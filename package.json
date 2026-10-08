@@ -5,7 +5,7 @@
     "description": "BylineCRM — a decoupled, multi-tenant CRM service.",
     "packageManager": "pnpm@9.15.0",
     "engines": {
-        "node": ">=22 <23"
+        "node": ">=22"
     },
     "scripts": {
         "build": "turbo build",

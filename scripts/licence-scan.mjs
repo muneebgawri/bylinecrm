@@ -26,6 +26,8 @@ const ALLOWED = new Set([
     'CC0-1.0',
     'Unlicense',
     'Python-2.0',
+    'MIT-0',
+    'BlueOak-1.0.0',
 ]);
 
 const here = dirname(fileURLToPath(import.meta.url));
