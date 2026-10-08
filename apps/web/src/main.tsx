@@ -1,3 +1,4 @@
+import { ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
@@ -9,6 +10,10 @@ if (!root) throw new Error('index.html has no #root element');
 
 createRoot(root).render(
     <StrictMode>
-        <RouterProvider router={router} />
+        <ThemeProvider>
+            <TooltipProvider>
+                <RouterProvider router={router} />
+            </TooltipProvider>
+        </ThemeProvider>
     </StrictMode>,
 );

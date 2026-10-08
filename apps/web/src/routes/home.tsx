@@ -1,11 +1,25 @@
-import type { HealthStatus } from '@bylinecrm/shared';
+import type { DependencyState, HealthStatus } from '@bylinecrm/shared';
+import { Badge, Button, EmptyState, Skeleton, ThemeToggle, type BadgeProps } from '@bylinecrm/ui';
 import { useEffect, useState } from 'react';
 import { fetchHealth } from '../api/health';
 
 type Loadable = { state: 'loading' } | { state: 'ready'; health: HealthStatus } | { state: 'error'; message: string };
 
+/** The one mapping from a dependency's state to a status colour (Badge's semantics, not a hue). */
+function statusOf(state: DependencyState | HealthStatus['status']): NonNullable<BadgeProps['status']> {
+    switch (state) {
+        case 'ok':
+            return 'success';
+        case 'degraded':
+            return 'warning';
+        case 'down':
+            return 'danger';
+    }
+}
+
 export function Home() {
     const [health, setHealth] = useState<Loadable>({ state: 'loading' });
+    const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -18,27 +32,67 @@ export function Home() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [attempt]);
+
+    const retry = () => {
+        setHealth({ state: 'loading' });
+        setAttempt((n) => n + 1);
+    };
 
     return (
-        <main className="min-h-screen p-8 font-sans">
-            <h1 className="text-2xl font-semibold">BylineCRM</h1>
-            <section aria-live="polite" className="mt-4 text-sm">
-                {health.state === 'loading' && <p>Checking the API…</p>}
-                {health.state === 'error' && <p role="alert">API unreachable: {health.message}</p>}
-                {health.state === 'ready' && (
-                    <dl className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <dt>API</dt>
-                        <dd data-testid="status">{health.health.status}</dd>
-                        <dt>Database</dt>
-                        <dd>{health.health.db}</dd>
-                        <dt>Redis</dt>
-                        <dd>{health.health.redis}</dd>
-                        <dt>Version</dt>
-                        <dd>{health.health.version}</dd>
-                    </dl>
-                )}
-            </section>
-        </main>
+        <div className="min-h-screen bg-background text-text">
+            <header className="flex h-12 items-center justify-between border-b border-border px-4">
+                <span className="text-sm font-semibold">BylineCRM</span>
+                <ThemeToggle />
+            </header>
+            <main className="p-6">
+                <h1 className="text-2xl font-semibold">Service status</h1>
+                <section aria-live="polite" className="mt-4 max-w-md text-sm">
+                    {health.state === 'loading' && (
+                        <div className="grid gap-2" aria-label="Checking the API">
+                            <Skeleton className="h-6 w-40" />
+                            <Skeleton className="h-6 w-56" />
+                            <Skeleton className="h-6 w-48" />
+                        </div>
+                    )}
+                    {health.state === 'error' && (
+                        <EmptyState
+                            tone="error"
+                            title="API unreachable"
+                            body={health.message}
+                            action={
+                                <Button variant="secondary" onClick={retry}>
+                                    Retry
+                                </Button>
+                            }
+                        />
+                    )}
+                    {health.state === 'ready' && (
+                        <dl className="grid grid-cols-[auto_1fr] items-center gap-x-6 gap-y-2">
+                            <dt className="text-text-muted">API</dt>
+                            <dd>
+                                <Badge dot status={statusOf(health.health.status)} data-testid="status">
+                                    {health.health.status}
+                                </Badge>
+                            </dd>
+                            <dt className="text-text-muted">Database</dt>
+                            <dd>
+                                <Badge dot status={statusOf(health.health.db)}>
+                                    {health.health.db}
+                                </Badge>
+                            </dd>
+                            <dt className="text-text-muted">Redis</dt>
+                            <dd>
+                                <Badge dot status={statusOf(health.health.redis)}>
+                                    {health.health.redis}
+                                </Badge>
+                            </dd>
+                            <dt className="text-text-muted">Version</dt>
+                            <dd className="font-mono">{health.health.version}</dd>
+                        </dl>
+                    )}
+                </section>
+            </main>
+        </div>
     );
 }
