@@ -15,7 +15,7 @@ a licence allowlist and an identifier scan (`scripts/`).
 | `packages/shared`    | Types shared by both (`@bylinecrm/shared`) and the base `tsconfig` |
 | `parity/`            | The behaviour ledger (doc 48 §4) — owned by the ledger author      |
 | `docs/design-notes/` | One note per work package (doc 49 §3, loop step 2)                 |
-| `scripts/`           | The licence and identifier gates                                   |
+| `scripts/`           | The licence and identifier gates; `db-ensure-app-role.mjs`         |
 
 ## Run it locally
 
@@ -27,9 +27,9 @@ docker compose up -d            # local Postgres + Redis
 pnpm install
 pnpm --filter @bylinecrm/shared build
 pnpm --filter api prisma:generate
-pnpm --filter api prisma:migrate # applies migrations (dev)
+pnpm --filter api db:setup      # creates the restricted role from RLS_DATABASE_URL, then applies migrations
 pnpm dev                        # api on :3300, web on :3301 (proxies /api → api)
-curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","version":"0.0.0"}
+curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"ok","version":"0.0.0"}
 ```
 
 ## Gates (all run in CI; run them before you push)
