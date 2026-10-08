@@ -1,5 +1,5 @@
-// BylineCRM data model. P0-1 ships the datasource and generator only; the first tables
-// (workspaces, members, RLS) arrive with P0-2.
+// BylineCRM data model. Every tenant table carries `workspace_id` and is under row-level
+// security (see the P0-2 migration); the policies are the backstop, the route guard is the gate.
 
 generator client {
     provider = "prisma-client-js"
@@ -8,4 +8,46 @@ generator client {
 datasource db {
     provider = "postgresql"
     url      = env("DATABASE_URL")
+}
+
+/// A tenant. Global table: the app role reads only the current workspace's row.
+model Workspace {
+    id        String   @id @default(uuid()) @db.Uuid
+    slug      String   @unique
+    name      String
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+    members WorkspaceMember[]
+
+    @@map("workspaces")
+}
+
+/// A person who can sign in. Global table; credentials and sessions arrive with P0-3.
+/// `email` is stored lower-cased by the application and unique as stored.
+model User {
+    id        String   @id @default(uuid()) @db.Uuid
+    email     String   @unique
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+    memberships WorkspaceMember[]
+
+    @@map("users")
+}
+
+/// A user's seat in a workspace. The first tenant table: `workspace_id` + RLS.
+model WorkspaceMember {
+    id          String   @id @default(uuid()) @db.Uuid
+    workspaceId String   @map("workspace_id") @db.Uuid
+    userId      String   @map("user_id") @db.Uuid
+    createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+    updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+    workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([workspaceId, userId])
+    @@index([userId])
+    @@map("workspace_members")
 }
