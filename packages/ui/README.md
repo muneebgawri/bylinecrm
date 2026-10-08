@@ -74,10 +74,11 @@ To update baselines after an intended change:
 pnpm --filter @bylinecrm/ui visual:baseline
 ```
 
-That dispatches the `visual-baseline` workflow on your branch, waits for it, and downloads the
-new `__snapshots__/` for you to review and commit **in the same PR** as the change that moved
-the pixels. A baseline is a reviewed decision, not a fixture. Never commit a locally generated
-baseline.
+That dispatches CI on your branch with `baseline=true` (which adds the `visual-baseline` job),
+waits for it, and downloads the new `__snapshots__/` for you to review and commit **in the same
+PR** as the change that moved the pixels. The job lives inside `ci.yml` because GitHub only
+dispatches a workflow that already exists on the default branch. A baseline is a reviewed
+decision, not a fixture. Never commit a locally generated baseline.
 
 ## Tests
 
