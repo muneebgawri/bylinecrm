@@ -1,0 +1,58 @@
+/*
+ * Tailwind v4 theme for BylineCRM. Must be imported from a stylesheet Tailwind processes (one
+ * that also imports `tailwindcss`); see `styles.css`.
+ *
+ * THE TRAP, by design: the first block deletes Tailwind's entire default palette. After it,
+ * `bg-emerald-300`, `text-slate-500`, `from-rose-400` and friends do not exist — they render
+ * NOTHING, with no error. That is the point: the only colours a component can use are the
+ * semantic tokens below, so a hard-coded palette value cannot reach the product. If a class
+ * "does nothing", check it against this file before checking anything else.
+ */
+
+@theme {
+    --color-*: initial;
+    --font-*: initial;
+    --radius-*: initial;
+    --shadow-*: initial;
+}
+
+@theme inline {
+    --spacing: var(--bc-spacing);
+
+    --color-background: var(--bc-background);
+    --color-surface: var(--bc-surface);
+    --color-surface-raised: var(--bc-surface-raised);
+    --color-border: var(--bc-border);
+    --color-border-strong: var(--bc-border-strong);
+
+    --color-text: var(--bc-text);
+    --color-text-muted: var(--bc-text-muted);
+    --color-text-faint: var(--bc-text-faint);
+
+    --color-accent: var(--bc-accent);
+    --color-accent-hover: var(--bc-accent-hover);
+    --color-accent-foreground: var(--bc-accent-foreground);
+    --color-accent-soft: var(--bc-accent-soft);
+
+    --color-success: var(--bc-success);
+    --color-success-soft: var(--bc-success-soft);
+    --color-warning: var(--bc-warning);
+    --color-warning-soft: var(--bc-warning-soft);
+    --color-danger: var(--bc-danger);
+    --color-danger-soft: var(--bc-danger-soft);
+    --color-info: var(--bc-info);
+    --color-info-soft: var(--bc-info-soft);
+
+    --color-ring: var(--bc-ring);
+
+    --font-sans: var(--bc-font-sans);
+    --font-mono: var(--bc-font-mono);
+
+    --radius-sm: var(--bc-radius-sm);
+    --radius-md: var(--bc-radius-md);
+    --radius-lg: var(--bc-radius-lg);
+    --radius-full: var(--bc-radius-full);
+
+    --shadow-sm: var(--bc-shadow-sm);
+    --shadow-md: var(--bc-shadow-md);
+}

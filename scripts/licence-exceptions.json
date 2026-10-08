@@ -1,4 +1,5 @@
 {
     "caniuse-lite": "CC-BY-4.0 covers the browser-support DATA only, not code; attribution is satisfied by the package's own notice. Build-time, via Vite/Tailwind.",
-    "lightningcss*": "MPL-2.0 is file-level weak copyleft on ITS files only; lightningcss is a build tool used unmodified by Tailwind v4 and ships nothing into our bundle. Dev-only. The prefix covers its one-native-binary-per-platform packages (darwin-*, linux-*, win32-*), which carry the same licence."
+    "lightningcss*": "MPL-2.0 is file-level weak copyleft on ITS files only; lightningcss is a build tool used unmodified by Tailwind v4 and ships nothing into our bundle. Dev-only. The prefix covers its one-native-binary-per-platform packages (darwin-*, linux-*, win32-*), which carry the same licence.",
+    "axe-core": "MPL-2.0 is file-level weak copyleft on ITS files only; axe-core is the accessibility engine behind the a11y gate (doc 49 \u00a74), run unmodified by @storybook/test-runner against stories in CI. Dev-only; ships nothing into our bundle."
 }
