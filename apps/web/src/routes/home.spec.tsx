@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Home } from './home';
 
-const ok: HealthStatus = { status: 'ok', db: 'ok', redis: 'ok', version: '0.0.0' };
+const ok: HealthStatus = { status: 'ok', db: 'ok', redis: 'ok', rls: 'ok', version: '0.0.0' };
 
 function stubFetch(response: () => Promise<Response>) {
     vi.stubGlobal('fetch', vi.fn(response));
