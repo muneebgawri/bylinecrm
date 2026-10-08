@@ -1,0 +1,12 @@
+name: ui-browser
+description: The browser and fonts the design system's a11y and visual gates render with. One definition, used by ci.yml and visual-baseline.yml so the comparison and the baseline are made in the same environment.
+
+runs:
+    using: composite
+    steps:
+        # Inter is first in the token font stack; installing it on the runner makes the screenshots
+        # the product's real typeface, and the same package every time.
+        - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends fonts-inter
+          shell: bash
+        - run: pnpm --filter @bylinecrm/ui exec playwright install --with-deps chromium
+          shell: bash

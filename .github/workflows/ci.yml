@@ -72,3 +72,27 @@ jobs:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
             - run: pnpm scan:identifiers
+
+    a11y:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/ui build-storybook
+            - run: pnpm --filter @bylinecrm/ui test:a11y
+
+    visual:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/ui build-storybook
+            - run: pnpm --filter @bylinecrm/ui test:visual
+            - uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: visual-diffs
+                  path: packages/ui/test-results
+                  if-no-files-found: ignore
