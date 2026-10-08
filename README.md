@@ -19,7 +19,7 @@ a licence allowlist and an identifier scan (`scripts/`).
 
 ## Run it locally
 
-Requires Node 22 (`.nvmrc`), pnpm 9.15 (`corepack enable`), Docker.
+Requires Node 22 (`.nvmrc`), pnpm 9.15 (`corepack enable`), Docker. PostgreSQL ≥ 14 (the migrations use SQL-standard function bodies; the local stack and CI run 16).
 
 ```bash
 cp .env.example .env            # ports: Postgres 5441, Redis 6391, API 3300, web 3301
