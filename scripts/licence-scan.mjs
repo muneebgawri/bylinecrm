@@ -7,7 +7,9 @@
  *
  * Exceptions live in scripts/licence-exceptions.json as { "<package name>": "<reason>" }. An
  * entry is a reviewed decision with its reason written down, never a way to make the scan
- * quiet; a reviewer reads the reason, not the count.
+ * quiet; a reviewer reads the reason, not the count. A key ending in `*` matches by prefix,
+ * for a package that ships one native binary per platform under one licence (the tree seen
+ * on a developer's Mac and on a Linux runner differ only in those).
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -28,6 +30,12 @@ const ALLOWED = new Set([
 
 const here = dirname(fileURLToPath(import.meta.url));
 const exceptions = JSON.parse(readFileSync(resolve(here, 'licence-exceptions.json'), 'utf8'));
+
+function excepted(name) {
+    return Object.keys(exceptions).some((key) =>
+        key.endsWith('*') ? name.startsWith(key.slice(0, -1)) : key === name,
+    );
+}
 
 /**
  * A licence field may be a single SPDX id or an expression such as `(MIT OR Apache-2.0)`.
@@ -54,7 +62,7 @@ const failures = [];
 for (const [licence, packages] of Object.entries(byLicence)) {
     if (allowed(licence)) continue;
     for (const pkg of packages) {
-        if (pkg.name in exceptions) continue;
+        if (excepted(pkg.name)) continue;
         failures.push(`${pkg.name}@${(pkg.versions ?? []).join(',')} — ${licence}`);
     }
 }
