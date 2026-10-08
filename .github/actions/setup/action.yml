@@ -1,0 +1,17 @@
+name: setup
+description: Node 22 + pnpm with a cached store, install, and build the shared package once.
+
+runs:
+    using: composite
+    steps:
+        - uses: pnpm/action-setup@v4
+        - uses: actions/setup-node@v4
+          with:
+              node-version-file: .nvmrc
+              cache: pnpm
+        - run: pnpm install --frozen-lockfile
+          shell: bash
+        - run: pnpm --filter @bylinecrm/shared build
+          shell: bash
+        - run: pnpm --filter api prisma:generate
+          shell: bash

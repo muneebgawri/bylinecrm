@@ -1,0 +1,74 @@
+name: ci
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    DATABASE_URL: postgresql://bylinecrm:bylinecrm@127.0.0.1:5432/bylinecrm
+    REDIS_URL: redis://127.0.0.1:6379
+    PORT: '3300'
+    WEB_PORT: '3301'
+
+jobs:
+    typecheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm typecheck
+
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm lint
+            - run: pnpm format:check
+
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm test
+
+    cross-tenant:
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_USER: bylinecrm
+                    POSTGRES_PASSWORD: bylinecrm
+                    POSTGRES_DB: bylinecrm
+                ports: ['5432:5432']
+                options: --health-cmd "pg_isready -U bylinecrm" --health-interval 5s --health-timeout 3s --health-retries 10
+            redis:
+                image: redis:7
+                ports: ['6379:6379']
+                options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm --filter api prisma:migrate:deploy
+            - run: pnpm --filter api test:cross-tenant
+
+    licence-scan:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm scan:licences
+
+    identifier-scan:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm scan:identifiers
