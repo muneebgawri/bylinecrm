@@ -1,0 +1,49 @@
+{
+    "name": "api",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "build": "nest build",
+        "dev": "dotenv -e ../../.env -- nest start --watch",
+        "start": "dotenv -e ../../.env -- node dist/main.js",
+        "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:cross-tenant": "dotenv -e ../../.env -- vitest run --config vitest.cross-tenant.config.mts",
+        "prisma:generate": "prisma generate",
+        "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+        "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy"
+    },
+    "dependencies": {
+        "@bylinecrm/shared": "workspace:*",
+        "@nestjs/bullmq": "^11.0.5",
+        "@nestjs/common": "^11.2.7",
+        "@nestjs/core": "^11.2.7",
+        "@nestjs/platform-express": "^11.2.7",
+        "@prisma/client": "^6.19.3",
+        "bullmq": "^6.3.11",
+        "ioredis": "^5.10.1",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.2",
+        "zod": "^4.6.5"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.39.4",
+        "@nestjs/cli": "^11.0.24",
+        "@nestjs/schematics": "^11.1.0",
+        "@nestjs/testing": "^11.2.7",
+        "@swc/core": "^1.16.13",
+        "@types/node": "^22.19.0",
+        "@types/supertest": "^6.0.3",
+        "dotenv-cli": "^10",
+        "eslint": "^9.39.4",
+        "globals": "^16.5.0",
+        "prisma": "^6.19.3",
+        "supertest": "^7.3.1",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.71.1",
+        "unplugin-swc": "^2.0.0",
+        "vitest": "^4.1.11"
+    }
+}

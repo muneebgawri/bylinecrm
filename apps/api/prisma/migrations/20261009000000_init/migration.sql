@@ -1,0 +1,2 @@
+-- Baseline (P0-1). The schema has no models yet; applying this records the first entry in
+-- _prisma_migrations so every later migration builds on a known state. Intentionally empty.
