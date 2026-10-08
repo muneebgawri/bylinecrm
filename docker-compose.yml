@@ -1,0 +1,32 @@
+# Local development stack only. Production is deployed separately (doc 49, P5-4).
+# Host ports are chosen not to collide with the other local stacks on this machine
+# (NewswireOS uses 5432/6379, its second stack 6390); the API reads them from .env.
+services:
+    postgres:
+        image: postgres:16
+        environment:
+            POSTGRES_USER: bylinecrm
+            POSTGRES_PASSWORD: bylinecrm
+            POSTGRES_DB: bylinecrm
+        ports:
+            - '127.0.0.1:5441:5432'
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U bylinecrm']
+            interval: 5s
+            timeout: 3s
+            retries: 10
+
+    redis:
+        image: redis:7
+        ports:
+            - '127.0.0.1:6391:6379'
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 5s
+            timeout: 3s
+            retries: 10
+
+volumes:
+    pgdata:

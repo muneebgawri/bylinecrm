@@ -1,0 +1,4 @@
+{
+    "caniuse-lite": "CC-BY-4.0 covers the browser-support DATA only, not code; attribution is satisfied by the package's own notice. Build-time, via Vite/Tailwind.",
+    "lightningcss*": "MPL-2.0 is file-level weak copyleft on ITS files only; lightningcss is a build tool used unmodified by Tailwind v4 and ships nothing into our bundle. Dev-only. The prefix covers its one-native-binary-per-platform packages (darwin-*, linux-*, win32-*), which carry the same licence."
+}

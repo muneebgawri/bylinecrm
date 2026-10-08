@@ -1,0 +1,41 @@
+{
+    "name": "bylinecrm",
+    "version": "0.0.0",
+    "private": true,
+    "description": "BylineCRM — a decoupled, multi-tenant CRM service.",
+    "packageManager": "pnpm@9.15.0",
+    "engines": {
+        "node": ">=22"
+    },
+    "scripts": {
+        "build": "turbo build",
+        "dev": "turbo dev",
+        "lint": "turbo lint",
+        "test": "turbo test",
+        "typecheck": "turbo typecheck",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "scan:licences": "node scripts/licence-scan.mjs",
+        "scan:identifiers": "node scripts/identifier-scan.mjs",
+        "prepare": "husky"
+    },
+    "devDependencies": {
+        "husky": "^9.1.7",
+        "lint-staged": "^17.6.0",
+        "prettier": "^3.9.9",
+        "turbo": "^2.11.7"
+    },
+    "lint-staged": {
+        "apps/api/**/*.ts": [
+            "prettier --write",
+            "eslint --fix --no-warn-ignored --max-warnings 0 --config apps/api/eslint.config.mjs"
+        ],
+        "apps/web/**/*.{ts,tsx}": [
+            "prettier --write",
+            "eslint --fix --no-warn-ignored --max-warnings 0 --config apps/web/eslint.config.mjs"
+        ],
+        "*.{json,yml,yaml,md,mjs}": [
+            "prettier --write"
+        ]
+    }
+}
