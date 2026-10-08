@@ -13,7 +13,9 @@
         "test:cross-tenant": "dotenv -e ../../.env -- vitest run --config vitest.cross-tenant.config.mts",
         "prisma:generate": "prisma generate",
         "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
-        "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy"
+        "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+        "db:ensure-role": "dotenv -e ../../.env -- node ../../scripts/db-ensure-app-role.mjs",
+        "db:setup": "pnpm db:ensure-role && pnpm prisma:migrate:deploy"
     },
     "dependencies": {
         "@bylinecrm/shared": "workspace:*",

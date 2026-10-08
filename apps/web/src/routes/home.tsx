@@ -1,18 +1,19 @@
-import type { DependencyState, HealthStatus } from '@bylinecrm/shared';
+import type { DependencyState, HealthStatus, RlsState } from '@bylinecrm/shared';
 import { Badge, Button, EmptyState, Skeleton, ThemeToggle, type BadgeProps } from '@bylinecrm/ui';
 import { useEffect, useState } from 'react';
 import { fetchHealth } from '../api/health';
 
 type Loadable = { state: 'loading' } | { state: 'ready'; health: HealthStatus } | { state: 'error'; message: string };
 
-/** The one mapping from a dependency's state to a status colour (Badge's semantics, not a hue). */
-function statusOf(state: DependencyState | HealthStatus['status']): NonNullable<BadgeProps['status']> {
+/** The one mapping from a reported state to a status colour (Badge's semantics, not a hue). */
+function statusOf(state: DependencyState | RlsState | HealthStatus['status']): NonNullable<BadgeProps['status']> {
     switch (state) {
         case 'ok':
             return 'success';
         case 'degraded':
             return 'warning';
         case 'down':
+        case 'misconfigured':
             return 'danger';
     }
 }
@@ -85,6 +86,12 @@ export function Home() {
                             <dd>
                                 <Badge dot status={statusOf(health.health.redis)}>
                                     {health.health.redis}
+                                </Badge>
+                            </dd>
+                            <dt className="text-text-muted">Row-level security</dt>
+                            <dd>
+                                <Badge dot status={statusOf(health.health.rls)}>
+                                    {health.health.rls}
                                 </Badge>
                             </dd>
                             <dt className="text-text-muted">Version</dt>
