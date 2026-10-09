@@ -1,12 +1,14 @@
-import { Controller, Get, Module, Query } from '@nestjs/common';
+import { Get, Module, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { RECORD_OBJECTS, type SearchResults } from '@bylinecrm/shared';
-import { Requires } from '../auth/decorators';
+import { Requires, TenantController } from '../auth/decorators';
 import { CustomFieldsModule } from '../records/custom-fields/custom-fields.module';
 import { SearchQueryDto } from './dto';
 import { ExportService } from './export.service';
 import { QueryService } from './query.service';
 import { SearchService } from './search.service';
+import { Returns } from '../openapi/responses';
+import { searchResults } from './responses';
 
 /**
  * Global search across people, companies and deals, for the command palette. `record:read`
@@ -14,12 +16,13 @@ import { SearchService } from './search.service';
  * the service narrows the objects to what the caller's capabilities reach.
  */
 @ApiTags('search')
-@Controller('w/:workspaceId/search')
+@TenantController('search')
 export class SearchController {
     constructor(private readonly search: SearchService) {}
 
     @Requires('record:read')
     @Get()
+    @Returns(searchResults)
     find(@Query() query: SearchQueryDto): Promise<SearchResults> {
         return this.search.search(query.q, query.limit, query.objects ?? RECORD_OBJECTS);
     }

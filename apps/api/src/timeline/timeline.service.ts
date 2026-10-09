@@ -19,19 +19,8 @@ import { actorOf } from '../records/actor';
 import { type Page, paginate } from '../records/list-query';
 import { stored } from '../records/references';
 import { readableTargets } from '../records/targets';
-
-/** One entry as the API returns it. `target` is the record the entry is on — on a company's
- * timeline that may be one of its people (the merge, PAR-015 as deviated). */
-export interface TimelineActivityView {
-    id: string;
-    target: RecordTarget;
-    kind: string;
-    happenedAt: Date;
-    actor: TimelineActor;
-    properties: Record<string, unknown>;
-    linked: { type: LinkedObject; id: string } | null;
-    createdAt: Date;
-}
+import type { TimelineActivityView, ExternalActivityResult } from './responses';
+export type { TimelineActivityView, ExternalActivityResult } from './responses';
 
 export interface TimelineQuery {
     target: RecordTarget;
@@ -50,12 +39,6 @@ export interface ExternalActivityInput {
     amount?: Money | undefined;
     source: string;
     idempotencyKey: string;
-}
-
-/** What `recordExternal` answers: the entry, and whether this call wrote it or found it. */
-export interface ExternalActivityResult {
-    activity: TimelineActivityView;
-    created: boolean;
 }
 
 type ActivityRow = Prisma.TimelineActivityGetPayload<object>;

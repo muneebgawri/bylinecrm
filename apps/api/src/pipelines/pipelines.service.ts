@@ -10,7 +10,6 @@ import {
     DEFAULT_STAGES,
     type EventActor,
     type StageColour,
-    type StageHistoryReason,
     type StageKind,
     type StageRuleEvent,
     type ViewSort,
@@ -20,7 +19,7 @@ import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
-import { withStage, withStageInclude, type OpportunityView } from '../records/opportunities.service';
+import { withStage, withStageInclude } from '../records/opportunities.service';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { type RawQuery, resolvePlan } from '../query/query.service';
 import { ownerWhere } from '../records/record-scope';
@@ -28,68 +27,8 @@ import { stored } from '../records/references';
 import { searchCandidates } from '../records/search';
 import { ruleEventOf, storedRuleEvent } from './rule-events';
 import { StageMoveService, type ClosePayload } from './stage-move.service';
-
-export interface StageView {
-    id: string;
-    pipelineId: string;
-    name: string;
-    position: number;
-    probability: number;
-    kind: StageKind;
-    daysThreshold: number | null;
-    colour: StageColour;
-}
-
-export interface PipelineView {
-    id: string;
-    name: string;
-    isDefault: boolean;
-    position: number;
-    stages: StageView[];
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface RuleView {
-    id: string;
-    pipelineId: string;
-    event: StageRuleEvent;
-    toStageId: string;
-    allowBackward: boolean;
-    enabled: boolean;
-}
-
-export interface HistoryEntry {
-    id: string;
-    fromStageId: string | null;
-    toStageId: string;
-    enteredAt: Date;
-    actor: EventActor;
-    reason: StageHistoryReason;
-}
-
-/** What a member's move returns: the deal, and whether a rule may move it forward again. */
-export interface MoveResult {
-    deal: OpportunityView;
-    /** Set when the member moved the deal backward: the enabled rules of its pipeline that could move it forward. */
-    rulesThatMayMoveItForward: RuleView[];
-}
-
-export interface BoardColumn {
-    stage: StageView;
-    /** Deals in this stage under the current filter and the caller's scope — not the whole stage. */
-    count: number;
-    /** Their amounts, summed exactly per currency; a deal with no amount adds nothing. */
-    amountMinorByCurrency: Record<string, number>;
-    deals: OpportunityView[];
-    /** More deals than the column carries (`BOARD_STAGE_LIMIT`). */
-    hasMore: boolean;
-}
-
-export interface BoardView {
-    pipeline: PipelineView;
-    columns: BoardColumn[];
-}
+import type { StageView, PipelineView, RuleView, HistoryEntry, MoveResult, BoardColumn, BoardView } from './responses';
+export type { StageView, PipelineView, RuleView, HistoryEntry, MoveResult, BoardColumn, BoardView } from './responses';
 
 export interface StageInput {
     name: string;

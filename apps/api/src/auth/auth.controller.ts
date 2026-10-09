@@ -24,6 +24,8 @@ import { OidcService } from './oidc.service';
 import type { Principal } from './principal';
 import { SessionService } from './session.service';
 import { randomToken } from './tokens';
+import { NotImplementedYet, Redirects, Returns } from '../openapi/responses';
+import { authProviders, signedIn, signedUp, userView, workspaceView } from '../workspace/responses';
 
 /** Sign-up, sign-in and sign-out, for people. Machines use API keys and never come here. */
 @ApiTags('auth')
@@ -42,6 +44,7 @@ export class AuthController {
 
     @Public()
     @Post('signup')
+    @Returns(signedUp)
     async signup(
         @Body() body: SignupDto,
         @Req() req: Request,
@@ -55,6 +58,7 @@ export class AuthController {
     @Public()
     @HttpCode(200)
     @Post('login')
+    @Returns(signedIn)
     async login(
         @Body() body: LoginDto,
         @Req() req: Request,
@@ -75,6 +79,7 @@ export class AuthController {
     /** Which identity providers this deployment offers. */
     @Public()
     @Get('providers')
+    @Returns(authProviders)
     providers(): { providers: string[] } {
         return { providers: this.oidc.available() };
     }
@@ -82,24 +87,28 @@ export class AuthController {
     /** Google is the OIDC issuer `google`; the route exists so the web app has a stable name. */
     @Public()
     @Get('google')
+    @Redirects()
     async google(@Res() res: Response): Promise<void> {
         res.redirect((await this.oidc.start('google')).toString());
     }
 
     @Public()
     @Get('google/callback')
+    @Redirects()
     googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
         return this.oidcCallback('google', req, res);
     }
 
     @Public()
     @Get('oidc/:issuer')
+    @Redirects()
     async oidcStart(@Param('issuer') issuer: string, @Res() res: Response): Promise<void> {
         res.redirect((await this.oidc.start(issuer)).toString());
     }
 
     @Public()
     @Get('oidc/:issuer/callback')
+    @Redirects()
     oidcCallback(@Param('issuer') issuer: string, @Req() req: Request, @Res() res: Response): Promise<void> {
         return this.finishOidc(issuer, req, res);
     }
@@ -107,6 +116,7 @@ export class AuthController {
     /** Joining a workspace with an invitation while signed in. */
     @HttpCode(200)
     @Post('invites/:token/accept')
+    @Returns(workspaceView)
     async acceptInvite(
         @Param('token') token: string,
         @CurrentPrincipal() principal: Principal,
@@ -118,6 +128,7 @@ export class AuthController {
     /** Creating an account from an invitation: the invited address is the account's, verified. */
     @Public()
     @Post('invites/:token/signup')
+    @Returns(workspaceView)
     async acceptInviteSignup(
         @Param('token') token: string,
         @Body() body: AcceptInviteSignupDto,
@@ -132,6 +143,7 @@ export class AuthController {
     /** Password reset is designed, not built: the design note names the flow. */
     @Public()
     @Post('password/forgot')
+    @NotImplementedYet()
     forgotPassword(): never {
         throw new NotImplementedException('password reset is not available yet');
     }
@@ -166,18 +178,21 @@ export class MeController {
     ) {}
 
     @Get('me')
+    @Returns(userView)
     me(@CurrentPrincipal() principal: Principal): Promise<UserView> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key has no profile');
         return this.auth.me(principal.userId);
     }
 
     @Get('me/workspaces')
+    @Returns([workspaceView])
     workspaces(@CurrentPrincipal() principal: Principal): Promise<WorkspaceView[]> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key belongs to one workspace');
         return this.memberships.workspacesOf(principal.userId);
     }
 
     @Post('workspaces')
+    @Returns(workspaceView)
     createWorkspace(
         @Body() body: CreateWorkspaceDto,
         @CurrentPrincipal() principal: Principal,

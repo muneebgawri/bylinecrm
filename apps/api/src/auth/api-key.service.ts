@@ -5,21 +5,13 @@ import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { API_KEY_TOUCH_INTERVAL_S } from './auth.constants';
 import { digestsEqual, hashToken, randomToken } from './tokens';
+import type { ApiKeyView } from '../workspace/responses';
+export type { ApiKeyView } from '../workspace/responses';
 
 /** `blc_<prefix>_<secret>`, parsed. */
 export interface ParsedApiKey {
     prefix: string;
     secret: string;
-}
-
-export interface ApiKeyView {
-    id: string;
-    name: string;
-    prefix: string;
-    roleId: string;
-    createdAt: Date;
-    lastUsedAt: Date | null;
-    revokedAt: Date | null;
 }
 
 /** The key that just authenticated, as the auth guard needs it. */

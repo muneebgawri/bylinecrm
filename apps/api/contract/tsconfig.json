@@ -1,0 +1,10 @@
+{
+    "extends": "../../../packages/shared/tsconfig.base.json",
+    "compilerOptions": {
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "noEmit": true,
+        "types": []
+    },
+    "include": ["check.ts", "generated/schema.d.ts"]
+}

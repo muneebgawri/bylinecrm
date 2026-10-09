@@ -27,42 +27,8 @@ import {
     WEBHOOK_ROTATION_GRACE_S,
     backoffDelayMs,
 } from './webhooks.constants';
-
-/** An endpoint as the API shows it. The secret is never here; `secretPrefix` is its name. */
-export interface WebhookEndpointView {
-    id: string;
-    url: string;
-    description: string;
-    events: string[];
-    enabled: boolean;
-    disabledReason: string | null;
-    consecutiveFailures: number;
-    secretPrefix: string;
-    /** Set while a rotation's grace window is open: until when the previous secret still signs. */
-    previousSecretExpiresAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface WebhookDeliveryView {
-    id: string;
-    endpointId: string;
-    eventId: string;
-    eventName: string;
-    status: WebhookDeliveryStatus;
-    attempts: number;
-    nextAttemptAt: Date | null;
-    lastStatusCode: number | null;
-    lastError: string | null;
-    createdAt: Date;
-    deliveredAt: Date | null;
-}
-
-/** One catalogue event a UI may offer for subscription. */
-export interface WebhookEventView {
-    name: string;
-    object: string;
-}
+import type { WebhookEndpointView, WebhookDeliveryView, WebhookEventView } from './responses';
+export type { WebhookEndpointView, WebhookDeliveryView, WebhookEventView } from './responses';
 
 /** What the queue carries: enough to find the row; everything else is read fresh at attempt time. */
 export interface DeliveryJob {

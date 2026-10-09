@@ -1,8 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Capability, RecordScope } from '@bylinecrm/shared';
 import { AuthService } from '../auth/auth.service';
-import { AnyMember, Requires } from '../auth/decorators';
+import { AnyMember, Requires, TenantController } from '../auth/decorators';
 import { CreateApiKeyDto, CreateInviteDto, CreateRoleDto, SetMemberRoleDto, UpdateRoleDto } from '../auth/dto';
 import { ApiKeyService, type ApiKeyView } from '../auth/api-key.service';
 import { normaliseEmail } from '../auth/auth.service';
@@ -10,20 +9,19 @@ import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MembersService, type MemberSummaryView, type MemberView } from './members.service';
 import { RolesService, type RoleView } from './roles.service';
-
-/** The caller's own standing in the workspace: what the guard decided, read back. */
-export interface StandingView {
-    workspaceId: string;
-    /** The seat, when the caller is a person; `null` for a key. */
-    memberId: string | null;
-    userId: string | null;
-    /** The key, when the caller is a machine; `null` for a person. */
-    apiKeyId: string | null;
-    roleId: string | null;
-    roleName: string | null;
-    recordScope: RecordScope;
-    capabilities: Capability[];
-}
+import type { StandingView, InviteView } from './responses';
+import { Returns } from '../openapi/responses';
+import {
+    apiKeyView,
+    createdApiKey,
+    createdInvite,
+    inviteView as inviteSchema,
+    memberSummaryView,
+    memberView,
+    roleView,
+    standingView,
+} from './responses';
+export type { StandingView, InviteView } from './responses';
 
 /** One source: the guard's decision in `WorkspaceContext`; nothing is computed a second time. */
 export function standingOf(context: WorkspaceRunContext): StandingView {
@@ -40,13 +38,14 @@ export function standingOf(context: WorkspaceRunContext): StandingView {
 }
 
 @ApiTags('workspace')
-@Controller('w/:workspaceId/me')
+@TenantController('me')
 export class WorkspaceMeController {
     constructor(private readonly context: WorkspaceContext) {}
 
     /** The UI reads this to show or hide controls (FR-CRMS-UI-6); the server stays the gate. */
     @AnyMember('a caller asking what they may do cannot be asked for a capability first')
     @Get()
+    @Returns(standingView)
     standing(): StandingView {
         const current = this.context.get();
         if (!current) throw new Error('standing is read inside a workspace scope');
@@ -60,12 +59,13 @@ export class WorkspaceMeController {
  * The services read the workspace from `WorkspaceContext`, never from the URL.
  */
 @ApiTags('workspace')
-@Controller('w/:workspaceId/members')
+@TenantController('members')
 export class MembersController {
     constructor(private readonly members: MembersService) {}
 
     @Requires('workspace:admin')
     @Get()
+    @Returns([memberView])
     list(): Promise<MemberView[]> {
         return this.members.list();
     }
@@ -73,6 +73,7 @@ export class MembersController {
     /** Declared before `:memberId` so the literal segment wins. */
     @Requires('record:read')
     @Get('summary')
+    @Returns([memberSummaryView])
     summary(): Promise<MemberSummaryView[]> {
         return this.members.summary();
     }
@@ -93,25 +94,28 @@ export class MembersController {
 }
 
 @ApiTags('workspace')
-@Controller('w/:workspaceId/roles')
+@TenantController('roles')
 export class RolesController {
     constructor(private readonly roles: RolesService) {}
 
     /** Any member may see the roles (the UI needs names); only an admin changes them. */
     @Requires('record:read')
     @Get()
+    @Returns([roleView])
     list(): Promise<RoleView[]> {
         return this.roles.list();
     }
 
     @Requires('workspace:admin')
     @Post()
+    @Returns(roleView)
     create(@Body() body: CreateRoleDto): Promise<RoleView> {
         return this.roles.create(body.name, body.capabilities, body.recordScope);
     }
 
     @Requires('workspace:admin')
     @Patch(':roleId')
+    @Returns(roleView)
     update(@Param('roleId', ParseUUIDPipe) roleId: string, @Body() body: UpdateRoleDto): Promise<RoleView> {
         return this.roles.update(roleId, body);
     }
@@ -125,7 +129,7 @@ export class RolesController {
 }
 
 @ApiTags('workspace')
-@Controller('w/:workspaceId/api-keys')
+@TenantController('api-keys')
 export class ApiKeysController {
     constructor(
         private readonly apiKeys: ApiKeyService,
@@ -134,6 +138,7 @@ export class ApiKeysController {
 
     @Requires('workspace:admin')
     @Get()
+    @Returns([apiKeyView])
     list(): Promise<ApiKeyView[]> {
         return this.apiKeys.list();
     }
@@ -141,6 +146,7 @@ export class ApiKeysController {
     /** The response carries the full key once; it is not stored and cannot be shown again. */
     @Requires('workspace:admin')
     @Post()
+    @Returns(createdApiKey)
     create(@Body() body: CreateApiKeyDto): Promise<{ key: ApiKeyView; secret: string }> {
         const memberId = this.context.get()?.memberId;
         if (!memberId) throw new Error('API keys are created by a member, not by another key');
@@ -155,16 +161,8 @@ export class ApiKeysController {
     }
 }
 
-export interface InviteView {
-    id: string;
-    email: string;
-    roleId: string;
-    expiresAt: Date;
-    acceptedAt: Date | null;
-}
-
 @ApiTags('workspace')
-@Controller('w/:workspaceId/invites')
+@TenantController('invites')
 export class InvitesController {
     constructor(
         private readonly rls: RlsPrismaService,
@@ -173,6 +171,7 @@ export class InvitesController {
 
     @Requires('workspace:admin')
     @Get()
+    @Returns([inviteSchema])
     list(): Promise<InviteView[]> {
         return this.rls.withWorkspace(async (tx) => {
             const invites = await tx.workspaceInvite.findMany({ orderBy: { createdAt: 'asc' } });
@@ -186,6 +185,7 @@ export class InvitesController {
      */
     @Requires('workspace:admin')
     @Post()
+    @Returns(createdInvite)
     create(@Body() body: CreateInviteDto): Promise<{ invite: InviteView; token: string }> {
         const current = this.context.get();
         if (!current?.memberId) throw new Error('invitations are sent by a member, not by a key');

@@ -2,15 +2,8 @@ import { ConflictException, Injectable, NotFoundException, UnprocessableEntityEx
 import { CAPABILITIES, SYSTEM_ROLES, isCapability, type Capability, type RecordScope } from '@bylinecrm/shared';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
-
-/** A role as the API returns it: the system admin role reports every capability. */
-export interface RoleView {
-    id: string;
-    name: string;
-    isSystem: boolean;
-    recordScope: RecordScope;
-    capabilities: Capability[];
-}
+import type { RoleView } from './responses';
+export type { RoleView } from './responses';
 
 /** What a role grants, as the workspace guard needs it: the capabilities, how far they reach, and which role. */
 export interface RoleAccess {
