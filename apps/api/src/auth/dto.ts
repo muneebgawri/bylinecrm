@@ -1,4 +1,4 @@
-import { CAPABILITIES, RECORD_SCOPES } from '@bylinecrm/shared';
+import { CAPABILITIES, DISPLAY_NAME_MAX_LENGTH, RECORD_SCOPES } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './auth.constants';
@@ -13,6 +13,10 @@ export class SignupDto extends createZodDto(z.object({ email, password, workspac
 export class LoginDto extends createZodDto(z.object({ email, password: z.string().min(1).max(PASSWORD_MAX_LENGTH) })) {}
 export class CreateWorkspaceDto extends createZodDto(z.object({ name })) {}
 export class AcceptInviteSignupDto extends createZodDto(z.object({ password })) {}
+/** The person's own name, trimmed; the only profile field in v1 (an avatar comes later). */
+export class UpdateProfileDto extends createZodDto(
+    z.object({ displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH) }),
+) {}
 
 export class CreateRoleDto extends createZodDto(
     z.object({

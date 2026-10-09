@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SYSTEM_ROLES } from '@bylinecrm/shared';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { MEMBER_SUMMARY_SELECT, memberSummaryOf } from '../records/summaries';
 import type { MemberSummaryView, MemberView } from './responses';
 export type { MemberSummaryView, MemberView } from './responses';
 
@@ -33,10 +34,10 @@ export class MembersService {
     summary(): Promise<MemberSummaryView[]> {
         return this.rls.withWorkspace(async (tx) => {
             const members = await tx.workspaceMember.findMany({
-                select: { id: true, displayName: true },
-                orderBy: [{ displayName: 'asc' }, { createdAt: 'asc' }],
+                select: MEMBER_SUMMARY_SELECT,
+                orderBy: [{ user: { displayName: 'asc' } }, { createdAt: 'asc' }],
             });
-            return members.map((m) => ({ memberId: m.id, name: m.displayName }));
+            return members.map(memberSummaryOf);
         });
     }
 
