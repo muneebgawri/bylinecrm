@@ -2,6 +2,12 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { SYSTEM_ROLES } from '@bylinecrm/shared';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 
+/** A member as a picker shows them: the seat and a display name, nothing that identifies the account. */
+export interface MemberSummaryView {
+    memberId: string;
+    name: string | null;
+}
+
 export interface MemberView {
     id: string;
     userId: string;
@@ -33,6 +39,17 @@ export class MembersService {
                 roleName: m.role.name,
                 createdAt: m.createdAt,
             }));
+        });
+    }
+
+    /** For owner, assignee and contact pickers: readable by anyone who reads records. */
+    summary(): Promise<MemberSummaryView[]> {
+        return this.rls.withWorkspace(async (tx) => {
+            const members = await tx.workspaceMember.findMany({
+                select: { id: true, displayName: true },
+                orderBy: [{ displayName: 'asc' }, { createdAt: 'asc' }],
+            });
+            return members.map((m) => ({ memberId: m.id, name: m.displayName }));
         });
     }
 

@@ -164,7 +164,14 @@ export class AuthService {
                 userId = user.id;
             }
             await tx.workspaceMember
-                .create({ data: { workspaceId: invite.workspaceId, userId, roleId: invite.roleId } })
+                .create({
+                    data: {
+                        workspaceId: invite.workspaceId,
+                        userId,
+                        roleId: invite.roleId,
+                        displayName: displayNameFor(invite.email),
+                    },
+                })
                 .catch((error: unknown) => {
                     throw uniqueViolation(error) ? new ConflictException('already a member') : error;
                 });
@@ -210,8 +217,19 @@ async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: strin
             },
         },
     });
-    await tx.workspaceMember.create({ data: { workspaceId: workspace.id, userId, roleId: admin.id } });
+    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+    await tx.workspaceMember.create({
+        data: { workspaceId: workspace.id, userId, roleId: admin.id, displayName: displayNameFor(user.email) },
+    });
     return workspaceView(workspace);
+}
+
+/**
+ * The name a new member is shown under until they set one: the local part of their address.
+ * Other members see this and never the address itself (`/members/summary`).
+ */
+export function displayNameFor(email: string): string {
+    return email.split('@')[0] ?? email;
 }
 
 /** `acme-corp-3f9a1c`: readable, unique by its suffix, never a second query to check. */

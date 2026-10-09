@@ -19,6 +19,13 @@ export async function assertCompanyExists(tx: WorkspaceClient, companyId: string
     if (!company) throw new UnprocessableEntityException('company not found');
 }
 
+/** A deal's point of contact is a live person the caller can see. */
+export async function assertPersonExists(tx: WorkspaceClient, personId: string | null): Promise<void> {
+    if (personId === null) return;
+    const person = await tx.person.findFirst({ where: { id: personId, deletedAt: null }, select: { id: true } });
+    if (!person) throw new UnprocessableEntityException('person not found');
+}
+
 /**
  * Removes the keys whose value is `undefined`, so "not mentioned" never reaches Prisma as an
  * explicit `undefined` (which `exactOptionalPropertyTypes` rightly refuses).
