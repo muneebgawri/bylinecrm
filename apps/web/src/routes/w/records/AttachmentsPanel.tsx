@@ -1,5 +1,5 @@
 import type { RecordTarget } from '@bylinecrm/shared';
-import { Button, Skeleton, cn, focusRing } from '@bylinecrm/ui';
+import { Button, cn, focusRing } from '@bylinecrm/ui';
 import { Paperclip, Upload } from 'lucide-react';
 import { useRef, useState, type DragEvent } from 'react';
 import { attachments as attachmentRoutes } from '../../../api/endpoints';
@@ -7,7 +7,7 @@ import { useAttachments, useDeleteAttachment, useUploadAttachment } from '../../
 import { usePermission } from '../../../auth/capabilities';
 import { formatBytes, formatWhen } from '../../../lib/format';
 import { messageFor } from './InlineEdit';
-import { RailCard, RailEmpty } from './RailCard';
+import { RailCard, RailEmpty, RailLoading } from './RailCard';
 
 /**
  * Files on a record: a drop zone (or the picker), the list with download links, delete with the
@@ -84,9 +84,7 @@ export function AttachmentsPanel({ workspaceId, target }: { workspaceId: string;
                 </p>
             )}
             {list.isPending ? (
-                <div className="px-4 py-3">
-                    <Skeleton className="h-8" />
-                </div>
+                <RailLoading />
             ) : list.isError ? (
                 <RailEmpty>Files could not be loaded.</RailEmpty>
             ) : list.data.length === 0 ? (

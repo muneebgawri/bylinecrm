@@ -11,7 +11,7 @@ import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
-import { RailCard, RailEmpty, RailRow } from './RailCard';
+import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
 import { TasksPanel } from './TasksPanel';
@@ -44,7 +44,7 @@ export function CompanyRecord({
     const currency = company.arr?.currency ?? DEFAULT_CURRENCY;
 
     useRecordCommands({
-        recordId: company.id,
+        layout,
         onNote: write.allowed ? () => setNotesOpen(true) : undefined,
         onTask: write.allowed ? () => setTasksOpen(true) : undefined,
         onOwner: write.allowed ? () => document.getElementById(ownerId)?.focus() : undefined,
@@ -246,7 +246,9 @@ export function CompanyRecord({
             rail={
                 <>
                     <RailCard title="People" count={people.data ? companyPeople.length : undefined}>
-                        {companyPeople.length === 0 ? (
+                        {people.isPending ? (
+                            <RailLoading />
+                        ) : companyPeople.length === 0 ? (
                             <RailEmpty>No people at this company yet.</RailEmpty>
                         ) : (
                             companyPeople.map((p) => (
@@ -260,7 +262,9 @@ export function CompanyRecord({
                         )}
                     </RailCard>
                     <RailCard title="Deals" count={deals.data ? companyDeals.length : undefined}>
-                        {companyDeals.length === 0 ? (
+                        {deals.isPending ? (
+                            <RailLoading />
+                        ) : companyDeals.length === 0 ? (
                             <RailEmpty>No deals with this company yet.</RailEmpty>
                         ) : (
                             companyDeals.map((d) => (

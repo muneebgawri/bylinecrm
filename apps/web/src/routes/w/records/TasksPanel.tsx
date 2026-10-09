@@ -15,7 +15,6 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Skeleton,
     type BadgeProps,
 } from '@bylinecrm/ui';
 import { useState } from 'react';
@@ -24,7 +23,7 @@ import type { TaskView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatDate, formatWhen } from '../../../lib/format';
 import { messageFor } from './InlineEdit';
-import { RailCard, RailEmpty, RailRow } from './RailCard';
+import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 
 const STATUS_LABEL: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', done: 'Done' };
 const STATUS_TONE: Record<TaskStatus, NonNullable<BadgeProps['status']>> = {
@@ -71,9 +70,7 @@ export function TasksPanel({
             }
         >
             {tasks.isPending ? (
-                <div className="px-4 py-3">
-                    <Skeleton className="h-10" />
-                </div>
+                <RailLoading />
             ) : tasks.isError ? (
                 <RailEmpty>Tasks could not be loaded.</RailEmpty>
             ) : items.length === 0 ? (

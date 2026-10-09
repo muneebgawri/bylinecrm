@@ -1,4 +1,4 @@
-import { cn, focusRing } from '@bylinecrm/ui';
+import { Skeleton, cn, focusRing } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -71,4 +71,13 @@ export function RailRow({
 /** The rail card's "nothing here" line; a sentence, never a blank card. */
 export function RailEmpty({ children }: { children: ReactNode }) {
     return <p className="m-0 px-4 py-3 text-[13px] text-text-faint">{children}</p>;
+}
+
+/** A rail card while its rows load: the shape, not "nothing here" (loading is not empty, FR-CRMS-UI-7). */
+export function RailLoading() {
+    return (
+        <div className="px-4 py-3" aria-busy="true" aria-label="Loading">
+            <Skeleton className="h-8" />
+        </div>
+    );
 }

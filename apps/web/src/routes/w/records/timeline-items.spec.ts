@@ -52,7 +52,7 @@ describe('wordsFor', () => {
             entry({
                 kind: 'deal.stage_changed',
                 actor: { kind: 'rule', id: 'r1' },
-                properties: { stage: { pipelineId: 'pl', fromStageId: 's1', toStageId: 's2', reason: 'rule' } },
+                properties: { diff: { stageId: { from: 's1', to: 's2' } } },
             }),
             {
                 ...names,

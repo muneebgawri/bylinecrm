@@ -90,11 +90,15 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
     };
 }
 
-/** `properties.stage` is the event's `StageChange` (ids); the names come from the pipeline the page holds. */
+/**
+ * A stage move is stored as the event's diff, `properties.diff.stageId = { from, to }` (ids, as any
+ * changed field is); the names come from the pipeline the page already holds.
+ */
 function stageWords(entry: TimelineActivityView, names: NameSources): Pick<TimelineWords, 'action' | 'detail'> {
-    const stage = isRecord(entry.properties['stage']) ? entry.properties['stage'] : undefined;
-    const from = typeof stage?.['fromStageId'] === 'string' ? stage['fromStageId'] : null;
-    const to = typeof stage?.['toStageId'] === 'string' ? stage['toStageId'] : null;
+    const diff = isRecord(entry.properties['diff']) ? entry.properties['diff'] : undefined;
+    const move = diff && isRecord(diff['stageId']) ? diff['stageId'] : undefined;
+    const from = typeof move?.['from'] === 'string' ? move['from'] : null;
+    const to = typeof move?.['to'] === 'string' ? move['to'] : null;
     const action = entry.kind.endsWith('.won')
         ? 'won the deal'
         : entry.kind.endsWith('.lost')

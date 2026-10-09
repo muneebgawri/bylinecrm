@@ -10,7 +10,7 @@ import { ComposePlaceholder } from './ComposePlaceholder';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
-import { RailCard, RailEmpty, RailRow } from './RailCard';
+import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
 import { TasksPanel } from './TasksPanel';
@@ -48,7 +48,7 @@ export function PersonRecord({
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
 
     useRecordCommands({
-        recordId: person.id,
+        layout,
         onNote: write.allowed ? () => setNotesOpen(true) : undefined,
         onTask: write.allowed ? () => setTasksOpen(true) : undefined,
         onOwner: write.allowed ? () => document.getElementById(ownerId)?.focus() : undefined,
@@ -315,7 +315,9 @@ export function PersonRecord({
                         )}
                     </RailCard>
                     <RailCard title="Deals" count={deals.data ? personDeals.length : undefined}>
-                        {personDeals.length === 0 ? (
+                        {deals.isPending ? (
+                            <RailLoading />
+                        ) : personDeals.length === 0 ? (
                             <RailEmpty>No deals with this person as the contact.</RailEmpty>
                         ) : (
                             personDeals.map((d) => (

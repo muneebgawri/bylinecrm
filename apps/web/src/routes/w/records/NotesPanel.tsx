@@ -6,7 +6,7 @@ import type { NoteView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatWhen } from '../../../lib/format';
 import { messageFor } from './InlineEdit';
-import { RailCard, RailEmpty } from './RailCard';
+import { RailCard, RailEmpty, RailLoading } from './RailCard';
 import { RichTextView } from './RichTextView';
 
 const NoteEditor = lazy(() => import('./NoteEditor'));
@@ -69,9 +69,7 @@ export function NotesPanel({
                 />
             )}
             {notes.isPending ? (
-                <div className="px-4 py-3">
-                    <Skeleton className="h-10" />
-                </div>
+                <RailLoading />
             ) : notes.isError ? (
                 <RailEmpty>Notes could not be loaded.</RailEmpty>
             ) : items.length === 0 && !open ? (

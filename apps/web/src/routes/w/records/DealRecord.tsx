@@ -35,7 +35,7 @@ import { InlineSelect, InlineText, messageFor } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
-import { RailCard, RailEmpty, RailRow } from './RailCard';
+import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
 import { TasksPanel } from './TasksPanel';
@@ -74,7 +74,7 @@ export function DealRecord({
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
 
     useRecordCommands({
-        recordId: deal.id,
+        layout,
         onNote: edit.allowed ? () => setNotesOpen(true) : undefined,
         onTask: edit.allowed ? () => setTasksOpen(true) : undefined,
         onOwner: edit.allowed ? () => document.getElementById(ownerId)?.focus() : undefined,
@@ -359,9 +359,7 @@ export function DealRecord({
                 <>
                     <RailCard title="Stage history" count={history.data?.length}>
                         {history.isPending ? (
-                            <div className="px-4 py-3">
-                                <Skeleton className="h-8" />
-                            </div>
+                            <RailLoading />
                         ) : history.isError || !history.data?.length ? (
                             <RailEmpty>No stage changes yet.</RailEmpty>
                         ) : (
