@@ -38,7 +38,7 @@ export const DialogContent = forwardRef<
                 <DialogPrimitive.Close
                     className={cn(
                         'absolute right-4 top-4 rounded-sm text-text-muted hover:text-text',
-                        'max-md:right-2 max-md:top-2 max-md:grid max-md:size-11 max-md:place-items-center',
+                        'max-md:right-2 max-md:top-2 max-md:grid max-md:size-touch max-md:place-items-center',
                         focusRing,
                     )}
                 >

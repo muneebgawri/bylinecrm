@@ -505,8 +505,28 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         expect(within(cards).getAllByRole('listitem')).toHaveLength(2);
         expect(within(cards).queryByRole('table')).not.toBeInTheDocument();
         const select = within(cards).getByRole('checkbox', { name: 'Select Series B PR' });
-        expect(select.className).toContain('size-11');
+        expect(select.className).toContain('size-touch');
         expect(within(cards).getByRole('combobox', { name: 'Stage of Series B PR' })).toBeInTheDocument();
+    });
+
+    it('shows loading, not a refusal, while the member’s standing is unknown', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        const router = createMemoryRouter([{ path: '/w/:workspaceId/deals', element: <DealsPage /> }], {
+            initialEntries: [`/w/${WS}/deals`],
+        });
+        render(
+            <QueryClientProvider client={createQueryClient()}>
+                <ThemeProvider>
+                    <TooltipProvider>
+                        <CapabilitiesProvider membership={null}>
+                            <RouterProvider router={router} />
+                        </CapabilitiesProvider>
+                    </TooltipProvider>
+                </ThemeProvider>
+            </QueryClientProvider>,
+        );
+        expect(await screen.findByLabelText('Loading deals')).toBeInTheDocument();
+        expect(screen.queryByText('You cannot see deals')).not.toBeInTheDocument();
     });
 
     it('remembers the rendering the person chose', async () => {

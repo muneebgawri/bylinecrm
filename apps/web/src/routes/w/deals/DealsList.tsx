@@ -323,7 +323,7 @@ export function DealsList({
                                             aria-checked={isSelected}
                                             aria-label={`Select ${deal.name}`}
                                             onClick={() => toggle(deal.id)}
-                                            className="-m-1 grid size-11 shrink-0 place-items-center"
+                                            className="-m-1 grid size-touch shrink-0 place-items-center"
                                         >
                                             <span
                                                 aria-hidden
@@ -339,9 +339,9 @@ export function DealsList({
                                     <button
                                         type="button"
                                         onClick={() => onOpen(deal)}
-                                        className="min-h-11 min-w-0 flex-1 text-left"
+                                        className="min-h-touch min-w-0 flex-1 text-left"
                                     >
-                                        <span className="block truncate text-base font-semibold">{deal.name}</span>
+                                        <span className="block truncate text-touch font-semibold">{deal.name}</span>
                                         <span className="block text-sm text-text-muted tabular-nums">
                                             {formatMoney(deal.amount)}
                                             {deal.ownerId ? ` · ${membersById.get(deal.ownerId) ?? 'Member'}` : ''}
@@ -362,7 +362,7 @@ export function DealsList({
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {stages.map((s) => (
-                                                    <SelectItem key={s.id} value={s.id} className="min-h-11">
+                                                    <SelectItem key={s.id} value={s.id} className="min-h-touch">
                                                         {s.name}
                                                     </SelectItem>
                                                 ))}

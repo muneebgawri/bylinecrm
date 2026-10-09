@@ -2,10 +2,13 @@ import {
     DndContext,
     DragOverlay,
     PointerSensor,
+    pointerWithin,
+    rectIntersection,
     useDraggable,
     useDroppable,
     useSensor,
     useSensors,
+    type CollisionDetection,
     type DragEndEvent,
     type DragStartEvent,
 } from '@dnd-kit/core';
@@ -50,6 +53,17 @@ interface Picked {
 
 /** How far the pointer travels before a press becomes a drag, so a click still opens the deal. */
 const DRAG_DISTANCE_PX = 6;
+
+/**
+ * The lane under the pointer is the drop target — not the lane the dragged card's rectangle
+ * overlaps most, which dnd-kit's default picks and which put a card one lane to the right of where
+ * it was released when grabbed by its right edge (found in the browser walk). Off every lane, the
+ * overlap decides.
+ */
+const dropUnderPointer: CollisionDetection = (args) => {
+    const underPointer = pointerWithin(args);
+    return underPointer.length > 0 ? underPointer : rectIntersection(args);
+};
 
 /**
  * The board: lanes from the API's columns. On a pointer device, drag between lanes with dnd-kit;
@@ -161,6 +175,7 @@ export function DealsBoard({
             onOpen={onOpen}
             onMoveSheet={onMoveSheet}
             onShowList={onShowList}
+            ownScroll={layout === 'lanes'}
             {...(className ? { className } : {})}
         />
     );
@@ -170,6 +185,7 @@ export function DealsBoard({
     return (
         <DndContext
             sensors={sensors}
+            collisionDetection={dropUnderPointer}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onDragCancel={() => setActive(null)}
@@ -213,7 +229,7 @@ function PagedBoard({
 
     return (
         <div>
-            <nav aria-label="Stages" className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
+            <nav aria-label="Stages" className="relative -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
                 {columns.map((column, index) => (
                     <button
                         key={column.stage.id}
@@ -221,7 +237,7 @@ function PagedBoard({
                         onClick={() => goTo(index)}
                         aria-current={index === current ? 'true' : undefined}
                         className={cn(
-                            'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm',
+                            'inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm',
                             index === current && 'border-border-strong bg-surface-raised font-medium shadow-sm',
                         )}
                     >
@@ -244,7 +260,10 @@ function PagedBoard({
                     const index = Math.round(strip.scrollLeft / Math.max(strip.clientWidth, 1));
                     if (index !== current) setCurrent(index);
                 }}
-                className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
+                // `relative`: an absolutely positioned descendant (the sr-only text of "Move to stage")
+                // otherwise takes the page as its containing block, escapes this strip's clipping and
+                // widens the page (found at 375px in the browser walk).
+                className="relative flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
             >
                 {columns.map((column, index) => renderLane(column, index, 'w-full shrink-0 snap-start px-0.5'))}
             </div>
@@ -264,6 +283,12 @@ interface LaneProps {
     onOpen: (deal: OpportunityView) => void;
     onMoveSheet: (deal: OpportunityView) => void;
     onShowList: () => void;
+    /**
+     * Lanes side by side each scroll on their own (and virtualise past `LANE_FOLD`). On a phone the
+     * page is the only vertical scroller — a scroller inside a scroller traps the finger — so a lane
+     * grows with its cards; a column carries at most `BOARD_STAGE_LIMIT`, which bounds it.
+     */
+    ownScroll: boolean;
     className?: string;
 }
 
@@ -279,13 +304,14 @@ function Lane({
     onOpen,
     onMoveSheet,
     onShowList,
+    ownScroll,
     className,
 }: LaneProps) {
     const { setNodeRef, isOver } = useDroppable({ id: column.stage.id, disabled: !canDrag });
     const isKeyboardTarget = picked !== null && picked.targetLane === laneIndex && picked.fromLane !== laneIndex;
     const hidden = Math.max(column.count - column.deals.length, 0);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const virtual = column.deals.length > LANE_FOLD;
+    const virtual = ownScroll && column.deals.length > LANE_FOLD;
     const virtualizer = useVirtualizer({
         count: virtual ? column.deals.length : 0,
         getScrollElement: () => scrollRef.current,
@@ -345,7 +371,12 @@ function Lane({
                     No deals here
                 </div>
             ) : (
-                <div ref={scrollRef} className="-m-1 max-h-[calc(100dvh-18rem)] overflow-y-auto p-1">
+                <div
+                    ref={scrollRef}
+                    // The negative margin lets an own scroller show its cards' focus rings; without one there is
+                    // nothing to compensate for, and it would poke out of the phone's strip.
+                    className={ownScroll ? '-m-1 max-h-[calc(100dvh-18rem)] overflow-y-auto p-1' : 'p-1'}
+                >
                     {virtual ? (
                         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
                             {virtualizer.getVirtualItems().map((item) => {
@@ -377,7 +408,7 @@ function Lane({
                 <button
                     type="button"
                     onClick={onShowList}
-                    className="min-h-11 rounded-lg border-[1.5px] border-dashed border-border-strong px-4 py-3.5 text-center text-text-faint hover:text-text"
+                    className="min-h-touch rounded-lg border-[1.5px] border-dashed border-border-strong px-4 py-3.5 text-center text-text-faint hover:text-text"
                 >
                     {hidden} more — see the list
                 </button>

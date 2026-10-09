@@ -257,7 +257,7 @@ export function DealsPage() {
             />
 
             {/* Views and filters: one row that wraps on a desktop and scrolls sideways on a phone (FR-CRMS-UI-12). */}
-            <div className="mb-3 flex flex-wrap items-center gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1">
+            <div className="relative mb-3 flex flex-wrap items-center gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1">
                 <ViewPicker
                     workspaceId={workspaceId}
                     viewId={savedViewId}
@@ -314,7 +314,10 @@ export function DealsPage() {
                 </div>
             </div>
 
-            {!canRead ? (
+            {membership === null ? (
+                // The member's standing is not known yet: loading, not a refusal (found in the browser walk).
+                <BoardSkeleton stageNames={pipeline?.stages.map((st) => st.name)} />
+            ) : !canRead ? (
                 <EmptyState
                     title="You cannot see deals"
                     body="Your role has no deal:read capability. Ask a workspace admin."

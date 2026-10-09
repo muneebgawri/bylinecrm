@@ -37,7 +37,7 @@ export function MoveSheet({ deal, stages, onClose, onPick }: MoveSheetProps) {
                                                 onPick(deal, stage.id);
                                             }}
                                             className={cn(
-                                                'flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-base',
+                                                'flex min-h-touch w-full items-center gap-3 rounded-md px-3 text-left text-touch',
                                                 'hover:bg-surface disabled:cursor-default disabled:text-text-muted',
                                             )}
                                         >

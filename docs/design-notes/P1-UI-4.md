@@ -69,10 +69,28 @@ says `max-md:`, script says `useIsMobile()`. The shell's sidebar width (900) liv
 - **List, under 768px:** stacked cards — name (opens the drawer), amount and owner, a full-width stage
   select, days in stage, close date — with a 44px selection toggle and the same bulk bar, which spans the
   width and scrolls its actions instead of the page.
+- **Touch sizes are physical tokens:** `--bc-touch-target: 44px` and `--bc-touch-text: 16px` (utilities
+  `*-touch`, `text-touch`). The root font is 14px, so `min-h-11` measured 38.5px and `text-base` 14px in the
+  walk — rem steps cannot express a finger or iOS's zoom threshold; px outside density can.
+- **A phone lane does not scroll on its own:** the page is the only vertical scroller (a scroller inside a
+  scroller traps the finger); a column carries at most `BOARD_STAGE_LIMIT`, so a phone lane renders its
+  cards without virtualising. Lanes side by side keep their own scroller and virtualise past 50.
+- **Horizontal scrollers are positioned (`relative`):** an absolutely positioned descendant (the sr-only
+  text in "Move to stage") otherwise takes the page as its containing block, escapes the scroller's
+  clipping and widens the page — the walk measured a 1156px document at 375px until this.
 - **Rows that scroll sideways, not the page:** the view picker and filter chips, the stage chips, the bulk
   bar. Inputs and selects are 16px / 44px on a phone (iOS does not zoom); buttons and the segmented
   control have a 44px minimum there. All of this is `max-md:` in the primitives, so desktop sizes and the
   visual baselines (taken at 1024px) are unchanged.
+
+## Found in the browser walk (127.0.0.1, desktop and 375px, both themes)
+
+- A card released over Contacted landed in Replied: dnd-kit's default collision picks the lane the dragged
+  rectangle overlaps most. The drop target is now the lane **under the pointer** (`pointerWithin`, with
+  rectangle overlap only off every lane).
+- Right after a reload the page said "You cannot see deals" while the member's standing was still
+  loading. Unknown is not denied: the page shows its skeleton until `/w/:id/me` answers (tested).
+- The phone fixes above (touch tokens, positioned scrollers, no nested vertical scroller).
 
 ## Saved views and filter chips (P1-4, wired here)
 

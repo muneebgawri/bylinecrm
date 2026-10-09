@@ -50,7 +50,7 @@ export const BulkBarAction = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<
                 ref={ref}
                 type={type}
                 className={cn(
-                    'inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-md px-2.5 font-medium transition-colors hover:bg-primary-foreground/20 max-md:h-11',
+                    'inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-md px-2.5 font-medium transition-colors hover:bg-primary-foreground/20 max-md:h-touch',
                     '[&_svg]:size-3.5',
                     focusRing,
                     className,

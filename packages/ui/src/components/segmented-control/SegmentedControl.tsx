@@ -40,7 +40,7 @@ function SegmentedControlInner<V extends string>(
                     value={option.value}
                     disabled={option.disabled}
                     className={cn(
-                        'h-6.5 rounded-[6px] px-2.5 text-[13px] text-text-muted transition-colors max-md:h-11 max-md:px-4 max-md:text-sm',
+                        'h-6.5 rounded-[6px] px-2.5 text-[13px] text-text-muted transition-colors max-md:h-touch max-md:px-4 max-md:text-sm',
                         'data-[state=on]:bg-surface data-[state=on]:font-medium data-[state=on]:text-text data-[state=on]:shadow-sm',
                         'disabled:opacity-50',
                         focusRing,
