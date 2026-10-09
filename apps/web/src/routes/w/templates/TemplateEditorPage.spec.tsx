@@ -265,6 +265,21 @@ describe('Template editor', () => {
         expect(await screen.findByRole('region', { name: 'Preview' })).toBeInTheDocument();
     });
 
+    it('on a phone, opens the variable picker and the kind selector as bottom sheets', async () => {
+        phoneMode();
+        stubApi();
+        const user = userEvent.setup();
+        renderEditor();
+        await user.click(await screen.findByRole('button', { name: 'Insert variable' }));
+        const picker = await screen.findByRole('dialog', { name: 'Insert variable' });
+        expect(within(picker).getByRole('option', { name: /First name/ })).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Insert variable' })).toBeNull());
+        await user.click(screen.getByRole('button', { name: 'Kind: Personal' }));
+        const kind = await screen.findByRole('dialog', { name: 'Kind' });
+        expect(within(kind).getByRole('radio', { name: /Outreach/ })).toBeInTheDocument();
+    });
+
     it('is read-only for a role that cannot write templates, and says why', async () => {
         stubApi();
         renderEditor(CAPABILITIES.filter((c) => c !== 'template:write'));
