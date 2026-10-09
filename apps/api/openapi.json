@@ -4013,6 +4013,17 @@
                         }
                     },
                     {
+                        "name": "moveDealsTo",
+                        "required": false,
+                        "in": "query",
+                        "description": "An open stage of the same pipeline; required when the stage holds deals.",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "workspaceId",
                         "required": true,
                         "in": "path",
@@ -6954,6 +6965,79 @@
                 "responses": {
                     "204": {
                         "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["custom-fields"]
+            }
+        },
+        "/api/w/{workspaceId}/custom-fields/{fieldId}/restore": {
+            "post": {
+                "operationId": "customFields_restore",
+                "parameters": [
+                    {
+                        "name": "fieldId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomField"
+                                }
+                            }
+                        },
                         "headers": {
                             "x-request-id": {
                                 "$ref": "#/components/headers/RequestId"
@@ -15120,6 +15204,27 @@
                             "$ref": "#/components/schemas/FieldError"
                         }
                     },
+                    "details": {
+                        "description": "Facts to act on without parsing the message (counts, limits); present only when the error has some.",
+                        "example": {
+                            "liveDeals": 2,
+                            "trashedDeals": 1
+                        },
+                        "type": "object",
+                        "additionalProperties": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number"
+                                },
+                                {
+                                    "type": "boolean"
+                                }
+                            ]
+                        }
+                    },
                     "requestId": {
                         "type": "string",
                         "description": "Also in the X-Request-Id header.",
@@ -17229,11 +17334,20 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "fromStageName": {
+                        "nullable": true,
+                        "description": "The stage’s name when the move happened; it may since have been renamed or deleted.",
+                        "type": "string"
+                    },
                     "toStageId": {
                         "type": "string",
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "toStageName": {
+                        "type": "string",
+                        "description": "The stage’s name when the move happened; it may since have been renamed or deleted."
                     },
                     "enteredAt": {
                         "example": "2026-10-09T09:30:00.000Z",
@@ -17246,10 +17360,19 @@
                     },
                     "reason": {
                         "type": "string",
-                        "enum": ["manual", "rule", "import", "close"]
+                        "enum": ["manual", "rule", "import", "close", "stage_deleted"]
                     }
                 },
-                "required": ["id", "fromStageId", "toStageId", "enteredAt", "actor", "reason"]
+                "required": [
+                    "id",
+                    "fromStageId",
+                    "fromStageName",
+                    "toStageId",
+                    "toStageName",
+                    "enteredAt",
+                    "actor",
+                    "reason"
+                ]
             },
             "MoveResult": {
                 "type": "object",

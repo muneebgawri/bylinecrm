@@ -169,6 +169,14 @@ export const apiError = named(
             // Absent, never `undefined`: the filter omits the key when there is nothing to say.
             .exactOptional()
             .meta({ description: 'Present when the failure is about specific request fields.' }),
+        details: z
+            .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+            .exactOptional()
+            .meta({
+                description:
+                    'Facts to act on without parsing the message (counts, limits); present only when the error has some.',
+                example: { liveDeals: 2, trashedDeals: 1 },
+            }),
         requestId: z.string().meta({ description: 'Also in the X-Request-Id header.', example: EXAMPLE_ID }),
     }),
 );

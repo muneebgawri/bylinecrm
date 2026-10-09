@@ -70,3 +70,12 @@ export class HistoryQueryDto extends createZodDto(
         limit: z.coerce.number().int().min(1).max(LIST_LIMIT_MAX).default(LIST_LIMIT_DEFAULT),
     }),
 ) {}
+
+/** `DELETE …/stages/:stageId?moveDealsTo=<id>`: where the stage's deals go before it does (P1-2b). */
+export class DeleteStageQueryDto extends createZodDto(
+    z.object({
+        moveDealsTo: uuid
+            .optional()
+            .meta({ description: 'An open stage of the same pipeline; required when the stage holds deals.' }),
+    }),
+) {}

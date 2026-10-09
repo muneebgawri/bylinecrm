@@ -298,4 +298,12 @@ export class CustomFieldsController {
     archive(@Param('fieldId', ParseUUIDPipe) fieldId: string): Promise<void> {
         return this.customFields.archive(fieldId);
     }
+
+    /** Un-archives: the key is accepted on records again (P1-2b). */
+    @Requires('workspace:admin')
+    @Post(':fieldId/restore')
+    @Returns(customFieldView)
+    restore(@Param('fieldId', ParseUUIDPipe) fieldId: string): Promise<CustomFieldView> {
+        return this.customFields.restore(fieldId);
+    }
 }
