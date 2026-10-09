@@ -1,3 +1,5 @@
+// @vitest-environment node
+// This spec reads index.html from disk and asserts on its text; it needs Node, not a DOM.
 import { DENSITY_ATTRIBUTE, DENSITY_STORAGE_KEY, THEME_ATTRIBUTE, THEME_STORAGE_KEY } from '@bylinecrm/ui';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
