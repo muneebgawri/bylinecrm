@@ -21,6 +21,7 @@ import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
 import { GmailQuota } from './quota';
 import { recountThread } from './threads';
 import { emailSummaryOf } from './summary';
+import { linkOutbound, replyEventFor } from './replies';
 import { withGmailRetry, type RetryOptions } from './retry';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
@@ -126,6 +127,32 @@ export class MailSyncService {
         }
     }
 
+    /**
+     * Imports one message the mailbox holds, by Gmail's id, through the same path as a sync (P2-3:
+     * the send job stores what it sent this way). Returns the stored message's id, or `null` when
+     * the message is passed over (a label, or the blocklist). Already stored is not an error: its
+     * id is returned and nothing is announced again.
+     */
+    async importMessage(
+        workspaceId: string,
+        mailboxId: string,
+        providerMessageId: string,
+        retry: RetryOptions = {},
+    ): Promise<string | null> {
+        const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailbox.findUnique({ where: { id: mailboxId } }),
+        );
+        if (!mailbox) return null;
+        await this.importIds(new Run(this, mailbox, retry), [providerMessageId]);
+        const row = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailMessage.findUnique({
+                where: { mailboxId_providerMessageId: { mailboxId, providerMessageId } },
+                select: { id: true },
+            }),
+        );
+        return row?.id ?? null;
+    }
+
     // ── The three ways a run proceeds ────────────────────────────────────────────────────────
 
     private async initial(run: Run): Promise<SyncRunResult> {
@@ -213,10 +240,10 @@ export class MailSyncService {
             }
             incoming.sort((a, b) => a.parsed.sentAt.getTime() - b.parsed.sentAt.getTime());
             for (const message of incoming) {
-                const stored = await this.store(run.mailbox, message);
-                if (stored) {
+                const announced = await this.store(run.mailbox, message);
+                if (announced.length > 0) {
                     totals.imported += 1;
-                    this.events.publish(stored);
+                    for (const event of announced) this.events.publish(event);
                 } else {
                     totals.duplicates += 1;
                 }
@@ -227,8 +254,13 @@ export class MailSyncService {
 
     // ── Storing one message ──────────────────────────────────────────────────────────────────
 
-    /** Stores the message, its thread and participants; returns the event to announce, or `null` if it was already stored. */
-    private async store(mailbox: MailboxRow, message: Incoming): Promise<DomainEvent | null> {
+    /**
+     * Stores the message, its thread and participants; returns the events to announce — its
+     * `email.received` / `email.sent`, then an `email.replied` when it answers one of our sends
+     * (P2-3) — or none when it was already stored. An outbound message that is one of our sends is
+     * linked to it here. One writer: the send job's import and a later sync both come through here.
+     */
+    private async store(mailbox: MailboxRow, message: Incoming): Promise<DomainEvent[]> {
         const { parsed, direction } = message;
         try {
             return await this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
@@ -297,11 +329,33 @@ export class MailSyncService {
                     targets,
                     email,
                 };
-                return event;
+                if (direction === 'outbound') {
+                    await linkOutbound(tx, mailbox, row);
+                    return [event];
+                }
+                const fromPeople = parsed.participants
+                    .filter((p) => p.role === 'from')
+                    .map((p) => people.get(p.address))
+                    .filter((id): id is string => id !== undefined);
+                const replied = await replyEventFor(
+                    tx,
+                    mailbox,
+                    {
+                        id: row.id,
+                        threadId: thread.id,
+                        providerThreadId: parsed.providerThreadId,
+                        inReplyTo: row.inReplyTo,
+                        references: row.references,
+                        sentAt: row.sentAt,
+                    },
+                    email,
+                    fromPeople,
+                );
+                return replied ? [event, replied] : [event];
             });
         } catch (error) {
             // Another run stored it between our check and our write: it is stored, once.
-            if (uniqueViolation(error)) return null;
+            if (uniqueViolation(error)) return [];
             throw error;
         }
     }

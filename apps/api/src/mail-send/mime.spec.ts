@@ -1,3 +1,4 @@
+import libmime from 'libmime';
 import { describe, expect, it } from 'vitest';
 import { buildMime, newMessageId, replySubject, type MimeInput } from './mime';
 
@@ -67,8 +68,9 @@ describe('FR-CRMS-2 the MIME builder', () => {
             to: [{ address: 'zoe@acme.example', name: 'Zoë Ünal' }],
         });
         const h = headersOf(mime);
-        expect(h.get('subject')).toMatch(/^=\?UTF-8\?[BQ]\?.+\?=$/);
-        expect(h.get('to')).toMatch(/^=\?UTF-8\?[BQ]\?.+\?= <zoe@acme\.example>$/);
+        expect(h.get('subject')).toContain('=?UTF-8?');
+        expect(libmime.decodeWords(h.get('subject')!)).toBe('Prix — série B');
+        expect(libmime.decodeWords(h.get('to')!)).toBe('Zoë Ünal <zoe@acme.example>');
         // The header block is 7-bit: every non-ASCII character is inside an encoded word.
         expect([...mime.split('\r\n\r\n')[0]!].every((c) => c.charCodeAt(0) < 128)).toBe(true);
     });

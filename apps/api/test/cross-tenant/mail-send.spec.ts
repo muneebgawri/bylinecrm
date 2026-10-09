@@ -53,7 +53,14 @@ interface BusEvent {
     recordId: string;
     related?: { type: string; id: string }[];
     email?: { messageId: string; direction: string; rfc822MessageId: string | null };
-    reply?: { messageId: string; inReplyToMessageId: string; threadId: string; personIds: string[]; dealIds: string[] };
+    reply?: {
+        messageId: string;
+        inReplyToOutboundId: string;
+        inReplyToMessageId: string | null;
+        threadId: string;
+        personIds: string[];
+        dealIds: string[];
+    };
 }
 interface Stage {
     id: string;
@@ -569,7 +576,12 @@ describe('mail send and reply detection', () => {
             expect(replied).toHaveLength(1);
             expect(replied[0]).toMatchObject({
                 workspaceId: workspace,
-                reply: { inReplyToMessageId: ours.mailMessageId, personIds: [danaId], dealIds: [dealId] },
+                reply: {
+                    inReplyToOutboundId: ours.id,
+                    inReplyToMessageId: ours.mailMessageId,
+                    personIds: [danaId],
+                    dealIds: [dealId],
+                },
             });
             expect(replied[0]!.related).toEqual(
                 expect.arrayContaining([
@@ -601,12 +613,14 @@ describe('mail send and reply detection', () => {
         });
 
         it('recognises a reply in the same Gmail thread without In-Reply-To', async () => {
+            const { providerThreadId } = await owner.mailOutbound.findUniqueOrThrow({ where: { id: ours.id } });
+            expect(providerThreadId).not.toBeNull();
             gmail.deliver(adminEmail, {
                 from: dana,
                 to: [adminEmail],
                 subject: 'one more thing',
                 text: 'Also, the deck.',
-                threadId: gmail.sent.find((s) => s.raw.includes(ourMessageId))!.threadId ?? undefined,
+                threadId: providerThreadId!,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(ofType('email.replied')).toHaveLength(2);
