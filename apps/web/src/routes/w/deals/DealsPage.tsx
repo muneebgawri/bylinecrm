@@ -14,12 +14,15 @@ import {
     SelectValue,
     Skeleton,
     toast,
+    useCoarsePointer,
+    useIsMobile,
     writeStored,
 } from '@bylinecrm/ui';
-import { Plus, Settings2 } from 'lucide-react';
+import { Download, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ApiError } from '../../../api/client';
+import { opportunities } from '../../../api/endpoints';
 import { useBoard, useMembersSummary, usePipelines, useRules, useUpdateDeal } from '../../../api/queries';
 import type { OpportunityView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
@@ -27,11 +30,13 @@ import { decodeFilter, encodeFilter } from '../../../lib/filterParam';
 import { useRegisterCommands } from '../../../commands/registry';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { withOpen } from '../records/targets';
 import { ruleEventLabel } from './BackwardMoveDialog';
 import { DealsBoard } from './DealsBoard';
 import { DealsList } from './DealsList';
 import { DEALS_PARAMS, DEALS_VIEW_KEY, isDealsView, type DealsView } from './dealsView';
 import { FilterChips } from './FilterChips';
+import { MoveSheet } from './MoveSheet';
 import { NewDealDialog } from './NewDealDialog';
 import { useDealMove } from './useDealMove';
 import { ViewPicker } from './ViewPicker';
@@ -63,6 +68,12 @@ export function DealsPage() {
     const canSaveView = useCan('view:save');
     const canShareView = useCan('view:share');
     const membership = useMembership();
+    // A phone gets one stage per screen and stacked cards; a finger gets "Move to stage" instead of drag.
+    const mobile = useIsMobile();
+    const coarse = useCoarsePointer();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [moving, setMoving] = useState<OpportunityView | null>(null);
 
     const pipelines = usePipelines(workspaceId);
     const pipelineId =
@@ -92,20 +103,17 @@ export function DealsPage() {
     // The saved view, its filter and sort, and the inline overrides — the API applies the same rule:
     // an inline filter or sort replaces the view's whole (P1-4).
     const [selectedView, setSelectedView] = useState<SavedView | null>(null);
-    const inlineFilter = useMemo(() => decodeFilter(filterParam), [filterParam]);
+    // Cheap to recompute from the URL's strings on each render, so neither is memoised.
+    const inlineFilter = decodeFilter(filterParam);
     const shownFilter: FilterGroup | null =
         inlineFilter ?? (selectedView && selectedView.id === savedViewId ? selectedView.filter : null);
-    const currentSorts: ViewSort[] = useMemo(
-        () =>
-            (sort ?? '')
-                .split(',')
-                .filter(Boolean)
-                .map((part) => {
-                    const [field = '', direction] = part.split(':');
-                    return { field, direction: direction === 'desc' ? 'desc' : 'asc' };
-                }),
-        [sort],
-    );
+    const currentSorts: ViewSort[] = (sort ?? '')
+        .split(',')
+        .filter(Boolean)
+        .map((part) => {
+            const [field = '', direction] = part.split(':');
+            return { field, direction: direction === 'desc' ? 'desc' : 'asc' };
+        });
 
     const setParam = useCallback(
         (key: string, value: string | undefined) =>
@@ -161,7 +169,7 @@ export function DealsPage() {
     const onAssign = useCallback(
         (deal: OpportunityView, ownerId: string | null) =>
             updateDeal.mutate(
-                { dealId: deal.id, ownerId },
+                { dealId: deal.id, patch: { ownerId } },
                 {
                     onError: (error) =>
                         toast({
@@ -194,12 +202,19 @@ export function DealsPage() {
     if (board.isError && board.error instanceof ApiError && board.error.status !== 404) throw board.error;
 
     const currency = board.data?.columns.find((c) => c.deals[0])?.deals[0]?.currency ?? DEFAULT_CURRENCY;
+    /** The deal's record drawer over this page (P1-UI-3's `?open=`), so the board stays where it was. */
+    const openDeal = useCallback(
+        (deal: OpportunityView) =>
+            navigate({ search: withOpen(location.search, { type: 'opportunity', id: deal.id }) }),
+        [location.search, navigate],
+    );
+    const exportHref = opportunities.exportUrl(workspaceId, { view: savedViewId, filter: filterParam, sort, q });
     const enabledRules = (rules.data ?? []).filter((r) => r.enabled);
     const stagesById = new Map(pipeline?.stages.map((s) => [s.id, s]) ?? []);
     const dealCount = board.data?.columns.reduce((n, c) => n + c.count, 0);
 
     return (
-        <div className="p-7">
+        <div className="p-7 max-md:p-4">
             <PageHeader
                 title="Deals"
                 subtitle={
@@ -232,15 +247,6 @@ export function DealsPage() {
                             onValueChange={setView}
                             options={VIEW_OPTIONS}
                         />
-                        <ViewPicker
-                            workspaceId={workspaceId}
-                            viewId={savedViewId}
-                            onSelect={selectView}
-                            current={{ filter: shownFilter, sorts: currentSorts }}
-                            memberId={membership?.memberId ?? null}
-                            canSave={canSaveView}
-                            canShare={canShareView}
-                        />
                         {canEdit && (
                             <Button variant="primary" shape="square" onClick={() => setParam(DEALS_PARAMS.create, '1')}>
                                 <Plus aria-hidden /> New deal
@@ -250,7 +256,17 @@ export function DealsPage() {
                 }
             />
 
-            <div className="mb-4 flex flex-wrap items-center gap-3">
+            {/* Views and filters: one row that wraps on a desktop and scrolls sideways on a phone (FR-CRMS-UI-12). */}
+            <div className="mb-3 flex flex-wrap items-center gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1">
+                <ViewPicker
+                    workspaceId={workspaceId}
+                    viewId={savedViewId}
+                    onSelect={selectView}
+                    current={{ filter: shownFilter, sorts: currentSorts }}
+                    memberId={membership?.memberId ?? null}
+                    canSave={canSaveView}
+                    canShare={canShareView}
+                />
                 <FilterChips
                     filter={shownFilter}
                     onChange={setFilter}
@@ -258,13 +274,15 @@ export function DealsPage() {
                     ownerFilterAllowed={membership?.recordScope !== 'own'}
                     currency={currency}
                 />
+            </div>
+            <div className="mb-4 flex flex-wrap items-center gap-3">
                 <Input
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search deals…"
                     aria-label="Search deals"
-                    className="h-8.5 w-64"
+                    className="h-8.5 w-64 max-md:w-full"
                 />
                 {enabledRules.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
@@ -278,13 +296,22 @@ export function DealsPage() {
                         <span className="text-text-faint">· never backward unless asked</span>
                     </div>
                 )}
-                {configure.allowed ? (
-                    <Button variant="ghost" size="sm" shape="square" className="ml-auto" asChild>
-                        <Link to={paths.settingsPipelines(workspaceId)}>
-                            <Settings2 aria-hidden /> Configure pipeline
-                        </Link>
-                    </Button>
-                ) : null}
+                <div className="ml-auto flex items-center gap-1 max-md:ml-0">
+                    {canRead && (
+                        <Button variant="ghost" size="sm" shape="square" asChild>
+                            <a href={exportHref} download>
+                                <Download aria-hidden /> Export CSV
+                            </a>
+                        </Button>
+                    )}
+                    {configure.allowed ? (
+                        <Button variant="ghost" size="sm" shape="square" asChild>
+                            <Link to={paths.settingsPipelines(workspaceId)}>
+                                <Settings2 aria-hidden /> Configure pipeline
+                            </Link>
+                        </Button>
+                    ) : null}
+                </div>
             </div>
 
             {!canRead ? (
@@ -303,8 +330,12 @@ export function DealsPage() {
                 <DealsBoard
                     board={board.data}
                     canMove={canMove}
+                    layout={mobile ? 'pages' : 'lanes'}
+                    touch={mobile || coarse}
                     membersById={membersById}
                     onMove={move.request}
+                    onMoveSheet={setMoving}
+                    onOpen={openDeal}
                     announce={announce}
                     onShowList={() => setView('list')}
                 />
@@ -320,14 +351,18 @@ export function DealsPage() {
                     onSortChange={(next) => setParam(DEALS_PARAMS.sort, next)}
                     onMove={move.request}
                     onAssign={onAssign}
+                    onOpen={openDeal}
+                    stacked={mobile}
                 />
             )}
 
             {board.data && (
                 <p className="mt-4 text-[13px] text-text-muted">
-                    {view === 'board'
-                        ? 'Drag a card, or focus it and press Space, ← →, Space. A move the server refuses snaps back and says why.'
-                        : 'Change a stage from its select; select rows for the bulk bar. Sorting is the pipeline’s own.'}
+                    {view !== 'board'
+                        ? 'Change a stage from its select; select rows for the bulk bar. Open a deal from its name.'
+                        : mobile || coarse
+                          ? 'Swipe between stages; tap a deal to open it, or “Move to stage” to move it.'
+                          : 'Drag a card, or focus it and press Space, ← →, Space. Click or press Enter to open it. A move the server refuses snaps back and says why.'}
                 </p>
             )}
 
@@ -335,6 +370,12 @@ export function DealsPage() {
                 {announcement}
             </div>
             {move.dialogs}
+            <MoveSheet
+                deal={moving}
+                stages={pipeline?.stages ?? []}
+                onClose={() => setMoving(null)}
+                onPick={move.request}
+            />
             <NewDealDialog
                 workspaceId={workspaceId}
                 pipeline={pipeline}

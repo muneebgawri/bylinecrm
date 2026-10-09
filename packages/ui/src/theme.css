@@ -14,6 +14,10 @@
     --font-*: initial;
     --radius-*: initial;
     --shadow-*: initial;
+
+    /* The phone/desktop line (FR-CRMS-UI-12): `max-md:` in CSS, `useIsMobile()` in script.
+       Must equal BREAKPOINT_PX.mobile in lib/breakpoints.ts — breakpoints.spec.ts checks it. */
+    --breakpoint-md: 48rem;
 }
 
 @theme inline {

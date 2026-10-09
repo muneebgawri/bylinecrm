@@ -1,11 +1,10 @@
-import type { Money } from '@bylinecrm/shared';
 import { toast } from '@bylinecrm/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { ApiError } from '../../../api/client';
 import { useMoveDeal, useRules } from '../../../api/queries';
 import type { BoardView, OpportunityView, RuleView, StageView } from '../../../api/types';
 import { BackwardMoveDialog, ruleEventLabel, type BackwardRequest } from './BackwardMoveDialog';
-import { CloseDealDialog, type CloseRequest } from './CloseDealDialog';
+import { CloseDealDialog, type ClosePayload, type CloseRequest } from './CloseDealDialog';
 import { classifyMove } from './moveGate';
 
 /**
@@ -37,14 +36,10 @@ export function useDealMove(
     );
 
     const perform = useCallback(
-        (
-            deal: OpportunityView,
-            stage: StageView,
-            close?: { wonAmount?: Money | undefined; lostReason?: string | undefined },
-        ) => {
+        (deal: OpportunityView, stage: StageView, close?: ClosePayload) => {
             announce?.(`${deal.name}, moving to ${stage.name}`);
             move.mutate(
-                { dealId: deal.id, pipelineId: deal.pipelineId, stageId: stage.id, close },
+                { dealId: deal.id, pipelineId: deal.pipelineId, stageId: stage.id, ...(close ? { close } : {}) },
                 {
                     onSuccess: (result) => {
                         announce?.(`${deal.name}, moved to ${stage.name}`);

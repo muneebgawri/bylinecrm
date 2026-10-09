@@ -12,6 +12,13 @@ import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
 
 /** Settings is its own chunk: admins only, loaded on first visit (FR-CRMS-UI-10). */
+/** Record pages are one chunk: the three records share their panels (FR-CRMS-UI-10). */
+const records = {
+    person: () => import('./w/records/RecordPages').then((m) => ({ Component: m.PersonPage })),
+    company: () => import('./w/records/RecordPages').then((m) => ({ Component: m.CompanyPage })),
+    deal: () => import('./w/records/RecordPages').then((m) => ({ Component: m.DealPage })),
+};
+
 const settings = {
     layout: () => import('./w/settings/SettingsLayout').then((m) => ({ Component: m.SettingsLayout })),
     members: () => import('./w/settings/Members').then((m) => ({ Component: m.Members })),
@@ -45,8 +52,16 @@ const workspaceRoutes: RouteObject = {
         page('home', 'home', 'Dashboard'),
         page('reports', 'reports', 'Reports'),
         page('people', 'people', 'People'),
+        { path: 'people/:personId', lazy: records.person, handle: { crumb: 'Person' }, errorElement: <RouteError /> },
         page('companies', 'companies', 'Companies'),
+        {
+            path: 'companies/:companyId',
+            lazy: records.company,
+            handle: { crumb: 'Company' },
+            errorElement: <RouteError />,
+        },
         { path: 'deals', lazy: dealsPage, handle: { crumb: 'Deals' }, errorElement: <RouteError /> },
+        { path: 'deals/:dealId', lazy: records.deal, handle: { crumb: 'Deal' }, errorElement: <RouteError /> },
         page('sequences', 'sequences', 'Sequences'),
         page('templates', 'templates', 'Templates'),
         page('mailboxes', 'mailboxes', 'Mailboxes'),

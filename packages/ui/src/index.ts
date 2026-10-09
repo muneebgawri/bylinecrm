@@ -2,6 +2,16 @@ export { cn } from './lib/cn';
 export { focusRing } from './lib/focus';
 export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
+export {
+    BREAKPOINT_PX,
+    COARSE_POINTER_QUERY,
+    MOBILE_QUERY,
+    NARROW_QUERY,
+    useCoarsePointer,
+    useIsMobile,
+    useIsNarrow,
+    useMediaQuery,
+} from './lib/breakpoints';
 
 export * from './theme/theme';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/ThemeProvider';

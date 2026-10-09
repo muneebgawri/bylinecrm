@@ -1,15 +1,17 @@
-import type { RecordObject } from '@bylinecrm/shared';
-import { request } from './client';
+import type { RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
+import { API_BASE, request } from './client';
 import type {
     ApiKeyView,
+    AttachmentView,
     BoardQuery,
-    CreateViewInput,
     BoardView,
-    CompanySummary,
+    CompanyInput,
+    CompanyView,
     CreateApiKeyInput,
     CreateInviteInput,
-    CreateOpportunityInput,
     CreateRoleInput,
+    CreateViewInput,
+    CustomFieldView,
     InviteView,
     LoginInput,
     MembershipSummary,
@@ -17,19 +19,49 @@ import type {
     MemberView,
     MoveDealInput,
     MoveResult,
+    NoteInput,
+    NoteView,
+    OpportunityCreateInput,
+    OpportunityInput,
     OpportunityView,
     Page,
+    PersonInput,
+    PersonView,
     PipelineView,
     RoleView,
     RuleView,
     SavedView,
     SignupInput,
-    UpdateOpportunityInput,
+    StageHistoryEntry,
+    TaskInput,
+    TaskView,
+    TimelineActivityView,
     UpdateRoleInput,
     UpdateViewInput,
     UserView,
     WorkspaceView,
 } from './types';
+
+/** `person:<uuid>` — how a target travels in a query string; the API parses the same spelling. */
+export function targetParam(target: RecordTarget): string {
+    return `${target.type}:${target.id}`;
+}
+
+/** Builds `?a=b&c=d` from the defined values only. */
+function query(params: Record<string, string | number | undefined>): string {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, String(value));
+    const text = search.toString();
+    return text ? `?${text}` : '';
+}
+
+/** A type alias (not an interface) so it satisfies `query`'s index signature. */
+export type ListParams = {
+    cursor?: string | undefined;
+    limit?: number | undefined;
+    sort?: string | undefined;
+    q?: string | undefined;
+};
 
 /**
  * One function per API route, named for what it does, typed by `types.ts`. Paths are built here
@@ -64,21 +96,9 @@ export const membership = {
         request<MembershipSummary>('GET', workspacePath(workspaceId, '/me'), { signal }),
 };
 
-/** `?a=1&b=2` from the defined entries only; empty when none. */
-function query(params: { readonly [key: string]: string | number | undefined }): string {
-    const search = new URLSearchParams();
-    for (const [key, value] of Object.entries(params))
-        if (value !== undefined && value !== '') search.set(key, String(value));
-    const text = search.toString();
-    return text ? `?${text}` : '';
-}
-
 export const members = {
     list: (workspaceId: string, signal?: AbortSignal) =>
         request<MemberView[]>('GET', workspacePath(workspaceId, '/members'), { signal }),
-    /** Names for owner/assignee pickers; readable by anyone with `record:read`. */
-    summary: (workspaceId: string, signal?: AbortSignal) =>
-        request<MemberSummaryView[]>('GET', workspacePath(workspaceId, '/members/summary'), { signal }),
     setRole: (workspaceId: string, memberId: string, roleId: string) =>
         request<void>('PATCH', workspacePath(workspaceId, `/members/${memberId}/role`), { body: { roleId } }),
     remove: (workspaceId: string, memberId: string) =>
@@ -108,55 +128,6 @@ export const apiKeys = {
         request<void>('DELETE', workspacePath(workspaceId, `/api-keys/${apiKeyId}`)),
 };
 
-export const pipelines = {
-    list: (workspaceId: string, signal?: AbortSignal) =>
-        request<PipelineView[]>('GET', workspacePath(workspaceId, '/pipelines'), { signal }),
-    /** The board: every stage with its deals, count and exact sums under the caller's scope and the query. */
-    board: (workspaceId: string, pipelineId: string, params: BoardQuery, signal?: AbortSignal) =>
-        request<BoardView>(
-            'GET',
-            workspacePath(
-                workspaceId,
-                `/pipelines/${pipelineId}/board${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`,
-            ),
-            {
-                signal,
-            },
-        ),
-    rules: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
-        request<RuleView[]>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules`), { signal }),
-};
-
-export const views = {
-    /** Shared views and the caller's own, for one object. */
-    list: (workspaceId: string, object: RecordObject, signal?: AbortSignal) =>
-        request<SavedView[]>('GET', workspacePath(workspaceId, `/views${query({ object })}`), { signal }),
-    create: (workspaceId: string, input: CreateViewInput) =>
-        request<SavedView>('POST', workspacePath(workspaceId, '/views'), { body: input }),
-    update: (workspaceId: string, viewId: string, input: UpdateViewInput) =>
-        request<SavedView>('PATCH', workspacePath(workspaceId, `/views/${viewId}`), { body: input }),
-    remove: (workspaceId: string, viewId: string) =>
-        request<void>('DELETE', workspacePath(workspaceId, `/views/${viewId}`)),
-};
-
-export const deals = {
-    create: (workspaceId: string, input: CreateOpportunityInput) =>
-        request<OpportunityView>('POST', workspacePath(workspaceId, '/opportunities'), { body: input }),
-    update: (workspaceId: string, dealId: string, input: UpdateOpportunityInput) =>
-        request<OpportunityView>('PATCH', workspacePath(workspaceId, `/opportunities/${dealId}`), { body: input }),
-    /** The one way a deal changes stage; a won/lost target needs `close`. */
-    move: (workspaceId: string, dealId: string, input: MoveDealInput) =>
-        request<MoveResult>('POST', workspacePath(workspaceId, `/opportunities/${dealId}/move`), { body: input }),
-};
-
-export const companies = {
-    /** A short search for pickers: name or domain prefix, a handful of rows. */
-    search: (workspaceId: string, q: string, signal?: AbortSignal) =>
-        request<Page<CompanySummary>>('GET', workspacePath(workspaceId, `/companies${query({ q, limit: 8 })}`), {
-            signal,
-        }),
-};
-
 export const invites = {
     list: (workspaceId: string, signal?: AbortSignal) =>
         request<InviteView[]>('GET', workspacePath(workspaceId, '/invites'), { signal }),
@@ -167,4 +138,168 @@ export const invites = {
         }),
     revoke: (workspaceId: string, inviteId: string) =>
         request<void>('DELETE', workspacePath(workspaceId, `/invites/${inviteId}`)),
+};
+
+export const membersSummary = {
+    /** Enough to name a member in a picker; readable by anyone with `record:read`. */
+    list: (workspaceId: string, signal?: AbortSignal) =>
+        request<MemberSummaryView[]>('GET', workspacePath(workspaceId, '/members/summary'), { signal }),
+};
+
+/** The three record objects share one shape of route: list, get, create, patch, delete, restore. */
+function recordRoutes<View, Input>(segment: string) {
+    return {
+        list: (workspaceId: string, params: ListParams = {}, signal?: AbortSignal) =>
+            request<Page<View>>('GET', workspacePath(workspaceId, `/${segment}${query(params)}`), { signal }),
+        get: (workspaceId: string, id: string, signal?: AbortSignal) =>
+            request<View>('GET', workspacePath(workspaceId, `/${segment}/${id}`), { signal }),
+        create: (workspaceId: string, input: Input) =>
+            request<View>('POST', workspacePath(workspaceId, `/${segment}`), { body: input }),
+        update: (workspaceId: string, id: string, input: Input) =>
+            request<View>('PATCH', workspacePath(workspaceId, `/${segment}/${id}`), { body: input }),
+        remove: (workspaceId: string, id: string) =>
+            request<void>('DELETE', workspacePath(workspaceId, `/${segment}/${id}`)),
+        restore: (workspaceId: string, id: string) =>
+            request<View>('POST', workspacePath(workspaceId, `/${segment}/${id}/restore`)),
+    };
+}
+
+export const people = recordRoutes<PersonView, PersonInput>('people');
+export const companies = recordRoutes<CompanyView, CompanyInput>('companies');
+export const opportunities = {
+    ...recordRoutes<OpportunityView, OpportunityInput>('opportunities'),
+    /** Create names where the deal starts; omitted, the default pipeline's first stage. */
+    create: (workspaceId: string, input: OpportunityCreateInput) =>
+        request<OpportunityView>('POST', workspacePath(workspaceId, '/opportunities'), { body: input }),
+    /** A stage move (P1-2): into a won/lost stage the close payload is required; a backward move answers with the rules that may undo it. */
+    move: (workspaceId: string, id: string, input: MoveDealInput) =>
+        request<MoveResult>('POST', workspacePath(workspaceId, `/opportunities/${id}/move`), { body: input }),
+    /** The filtered, scoped deals as CSV (P1-4): a download link, not a fetch — the browser streams it. */
+    exportUrl: (workspaceId: string, params: BoardQuery) =>
+        `${API_BASE}${workspacePath(workspaceId, `/opportunities/export.csv${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`)}`,
+    history: (workspaceId: string, id: string, signal?: AbortSignal) =>
+        request<StageHistoryEntry[]>('GET', workspacePath(workspaceId, `/opportunities/${id}/history`), { signal }),
+};
+
+export const pipelines = {
+    list: (workspaceId: string, signal?: AbortSignal) =>
+        request<PipelineView[]>('GET', workspacePath(workspaceId, '/pipelines'), { signal }),
+    get: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
+        request<PipelineView>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}`), { signal }),
+    /** Every stage with its deals, count and exact sums under the caller's scope and the query (P1-2, P1-4). */
+    board: (workspaceId: string, pipelineId: string, params: BoardQuery, signal?: AbortSignal) =>
+        request<BoardView>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/pipelines/${pipelineId}/board${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`,
+            ),
+            { signal },
+        ),
+    rules: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
+        request<RuleView[]>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules`), { signal }),
+};
+
+export const views = {
+    /** Shared views and the caller's own, for one object (P1-4). */
+    list: (workspaceId: string, object: RecordObject, signal?: AbortSignal) =>
+        request<SavedView[]>('GET', workspacePath(workspaceId, `/views${query({ object })}`), { signal }),
+    create: (workspaceId: string, input: CreateViewInput) =>
+        request<SavedView>('POST', workspacePath(workspaceId, '/views'), { body: input }),
+    update: (workspaceId: string, viewId: string, input: UpdateViewInput) =>
+        request<SavedView>('PATCH', workspacePath(workspaceId, `/views/${viewId}`), { body: input }),
+    remove: (workspaceId: string, viewId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/views/${viewId}`)),
+};
+
+export const customFields = {
+    list: (workspaceId: string, object: RecordObject, signal?: AbortSignal) =>
+        request<CustomFieldView[]>('GET', workspacePath(workspaceId, `/custom-fields${query({ object })}`), {
+            signal,
+        }),
+};
+
+export const notes = {
+    list: (workspaceId: string, target: RecordTarget, cursor?: string, signal?: AbortSignal) =>
+        request<Page<NoteView>>(
+            'GET',
+            workspacePath(workspaceId, `/notes${query({ target: targetParam(target), cursor })}`),
+            { signal },
+        ),
+    create: (workspaceId: string, input: NoteInput & { targets: RecordTarget[] }) =>
+        request<NoteView>('POST', workspacePath(workspaceId, '/notes'), { body: input }),
+    update: (workspaceId: string, id: string, input: NoteInput) =>
+        request<NoteView>('PATCH', workspacePath(workspaceId, `/notes/${id}`), { body: input }),
+    remove: (workspaceId: string, id: string) => request<void>('DELETE', workspacePath(workspaceId, `/notes/${id}`)),
+};
+
+export const tasks = {
+    list: (
+        workspaceId: string,
+        params: {
+            target?: RecordTarget | undefined;
+            assigneeId?: string | undefined;
+            status?: TaskStatus | undefined;
+            cursor?: string | undefined;
+        },
+        signal?: AbortSignal,
+    ) =>
+        request<Page<TaskView>>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/tasks${query({
+                    target: params.target ? targetParam(params.target) : undefined,
+                    assigneeId: params.assigneeId,
+                    status: params.status,
+                    cursor: params.cursor,
+                })}`,
+            ),
+            { signal },
+        ),
+    create: (workspaceId: string, input: TaskInput & { title: string; targets: RecordTarget[] }) =>
+        request<TaskView>('POST', workspacePath(workspaceId, '/tasks'), { body: input }),
+    update: (workspaceId: string, id: string, input: TaskInput) =>
+        request<TaskView>('PATCH', workspacePath(workspaceId, `/tasks/${id}`), { body: input }),
+    remove: (workspaceId: string, id: string) => request<void>('DELETE', workspacePath(workspaceId, `/tasks/${id}`)),
+};
+
+export const attachments = {
+    list: (workspaceId: string, target: RecordTarget, signal?: AbortSignal) =>
+        request<AttachmentView[]>(
+            'GET',
+            workspacePath(workspaceId, `/attachments${query({ target: targetParam(target) })}`),
+            { signal },
+        ),
+    /** The file is the multipart body (`file`); the target rides in the query string. */
+    upload: (workspaceId: string, target: RecordTarget, file: File) => {
+        const body = new FormData();
+        body.set('file', file, file.name);
+        return request<AttachmentView>(
+            'POST',
+            workspacePath(workspaceId, `/attachments${query({ target: targetParam(target) })}`),
+            { body },
+        );
+    },
+    /** A same-origin URL the browser fetches with the session cookie; never embedded, always opened. */
+    contentUrl: (workspaceId: string, id: string) =>
+        `${API_BASE}${workspacePath(workspaceId, `/attachments/${id}/content`)}`,
+    remove: (workspaceId: string, id: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/attachments/${id}`)),
+};
+
+export const timeline = {
+    list: (
+        workspaceId: string,
+        params: { target: RecordTarget; kinds?: string | undefined; cursor?: string | undefined },
+        signal?: AbortSignal,
+    ) =>
+        request<Page<TimelineActivityView>>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/timeline${query({ target: targetParam(params.target), kinds: params.kinds, cursor: params.cursor })}`,
+            ),
+            { signal },
+        ),
 };

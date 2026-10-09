@@ -43,6 +43,37 @@ the drop zones are disabled.
 Bulk moves are refused for won/lost stages with a toast that says why: a close records a won amount or a
 lost reason per deal, which a bulk action cannot ask for.
 
+## Opening a deal
+
+A click or tap on a card, Enter on a focused card, or a deal's name in the list opens its record drawer
+over the board through P1-UI-3's `?open=opportunity:<id>` (`withOpen`) — the board stays where it was and
+a refresh or shared link reopens it. A press that travels 6 px is a drag on a pointer device, so a click
+is never mistaken for one.
+
+## Phones and touch (FR-CRMS-UI-12)
+
+One breakpoint: `BREAKPOINT_PX.mobile` (768) in `packages/ui/src/lib/breakpoints.ts`, which is Tailwind's
+`md` (`--breakpoint-md: 48rem` declared in `theme.css`; `breakpoints.spec.ts` fails if they differ). CSS
+says `max-md:`, script says `useIsMobile()`. The shell's sidebar width (900) lives in the same file as
+`narrow`; the shell's own media-query module is gone in favour of the design system's hook.
+
+- **Board, under 768px:** one stage per screen in a horizontal scroll-snap strip, and a row of stage chips
+  (name, count, 44px) on top that follows the swipe and jumps to a stage.
+- **Moving on touch:** no drag on a finger (`(pointer: coarse)` or a phone) — each card has **"Move to
+  stage"**, which opens `MoveSheet`, a list of 44px stage rows; it calls the same `request` as everything
+  else, so a close still asks for its payload and a backward move still names the rules ahead. dnd-kit
+  stays for pointer devices; the keyboard twin works everywhere.
+- **Sheets:** below 768px every `Dialog` in the design system is a bottom sheet (full width, anchored to
+  the bottom, safe-area padding, scrolling inside, a 44px close) — the close dialog, the backward-move
+  dialog, "Add a filter", "Save view", "New deal" and the move sheet with no per-dialog code.
+- **List, under 768px:** stacked cards — name (opens the drawer), amount and owner, a full-width stage
+  select, days in stage, close date — with a 44px selection toggle and the same bulk bar, which spans the
+  width and scrolls its actions instead of the page.
+- **Rows that scroll sideways, not the page:** the view picker and filter chips, the stage chips, the bulk
+  bar. Inputs and selects are 16px / 44px on a phone (iOS does not zoom); buttons and the segmented
+  control have a 44px minimum there. All of this is `max-md:` in the primitives, so desktop sizes and the
+  visual baselines (taken at 1024px) are unchanged.
+
 ## Saved views and filter chips (P1-4, wired here)
 
 - **View picker** — "All deals", then shared views and the member's own (`GET /views?object=opportunity`).
@@ -75,11 +106,15 @@ The deals route is a lazy chunk carrying dnd-kit, TanStack Table and TanStack Vi
 `vendor` chunk now matches only the framework's TanStack package (React Query) — it used to match every
 `@tanstack/*`, which would have put Table and Virtual on every page's first load.
 
-**The budget now measures everything `index.html` loads.** Splitting the toast renderer out made Rollup
-create a shared chunk that every page preloaded but `.size-limit.json` did not name, so the reported
-figure dropped by 18 kB while the page did not get lighter. The design system now has a stable `ui` chunk
-(`packages/ui` + Radix, minus the toast renderer), and the budget's paths are `index`, `vendor`, `ui` and the
-runtime — the files the HTML loads before first paint. Today: **188.6 kB of 190 kB**.
+**The budget measures what `index.html` loads.** `.size-limit.js` reads the built HTML and counts its entry
+script and every modulepreload, so no chunk escapes by its name. (A glob of chunk names undercounted: when
+the toast renderer was split out, Rollup made a shared chunk every page preloaded and no pattern named, and
+the reported figure fell by 18 kB while the page did not get lighter.)
+
+**`packages/ui` declares `"sideEffects": ["*.css"]`.** Every component module calls `forwardRef`/`cva` at
+the top level, which a bundler must keep unless told the package has no side effects; without the
+declaration, every component in the barrel shipped on every page's first load. With it, a page loads the
+components it uses. Today: **180.6 kB of 190 kB** — about 11 kB less for every page than before this card.
 
 ## A lint rule turned off, once, with its reason (architect decision)
 
@@ -104,8 +139,8 @@ identity with Node's base64url, garbage → no filter, chip edits. `Toast.spec.t
 
 ## Not in this slice
 
-Opening a deal from a card or a row — the deal route belongs to P1-UI-3 (record pages); the card is
-announced and keyboard-movable, a click does nothing until that route exists. The pipeline settings page
+The pipeline settings page
 (stages, colours, thresholds, rule editor) — registered as a designed placeholder at
-`/settings/pipelines` so "Configure pipeline" lands somewhere honest. Forecast view; group-by rendering;
-export from the bulk bar (P1-4's `export.csv` — next UI slice).
+`/settings/pipelines` so "Configure pipeline" lands somewhere honest. Forecast view; group-by rendering. CSV export
+is the toolbar's "Export CSV" link to P1-4's `opportunities/export.csv` with the page's view, filter, sort and
+search — a download, not a selection export.

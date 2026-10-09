@@ -61,6 +61,7 @@ const deal = (id: string, name: string, stageId: string, days = 2): OpportunityV
     ownerId: 'm-1',
     pointOfContactId: null,
     companyId: null,
+    createdBy: { kind: 'member', id: 'm-1' },
     custom: {},
     deletedAt: null,
     createdAt: '2026-10-01T00:00:00Z',
@@ -179,6 +180,20 @@ function stubApi(moveResponse: (body: { stageId: string }) => Response) {
     return moves;
 }
 
+/** Makes `matchMedia` answer as a phone with a finger (or not) for the rest of the test. */
+function setPhone(on: boolean) {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: on && (query.includes('max-width') || query.includes('pointer: coarse')),
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+    }));
+}
+
 function renderPage(capabilities: Capability[] = ALL, entry = `/w/${WS}/deals`) {
     const client = createQueryClient();
     const router = createMemoryRouter([{ path: '/w/:workspaceId/deals', element: <DealsPage /> }], {
@@ -244,6 +259,7 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         vi.unstubAllGlobals();
         toasts.clear();
     });
+    beforeEach(() => setPhone(false));
 
     it('board and list read one query key — one result set, two renderings', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
@@ -362,8 +378,8 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         stubApi(() => new Response('{}', { status: 200 }));
         renderPage();
         await card('Product PR');
-        // The lane's sum (from the API) and the card's amount, through the one formatter.
-        expect(within(laneOf('New')).getAllByText('$12,000')).toHaveLength(2);
+        // The lane's sum (from the API) and the card's amount, through the one formatter's compact form.
+        expect(within(laneOf('New')).getAllByText('$12K')).toHaveLength(2);
         expect(within(laneOf('Contacted')).getByText('⚠ Quiet')).toBeInTheDocument();
     });
 
@@ -443,6 +459,54 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         await user.click(within(dialog).getByRole('combobox', { name: 'Field' }));
         expect(screen.queryByRole('option', { name: 'Owner' })).not.toBeInTheDocument();
         expect(screen.getByRole('option', { name: 'Amount' })).toBeInTheDocument();
+    });
+
+    it('opens the deal’s drawer from a click and from Enter', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        const { router } = renderPage();
+        const c = await card('Series B PR');
+        fireEvent.click(c);
+        expect(router.state.location.search).toContain('open=opportunity%3Ad-1');
+        fireEvent.keyDown(await card('Product PR'), { key: 'Enter' });
+        expect(router.state.location.search).toContain('open=opportunity%3Ad-2');
+    });
+
+    it('on a phone: one stage per screen with a stage chip row, and "Move to stage" instead of drag', async () => {
+        setPhone(true);
+        const moves = stubApi(
+            (body) =>
+                new Response(
+                    JSON.stringify({ deal: { ...SERIES_B, stageId: body.stageId }, rulesThatMayMoveItForward: [] }),
+                    {
+                        status: 200,
+                    },
+                ),
+        );
+        const user = userEvent.setup();
+        renderPage();
+        await card('Series B PR');
+        expect(screen.getByRole('region', { name: /one stage per screen/ })).toBeInTheDocument();
+        const chips = within(screen.getByRole('navigation', { name: 'Stages' })).getAllByRole('button');
+        expect(chips.map((b) => b.textContent)).toEqual(['New1', 'Contacted1', 'Replied0', 'Won0', 'Lost0']);
+        expect(chips[0]).toHaveAttribute('aria-current', 'true');
+        await user.click(screen.getByRole('button', { name: /Move to stage: Series B PR/ }));
+        const sheet = await screen.findByRole('dialog', { name: 'Move “Series B PR”' });
+        expect(within(sheet).getByRole('button', { name: /New/ })).toBeDisabled();
+        await user.click(within(sheet).getByRole('button', { name: 'Replied' }));
+        await waitFor(() => expect(moves).toHaveLength(1));
+        expect(moves[0]?.body).toEqual({ stageId: 's-replied' });
+    });
+
+    it('on a phone the list is stacked cards with 44px selection and a stage select', async () => {
+        setPhone(true);
+        stubApi(() => new Response('{}', { status: 200 }));
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        const cards = await screen.findByRole('list', { name: '2 deals' });
+        expect(within(cards).getAllByRole('listitem')).toHaveLength(2);
+        expect(within(cards).queryByRole('table')).not.toBeInTheDocument();
+        const select = within(cards).getByRole('checkbox', { name: 'Select Series B PR' });
+        expect(select.className).toContain('size-11');
+        expect(within(cards).getByRole('combobox', { name: 'Stage of Series B PR' })).toBeInTheDocument();
     });
 
     it('remembers the rendering the person chose', async () => {

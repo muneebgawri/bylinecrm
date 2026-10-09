@@ -15,6 +15,13 @@ export type OidcIssuerConfig = z.infer<typeof oidcIssuerSchema>;
  * process before anything else runs — the alternative is a server that starts and then fails on
  * the first request that touches the unset thing.
  */
+/** `0` or `1`, read as a boolean, with its default spelled the same way. */
+const flag = (fallback: '0' | '1') =>
+    z
+        .enum(['0', '1'])
+        .default(fallback)
+        .transform((value) => value === '1');
+
 export const envSchema = z
     .object({
         /** The owner connection: migrations and administrative operations only. */
@@ -41,6 +48,36 @@ export const envSchema = z
          * shared store is a different driver behind the same interface, not a different variable.
          */
         FILE_STORAGE_ROOT: z.string().min(1).default('.data/attachments'),
+        /**
+         * The key secrets-at-rest are encrypted with (`SecretBox`, P1-5): 32 random bytes, base64.
+         * A webhook's signing secret cannot be stored as a hash — the application has to use it —
+         * so it is sealed with this. Losing the key makes every sealed secret unusable; rotating
+         * it is a re-seal, not a variable change. Generate one with `openssl rand -base64 32`.
+         */
+        SECRETS_KEY: z
+            .string()
+            .min(1)
+            .transform((raw, ctx) => {
+                const key = Buffer.from(raw, 'base64');
+                if (key.length !== 32) {
+                    ctx.addIssue({ code: 'custom', message: 'must be 32 bytes, base64-encoded' });
+                    return z.NEVER;
+                }
+                return key;
+            }),
+        /**
+         * Whether this process runs the webhook delivery worker (P1-5). On by default so a single
+         * API process delivers; a deployment that wants a separate worker process sets `0` on the
+         * API and `1` on the worker. `0` also keeps compile-only runs (the OpenAPI writer) quiet.
+         */
+        WEBHOOK_WORKER: flag('1'),
+        /**
+         * Lets a webhook endpoint point at a private or loopback address. Off by default: an
+         * endpoint URL is an attacker's reach into the network the API runs in (SSRF), and the
+         * guard refuses RFC 1918, loopback and link-local targets. Local development and the
+         * cross-tenant suite deliver to a receiver on 127.0.0.1 and set it to `1`.
+         */
+        WEBHOOK_ALLOW_PRIVATE_TARGETS: flag('0'),
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),

@@ -13,6 +13,8 @@ export const buttonVariants = cva(
     [
         'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap font-medium',
         'transition-colors disabled:pointer-events-none disabled:opacity-50',
+        // A finger needs 44×44 (FR-CRMS-UI-12); the desktop sizes below are unchanged.
+        'max-md:min-h-11 max-md:min-w-11',
         '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         focusRing,
     ],

@@ -1,0 +1,517 @@
+import 'reflect-metadata';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { INestApplication } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
+import {
+    CSRF_COOKIE,
+    CSRF_HEADER,
+    SESSION_COOKIE,
+    WEBHOOK_DELIVERY_HEADER,
+    WEBHOOK_EVENT_HEADER,
+    WEBHOOK_SIGNATURE_HEADER,
+    WEBHOOK_TIMESTAMP_HEADER,
+    parseWebhookSignature,
+} from '@bylinecrm/shared';
+import type { Queue } from 'bullmq';
+import request, { type Response } from 'supertest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApp } from '../../src/app';
+import { PrismaService } from '../../src/infra/prisma.service';
+import { hmacHex } from '../../src/webhooks/signature';
+import { WebhooksSweep } from '../../src/webhooks/sweep';
+import {
+    WEBHOOK_AUTO_DISABLE_AFTER_DEAD,
+    WEBHOOK_MAX_ATTEMPTS,
+    WEBHOOK_QUEUE,
+    WEBHOOK_STUCK_DELIVERING_MS,
+    WEBHOOK_SWEEP_GRACE_MS,
+} from '../../src/webhooks/webhooks.constants';
+import { WebhooksService } from '../../src/webhooks/webhooks.service';
+
+interface Browser {
+    cookie: string;
+    csrf: string;
+}
+
+function browserFrom(res: Response): Browser {
+    const raw = res.headers['set-cookie'] as string[] | undefined;
+    const session = raw?.find((c) => c.startsWith(`${SESSION_COOKIE}=`))?.split(';')[0];
+    const csrf = raw
+        ?.find((c) => c.startsWith(`${CSRF_COOKIE}=`))
+        ?.split(';')[0]
+        ?.split('=')[1];
+    if (!session || !csrf) throw new Error('login did not set both cookies');
+    return { cookie: `${session}; ${CSRF_COOKIE}=${csrf}`, csrf };
+}
+
+/** One request the receiver saw: headers and the raw body, exactly as sent. */
+interface Received {
+    path: string;
+    headers: IncomingMessage['headers'];
+    body: string;
+}
+
+interface Endpoint {
+    id: string;
+    url: string;
+    events: string[];
+    enabled: boolean;
+    disabledReason: string | null;
+    consecutiveFailures: number;
+    secretPrefix: string;
+    previousSecretExpiresAt: string | null;
+}
+interface Delivery {
+    id: string;
+    eventName: string;
+    status: string;
+    attempts: number;
+    lastStatusCode: number | null;
+    lastError: string | null;
+}
+interface Page<T> {
+    items: T[];
+    nextCursor: string | null;
+}
+
+/** The worker runs after the request answered; a reader waits a bounded moment for a condition. */
+async function until<T>(read: () => Promise<T>, ok: (value: T) => boolean, tries = 200, everyMs = 100): Promise<T> {
+    let last = await read();
+    for (let i = 0; i < tries && !ok(last); i++) {
+        await new Promise((r) => setTimeout(r, everyMs));
+        last = await read();
+    }
+    return last;
+}
+
+/**
+ * Outbound webhooks end to end against a receiver in this process: an endpoint gets the events
+ * it subscribed to, signed so the secret shown once verifies the body; a receiver that fails is
+ * retried on the schedule and succeeds when it recovers; one that never recovers sees the
+ * delivery die and, after enough deaths, the endpoint switched off; a workspace's endpoints
+ * never hear another workspace's events, and its delivery log is unreadable from elsewhere.
+ */
+describe('webhooks', () => {
+    let app: INestApplication;
+    let http: () => request.Agent;
+    let receiver: Server;
+    let receiverBase: string;
+    const received: Received[] = [];
+    /** Per path: how many requests should still fail with 500 before succeeding; `Infinity` never succeeds. */
+    const failuresLeft = new Map<string, number>();
+
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const password = 'correct horse battery staple';
+    let admin: Browser;
+    let other: Browser;
+    let workspace: string;
+    let otherWorkspace: string;
+
+    const as = (who: Browser) => ({
+        get: (path: string) => http().get(path).set('Cookie', who.cookie),
+        post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+    });
+    const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
+    const deliveriesOf = (endpointId: string, who = admin, ws = workspace) =>
+        as(who)
+            .get(w(`/webhooks/${endpointId}/deliveries`, ws))
+            .then((res) => res.body as Page<Delivery>);
+
+    beforeAll(async () => {
+        receiver = createServer((req, res) => {
+            const chunks: Buffer[] = [];
+            req.on('data', (c: Buffer) => chunks.push(c));
+            req.on('end', () => {
+                const path = req.url ?? '/';
+                received.push({ path, headers: req.headers, body: Buffer.concat(chunks).toString('utf8') });
+                const left = failuresLeft.get(path) ?? 0;
+                if (left > 0) {
+                    failuresLeft.set(path, left - 1);
+                    res.writeHead(500).end('still broken');
+                    return;
+                }
+                res.writeHead(200).end('ok');
+            });
+        });
+        await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
+        receiverBase = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
+
+        app = await createApp();
+        await app.init();
+        http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
+        const queue = app.get<Queue>(getQueueToken(WEBHOOK_QUEUE));
+        await queue.drain(true);
+
+        const signUp = async (email: string, name: string) => {
+            const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
+            expect(res.status).toBe(201);
+            return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
+        };
+        ({ browser: admin, workspace } = await signUp(`wh-admin-${stamp}@example.com`, `Webhooks ${stamp}`));
+        ({ browser: other, workspace: otherWorkspace } = await signUp(
+            `wh-other-${stamp}@example.com`,
+            `Other ${stamp}`,
+        ));
+    });
+
+    afterAll(async () => {
+        await app?.close();
+        await new Promise<void>((resolve) => receiver.close(() => resolve()));
+    });
+
+    it('lists the catalogue an endpoint may subscribe to', async () => {
+        const res = await as(admin).get(w('/webhooks/events'));
+        expect(res.status).toBe(200);
+        const names = (res.body as { name: string; object: string }[]).map((e) => e.name);
+        expect(names).toContain('person.created');
+        expect(names).toContain('deal.stage_changed');
+        expect(names).not.toContain('ping');
+    });
+
+    it('refuses an endpoint that is not an https public target (unless the environment allows private ones)', async () => {
+        const res = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: 'https://user:pw@hooks.example.com/in', events: ['*'] });
+        expect(res.status).toBe(400);
+        const ftp = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: 'ftp://hooks.example.com/in', events: ['*'] });
+        expect(ftp.status).toBe(400);
+        const unknown = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}/x`, events: ['no.such_event'] });
+        expect(unknown.status).toBe(400);
+    });
+
+    it('delivers a subscribed event, signed with the secret shown once, and records it', async () => {
+        const path = `/ok-${stamp}`;
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({
+                url: `${receiverBase}${path}`,
+                description: 'all events',
+                events: ['person.created', 'person.updated'],
+            });
+        expect(created.status).toBe(201);
+        const { endpoint, secret } = created.body as { endpoint: Endpoint; secret: string };
+        expect(secret).toMatch(/^whsec_/);
+        expect(endpoint.secretPrefix).toBe(`whsec_${secret.slice(6, 14)}…`);
+        expect(JSON.stringify(created.body)).not.toContain('Ciphertext');
+
+        const person = await as(admin)
+            .post(w('/people'))
+            .send({
+                name: { first: 'Dana', last: 'Reyes' },
+                emails: { primary: `dana-${stamp}@acme.example`, additional: [] },
+            });
+        expect(person.status).toBe(201);
+        const personId = (person.body as { id: string }).id;
+
+        const hit = await until(
+            async () => received.find((r) => r.path === path && r.headers[WEBHOOK_EVENT_HEADER] === 'person.created'),
+            (r) => r !== undefined,
+        );
+        expect(hit).toBeDefined();
+        const body = JSON.parse(hit!.body) as {
+            id: string;
+            event: string;
+            workspaceId: string;
+            data: { recordId: string; type: string };
+        };
+        expect(body.event).toBe('person.created');
+        expect(body.workspaceId).toBe(workspace);
+        expect(body.data.recordId).toBe(personId);
+        expect(body.data.type).toBe('person.created');
+        expect(hit!.headers[WEBHOOK_DELIVERY_HEADER]).toBe(body.id);
+
+        // The signature verifies over the raw body with the secret the admin was shown.
+        const parsed = parseWebhookSignature(String(hit!.headers[WEBHOOK_SIGNATURE_HEADER]));
+        expect(parsed).not.toBeNull();
+        expect(String(hit!.headers[WEBHOOK_TIMESTAMP_HEADER])).toBe(String(parsed!.timestamp));
+        expect(parsed!.signatures).toContain(hmacHex(secret, parsed!.timestamp, hit!.body));
+        expect(Math.abs(parsed!.timestamp - Date.now() / 1000)).toBeLessThan(60);
+
+        const log = await until(
+            () => deliveriesOf(endpoint.id),
+            (page) => page.items.some((d) => d.eventName === 'person.created' && d.status === 'succeeded'),
+        );
+        const delivery = log.items.find((d) => d.eventName === 'person.created')!;
+        expect(delivery.status).toBe('succeeded');
+        expect(delivery.attempts).toBe(1);
+        expect(delivery.lastStatusCode).toBe(200);
+
+        // Not subscribed: a company event never reaches this endpoint.
+        const company = await as(admin)
+            .post(w('/companies'))
+            .send({ name: `Acme ${stamp}` });
+        expect(company.status).toBe(201);
+        await new Promise((r) => setTimeout(r, 300));
+        expect(received.some((r) => r.path === path && r.headers[WEBHOOK_EVENT_HEADER] === 'company.created')).toBe(
+            false,
+        );
+    });
+
+    it('a test send pings the receiver now and reports what it answered', async () => {
+        const path = `/ping-${stamp}`;
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+        const { endpoint, secret } = created.body as { endpoint: Endpoint; secret: string };
+        const res = await as(admin).post(w(`/webhooks/${endpoint.id}/test`));
+        expect(res.status).toBe(200);
+        const body = res.body as { ok: boolean; statusCode: number; delivery: Delivery };
+        expect(body.ok).toBe(true);
+        expect(body.statusCode).toBe(200);
+        expect(body.delivery.eventName).toBe('ping');
+        expect(body.delivery.status).toBe('succeeded');
+        const hit = received.find((r) => r.path === path)!;
+        expect(hit.headers[WEBHOOK_EVENT_HEADER]).toBe('ping');
+        const parsed = parseWebhookSignature(String(hit.headers[WEBHOOK_SIGNATURE_HEADER]))!;
+        expect(parsed.signatures).toContain(hmacHex(secret, parsed.timestamp, hit.body));
+    });
+
+    it('a receiver that fails is retried on the schedule and succeeds once it recovers', async () => {
+        const path = `/flaky-${stamp}`;
+        failuresLeft.set(path, 2);
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}${path}`, events: ['company.created'] });
+        const { endpoint } = created.body as { endpoint: Endpoint };
+        await as(admin)
+            .post(w('/companies'))
+            .send({ name: `Flaky ${stamp}` });
+        const log = await until(
+            () => deliveriesOf(endpoint.id),
+            (page) => page.items.some((d) => d.status === 'succeeded'),
+        );
+        const delivery = log.items[0]!;
+        expect(delivery.status).toBe('succeeded');
+        expect(delivery.attempts).toBe(3);
+        expect(received.filter((r) => r.path === path)).toHaveLength(3);
+        const after = await as(admin).get(w(`/webhooks/${endpoint.id}`));
+        expect((after.body as Endpoint).consecutiveFailures).toBe(0);
+    }, 60_000);
+
+    it('a receiver that never recovers sees the delivery die, and enough deaths switch the endpoint off', async () => {
+        const path = `/dead-${stamp}`;
+        failuresLeft.set(path, Number.POSITIVE_INFINITY);
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}${path}`, events: ['company.created'] });
+        const { endpoint } = created.body as { endpoint: Endpoint };
+        // One event per needed death; each runs its whole retry schedule in parallel with the others.
+        for (let i = 0; i < WEBHOOK_AUTO_DISABLE_AFTER_DEAD; i++) {
+            await as(admin)
+                .post(w('/companies'))
+                .send({ name: `Dead ${stamp} ${i}` });
+        }
+        const log = await until(
+            () => deliveriesOf(endpoint.id),
+            (page) =>
+                page.items.length >= WEBHOOK_AUTO_DISABLE_AFTER_DEAD && page.items.every((d) => d.status === 'dead'),
+            400,
+        );
+        expect(log.items.every((d) => d.status === 'dead' && d.attempts === WEBHOOK_MAX_ATTEMPTS)).toBe(true);
+        expect(log.items[0]!.lastStatusCode).toBe(500);
+        expect(log.items[0]!.lastError).toContain('500');
+        const after = await until(
+            async () => (await as(admin).get(w(`/webhooks/${endpoint.id}`))).body as Endpoint,
+            (e) => e.enabled === false,
+        );
+        expect(after.enabled).toBe(false);
+        expect(after.disabledReason).toContain('consecutive');
+        expect(after.consecutiveFailures).toBeGreaterThanOrEqual(WEBHOOK_AUTO_DISABLE_AFTER_DEAD);
+
+        // Switching it back on is a person's decision, and it starts a fresh count.
+        const on = await as(admin)
+            .patch(w(`/webhooks/${endpoint.id}`))
+            .send({ enabled: true });
+        expect(on.status).toBe(200);
+        expect((on.body as Endpoint).enabled).toBe(true);
+        expect((on.body as Endpoint).consecutiveFailures).toBe(0);
+        expect((on.body as Endpoint).disabledReason).toBeNull();
+
+        // A dead delivery can be queued again as a new one.
+        failuresLeft.delete(path);
+        const redo = await as(admin).post(w(`/webhooks/${endpoint.id}/deliveries/${log.items[0]!.id}/redeliver`));
+        expect(redo.status).toBe(201);
+        const redone = await until(
+            () => deliveriesOf(endpoint.id),
+            (page) => page.items.some((d) => d.id === (redo.body as Delivery).id && d.status === 'succeeded'),
+        );
+        expect(redone.items.find((d) => d.id === (redo.body as Delivery).id)!.attempts).toBe(1);
+    }, 120_000);
+
+    it('rotating the secret signs with both until the old one expires, and the new one is shown once', async () => {
+        const path = `/rotate-${stamp}`;
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+        const { endpoint, secret: oldSecret } = created.body as { endpoint: Endpoint; secret: string };
+        const rotated = await as(admin).post(w(`/webhooks/${endpoint.id}/rotate`));
+        expect(rotated.status).toBe(201);
+        const { secret: newSecret, endpoint: after } = rotated.body as { endpoint: Endpoint; secret: string };
+        expect(newSecret).not.toBe(oldSecret);
+        expect(after.secretPrefix).toBe(`whsec_${newSecret.slice(6, 14)}…`);
+        expect(after.previousSecretExpiresAt).not.toBeNull();
+        await as(admin).post(w(`/webhooks/${endpoint.id}/test`));
+        const hit = received.find((r) => r.path === path)!;
+        const parsed = parseWebhookSignature(String(hit.headers[WEBHOOK_SIGNATURE_HEADER]))!;
+        expect(parsed.signatures).toHaveLength(2);
+        expect(parsed.signatures).toContain(hmacHex(newSecret, parsed.timestamp, hit.body));
+        expect(parsed.signatures).toContain(hmacHex(oldSecret, parsed.timestamp, hit.body));
+    });
+
+    it('another workspace never hears these events, and cannot read this log', async () => {
+        const path = `/other-${stamp}`;
+        const theirs = await as(other)
+            .post(w('/webhooks', otherWorkspace))
+            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+        expect(theirs.status).toBe(201);
+        const theirEndpoint = (theirs.body as { endpoint: Endpoint }).endpoint;
+        const before = received.filter((r) => r.path === path).length;
+        await as(admin)
+            .post(w('/companies'))
+            .send({ name: `Private ${stamp}` });
+        await new Promise((r) => setTimeout(r, 500));
+        expect(received.filter((r) => r.path === path).length).toBe(before);
+        const theirLog = await deliveriesOf(theirEndpoint.id, other, otherWorkspace);
+        expect(theirLog.items.filter((d) => d.eventName !== 'ping')).toHaveLength(0);
+
+        const mine = (await as(admin).get(w('/webhooks'))).body as Endpoint[];
+        expect(mine.length).toBeGreaterThan(0);
+        const crossList = await as(other).get(w(`/webhooks/${mine[0]!.id}/deliveries`, otherWorkspace));
+        expect(crossList.status).toBe(404);
+        const crossGet = await as(other).get(w(`/webhooks/${mine[0]!.id}`, otherWorkspace));
+        expect(crossGet.status).toBe(404);
+        const crossWs = await as(other).get(w('/webhooks'));
+        expect(crossWs.status).toBe(403);
+    });
+
+    it('a retired endpoint receives nothing more, and its log stays readable', async () => {
+        const path = `/retired-${stamp}`;
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+        const { endpoint } = created.body as { endpoint: Endpoint };
+        await as(admin).post(w(`/webhooks/${endpoint.id}/test`));
+        const gone = await as(admin).delete(w(`/webhooks/${endpoint.id}`));
+        expect(gone.status).toBe(204);
+        expect((await as(admin).get(w(`/webhooks/${endpoint.id}`))).status).toBe(404);
+        const before = received.filter((r) => r.path === path).length;
+        await as(admin)
+            .post(w('/companies'))
+            .send({ name: `Retired ${stamp}` });
+        await new Promise((r) => setTimeout(r, 500));
+        expect(received.filter((r) => r.path === path).length).toBe(before);
+        const log = await deliveriesOf(endpoint.id);
+        expect(log.items.some((d) => d.eventName === 'ping')).toBe(true);
+    });
+
+    describe('the stranded-delivery sweep', () => {
+        /**
+         * A delivery row exactly as `enqueueForEvent` writes it, but with no job — what a Redis outage
+         * between the row and the `queue.add` leaves behind. Written as the owner (a fixture), with
+         * the same envelope shape a real delivery carries.
+         */
+        async function strandedRow(endpointId: string, overrides: Record<string, unknown> = {}): Promise<string> {
+            const owner = app.get(PrismaService);
+            const id = crypto.randomUUID();
+            await owner.webhookDelivery.create({
+                data: {
+                    id,
+                    workspaceId: workspace,
+                    endpointId,
+                    eventId: crypto.randomUUID(),
+                    eventName: 'company.created',
+                    payload: {
+                        id,
+                        event: 'company.created',
+                        occurredAt: new Date().toISOString(),
+                        workspaceId: workspace,
+                        data: { type: 'company.created', recordId: crypto.randomUUID(), workspaceId: workspace },
+                    },
+                    ...overrides,
+                },
+            });
+            return id;
+        }
+        const later = () => Date.now() + WEBHOOK_SWEEP_GRACE_MS + 1_000;
+        const hits = (path: string) => received.filter((r) => r.path === path).length;
+        const endpointAt = async (path: string) =>
+            (
+                (
+                    await as(admin)
+                        .post(w('/webhooks'))
+                        .send({ url: `${receiverBase}${path}`, events: ['company.created'] })
+                ).body as { endpoint: Endpoint }
+            ).endpoint;
+
+        it('delivers a delivery written while the queue was unavailable, and running it again never sends twice', async () => {
+            const path = `/swept-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const id = await strandedRow(endpoint.id);
+            const sweep = app.get(WebhooksSweep);
+
+            // Inside the grace period a fresh row is not stranded: nothing is sent.
+            await sweep.run();
+            await new Promise((r) => setTimeout(r, 300));
+            expect(hits(path)).toBe(0);
+
+            const first = await sweep.run(later());
+            expect(first.requeued).toBeGreaterThanOrEqual(1);
+            const log = await until(
+                () => deliveriesOf(endpoint.id),
+                (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
+            );
+            expect(log.items.find((d) => d.id === id)!.attempts).toBe(1);
+
+            await sweep.run(later());
+            await sweep.run(later());
+            await new Promise((r) => setTimeout(r, 500));
+            expect(hits(path)).toBe(1);
+        });
+
+        it('never gives a delivery that still has a live job a second one', async () => {
+            const path = `/live-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const id = await strandedRow(endpoint.id);
+            const queue = app.get<Queue>(getQueueToken(WEBHOOK_QUEUE));
+            // The job exists (delayed), as it would mid-retry or just after the subscriber added it.
+            await app
+                .get(WebhooksService)
+                .enqueue({ deliveryId: id, workspaceId: workspace, endpointId: endpoint.id }, 1_500);
+            await app.get(WebhooksSweep).run(later());
+            await app.get(WebhooksSweep).run(later());
+            expect(await queue.getJob(id)).toBeDefined();
+            await until(
+                () => deliveriesOf(endpoint.id),
+                (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
+            );
+            await new Promise((r) => setTimeout(r, 500));
+            expect(hits(path)).toBe(1);
+        });
+
+        it('returns an attempt abandoned mid-flight to pending with its count kept, then delivers it', async () => {
+            const path = `/stuck-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const id = await strandedRow(endpoint.id, {
+                status: 'delivering',
+                attempts: 1,
+                attemptStartedAt: new Date(Date.now() - WEBHOOK_STUCK_DELIVERING_MS - 1_000),
+            });
+            const result = await app.get(WebhooksSweep).run(later());
+            expect(result.freed).toBeGreaterThanOrEqual(1);
+            const log = await until(
+                () => deliveriesOf(endpoint.id),
+                (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
+            );
+            // The abandoned attempt still counts: this was the second.
+            expect(log.items.find((d) => d.id === id)!.attempts).toBe(2);
+            expect(hits(path)).toBe(1);
+        });
+    });
+});

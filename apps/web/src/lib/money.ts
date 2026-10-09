@@ -1,51 +1,70 @@
 import type { Money } from '@bylinecrm/shared';
 
 /**
- * The one money formatter. The API carries every amount as `Money` — integer minor units plus an
- * ISO 4217 currency (P1-1b, one representation) — and this is the only place the web app turns
- * that into text. `Intl` knows each currency's minor-unit scale, so nothing here hard-codes 100.
+ * The one money formatter. `Money` is exact minor units plus an ISO 4217 code; how many minor
+ * units make a major unit is the currency's business (JPY has none, BHD has three), and
+ * `Intl.NumberFormat` already knows — so the fraction digits are read from it rather than
+ * assumed to be two.
  */
-export function formatMoney(money: Money | null | undefined, locale?: string): string {
-    if (!money) return '—';
-    const scale = 10 ** fractionDigits(currencyFormatter(money.currency, locale));
-    // Whole amounts read as "$12,000"; minor units appear only when there are some.
-    const whole = money.amountMinor % scale === 0;
-    return currencyFormatter(money.currency, locale, whole).format(money.amountMinor / scale);
-}
-
-/** "$48,000 · €2,000" — a board column's exact per-currency sums, as the API computed them. */
-export function formatSums(byCurrency: Readonly<Record<string, number>>, locale?: string): string {
-    const entries = Object.entries(byCurrency).sort(([a], [b]) => a.localeCompare(b));
-    if (entries.length === 0) return '—';
-    return entries.map(([currency, amountMinor]) => formatMoney({ amountMinor, currency }, locale)).join(' · ');
-}
-
-/** Minor units from a person's typed amount ("12,000.50" → 1200050 for a two-decimal currency). */
-export function parseMoneyInput(text: string, currency: string, locale?: string): Money | null {
-    const cleaned = text.replace(/[^\d.-]/g, '');
-    if (!cleaned) return null;
-    const major = Number(cleaned);
-    if (!Number.isFinite(major) || major < 0) return null;
-    const digits = fractionDigits(currencyFormatter(currency, locale));
-    return { amountMinor: Math.round(major * 10 ** digits), currency };
-}
-
 const formatters = new Map<string, Intl.NumberFormat>();
 
-function currencyFormatter(currency: string, locale?: string, whole = false): Intl.NumberFormat {
-    const key = `${locale ?? ''}/${currency}/${whole ? 'whole' : 'minor'}`;
-    let formatter = formatters.get(key);
+function formatterFor(currency: string): Intl.NumberFormat {
+    let formatter = formatters.get(currency);
     if (!formatter) {
-        formatter = new Intl.NumberFormat(locale, {
-            style: 'currency',
-            currency,
-            ...(whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}),
-        });
-        formatters.set(key, formatter);
+        formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' });
+        formatters.set(currency, formatter);
     }
     return formatter;
 }
 
-function fractionDigits(formatter: Intl.NumberFormat): number {
-    return formatter.resolvedOptions().maximumFractionDigits ?? 2;
+/** The number of minor-unit digits the currency has: 2 for USD, 0 for JPY, 3 for BHD. */
+export function minorDigits(currency: string): number {
+    return formatterFor(currency).resolvedOptions().maximumFractionDigits ?? 2;
+}
+
+/** Minor units → the major amount as a number, for input fields and sums the reader sees. */
+export function toMajor(money: Money): number {
+    return money.amountMinor / 10 ** minorDigits(money.currency);
+}
+
+/** A major amount typed by a person → minor units, rounded to the currency's precision. */
+export function toMinor(major: number, currency: string): number {
+    return Math.round(major * 10 ** minorDigits(currency));
+}
+
+/** "$12,000.00", "¥1,200", or an em dash for no amount. */
+export function formatMoney(money: Money | null | undefined): string {
+    if (!money) return '—';
+    return formatterFor(money.currency).format(toMajor(money));
+}
+
+/** "$12k" for cards and lane totals; the full form stays in the tooltip. */
+export function formatMoneyCompact(money: Money | null | undefined): string {
+    if (!money) return '—';
+    return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: money.currency,
+        currencyDisplay: 'narrowSymbol',
+        notation: 'compact',
+        // Both bounds, so every ICU agrees: a currency's default minimum (2 for USD) would
+        // otherwise turn "$12K" into "$12.0K" on some platforms.
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1,
+    }).format(toMajor(money));
+}
+
+/** A board column's exact per-currency sums, as the API computed them: "$48K · €2K". */
+export function formatSums(byCurrency: Readonly<Record<string, number>>): string {
+    const entries = Object.entries(byCurrency).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return '—';
+    return entries.map(([currency, amountMinor]) => formatMoneyCompact({ amountMinor, currency })).join(' · ');
+}
+
+/** A typed amount ("12,000.50") → `Money` in the currency's minor units, or `null` when it is not a number. */
+export function parseMoneyInput(text: string, currency: string): Money | null {
+    const cleaned = text.replace(/[^\d.-]/g, '');
+    if (!cleaned) return null;
+    const major = Number(cleaned);
+    if (!Number.isFinite(major) || major < 0) return null;
+    return { amountMinor: toMinor(major, currency), currency };
 }

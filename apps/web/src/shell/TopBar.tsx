@@ -7,13 +7,13 @@ import {
     IconTile,
     cn,
     focusRing,
+    useIsNarrow,
 } from '@bylinecrm/ui';
 import { Bell, Building2, FileText, Handshake, ListTodo, PanelLeft, Plus, Search, Users } from 'lucide-react';
 import { useMatches, useNavigate } from 'react-router';
 import { useCan } from '../auth/capabilities';
 import { formatShortcut } from '../commands/shortcuts';
 import { paths } from '../routes/paths';
-import { useIsNarrow } from './useMediaQuery';
 
 /** A route declares its breadcrumb through `handle.crumb`; the top bar reads the deepest one. */
 export interface RouteHandle {

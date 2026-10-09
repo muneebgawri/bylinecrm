@@ -47,6 +47,8 @@ jobs:
             WEB_PORT: '3301'
             APP_URL: http://localhost:3300
             WEB_URL: http://localhost:3301
+            SECRETS_KEY: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+            WEBHOOK_ALLOW_PRIVATE_TARGETS: '1'
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
@@ -62,6 +64,8 @@ jobs:
             WEB_PORT: '3301'
             APP_URL: http://localhost:3300
             WEB_URL: http://localhost:3301
+            SECRETS_KEY: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+            WEBHOOK_ALLOW_PRIVATE_TARGETS: '1'
         services:
             postgres:
                 image: postgres:16

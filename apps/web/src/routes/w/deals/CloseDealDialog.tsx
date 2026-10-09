@@ -12,8 +12,11 @@ import {
     Textarea,
 } from '@bylinecrm/ui';
 import { useId, useState, type FormEvent } from 'react';
-import type { OpportunityView, StageView } from '../../../api/types';
+import type { MoveDealInput, OpportunityView, StageView } from '../../../api/types';
 import { formatMoney, parseMoneyInput } from '../../../lib/money';
+
+/** What the API's close takes: the won amount, or the lost reason. */
+export type ClosePayload = NonNullable<MoveDealInput['close']>;
 
 export interface CloseRequest {
     deal: OpportunityView;
@@ -25,7 +28,7 @@ export interface CloseDealDialogProps {
     busy: boolean;
     onCancel: () => void;
     /** The close payload the API requires for a won or lost stage. */
-    onConfirm: (close: { wonAmount?: Money | undefined; lostReason?: string | undefined }) => void;
+    onConfirm: (close: ClosePayload) => void;
 }
 
 /**
@@ -68,7 +71,7 @@ function CloseForm({ request, busy, onConfirm, onCancel }: CloseDealDialogProps 
                 setError('Enter an amount, like 12000 or 12,000.50.');
                 return;
             }
-            onConfirm({ wonAmount: parsed ?? undefined });
+            onConfirm(parsed ? { wonAmount: parsed } : {});
         } else {
             if (!reason.trim()) {
                 setError('Say why it was lost; the reason is kept with the deal.');

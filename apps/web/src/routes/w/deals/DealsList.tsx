@@ -29,9 +29,10 @@ import {
     type VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, Download } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { BoardView, MemberSummaryView, OpportunityView, StageView } from '../../../api/types';
+import { formatDay } from '../../../lib/format';
 import { formatMoney } from '../../../lib/money';
 import { daysLabel, LANE_FOLD, ROW_ESTIMATE_PX, STAGE_TONES, VIRTUAL_OVERSCAN } from './dealsView';
 import { classifyMove } from './moveGate';
@@ -48,6 +49,10 @@ export interface DealsListProps {
     onSortChange: (sort: string | undefined) => void;
     onMove: (deal: OpportunityView, stageId: string) => void;
     onAssign: (deal: OpportunityView, ownerId: string | null) => void;
+    /** Opens the deal's record drawer (a row's name, a tap on a phone card). */
+    onOpen: (deal: OpportunityView) => void;
+    /** A phone (FR-CRMS-UI-12): the rows become stacked cards with 44px controls. */
+    stacked: boolean;
 }
 
 /** The columns the API can sort by: the shared descriptors' sortable set, by the same names (P1-4). */
@@ -76,6 +81,8 @@ export function DealsList({
     onSortChange,
     onMove,
     onAssign,
+    onOpen,
+    stacked,
 }: DealsListProps) {
     const rows = useMemo<Row[]>(
         () => board.columns.flatMap((column) => column.deals.map((deal) => ({ deal, stage: column.stage }))),
@@ -127,7 +134,15 @@ export function DealsList({
             helper.accessor((r) => r.deal.name, {
                 id: 'name',
                 header: 'Deal',
-                cell: ({ row }) => <span className="font-medium">{row.original.deal.name}</span>,
+                cell: ({ row }) => (
+                    <button
+                        type="button"
+                        onClick={() => onOpen(row.original.deal)}
+                        className="text-left font-medium hover:underline"
+                    >
+                        {row.original.deal.name}
+                    </button>
+                ),
                 enableHiding: false,
             }),
             helper.accessor((r) => r.stage.name, {
@@ -186,10 +201,10 @@ export function DealsList({
             helper.accessor((r) => r.deal.closeDate, {
                 id: 'closeDate',
                 header: 'Close date',
-                cell: ({ getValue }) => getValue() ?? <span className="text-text-faint">—</span>,
+                cell: ({ getValue }) => formatDay(getValue()),
             }),
         ],
-        [canBulk, canMove, membersById, onMove, rows, selected, stages],
+        [canBulk, canMove, membersById, onMove, onOpen, rows, selected, stages],
     );
 
     const table = useReactTable({
@@ -242,6 +257,142 @@ export function DealsList({
     if (rows.length === 0) {
         return (
             <EmptyState title="No deals in this view" body="Deals appear here as they are created in this pipeline." />
+        );
+    }
+
+    const toggle = (id: string) =>
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+
+    const bulkBar = selected.size > 0 && canBulk && (
+        <BulkBar count={selected.size} onDiscard={() => setSelected(new Set())}>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <BulkBarAction disabled={!canMove}>Move to stage</BulkBarAction>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                    {stages.map((stage) => (
+                        <DropdownMenuItem key={stage.id} onSelect={() => bulkMove(stage.id)}>
+                            {stage.name}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <BulkBarAction disabled={!canEdit}>Assign owner</BulkBarAction>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                    <DropdownMenuItem onSelect={() => bulkAssign(null)}>Unassigned</DropdownMenuItem>
+                    {members.map((m) => (
+                        <DropdownMenuItem key={m.memberId} onSelect={() => bulkAssign(m.memberId)}>
+                            {m.name ?? 'Member'}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </BulkBar>
+    );
+
+    if (stacked) {
+        // A phone: one card per deal — the same rows, the same selection and bulk bar, the same
+        // stage select calling the same move — with every control a 44px target (FR-CRMS-UI-12).
+        return (
+            <div>
+                <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label={`${rows.length} deals`}>
+                    {rows.map(({ deal, stage }) => {
+                        const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
+                        const isSelected = selected.has(deal.id);
+                        return (
+                            <li
+                                key={deal.id}
+                                className={cn(
+                                    'rounded-lg border border-border bg-surface p-3 shadow-sm',
+                                    isSelected && 'border-accent bg-selection',
+                                )}
+                            >
+                                <div className="flex items-start gap-2">
+                                    {canBulk && (
+                                        <button
+                                            type="button"
+                                            role="checkbox"
+                                            aria-checked={isSelected}
+                                            aria-label={`Select ${deal.name}`}
+                                            onClick={() => toggle(deal.id)}
+                                            className="-m-1 grid size-11 shrink-0 place-items-center"
+                                        >
+                                            <span
+                                                aria-hidden
+                                                className={cn(
+                                                    'grid size-5 place-items-center rounded-sm border border-border-strong',
+                                                    isSelected && 'border-accent bg-accent text-accent-foreground',
+                                                )}
+                                            >
+                                                {isSelected && <Check className="size-3.5" />}
+                                            </span>
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpen(deal)}
+                                        className="min-h-11 min-w-0 flex-1 text-left"
+                                    >
+                                        <span className="block truncate text-base font-semibold">{deal.name}</span>
+                                        <span className="block text-sm text-text-muted tabular-nums">
+                                            {formatMoney(deal.amount)}
+                                            {deal.ownerId ? ` · ${membersById.get(deal.ownerId) ?? 'Member'}` : ''}
+                                        </span>
+                                    </button>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                                    {canMove ? (
+                                        <Select
+                                            value={deal.stageId}
+                                            onValueChange={(stageId) => {
+                                                if (classifyMove(stages, deal.stageId, stageId).kind !== 'same')
+                                                    onMove(deal, stageId);
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full" aria-label={`Stage of ${deal.name}`}>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {stages.map((s) => (
+                                                    <SelectItem key={s.id} value={s.id} className="min-h-11">
+                                                        {s.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Badge status={STAGE_TONES[stage.colour]} dot>
+                                            {stage.name}
+                                        </Badge>
+                                    )}
+                                    <span
+                                        className={cn(
+                                            'text-sm tabular-nums',
+                                            quiet ? 'text-warning' : 'text-text-muted',
+                                        )}
+                                    >
+                                        {daysLabel(deal.daysInStage)} in stage{quiet ? ' ⚠' : ''}
+                                    </span>
+                                    {deal.closeDate && (
+                                        <span className="text-sm text-text-muted">
+                                            Close {formatDay(deal.closeDate)}
+                                        </span>
+                                    )}
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+                {bulkBar}
+            </div>
         );
     }
 
@@ -354,38 +505,7 @@ export function DealsList({
                     )}
                 </table>
             </div>
-            {selected.size > 0 && canBulk && (
-                <BulkBar count={selected.size} onDiscard={() => setSelected(new Set())}>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <BulkBarAction disabled={!canMove}>Move to stage</BulkBarAction>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                            {stages.map((stage) => (
-                                <DropdownMenuItem key={stage.id} onSelect={() => bulkMove(stage.id)}>
-                                    {stage.name}
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <BulkBarAction disabled={!canEdit}>Assign owner</BulkBarAction>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                            <DropdownMenuItem onSelect={() => bulkAssign(null)}>Unassigned</DropdownMenuItem>
-                            {members.map((m) => (
-                                <DropdownMenuItem key={m.memberId} onSelect={() => bulkAssign(m.memberId)}>
-                                    {m.name ?? 'Member'}
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <BulkBarAction disabled title="Export arrives with saved views (P1-4)">
-                        <Download aria-hidden /> Export
-                    </BulkBarAction>
-                </BulkBar>
-            )}
+            {bulkBar}
         </div>
     );
 }

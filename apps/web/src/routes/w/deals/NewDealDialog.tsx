@@ -17,8 +17,8 @@ import {
 } from '@bylinecrm/ui';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
-import { useCompanySearch, useCreateDeal } from '../../../api/queries';
-import type { CompanySummary, PipelineView } from '../../../api/types';
+import { useCreateDeal, useRecordList } from '../../../api/queries';
+import type { CompanyView, PipelineView } from '../../../api/types';
 import { parseMoneyInput } from '../../../lib/money';
 
 export interface NewDealDialogProps {
@@ -32,6 +32,8 @@ export interface NewDealDialogProps {
 
 /** How long typing pauses before the company search asks the API. */
 const SEARCH_DEBOUNCE_MS = 250;
+/** How many companies the picker suggests. */
+const COMPANY_SUGGESTIONS = 8;
 
 /** "+ New deal": name, company (searched), amount, close date, starting stage (first open stage by default). */
 export function NewDealDialog({ workspaceId, pipeline, open, onOpenChange, currency }: NewDealDialogProps) {
@@ -68,11 +70,16 @@ function NewDealForm({
     const [amountText, setAmountText] = useState('');
     const [closeDate, setCloseDate] = useState('');
     const [companyText, setCompanyText] = useState('');
-    const [company, setCompany] = useState<CompanySummary | null>(null);
+    const [company, setCompany] = useState<CompanyView | null>(null);
     const [debounced, setDebounced] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const create = useCreateDeal(workspaceId);
-    const search = useCompanySearch(workspaceId, debounced);
+    const search = useRecordList(
+        workspaceId,
+        'company',
+        { q: debounced, limit: COMPANY_SUGGESTIONS },
+        debounced.length > 0,
+    );
 
     useEffect(() => {
         const handle = setTimeout(() => setDebounced(company ? '' : companyText.trim()), SEARCH_DEBOUNCE_MS);
