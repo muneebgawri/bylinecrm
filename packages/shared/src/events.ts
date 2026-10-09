@@ -6,7 +6,7 @@ import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
  * things that happen to them — a deal's stage changing (P1-2), mail (P2) and meetings (P3).
  * One list; `ObjectOfEvent` derives an event's object from its type against it.
  */
-export const EVENT_OBJECTS = [...RECORD_OBJECTS, 'note', 'task', 'attachment', 'email', 'meeting'] as const;
+export const EVENT_OBJECTS = [...RECORD_OBJECTS, 'note', 'task', 'attachment', 'email', 'meeting', 'mailbox'] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
 /**
@@ -57,6 +57,11 @@ export const DOMAIN_EVENT_TYPES = [
     // person and company they concern, which is how the rule engine finds the deals.
     'email.replied',
     'meeting.booked',
+    // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
+    // writes nothing for these, webhooks deliver them.
+    'mailbox.connected',
+    'mailbox.disconnected',
+    'mailbox.reconnect_needed',
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
