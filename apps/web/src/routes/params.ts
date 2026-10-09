@@ -12,3 +12,12 @@ export function useWorkspaceId(): string {
     if (!value) throw new Error(`route has no :${WORKSPACE_PARAM} segment`);
     return value;
 }
+
+/** The pipeline settings page's segment (P1-UI-8). */
+export const PIPELINE_PARAM = 'pipelineId';
+
+export function usePipelineId(): string {
+    const value = useParams()[PIPELINE_PARAM];
+    if (!value) throw new Error(`route has no :${PIPELINE_PARAM} segment`);
+    return value;
+}

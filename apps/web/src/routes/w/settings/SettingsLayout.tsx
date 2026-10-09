@@ -1,27 +1,32 @@
+import type { Capability } from '@bylinecrm/shared';
 import { PageHeader, cn, focusRing } from '@bylinecrm/ui';
 import { NavLink, Outlet } from 'react-router';
+import { can, useMembership } from '../../../auth/capabilities';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 
-const SECTIONS = [
-    { id: 'members', label: 'Members', to: paths.settingsMembers },
-    { id: 'roles', label: 'Roles', to: paths.settingsRoles },
-    { id: 'api-keys', label: 'API keys', to: paths.settingsApiKeys },
-    { id: 'invites', label: 'Invites', to: paths.settingsInvites },
-    { id: 'pipelines', label: 'Pipelines', to: paths.settingsPipelines },
-] as const;
+/** Each section and the capability its writes need; a member sees only the sections they can use (FR-CRMS-UI-6). */
+const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) => string; requires: Capability }[] = [
+    { id: 'members', label: 'Members', to: paths.settingsMembers, requires: 'workspace:admin' },
+    { id: 'roles', label: 'Roles', to: paths.settingsRoles, requires: 'workspace:admin' },
+    { id: 'api-keys', label: 'API keys', to: paths.settingsApiKeys, requires: 'workspace:admin' },
+    { id: 'invites', label: 'Invites', to: paths.settingsInvites, requires: 'workspace:admin' },
+    { id: 'pipelines', label: 'Pipelines', to: paths.settingsPipelines, requires: 'pipeline:configure' },
+    { id: 'custom-fields', label: 'Custom fields', to: paths.settingsCustomFields, requires: 'workspace:admin' },
+];
 
-/** Workspace settings: a section row, then the section's table. Admin-only by the route guard. */
+/** Workspace settings: a section row, then the section's table. The server is still the gate on every write. */
 export function SettingsLayout() {
     const workspaceId = useWorkspaceId();
+    const membership = useMembership();
     return (
         <div className="p-7">
             <PageHeader
                 title="Settings"
-                subtitle="Who is in the workspace, what they may do, and the machines that may call it."
+                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, and the fields records carry."
             />
             <nav aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
-                {SECTIONS.map((section) => (
+                {SECTIONS.filter((section) => can(membership, section.requires)).map((section) => (
                     <NavLink
                         key={section.id}
                         to={section.to(workspaceId)}
