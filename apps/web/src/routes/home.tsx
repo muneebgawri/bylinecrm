@@ -50,7 +50,7 @@ export function Home() {
                 <h1 className="text-2xl font-semibold">Service status</h1>
                 <section aria-live="polite" className="mt-4 max-w-md text-sm">
                     {health.state === 'loading' && (
-                        <div className="grid gap-2" aria-label="Checking the API">
+                        <div className="grid gap-2" role="status" aria-label="Checking the API">
                             <Skeleton className="h-6 w-40" />
                             <Skeleton className="h-6 w-56" />
                             <Skeleton className="h-6 w-48" />

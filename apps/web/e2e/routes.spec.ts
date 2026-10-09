@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { BREAKPOINT_PX } from '../../../packages/ui/src/lib/breakpoints';
 import { installApi } from './api';
 import { axe, phoneTargets, primaryAction, sidewaysScroll, type Finding } from './checks';
@@ -17,17 +17,21 @@ import { STATES } from './states';
  */
 const PALETTE_SHORTCUT = 'ControlOrMeta+k';
 const SETTLE_TIMEOUT_MS = 20_000;
+/** How long the page must stay quiet to count as settled, and how often that is checked. */
+const QUIET_MS = 500;
+const POLL_MS = 100;
 
 for (const state of STATES) {
     test(state.name, async ({ page }, testInfo) => {
         const unanswered = await installApi(page);
+        const inFlight = trackRequests(page);
         await page.clock.setFixedTime(FIXED_NOW);
         await page.goto(state.url);
-        await settle(page);
+        await settle(page, inFlight);
         if (state.after === 'palette') {
             await page.keyboard.press(PALETTE_SHORTCUT);
             await expect(page.getByRole('dialog')).toBeVisible();
-            await settle(page);
+            await settle(page, inFlight);
         }
 
         const viewport = page.viewportSize();
@@ -62,11 +66,36 @@ for (const state of STATES) {
     });
 }
 
-/** The page has loaded its data, its lazy chunks and its fonts, and nothing is still loading. */
-async function settle(page: import('@playwright/test').Page): Promise<void> {
-    await page.waitForLoadState('networkidle');
+/** Counts the page's requests still in flight (route-intercepted ones included). */
+function trackRequests(page: Page): () => number {
+    let inFlight = 0;
+    page.on('request', () => inFlight++);
+    const done = () => inFlight--;
+    page.on('requestfinished', done);
+    page.on('requestfailed', done);
+    return () => inFlight;
+}
+
+/**
+ * The page is settled: fonts loaded, then no request in flight and nothing marked busy for
+ * QUIET_MS without a break. A single quiet moment is not enough — a lazy chunk (the record
+ * drawer) can finish loading and only then start its queries, and a check that landed between
+ * the two would read a half-loaded page. `waitForLoadState('networkidle')` cannot express this:
+ * once a page has been idle it returns at once.
+ */
+async function settle(page: Page, inFlight: () => number): Promise<void> {
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
-    // A lazy route chunk plus its queries can take longer than expect's 5s default on a loaded
-    // runner; the gate is about the settled page, so it waits for it rather than flaking.
-    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: SETTLE_TIMEOUT_MS });
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+    let quietSince: number | null = null;
+    while (Date.now() < deadline) {
+        const busy = await page.locator('[aria-busy="true"]').count();
+        if (inFlight() === 0 && busy === 0) {
+            quietSince ??= Date.now();
+            if (Date.now() - quietSince >= QUIET_MS) return;
+        } else {
+            quietSince = null;
+        }
+        await page.waitForTimeout(POLL_MS);
+    }
+    throw new Error(`the page did not settle within ${SETTLE_TIMEOUT_MS}ms (${inFlight()} requests in flight)`);
 }

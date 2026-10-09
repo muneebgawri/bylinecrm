@@ -30,7 +30,7 @@ export function AuthCallback() {
                     </Button>
                 </div>
             ) : (
-                <div className="grid gap-2" aria-label="Checking your session">
+                <div className="grid gap-2" role="status" aria-label="Checking your session">
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-5 w-1/2" />
                 </div>

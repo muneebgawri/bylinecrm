@@ -28,7 +28,7 @@ export function Workspaces() {
     if (workspaces.isPending) {
         return (
             <Frame>
-                <div className="grid gap-2" aria-label="Loading your workspaces">
+                <div className="grid gap-2" role="status" aria-label="Loading your workspaces">
                     <Skeleton className="h-14" />
                     <Skeleton className="h-14" />
                 </div>

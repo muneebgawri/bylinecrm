@@ -123,7 +123,12 @@ export function TimelinePanel({
             </div>
             <div className="px-4 py-2">
                 {query.isPending ? (
-                    <div className="flex flex-col gap-3 py-2" aria-busy="true" aria-label="Loading activity">
+                    <div
+                        className="flex flex-col gap-3 py-2"
+                        role="status"
+                        aria-busy="true"
+                        aria-label="Loading activity"
+                    >
                         <Skeleton className="h-10" />
                         <Skeleton className="h-10" />
                         <Skeleton className="h-10" />
