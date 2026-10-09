@@ -1,6 +1,7 @@
 import type { Capability } from '@bylinecrm/shared';
 import { PageHeader, cn, focusRing } from '@bylinecrm/ui';
-import { NavLink, Outlet } from 'react-router';
+import { useEffect, useRef } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { useMembership, can } from '../../../auth/capabilities';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
@@ -24,13 +25,19 @@ export function SettingsLayout() {
     const workspaceId = useWorkspaceId();
     const membership = useMembership();
     const sections = SECTIONS.filter((section) => can(membership, section.requires));
+    // On a phone the section row scrolls inside itself; the open section is kept in view.
+    const nav = useRef<HTMLElement>(null);
+    const { pathname } = useLocation();
+    useEffect(() => {
+        nav.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [pathname, sections.length]);
     return (
         <div className="p-7">
             <PageHeader
                 title="Settings"
                 subtitle="Who is in the workspace, what they may do, the machines that may call it, and how its mail is signed."
             />
-            <nav aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
+            <nav ref={nav} aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
                 {sections.map((section) => (
                     <NavLink
                         key={section.id}
