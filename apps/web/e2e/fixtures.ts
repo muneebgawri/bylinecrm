@@ -19,6 +19,7 @@ import type {
     NoteView,
     OpportunityView,
     Page,
+    RecordPage,
     PersonView,
     PipelineView,
     RoleView,
@@ -141,6 +142,10 @@ export const invites: InviteView[] = [
 ];
 
 const noLinks = { linkedin: null, x: null };
+/** Related records by name, as the API embeds them on a row (P1-4a). */
+const ownerOf = (memberId: string) => membersSummary.find((m) => m.memberId === memberId) ?? null;
+const companyRef = (id: string) => ({ id, name: id === IDS.company ? 'Acme Corp' : 'Initech' });
+const personRef = (id: string) => ({ id, name: id === IDS.person ? 'Dana Reyes' : 'Sam Okafor' });
 const noAddress = { street: null, city: null, state: null, country: null, postalCode: null };
 const created = (hoursAgo: number) => ({
     createdBy: member,
@@ -161,6 +166,7 @@ export const companies: CompanyView[] = [
         icp: true,
         position: 0,
         ownerId: IDS.member,
+        owner: ownerOf(IDS.member),
         custom: {},
         ...created(24 * 14),
     },
@@ -175,6 +181,7 @@ export const companies: CompanyView[] = [
         icp: false,
         position: 1,
         ownerId: IDS.secondMember,
+        owner: ownerOf(IDS.secondMember),
         custom: {},
         ...created(24 * 9),
     },
@@ -194,6 +201,8 @@ export const people: PersonView[] = [
         position: 0,
         companyId: IDS.company,
         ownerId: IDS.member,
+        company: companyRef(IDS.company),
+        owner: ownerOf(IDS.member),
         custom: {},
         ...created(24 * 14),
     },
@@ -210,6 +219,8 @@ export const people: PersonView[] = [
         position: 1,
         companyId: IDS.secondCompany,
         ownerId: IDS.secondMember,
+        company: companyRef(IDS.secondCompany),
+        owner: ownerOf(IDS.secondMember),
         custom: {},
         ...created(24 * 9),
     },
@@ -261,6 +272,9 @@ const deal = (
     ownerId: IDS.member,
     pointOfContactId,
     companyId,
+    company: companyRef(companyId),
+    pointOfContact: personRef(pointOfContactId),
+    owner: ownerOf(IDS.member),
     custom: {},
     ...created(24 * 20),
 });
@@ -431,3 +445,10 @@ export const timeline: TimelineActivityView[] = [
 ];
 
 export const page = <T>(items: T[]): Page<T> => ({ items, nextCursor: null });
+/** A record list's page (P1-4a): the rows and the size of the whole set. */
+export const recordPage = <T>(items: T[]): RecordPage<T> => ({
+    items,
+    nextCursor: null,
+    total: items.length,
+    totalIsExact: true,
+});
