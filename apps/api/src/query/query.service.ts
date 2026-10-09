@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import type { FilterGroup, RecordObject, ViewSort } from '@bylinecrm/shared';
+import { type FilterGroup, type RecordObject, SEARCH_CANDIDATE_LIMIT, type ViewSort } from '@bylinecrm/shared';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
-import { ownerWhere } from '../records/record-scope';
+import { recordWhere } from '../records/record-scope';
 import { searchCandidates } from '../records/search';
 import { loadView } from '../views/views.service';
+import type { CompiledWhere } from './compile-filter';
 import { type Group, groupRows } from './group-by';
 import { decodeFilterParam, planQuery, type QueryPlan } from './plan';
 import { SEARCHABLE_TABLE } from './search.service';
@@ -42,6 +43,45 @@ export async function resolvePlan(
     );
 }
 
+/** What a list request selects: the plan, and the one `where` its page, total, export and bulk read. */
+export interface ListScope {
+    plan: QueryPlan;
+    where: CompiledWhere;
+    /** The text search matched nothing: `where` matches no row, and a reader may skip the query. */
+    empty: boolean;
+    /** The text search's candidates hit their cap, so the set may be larger than this `where` says. */
+    candidatesCapped: boolean;
+}
+
+/**
+ * The set a list request names, as one `where`: live rows or the trash, the caller's owner scope,
+ * the planned filter, and the text search's candidates. Every reader of a list — its page and
+ * total, the group-by, the export, a bulk action over a filter — takes its rows from here, so
+ * none of them can disagree about which rows a request means.
+ */
+export async function listScope(
+    tx: WorkspaceClient,
+    context: WorkspaceRunContext,
+    customFields: CustomFieldsService,
+    object: RecordObject,
+    raw: RawQuery,
+    deleted: boolean,
+    defaultSort?: ViewSort,
+): Promise<ListScope> {
+    const plan = await resolvePlan(tx, context, customFields, object, raw, defaultSort);
+    const ids = raw.q ? await searchCandidates(tx, SEARCHABLE_TABLE[object], raw.q, deleted) : undefined;
+    return {
+        plan,
+        where: {
+            ...recordWhere(context, deleted),
+            ...plan.where,
+            ...(ids ? { id: { in: ids } } : {}),
+        },
+        empty: ids?.length === 0,
+        candidatesCapped: ids?.length === SEARCH_CANDIDATE_LIMIT,
+    };
+}
+
 @Injectable()
 export class QueryService {
     constructor(
@@ -54,15 +94,9 @@ export class QueryService {
     groupBy(object: RecordObject, raw: RawQuery & { field: string }): Promise<Group[]> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const plan = await resolvePlan(tx, context, this.customFields, object, raw);
-            const ids = raw.q ? await searchCandidates(tx, SEARCHABLE_TABLE[object], raw.q, false) : undefined;
-            const where = {
-                deletedAt: null,
-                ...ownerWhere(context),
-                ...plan.where,
-                ...(ids ? { id: { in: ids } } : {}),
-            };
-            return groupRows(tx, object, plan.fields, raw.field, where);
+            const scope = await listScope(tx, context, this.customFields, object, raw, false);
+            if (scope.empty) return [];
+            return groupRows(tx, object, scope.plan.fields, raw.field, scope.where);
         });
     }
 

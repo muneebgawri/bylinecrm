@@ -1,9 +1,33 @@
 import { BadRequestException } from '@nestjs/common';
+import { LIST_COUNT_CAP } from '@bylinecrm/shared';
 
 /** One page of a list and the cursor that continues it, `null` on the last page. */
 export interface Page<T> {
     items: T[];
     nextCursor: string | null;
+}
+
+/** A record list's total, counted over the same filtered, scoped set as its page (P1-4a). */
+export interface Totals {
+    total: number;
+    totalIsExact: boolean;
+}
+
+/** A record list's page with its total. */
+export type CountedPage<T> = Page<T> & Totals;
+
+/** The page of a list that matched nothing. */
+export const EMPTY_COUNTED_PAGE: CountedPage<never> = { items: [], nextCursor: null, total: 0, totalIsExact: true };
+
+/**
+ * The total of a list, from `count(take)` — a count of the same `where` the page reads, asked for
+ * at most one row past `LIST_COUNT_CAP`. A count past the cap is the cap and not exact; so is any
+ * count over a text search whose candidates were themselves capped (there may be more matches).
+ */
+export async function countTotal(count: (take: number) => Promise<number>, candidatesCapped: boolean): Promise<Totals> {
+    const counted = await count(LIST_COUNT_CAP + 1);
+    if (counted > LIST_COUNT_CAP) return { total: LIST_COUNT_CAP, totalIsExact: false };
+    return { total: counted, totalIsExact: !candidatesCapped };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

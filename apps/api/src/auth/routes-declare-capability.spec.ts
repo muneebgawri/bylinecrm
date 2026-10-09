@@ -2,11 +2,10 @@ import 'reflect-metadata';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryModule, DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { isCapability } from '@bylinecrm/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../app.module';
 import { APP_COMPILE_TIMEOUT_MS, applyPlaceholderEnv } from '../openapi/placeholder-env';
-import { ANY_MEMBER_KEY, REQUIRES_KEY } from './decorators';
+import { ANY_MEMBER_KEY, REQUIRES_KEY, requiredCapabilities } from './decorators';
 import { TENANT_PATH } from './guards';
 
 /**
@@ -45,10 +44,15 @@ describe('tenant routes declare a capability', () => {
         expect(routes.length).toBeGreaterThanOrEqual(30);
     });
 
-    it('every one of them names a capability from the catalogue, or is open to any member for a written reason', () => {
+    it('every one of them names capabilities from the catalogue, or is open to any member for a written reason', () => {
         const open = (r: { openReason: unknown }) => typeof r.openReason === 'string' && r.openReason.trim().length > 0;
-        const undeclared = routes.filter((r) => !isCapability(r.capability) && !open(r)).map((r) => r.route);
+        const undeclared = routes.filter((r) => !requiredCapabilities(r.capability) && !open(r)).map((r) => r.route);
         expect(undeclared, 'tenant routes with no @Requires() and no @AnyMember(reason)').toEqual([]);
+    });
+
+    it('a route gated by several capabilities counts as gated (the deal bulk route)', () => {
+        const bulk = routes.find((r) => r.route === 'OpportunitiesController.bulk');
+        expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
     });
 
     it('the routes open to any member are exactly the ones that ask what the caller may do', () => {

@@ -1,11 +1,13 @@
 import { Body, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
+import type { BulkResult } from '@bylinecrm/shared';
+import { BulkBodyDto, ExportBodyDto, ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
 import { ExportService } from '../query/export.service';
 import type { Group } from '../query/group-by';
 import { QueryService } from '../query/query.service';
 import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
+import { BulkService } from './bulk/bulk.service';
 import { CompaniesService, type CompanyView } from './companies.service';
 import { CustomFieldsService, type CustomFieldView } from './custom-fields/custom-fields.service';
 import {
@@ -18,11 +20,11 @@ import {
     UpdateCustomFieldDto,
     UpdatePersonDto,
 } from './dto';
-import type { Page } from './list-query';
+import type { CountedPage } from './list-query';
 import { PeopleService, type PersonView } from './people.service';
 import { Returns, ReturnsFile } from '../openapi/responses';
 import { groupView } from '../query/responses';
-import { companyPage, companyView, customFieldView, personPage, personView } from './responses';
+import { bulkResultView, companyPage, companyView, customFieldView, personPage, personView } from './responses';
 
 /**
  * Records live under `/api/w/:workspaceId`, so the workspace guard has already placed the caller;
@@ -36,6 +38,7 @@ export class PeopleController {
         private readonly people: PeopleService,
         private readonly queries: QueryService,
         private readonly exports: ExportService,
+        private readonly bulkActions: BulkService,
     ) {}
 
     /** The list's twin for a filter too long for a query string: the same parameters in a body. */
@@ -43,7 +46,7 @@ export class PeopleController {
     @HttpCode(200)
     @Post('query')
     @Returns(personPage)
-    query(@Body() body: QueryBodyDto): Promise<Page<PersonView>> {
+    query(@Body() body: QueryBodyDto): Promise<CountedPage<PersonView>> {
         return this.people.list(body);
     }
 
@@ -53,6 +56,32 @@ export class PeopleController {
     @Returns([groupView])
     groupBy(@Query() query: GroupByQueryDto): Promise<Group[]> {
         return this.queries.groupBy('person', query);
+    }
+
+    /**
+     * Many records at once (P1-4a): assign an owner, delete or restore — named by id or selected
+     * by filter / view / q, at most `BULK_MAX_IDS`. Each goes through the single-record write and
+     * is announced by its own event; the result says, per record, whether it changed.
+     */
+    @Requires('record:write')
+    @HttpCode(200)
+    @Post('bulk')
+    @Returns(bulkResultView)
+    bulk(@Body() body: BulkBodyDto): Promise<BulkResult> {
+        return this.bulkActions.run(this.people, body);
+    }
+
+    /** The export's twin for a filter too long for a query string — a selection of ids, typically. */
+    @Requires('record:read')
+    @HttpCode(200)
+    @Post('export.csv')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="persons.csv"')
+    @Header('Cache-Control', 'private, no-store')
+    @ReturnsFile('text/csv')
+    async exportCsvSelection(@Body() body: ExportBodyDto, @Res() res: Response): Promise<void> {
+        await this.exports.writeCsv('person', body, res);
+        res.end();
     }
 
     /** The filtered, scoped list as a streamed CSV (RFC 4180, UTF-8 with BOM); `413` past `EXPORT_MAX_ROWS`. */
@@ -70,14 +99,14 @@ export class PeopleController {
     @Requires('record:read')
     @Get()
     @Returns(personPage)
-    list(@Query() query: ListQueryDto): Promise<Page<PersonView>> {
+    list(@Query() query: ListQueryDto): Promise<CountedPage<PersonView>> {
         return this.people.list(query);
     }
 
     @Requires('record:write')
     @Get('deleted')
     @Returns(personPage)
-    listDeleted(@Query() query: ListQueryDto): Promise<Page<PersonView>> {
+    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<PersonView>> {
         return this.people.list(query, true);
     }
 
@@ -124,6 +153,7 @@ export class CompaniesController {
         private readonly companies: CompaniesService,
         private readonly queries: QueryService,
         private readonly exports: ExportService,
+        private readonly bulkActions: BulkService,
     ) {}
 
     /** The list's twin for a filter too long for a query string: the same parameters in a body. */
@@ -131,7 +161,7 @@ export class CompaniesController {
     @HttpCode(200)
     @Post('query')
     @Returns(companyPage)
-    query(@Body() body: QueryBodyDto): Promise<Page<CompanyView>> {
+    query(@Body() body: QueryBodyDto): Promise<CountedPage<CompanyView>> {
         return this.companies.list(body);
     }
 
@@ -141,6 +171,32 @@ export class CompaniesController {
     @Returns([groupView])
     groupBy(@Query() query: GroupByQueryDto): Promise<Group[]> {
         return this.queries.groupBy('company', query);
+    }
+
+    /**
+     * Many records at once (P1-4a): assign an owner, delete or restore — named by id or selected
+     * by filter / view / q, at most `BULK_MAX_IDS`. Each goes through the single-record write and
+     * is announced by its own event; the result says, per record, whether it changed.
+     */
+    @Requires('record:write')
+    @HttpCode(200)
+    @Post('bulk')
+    @Returns(bulkResultView)
+    bulk(@Body() body: BulkBodyDto): Promise<BulkResult> {
+        return this.bulkActions.run(this.companies, body);
+    }
+
+    /** The export's twin for a filter too long for a query string — a selection of ids, typically. */
+    @Requires('record:read')
+    @HttpCode(200)
+    @Post('export.csv')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="companys.csv"')
+    @Header('Cache-Control', 'private, no-store')
+    @ReturnsFile('text/csv')
+    async exportCsvSelection(@Body() body: ExportBodyDto, @Res() res: Response): Promise<void> {
+        await this.exports.writeCsv('company', body, res);
+        res.end();
     }
 
     /** The filtered, scoped list as a streamed CSV (RFC 4180, UTF-8 with BOM); `413` past `EXPORT_MAX_ROWS`. */
@@ -158,14 +214,14 @@ export class CompaniesController {
     @Requires('record:read')
     @Get()
     @Returns(companyPage)
-    list(@Query() query: ListQueryDto): Promise<Page<CompanyView>> {
+    list(@Query() query: ListQueryDto): Promise<CountedPage<CompanyView>> {
         return this.companies.list(query);
     }
 
     @Requires('record:write')
     @Get('deleted')
     @Returns(companyPage)
-    listDeleted(@Query() query: ListQueryDto): Promise<Page<CompanyView>> {
+    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<CompanyView>> {
         return this.companies.list(query, true);
     }
 

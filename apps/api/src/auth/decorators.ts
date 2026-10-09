@@ -1,6 +1,6 @@
 import { applyDecorators, Controller, createParamDecorator, SetMetadata, type ExecutionContext } from '@nestjs/common';
 import { ApiParam } from '@nestjs/swagger';
-import type { Capability } from '@bylinecrm/shared';
+import { type Capability, isCapability } from '@bylinecrm/shared';
 import type { AuthenticatedRequest, Principal } from './principal';
 
 export const PUBLIC_KEY = 'auth:public';
@@ -9,10 +9,18 @@ export const Public = (): MethodDecorator & ClassDecorator => SetMetadata(PUBLIC
 
 export const REQUIRES_KEY = 'auth:requires';
 /**
- * The capability a tenant route needs. Every route under `/api/w/:workspaceId` must declare one;
- * the guard refuses a route that does not, and a unit test walks the router to catch it earlier.
+ * The capabilities a tenant route needs — all of them. Every route under `/api/w/:workspaceId`
+ * declares at least one; the guard refuses a route that does not, and a unit test walks the
+ * router to catch it earlier. Several are for a route that is more than one thing at once (a bulk
+ * edit of deals: `@Requires('deal:bulk', 'deal:edit')`), so every gate stays on the route.
  */
-export const Requires = (capability: Capability): MethodDecorator => SetMetadata(REQUIRES_KEY, capability);
+export const Requires = (first: Capability, ...rest: Capability[]): MethodDecorator =>
+    SetMetadata(REQUIRES_KEY, [first, ...rest]);
+
+/** What `@Requires` recorded on a handler, or `null` when it recorded nothing usable. */
+export function requiredCapabilities(metadata: unknown): readonly Capability[] | null {
+    return Array.isArray(metadata) && metadata.length > 0 && metadata.every(isCapability) ? metadata : null;
+}
 
 /** The authenticated caller, as the auth guard recorded it. */
 export const CurrentPrincipal = createParamDecorator((_: unknown, ctx: ExecutionContext): Principal => {

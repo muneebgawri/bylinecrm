@@ -17,3 +17,23 @@ export function diffOf<T extends object>(
     }
     return diff;
 }
+
+/**
+ * What writing `data` over `current` would change, as the record's view shows it — computed
+ * before the write (P1-4a). `data` is keyed by the row's columns, as Prisma takes it; the
+ * projected row is `current` with `data` laid over it. An update whose projection changes none
+ * of `fields` is not written and not announced: a no-op is no event.
+ */
+export function projectedChanges<Row extends object, View extends object>(
+    current: Row,
+    data: object,
+    view: (row: Row) => View,
+    fields: readonly (keyof View & string)[],
+): Record<string, FieldChange> {
+    return diffOf(view(current), view({ ...current, ...data } as Row), fields);
+}
+
+/** A diff with no changes in it. */
+export function isEmpty(diff: Record<string, FieldChange>): boolean {
+    return Object.keys(diff).length === 0;
+}

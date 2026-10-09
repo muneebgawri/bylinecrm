@@ -64,6 +64,20 @@ export function page<S extends z.ZodType>(
     return z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 }
 
+/**
+ * A record list's page with its total (P1-4a): counted over the same filtered, scoped set,
+ * up to `LIST_COUNT_CAP`; past it `totalIsExact` is false and `total` is the cap.
+ */
+export function countedPage<S extends z.ZodType>(item: S) {
+    return page(item).extend({
+        total: z
+            .number()
+            .int()
+            .meta({ description: 'Rows in the whole filtered, scoped set (capped; see totalIsExact).' }),
+        totalIsExact: z.boolean(),
+    });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The shared composites. Their TypeScript types live in @bylinecrm/shared (the web app imports
 // them and must not import zod — P1-4's bundle finding), so each schema here is held to its type
