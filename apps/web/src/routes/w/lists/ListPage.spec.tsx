@@ -57,11 +57,13 @@ const MINE = {
 
 const membership: MembershipSummary = {
     memberId: ME,
+    workspaceId: 'w1',
+    apiKeyId: null,
     userId: 'u1',
     roleId: 'r1',
     roleName: 'admin',
     recordScope: 'all',
-    capabilities: CAPABILITIES,
+    capabilities: [...CAPABILITIES],
 };
 
 interface Call {

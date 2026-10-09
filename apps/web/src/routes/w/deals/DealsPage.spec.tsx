@@ -94,6 +94,8 @@ const board = (): BoardView => ({
 const ALL: Capability[] = ['deal:read', 'deal:move', 'deal:edit', 'deal:bulk'];
 const membership = (capabilities: Capability[]): MembershipSummary => ({
     memberId: 'm-1',
+    workspaceId: 'w1',
+    apiKeyId: null,
     userId: 'u-1',
     roleId: 'r-1',
     roleName: 'member',

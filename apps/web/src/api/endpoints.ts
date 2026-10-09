@@ -8,6 +8,7 @@ import type {
     BulkInput,
     BulkResultView,
     CompanyInput,
+    CompanyPage,
     CompanyView,
     CreateApiKeyInput,
     CreateInviteInput,
@@ -21,25 +22,29 @@ import type {
     MemberView,
     MoveDealInput,
     MoveResult,
+    NoteCreateInput,
     NoteInput,
+    NotePage,
     NoteView,
     OpportunityCreateInput,
     OpportunityInput,
+    OpportunityPage,
     OpportunityView,
-    Page,
     PersonInput,
+    PersonPage,
     PersonView,
     PipelineView,
-    RecordPage,
     RoleView,
     RuleView,
     SavedView,
     SearchResults,
     SignupInput,
     StageHistoryEntry,
+    TaskCreateInput,
     TaskInput,
+    TaskPage,
     TaskView,
-    TimelineActivityView,
+    TimelinePage,
     UpdateRoleInput,
     UpdateViewInput,
     UserView,
@@ -167,10 +172,10 @@ export const membersSummary = {
 };
 
 /** The three record objects share one shape of route: list, get, create, patch, delete, restore. */
-function recordRoutes<View, Input>(segment: string) {
+function recordRoutes<View, Page, Input>(segment: string) {
     return {
         list: (workspaceId: string, params: ListParams = {}, signal?: AbortSignal) =>
-            request<RecordPage<View>>('GET', workspacePath(workspaceId, `/${segment}${query(params)}`), { signal }),
+            request<Page>('GET', workspacePath(workspaceId, `/${segment}${query(params)}`), { signal }),
         get: (workspaceId: string, id: string, signal?: AbortSignal) =>
             request<View>('GET', workspacePath(workspaceId, `/${segment}/${id}`), { signal }),
         create: (workspaceId: string, input: Input) =>
@@ -196,10 +201,10 @@ function recordRoutes<View, Input>(segment: string) {
     };
 }
 
-export const people = recordRoutes<PersonView, PersonInput>('people');
-export const companies = recordRoutes<CompanyView, CompanyInput>('companies');
+export const people = recordRoutes<PersonView, PersonPage, PersonInput>('people');
+export const companies = recordRoutes<CompanyView, CompanyPage, CompanyInput>('companies');
 export const opportunities = {
-    ...recordRoutes<OpportunityView, OpportunityInput>('opportunities'),
+    ...recordRoutes<OpportunityView, OpportunityPage, OpportunityInput>('opportunities'),
     /** Create names where the deal starts; omitted, the default pipeline's first stage. */
     create: (workspaceId: string, input: OpportunityCreateInput) =>
         request<OpportunityView>('POST', workspacePath(workspaceId, '/opportunities'), { body: input }),
@@ -250,12 +255,12 @@ export const customFields = {
 
 export const notes = {
     list: (workspaceId: string, target: RecordTarget, cursor?: string, signal?: AbortSignal) =>
-        request<Page<NoteView>>(
+        request<NotePage>(
             'GET',
             workspacePath(workspaceId, `/notes${query({ target: targetParam(target), cursor })}`),
             { signal },
         ),
-    create: (workspaceId: string, input: NoteInput & { targets: RecordTarget[] }) =>
+    create: (workspaceId: string, input: NoteCreateInput) =>
         request<NoteView>('POST', workspacePath(workspaceId, '/notes'), { body: input }),
     update: (workspaceId: string, id: string, input: NoteInput) =>
         request<NoteView>('PATCH', workspacePath(workspaceId, `/notes/${id}`), { body: input }),
@@ -273,7 +278,7 @@ export const tasks = {
         },
         signal?: AbortSignal,
     ) =>
-        request<Page<TaskView>>(
+        request<TaskPage>(
             'GET',
             workspacePath(
                 workspaceId,
@@ -286,7 +291,7 @@ export const tasks = {
             ),
             { signal },
         ),
-    create: (workspaceId: string, input: TaskInput & { title: string; targets: RecordTarget[] }) =>
+    create: (workspaceId: string, input: TaskCreateInput) =>
         request<TaskView>('POST', workspacePath(workspaceId, '/tasks'), { body: input }),
     update: (workspaceId: string, id: string, input: TaskInput) =>
         request<TaskView>('PATCH', workspacePath(workspaceId, `/tasks/${id}`), { body: input }),
@@ -323,7 +328,7 @@ export const timeline = {
         params: { target: RecordTarget; kinds?: string | undefined; cursor?: string | undefined },
         signal?: AbortSignal,
     ) =>
-        request<Page<TimelineActivityView>>(
+        request<TimelinePage>(
             'GET',
             workspacePath(
                 workspaceId,
