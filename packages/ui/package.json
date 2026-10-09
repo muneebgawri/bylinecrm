@@ -9,6 +9,10 @@
             "types": "./src/index.ts",
             "default": "./src/index.ts"
         },
+        "./toaster": {
+            "types": "./src/components/toast/Toaster.tsx",
+            "default": "./src/components/toast/Toaster.tsx"
+        },
         "./styles.css": "./src/styles.css",
         "./tokens.css": "./src/tokens.css",
         "./theme.css": "./src/theme.css"

@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
 import { inMode } from '../../../.storybook/modes';
-import { Toaster, ToastStore } from './Toast';
+import { Toaster } from './Toaster';
+import { ToastStore } from './toast-store';
 
 const meta = { title: 'Feedback/Toast', component: Toaster } satisfies Meta<typeof Toaster>;
 export default meta;

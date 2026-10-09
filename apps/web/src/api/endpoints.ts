@@ -1,16 +1,32 @@
+import type { RecordObject } from '@bylinecrm/shared';
 import { request } from './client';
 import type {
     ApiKeyView,
+    BoardQuery,
+    CreateViewInput,
+    BoardView,
+    CompanySummary,
     CreateApiKeyInput,
     CreateInviteInput,
+    CreateOpportunityInput,
     CreateRoleInput,
     InviteView,
     LoginInput,
     MembershipSummary,
+    MemberSummaryView,
     MemberView,
+    MoveDealInput,
+    MoveResult,
+    OpportunityView,
+    Page,
+    PipelineView,
     RoleView,
+    RuleView,
+    SavedView,
     SignupInput,
+    UpdateOpportunityInput,
     UpdateRoleInput,
+    UpdateViewInput,
     UserView,
     WorkspaceView,
 } from './types';
@@ -48,9 +64,21 @@ export const membership = {
         request<MembershipSummary>('GET', workspacePath(workspaceId, '/me'), { signal }),
 };
 
+/** `?a=1&b=2` from the defined entries only; empty when none. */
+function query(params: { readonly [key: string]: string | number | undefined }): string {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(params))
+        if (value !== undefined && value !== '') search.set(key, String(value));
+    const text = search.toString();
+    return text ? `?${text}` : '';
+}
+
 export const members = {
     list: (workspaceId: string, signal?: AbortSignal) =>
         request<MemberView[]>('GET', workspacePath(workspaceId, '/members'), { signal }),
+    /** Names for owner/assignee pickers; readable by anyone with `record:read`. */
+    summary: (workspaceId: string, signal?: AbortSignal) =>
+        request<MemberSummaryView[]>('GET', workspacePath(workspaceId, '/members/summary'), { signal }),
     setRole: (workspaceId: string, memberId: string, roleId: string) =>
         request<void>('PATCH', workspacePath(workspaceId, `/members/${memberId}/role`), { body: { roleId } }),
     remove: (workspaceId: string, memberId: string) =>
@@ -78,6 +106,55 @@ export const apiKeys = {
         }),
     revoke: (workspaceId: string, apiKeyId: string) =>
         request<void>('DELETE', workspacePath(workspaceId, `/api-keys/${apiKeyId}`)),
+};
+
+export const pipelines = {
+    list: (workspaceId: string, signal?: AbortSignal) =>
+        request<PipelineView[]>('GET', workspacePath(workspaceId, '/pipelines'), { signal }),
+    /** The board: every stage with its deals, count and exact sums under the caller's scope and the query. */
+    board: (workspaceId: string, pipelineId: string, params: BoardQuery, signal?: AbortSignal) =>
+        request<BoardView>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/pipelines/${pipelineId}/board${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`,
+            ),
+            {
+                signal,
+            },
+        ),
+    rules: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
+        request<RuleView[]>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules`), { signal }),
+};
+
+export const views = {
+    /** Shared views and the caller's own, for one object. */
+    list: (workspaceId: string, object: RecordObject, signal?: AbortSignal) =>
+        request<SavedView[]>('GET', workspacePath(workspaceId, `/views${query({ object })}`), { signal }),
+    create: (workspaceId: string, input: CreateViewInput) =>
+        request<SavedView>('POST', workspacePath(workspaceId, '/views'), { body: input }),
+    update: (workspaceId: string, viewId: string, input: UpdateViewInput) =>
+        request<SavedView>('PATCH', workspacePath(workspaceId, `/views/${viewId}`), { body: input }),
+    remove: (workspaceId: string, viewId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/views/${viewId}`)),
+};
+
+export const deals = {
+    create: (workspaceId: string, input: CreateOpportunityInput) =>
+        request<OpportunityView>('POST', workspacePath(workspaceId, '/opportunities'), { body: input }),
+    update: (workspaceId: string, dealId: string, input: UpdateOpportunityInput) =>
+        request<OpportunityView>('PATCH', workspacePath(workspaceId, `/opportunities/${dealId}`), { body: input }),
+    /** The one way a deal changes stage; a won/lost target needs `close`. */
+    move: (workspaceId: string, dealId: string, input: MoveDealInput) =>
+        request<MoveResult>('POST', workspacePath(workspaceId, `/opportunities/${dealId}/move`), { body: input }),
+};
+
+export const companies = {
+    /** A short search for pickers: name or domain prefix, a handful of rows. */
+    search: (workspaceId: string, q: string, signal?: AbortSignal) =>
+        request<Page<CompanySummary>>('GET', workspacePath(workspaceId, `/companies${query({ q, limit: 8 })}`), {
+            signal,
+        }),
 };
 
 export const invites = {

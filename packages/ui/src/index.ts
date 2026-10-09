@@ -82,12 +82,12 @@ export { WelcomePanel, type WelcomeFact, type WelcomePanelProps } from './compon
 export {
     TOAST_DURATION_MS,
     TOAST_LIMIT,
-    Toaster,
     ToastStore,
     toast,
     toasts,
     useToasts,
     type ToastInput,
     type ToastRecord,
-    type ToasterProps,
-} from './components/toast/Toast';
+} from './components/toast/toast-store';
+// The renderer is a subpath of its own (`@bylinecrm/ui/toaster`) so an app can load it lazily;
+// re-exporting it here would put Radix Toast in every page's first load.

@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { Toaster, ToastStore, TOAST_LIMIT } from './Toast';
+import { Toaster } from './Toaster';
+import { ToastStore, TOAST_LIMIT } from './toast-store';
 
 describe('ToastStore', () => {
     it('keeps the newest toasts only, up to the limit', () => {

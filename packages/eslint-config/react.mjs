@@ -7,6 +7,14 @@ import { base } from './base.mjs';
 export const react = tseslint.config(...base, reactHooks.configs.flat.recommended, {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser } },
+    rules: {
+        // `incompatible-library` reports React Compiler compatibility: that the compiler would skip a
+        // component using a library whose hooks return mutable instances (TanStack Table, Virtual).
+        // This build does not run the React Compiler (no compiler plugin in any Vite config), so the
+        // warning describes nothing that happens. Re-enable it in the same change that adopts the
+        // compiler; components using those libraries then opt out with 'use no memo'. (P1-UI-4.)
+        'react-hooks/incompatible-library': 'off',
+    },
 });
 
 export default react;

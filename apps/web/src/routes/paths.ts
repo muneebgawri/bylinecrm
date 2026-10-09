@@ -26,6 +26,7 @@ export const paths = {
     settingsRoles: (workspaceId: string) => `/w/${workspaceId}/settings/roles`,
     settingsApiKeys: (workspaceId: string) => `/w/${workspaceId}/settings/api-keys`,
     settingsInvites: (workspaceId: string) => `/w/${workspaceId}/settings/invites`,
+    settingsPipelines: (workspaceId: string) => `/w/${workspaceId}/settings/pipelines`,
 } as const;
 
 /** The query parameter sign-in uses to return the person where they were. */
