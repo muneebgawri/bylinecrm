@@ -50,6 +50,11 @@ export interface DataTableChromeProps<T extends string = string> extends Omit<HT
     search?: TableSearch;
     toolbar?: TableToolbar;
     pagination?: TablePagination;
+    /**
+     * A footer of the caller's own, for a list that is not paged by number — a cursor list that
+     * loads as it scrolls says "120 shown · loading more" here. Ignored when `pagination` is set.
+     */
+    footer?: ReactNode;
     /** The table itself; it scrolls horizontally inside the chrome. */
     children: ReactNode;
 }
@@ -71,6 +76,7 @@ function DataTableChromeInner<T extends string>(
         search,
         toolbar,
         pagination,
+        footer,
         children,
         ...props
     }: DataTableChromeProps<T>,
@@ -154,7 +160,15 @@ function DataTableChromeInner<T extends string>(
             {/* `relative`: an absolutely positioned cell part (an sr-only label) would otherwise escape this
                 scroll container and widen the whole page. */}
             <div className="relative overflow-x-auto">{children}</div>
-            {pagination && <Footer {...pagination} />}
+            {pagination ? (
+                <Footer {...pagination} />
+            ) : (
+                footer && (
+                    <div className="flex flex-wrap items-center gap-3.5 border-t border-border px-4.5 py-3 text-[13px] text-text-muted">
+                        {footer}
+                    </div>
+                )
+            )}
         </div>
     );
 }

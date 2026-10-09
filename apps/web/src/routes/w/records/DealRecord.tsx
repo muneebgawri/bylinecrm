@@ -17,21 +17,15 @@ import {
 } from '@bylinecrm/ui';
 import { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import {
-    useDealHistory,
-    useMoveDeal,
-    usePatchRecord,
-    usePipeline,
-    useRecord,
-    useRecordList,
-} from '../../../api/queries';
+import { useDealHistory, useMoveDeal, usePatchRecord, usePipeline, useRecord } from '../../../api/queries';
 import type { OpportunityView, StageView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatDate, formatDay } from '../../../lib/format';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
+import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
 import { AttachmentsPanel } from './AttachmentsPanel';
-import { InlineSelect, InlineText, messageFor } from './InlineEdit';
+import { InlineText, messageFor } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
@@ -64,8 +58,6 @@ export function DealRecord({
     const history = useDealHistory(workspaceId, deal.id);
     const company = useRecord(workspaceId, 'company', deal.companyId ?? '');
     const contact = useRecord(workspaceId, 'person', deal.pointOfContactId ?? '');
-    const companies = useRecordList(workspaceId, 'company', { limit: 200 }, edit.allowed);
-    const people = useRecordList(workspaceId, 'person', { limit: 200 }, edit.allowed);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
     const [closing, setClosing] = useState<StageView | null>(null);
@@ -179,36 +171,32 @@ export function DealRecord({
         {
             field: 'companyId',
             control: (
-                <InlineSelect
+                <RecordPicker
+                    workspaceId={workspaceId}
+                    object="company"
                     label="Company"
-                    path="companyId"
                     value={deal.companyId}
-                    options={(companies.data?.items ?? (company.data ? [company.data] : [])).map((c) => ({
-                        value: c.id,
-                        label: c.name,
-                    }))}
+                    valueLabel={company.data?.name}
                     clearLabel="No company"
                     canEdit={edit.allowed}
                     reason={edit.reason}
-                    onSave={(v) => save({ companyId: v })}
+                    onChange={(v) => save({ companyId: v })}
                 />
             ),
         },
         {
             field: 'pointOfContactId',
             control: (
-                <InlineSelect
+                <RecordPicker
+                    workspaceId={workspaceId}
+                    object="person"
                     label="Point of contact"
-                    path="pointOfContactId"
                     value={deal.pointOfContactId}
-                    options={(people.data?.items ?? (contact.data ? [contact.data] : [])).map((p) => ({
-                        value: p.id,
-                        label: personName(p),
-                    }))}
+                    valueLabel={contact.data ? personName(contact.data) : undefined}
                     clearLabel="Nobody yet"
                     canEdit={edit.allowed}
                     reason={edit.reason}
-                    onSave={(v) => save({ pointOfContactId: v })}
+                    onChange={(v) => save({ pointOfContactId: v })}
                 />
             ),
         },
