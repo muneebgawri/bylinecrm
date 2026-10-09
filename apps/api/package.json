@@ -6,7 +6,7 @@
         "build": "nest build",
         "dev": "dotenv -e ../../.env -- nest start --watch",
         "start": "dotenv -e ../../.env -- node dist/main.js",
-        "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" \"*.mts\" --max-warnings 0",
+        "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" \"contract/*.ts\" \"*.mts\" --max-warnings 0",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
@@ -16,7 +16,8 @@
         "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
         "db:ensure-role": "dotenv -e ../../.env -- node ../../scripts/db-ensure-app-role.mjs",
         "db:setup": "pnpm db:ensure-role && pnpm prisma:migrate:deploy",
-        "openapi:write": "nest build && node dist/openapi/write.js && prettier --write openapi.json"
+        "openapi:write": "nest build && node dist/openapi/write.js && prettier --write openapi.json",
+        "contract:check": "openapi-typescript openapi.json -o contract/generated/schema.d.ts && tsc -p contract/tsconfig.json"
     },
     "dependencies": {
         "@bylinecrm/shared": "workspace:*",
@@ -52,6 +53,8 @@
         "@types/supertest": "^6.0.3",
         "dotenv-cli": "^10",
         "eslint": "^9.39.4",
+        "openapi-fetch": "^0.17.0",
+        "openapi-typescript": "^7.13.0",
         "prisma": "^6.19.3",
         "supertest": "^7.3.1",
         "typescript": "^5.9.3",

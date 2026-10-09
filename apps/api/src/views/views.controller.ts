@@ -1,9 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { SavedView } from '@bylinecrm/shared';
-import { Requires } from '../auth/decorators';
+import { Requires, TenantController } from '../auth/decorators';
 import { CreateViewDto, ListViewsQueryDto, UpdateViewDto } from './dto';
 import { ViewsService } from './views.service';
+import { Returns } from '../openapi/responses';
+import { savedViewSchema } from './responses';
 
 /**
  * Saved views. Reading needs `record:read` (a view is how a list is looked at); writing one's own
@@ -11,24 +13,27 @@ import { ViewsService } from './views.service';
  * checks that second gate because it depends on the row, not only the route.
  */
 @ApiTags('views')
-@Controller('w/:workspaceId/views')
+@TenantController('views')
 export class ViewsController {
     constructor(private readonly views: ViewsService) {}
 
     @Requires('record:read')
     @Get()
+    @Returns([savedViewSchema])
     list(@Query() query: ListViewsQueryDto): Promise<SavedView[]> {
         return this.views.list(query.object);
     }
 
     @Requires('record:read')
     @Get(':viewId')
+    @Returns(savedViewSchema)
     get(@Param('viewId', ParseUUIDPipe) viewId: string): Promise<SavedView> {
         return this.views.get(viewId);
     }
 
     @Requires('view:save')
     @Post()
+    @Returns(savedViewSchema)
     create(@Body() body: CreateViewDto): Promise<SavedView> {
         const { object, ...input } = body;
         return this.views.create(object, input);
@@ -36,6 +41,7 @@ export class ViewsController {
 
     @Requires('view:save')
     @Patch(':viewId')
+    @Returns(savedViewSchema)
     update(@Param('viewId', ParseUUIDPipe) viewId: string, @Body() body: UpdateViewDto): Promise<SavedView> {
         return this.views.update(viewId, body);
     }
@@ -49,6 +55,7 @@ export class ViewsController {
 
     @Requires('view:save')
     @Post(':viewId/duplicate')
+    @Returns(savedViewSchema)
     duplicate(@Param('viewId', ParseUUIDPipe) viewId: string): Promise<SavedView> {
         return this.views.duplicate(viewId);
     }
