@@ -9,7 +9,6 @@ import {
     CommandInput,
     CommandItem,
     CommandList,
-    CommandSeparator,
     CommandShortcut,
 } from './Command';
 
@@ -36,7 +35,6 @@ function Items() {
                         <Building2 aria-hidden /> Acme Corp
                     </CommandItem>
                 </CommandGroup>
-                <CommandSeparator />
                 <CommandGroup heading="Actions">
                     <CommandItem>
                         <Plus aria-hidden /> New deal

@@ -85,18 +85,16 @@ export const CommandEmpty = forwardRef<
     return <CommandPrimitive.Empty ref={ref} className="py-6 text-center text-sm text-text-muted" {...props} />;
 });
 
+/**
+ * Groups, with their headings, are the only separation inside the list. cmdk's separator carries
+ * `role="separator"`, which ARIA does not allow inside a `listbox`, and the a11y gate fails it —
+ * so there is no CommandSeparator here.
+ */
 export const CommandGroup = forwardRef<
     ComponentRef<typeof CommandPrimitive.Group>,
     ComponentPropsWithoutRef<typeof CommandPrimitive.Group>
 >(function CommandGroup({ className, ...props }, ref) {
     return <CommandPrimitive.Group ref={ref} className={cn('overflow-hidden text-text', className)} {...props} />;
-});
-
-export const CommandSeparator = forwardRef<
-    ComponentRef<typeof CommandPrimitive.Separator>,
-    ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
->(function CommandSeparator({ className, ...props }, ref) {
-    return <CommandPrimitive.Separator ref={ref} className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />;
 });
 
 export const CommandItem = forwardRef<
