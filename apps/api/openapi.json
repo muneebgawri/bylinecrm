@@ -2368,6 +2368,240 @@
                 },
                 "tags": ["timeline"]
             }
+        },
+        "/api/w/{workspaceId}/webhooks/events": {
+            "get": {
+                "operationId": "WebhooksController_events",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
+        },
+        "/api/w/{workspaceId}/webhooks": {
+            "get": {
+                "operationId": "WebhooksController_list",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            },
+            "post": {
+                "operationId": "WebhooksController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateWebhookDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
+        },
+        "/api/w/{workspaceId}/webhooks/{endpointId}": {
+            "get": {
+                "operationId": "WebhooksController_get",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            },
+            "patch": {
+                "operationId": "WebhooksController_update",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateWebhookDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            },
+            "delete": {
+                "operationId": "WebhooksController_remove",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
+        },
+        "/api/w/{workspaceId}/webhooks/{endpointId}/rotate": {
+            "post": {
+                "operationId": "WebhooksController_rotate",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
+        },
+        "/api/w/{workspaceId}/webhooks/{endpointId}/test": {
+            "post": {
+                "operationId": "WebhooksController_test",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
+        },
+        "/api/w/{workspaceId}/webhooks/{endpointId}/deliveries": {
+            "get": {
+                "operationId": "WebhooksController_deliveries",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["pending", "delivering", "succeeded", "failed", "dead"]
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
+        },
+        "/api/w/{workspaceId}/webhooks/{endpointId}/deliveries/{deliveryId}/redeliver": {
+            "post": {
+                "operationId": "WebhooksController_redeliver",
+                "parameters": [
+                    {
+                        "name": "endpointId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "deliveryId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["webhooks"]
+            }
         }
     },
     "info": {
@@ -3908,6 +4142,149 @@
                     }
                 },
                 "required": ["target", "kind", "happenedAt", "title", "source", "idempotencyKey"]
+            },
+            "WebhookEnvelopeDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "event": {
+                        "type": "string"
+                    },
+                    "occurredAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "workspaceId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "data": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": ["id", "event", "occurredAt", "workspaceId", "data"]
+            },
+            "CreateWebhookDto": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                    },
+                    "description": {
+                        "default": "",
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "events": {
+                        "minItems": 1,
+                        "maxItems": 29,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "*",
+                                "person.created",
+                                "person.updated",
+                                "person.deleted",
+                                "person.restored",
+                                "company.created",
+                                "company.updated",
+                                "company.deleted",
+                                "company.restored",
+                                "opportunity.created",
+                                "opportunity.updated",
+                                "opportunity.deleted",
+                                "opportunity.restored",
+                                "note.created",
+                                "note.updated",
+                                "note.deleted",
+                                "note.restored",
+                                "task.created",
+                                "task.updated",
+                                "task.deleted",
+                                "task.restored",
+                                "attachment.created",
+                                "attachment.deleted",
+                                "attachment.restored",
+                                "deal.stage_changed",
+                                "deal.won",
+                                "deal.lost",
+                                "email.replied",
+                                "meeting.booked"
+                            ]
+                        }
+                    },
+                    "enabled": {
+                        "default": true,
+                        "type": "boolean"
+                    }
+                },
+                "required": ["url", "events"]
+            },
+            "UpdateWebhookDto": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "events": {
+                        "minItems": 1,
+                        "maxItems": 29,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "*",
+                                "person.created",
+                                "person.updated",
+                                "person.deleted",
+                                "person.restored",
+                                "company.created",
+                                "company.updated",
+                                "company.deleted",
+                                "company.restored",
+                                "opportunity.created",
+                                "opportunity.updated",
+                                "opportunity.deleted",
+                                "opportunity.restored",
+                                "note.created",
+                                "note.updated",
+                                "note.deleted",
+                                "note.restored",
+                                "task.created",
+                                "task.updated",
+                                "task.deleted",
+                                "task.restored",
+                                "attachment.created",
+                                "attachment.deleted",
+                                "attachment.restored",
+                                "deal.stage_changed",
+                                "deal.won",
+                                "deal.lost",
+                                "email.replied",
+                                "meeting.booked"
+                            ]
+                        }
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
             }
         }
     }
