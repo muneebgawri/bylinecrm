@@ -2094,6 +2094,71 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/mail/oauth-client/status": {
+            "get": {
+                "operationId": "oAuthClient_status",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GoogleOAuthClientStatus"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mail/oauth-client/verify": {
             "post": {
                 "operationId": "oAuthClient_verify",
@@ -13873,6 +13938,29 @@
                     "configuredBy",
                     "updatedAt"
                 ]
+            },
+            "GoogleOAuthClientStatus": {
+                "type": "object",
+                "properties": {
+                    "configured": {
+                        "type": "boolean"
+                    },
+                    "verified": {
+                        "type": "boolean",
+                        "description": "A mailbox has connected through the client."
+                    },
+                    "redirectUri": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "scopes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": ["configured", "verified", "redirectUri", "scopes"]
             },
             "Mailbox": {
                 "type": "object",
