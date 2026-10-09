@@ -5,9 +5,13 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '../../lib/cn';
 import { focusRing } from '../../lib/focus';
 
+/**
+ * The mockup's buttons: pills by default (`shape="square"` for the 8px toolbar buttons), a black
+ * primary, a bordered secondary with the card shadow, a quiet ghost, a danger fill and a link.
+ */
 export const buttonVariants = cva(
     [
-        'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium',
+        'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap font-medium',
         'transition-colors disabled:pointer-events-none disabled:opacity-50',
         '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         focusRing,
@@ -15,20 +19,26 @@ export const buttonVariants = cva(
     {
         variants: {
             variant: {
-                primary: 'bg-accent text-accent-foreground hover:bg-accent-hover',
-                secondary: 'border border-border bg-surface-raised text-text hover:bg-surface',
-                ghost: 'text-text hover:bg-surface',
-                danger: 'bg-danger text-danger-soft hover:opacity-90',
+                primary: 'border border-primary bg-primary text-primary-foreground hover:opacity-90',
+                accent: 'border border-accent bg-accent text-accent-foreground hover:opacity-90',
+                secondary: 'border border-border bg-surface text-text shadow-sm hover:bg-surface-raised',
+                ghost: 'border border-transparent text-text-muted hover:bg-surface-raised hover:text-text',
+                danger: 'border border-danger bg-danger text-danger-soft hover:opacity-90',
                 link: 'text-accent underline-offset-4 hover:underline',
             },
             size: {
-                sm: 'h-8 px-3 text-sm',
-                md: 'h-9 px-4 text-sm',
+                xs: 'h-6.5 px-2 text-xs',
+                sm: 'h-7.5 px-2.5 text-[13px]',
+                md: 'h-9 px-3.5 text-sm',
                 lg: 'h-10 px-5 text-base',
-                icon: 'size-9',
+                icon: 'size-8.5',
+            },
+            shape: {
+                pill: 'rounded-full',
+                square: 'rounded-md',
             },
         },
-        defaultVariants: { variant: 'primary', size: 'md' },
+        defaultVariants: { variant: 'secondary', size: 'md', shape: 'pill' },
     },
 );
 
@@ -40,14 +50,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, Va
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-    { className, variant, size, asChild = false, loading = false, disabled, children, type, ...props },
+    { className, variant, size, shape, asChild = false, loading = false, disabled, children, type, ...props },
     ref,
 ) {
     const Comp = asChild ? Slot : 'button';
     return (
         <Comp
             ref={ref}
-            className={cn(buttonVariants({ variant, size }), className)}
+            className={cn(buttonVariants({ variant, size, shape }), className)}
             disabled={disabled || loading}
             aria-busy={loading || undefined}
             type={asChild ? undefined : (type ?? 'button')}

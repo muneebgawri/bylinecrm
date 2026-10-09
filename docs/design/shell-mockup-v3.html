@@ -1,0 +1,3287 @@
+<title>BylineCRM Shell</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+<style>
+    /* Layout: 240px white sidebar with grouped nav + user card; 56px top bar (breadcrumb · search ⌘K · bell · black Create); content = white cards on a light grey ground, page title + subtitle + one primary action. */
+    :root {
+        --bg: #f5f6f8;
+        --surface: #ffffff;
+        --raised: #f7f8fa;
+        --border: #e6e8ec;
+        --border-strong: #d2d6dc;
+        --text: #101828;
+        --muted: #667085;
+        --faint: #98a2b3;
+        --primary: #101828;
+        --primary-fg: #ffffff;
+        --accent: #6d4aff;
+        --accent-soft: #efeaff;
+        --accent-fg: #ffffff;
+        --ok: #17803d;
+        --ok-soft: #e5f6ec;
+        --warn: #b54708;
+        --warn-soft: #fff3e4;
+        --bad: #b42318;
+        --bad-soft: #fee4e2;
+        --info: #175cd3;
+        --info-soft: #e7f0ff;
+        --viol: #6d4aff;
+        --sel: #f3f0ff;
+        --ring: #6d4aff;
+        --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --r: 12px;
+        --rs: 8px;
+        --side: 240px;
+        --top: 56px;
+        --shadow-s: 0 1px 2px rgba(16, 24, 40, 0.05);
+        --shadow: 0 4px 12px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
+        --shadow-l: 0 20px 48px rgba(16, 24, 40, 0.18);
+    }
+    @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+            --bg: #0e1117;
+            --surface: #151a22;
+            --raised: #1b212b;
+            --border: #262d38;
+            --border-strong: #364050;
+            --text: #eef1f5;
+            --muted: #9aa5b5;
+            --faint: #6b7687;
+            --primary: #eef1f5;
+            --primary-fg: #0e1117;
+            --accent: #9b84ff;
+            --accent-soft: #2a2350;
+            --accent-fg: #0e1117;
+            --ok: #4ade80;
+            --ok-soft: #15301f;
+            --warn: #fdba74;
+            --warn-soft: #3a2510;
+            --bad: #fda29b;
+            --bad-soft: #3b1a17;
+            --info: #8ab4ff;
+            --info-soft: #1b2a44;
+            --viol: #9b84ff;
+            --sel: #241f45;
+            --ring: #9b84ff;
+            --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.5);
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+            --shadow-l: 0 20px 48px rgba(0, 0, 0, 0.6);
+            color-scheme: dark;
+        }
+    }
+    :root[data-theme='dark'] {
+        --bg: #0e1117;
+        --surface: #151a22;
+        --raised: #1b212b;
+        --border: #262d38;
+        --border-strong: #364050;
+        --text: #eef1f5;
+        --muted: #9aa5b5;
+        --faint: #6b7687;
+        --primary: #eef1f5;
+        --primary-fg: #0e1117;
+        --accent: #9b84ff;
+        --accent-soft: #2a2350;
+        --accent-fg: #0e1117;
+        --ok: #4ade80;
+        --ok-soft: #15301f;
+        --warn: #fdba74;
+        --warn-soft: #3a2510;
+        --bad: #fda29b;
+        --bad-soft: #3b1a17;
+        --info: #8ab4ff;
+        --info-soft: #1b2a44;
+        --viol: #9b84ff;
+        --sel: #241f45;
+        --ring: #9b84ff;
+        --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.5);
+        --shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+        --shadow-l: 0 20px 48px rgba(0, 0, 0, 0.6);
+        color-scheme: dark;
+    }
+    html,
+    body {
+        height: 100%;
+    }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 var(--font);
+        -webkit-font-smoothing: antialiased;
+    }
+    * {
+        box-sizing: border-box;
+    }
+    button,
+    input {
+        font: inherit;
+        color: inherit;
+    }
+    button {
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+    }
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+    :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+    }
+    svg {
+        display: block;
+    }
+    .app {
+        display: grid;
+        grid-template-columns: var(--side) 1fr;
+        grid-template-rows: var(--top) 1fr;
+        height: 100%;
+        min-height: 640px;
+    }
+    /* sidebar */
+    .side {
+        grid-row: 1/3;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 14px 12px;
+        gap: 6px;
+        min-width: 0;
+        overflow: auto;
+    }
+    .wsw {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: var(--rs);
+        width: 100%;
+        text-align: left;
+        margin-bottom: 10px;
+    }
+    .wsw:hover {
+        background: var(--raised);
+    }
+    .logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: var(--primary);
+        color: var(--primary-fg);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 13px;
+        flex: none;
+    }
+    .wsw .t {
+        line-height: 1.2;
+        min-width: 0;
+    }
+    .wsw .t b {
+        display: block;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .wsw .t span {
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .wsw .chev {
+        margin-left: auto;
+        color: var(--faint);
+        font-size: 12px;
+    }
+    .gh {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--faint);
+        padding: 10px 10px 4px;
+    }
+    .nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 36px;
+        padding: 0 10px;
+        border-radius: var(--rs);
+        color: var(--muted);
+        width: 100%;
+        text-align: left;
+        font-weight: 450;
+    }
+    .nav svg {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .nav:hover {
+        background: var(--raised);
+        color: var(--text);
+    }
+    .nav.on {
+        background: var(--raised);
+        color: var(--text);
+        font-weight: 500;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-s);
+    }
+    .nav .cnt {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--faint);
+        font-variant-numeric: tabular-nums;
+    }
+    .nav .badge {
+        margin-left: auto;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--warn-soft);
+        color: var(--warn);
+        font-size: 11px;
+        font-weight: 600;
+        display: grid;
+        place-items: center;
+    }
+    .nav .chev {
+        margin-left: auto;
+        color: var(--faint);
+        font-size: 11px;
+    }
+    .user {
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        background: var(--surface);
+    }
+    .av {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 600;
+        flex: none;
+        background: var(--accent-soft);
+        color: var(--accent);
+    }
+    .av.g {
+        background: var(--ok-soft);
+        color: var(--ok);
+    }
+    .av.o {
+        background: var(--warn-soft);
+        color: var(--warn);
+    }
+    .av.b {
+        background: var(--info-soft);
+        color: var(--info);
+    }
+    .user .t {
+        line-height: 1.2;
+        min-width: 0;
+    }
+    .user .t b {
+        display: block;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .user .t span {
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .user .chev {
+        margin-left: auto;
+        color: var(--faint);
+    }
+    /* top bar */
+    .top {
+        grid-column: 2;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+    }
+    .ib {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--rs);
+        color: var(--muted);
+        position: relative;
+    }
+    .ib:hover {
+        background: var(--raised);
+        color: var(--text);
+    }
+    .ib svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .ib .dotn {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--bad);
+        border: 2px solid var(--surface);
+    }
+    .crumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-weight: 500;
+    }
+    .crumb b {
+        color: var(--text);
+        font-weight: 500;
+    }
+    .crumb .sep {
+        color: var(--faint);
+    }
+    .search {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--rs);
+        background: var(--raised);
+        color: var(--faint);
+        width: 280px;
+        text-align: left;
+    }
+    .search svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+    }
+    .search .k {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--faint);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 6px;
+        background: var(--surface);
+    }
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        font-weight: 500;
+        white-space: nowrap;
+        box-shadow: var(--shadow-s);
+    }
+    .btn:hover {
+        background: var(--raised);
+    }
+    .btn.p {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--primary-fg);
+    }
+    .btn.p:hover {
+        opacity: 0.92;
+    }
+    .btn.sq {
+        border-radius: var(--rs);
+    }
+    .btn.q {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+        color: var(--muted);
+    }
+    .btn.q:hover {
+        background: var(--raised);
+        color: var(--text);
+    }
+    .btn.sm {
+        height: 30px;
+        padding: 0 10px;
+        font-size: 13px;
+    }
+    .btn.xs {
+        height: 26px;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+    .btn svg {
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+    }
+    .btn[aria-disabled='true'] {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    /* content */
+    .main {
+        grid-column: 2;
+        overflow: auto;
+        min-width: 0;
+    }
+    .view {
+        display: none;
+        padding: 24px 28px 48px;
+        min-width: 0;
+    }
+    .view.on {
+        display: block;
+    }
+    .ph {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .ph h1 {
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 0;
+        line-height: 1.25;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .ph p {
+        margin: 4px 0 0;
+        color: var(--muted);
+    }
+    .ph .r {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--shadow-s);
+    }
+    .card > h3 {
+        margin: 0;
+        padding: 14px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .card > h3 .r {
+        margin-left: auto;
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .pill.rd {
+        border-radius: 999px;
+    }
+    .pill i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+    .ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+    }
+    .warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+    }
+    .bad {
+        background: var(--bad-soft);
+        color: var(--bad);
+    }
+    .info {
+        background: var(--info-soft);
+        color: var(--info);
+    }
+    .neu {
+        background: var(--raised);
+        color: var(--muted);
+        border: 1px solid var(--border);
+    }
+    .vio {
+        background: var(--accent-soft);
+        color: var(--accent);
+    }
+    .delta {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 2px 7px;
+        border-radius: 999px;
+    }
+    .delta.up {
+        background: var(--ok-soft);
+        color: var(--ok);
+    }
+    .delta.dn {
+        background: var(--bad-soft);
+        color: var(--bad);
+    }
+    /* KPI cards */
+    .kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .kpi {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--shadow-s);
+        padding: 16px 18px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 12px;
+        align-items: start;
+    }
+    .kpi .ic {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        grid-row: 1/3;
+        background: var(--accent-soft);
+        color: var(--accent);
+    }
+    .kpi .ic.g {
+        background: var(--ok-soft);
+        color: var(--ok);
+    }
+    .kpi .ic.b {
+        background: var(--info-soft);
+        color: var(--info);
+    }
+    .kpi .ic.o {
+        background: var(--warn-soft);
+        color: var(--warn);
+    }
+    .kpi .ic svg {
+        width: 19px;
+        height: 19px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .kpi .l {
+        grid-column: 2;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    .kpi .v {
+        grid-column: 2;
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .kpi .s {
+        grid-column: 1/3;
+        font-size: 12px;
+        color: var(--faint);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .kpi .s svg {
+        margin-left: auto;
+        width: 84px;
+        height: 26px;
+    }
+    /* welcome */
+    .hero {
+        background: linear-gradient(135deg, var(--accent-soft), var(--surface) 55%);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        padding: 22px 24px;
+        margin-bottom: 16px;
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .hero h2 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+    .hero p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        max-width: 52ch;
+    }
+    .hero .r {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+    }
+    .hero .facts {
+        display: flex;
+        gap: 28px;
+        margin-top: 14px;
+        flex-wrap: wrap;
+    }
+    .hero .facts div span {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--faint);
+    }
+    .hero .facts div b {
+        display: block;
+        font-size: 20px;
+        font-weight: 600;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+    }
+    .grid2 {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        gap: 16px;
+    }
+    .grid2 + .grid2 {
+        margin-top: 16px;
+    }
+    /* action list */
+    .al {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .al li {
+        display: grid;
+        grid-template-columns: 36px 1fr auto;
+        gap: 14px;
+        align-items: center;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+    }
+    .al li:last-child {
+        border-bottom: 0;
+    }
+    .al .ic {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+    }
+    .al .ic svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .al .t b {
+        display: block;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .al .t span {
+        font-size: 12.5px;
+        color: var(--muted);
+    }
+    .al .do {
+        display: flex;
+        gap: 6px;
+    }
+    /* chart */
+    .chart {
+        padding: 16px 18px;
+    }
+    .chart .hd {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+    .chart .hd b {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+    }
+    .chart .hd .seg {
+        margin-left: auto;
+    }
+    .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: var(--rs);
+        padding: 3px;
+        background: var(--raised);
+        gap: 2px;
+    }
+    .seg button {
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    .seg .on {
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 500;
+        box-shadow: var(--shadow-s);
+    }
+    .bars {
+        width: 100%;
+        height: 190px;
+    }
+    .pipe {
+        padding: 16px 18px;
+    }
+    .pipe .track {
+        display: flex;
+        gap: 3px;
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 10px 0;
+    }
+    .pipe .track i {
+        display: block;
+        height: 100%;
+    }
+    .leg {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        color: var(--muted);
+    }
+    .leg span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .leg i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    .mini {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+    .mini div {
+        border: 1px solid var(--border);
+        border-radius: var(--rs);
+        padding: 10px 12px;
+        background: var(--raised);
+    }
+    .mini span {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .mini b {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+    }
+    /* table */
+    .tb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+    .tabs {
+        display: flex;
+        gap: 4px;
+    }
+    .tabs button {
+        height: 32px;
+        padding: 0 12px;
+        border-radius: var(--rs);
+        color: var(--muted);
+        font-weight: 500;
+    }
+    .tabs .on {
+        background: var(--raised);
+        color: var(--text);
+        border: 1px solid var(--border);
+    }
+    .tabs .n {
+        font-size: 12px;
+        color: var(--faint);
+        margin-left: 6px;
+    }
+    .in {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--rs);
+        background: var(--surface);
+        color: var(--faint);
+        min-width: 220px;
+    }
+    .in svg {
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+    }
+    .tw {
+        overflow-x: auto;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 900px;
+    }
+    th {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--muted);
+        text-align: left;
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--border);
+        background: var(--raised);
+        white-space: nowrap;
+    }
+    th .srt {
+        color: var(--faint);
+        margin-left: 4px;
+    }
+    td {
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    tr:last-child td {
+        border-bottom: 0;
+    }
+    tbody tr:hover td {
+        background: var(--raised);
+    }
+    tbody tr.sel td {
+        background: var(--sel);
+    }
+    td.m {
+        color: var(--muted);
+    }
+    .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .who .av {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+    .who b {
+        display: block;
+        font-weight: 500;
+    }
+    .who span {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .cb {
+        width: 16px;
+        height: 16px;
+        border: 1.5px solid var(--border-strong);
+        border-radius: 4px;
+        display: inline-block;
+        vertical-align: -3px;
+        background: var(--surface);
+    }
+    .cb.x {
+        background: var(--accent);
+        border-color: var(--accent);
+        position: relative;
+    }
+    .cb.x:after {
+        content: '';
+        position: absolute;
+        left: 4px;
+        top: 1px;
+        width: 4px;
+        height: 8px;
+        border: solid var(--accent-fg);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+    }
+    .score {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .score .b {
+        display: inline-flex;
+        gap: 2px;
+    }
+    .score .b i {
+        width: 3px;
+        height: 12px;
+        border-radius: 1px;
+        background: var(--border);
+    }
+    .score .b i.f {
+        background: var(--viol);
+    }
+    .score span {
+        font-size: 12px;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0 5px;
+    }
+    .dots {
+        color: var(--faint);
+        letter-spacing: 1px;
+    }
+    .tf {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 18px;
+        color: var(--muted);
+        font-size: 13px;
+        border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+    .tf .r {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .pg {
+        min-width: 30px;
+        height: 30px;
+        border-radius: var(--rs);
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        padding: 0 6px;
+    }
+    .pg.on {
+        background: var(--primary);
+        color: var(--primary-fg);
+    }
+    .bulk {
+        position: sticky;
+        bottom: 12px;
+        margin: 12px auto 0;
+        width: max-content;
+        max-width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--primary);
+        color: var(--primary-fg);
+        border-radius: 12px;
+        padding: 6px 8px;
+        box-shadow: var(--shadow-l);
+        font-size: 13px;
+    }
+    .bulk span {
+        padding: 0 10px;
+        font-weight: 500;
+    }
+    .bulk button {
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 8px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 500;
+    }
+    .bulk button:hover {
+        background: rgba(127, 127, 127, 0.25);
+    }
+    .bulk .sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(127, 127, 127, 0.4);
+    }
+    .bulk .x {
+        background: var(--surface);
+        color: var(--bad);
+    }
+    /* drawer */
+    .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(560px, 100vw);
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        box-shadow: var(--shadow-l);
+        transform: translateX(102%);
+        transition: transform 0.22s;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        overflow: auto;
+    }
+    .drawer.on {
+        transform: none;
+    }
+    .drawer .dh {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        background: var(--surface);
+        z-index: 1;
+    }
+    .drawer .dh h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .drawer .dh .r {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+    }
+    .prof {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 22px 22px 16px;
+        flex-wrap: wrap;
+    }
+    .prof .av {
+        width: 56px;
+        height: 56px;
+        font-size: 18px;
+    }
+    .prof h3 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+    }
+    .prof p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .prof .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+    }
+    .ic-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        background: var(--surface);
+        box-shadow: var(--shadow-s);
+    }
+    .ic-btn:hover {
+        background: var(--raised);
+    }
+    .ic-btn svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .facts {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        margin: 0 22px;
+        border: 1px solid var(--border);
+        border-radius: var(--rs);
+        overflow: hidden;
+    }
+    .facts div {
+        padding: 10px 12px;
+        border-right: 1px solid var(--border);
+        min-width: 0;
+    }
+    .facts div:last-child {
+        border-right: 0;
+    }
+    .facts span {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .facts b {
+        display: block;
+        font-weight: 500;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .prog {
+        margin: 14px 22px 0;
+        border: 1px solid var(--border);
+        border-radius: var(--rs);
+        padding: 12px 14px;
+    }
+    .prog .t {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+    }
+    .prog .t span {
+        margin-left: auto;
+        color: var(--muted);
+        font-weight: 400;
+        font-size: 13px;
+    }
+    .prog .bar {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--accent-soft);
+        margin-top: 10px;
+        position: relative;
+    }
+    .prog .bar i {
+        display: block;
+        height: 100%;
+        border-radius: 4px;
+        background: var(--accent);
+        width: 60%;
+    }
+    .prog .bar em {
+        position: absolute;
+        top: -4px;
+        left: 60%;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary);
+        border: 3px solid var(--surface);
+        transform: translateX(-50%);
+    }
+    .stg {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--muted);
+        flex-wrap: wrap;
+    }
+    .stg span {
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+    }
+    .stg span.on {
+        background: var(--accent);
+        color: var(--accent-fg);
+        border-color: var(--accent);
+    }
+    .stg span.done {
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-color: transparent;
+    }
+    .dsec {
+        padding: 18px 22px 6px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .dsec h4 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    .dsec .n {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 7px;
+        border-radius: 999px;
+        background: #fef08a;
+        color: #713f12;
+        font-size: 12px;
+        font-weight: 600;
+        display: grid;
+        place-items: center;
+    }
+    .dsec .r {
+        margin-left: auto;
+    }
+    .dtl {
+        list-style: none;
+        margin: 0;
+        padding: 6px 22px 10px 22px;
+        position: relative;
+    }
+    .dtl li {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 14px;
+        padding: 8px 0;
+        position: relative;
+    }
+    .dtl li:before {
+        content: '';
+        position: absolute;
+        left: 19px;
+        top: 44px;
+        bottom: -10px;
+        width: 2px;
+        background: var(--border);
+    }
+    .dtl li:last-child:before {
+        display: none;
+    }
+    .dtl .ic {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--accent-soft);
+        color: var(--accent);
+        position: relative;
+        z-index: 1;
+    }
+    .dtl .ic.g {
+        background: var(--ok-soft);
+        color: var(--ok);
+    }
+    .dtl .ic.n {
+        background: var(--raised);
+        color: var(--muted);
+        border: 1px solid var(--border);
+    }
+    .dtl .ic svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .dtl .t b {
+        font-weight: 600;
+    }
+    .dtl .t span {
+        color: var(--muted);
+    }
+    .dtl time {
+        display: block;
+        font-size: 12px;
+        color: var(--faint);
+        margin-top: 1px;
+    }
+    .dtl .chips {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+    }
+    .dtl .arrow {
+        color: var(--faint);
+    }
+    .compose {
+        margin: 0 22px 22px;
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        background: var(--raised);
+    }
+    .compose .hd {
+        display: flex;
+        gap: 14px;
+        padding: 10px 14px;
+        font-size: 13px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+    .compose .hd b {
+        color: var(--text);
+        font-weight: 500;
+    }
+    .compose .body {
+        padding: 12px 14px;
+        line-height: 1.6;
+        background: var(--surface);
+    }
+    .var {
+        display: inline-block;
+        padding: 0 6px;
+        border-radius: 5px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .var.bad {
+        background: var(--bad-soft);
+        color: var(--bad);
+    }
+    .compose .ft {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+    .compose .ft .r {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+    }
+    .note {
+        margin: 0 22px 22px;
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+    }
+    .note .nh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 500;
+    }
+    .note .nh span {
+        margin-left: auto;
+        color: var(--faint);
+        font-size: 12px;
+        font-weight: 400;
+    }
+    .note p {
+        margin: 0;
+        padding: 12px 14px;
+        color: var(--muted);
+    }
+    .scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(16, 24, 40, 0.35);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 19;
+    }
+    .scrim.on {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    /* board */
+    .lanes {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(260px, 1fr);
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+    .lane .lh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 4px 12px;
+    }
+    .lane .lh .nm {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 10px;
+        border-radius: var(--rs);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        font-weight: 500;
+    }
+    .lane .lh .nm i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    .lane .lh .nm span {
+        color: var(--faint);
+        font-size: 12px;
+    }
+    .lane .lh .sum {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+    }
+    .lane .lh .dots {
+        margin-left: 6px;
+    }
+    .cards {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .dc {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        padding: 14px 16px;
+        box-shadow: var(--shadow-s);
+    }
+    .dc:hover {
+        box-shadow: var(--shadow);
+        border-color: var(--border-strong);
+    }
+    .dc .id {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--faint);
+        margin-bottom: 6px;
+    }
+    .dc .id .pri {
+        margin-left: auto;
+    }
+    .dc b {
+        display: block;
+        font-weight: 600;
+    }
+    .dc .c {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 2px;
+    }
+    .dc .meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+    }
+    .dc .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 6px;
+        background: var(--raised);
+        border: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .dc .ft {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .dc .ft .amt {
+        font-weight: 600;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+    }
+    .dc .ft .age {
+        margin-left: auto;
+    }
+    .dc .av {
+        width: 22px;
+        height: 22px;
+        font-size: 9px;
+    }
+    .dc.hi {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .dc.ghost {
+        border: 1.5px dashed var(--border-strong);
+        background: transparent;
+        color: var(--faint);
+        text-align: center;
+        box-shadow: none;
+    }
+    /* mailbox rows */
+    .mrow {
+        display: grid;
+        grid-template-columns: 1fr auto auto auto auto;
+        gap: 18px;
+        align-items: center;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+    }
+    .mrow:last-child {
+        border-bottom: 0;
+    }
+    .mrow .n b {
+        display: block;
+        font-weight: 500;
+    }
+    .mrow .n span {
+        font-size: 12.5px;
+        color: var(--muted);
+    }
+    .mrow .v {
+        text-align: right;
+        min-width: 68px;
+    }
+    .mrow .v b {
+        display: block;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    .mrow .v span {
+        font-size: 12px;
+        color: var(--faint);
+    }
+    .mrow .v.bad b {
+        color: var(--bad);
+    }
+    .mrow .why {
+        grid-column: 1/-1;
+        font-size: 13px;
+        color: var(--muted);
+        padding: 0 0 2px 0;
+    }
+    /* palette */
+    .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(16, 24, 40, 0.45);
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 12vh;
+        z-index: 30;
+    }
+    .overlay.on {
+        display: flex;
+    }
+    .pal {
+        width: min(600px, 92vw);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow-l);
+        overflow: hidden;
+    }
+    .pal .pin {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+    }
+    .pal input {
+        flex: 1;
+        border: 0;
+        background: transparent;
+        outline: 0;
+        font-size: 15px;
+    }
+    .pal .g {
+        padding: 10px 8px 4px 18px;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--faint);
+    }
+    .pal .it {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 18px;
+    }
+    .pal .it.on {
+        background: var(--sel);
+    }
+    .pal .it .k {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--faint);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 6px;
+    }
+    .pal .ft {
+        display: flex;
+        gap: 16px;
+        padding: 10px 18px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--faint);
+    }
+    .hint {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        background: var(--primary);
+        color: var(--primary-fg);
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 12px;
+        box-shadow: var(--shadow);
+        opacity: 0.92;
+        z-index: 5;
+        white-space: nowrap;
+    }
+    .mobile-nav {
+        display: none;
+    }
+    @media (max-width: 900px) {
+        .app {
+            grid-template-columns: 1fr;
+        }
+        .side {
+            display: none;
+        }
+        .top,
+        .main {
+            grid-column: 1;
+        }
+        .search {
+            width: auto;
+            flex: 1;
+        }
+        .view {
+            padding: 16px 16px 40px;
+        }
+        .grid2 {
+            grid-template-columns: 1fr;
+        }
+        .facts {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .facts div:nth-child(2) {
+            border-right: 0;
+        }
+        .facts div:nth-child(-n + 2) {
+            border-bottom: 1px solid var(--border);
+        }
+        .mrow {
+            grid-template-columns: 1fr auto;
+        }
+        .mobile-nav {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .mobile-nav button {
+            white-space: nowrap;
+        }
+        .hint {
+            display: none;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .drawer,
+        .scrim {
+            transition: none;
+        }
+    }
+</style>
+
+<div class="app">
+    <aside class="side" aria-label="Sidebar">
+        <button class="wsw">
+            <span class="logo">B</span><span class="t"><b>Pinion Partners</b><span>BylineCRM</span></span
+            ><span class="chev">⇅</span>
+        </button>
+        <div class="gh">Overview</div>
+        <button class="nav" data-v="dash">
+            <svg viewBox="0 0 24 24">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" /></svg
+            >Dashboard
+        </button>
+        <button class="nav" data-v="dash">
+            <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6" /></svg>Reports
+        </button>
+        <div class="gh">CRM</div>
+        <button class="nav" data-v="people">
+            <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21c.8-4 4-6 8-6s7.2 2 8 6" /></svg
+            >People<span class="cnt">4,812</span>
+        </button>
+        <button class="nav" data-v="companies">
+            <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 20v-6h6v6M7 8h2M11 8h2M15 8h2M7 12h2M15 12h2" /></svg
+            >Companies<span class="cnt">1,260</span>
+        </button>
+        <button class="nav" data-v="deals">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 7h18l-2 12H5z" />
+                <path d="M8 7V5a4 4 0 0 1 8 0v2" /></svg
+            >Deals<span class="chev">›</span>
+        </button>
+        <div class="gh">Outreach</div>
+        <button class="nav" data-v="sequences">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" /></svg>Sequences
+        </button>
+        <button class="nav" data-v="templates">
+            <svg viewBox="0 0 24 24">
+                <rect x="4" y="3" width="16" height="18" rx="2" />
+                <path d="M8 8h8M8 12h8M8 16h5" /></svg
+            >Templates
+        </button>
+        <button class="nav" data-v="pool">
+            <svg viewBox="0 0 24 24">
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="m3 7 9 6 9-6" /></svg
+            >Mailboxes<span class="badge">1</span>
+        </button>
+        <div class="gh">Workspace</div>
+        <button class="nav" data-v="team">
+            <svg viewBox="0 0 24 24">
+                <circle cx="9" cy="8" r="3.5" />
+                <path
+                    d="M2 20c.6-3.5 3.3-5.5 7-5.5s6.4 2 7 5.5M16 4a3.5 3.5 0 0 1 0 7M22 20c-.3-2.6-1.8-4.3-4-5"
+                /></svg
+            >Team
+        </button>
+        <button class="nav" data-v="settings">
+            <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                    d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"
+                /></svg
+            >Settings
+        </button>
+        <div class="user">
+            <span class="av">KM</span><span class="t"><b>Kate Morgan</b><span>kate@pinionpartners.co</span></span
+            ><button
+                class="ib"
+                id="theme"
+                title="Toggle theme"
+                aria-label="Toggle theme"
+                style="margin-left: auto; width: 28px; height: 28px"
+            >
+                ◐
+            </button>
+        </div>
+    </aside>
+
+    <header class="top">
+        <button class="ib" title="Collapse sidebar" aria-label="Collapse sidebar">
+            <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v16" />
+            </svg>
+        </button>
+        <div class="crumb" id="crumb"><b>Dashboard</b></div>
+        <button class="search" id="open-k" aria-label="Search">
+            <svg viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" /></svg
+            ><span>Search…</span><span class="k">⌘K</span>
+        </button>
+        <button class="ib" title="Notifications" aria-label="Notifications">
+            <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" /></svg
+            ><span class="dotn"></span>
+        </button>
+        <button class="btn p" id="create">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Create
+        </button>
+    </header>
+
+    <main class="main">
+        <div class="mobile-nav">
+            <button class="btn sm" data-v="dash">Dashboard</button><button class="btn sm" data-v="people">People</button
+            ><button class="btn sm" data-v="deals">Deals</button><button class="btn sm" data-v="pool">Mailboxes</button
+            ><button class="btn sm" data-v="team">Team</button>
+        </div>
+
+        <!-- DASHBOARD -->
+        <section class="view" data-view="dash">
+            <div class="ph">
+                <div>
+                    <h1>
+                        Dashboard <span class="pill ok rd"><i></i>Live</span>
+                    </h1>
+                    <p>Your pipeline, outreach and what needs attention today.</p>
+                </div>
+                <div class="r">
+                    <button class="btn sq">Oct 1 – Oct 9, 2026 ⌄</button><button class="btn sq">Export</button>
+                </div>
+            </div>
+            <div class="hero">
+                <div>
+                    <span class="pill vio rd">Rules worked overnight · 2 deals moved, 48 contacts re-verified</span>
+                    <h2 style="margin-top: 12px">Welcome back, Kate</h2>
+                    <p>
+                        Replies are trending up <b>12.4%</b> against last week, with <b>3 deals</b> and
+                        <b>1 mailbox</b> needing your attention.
+                    </p>
+                    <div class="facts">
+                        <div><span>Pipeline value</span><b>$130,000</b></div>
+                        <div><span>Replies this week</span><b>9</b></div>
+                        <div><span>Active leads</span><b>248</b></div>
+                    </div>
+                </div>
+                <div class="r">
+                    <button class="btn sq">Refresh data</button
+                    ><button class="btn p sq" data-v="people">Work the queue</button>
+                </div>
+            </div>
+            <div class="kpis">
+                <div class="kpi">
+                    <div class="ic g">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M4 17l5-5 4 4 7-8" />
+                            <path d="M16 8h4v4" />
+                        </svg>
+                    </div>
+                    <span class="l">Reply rate</span><span class="v">4.2% <span class="delta up">↗ 0.8</span></span
+                    ><span class="s"
+                        >9 of 212 sent this week<svg viewBox="0 0 84 26">
+                            <polyline
+                                points="0,20 12,17 24,19 36,12 48,14 60,8 72,10 84,4"
+                                fill="none"
+                                stroke="var(--ok)"
+                                stroke-width="1.8"
+                            /></svg
+                    ></span>
+                </div>
+                <div class="kpi">
+                    <div class="ic">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M3 7h18l-2 12H5z" />
+                            <path d="M8 7V5a4 4 0 0 1 8 0v2" />
+                        </svg>
+                    </div>
+                    <span class="l">Open deals</span><span class="v">14 <span class="delta up">↗ 2</span></span
+                    ><span class="s"
+                        >$61.5k weighted<svg viewBox="0 0 84 26">
+                            <polyline
+                                points="0,18 12,16 24,18 36,13 48,15 60,11 72,12 84,7"
+                                fill="none"
+                                stroke="var(--accent)"
+                                stroke-width="1.8"
+                            /></svg
+                    ></span>
+                </div>
+                <div class="kpi">
+                    <div class="ic b">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="5" width="18" height="16" rx="2" />
+                            <path d="M3 10h18M8 3v4M16 3v4" />
+                        </svg>
+                    </div>
+                    <span class="l">Meetings booked</span><span class="v">3 <span class="delta dn">↘ 1</span></span
+                    ><span class="s"
+                        >next Thu 10:00 · Initech<svg viewBox="0 0 84 26">
+                            <polyline
+                                points="0,8 12,10 24,7 36,12 48,11 60,15 72,14 84,18"
+                                fill="none"
+                                stroke="var(--info)"
+                                stroke-width="1.8"
+                            /></svg
+                    ></span>
+                </div>
+                <div class="kpi">
+                    <div class="ic o">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="5" width="18" height="14" rx="2" />
+                            <path d="m3 7 9 6 9-6" />
+                        </svg>
+                    </div>
+                    <span class="l">Sending pool</span
+                    ><span class="v"
+                        >162<span style="font-size: 14px; color: var(--faint); font-weight: 400">/ 200</span></span
+                    ><span class="s"><span class="pill warn">1 paused</span> 5 of 6 mailboxes active</span>
+                </div>
+            </div>
+            <div class="grid2">
+                <div class="card">
+                    <h3>
+                        Needs attention<span class="r"><span class="pill neu">5</span></span>
+                    </h3>
+                    <ul class="al">
+                        <li>
+                            <div class="ic" style="background: var(--info-soft); color: var(--info)">
+                                <svg viewBox="0 0 24 24">
+                                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                                    <path d="m3 7 9 6 9-6" />
+                                </svg>
+                            </div>
+                            <div class="t">
+                                <b>Dana Reyes replied to your intro</b
+                                ><span>Acme Corp · “send me the distribution list and pricing” · 4h ago</span>
+                            </div>
+                            <div class="do"><button class="btn p sm sq" data-open="drawer">Reply</button></div>
+                        </li>
+                        <li>
+                            <div class="ic" style="background: var(--bad-soft); color: var(--bad)">
+                                <svg viewBox="0 0 24 24">
+                                    <rect x="6" y="5" width="4" height="14" rx="1" />
+                                    <rect x="14" y="5" width="4" height="14" rx="1" />
+                                </svg>
+                            </div>
+                            <div class="t">
+                                <b>ops@pinionmail.net paused itself</b
+                                ><span>Bounce 4.6% passed 3.0% at 09:41 · 12 queued sends moved</span>
+                            </div>
+                            <div class="do"><button class="btn sm sq" data-v="pool">Review</button></div>
+                        </li>
+                        <li>
+                            <div class="ic" style="background: var(--warn-soft); color: var(--warn)">
+                                <svg viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="8" />
+                                    <path d="M12 8v4l3 2" />
+                                </svg>
+                            </div>
+                            <div class="t">
+                                <b>Wayne Enterprises · Product PR has gone quiet</b
+                                ><span>21 days in Contacted · last touch step 2 of Cold intro</span>
+                            </div>
+                            <div class="do">
+                                <button class="btn sm sq">Follow up</button><button class="btn q sm">Snooze</button>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="ic" style="background: var(--raised); color: var(--muted)">
+                                <svg viewBox="0 0 24 24">
+                                    <path
+                                        d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"
+                                    />
+                                </svg>
+                            </div>
+                            <div class="t">
+                                <b>Call Sam Okafor</b><span>Initech · sequence step 3 · no reply after two emails</span>
+                            </div>
+                            <div class="do"><button class="btn sm sq">Done</button></div>
+                        </li>
+                        <li>
+                            <div class="ic" style="background: var(--warn-soft); color: var(--warn)">
+                                <svg viewBox="0 0 24 24">
+                                    <path
+                                        d="M12 9v4M12 17h.01M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"
+                                    />
+                                </svg>
+                            </div>
+                            <div class="t">
+                                <b>3 sends are held</b
+                                ><span
+                                    >Q4 agency outreach · <span class="var">company.name</span> is empty on 3
+                                    contacts</span
+                                >
+                            </div>
+                            <div class="do"><button class="btn sm sq">Fix contacts</button></div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card pipe">
+                    <div style="display: flex; align-items: center; gap: 8px">
+                        <b>Pipeline health</b
+                        ><span class="pill neu" style="margin-left: auto">100% of active deals</span>
+                    </div>
+                    <div class="track">
+                        <i style="width: 40%; background: var(--ok)"></i
+                        ><i style="width: 27%; background: var(--accent)"></i
+                        ><i style="width: 18%; background: var(--warn)"></i
+                        ><i style="width: 15%; background: var(--info)"></i>
+                    </div>
+                    <div class="leg">
+                        <span><i style="background: var(--ok)"></i>New 40%</span
+                        ><span><i style="background: var(--accent)"></i>Contacted 27%</span
+                        ><span><i style="background: var(--warn)"></i>Replied 18%</span
+                        ><span><i style="background: var(--info)"></i>Meeting 15%</span>
+                    </div>
+                    <div class="mini">
+                        <div><span>Qualified leads</span><b>248</b></div>
+                        <div><span>Win rate</span><b>32.8%</b></div>
+                        <div><span>Avg. cycle</span><b>14d</b></div>
+                        <div><span>Verified</span><b>81%</b></div>
+                    </div>
+                </div>
+            </div>
+            <div class="grid2">
+                <div class="card chart">
+                    <div class="hd">
+                        <span style="color: var(--muted)">Replies</span><b>212 sent · 9 replies</b
+                        ><span class="delta up">↗ 12.4% vs last week</span
+                        ><span class="seg"
+                            ><button>1W</button><button class="on">1M</button><button>6M</button
+                            ><button>1Y</button></span
+                        >
+                    </div>
+                    <svg
+                        class="bars"
+                        viewBox="0 0 600 190"
+                        role="img"
+                        aria-label="Replies per week over the last twelve weeks"
+                    >
+                        <g stroke="var(--border)" stroke-dasharray="3 4">
+                            <line x1="40" x2="600" y1="30" y2="30" />
+                            <line x1="40" x2="600" y1="75" y2="75" />
+                            <line x1="40" x2="600" y1="120" y2="120" />
+                            <line x1="40" x2="600" y1="165" y2="165" />
+                        </g>
+                        <g fill="var(--faint)" font-size="11" font-family="Inter,sans-serif">
+                            <text x="0" y="34">12</text>
+                            <text x="0" y="79">8</text>
+                            <text x="0" y="124">4</text>
+                            <text x="0" y="169">0</text>
+                        </g>
+                        <g fill="var(--accent-soft)">
+                            <rect x="52" y="97.5" width="30" height="67.5" rx="4" />
+                            <rect x="97" y="120" width="30" height="45" rx="4" />
+                            <rect x="142" y="108.75" width="30" height="56.25" rx="4" />
+                            <rect x="187" y="131.25" width="30" height="33.75" rx="4" />
+                            <rect x="232" y="97.5" width="30" height="67.5" rx="4" />
+                            <rect x="277" y="86.25" width="30" height="78.75" rx="4" />
+                            <rect x="322" y="108.75" width="30" height="56.25" rx="4" />
+                            <rect x="367" y="75" width="30" height="90" rx="4" />
+                            <rect x="412" y="86.25" width="30" height="78.75" rx="4" />
+                            <rect x="457" y="63.75" width="30" height="101.25" rx="4" />
+                            <rect x="502" y="52.5" width="30" height="112.5" rx="4" fill="var(--accent)" />
+                            <rect x="547" y="63.75" width="30" height="101.25" rx="4" />
+                        </g>
+                        <g fill="var(--accent)">
+                            <rect x="52" y="96" width="30" height="3" rx="1.5" />
+                            <rect x="97" y="118.5" width="30" height="3" rx="1.5" />
+                            <rect x="142" y="107.25" width="30" height="3" rx="1.5" />
+                            <rect x="187" y="129.75" width="30" height="3" rx="1.5" />
+                            <rect x="232" y="96" width="30" height="3" rx="1.5" />
+                            <rect x="277" y="84.75" width="30" height="3" rx="1.5" />
+                            <rect x="322" y="107.25" width="30" height="3" rx="1.5" />
+                            <rect x="367" y="73.5" width="30" height="3" rx="1.5" />
+                            <rect x="412" y="84.75" width="30" height="3" rx="1.5" />
+                            <rect x="457" y="62.25" width="30" height="3" rx="1.5" />
+                            <rect x="547" y="62.25" width="30" height="3" rx="1.5" />
+                        </g>
+                        <g fill="var(--faint)" font-size="11" font-family="Inter,sans-serif" text-anchor="middle">
+                            <text x="67" y="184">W28</text>
+                            <text x="157" y="184">W30</text>
+                            <text x="247" y="184">W32</text>
+                            <text x="337" y="184">W34</text>
+                            <text x="427" y="184">W36</text>
+                            <text x="517" y="184">W38</text>
+                        </g>
+                    </svg>
+                </div>
+                <div class="card">
+                    <h3>Upcoming<span class="r">This week</span></h3>
+                    <ul class="al">
+                        <li>
+                            <div class="ic" style="background: var(--accent-soft); color: var(--accent)">
+                                <b style="font-size: 13px">Thu</b>
+                            </div>
+                            <div class="t">
+                                <b>Initech · IPO wire call</b><span>10:00 – 10:30 · Sam Okafor · Google Meet</span>
+                            </div>
+                            <div class="do"><button class="btn xs sq">Prep</button></div>
+                        </li>
+                        <li>
+                            <div class="ic" style="background: var(--accent-soft); color: var(--accent)">
+                                <b style="font-size: 13px">Fri</b>
+                            </div>
+                            <div class="t"><b>Globex · rebrand pricing</b><span>14:00 – 14:30 · Dana Reyes</span></div>
+                            <div class="do"><button class="btn xs sq">Prep</button></div>
+                        </li>
+                        <li>
+                            <div class="ic" style="background: var(--raised); color: var(--muted)">
+                                <b style="font-size: 13px">Mon</b>
+                            </div>
+                            <div class="t">
+                                <b>Q4 agency outreach · step 2 fires</b><span>148 contacts · pool capacity 200</span>
+                            </div>
+                            <div class="do"><button class="btn xs sq">Review</button></div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- PEOPLE -->
+        <section class="view" data-view="people">
+            <div class="ph">
+                <div>
+                    <h1>People <span class="pill neu rd">4,812</span></h1>
+                    <p>Leads and contacts in your portfolio. Verified before they are ever emailed.</p>
+                </div>
+                <div class="r">
+                    <button class="btn sq">
+                        <svg viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16" /></svg>Import</button
+                    ><button class="btn p sq">
+                        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Add person
+                    </button>
+                </div>
+            </div>
+            <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+                <div class="kpi">
+                    <div class="ic">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M4 21c.8-4 4-6 8-6s7.2 2 8 6" />
+                        </svg>
+                    </div>
+                    <span class="l">New this week</span><span class="v">42 <span class="delta up">↗ 12%</span></span
+                    ><span class="s">BylineAI 28 · Inbound 9 · Import 5</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic g">
+                        <svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7" /></svg>
+                    </div>
+                    <span class="l">Verified</span><span class="v">3,904 <span class="delta up">↗ 48</span></span
+                    ><span class="s">618 unknown · 290 risky</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic o">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="8" />
+                            <path d="M12 8v4l3 2" />
+                        </svg>
+                    </div>
+                    <span class="l">Avg. first reply</span
+                    ><span class="v">1.8d <span class="delta up">↗ 15%</span></span
+                    ><span class="s">across 212 sends</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic b">
+                        <svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 4 7-8" /></svg>
+                    </div>
+                    <span class="l">Hot</span><span class="v">9 <span class="delta dn">↘ 2%</span></span
+                    ><span class="s">replied in the last 7 days</span>
+                </div>
+            </div>
+            <div class="card">
+                <div class="tb">
+                    <div class="tabs">
+                        <button class="on">All</button><button>My leads<span class="n">1,204</span></button
+                        ><button>Replied<span class="n">9</span></button
+                        ><button>Unverified<span class="n">618</span></button
+                        ><button>Blocked region<span class="n">311</span></button>
+                    </div>
+                    <span style="margin-left: auto"></span
+                    ><span class="in"
+                        ><svg viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" /></svg
+                        >Search people…</span
+                    ><button class="btn sm sq">⚲ Filter</button><button class="btn sm sq">⇅ Sort</button
+                    ><button class="btn sm sq">⫶ Columns</button>
+                </div>
+                <div class="tw">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 22px"><span class="cb"></span></th>
+                                <th>Person<span class="srt">⇅</span></th>
+                                <th>Company</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Stage</th>
+                                <th>Owner</th>
+                                <th>Score</th>
+                                <th>Last activity<span class="srt">⇅</span></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="sel">
+                                <td><span class="cb x"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av">DR</span>
+                                        <div>
+                                            <b><a href="#" data-open="drawer">Dana Reyes</a></b
+                                            ><span>Head of Comms</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>Acme Corp</td>
+                                <td class="m">dana@acme.example</td>
+                                <td>
+                                    <span class="pill ok"><i></i>Valid</span>
+                                </td>
+                                <td><span class="pill vio">Replied</span></td>
+                                <td>Kate M.</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i
+                                            ><i></i></span
+                                        ><span>8/10</span></span
+                                    >
+                                </td>
+                                <td class="m">4h ago</td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                            <tr class="sel">
+                                <td><span class="cb x"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av g">SO</span>
+                                        <div><b>Sam Okafor</b><span>VP Marketing</span></div>
+                                    </div>
+                                </td>
+                                <td>Initech</td>
+                                <td class="m">sam@initech.example</td>
+                                <td>
+                                    <span class="pill ok"><i></i>Valid</span>
+                                </td>
+                                <td><span class="pill info">Meeting</span></td>
+                                <td>Kate M.</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i></i></span
+                                        ><span>9/10</span></span
+                                    >
+                                </td>
+                                <td class="m">1d ago</td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="cb"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av o">PN</span>
+                                        <div><b>Priya Nair</b><span>Founder</span></div>
+                                    </div>
+                                </td>
+                                <td>Nair &amp; Co</td>
+                                <td class="m">p@nair.co</td>
+                                <td>
+                                    <span class="pill warn"><i></i>Risky</span>
+                                </td>
+                                <td><span class="pill neu">Contacted</span></td>
+                                <td>Kate M.</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i
+                                            ><i></i><i></i><i></i><i></i><i></i></span
+                                        ><span>4/10</span></span
+                                    >
+                                </td>
+                                <td class="m">9d ago</td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="cb"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av b">LV</span>
+                                        <div><b>Lena Vogt</b><span>PR Lead</span></div>
+                                    </div>
+                                </td>
+                                <td>Kraft Media</td>
+                                <td class="m">lena@kraft.de</td>
+                                <td>
+                                    <span class="pill ok"><i></i>Valid</span>
+                                </td>
+                                <td><span class="pill neu">New</span></td>
+                                <td>—</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></span
+                                        ><span>6/10</span></span
+                                    >
+                                </td>
+                                <td><span class="pill warn">EU · blocked by policy</span></td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="cb"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av">RO</span>
+                                        <div><b>R. Ortiz</b><span>CMO</span></div>
+                                    </div>
+                                </td>
+                                <td>Ortiz Agency</td>
+                                <td class="m">r@ortiz.agency</td>
+                                <td>
+                                    <span class="pill ok"><i></i>Valid</span>
+                                </td>
+                                <td><span class="pill ok">Won</span></td>
+                                <td>Kate M.</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i class="f"></i></span
+                                        ><span>10/10</span></span
+                                    >
+                                </td>
+                                <td class="m">12d ago</td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="cb"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av g">TH</span>
+                                        <div><b>Tom Hale</b><span>Director</span></div>
+                                    </div>
+                                </td>
+                                <td>Hale PR</td>
+                                <td class="m">tom@halepr.co.uk</td>
+                                <td>
+                                    <span class="pill ok"><i></i>Valid</span>
+                                </td>
+                                <td><span class="pill neu">New</span></td>
+                                <td>—</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i
+                                            ><i class="f"></i><i></i><i></i><i></i><i></i><i></i></span
+                                        ><span>5/10</span></span
+                                    >
+                                </td>
+                                <td><span class="pill warn">UK · blocked by policy</span></td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="cb"></span></td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av o">?</span>
+                                        <div><b>info@bigpr.com</b><span>No name yet</span></div>
+                                    </div>
+                                </td>
+                                <td>Big PR</td>
+                                <td class="m">info@bigpr.com</td>
+                                <td><span class="pill neu">Unknown</span></td>
+                                <td><span class="pill neu">New</span></td>
+                                <td>—</td>
+                                <td>
+                                    <span class="score"
+                                        ><span class="b"
+                                            ><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i
+                                            ><i></i><i></i></span
+                                        ><span>2/10</span></span
+                                    >
+                                </td>
+                                <td class="m">—</td>
+                                <td><span class="dots">•••</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tf">
+                    <span>Page 1 of 97</span><span>2 of 50 rows selected</span
+                    ><span
+                        >Rows per page
+                        <b
+                            style="
+                                border: 1px solid var(--border);
+                                border-radius: 6px;
+                                padding: 2px 8px;
+                                margin-left: 4px;
+                            "
+                            >50 ⌄</b
+                        ></span
+                    >
+                    <div class="r">
+                        <button class="pg">Previous</button><button class="pg on">1</button><button class="pg">2</button
+                        ><button class="pg">3</button><button class="pg">Next</button>
+                    </div>
+                </div>
+            </div>
+            <div class="bulk">
+                <span>Selected: 2</span>
+                <div class="sep"></div>
+                <button>⇢ Enrol in sequence</button><button>⤳ Assign to</button><button>✎ Edit</button>
+                <div class="sep"></div>
+                <button class="x">Discard</button>
+            </div>
+        </section>
+
+        <!-- DEALS -->
+        <section class="view" data-view="deals">
+            <div class="ph">
+                <div>
+                    <h1>Deals</h1>
+                    <p>Sales pipeline · $130k open · 30 deals · your portfolio</p>
+                </div>
+                <div class="r">
+                    <span class="seg"
+                        ><button class="on">Board</button><button>List</button><button>Forecast</button></span
+                    ><button class="btn sq">⚲ Filter</button
+                    ><button class="btn p sq">
+                        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>New deal
+                    </button>
+                </div>
+            </div>
+            <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+                <div class="kpi">
+                    <div class="ic">
+                        <svg viewBox="0 0 24 24"><path d="M3 7h18l-2 12H5z" /></svg>
+                    </div>
+                    <span class="l">Pipeline value</span><span class="v">$130k <span class="delta up">↗ 8%</span></span
+                    ><span class="s">weighted $61.5k</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic g">
+                        <svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7" /></svg>
+                    </div>
+                    <span class="l">Won this month</span><span class="v">2 <span class="delta up">↗ 1</span></span
+                    ><span class="s">$9,500 closed</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic o">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="8" />
+                            <path d="M12 8v4l3 2" />
+                        </svg>
+                    </div>
+                    <span class="l">At risk</span><span class="v">3 <span class="delta dn">↘ 6.1%</span></span
+                    ><span class="s">past the days-in-stage threshold</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic b">
+                        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" /></svg>
+                    </div>
+                    <span class="l">Stage rules</span
+                    ><span class="v" style="font-size: 15px; font-weight: 500">reply → Replied</span
+                    ><span class="s">meeting booked → Meeting · never backward unless asked</span>
+                </div>
+            </div>
+            <div class="lanes">
+                <div class="lane">
+                    <div class="lh">
+                        <span class="nm"><i style="background: var(--ok)"></i>New<span>12</span></span
+                        ><span class="sum">$48,000</span><span class="dots">•••</span>
+                    </div>
+                    <div class="cards">
+                        <div class="dc">
+                            <div class="id">BC-128<span class="pri pill vio rd">⚑ High</span></div>
+                            <b>Series B PR</b>
+                            <div class="c">Acme Corp</div>
+                            <div class="meta">
+                                <span class="chip">◷ Close Oct 31</span><span class="chip">Replied 4h ago</span>
+                            </div>
+                            <div class="ft">
+                                <span class="amt">$12,000</span><span class="av">KM</span
+                                ><span class="age">3d in stage</span>
+                            </div>
+                        </div>
+                        <div class="dc">
+                            <div class="id">BC-131<span class="pri pill neu rd">⚑ Normal</span></div>
+                            <b>Funding round</b>
+                            <div class="c">Stark Industries</div>
+                            <div class="meta"><span class="chip">◷ Close Nov 15</span></div>
+                            <div class="ft">
+                                <span class="amt">$5,000</span><span class="av g">TS</span><span class="age">1d</span>
+                            </div>
+                        </div>
+                        <div class="dc ghost">10 more</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lh">
+                        <span class="nm"><i style="background: var(--accent)"></i>Contacted<span>8</span></span
+                        ><span class="sum">$31,500</span><span class="dots">•••</span>
+                    </div>
+                    <div class="cards">
+                        <div class="dc">
+                            <div class="id">BC-119<span class="pri pill neu rd">⚑ Normal</span></div>
+                            <b>Q4 launch</b>
+                            <div class="c">Northwind</div>
+                            <div class="meta">
+                                <span class="chip">◷ Close Nov 1</span><span class="chip">Step 2 of 3</span>
+                            </div>
+                            <div class="ft">
+                                <span class="amt">$6,500</span><span class="av">KM</span><span class="age">9d</span>
+                            </div>
+                        </div>
+                        <div class="dc" style="border-color: var(--warn)">
+                            <div class="id">BC-102<span class="pri pill warn rd">⚠ Quiet</span></div>
+                            <b>Product PR</b>
+                            <div class="c">Wayne Enterprises</div>
+                            <div class="meta">
+                                <span class="chip">◷ Close Oct 20</span
+                                ><span class="chip" style="color: var(--warn)">21d · past threshold</span>
+                            </div>
+                            <div class="ft">
+                                <span class="amt">$9,000</span><span class="av o">BW</span><span class="age">21d</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lh">
+                        <span class="nm"><i style="background: var(--warn)"></i>Replied<span>5</span></span
+                        ><span class="sum">$22,000</span><span class="dots">•••</span>
+                    </div>
+                    <div class="cards">
+                        <div class="dc hi">
+                            <div class="id">BC-124<span class="pri pill vio rd">⚑ High</span></div>
+                            <b>Rebrand</b>
+                            <div class="c">Globex</div>
+                            <div class="meta">
+                                <span class="chip">◷ Close Oct 25</span><span class="chip">Pricing call Fri</span>
+                            </div>
+                            <div class="ft">
+                                <span class="amt">$8,000</span><span class="av">KM</span><span class="age">2d</span>
+                            </div>
+                        </div>
+                        <div class="dc">
+                            <div class="id">BC-126<span class="pri pill neu rd">⚑ Low</span></div>
+                            <b>Exec hire</b>
+                            <div class="c">Hooli</div>
+                            <div class="meta"><span class="chip">◷ Close Nov 8</span></div>
+                            <div class="ft">
+                                <span class="amt">$3,000</span><span class="av g">SO</span><span class="age">4d</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lh">
+                        <span class="nm"><i style="background: var(--info)"></i>Meeting<span>3</span></span
+                        ><span class="sum">$19,000</span><span class="dots">•••</span>
+                    </div>
+                    <div class="cards">
+                        <div class="dc">
+                            <div class="id">BC-121<span class="pri pill vio rd">⚑ High</span></div>
+                            <b>IPO wire</b>
+                            <div class="c">Initech</div>
+                            <div class="meta"><span class="chip">◷ Call Thu 10:00</span></div>
+                            <div class="ft">
+                                <span class="amt">$11,000</span><span class="av g">SO</span><span class="age">1d</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lh">
+                        <span class="nm"><i style="background: var(--ok)"></i>Won<span>2</span></span
+                        ><span class="sum">$9,500</span><span class="dots">•••</span>
+                    </div>
+                    <div class="cards">
+                        <div class="dc">
+                            <div class="id">BC-110<span class="pri pill ok rd">✓ Won</span></div>
+                            <b>Annual plan</b>
+                            <div class="c">Umbrella</div>
+                            <div class="meta"><span class="chip">Order paid in NewswireOS</span></div>
+                            <div class="ft">
+                                <span class="amt">$4,500</span><span class="av">KM</span><span class="age">Oct 2</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MAILBOXES -->
+        <section class="view" data-view="pool">
+            <div class="ph">
+                <div>
+                    <h1>Mailboxes</h1>
+                    <p>
+                        Outreach is spread across these mailboxes. A mailbox pauses itself when its bounce or complaint
+                        rate passes the threshold.
+                    </p>
+                </div>
+                <div class="r">
+                    <button class="btn sq">Thresholds</button
+                    ><button class="btn p sq">
+                        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Connect mailbox
+                    </button>
+                </div>
+            </div>
+            <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+                <div class="kpi">
+                    <div class="ic">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="5" width="18" height="14" rx="2" />
+                            <path d="m3 7 9 6 9-6" />
+                        </svg>
+                    </div>
+                    <span class="l">Sent today</span
+                    ><span class="v"
+                        >162<span style="font-size: 14px; color: var(--faint); font-weight: 400">/ 200</span></span
+                    ><span class="s">pool cap · 5 of 6 active</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic g">
+                        <svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7" /></svg>
+                    </div>
+                    <span class="l">Bounce rate 7d</span><span class="v">1.1% <span class="delta up">↘ 0.3</span></span
+                    ><span class="s">threshold 3.0%</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic b">
+                        <svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" /></svg>
+                    </div>
+                    <span class="l">Complaint rate 7d</span><span class="v">0.03%</span
+                    ><span class="s">threshold 0.20% · Google's line 0.30%</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic o">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 9v4M12 17h.01" />
+                            <circle cx="12" cy="12" r="9" />
+                        </svg>
+                    </div>
+                    <span class="l">Domains</span
+                    ><span class="v"
+                        >2<span style="font-size: 14px; color: var(--faint); font-weight: 400">/ 3 pass</span></span
+                    ><span class="s"><span class="pill bad">pinionmail.net · DKIM missing</span></span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Pool<span class="r">Checked 08:00 · again before every send</span></h3>
+                <div class="mrow">
+                    <div class="n">
+                        <b>ops@pinionmail.net</b
+                        ><span
+                            ><span class="pill bad"><i></i>Paused</span> &nbsp;by the bounce rule at 09:41</span
+                        >
+                    </div>
+                    <div class="v"><b>32 / 40</b><span>today</span></div>
+                    <div class="v bad"><b>4.6%</b><span>bounce</span></div>
+                    <div class="v"><b>0.12%</b><span>complaint</span></div>
+                    <button class="btn sm sq">Review &amp; resume</button>
+                    <div class="why">
+                        12 queued sends were moved to other mailboxes. Resume asks you to confirm the rate; it stays
+                        refused while the rate is above 3.0%.
+                    </div>
+                </div>
+                <div class="mrow">
+                    <div class="n">
+                        <b>hello@pinionmail.net</b
+                        ><span
+                            ><span class="pill bad"><i></i>DNS failing</span> &nbsp;DKIM record not found</span
+                        >
+                    </div>
+                    <div class="v"><b>0 / 40</b><span>today</span></div>
+                    <div class="v"><b>—</b><span>bounce</span></div>
+                    <div class="v"><b>—</b><span>complaint</span></div>
+                    <button class="btn sm sq">Check again</button>
+                </div>
+                <div class="mrow">
+                    <div class="n">
+                        <b>mia@getpinion.com</b
+                        ><span
+                            ><span class="pill vio"><i></i>Warming</span> &nbsp;day 3 of 14 · cap rises daily</span
+                        >
+                    </div>
+                    <div class="v"><b>12 / 12</b><span>today</span></div>
+                    <div class="v"><b>0.0%</b><span>bounce</span></div>
+                    <div class="v"><b>0.00%</b><span>complaint</span></div>
+                    <span></span>
+                </div>
+                <div class="mrow">
+                    <div class="n">
+                        <b>sara@pinionreach.co</b
+                        ><span
+                            ><span class="pill ok"><i></i>Active</span></span
+                        >
+                    </div>
+                    <div class="v"><b>40 / 40</b><span>today</span></div>
+                    <div class="v"><b>0.8%</b><span>bounce</span></div>
+                    <div class="v"><b>0.00%</b><span>complaint</span></div>
+                    <span class="dots">•••</span>
+                </div>
+                <div class="mrow">
+                    <div class="n">
+                        <b>dan@pinionreach.co</b
+                        ><span
+                            ><span class="pill ok"><i></i>Active</span></span
+                        >
+                    </div>
+                    <div class="v"><b>38 / 40</b><span>today</span></div>
+                    <div class="v"><b>1.1%</b><span>bounce</span></div>
+                    <div class="v"><b>0.05%</b><span>complaint</span></div>
+                    <span class="dots">•••</span>
+                </div>
+                <div class="mrow">
+                    <div class="n">
+                        <b>alex@getpinion.com</b
+                        ><span
+                            ><span class="pill ok"><i></i>Active</span></span
+                        >
+                    </div>
+                    <div class="v"><b>40 / 40</b><span>today</span></div>
+                    <div class="v"><b>0.5%</b><span>bounce</span></div>
+                    <div class="v"><b>0.00%</b><span>complaint</span></div>
+                    <span class="dots">•••</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- TEAM -->
+        <section class="view" data-view="team">
+            <div class="ph">
+                <div>
+                    <h1>Team <span class="pill neu rd">6 members</span></h1>
+                    <p>Account managers, their portfolios and results.</p>
+                </div>
+                <div class="r"><button class="btn p sq">Invite member</button></div>
+            </div>
+            <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+                <div class="kpi">
+                    <div class="ic">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="9" cy="8" r="3.5" />
+                            <path d="M2 20c.6-3.5 3.3-5.5 7-5.5s6.4 2 7 5.5" />
+                        </svg>
+                    </div>
+                    <span class="l">Members</span><span class="v">6</span><span class="s">5 active · 1 invited</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic g">
+                        <svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7" /></svg>
+                    </div>
+                    <span class="l">Deals won</span><span class="v">47</span><span class="s">$1.4M this quarter</span>
+                </div>
+                <div class="kpi">
+                    <div class="ic o">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="8" />
+                            <path d="M12 8v4l3 2" />
+                        </svg>
+                    </div>
+                    <span class="l">Avg. first reply</span><span class="v">1.8d</span><span class="s">team median</span>
+                </div>
+            </div>
+            <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))">
+                <div class="card" style="padding: 16px 18px">
+                    <div class="who">
+                        <span class="av" style="width: 44px; height: 44px; font-size: 15px">KM</span>
+                        <div>
+                            <b>Kate Morgan <span class="pill neu" style="margin-left: 4px">You</span></b
+                            ><span>Account manager · own records</span>
+                        </div>
+                    </div>
+                    <div class="mini" style="grid-template-columns: repeat(3, 1fr)">
+                        <div><span>Open</span><b>14</b></div>
+                        <div><span>Won</span><b>11</b></div>
+                        <div><span>Revenue</span><b>$356k</b></div>
+                    </div>
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            font-size: 12px;
+                            color: var(--muted);
+                            margin-top: 12px;
+                        "
+                    >
+                        <span>Quota</span><b style="color: var(--ok)">89%</b>
+                    </div>
+                    <div style="height: 6px; border-radius: 3px; background: var(--raised); margin-top: 6px">
+                        <div style="width: 89%; height: 100%; border-radius: 3px; background: var(--ok)"></div>
+                    </div>
+                </div>
+                <div class="card" style="padding: 16px 18px">
+                    <div class="who">
+                        <span class="av g" style="width: 44px; height: 44px; font-size: 15px">SO</span>
+                        <div><b>Sam Okafor</b><span>Account manager</span></div>
+                    </div>
+                    <div class="mini" style="grid-template-columns: repeat(3, 1fr)">
+                        <div><span>Open</span><b>8</b></div>
+                        <div><span>Won</span><b>9</b></div>
+                        <div><span>Revenue</span><b>$274k</b></div>
+                    </div>
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            font-size: 12px;
+                            color: var(--muted);
+                            margin-top: 12px;
+                        "
+                    >
+                        <span>Quota</span><b style="color: var(--ok)">91%</b>
+                    </div>
+                    <div style="height: 6px; border-radius: 3px; background: var(--raised); margin-top: 6px">
+                        <div style="width: 91%; height: 100%; border-radius: 3px; background: var(--ok)"></div>
+                    </div>
+                </div>
+                <div class="card" style="padding: 16px 18px">
+                    <div class="who">
+                        <span class="av o" style="width: 44px; height: 44px; font-size: 15px">DK</span>
+                        <div>
+                            <b>Daniel Kim</b
+                            ><span
+                                >Account manager ·
+                                <span class="pill warn" style="height: 18px; font-size: 11px">Away</span></span
+                            >
+                        </div>
+                    </div>
+                    <div class="mini" style="grid-template-columns: repeat(3, 1fr)">
+                        <div><span>Open</span><b>7</b></div>
+                        <div><span>Won</span><b>6</b></div>
+                        <div><span>Revenue</span><b>$168k</b></div>
+                    </div>
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            font-size: 12px;
+                            color: var(--muted);
+                            margin-top: 12px;
+                        "
+                    >
+                        <span>Quota</span><b style="color: var(--warn)">56%</b>
+                    </div>
+                    <div style="height: 6px; border-radius: 3px; background: var(--raised); margin-top: 6px">
+                        <div style="width: 56%; height: 100%; border-radius: 3px; background: var(--warn)"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PLACEHOLDERS -->
+        <section class="view" data-view="companies">
+            <div class="ph">
+                <div>
+                    <h1>Companies <span class="pill neu rd">1,260</span></h1>
+                    <p>Accounts, with their people, deals and NewswireOS history.</p>
+                </div>
+                <div class="r"><button class="btn p sq">Add company</button></div>
+            </div>
+            <div class="card">
+                <ul class="al">
+                    <li>
+                        <div class="ic" style="background: var(--raised); color: var(--muted)">▦</div>
+                        <div class="t">
+                            <b>Same table pattern as People</b
+                            ><span
+                                >Logo + name + domain, industry, people, deals, owner, last activity, row menu; tabs All
+                                / Customers / Prospects.</span
+                            >
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+        <section class="view" data-view="sequences">
+            <div class="ph">
+                <div>
+                    <h1>Sequences</h1>
+                    <p>6 running · 184 people enrolled</p>
+                </div>
+                <div class="r"><button class="btn p sq">New sequence</button></div>
+            </div>
+            <div class="card">
+                <ul class="al">
+                    <li>
+                        <div class="ic" style="background: var(--raised); color: var(--muted)">≡</div>
+                        <div class="t">
+                            <b>Builder</b
+                            ><span
+                                >Steps with waits, stop conditions always visible, send window in both time zones, enrol
+                                dialog that names every refusal (doc 50 §D).</span
+                            >
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+        <section class="view" data-view="templates">
+            <div class="ph">
+                <div>
+                    <h1>Templates</h1>
+                    <p>Variable chips, live preview, locked compliance blocks.</p>
+                </div>
+                <div class="r"><button class="btn p sq">New template</button></div>
+            </div>
+            <div class="card">
+                <ul class="al">
+                    <li>
+                        <div class="ic" style="background: var(--raised); color: var(--muted)">✎</div>
+                        <div class="t">
+                            <b>Editor</b
+                            ><span
+                                >Doc 50 §C: variables as chips, preview against a real record, a missing variable blocks
+                                the send.</span
+                            >
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+        <section class="view" data-view="settings">
+            <div class="ph">
+                <div>
+                    <h1>Settings</h1>
+                    <p>Workspace configuration.</p>
+                </div>
+            </div>
+            <div class="card">
+                <ul class="al">
+                    <li>
+                        <div class="ic" style="background: var(--raised); color: var(--muted)">⚙</div>
+                        <div class="t">
+                            <b>Sections</b
+                            ><span
+                                >Members · Roles · API keys · Invites · Pipelines · Region policy · Suppression · Custom
+                                fields · Google OAuth client.</span
+                            >
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- RECORD DRAWER -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Person">
+    <div class="dh">
+        <button class="ib" data-close="drawer" aria-label="Close">✕</button>
+        <h2>Person</h2>
+        <div class="r">
+            <button class="btn sm sq">Open full page ↗</button><button class="btn p sm sq">Enrol in sequence</button>
+        </div>
+    </div>
+    <div class="prof">
+        <span class="av">DR</span>
+        <div>
+            <h3>Dana Reyes</h3>
+            <p>Head of Comms · Acme Corp · dana@acme.example</p>
+        </div>
+        <div class="acts">
+            <button class="ic-btn" title="Note">
+                <svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z" /></svg></button
+            ><button class="ic-btn" title="Email">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="m3 7 9 6 9-6" />
+                </svg></button
+            ><button class="ic-btn" title="Call">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"
+                    />
+                </svg></button
+            ><button class="ic-btn" title="More">•••</button>
+        </div>
+    </div>
+    <div class="facts">
+        <div><span>Owner</span><b>Kate Morgan</b></div>
+        <div><span>Source</span><b>BylineAI</b></div>
+        <div><span>Email status</span><b style="color: var(--ok)">Valid · 12d ago</b></div>
+        <div><span>Country</span><b>United States</b></div>
+    </div>
+    <div class="prog">
+        <div class="t">Deal · Acme Series B PR<span>$12,000 · Replied</span></div>
+        <div class="bar"><i></i><em></em></div>
+        <div class="stg">
+            <span class="done">New</span><span class="done">Contacted</span><span class="on">Replied</span
+            ><span>Meeting</span><span>Won</span>
+        </div>
+    </div>
+    <div class="dsec">
+        <h4>Reply</h4>
+        <span class="r pill neu">from kate@pinionpartners.co</span>
+    </div>
+    <div class="compose">
+        <div class="hd">
+            <span>To <b>Dana Reyes</b></span
+            ><span>Re: <b>Intro — PR distribution offer</b></span
+            ><span style="margin-left: auto">Template <b>Follow-up v2 ⌄</b></span>
+        </div>
+        <div class="body">
+            Hi <span class="var">person.firstName</span>, thanks — attaching the distribution list and pricing for
+            <span class="var">company.name</span>. Would <span class="var bad">custom.lastOutlet</span> be the outlet to
+            lead with?
+        </div>
+        <div class="ft">
+            <span class="pill bad">custom.lastOutlet is empty · send disabled</span>
+            <div class="r">
+                <button class="btn q sm">Schedule</button><button class="btn p sm sq" aria-disabled="true">Send</button>
+            </div>
+        </div>
+    </div>
+    <div class="dsec">
+        <h4>Latest activity</h4>
+        <span class="n">3</span><button class="btn q sm r">View all</button>
+    </div>
+    <ul class="dtl">
+        <li>
+            <div class="ic">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="m3 7 9 6 9-6" />
+                </svg>
+            </div>
+            <div class="t">
+                <b>Dana Reyes</b> <span>replied to Intro v3</span><time>Today 09:12</time>
+                <div class="chips">
+                    <span class="pill neu">Contacted</span><span class="arrow">→</span
+                    ><span class="pill vio">Replied</span
+                    ><span style="font-size: 12px; color: var(--faint)">by rule</span>
+                </div>
+            </div>
+        </li>
+        <li>
+            <div class="ic n">
+                <svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6" /></svg>
+            </div>
+            <div class="t">
+                <b>You</b> <span>sent Intro v3 · Cold intro, step 1</span><time>6 days ago</time>
+                <div class="chips"><span class="pill ok">✓ Delivered</span><span class="pill neu">1 click</span></div>
+            </div>
+        </li>
+        <li>
+            <div class="ic g">
+                <svg viewBox="0 0 24 24"><path d="M12 3v18M7 8h7a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8" /></svg>
+            </div>
+            <div class="t">
+                <b>Acme Corp</b> <span>paid an order in NewswireOS</span><time>20 days ago</time>
+                <div class="chips"><span class="pill neu">$1,200 · “Globex rebrand”</span></div>
+            </div>
+        </li>
+    </ul>
+    <div class="dsec">
+        <h4>Notes</h4>
+        <span class="n">1</span><button class="btn q sm r">+ Add note</button>
+    </div>
+    <div class="note">
+        <div class="nh">Note by Kate Morgan<span>9 days ago</span></div>
+        <p>Met at FinCon. Interested in EU distribution for Q4; CFO signs off on anything above $10k.</p>
+    </div>
+</aside>
+
+<div class="overlay" id="k" role="dialog" aria-label="Command palette">
+    <div class="pal">
+        <div class="pin">
+            <span style="color: var(--faint)">⌕</span
+            ><input
+                id="kin"
+                placeholder="Search people, companies, deals — or type a command"
+                aria-label="Search or command"
+            />
+        </div>
+        <div class="g">Suggested</div>
+        <div class="it on"><span>Reply to Dana Reyes</span><span class="k">↵</span></div>
+        <div class="it"><span>Review paused mailbox</span></div>
+        <div class="g">Go to</div>
+        <div class="it"><span>People</span><span class="k">g p</span></div>
+        <div class="it"><span>Deals</span><span class="k">g d</span></div>
+        <div class="g">Create</div>
+        <div class="it"><span>New person</span><span class="k">c p</span></div>
+        <div class="it"><span>New deal</span><span class="k">c d</span></div>
+        <div class="ft"><span>↑↓ navigate</span><span>↵ open</span><span>esc close</span></div>
+    </div>
+</div>
+<div class="hint">Sidebar switches views · click Dana Reyes for the drawer · ⌘K · ◐ theme</div>
+
+<script>
+    (function () {
+        var names = {
+            dash: 'Dashboard',
+            people: 'People',
+            companies: 'Companies',
+            deals: 'Deals',
+            sequences: 'Sequences',
+            templates: 'Templates',
+            pool: 'Mailboxes',
+            team: 'Team',
+            settings: 'Settings',
+        };
+        function show(v) {
+            document.querySelectorAll('.view').forEach(function (s) {
+                s.classList.toggle('on', s.dataset.view === v);
+            });
+            document.querySelectorAll('.nav').forEach(function (b) {
+                b.classList.toggle('on', b.dataset.v === v && b.textContent.trim().indexOf('Reports') !== 0);
+            });
+            document.getElementById('crumb').innerHTML = '<b>' + (names[v] || v) + '</b>';
+            document.querySelector('.main').scrollTop = 0;
+            try {
+                localStorage.setItem('bcrm-view3', v);
+            } catch (e) {}
+        }
+        var drawer = document.getElementById('drawer'),
+            scrim = document.getElementById('scrim');
+        function openD() {
+            drawer.classList.add('on');
+            scrim.classList.add('on');
+        }
+        function closeD() {
+            drawer.classList.remove('on');
+            scrim.classList.remove('on');
+        }
+        scrim.addEventListener('click', closeD);
+        document.addEventListener('click', function (e) {
+            var o = e.target.closest('[data-open="drawer"]');
+            if (o) {
+                e.preventDefault();
+                openD();
+                return;
+            }
+            var c = e.target.closest('[data-close="drawer"]');
+            if (c) {
+                closeD();
+                return;
+            }
+            var t = e.target.closest('[data-v]');
+            if (t) {
+                e.preventDefault();
+                closeD();
+                show(t.dataset.v);
+            }
+        });
+        var k = document.getElementById('k');
+        function openK() {
+            k.classList.add('on');
+            document.getElementById('kin').focus();
+        }
+        function closeK() {
+            k.classList.remove('on');
+        }
+        document.getElementById('open-k').addEventListener('click', openK);
+        k.addEventListener('click', function (e) {
+            if (e.target === k) closeK();
+        });
+        document.addEventListener('keydown', function (e) {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                k.classList.contains('on') ? closeK() : openK();
+            } else if (e.key === 'Escape') {
+                closeK();
+                closeD();
+            }
+        });
+        var root = document.documentElement;
+        document.getElementById('theme').addEventListener('click', function () {
+            var dark =
+                root.getAttribute('data-theme') === 'dark' ||
+                (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+            root.setAttribute('data-theme', dark ? 'light' : 'dark');
+        });
+        var start = 'dash';
+        try {
+            start = localStorage.getItem('bcrm-view3') || start;
+        } catch (e) {}
+        var h = location.hash.replace('#', '');
+        if (names[h]) start = h;
+        show(start);
+    })();
+</script>

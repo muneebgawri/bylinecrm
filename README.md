@@ -43,6 +43,9 @@ pnpm scan:licences
 pnpm scan:identifiers
 ```
 
+- **bundle** — `pnpm --filter web build && pnpm --filter web size`: the initial JS and the stylesheet stay under
+  the budgets in `apps/web/.size-limit.json` (gzip). Raise a budget in the PR that needs it, with the reason.
+
 ## Signing in (P0-3)
 
 - Local: `POST /api/auth/signup` (`email`, `password` ≥ 12 chars, `workspaceName`) → session cookie `blc_session`
@@ -102,6 +105,7 @@ Changing the API means regenerating the file in the same PR — `pnpm --filter a
 One work package per branch and PR (doc 49 §5); the loop in doc 49 §3 is the process. The standing rule:
 no hot patches, no band-aids, no divergence — one definition of each thing.
 
-A fresh `git worktree` inherits no `node_modules`, no built `@bylinecrm/shared` and no generated Prisma client:
+A package is built in its own git worktree (`git worktree add -b <branch> ../bylinecrm-wt-<pkg> main`). A fresh
+`git worktree` inherits no `node_modules`, no built `@bylinecrm/shared` and no generated Prisma client:
 run `pnpm install`, `pnpm --filter @bylinecrm/shared build` and `pnpm --filter api prisma:generate` there before
 `pnpm typecheck`, or the errors are stale artefacts, not code.

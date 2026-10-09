@@ -1,11 +1,13 @@
 /*
- * Everything a consumer needs, in order: the token values, then the Tailwind theme that maps
- * utilities onto them. Import this ONCE from a stylesheet that also imports `tailwindcss`, and
- * add `@source` for this package so the consumer's Tailwind sees the components' classes:
+ * Everything a consumer needs, in order: the self-hosted typeface, the token values, then the
+ * Tailwind theme that maps utilities onto them. Import this ONCE from a stylesheet that also
+ * imports `tailwindcss`, and add `@source` for this package so the consumer's Tailwind sees the
+ * components' classes:
  *
  *   @import 'tailwindcss';
  *   @import '@bylinecrm/ui/styles.css';
  *   @source '../../../packages/ui/src';
  */
+@import './fonts.css';
 @import './tokens.css';
 @import './theme.css';
