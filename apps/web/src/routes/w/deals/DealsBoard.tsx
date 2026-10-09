@@ -29,6 +29,7 @@ import { ArrowRightLeft, Clock, MoreHorizontal } from 'lucide-react';
 import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { BoardColumn, BoardView, OpportunityView, StageView } from '../../../api/types';
 import { formatDay } from '../../../lib/format';
+import { fieldTitle } from '../records/fields';
 import { formatMoneyCompact, formatSums } from '../../../lib/money';
 import { CARD_ESTIMATE_PX, daysLabel, LANE_FOLD, STAGE_TONES, VIRTUAL_OVERSCAN } from './dealsView';
 import { laneAfterKey } from './moveGate';
@@ -262,7 +263,10 @@ function PagedBoard({
 
     return (
         <div>
-            <nav aria-label="Stages" className="relative -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
+            <nav
+                aria-label="Stages"
+                className="scrollbar-hidden relative -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1"
+            >
                 {columns.map((column, index) => (
                     <button
                         key={column.stage.id}
@@ -529,7 +533,7 @@ function CardBody({
                 <>
                     {deal.closeDate && (
                         <CardChip>
-                            <Clock aria-hidden /> Close {formatDay(deal.closeDate)}
+                            <Clock aria-hidden /> {fieldTitle('closeDate')} {formatDay(deal.closeDate)}
                         </CardChip>
                     )}
                     {quiet && (
@@ -539,7 +543,11 @@ function CardBody({
             }
             amount={formatMoneyCompact(deal.amount)}
             {...(ownerName ? { owner: { name: ownerName } } : {})}
-            age={deal.closedAt ? formatDay(deal.closedAt) : `${daysLabel(deal.daysInStage)} in stage`}
+            age={
+                deal.closedAt
+                    ? `${fieldTitle('closedAt')} ${formatDay(deal.closedAt)}`
+                    : `${daysLabel(deal.daysInStage)} in stage`
+            }
             highlighted={highlighted}
             className={cn(highlighted && 'border-accent')}
         />

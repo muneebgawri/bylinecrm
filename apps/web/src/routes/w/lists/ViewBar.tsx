@@ -79,7 +79,11 @@ export function ViewBar({
 
     return (
         <div className="flex items-center gap-2">
-            <div role="tablist" aria-label="Views" className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
+            <div
+                role="tablist"
+                aria-label="Views"
+                className="scrollbar-hidden flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5"
+            >
                 {tabs.map((tab) => {
                     const active = (tab.id === ALL && !viewId) || tab.id === viewId;
                     const count = counts?.get(tab.view);
