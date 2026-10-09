@@ -47,7 +47,7 @@ export const DrawerContent = forwardRef<ComponentRef<typeof DialogPrimitive.Cont
                     <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border bg-surface px-5.5 py-4">
                         <DialogPrimitive.Close
                             className={cn(
-                                'grid size-8.5 place-items-center rounded-md text-text-muted hover:bg-surface-raised hover:text-text',
+                                'grid size-8.5 shrink-0 place-items-center rounded-md text-text-muted hover:bg-surface-raised hover:text-text max-md:size-touch',
                                 focusRing,
                             )}
                         >

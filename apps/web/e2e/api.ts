@@ -1,0 +1,115 @@
+import type { RecordObject } from '@bylinecrm/shared';
+import type { Page, Route } from '@playwright/test';
+import * as data from './fixtures';
+
+/**
+ * The API, as the route gate sees it: every `/api/**` request the web app makes is answered here
+ * from `fixtures.ts`, inside the browser's network layer (Playwright route interception).
+ *
+ * Why interception and not the Prism mock (`pnpm mock:api`): Prism answers from the schemas with
+ * values it invents, so the same page would read differently from run to run and the screenshots
+ * could never match; and what a page shows (a deal three weeks quiet, a field left empty) is
+ * chosen here so those states are checked. A fixed, typed answer per route makes every page
+ * render real content, identically, on every run. The session is the same
+ * fixture: `/api/me` answering 200 is what "signed in" means to the app (RequireAuth), so no
+ * cookie or server is involved.
+ *
+ * A request this table does not answer is NOT allowed to fall through to an error state the gate
+ * would then happily check: it is recorded, answered 501, and `routes.spec.ts` fails the route
+ * with the method and path, so a page that starts calling a new endpoint has to be given data.
+ */
+type Json = unknown;
+type Handler = (match: RegExpMatchArray, url: URL) => Json;
+
+const W = String.raw`/api/w/[^/]+`;
+const ID = String.raw`([^/]+)`;
+
+/** GET routes, most specific first. Writes are answered by `WRITES` below. */
+const GETS: [RegExp, Handler][] = [
+    [/^\/api\/me$/, () => data.user],
+    [/^\/api\/me\/workspaces$/, () => data.workspaces],
+    [/^\/api\/auth\/providers$/, () => ({ providers: ['google'] })],
+    [new RegExp(`^${W}/me$`), () => data.membership],
+    [new RegExp(`^${W}/members/summary$`), () => data.membersSummary],
+    [new RegExp(`^${W}/members$`), () => data.members],
+    [new RegExp(`^${W}/roles$`), () => data.roles],
+    [new RegExp(`^${W}/api-keys$`), () => data.apiKeys],
+    [new RegExp(`^${W}/invites$`), () => data.invites],
+    [new RegExp(`^${W}/people/${ID}$`), (m) => byId(data.people, m[1])],
+    [new RegExp(`^${W}/people$`), () => data.page(data.people)],
+    [new RegExp(`^${W}/companies/${ID}$`), (m) => byId(data.companies, m[1])],
+    [new RegExp(`^${W}/companies$`), () => data.page(data.companies)],
+    [new RegExp(`^${W}/opportunities/${ID}/history$`), () => data.history],
+    [new RegExp(`^${W}/opportunities/${ID}$`), (m) => byId(data.deals, m[1])],
+    [new RegExp(`^${W}/opportunities$`), () => data.page(data.deals)],
+    [new RegExp(`^${W}/pipelines/${ID}/board$`), () => data.board],
+    [new RegExp(`^${W}/pipelines/${ID}/rules$`), () => data.rules],
+    [new RegExp(`^${W}/pipelines/${ID}$`), () => data.pipeline],
+    [new RegExp(`^${W}/pipelines$`), () => [data.pipeline]],
+    [new RegExp(`^${W}/views$`), (_m, url) => data.savedViews(object(url))],
+    [new RegExp(`^${W}/custom-fields$`), (_m, url) => data.customFields(object(url))],
+    [new RegExp(`^${W}/notes$`), () => data.page(data.notes)],
+    [new RegExp(`^${W}/tasks$`), () => data.page(data.tasks)],
+    [new RegExp(`^${W}/attachments$`), () => data.attachments],
+    [new RegExp(`^${W}/timeline$`), () => data.page(data.timeline)],
+    [
+        new RegExp(`^${W}/search$`),
+        () => ({ people: data.people, companies: data.companies, opportunities: data.deals }),
+    ],
+];
+
+function byId<T extends { id: string }>(rows: readonly T[], id: string | undefined): T {
+    const row = rows.find((r) => r.id === id);
+    if (!row) throw new Error(`no fixture with id ${id ?? '(none)'}`);
+    return row;
+}
+
+function object(url: URL): RecordObject {
+    const value = url.searchParams.get('object');
+    if (value !== 'person' && value !== 'company' && value !== 'opportunity') {
+        throw new Error(`unexpected ?object=${value ?? '(none)'}`);
+    }
+    return value;
+}
+
+/** A request the gate could not answer: what to show in the failure. */
+export interface Unanswered {
+    method: string;
+    path: string;
+    reason: string;
+}
+
+/**
+ * Installs the answers on `page` and returns the list unanswered requests are pushed onto. The
+ * gate only reads pages, so a write is not expected; one that happens anyway is unanswered.
+ */
+export async function installApi(page: Page): Promise<Unanswered[]> {
+    const unanswered: Unanswered[] = [];
+    await page.route('**/api/**', (route) => answer(route, unanswered));
+    // The status page reads `/health`; it is served outside `/api` (vite.config.ts proxy).
+    await page.route('**/health', (route) =>
+        route.fulfill({ json: { status: 'ok', db: 'ok', redis: 'ok', rls: 'ok', version: 'gate' } }),
+    );
+    return unanswered;
+}
+
+async function answer(route: Route, unanswered: Unanswered[]): Promise<void> {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    if (method === 'GET') {
+        for (const [pattern, handler] of GETS) {
+            const match = url.pathname.match(pattern);
+            if (!match) continue;
+            try {
+                await route.fulfill({ json: handler(match, url) });
+            } catch (error) {
+                unanswered.push({ method, path: url.pathname + url.search, reason: String(error) });
+                await route.fulfill({ status: 501, json: { message: 'route gate: fixture error' } });
+            }
+            return;
+        }
+    }
+    unanswered.push({ method, path: url.pathname + url.search, reason: 'no fixture answers this request' });
+    await route.fulfill({ status: 501, json: { message: 'route gate: no fixture for this request' } });
+}

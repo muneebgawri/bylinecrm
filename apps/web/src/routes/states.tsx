@@ -6,7 +6,7 @@ import { paths } from './paths';
 /** What a route shows while its data loads: the page's shape, no layout shift (FR-CRMS-UI-7). */
 export function RouteSkeleton() {
     return (
-        <div className="p-7" aria-busy="true" aria-label="Loading">
+        <div className="p-7" role="status" aria-busy="true" aria-label="Loading">
             <Skeleton className="mb-2 h-7 w-56" />
             <Skeleton className="mb-6 h-4 w-96" />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
@@ -48,7 +48,7 @@ export function RouteError() {
                 action={
                     <div className="flex gap-2">
                         <Button onClick={() => navigate(0)}>Retry</Button>
-                        <Button variant="primary" onClick={() => navigate(-1)}>
+                        <Button data-primary-action variant="primary" onClick={() => navigate(-1)}>
                             Go back
                         </Button>
                     </div>
@@ -66,7 +66,7 @@ export function Forbidden() {
                 title="You cannot open this"
                 body="Your role does not include it. An admin can change that."
                 action={
-                    <Button asChild variant="primary">
+                    <Button data-primary-action asChild variant="primary">
                         <Link to={paths.workspaces}>Your workspaces</Link>
                     </Button>
                 }
@@ -82,7 +82,7 @@ export function NotFound() {
                 title="Not found"
                 body="There is nothing at this address."
                 action={
-                    <Button asChild variant="primary">
+                    <Button data-primary-action asChild variant="primary">
                         <Link to={paths.root}>Home</Link>
                     </Button>
                 }

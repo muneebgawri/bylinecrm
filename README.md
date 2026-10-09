@@ -65,6 +65,13 @@ pnpm scan:identifiers
 
 - **bundle** — `pnpm --filter web build && pnpm --filter web size`: the initial JS and the stylesheet stay under
   the budgets in `apps/web/.size-limit.json` (gzip). Raise a budget in the PR that needs it, with the reason.
+- **routes** — `pnpm --filter web build && pnpm --filter web test:routes`: every page, the record drawer and
+  the ⌘K palette at 375 / 768 / 1280px in light and dark — axe at WCAG 2.1 AA, no sideways scroll, 44px touch
+  targets and 16px field text on phones, the primary action (`data-primary-action`) on screen, phone
+  screenshots against baselines. The API is answered from `apps/web/e2e/fixtures.ts`; a page that calls an
+  endpoint with no fixture fails. A new page is visited automatically (it comes from `paths.ts`). Baselines
+  come from the CI runner only: push, then `pnpm --filter web routes:baseline`, and commit
+  `apps/web/e2e/__snapshots__/`. Details: `docs/design-notes/P0-10.md`.
 
 ## Signing in (P0-3)
 

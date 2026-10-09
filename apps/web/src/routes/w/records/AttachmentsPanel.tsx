@@ -102,7 +102,10 @@ export function AttachmentsPanel({ workspaceId, target }: { workspaceId: string;
                                     href={attachmentRoutes.contentUrl(workspaceId, file.id)}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className={cn('block truncate text-[13px] font-medium hover:underline', focusRing)}
+                                    className={cn(
+                                        'block truncate text-[13px] font-medium hover:underline max-md:flex max-md:min-h-touch max-md:items-center',
+                                        focusRing,
+                                    )}
                                 >
                                     {file.name}
                                 </a>

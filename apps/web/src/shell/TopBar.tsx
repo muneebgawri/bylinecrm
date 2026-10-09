@@ -68,10 +68,12 @@ export function TopBar({ workspaceId, onToggleSidebar, sidebarCollapsed, onOpenP
             <button
                 type="button"
                 onClick={onOpenPalette}
-                aria-label="Search"
+                // Icon-only when narrow, so it needs a name; wide, its visible "Search…" is the name
+                // (an aria-label there would hide the visible text from it — WCAG 2.5.3).
+                aria-label={narrow ? 'Search' : undefined}
                 aria-keyshortcuts="Meta+K Control+K"
                 className={cn(
-                    'ml-auto flex h-9 items-center gap-2 rounded-md border border-border bg-surface-raised px-3 text-left text-text-faint hover:text-text-muted',
+                    'ml-auto flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-surface-raised px-3 text-left text-text-faint hover:text-text-muted',
                     narrow ? 'w-9 justify-center px-0 max-md:size-touch' : 'w-70',
                     focusRing,
                 )}

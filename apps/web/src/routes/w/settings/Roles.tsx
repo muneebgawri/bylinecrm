@@ -45,7 +45,13 @@ export function Roles() {
                 activeTab="all"
                 toolbar={{
                     extra: (
-                        <Button variant="primary" shape="square" size="sm" onClick={() => setEditing('new')}>
+                        <Button
+                            data-primary-action
+                            variant="primary"
+                            shape="square"
+                            size="sm"
+                            onClick={() => setEditing('new')}
+                        >
                             New role
                         </Button>
                     ),

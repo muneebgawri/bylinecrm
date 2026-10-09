@@ -47,7 +47,14 @@ export function SignIn() {
                         onChange={(e) => setPassword(e.target.value)}
                     />
                 </Field>
-                <Button type="submit" variant="primary" shape="square" loading={login.isPending} className="w-full">
+                <Button
+                    data-primary-action
+                    type="submit"
+                    variant="primary"
+                    shape="square"
+                    loading={login.isPending}
+                    className="w-full"
+                >
                     Sign in
                 </Button>
             </form>
