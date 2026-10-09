@@ -1,11 +1,13 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import {
     type FieldKind,
     type FilterCondition,
     type FilterGroup,
+    FILTER_MAX_IDS,
     type FilterNode,
     type FilterOperator,
     filterProblem,
+    ID_FIELD,
     groupNodes,
     isFilterGroup,
     OPERATORS_BY_KIND,
@@ -29,9 +31,32 @@ export type CompiledWhere = Record<string, unknown>;
  * a `400` naming the condition's field.
  */
 export function compileFilter(group: FilterGroup, fields: readonly ResolvedField[]): CompiledWhere {
+    assertIdListsFit(group);
     const problem = filterProblem(group);
     if (problem) throw new BadRequestException(`filter: ${problem}`);
     return compileGroup(group, fields);
+}
+
+/**
+ * Too many ids in one `in`/`nin` is a request too large to serve (`413`), not a malformed one:
+ * the caller asked for more records by id than one request reads, and a shorter list would
+ * silently drop some. Checked before the structural limits, which would call it a `400`.
+ */
+function assertIdListsFit(group: FilterGroup): void {
+    const visit = (node: FilterNode): void => {
+        if (isFilterGroup(node)) return groupNodes(node).forEach(visit);
+        if (
+            node.field === ID_FIELD.name &&
+            (node.op === 'in' || node.op === 'nin') &&
+            Array.isArray(node.value) &&
+            node.value.length > FILTER_MAX_IDS
+        ) {
+            throw new PayloadTooLargeException(
+                `filter: id ${node.op} takes at most ${FILTER_MAX_IDS} ids; split the request`,
+            );
+        }
+    };
+    visit(group);
 }
 
 function compileGroup(group: FilterGroup, fields: readonly ResolvedField[]): CompiledWhere {

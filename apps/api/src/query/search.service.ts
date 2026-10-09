@@ -5,6 +5,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { ownerWhere } from '../records/record-scope';
 import { searchCandidates, type SearchableTable } from '../records/search';
 import { fetchRows, type RecordRow } from './rows';
+import { personName } from '../records/summaries';
 
 /** The searchable table behind each object (the raw search names tables, the API names objects). */
 export const SEARCHABLE_TABLE: Readonly<Record<RecordObject, SearchableTable>> = {
@@ -68,11 +69,11 @@ function hit(object: RecordObject, row: RecordRow): SearchHit {
     switch (object) {
         case 'person': {
             const emails = row.emails as { primary: string | null } | null;
-            const name = `${String(row.nameFirst ?? '')} ${String(row.nameLast ?? '')}`.trim();
+            const name = personName(String(row.nameFirst ?? ''), String(row.nameLast ?? ''), emails?.primary);
             return {
                 object,
                 id: row.id,
-                title: name || emails?.primary || row.id,
+                title: name || row.id,
                 subtitle: (row.jobTitle as string | null) ?? emails?.primary ?? null,
             };
         }

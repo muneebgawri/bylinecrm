@@ -78,6 +78,12 @@ export const envSchema = z
          * cross-tenant suite deliver to a receiver on 127.0.0.1 and set it to `1`.
          */
         WEBHOOK_ALLOW_PRIVATE_TARGETS: flag('0'),
+        /**
+         * Whether the tenant client emits an event per SQL statement, for `observeQueries` (P1-4a).
+         * Off in production — a statement listener is a test instrument, not a feature. The unit
+         * and cross-tenant suites set it to `1`; their query-budget tests (no N+1) need it.
+         */
+        DB_QUERY_EVENTS: flag('0'),
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),

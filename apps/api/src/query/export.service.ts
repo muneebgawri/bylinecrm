@@ -4,13 +4,10 @@ import type { Writable } from 'node:stream';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
-import { ownerWhere } from '../records/record-scope';
-import { searchCandidates } from '../records/search';
 import { CSV_BOM, csvRow } from './csv';
 import { fieldNamed, type ResolvedField } from './fields';
-import { type RawQuery, resolvePlan } from './query.service';
+import { listScope, type RawQuery } from './query.service';
 import { cellOf, countRows, fetchRows } from './rows';
-import { SEARCHABLE_TABLE } from './search.service';
 
 export interface ExportRequest extends RawQuery {
     /** Field names, comma-separated; every standard field when absent. */
@@ -34,15 +31,8 @@ export class ExportService {
     async writeCsv(object: RecordObject, request: ExportRequest, out: Writable): Promise<void> {
         const context = this.current();
         await this.rls.withWorkspace(async (tx) => {
-            const plan = await resolvePlan(tx, context, this.customFields, object, request);
+            const { plan, where } = await listScope(tx, context, this.customFields, object, request, false);
             const columns = chosenColumns(plan.fields, request.columns);
-            const ids = request.q ? await searchCandidates(tx, SEARCHABLE_TABLE[object], request.q, false) : undefined;
-            const where = {
-                deletedAt: null,
-                ...ownerWhere(context),
-                ...plan.where,
-                ...(ids ? { id: { in: ids } } : {}),
-            };
 
             const total = await countRows(tx, object, where);
             if (total > EXPORT_MAX_ROWS) {

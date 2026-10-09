@@ -12,6 +12,8 @@ export default defineConfig({
         include: ['test/cross-tenant/**/*.spec.ts'],
         passWithNoTests: false,
         environment: 'node',
+        // The list query-budget test (no N+1) counts statements; the client emits them only when asked.
+        env: { DB_QUERY_EVENTS: '1' },
         // One process: the suite shares one database and must not race itself.
         fileParallelism: false,
         testTimeout: 30_000,

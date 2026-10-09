@@ -36,15 +36,54 @@ export function fetchRows(tx: WorkspaceClient, object: RecordObject, page: RowPa
     }
 }
 
-export function countRows(tx: WorkspaceClient, object: RecordObject, where: CompiledWhere): Promise<number> {
+/** How many rows match, counting at most `take` when given (a capped total stops early). */
+export function countRows(
+    tx: WorkspaceClient,
+    object: RecordObject,
+    where: CompiledWhere,
+    take?: number,
+): Promise<number> {
+    switch (object) {
+        case 'person': {
+            const args: Prisma.PersonCountArgs = { where: where as Prisma.PersonWhereInput };
+            if (take !== undefined) args.take = take;
+            return tx.person.count(args);
+        }
+        case 'company': {
+            const args: Prisma.CompanyCountArgs = { where: where as Prisma.CompanyWhereInput };
+            if (take !== undefined) args.take = take;
+            return tx.company.count(args);
+        }
+        case 'opportunity': {
+            const args: Prisma.OpportunityCountArgs = { where: where as Prisma.OpportunityWhereInput };
+            if (take !== undefined) args.take = take;
+            return tx.opportunity.count(args);
+        }
+    }
+}
+
+/** The ids of the rows that match, in the list's order, at most `take` — what a bulk action acts on. */
+export async function rowIds(
+    tx: WorkspaceClient,
+    object: RecordObject,
+    where: CompiledWhere,
+    orderBy: CompiledOrderBy,
+    take: number,
+): Promise<string[]> {
+    const args = { where, orderBy, take, select: { id: true } };
+    let rows: { id: string }[];
     switch (object) {
         case 'person':
-            return tx.person.count({ where: where as Prisma.PersonWhereInput });
+            rows = await tx.person.findMany(args as Prisma.PersonFindManyArgs);
+            break;
         case 'company':
-            return tx.company.count({ where: where as Prisma.CompanyWhereInput });
+            rows = await tx.company.findMany(args as Prisma.CompanyFindManyArgs);
+            break;
         case 'opportunity':
-            return tx.opportunity.count({ where: where as Prisma.OpportunityWhereInput });
+            rows = await tx.opportunity.findMany(args as Prisma.OpportunityFindManyArgs);
+            break;
     }
+    return rows.map((r) => r.id);
 }
 
 /** A field's value on a row: the column, or the key of the `custom` object. */

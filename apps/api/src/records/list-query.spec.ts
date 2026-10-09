@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import { LIST_COUNT_CAP } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
-import { decodeCursor, encodeCursor, paginate } from './list-query';
+import { countTotal, decodeCursor, encodeCursor, paginate } from './list-query';
 
 const ID_A = '11111111-1111-4111-8111-111111111111';
 const ID_B = '22222222-2222-4222-8222-222222222222';
@@ -42,5 +43,32 @@ describe('paginate', () => {
         expect(asked).toEqual({ take: 3, cursor: { id: ID_B }, skip: 1 });
         expect(page.items.map((r) => r.id)).toEqual([ID_C]);
         expect(page.nextCursor).toBeNull();
+    });
+});
+
+describe('countTotal (P1-4a)', () => {
+    it('counts at most one row past the cap, and an answer within it is exact', async () => {
+        const asked: number[] = [];
+        const totals = await countTotal((take) => {
+            asked.push(take);
+            return Promise.resolve(37);
+        }, false);
+        expect(asked).toEqual([LIST_COUNT_CAP + 1]);
+        expect(totals).toEqual({ total: 37, totalIsExact: true });
+    });
+
+    it('past the cap the total is the cap and says it is not exact', async () => {
+        expect(await countTotal(() => Promise.resolve(LIST_COUNT_CAP + 1), false)).toEqual({
+            total: LIST_COUNT_CAP,
+            totalIsExact: false,
+        });
+        expect(await countTotal(() => Promise.resolve(LIST_COUNT_CAP), false)).toEqual({
+            total: LIST_COUNT_CAP,
+            totalIsExact: true,
+        });
+    });
+
+    it('a text search whose candidates were capped cannot give an exact total', async () => {
+        expect(await countTotal(() => Promise.resolve(12), true)).toEqual({ total: 12, totalIsExact: false });
     });
 });

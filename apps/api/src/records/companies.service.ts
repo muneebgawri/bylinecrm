@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Actor, Address, Links } from '@bylinecrm/shared';
+import type { Actor, Address, DomainEvent, Links } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { UniqueConflict } from '../infra/errors/api-errors';
@@ -7,15 +7,17 @@ import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from './actor';
+import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
-import { diffOf } from './diff';
-import { type Page, paginate } from './list-query';
+import { diffOf, isEmpty, projectedChanges } from './diff';
+import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
 import type { ListQuery } from './people.service';
-import { resolvePlan } from '../query/query.service';
-import { ownerWhere, resolveOwner } from './record-scope';
+import { listScope } from '../query/query.service';
+import { countRows } from '../query/rows';
+import { recordWhere, resolveOwner } from './record-scope';
 import { assertOwnerIsMember, compact, moneyColumns, type MoneyInput, stored } from './references';
-import { searchCandidates } from './search';
 import { type CompanyView } from './responses';
+import { MEMBER_SUMMARY_SELECT, memberSummary } from './summaries';
 export type { CompanyView } from './responses';
 
 export interface CompanyInput {
@@ -44,10 +46,14 @@ const DIFF_FIELDS = [
     'custom',
 ] as const;
 
-type CompanyRow = Prisma.CompanyGetPayload<Record<string, never>>;
+/** What every company read loads beside the row: its owner by name (P1-4a). */
+const companyInclude = { owner: { select: MEMBER_SUMMARY_SELECT } } as const;
+type CompanyRow = Prisma.CompanyGetPayload<{ include: typeof companyInclude }>;
 
 @Injectable()
-export class CompaniesService {
+export class CompaniesService implements BulkRecords {
+    readonly object = 'company' as const;
+
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
@@ -55,24 +61,23 @@ export class CompaniesService {
         private readonly events: DomainEvents,
     ) {}
 
-    list(query: ListQuery, deleted = false): Promise<Page<CompanyView>> {
+    /** Live companies, or the trash when `deleted`; the page and its total read one `where`. */
+    list(query: ListQuery, deleted = false): Promise<CountedPage<CompanyView>> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const plan = await resolvePlan(tx, context, this.customFields, 'company', query);
-            const ids = query.q ? await searchCandidates(tx, 'companies', query.q, deleted) : undefined;
-            if (ids && ids.length === 0) return { items: [], nextCursor: null };
+            const scope = await listScope(tx, context, this.customFields, 'company', query, deleted);
+            if (scope.empty) return EMPTY_COUNTED_PAGE;
+            const where = scope.where as Prisma.CompanyWhereInput;
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.company.findMany({
-                    where: {
-                        ...where(context, deleted),
-                        ...(plan.where as Prisma.CompanyWhereInput),
-                        ...(ids ? { id: { in: ids } } : {}),
-                    },
-                    orderBy: plan.orderBy as Prisma.CompanyOrderByWithRelationInput[],
+                    where,
+                    include: companyInclude,
+                    orderBy: scope.plan.orderBy as Prisma.CompanyOrderByWithRelationInput[],
                     ...args,
                 }),
             );
-            return { items: page.items.map(view), nextCursor: page.nextCursor };
+            const totals = await countTotal((take) => countRows(tx, 'company', where, take), scope.candidatesCapped);
+            return { items: page.items.map(view), nextCursor: page.nextCursor, ...totals };
         });
     }
 
@@ -100,99 +105,93 @@ export class CompaniesService {
                         createdBy: actor,
                         custom,
                     },
+                    include: companyInclude,
                 });
             } catch (error) {
                 throw uniqueViolation(error) ? conflict() : error;
             }
         });
-        this.events.publish({
-            type: 'company.created',
-            object: 'company',
-            workspaceId: context.workspaceId,
-            actor,
-            occurredAt: new Date().toISOString(),
-            recordId: row.id,
-        });
+        this.events.publish(event(context, 'company.created', row.id));
         return view(row);
     }
 
     async update(id: string, patch: CompanyInput): Promise<CompanyView> {
         const context = this.current();
-        const { before, after } = await this.rls.withWorkspace(async (tx) => {
-            const current = await find(tx, context, id);
-            const ownerId = resolveOwner(context, patch.ownerId, current.ownerId);
-            if (ownerId !== current.ownerId) await assertOwnerIsMember(tx, ownerId);
-            const custom = patch.custom
-                ? await this.customFields.validated(
-                      tx,
-                      'company',
-                      patch.custom,
-                      'patch',
-                      stored<Record<string, unknown>>(current.custom),
-                  )
-                : undefined;
-            const arr = await moneyColumns(tx, context.workspaceId, patch.arr);
-            try {
-                const updated = await tx.company.update({
-                    where: { id },
-                    data: { ...compact(fields(patch)), ...arrColumns(arr), ownerId, ...(custom ? { custom } : {}) },
-                });
-                return { before: current, after: updated };
-            } catch (error) {
-                throw uniqueViolation(error) ? conflict() : error;
-            }
-        });
-        this.events.publish({
-            type: 'company.updated',
-            object: 'company',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            diff: diffOf(view(before), view(after), DIFF_FIELDS),
-        });
+        const { after, event } = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch));
+        if (event) this.events.publish(event);
         return view(after);
     }
 
     /** Soft. People keep their `companyId`; the company is simply in the trash (PAR-079). */
     async remove(id: string): Promise<void> {
         const context = this.current();
-        await this.rls.withWorkspace(async (tx) => {
-            const result = await tx.company.updateMany({
-                where: { id, ...where(context, false) },
-                data: { deletedAt: new Date() },
-            });
-            if (result.count === 0) throw notFound();
-        });
-        this.events.publish({
-            type: 'company.deleted',
-            object: 'company',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-        });
+        const { event } = await this.rls.withWorkspace((tx) => this.removeIn(tx, context, id));
+        this.events.publish(event);
     }
 
     async restore(id: string): Promise<CompanyView> {
         const context = this.current();
-        const row = await this.rls.withWorkspace(async (tx) => {
-            const result = await tx.company.updateMany({
-                where: { id, ...where(context, true) },
-                data: { deletedAt: null },
-            });
-            if (result.count === 0) throw notFound();
-            return find(tx, context, id);
-        });
-        this.events.publish({
-            type: 'company.restored',
-            object: 'company',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-        });
+        const { row, event } = await this.rls.withWorkspace((tx) => this.restoreIn(tx, context, id));
+        this.events.publish(event);
         return view(row);
+    }
+
+    // The writes inside a caller's transaction — the single routes and the bulk service (P1-4a)
+    // both run these; each returns the event for the caller to publish after commit.
+
+    async updateIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        patch: CompanyInput,
+    ): Promise<{ after: CompanyRow; event: DomainEvent | null }> {
+        const current = await find(tx, context, id);
+        const ownerId = resolveOwner(context, patch.ownerId, current.ownerId);
+        if (ownerId !== current.ownerId) await assertOwnerIsMember(tx, ownerId);
+        const custom = patch.custom
+            ? await this.customFields.validated(
+                  tx,
+                  'company',
+                  patch.custom,
+                  'patch',
+                  stored<Record<string, unknown>>(current.custom),
+              )
+            : undefined;
+        const arr = await moneyColumns(tx, context.workspaceId, patch.arr);
+        const data = { ...compact(fields(patch)), ...arrColumns(arr), ownerId, ...(custom ? { custom } : {}) };
+        // Nothing would change: no write, no `updated` event, the record as it was.
+        if (isEmpty(projectedChanges(current, data, view, DIFF_FIELDS))) return { after: current, event: null };
+        try {
+            const after = await tx.company.update({ where: { id }, data, include: companyInclude });
+            return {
+                after,
+                event: event(context, 'company.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),
+            };
+        } catch (error) {
+            throw uniqueViolation(error) ? conflict() : error;
+        }
+    }
+
+    async removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }> {
+        const result = await tx.company.updateMany({
+            where: { id, ...recordWhere(context, false) },
+            data: { deletedAt: new Date() },
+        });
+        if (result.count === 0) throw notFound();
+        return { event: event(context, 'company.deleted', id) };
+    }
+
+    async restoreIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+    ): Promise<{ row: CompanyRow; event: DomainEvent }> {
+        const result = await tx.company.updateMany({
+            where: { id, ...recordWhere(context, true) },
+            data: { deletedAt: null },
+        });
+        if (result.count === 0) throw notFound();
+        return { row: await find(tx, context, id), event: event(context, 'company.restored', id) };
     }
 
     private current(): WorkspaceRunContext {
@@ -223,14 +222,27 @@ function arrColumns(money: { amountMinor?: bigint | null; currency?: string | nu
     };
 }
 
-function where(context: WorkspaceRunContext, deleted: boolean): Prisma.CompanyWhereInput {
-    return { deletedAt: deleted ? { not: null } : null, ...ownerWhere(context) };
-}
-
 async function find(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<CompanyRow> {
-    const row = await tx.company.findFirst({ where: { id, ...where(context, false) } });
+    const row = await tx.company.findFirst({ where: { id, ...recordWhere(context, false) }, include: companyInclude });
     if (!row) throw notFound();
     return row;
+}
+
+function event(
+    context: WorkspaceRunContext,
+    type: 'company.created' | 'company.updated' | 'company.deleted' | 'company.restored',
+    recordId: string,
+    diff?: DomainEvent['diff'],
+): DomainEvent {
+    return {
+        type,
+        object: 'company',
+        workspaceId: context.workspaceId,
+        actor: actorOf(context),
+        occurredAt: new Date().toISOString(),
+        recordId,
+        ...(diff ? { diff } : {}),
+    };
 }
 
 function notFound(): NotFoundException {
@@ -256,6 +268,7 @@ export function view(row: CompanyRow): CompanyView {
         icp: row.icp,
         position: row.position,
         ownerId: row.ownerId,
+        owner: memberSummary(row.owner),
         createdBy: stored<Actor>(row.createdBy),
         custom: stored<Record<string, unknown>>(row.custom),
         deletedAt: row.deletedAt,

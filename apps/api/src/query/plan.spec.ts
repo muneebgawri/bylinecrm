@@ -1,6 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import {
     FILTER_MAX_DEPTH,
+    FILTER_MAX_IDS,
     FILTER_MAX_LIST,
     FILTER_MAX_NODES,
     type FilterGroup,
@@ -67,6 +68,37 @@ describe('the filter grammar', () => {
         expect(() =>
             planQuery('company', { filter: { and: [{ field: 'name', op: 'in', value: values }] } }, []),
         ).toThrow(/at most/);
+    });
+});
+
+describe('a filter on id (P1-4a)', () => {
+    const uuids = (n: number) =>
+        Array.from({ length: n }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+
+    it('reads many records by id, on every object, as one column condition', () => {
+        const ids = uuids(3);
+        for (const object of ['person', 'company', 'opportunity'] as const) {
+            expect(planQuery(object, { filter: { and: [{ field: 'id', op: 'in', value: ids }] } }, []).where).toEqual({
+                AND: [{ id: { in: ids } }],
+            });
+        }
+    });
+
+    it(`takes up to ${FILTER_MAX_IDS} ids — past ${FILTER_MAX_LIST}, the limit of any other list`, () => {
+        const filter = { and: [{ field: 'id', op: 'in' as const, value: uuids(FILTER_MAX_IDS) }] };
+        expect(() => planQuery('person', { filter }, [])).not.toThrow();
+    });
+
+    it(`answers ${FILTER_MAX_IDS + 1} ids with 413, not a shorter list`, () => {
+        const filter = { and: [{ field: 'id', op: 'in' as const, value: uuids(FILTER_MAX_IDS + 1) }] };
+        expect(() => planQuery('person', { filter }, [])).toThrow(PayloadTooLargeException);
+    });
+
+    it('refuses an id that is not a uuid, and id as a sort', () => {
+        expect(() =>
+            planQuery('person', { filter: { and: [{ field: 'id', op: 'in', value: ['not-a-uuid'] }] } }, []),
+        ).toThrow(BadRequestException);
+        expect(() => planQuery('person', { sort: 'id:asc' }, [])).toThrow(BadRequestException);
     });
 });
 

@@ -1,4 +1,5 @@
 import {
+    BULK_ACTIONS,
     FIELD_NAME_PATTERN,
     LIST_LIMIT_DEFAULT,
     LIST_LIMIT_MAX,
@@ -44,14 +45,57 @@ export class QueryBodyDto extends createZodDto(
     }),
 ) {}
 
-export class ExportQueryDto extends createZodDto(
+const columnsParam = z
+    .string()
+    .regex(/^[a-zA-Z0-9_.]+(,[a-zA-Z0-9_.]+)*$/, 'columns is a comma-separated list of field names');
+
+export class ExportQueryDto extends createZodDto(z.object({ ...queryParams, columns: columnsParam.optional() })) {}
+
+/**
+ * The export's twin for a filter too long for a query string — a selection of up to
+ * `FILTER_MAX_IDS` ids, typically (`{ field: 'id', op: 'in', value: [...] }`). The same
+ * parameters, the filter as JSON; the same CSV back.
+ */
+export class ExportBodyDto extends createZodDto(
     z.object({
-        ...queryParams,
-        columns: z
-            .string()
-            .regex(/^[a-zA-Z0-9_.]+(,[a-zA-Z0-9_.]+)*$/, 'columns is a comma-separated list of field names')
-            .optional(),
+        filter: filterGroupSchema.optional(),
+        sort: sortParam.optional(),
+        view: viewParam.optional(),
+        q: q.optional(),
+        columns: columnsParam.optional(),
     }),
+) {}
+
+/**
+ * A bulk request (P1-4a): an action over named `ids`, or over the records a list request selects
+ * (`filter` / `view` / `q`, as the list takes them) — one or the other. `ownerId` goes with
+ * `assign_owner` and nothing else; `null` leaves the records with no owner.
+ */
+export class BulkBodyDto extends createZodDto(
+    z
+        .object({
+            action: z.enum(BULK_ACTIONS),
+            ids: z
+                .array(z.uuid())
+                .min(1)
+                .optional()
+                .meta({ description: 'At most BULK_MAX_IDS (500) distinct ids; more is 413.' }),
+            filter: filterGroupSchema.optional(),
+            view: viewParam.optional(),
+            q: q.optional(),
+            ownerId: z.uuid().nullable().optional(),
+        })
+        .refine(
+            (b) => (b.ids !== undefined) !== (b.filter !== undefined || b.view !== undefined || b.q !== undefined),
+            {
+                message: 'name the records by ids, or select them by filter / view / q — one or the other',
+                path: ['ids'],
+            },
+        )
+        .refine((b) => (b.action === 'assign_owner') === (b.ownerId !== undefined), {
+            message: 'ownerId goes with assign_owner, and only with it',
+            path: ['ownerId'],
+        }),
 ) {}
 
 export class GroupByQueryDto extends createZodDto(

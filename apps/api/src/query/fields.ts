@@ -4,6 +4,7 @@ import {
     customFieldKey,
     customFieldName,
     type FieldDescriptor,
+    ID_FIELD,
     type RecordObject,
     STANDARD_FIELDS,
 } from '@bylinecrm/shared';
@@ -28,13 +29,17 @@ const COLUMN_BY_NAME: Readonly<Record<RecordObject, Readonly<Record<string, stri
     opportunity: { amount: 'amountMinor' },
 };
 
-/** Every field of an object the caller may name: the standard ones, then the workspace's custom ones. */
+/**
+ * Every field of an object the caller may name: the standard ones, then the workspace's custom
+ * ones, then `id` (filterable and exportable by name, never offered as a default column).
+ */
 export function resolveFields(object: RecordObject, definitions: readonly FieldDefinition[]): ResolvedField[] {
     const standard: ResolvedField[] = STANDARD_FIELDS[object].map((f) => ({
         ...f,
         storage: 'column',
         column: COLUMN_BY_NAME[object][f.name] ?? f.name,
     }));
+    const id: ResolvedField = { ...ID_FIELD, storage: 'column', column: 'id' };
     const custom: ResolvedField[] = definitions.map((d) => ({
         name: customFieldName(d.key),
         label: d.label,
@@ -45,7 +50,7 @@ export function resolveFields(object: RecordObject, definitions: readonly FieldD
         storage: 'custom',
         key: d.key,
     }));
-    return [...standard, ...custom];
+    return [...standard, ...custom, id];
 }
 
 /** The field a name refers to, or `400` naming it — a field that is not there cannot be filtered on. */

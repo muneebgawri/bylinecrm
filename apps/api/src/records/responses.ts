@@ -1,4 +1,4 @@
-import { CUSTOM_FIELD_TYPES, RECORD_OBJECTS, TASK_STATUSES } from '@bylinecrm/shared';
+import { BULK_ROW_ERRORS, CUSTOM_FIELD_TYPES, RECORD_OBJECTS, TASK_STATUSES } from '@bylinecrm/shared';
 import { z } from 'zod';
 import {
     actor,
@@ -8,6 +8,7 @@ import {
     emails,
     id,
     links,
+    countedPage,
     money,
     named,
     page,
@@ -15,6 +16,7 @@ import {
     recordTarget,
     richText,
 } from '../openapi/responses';
+import { memberSummaryView } from '../workspace/responses';
 
 /**
  * The record objects as the API returns them. Each service's `…View` type is `z.output` of the
@@ -23,6 +25,17 @@ import {
  */
 
 const trash = { deletedAt: dateTime.nullable(), createdAt: dateTime, updatedAt: dateTime };
+
+/**
+ * A related record by name, on a row (P1-4a). `null` when there is none, when it is in the
+ * trash, or when the caller cannot see it — the id column beside it still says which it is.
+ */
+export const recordSummaryView = named('RecordSummary', z.object({ id, name: z.string() }));
+const related = (what: string) =>
+    recordSummaryView
+        .nullable()
+        .meta({ description: `The ${what}, by name; null when none, trashed or not visible to the caller.` });
+const owner = memberSummaryView.nullable().meta({ description: 'The owner, by name; null when the record has none.' });
 
 /** A person (PAR-001). */
 export const personView = named(
@@ -40,12 +53,14 @@ export const personView = named(
         position: z.number(),
         companyId: id.nullable(),
         ownerId: id.nullable(),
+        company: related('company'),
+        owner,
         createdBy: actor,
         custom: customValues,
         ...trash,
     }),
 );
-export const personPage = named('PersonPage', page(personView));
+export const personPage = named('PersonPage', countedPage(personView));
 
 /** A company (PAR-005). */
 export const companyView = named(
@@ -61,12 +76,13 @@ export const companyView = named(
         icp: z.boolean(),
         position: z.number(),
         ownerId: id.nullable(),
+        owner,
         createdBy: actor,
         custom: customValues,
         ...trash,
     }),
 );
-export const companyPage = named('CompanyPage', page(companyView));
+export const companyPage = named('CompanyPage', countedPage(companyView));
 
 /** A deal (PAR-007), with the stage fields P1-2 computes from its history. */
 export const opportunityView = named(
@@ -88,12 +104,15 @@ export const opportunityView = named(
         ownerId: id.nullable(),
         pointOfContactId: id.nullable(),
         companyId: id.nullable(),
+        owner,
+        pointOfContact: related('point of contact'),
+        company: related('company'),
         createdBy: actor,
         custom: customValues,
         ...trash,
     }),
 );
-export const opportunityPage = named('OpportunityPage', page(opportunityView));
+export const opportunityPage = named('OpportunityPage', countedPage(opportunityView));
 
 /** A note and the records it is attached to (PAR-010). */
 export const noteView = named(
@@ -163,6 +182,37 @@ export const customFieldView = named(
     }),
 );
 
+/** One bulk request's outcome, per record, in the order the request named them (P1-4a). */
+export const bulkResultView = named(
+    'BulkResult',
+    z.object({
+        results: z.array(
+            z.union([
+                z.object({
+                    id,
+                    ok: z.literal(true),
+                    unchanged: z
+                        .literal(true)
+                        .optional()
+                        .meta({ description: 'Already as asked: nothing written, no event.' }),
+                }),
+                z.object({
+                    id,
+                    ok: z.literal(false),
+                    error: z.enum(BULK_ROW_ERRORS).meta({
+                        description:
+                            'not_found: not visible to the caller in this state — whether or not it exists elsewhere.',
+                    }),
+                }),
+            ]),
+        ),
+        succeeded: z.number().int(),
+        failed: z.number().int(),
+    }),
+);
+
+export type RecordSummaryView = z.output<typeof recordSummaryView>;
+export type BulkResultView = z.output<typeof bulkResultView>;
 export type PersonView = z.output<typeof personView>;
 export type CompanyView = z.output<typeof companyView>;
 export type OpportunityView = z.output<typeof opportunityView>;
