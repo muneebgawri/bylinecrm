@@ -187,6 +187,22 @@ function useShellCommands({
                 run: () => navigate(paths.settingsMail(workspaceId)),
             },
             {
+                id: 'create.mailbox',
+                title: 'Connect a mailbox',
+                group: 'Create',
+                keywords: ['gmail', 'google', 'inbox'],
+                when: () => can(membership, 'mailbox:manage'),
+                run: () => navigate(withCreate(paths.mailboxes(workspaceId))),
+            },
+            {
+                id: 'settings.google',
+                title: 'Google setup',
+                group: 'Go to',
+                keywords: ['oauth', 'gmail', 'client id', 'redirect'],
+                when: () => can(membership, 'workspace:admin'),
+                run: () => navigate(paths.settingsGoogle(workspaceId)),
+            },
+            {
                 id: 'settings.pipelines',
                 title: 'Pipeline settings',
                 group: 'Go to',
