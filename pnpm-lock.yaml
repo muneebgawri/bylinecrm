@@ -218,6 +218,12 @@ importers:
 
   packages/shared:
     devDependencies:
+      '@bylinecrm/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.5(jiti@2.7.0)
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(@swc/core@1.16.13)(jiti@2.7.0)(postcss@8.5.29)(typescript@5.9.3)(yaml@2.9.1)
