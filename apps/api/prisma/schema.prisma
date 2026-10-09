@@ -43,6 +43,8 @@ model Workspace {
   stageRules             StageRule[]
   webhookEndpoints       WebhookEndpoint[]
   webhookDeliveries      WebhookDelivery[]
+  googleOAuthClient      GoogleOAuthClient?
+  mailboxes              Mailbox[]
   emailTemplates         EmailTemplate[]
   mailSettings           WorkspaceMailSettings?
 
@@ -130,6 +132,8 @@ model WorkspaceMember {
   assignedTasks       Task[]
   authoredAttachments Attachment[]
   savedViews          SavedView[]
+  configuredOAuthClients GoogleOAuthClient[]
+  mailboxes           Mailbox[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -797,6 +801,75 @@ model WebhookDelivery {
   @@index([workspaceId, endpointId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("webhook_deliveries")
+}
+
+enum MailboxPurpose {
+  personal
+  pool
+
+  @@map("mailbox_purpose")
+}
+
+enum MailboxStatus {
+  connected
+  reconnect_needed
+  disconnected
+
+  @@map("mailbox_status")
+}
+
+/// The Google OAuth client a workspace's admin created in their own Google Cloud project (P2-1,
+/// D-237): one per workspace. Mailboxes are connected through it, so their refresh tokens belong
+/// to it. The secret is held encrypted (it is presented to Google, so a hash would not do) and only
+/// its last four characters are ever shown.
+model GoogleOAuthClient {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String    @unique @map("workspace_id") @db.Uuid
+  clientId               String    @map("client_id")
+  clientSecretCiphertext String    @map("client_secret_ciphertext")
+  clientSecretLast4      String    @map("client_secret_last4")
+  configuredById         String    @map("configured_by_id") @db.Uuid
+  /// When a mailbox first connected through this client — the only end-to-end proof it works.
+  verifiedAt             DateTime? @map("verified_at") @db.Timestamptz
+  /// The last check's per-step outcomes and when it ran.
+  lastCheck              Json?     @map("last_check")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
+
+  @@map("google_oauth_clients")
+}
+
+/// A Google mailbox connected to the workspace (P2-1). Its purpose is fixed when it connects. Tokens
+/// are held encrypted and never leave the API; a disconnected mailbox keeps its row (history, the
+/// email's uniqueness) and loses its tokens.
+model Mailbox {
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String         @map("workspace_id") @db.Uuid
+  ownerMemberId          String         @map("owner_member_id") @db.Uuid
+  /// Lower case; unique in the workspace.
+  email                  String
+  label                  String?
+  purpose                MailboxPurpose
+  status                 MailboxStatus
+  grantedScopes          String[]       @default([]) @map("granted_scopes")
+  refreshTokenCiphertext String?        @map("refresh_token_ciphertext")
+  accessTokenCiphertext  String?        @map("access_token_ciphertext")
+  accessExpiresAt        DateTime?      @map("access_expires_at") @db.Timestamptz
+  /// Why the mailbox last stopped working: `{ code, message, at }`; null while it works.
+  lastError              Json?          @map("last_error")
+  connectedAt            DateTime?      @map("connected_at") @db.Timestamptz
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     WorkspaceMember @relation(fields: [ownerMemberId], references: [id])
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, ownerMemberId])
+  @@map("mailboxes")
 }
 
 enum TemplateKind {

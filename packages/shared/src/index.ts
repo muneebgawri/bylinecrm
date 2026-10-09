@@ -38,6 +38,7 @@ export * from './auth.js';
 export * from './capabilities.js';
 export * from './errors.js';
 export * from './events.js';
+export * from './mail.js';
 export * from './money.js';
 export * from './pipelines.js';
 export * from './records.js';
