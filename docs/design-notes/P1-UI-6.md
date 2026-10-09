@@ -62,9 +62,27 @@ own view picker and filter chips; there is now one of each.
 
 ## Mobile (FR-CRMS-UI-12)
 
-Unchanged in behaviour from P1-UI-2/P1-UI-4: bottom-sheet filter and sort, select mode with a bottom
-action bar, 44px targets and 16px inputs, view tabs that scroll inside themselves. The deals page's
-search field and toolbar wrap onto their own row on a phone.
+People and companies keep P1-UI-2/P1-UI-7's behaviour (bottom-sheet filter and sort, select mode
+with a bottom action bar, 44px targets, 16px inputs, view tabs that scroll inside themselves) and add
+a count above the cards ("36 people").
+
+**The deals list on a phone moved onto the shared `CardList`** (coordinator, after #51 landed): the
+page-local card and its inline stage select are deleted. A deal card is name, company and amount, the
+stage badge and days in stage, and one "•••" menu (Open, Move to stage…). **Moving a deal on a phone
+is the board's Move-to-stage sheet**, so there is one move UI on a phone. A long press or Select
+chooses deals for the bulk bar. The menu is `DataTableChrome`'s row menu, now exported from
+`packages/ui` as `RowActionsMenu`, so a row's actions are offered the same way everywhere.
+
+## Found in the browser walk (127.0.0.1:3481, isolated DB, desktop and 375px, dark and light)
+
+- A deal's close date read "Nov 30, 2026, 5:00 AM": the catalogue formatted a calendar date as an
+  instant (and would show the 29th west of UTC). Close date and custom `date` fields now use
+  `formatDay`; a test in `America/Los_Angeles` failed with the old formatter.
+- Confirmed: tab counts ("All people 36", "Austin 12"), "Page 1 of 1 · 36 of 36 people", company names
+  with zero `/companies` reads, bulk assign as exactly one `POST /people/bulk`, the deals list on the
+  shared toolbar with catalogue columns; at 375px in both themes no table, no sideways scroll, no
+  target under 44px, no input under 16px on people, deals list and board; the deal card's menu opens
+  the Move-to-stage sheet.
 
 ## Tests
 
