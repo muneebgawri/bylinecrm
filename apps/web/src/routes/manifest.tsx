@@ -34,6 +34,13 @@ const settings = {
     pipelines: () => import('./w/settings/Pipelines').then((m) => ({ Component: m.Pipelines })),
     pipeline: () => import('./w/settings/PipelineDetail').then((m) => ({ Component: m.PipelineDetail })),
     customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
+    mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
+};
+
+/** Templates are one chunk: the list and the editor, which brings the rich-text editor (FR-CRMS-UI-10). */
+const templates = {
+    list: () => import('./w/templates/TemplatesPage').then((m) => ({ Component: m.TemplatesPage })),
+    editor: () => import('./w/templates/TemplateEditorPage').then((m) => ({ Component: m.TemplateEditorPage })),
 };
 
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
@@ -86,7 +93,8 @@ const workspaceRoutes: RouteObject = {
         lazyPage('deals', dealsPage, 'Deals'),
         lazyPage('deals/:dealId', records.deal, 'Deal'),
         page('sequences', 'sequences', 'Sequences'),
-        page('templates', 'templates', 'Templates'),
+        lazyPage('templates', templates.list, 'Templates'),
+        lazyPage('templates/:templateId', templates.editor, 'Template'),
         page('mailboxes', 'mailboxes', 'Mailboxes'),
         page('team', 'team', 'Team'),
         lazyPage('settings', settings.layout, 'Settings', [
@@ -98,6 +106,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('pipelines', settings.pipelines, 'Pipelines'),
             lazyPage(`pipelines/:${PIPELINE_PARAM}`, settings.pipeline, 'Pipeline'),
             lazyPage('custom-fields', settings.customFields, 'Custom fields'),
+            lazyPage('mail', settings.mail, 'Mail'),
         ]),
     ],
 };

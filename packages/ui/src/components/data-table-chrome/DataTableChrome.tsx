@@ -171,7 +171,7 @@ function DataTableChromeInner<T extends string, R>(
                                         aria-selected={active}
                                         onClick={() => onTabChange?.(tab.id)}
                                         className={cn(
-                                            'h-8 shrink-0 rounded-md border border-transparent px-3 font-medium text-text-muted transition-colors max-md:h-touch',
+                                            'h-8 shrink-0 rounded-md border border-transparent px-3 font-medium text-text-muted transition-colors max-md:h-touch max-md:min-w-touch',
                                             active && 'border-border bg-surface-raised text-text',
                                             focusRing,
                                         )}

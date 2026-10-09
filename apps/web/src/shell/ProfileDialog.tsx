@@ -12,7 +12,7 @@ import {
     toast,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
-import { ApiError } from '../api/client';
+import { ApiError, fieldErrorAt } from '../api/client';
 import { useUpdateProfile } from '../api/queries';
 import type { ProfileView } from '../api/types';
 
@@ -93,10 +93,9 @@ function ProfileForm({
             return setError(`Keep it to ${DISPLAY_NAME_MAX_LENGTH} characters.`);
         setError(null);
         onSave(trimmed, (failure) => {
-            const field =
-                failure instanceof ApiError ? failure.fieldErrors.find((f) => f.path === 'displayName') : null;
             setError(
-                field?.message ?? (failure instanceof ApiError ? failure.message : 'The server could not be reached.'),
+                fieldErrorAt(failure, 'displayName') ??
+                    (failure instanceof ApiError ? failure.message : 'The server could not be reached.'),
             );
         });
     }

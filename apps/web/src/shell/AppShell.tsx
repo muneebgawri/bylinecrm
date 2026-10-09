@@ -17,7 +17,7 @@ import { can } from '../auth/capabilities';
 import { useRegisterCommands, type Command } from '../commands/registry';
 import { useCommandShortcuts } from '../commands/shortcuts';
 import { useWorkspaceId } from '../routes/params';
-import { paths } from '../routes/paths';
+import { paths, withCreate } from '../routes/paths';
 import { RouteSkeleton } from '../routes/states';
 import { CommandPalette } from './CommandPalette';
 import { OfflineBanner } from './OfflineBanner';
@@ -178,7 +178,7 @@ function useShellCommands({
                 group: 'Create',
                 shortcut: 'c p',
                 when: () => can(membership, 'record:write'),
-                run: () => navigate(`${paths.people(workspaceId)}?create=1`),
+                run: () => navigate(withCreate(paths.people(workspaceId))),
             },
             {
                 id: 'create.company',
@@ -186,7 +186,7 @@ function useShellCommands({
                 group: 'Create',
                 shortcut: 'c c',
                 when: () => can(membership, 'record:write'),
-                run: () => navigate(`${paths.companies(workspaceId)}?create=1`),
+                run: () => navigate(withCreate(paths.companies(workspaceId))),
             },
             {
                 id: 'create.deal',
@@ -194,7 +194,22 @@ function useShellCommands({
                 group: 'Create',
                 shortcut: 'c d',
                 when: () => can(membership, 'deal:edit'),
-                run: () => navigate(`${paths.deals(workspaceId)}?create=1`),
+                run: () => navigate(withCreate(paths.deals(workspaceId))),
+            },
+            {
+                id: 'create.template',
+                title: 'New template',
+                group: 'Create',
+                when: () => can(membership, 'template:write'),
+                run: () => navigate(withCreate(paths.templates(workspaceId))),
+            },
+            {
+                id: 'nav.mailSettings',
+                title: 'Mail settings',
+                group: 'Go to',
+                keywords: ['postal address', 'unsubscribe', 'sender'],
+                when: () => can(membership, 'record:read'),
+                run: () => navigate(paths.settingsMail(workspaceId)),
             },
             {
                 id: 'settings.pipelines',
