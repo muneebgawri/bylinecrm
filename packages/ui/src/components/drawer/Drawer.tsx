@@ -33,7 +33,7 @@ export const DrawerContent = forwardRef<ComponentRef<typeof DialogPrimitive.Cont
     ) {
         return (
             <DialogPrimitive.Portal>
-                <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-text/35" />
+                <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-scrim" />
                 <DialogPrimitive.Content
                     ref={ref}
                     className={cn(

@@ -18,7 +18,7 @@ export const DialogContent = forwardRef<
 >(function DialogContent({ className, children, ...props }, ref) {
     return (
         <DialogPrimitive.Portal>
-            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-text/40 motion-reduce:animate-none" />
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-scrim motion-reduce:animate-none" />
             <DialogPrimitive.Content
                 ref={ref}
                 className={cn(

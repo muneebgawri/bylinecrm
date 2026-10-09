@@ -55,6 +55,8 @@
     --color-info-soft: var(--bc-info-soft);
 
     --color-ring: var(--bc-ring);
+    /* `bg-scrim` — the layer behind every overlay (dialog, drawer, sheet, palette). */
+    --color-scrim: var(--bc-scrim);
 
     --font-sans: var(--bc-font-sans);
     --font-mono: var(--bc-font-mono);

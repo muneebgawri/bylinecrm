@@ -12,6 +12,13 @@ export {
     useIsNarrow,
     useMediaQuery,
 } from './lib/breakpoints';
+export {
+    DND_INSTRUCTIONS,
+    makeDndAnnouncements,
+    type DndAnnouncementNames,
+    type DndAnnouncements,
+    type DndId,
+} from './lib/dnd-announcements';
 
 export * from './theme/theme';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/ThemeProvider';
@@ -57,6 +64,12 @@ export {
 export { FactGrid, type Fact, type FactGridProps } from './components/fact-grid/FactGrid';
 export { StageProgress, type Stage, type StageProgressProps } from './components/stage-progress/StageProgress';
 export { CardList, LONG_PRESS_MS, type CardListItem, type CardListProps } from './components/card-list/CardList';
+export {
+    BottomActionBar,
+    BottomActionBarItem,
+    type BottomActionBarItemProps,
+    type BottomActionBarProps,
+} from './components/bottom-action-bar/BottomActionBar';
 export {
     DataTableChrome,
     RowActionsMenu,

@@ -79,6 +79,10 @@
     --bc-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
     --bc-shadow-lg: 0 20px 48px rgba(16, 24, 40, 0.18);
 
+    /* The layer behind a dialog, drawer, sheet or the palette: it DIMS the page in both themes, so
+       it is a near-black in both — never the text colour, which is near-white in dark mode. */
+    --bc-scrim: rgba(16, 24, 40, 0.4);
+
     /* Layout: the shell's fixed dimensions, so the app and the stories agree */
     --bc-sidebar-width: 240px;
     --bc-sidebar-collapsed-width: 64px;
@@ -120,6 +124,7 @@
         --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
         --bc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
         --bc-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
+        --bc-scrim: rgba(0, 0, 0, 0.6);
     }
 }
 
@@ -151,6 +156,7 @@
     --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
     --bc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
     --bc-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
+    --bc-scrim: rgba(0, 0, 0, 0.6);
 }
 
 html {
