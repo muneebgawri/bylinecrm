@@ -1,4 +1,5 @@
 import { Avatar, Badge, CardList, type CardListItem } from '@bylinecrm/ui';
+import type { ReactNode } from 'react';
 import { formatRelative } from '../../../lib/format';
 import { identityName, identitySubline } from './ListTable';
 import type { CellContext, ListObject, ListRow } from './listConfig';
@@ -41,7 +42,7 @@ export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
             leading: <Avatar name={name} size="md" />,
             primary: name,
             secondary: secondary ? [secondary] : [],
-            meta: [<Status key="status" object={object} row={row} context={context} />, formatRelative(row.updatedAt)],
+            meta: [status(object, row, context), formatRelative(row.updatedAt)].filter((part) => part !== null),
         };
     });
     return (
@@ -63,8 +64,11 @@ export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
     );
 }
 
-/** The one status a card shows: who owns a person; whether a company is an ideal customer. */
-function Status<O extends ListObject>({ object, row, context }: { object: O; row: ListRow<O>; context: CellContext }) {
+/**
+ * The one status a card shows, or `null` for none — who owns a person; whether a company is an
+ * ideal customer. A plain function, not a component, so "none" leaves no empty slot on the card.
+ */
+function status<O extends ListObject>(object: O, row: ListRow<O>, context: CellContext): ReactNode {
     if (object === 'company') {
         return (row as ListRow<'company'>).icp ? <Badge status="success">Ideal customer</Badge> : null;
     }
