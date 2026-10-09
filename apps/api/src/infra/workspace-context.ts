@@ -27,6 +27,8 @@ export interface WorkspaceRunContext {
 /** The store for one request or job: empty until a guard fills it. */
 interface Scope {
     workspace?: WorkspaceRunContext;
+    /** The request's id (P1-1d), when the scope is a request's: what a query observer is tied to. */
+    requestId?: string;
 }
 
 /**
@@ -45,9 +47,14 @@ interface Scope {
 export class WorkspaceContext {
     private readonly storage = new AsyncLocalStorage<Scope>();
 
-    /** Opens an empty scope for the chain started by `fn` (one per request). */
-    begin<T>(fn: () => T): T {
-        return this.storage.run({}, fn);
+    /** Opens an empty scope for the chain started by `fn` (one per request), carrying the request's id. */
+    begin<T>(fn: () => T, requestId?: string): T {
+        return this.storage.run(requestId ? { requestId } : {}, fn);
+    }
+
+    /** The id of the request this async chain belongs to; `undefined` outside a request. */
+    requestId(): string | undefined {
+        return this.storage.getStore()?.requestId;
     }
 
     /** Opens a scope already filled — for jobs and other non-request work. */
