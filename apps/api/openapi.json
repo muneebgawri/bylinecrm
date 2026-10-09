@@ -3156,7 +3156,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BlocklistEntry"
+                                    "$ref": "#/components/schemas/BlocklistEntryCreated"
                                 }
                             }
                         },
@@ -14748,7 +14748,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 38,
+                        "maxItems": 39,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -14786,6 +14786,7 @@
                                 "template.restored",
                                 "email.received",
                                 "email.sent",
+                                "email.linked",
                                 "email.replied",
                                 "meeting.booked",
                                 "mailbox.connected",
@@ -14815,7 +14816,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 38,
+                        "maxItems": 39,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -14853,6 +14854,7 @@
                                 "template.restored",
                                 "email.received",
                                 "email.sent",
+                                "email.linked",
                                 "email.replied",
                                 "meeting.booked",
                                 "mailbox.connected",
@@ -16141,6 +16143,32 @@
                     }
                 },
                 "required": ["id", "value", "scope", "createdAt"]
+            },
+            "BlocklistEntryCreated": {
+                "type": "object",
+                "properties": {
+                    "entry": {
+                        "$ref": "#/components/schemas/BlocklistEntry"
+                    },
+                    "purged": {
+                        "type": "object",
+                        "properties": {
+                            "messages": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "threads": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            }
+                        },
+                        "required": ["messages", "threads"],
+                        "description": "Stored mail the new entry fully covers, deleted with its timeline entries, and threads left empty. Removing the entry later does not bring it back."
+                    }
+                },
+                "required": ["entry", "purged"]
             },
             "RecordSummary": {
                 "type": "object",
