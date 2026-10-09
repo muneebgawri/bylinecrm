@@ -388,6 +388,7 @@ export function DealsPage() {
                     onBulkAssign={setAssigning}
                     onBulkExport={(ids) => void exportDeals(ids)}
                     onOpen={openDeal}
+                    onMoveSheet={setMoving}
                     stacked={mobile}
                 />
             )}

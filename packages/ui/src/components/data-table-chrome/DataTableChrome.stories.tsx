@@ -7,7 +7,8 @@ import { Badge } from '../badge/Badge';
 import { BulkBar, BulkBarAction } from '../bulk-bar/BulkBar';
 import { Checkbox } from '../checkbox/Checkbox';
 import { ScoreBar } from '../score-bar/ScoreBar';
-import { DataTableChrome, tableClasses } from './DataTableChrome';
+import { DropdownMenuItem } from '../dropdown-menu/DropdownMenu';
+import { DataTableChrome, tableClasses, type TableColumn } from './DataTableChrome';
 
 const meta = { title: 'Shell/DataTableChrome', component: DataTableChrome } satisfies Meta<typeof DataTableChrome>;
 export default meta;
@@ -160,3 +161,58 @@ function Example() {
 export const Gallery: Story = { render: () => <Example /> };
 export const GalleryDark: Story = inMode(Gallery, 'dark');
 export const GalleryCompact: Story = inMode(Gallery, 'compact');
+
+/** The chrome drawing its own rows from columns: a table on a desktop, the same rows as cards on a phone. */
+interface MemberRow {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    joined: string;
+}
+
+const MEMBERS: MemberRow[] = [
+    { id: 'm1', name: 'Dana Reyes', email: 'dana@acme.example', role: 'admin', joined: 'Oct 1, 2026' },
+    { id: 'm2', name: 'Sam Okafor', email: 'sam@initech.example', role: 'member', joined: 'Oct 3, 2026' },
+    { id: 'm3', name: 'Priya Nair', email: 'priya@nair.example', role: 'member', joined: 'Oct 7, 2026' },
+];
+
+const MEMBER_COLUMNS: TableColumn<MemberRow>[] = [
+    { id: 'name', header: 'Member', className: 'font-medium', cell: (m) => m.name },
+    {
+        id: 'role',
+        header: 'Role',
+        cell: (m) => <Badge status={m.role === 'admin' ? 'accent' : 'neutral'}>{m.role}</Badge>,
+    },
+    { id: 'joined', header: 'Joined', muted: true, cell: (m) => m.joined },
+    { id: 'email', header: 'Email', muted: true, phone: 'hidden', cell: (m) => m.email },
+];
+
+function Members({ layout }: { layout: 'table' | 'cards' }) {
+    return (
+        <div className={layout === 'cards' ? 'max-w-sm' : undefined}>
+            <DataTableChrome<string, MemberRow>
+                tabs={[{ id: 'all', label: 'All', count: MEMBERS.length }]}
+                activeTab="all"
+                data={{
+                    label: 'Members',
+                    layout,
+                    rows: MEMBERS,
+                    getRowId: (m) => m.id,
+                    leading: (m) => <Avatar name={m.name} size="md" />,
+                    columns: MEMBER_COLUMNS,
+                    rowActions: {
+                        label: (m) => m.name,
+                        items: () => <DropdownMenuItem destructive>Remove from workspace</DropdownMenuItem>,
+                    },
+                }}
+            />
+        </div>
+    );
+}
+
+export const RowsAsTable: Story = { render: () => <Members layout="table" /> };
+export const RowsAsTableDark: Story = inMode(RowsAsTable, 'dark');
+export const RowsAsCards: Story = { render: () => <Members layout="cards" /> };
+export const RowsAsCardsDark: Story = inMode(RowsAsCards, 'dark');
+export const RowsAsCardsCompact: Story = inMode(RowsAsCards, 'compact');

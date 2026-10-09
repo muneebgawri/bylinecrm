@@ -3,6 +3,8 @@ import {
     Badge,
     BulkBar,
     BulkBarAction,
+    Button,
+    CardList,
     Checkbox,
     cn,
     DropdownMenu,
@@ -15,15 +17,16 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    RowActionsMenu,
     tableClasses,
     toast,
+    type CardListItem,
 } from '@bylinecrm/ui';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { BoardView, OpportunityView, StageView } from '../../../api/types';
-import { formatDay } from '../../../lib/format';
 import { formatMoney } from '../../../lib/money';
 import { isSortable, type ListColumn } from '../lists/listConfig';
 import { daysLabel, LANE_FOLD, ROW_ESTIMATE_PX, STAGE_TONES, VIRTUAL_OVERSCAN } from './dealsView';
@@ -49,7 +52,9 @@ export interface DealsListProps {
     onBulkExport: (ids: string[]) => void;
     /** Opens the deal's record drawer (a row's name, a tap on a phone card). */
     onOpen: (deal: OpportunityView) => void;
-    /** A phone (FR-CRMS-UI-12): the rows become stacked cards with 44px controls. */
+    /** Opens the board's Move-to-stage sheet for a deal — how a phone card moves it. */
+    onMoveSheet: (deal: OpportunityView) => void;
+    /** A phone (FR-CRMS-UI-12): the rows become the design system's cards (CardList). */
     stacked: boolean;
 }
 
@@ -77,6 +82,7 @@ export function DealsList({
     onBulkAssign,
     onBulkExport,
     onOpen,
+    onMoveSheet,
     stacked,
 }: DealsListProps) {
     const rows = useMemo<Row[]>(
@@ -85,6 +91,8 @@ export function DealsList({
     );
     const stages = board.pipeline.stages;
     const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+    /** A phone's select mode: taps choose cards instead of opening them. */
+    const [selecting, setSelecting] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // The select box, the deal's name (a link), its stage, the chosen catalogue columns, days in stage.
@@ -274,98 +282,85 @@ export function DealsList({
     );
 
     if (stacked) {
-        // A phone: one card per deal — the same rows, the same selection and bulk bar, the same
-        // stage select calling the same move — with every control a 44px target (FR-CRMS-UI-12).
+        // A phone (FR-CRMS-UI-12): the design system's CardList, the card every list uses on a phone —
+        // name, company and amount, the stage and days in it — with one "•••" menu per deal. Moving
+        // a deal is the board's Move-to-stage sheet, the one move UI on a phone; a long press or
+        // Select chooses deals for the same bulk bar.
+        const items: CardListItem[] = rows.map(({ deal, stage }) => {
+            const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
+            return {
+                id: deal.id,
+                primary: deal.name,
+                secondary: [deal.company?.name, deal.amount ? formatMoney(deal.amount) : null].filter(
+                    (part): part is string => Boolean(part),
+                ),
+                meta: [
+                    <Badge key="stage" status={STAGE_TONES[stage.colour]} dot>
+                        {stage.name}
+                    </Badge>,
+                    <span key="days" className={cn('text-xs tabular-nums', quiet && 'text-warning')}>
+                        {daysLabel(deal.daysInStage)} in stage{quiet ? ' ⚠' : ''}
+                    </span>,
+                ],
+                actions: (
+                    <RowActionsMenu
+                        row={deal}
+                        actions={{
+                            label: (d) => d.name,
+                            items: (d) => (
+                                <>
+                                    <DropdownMenuItem onSelect={() => onOpen(d)}>Open</DropdownMenuItem>
+                                    {canMove && (
+                                        <DropdownMenuItem onSelect={() => onMoveSheet(d)}>
+                                            Move to stage…
+                                        </DropdownMenuItem>
+                                    )}
+                                </>
+                            ),
+                        }}
+                    />
+                ),
+            };
+        });
+        const byId = new Map(rows.map((r) => [r.deal.id, r.deal]));
         return (
-            <div>
-                <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label={`${rows.length} deals`}>
-                    {rows.map(({ deal, stage }) => {
-                        const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
-                        const isSelected = selected.has(deal.id);
-                        return (
-                            <li
-                                key={deal.id}
-                                className={cn(
-                                    'rounded-lg border border-border bg-surface p-3 shadow-sm',
-                                    isSelected && 'border-accent bg-selection',
-                                )}
-                            >
-                                <div className="flex items-start gap-2">
-                                    {canBulk && (
-                                        <button
-                                            type="button"
-                                            role="checkbox"
-                                            aria-checked={isSelected}
-                                            aria-label={`Select ${deal.name}`}
-                                            onClick={() => toggle(deal.id)}
-                                            className="-m-1 grid size-touch shrink-0 place-items-center"
-                                        >
-                                            <span
-                                                aria-hidden
-                                                className={cn(
-                                                    'grid size-5 place-items-center rounded-sm border border-border-strong',
-                                                    isSelected && 'border-accent bg-accent text-accent-foreground',
-                                                )}
-                                            >
-                                                {isSelected && <Check className="size-3.5" />}
-                                            </span>
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpen(deal)}
-                                        className="min-h-touch min-w-0 flex-1 text-left"
-                                    >
-                                        <span className="block truncate text-touch font-semibold">{deal.name}</span>
-                                        <span className="block text-sm text-text-muted tabular-nums">
-                                            {formatMoney(deal.amount)}
-                                            {deal.owner ? ` · ${deal.owner.name ?? 'Member'}` : ''}
-                                        </span>
-                                    </button>
-                                </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                                    {canMove ? (
-                                        <Select
-                                            value={deal.stageId}
-                                            onValueChange={(stageId) => {
-                                                if (classifyMove(stages, deal.stageId, stageId).kind !== 'same')
-                                                    onMove(deal, stageId);
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-full" aria-label={`Stage of ${deal.name}`}>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {stages.map((s) => (
-                                                    <SelectItem key={s.id} value={s.id} className="min-h-touch">
-                                                        {s.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Badge status={STAGE_TONES[stage.colour]} dot>
-                                            {stage.name}
-                                        </Badge>
-                                    )}
-                                    <span
-                                        className={cn(
-                                            'text-sm tabular-nums',
-                                            quiet ? 'text-warning' : 'text-text-muted',
-                                        )}
-                                    >
-                                        {daysLabel(deal.daysInStage)} in stage{quiet ? ' ⚠' : ''}
-                                    </span>
-                                    {deal.closeDate && (
-                                        <span className="text-sm text-text-muted">
-                                            Close {formatDay(deal.closeDate)}
-                                        </span>
-                                    )}
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
+            <div className="flex flex-col gap-2">
+                {canBulk && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-text-muted">{rows.length} deals</span>
+                        <Button
+                            shape="square"
+                            size="sm"
+                            onClick={() => {
+                                if (selecting) {
+                                    setSelecting(false);
+                                    setSelected(new Set());
+                                } else setSelecting(true);
+                            }}
+                        >
+                            {selecting ? 'Done' : 'Select'}
+                        </Button>
+                    </div>
+                )}
+                <CardList
+                    aria-label="Deals"
+                    items={items}
+                    onOpen={(id) => {
+                        const deal = byId.get(id);
+                        if (deal) onOpen(deal);
+                    }}
+                    selecting={selecting}
+                    selected={selected}
+                    onToggle={toggle}
+                    {...(canBulk
+                        ? {
+                              onStartSelecting: (id: string) => {
+                                  setSelecting(true);
+                                  toggle(id);
+                              },
+                          }
+                        : {})}
+                />
                 {bulkBar}
             </div>
         );

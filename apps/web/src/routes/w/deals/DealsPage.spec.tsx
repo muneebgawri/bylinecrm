@@ -567,16 +567,28 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         expect(moves[0]?.body).toEqual({ stageId: 's-replied' });
     });
 
-    it('on a phone the list is stacked cards with 44px selection and a stage select', async () => {
+    it('on a phone the list is the shared card list, and a deal moves through the Move-to-stage sheet', async () => {
         setPhone(true);
-        stubApi(() => new Response('{}', { status: 200 }));
+        const moves = stubApi(
+            (body) =>
+                new Response(
+                    JSON.stringify({ deal: { ...SERIES_B, stageId: body.stageId }, rulesThatMayMoveItForward: [] }),
+                    { status: 200 },
+                ),
+        );
+        const user = userEvent.setup();
         renderPage(ALL, `/w/${WS}/deals?show=list`);
-        const cards = await screen.findByRole('list', { name: '2 deals' });
+        const cards = await screen.findByRole('list', { name: 'Deals' }, { timeout: FIRST_RENDER_MS });
         expect(within(cards).getAllByRole('listitem')).toHaveLength(2);
-        expect(within(cards).queryByRole('table')).not.toBeInTheDocument();
-        const select = within(cards).getByRole('checkbox', { name: 'Select Series B PR' });
-        expect(select.className).toContain('size-touch');
-        expect(within(cards).getByRole('combobox', { name: 'Stage of Series B PR' })).toBeInTheDocument();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        // No inline stage select on a card: one move UI on a phone, the board's sheet.
+        expect(within(cards).queryByRole('combobox')).not.toBeInTheDocument();
+        await user.click(within(cards).getByRole('button', { name: 'Actions for Series B PR' }));
+        await user.click(await screen.findByRole('menuitem', { name: 'Move to stage…' }));
+        const sheet = await screen.findByRole('dialog', { name: 'Move “Series B PR”' });
+        await user.click(within(sheet).getByRole('button', { name: 'Replied' }));
+        await waitFor(() => expect(moves).toHaveLength(1));
+        expect(moves[0]?.body).toEqual({ stageId: 's-replied' });
     });
 
     it('shows loading, not a refusal, while the member’s standing is unknown', async () => {
