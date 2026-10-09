@@ -40,6 +40,8 @@ model Workspace {
   pipelineStages         PipelineStage[]
   stageHistory           OpportunityStageHistory[]
   stageRules             StageRule[]
+  webhookEndpoints       WebhookEndpoint[]
+  webhookDeliveries      WebhookDelivery[]
 
   @@map("workspaces")
 }
@@ -116,6 +118,7 @@ model WorkspaceMember {
   role      Role      @relation(fields: [roleId], references: [id])
 
   createdApiKeys      ApiKey[]
+  createdWebhooks     WebhookEndpoint[]
   sentInvites         WorkspaceInvite[]
   ownedPeople         Person[]
   ownedCompanies      Company[]
@@ -686,4 +689,76 @@ model TimelineActivity {
   @@index([workspaceId, targetType, targetId, happenedAt(sort: Desc)])
   @@index([workspaceId, linkedType, linkedId])
   @@map("timeline_activities")
+}
+
+/// Where a delivery stands. `pending` is queued; `delivering` is in an attempt; `failed` is between
+/// attempts; `succeeded` and `dead` are final (dead = every attempt failed).
+enum WebhookDeliveryStatus {
+  pending
+  delivering
+  succeeded
+  failed
+  dead
+
+  @@map("webhook_delivery_status")
+}
+
+/// An outbound webhook endpoint (P1-5): a URL the workspace wants its events POSTed to, with the
+/// secret the deliveries are signed with. The secret is held encrypted (it has to be used to sign,
+/// so a hash would not do) and shown once; `secret_prefix` is what a list shows afterwards. During
+/// a rotation the previous secret stays valid until `previous_secret_expires_at`, and deliveries
+/// carry both signatures.
+model WebhookEndpoint {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId              String    @map("workspace_id") @db.Uuid
+  url                      String
+  description              String    @default("")
+  secretCiphertext         String    @map("secret_ciphertext")
+  secretPrefix             String    @map("secret_prefix")
+  previousSecretCiphertext String?   @map("previous_secret_ciphertext")
+  previousSecretExpiresAt  DateTime? @map("previous_secret_expires_at") @db.Timestamptz
+  /// Catalogue event types, or `*` for all of them.
+  events                   String[]
+  enabled                  Boolean   @default(true)
+  /// Why the endpoint was switched off by the system (consecutive dead deliveries); null when a person did it or it is on.
+  disabledReason           String?   @map("disabled_reason")
+  /// Dead deliveries in a row; a success resets it. The auto-disable threshold reads it.
+  consecutiveFailures      Int       @default(0) @map("consecutive_failures")
+  createdById              String    @map("created_by_id") @db.Uuid
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                DateTime? @map("deleted_at") @db.Timestamptz
+
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy  WorkspaceMember   @relation(fields: [createdById], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId, deletedAt])
+  @@map("webhook_endpoints")
+}
+
+/// One event sent to one endpoint, and how that went. The payload is the envelope as sent, so a
+/// redelivery resends exactly what the receiver was meant to get.
+model WebhookDelivery {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId    String                @map("workspace_id") @db.Uuid
+  endpointId     String                @map("endpoint_id") @db.Uuid
+  /// The domain event's id: one per published event, shared by every endpoint's delivery of it.
+  eventId        String                @map("event_id") @db.Uuid
+  eventName      String                @map("event_name")
+  payload        Json
+  status         WebhookDeliveryStatus @default(pending)
+  attempts       Int                   @default(0)
+  nextAttemptAt  DateTime?             @map("next_attempt_at") @db.Timestamptz
+  lastStatusCode Int?                  @map("last_status_code")
+  lastError      String?               @map("last_error")
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  deliveredAt    DateTime?             @map("delivered_at") @db.Timestamptz
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoint  WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, endpointId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("webhook_deliveries")
 }
