@@ -2,6 +2,9 @@ import { DEFAULT_CURRENCY, ID_FIELD, type ViewColumn, type ViewSort } from '@byl
 import {
     Badge,
     Button,
+    Dialog,
+    DialogContent,
+    DialogTitle,
     EmptyState,
     Input,
     PageHeader,
@@ -18,7 +21,7 @@ import {
     useIsMobile,
     writeStored,
 } from '@bylinecrm/ui';
-import { Plus, Settings2 } from 'lucide-react';
+import { Plus, Settings2, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ApiError } from '../../../api/client';
@@ -78,6 +81,8 @@ export function DealsPage() {
     const location = useLocation();
     const [moving, setMoving] = useState<OpportunityView | null>(null);
     const [assigning, setAssigning] = useState<string[] | null>(null);
+    // A phone keeps view, search, filter, sort, export and the pipeline link in one sheet (FR-CRMS-UI-12).
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const pipelines = usePipelines(workspaceId);
     const pipelineId =
@@ -219,134 +224,197 @@ export function DealsPage() {
     const stagesById = new Map(pipeline?.stages.map((s) => [s.id, s]) ?? []);
     const dealCount = board.data?.columns.reduce((n, c) => n + c.count, 0);
 
+    // Each control is defined once; a tablet or desktop shows them in the page, a phone in the sheet.
+    const pipelinePicker =
+        pipelines.data && pipelines.data.length > 1 ? (
+            <Select value={pipelineId ?? ''} onValueChange={(id) => setParam(DEALS_PARAMS.pipeline, id)}>
+                <SelectTrigger className="w-48 max-md:w-auto max-md:min-w-0 max-md:flex-1" aria-label="Pipeline">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {pipelines.data.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        ) : null;
+    const renderPicker = (
+        <SegmentedControl aria-label="View" value={view} onValueChange={setView} options={VIEW_OPTIONS} />
+    );
+    const viewBar = (
+        <ViewBar
+            object="opportunity"
+            views={views.data ?? []}
+            viewId={state.viewId}
+            onSelect={selectView}
+            memberId={membership?.memberId ?? null}
+            canSave={canSaveView.allowed}
+            canShare={canShareView.allowed}
+            dirty={state.filter !== null || state.sorts.length > 0 || columnsDraft !== null}
+            current={{ filter, sorts, columns: viewColumns }}
+            workspaceId={workspaceId}
+            onSaved={() => {
+                update({ filter: null, sorts: [] });
+                setColumnsDraft(null);
+            }}
+            phone={mobile}
+            counts={tabCounts}
+        />
+    );
+    const searchBox = (
+        <Input
+            type="search"
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            placeholder="Search deals…"
+            aria-label="Search deals"
+            className="h-8.5 w-64 max-md:w-full"
+        />
+    );
+    const toolbar = (
+        <ListToolbar
+            object="opportunity"
+            workspaceId={workspaceId}
+            fields={fields}
+            filter={filter}
+            onFilter={(next) => update({ filter: next })}
+            sorts={sorts}
+            onSorts={(next) => update({ sorts: next })}
+            // Columns belong to the list rendering; the board's cards have none.
+            {...(view === 'list'
+                ? {
+                      columns: {
+                          shown: columns.map((c) => c.column.field),
+                          all: available.map((c) => ({ field: c.field, label: c.label })),
+                          locked: [IDENTITY_FIELD.opportunity],
+                          onChange: (choice) =>
+                              setColumnsDraft(
+                                  choice
+                                      .filter((c) => c.visible)
+                                      .map((c) => ({
+                                          field: c.field,
+                                          width: columns.find((x) => x.column.field === c.field)?.width,
+                                      })),
+                              ),
+                      },
+                  }
+                : {})}
+            members={members}
+            phone={mobile}
+            onExport={() => exportDeals()}
+        />
+    );
+    const configureLink = configure.allowed ? (
+        <Button variant="ghost" size="sm" shape="square" asChild className="ml-auto max-md:ml-0">
+            <Link to={paths.settingsPipelines(workspaceId)}>
+                <Settings2 aria-hidden /> Configure pipeline
+            </Link>
+        </Button>
+    ) : null;
+    const rulesLine =
+        enabledRules.length > 0 ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
+                <Badge status="info">Stage rules</Badge>
+                {enabledRules.map((rule) => (
+                    <span key={rule.id}>
+                        {ruleEventLabel(rule.event)} →{' '}
+                        <b className="font-medium text-text">{stagesById.get(rule.toStageId)?.name ?? '…'}</b>
+                    </span>
+                ))}
+                <span className="text-text-faint">· never backward unless asked</span>
+            </div>
+        ) : null;
+    /** How many list settings are in force, shown on the phone's Filters button. */
+    const activeSettings =
+        (state.viewId ? 1 : 0) + (state.filter ? 1 : 0) + (state.sorts.length ? 1 : 0) + (state.q ? 1 : 0);
+    const newDealButton = canEdit ? (
+        <Button
+            data-primary-action
+            variant="primary"
+            shape="square"
+            onClick={() => setParam(DEALS_PARAMS.create, '1')}
+            {...(mobile ? { 'aria-label': 'New deal', size: 'icon' as const } : {})}
+        >
+            <Plus aria-hidden />
+            {mobile ? null : ' New deal'}
+        </Button>
+    ) : null;
+
     return (
         <div className="p-7 max-md:p-4">
-            <PageHeader
-                title="Deals"
-                subtitle={
-                    pipeline
-                        ? `${pipeline.name} · ${dealCount ?? '…'} deals`
-                        : 'Your pipeline, as a board and as a list.'
-                }
-                actions={
-                    <>
-                        {pipelines.data && pipelines.data.length > 1 && (
-                            <Select
-                                value={pipelineId ?? ''}
-                                onValueChange={(id) => setParam(DEALS_PARAMS.pipeline, id)}
-                            >
-                                <SelectTrigger className="w-48" aria-label="Pipeline">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {pipelines.data.map((p) => (
-                                        <SelectItem key={p.id} value={p.id}>
-                                            {p.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+            {mobile ? (
+                <>
+                    {/* A phone: one compact row so the first card is on screen without scrolling (FR-CRMS-UI-12). */}
+                    <h1 className="sr-only">Deals</h1>
+                    <div className="mb-3 flex items-center gap-2">
+                        {pipelinePicker ?? (
+                            <span className="min-w-0 flex-1 truncate text-base font-semibold">
+                                {pipeline?.name ?? 'Deals'}
+                            </span>
                         )}
-                        <SegmentedControl
-                            aria-label="View"
-                            value={view}
-                            onValueChange={setView}
-                            options={VIEW_OPTIONS}
-                        />
-                        {canEdit && (
-                            <Button
-                                data-primary-action
-                                variant="primary"
-                                shape="square"
-                                onClick={() => setParam(DEALS_PARAMS.create, '1')}
-                            >
-                                <Plus aria-hidden /> New deal
-                            </Button>
-                        )}
-                    </>
-                }
-            />
-
-            {/* The same view bar and toolbar as every list (P1-UI-6). */}
-            <div className="mb-3">
-                <ViewBar
-                    object="opportunity"
-                    views={views.data ?? []}
-                    viewId={state.viewId}
-                    onSelect={selectView}
-                    memberId={membership?.memberId ?? null}
-                    canSave={canSaveView.allowed}
-                    canShare={canShareView.allowed}
-                    dirty={state.filter !== null || state.sorts.length > 0 || columnsDraft !== null}
-                    current={{ filter, sorts, columns: viewColumns }}
-                    workspaceId={workspaceId}
-                    onSaved={() => {
-                        update({ filter: null, sorts: [] });
-                        setColumnsDraft(null);
-                    }}
-                    phone={mobile}
-                    counts={tabCounts}
-                />
-            </div>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Input
-                    type="search"
-                    value={searchDraft}
-                    onChange={(e) => setSearchDraft(e.target.value)}
-                    placeholder="Search deals…"
-                    aria-label="Search deals"
-                    className="h-8.5 w-64 max-md:w-full"
-                />
-                <ListToolbar
-                    object="opportunity"
-                    workspaceId={workspaceId}
-                    fields={fields}
-                    filter={filter}
-                    onFilter={(next) => update({ filter: next })}
-                    sorts={sorts}
-                    onSorts={(next) => update({ sorts: next })}
-                    // Columns belong to the list rendering; the board's cards have none.
-                    {...(view === 'list'
-                        ? {
-                              columns: {
-                                  shown: columns.map((c) => c.column.field),
-                                  all: available.map((c) => ({ field: c.field, label: c.label })),
-                                  locked: [IDENTITY_FIELD.opportunity],
-                                  onChange: (choice) =>
-                                      setColumnsDraft(
-                                          choice
-                                              .filter((c) => c.visible)
-                                              .map((c) => ({
-                                                  field: c.field,
-                                                  width: columns.find((x) => x.column.field === c.field)?.width,
-                                              })),
-                                      ),
-                              },
-                          }
-                        : {})}
-                    members={members}
-                    phone={mobile}
-                    onExport={() => exportDeals()}
-                />
-                {configure.allowed ? (
-                    <Button variant="ghost" size="sm" shape="square" asChild className="ml-auto max-md:ml-0">
-                        <Link to={paths.settingsPipelines(workspaceId)}>
-                            <Settings2 aria-hidden /> Configure pipeline
-                        </Link>
-                    </Button>
-                ) : null}
-            </div>
-            {enabledRules.length > 0 && (
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
-                    <Badge status="info">Stage rules</Badge>
-                    {enabledRules.map((rule) => (
-                        <span key={rule.id}>
-                            {ruleEventLabel(rule.event)} →{' '}
-                            <b className="font-medium text-text">{stagesById.get(rule.toStageId)?.name ?? '…'}</b>
-                        </span>
-                    ))}
-                    <span className="text-text-faint">· never backward unless asked</span>
-                </div>
+                        {renderPicker}
+                        <Button
+                            variant="secondary"
+                            shape="square"
+                            size="icon"
+                            aria-haspopup="dialog"
+                            aria-label={activeSettings ? `Filters, ${activeSettings} in use` : 'Filters'}
+                            onClick={() => setFiltersOpen(true)}
+                            className="relative"
+                        >
+                            <SlidersHorizontal aria-hidden />
+                            {activeSettings > 0 && (
+                                <span
+                                    aria-hidden
+                                    className="absolute -top-1 -right-1 grid size-4.5 place-items-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground"
+                                >
+                                    {activeSettings}
+                                </span>
+                            )}
+                        </Button>
+                        {newDealButton}
+                    </div>
+                    <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+                        <DialogContent aria-describedby={undefined}>
+                            <DialogTitle>Filters</DialogTitle>
+                            <div className="flex flex-col gap-3">
+                                {viewBar}
+                                {searchBox}
+                                <div className="flex flex-wrap items-center gap-2">{toolbar}</div>
+                                {rulesLine}
+                                {configureLink}
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                </>
+            ) : (
+                <>
+                    <PageHeader
+                        title="Deals"
+                        subtitle={
+                            pipeline
+                                ? `${pipeline.name} · ${dealCount ?? '…'} deals`
+                                : 'Your pipeline, as a board and as a list.'
+                        }
+                        actions={
+                            <>
+                                {pipelinePicker}
+                                {renderPicker}
+                                {newDealButton}
+                            </>
+                        }
+                    />
+                    {/* The same view bar and toolbar as every list (P1-UI-6). */}
+                    <div className="mb-3">{viewBar}</div>
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                        {searchBox}
+                        {toolbar}
+                        {configureLink}
+                    </div>
+                    {rulesLine}
+                </>
             )}
 
             {membership === null ? (

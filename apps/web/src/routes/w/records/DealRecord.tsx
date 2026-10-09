@@ -15,6 +15,7 @@ import {
     cn,
     focusRing,
 } from '@bylinecrm/ui';
+import { ListTodo, StickyNote } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useDealHistory, useMoveDeal, usePatchRecord, usePipeline, useRecord } from '../../../api/queries';
@@ -32,6 +33,7 @@ import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesCo
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
+import { RecordActionBar, RecordHeaderActions, type RecordAction } from './recordActions';
 import { TasksPanel } from './TasksPanel';
 import { TimelinePanel } from './TimelinePanel';
 import { useRecordCommands } from './useRecordCommands';
@@ -250,9 +252,34 @@ export function DealRecord({
         </div>
     );
 
+    const actions: RecordAction[] = [
+        {
+            id: 'note',
+            label: 'Add note',
+            short: 'Note',
+            icon: <StickyNote aria-hidden />,
+            onSelect: () => setNotesOpen(true),
+            disabled: !edit.allowed,
+            reason: edit.reason || undefined,
+            hint: 'Add a note (n)',
+        },
+        {
+            id: 'task',
+            label: 'Add task',
+            short: 'Task',
+            icon: <ListTodo aria-hidden />,
+            primary: true,
+            onSelect: () => setTasksOpen(true),
+            disabled: !edit.allowed,
+            reason: edit.reason || undefined,
+            hint: 'Add a task (t)',
+        },
+    ];
+
     return (
         <RecordLayout
             layout={layout}
+            bar={<RecordActionBar name={deal.name} actions={actions} siblings={siblings} />}
             header={
                 <RecordHeader
                     layout={layout}
@@ -288,31 +315,7 @@ export function DealRecord({
                     }
                     back={{ to: paths.deals(workspaceId), label: 'Deals' }}
                     siblings={siblings}
-                    actions={
-                        <>
-                            <Button
-                                variant="secondary"
-                                shape="square"
-                                size="sm"
-                                onClick={() => setNotesOpen(true)}
-                                disabled={!edit.allowed}
-                                title={edit.reason || 'Add a note (n)'}
-                            >
-                                Add note
-                            </Button>
-                            <Button
-                                data-primary-action
-                                variant="primary"
-                                shape="square"
-                                size="sm"
-                                onClick={() => setTasksOpen(true)}
-                                disabled={!edit.allowed}
-                                title={edit.reason || 'Add a task (t)'}
-                            >
-                                Add task
-                            </Button>
-                        </>
-                    }
+                    actions={<RecordHeaderActions actions={actions} />}
                 />
             }
             facts={

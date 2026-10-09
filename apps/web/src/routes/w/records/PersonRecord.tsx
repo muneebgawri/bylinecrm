@@ -1,4 +1,5 @@
-import { Badge, Button, FactGrid, Tooltip, TooltipContent, TooltipTrigger } from '@bylinecrm/ui';
+import { Badge, FactGrid } from '@bylinecrm/ui';
+import { ListTodo, Send, StickyNote } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { usePatchRecord, useRecord } from '../../../api/queries';
@@ -14,6 +15,7 @@ import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesCo
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
+import { RecordActionBar, RecordHeaderActions, type RecordAction } from './recordActions';
 import { useRelated } from './related';
 import { TasksPanel } from './TasksPanel';
 import { TimelinePanel } from './TimelinePanel';
@@ -200,9 +202,42 @@ export function PersonRecord({
         },
     ];
 
+    const actions: RecordAction[] = [
+        {
+            id: 'note',
+            label: 'Add note',
+            short: 'Note',
+            icon: <StickyNote aria-hidden />,
+            onSelect: () => setNotesOpen(true),
+            disabled: !write.allowed,
+            reason: write.reason || undefined,
+            hint: 'Add a note (n)',
+        },
+        {
+            id: 'task',
+            label: 'Add task',
+            short: 'Task',
+            icon: <ListTodo aria-hidden />,
+            onSelect: () => setTasksOpen(true),
+            disabled: !write.allowed,
+            reason: write.reason || undefined,
+            hint: 'Add a task (t)',
+        },
+        {
+            id: 'enrol',
+            label: 'Enrol in sequence',
+            short: 'Enrol',
+            icon: <Send aria-hidden />,
+            primary: true,
+            disabled: true,
+            reason: 'Sequences arrive in Phase 3',
+        },
+    ];
+
     return (
         <RecordLayout
             layout={layout}
+            bar={<RecordActionBar name={personName(person)} actions={actions} siblings={siblings} />}
             header={
                 <RecordHeader
                     layout={layout}
@@ -226,47 +261,7 @@ export function PersonRecord({
                     status={!person.emails.primary ? <Badge status="warning">No email</Badge> : undefined}
                     back={{ to: paths.people(workspaceId), label: 'People' }}
                     siblings={siblings}
-                    actions={
-                        <>
-                            <Button
-                                variant="secondary"
-                                shape="square"
-                                size="sm"
-                                onClick={() => setNotesOpen(true)}
-                                disabled={!write.allowed}
-                                title={write.reason || 'Add a note (n)'}
-                            >
-                                Add note
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                shape="square"
-                                size="sm"
-                                onClick={() => setTasksOpen(true)}
-                                disabled={!write.allowed}
-                                title={write.reason || 'Add a task (t)'}
-                            >
-                                Add task
-                            </Button>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span tabIndex={0}>
-                                        <Button
-                                            data-primary-action
-                                            variant="primary"
-                                            shape="square"
-                                            size="sm"
-                                            disabled
-                                            aria-disabled="true"
-                                        >
-                                            Enrol in sequence
-                                        </Button>
-                                    </span>
-                                </TooltipTrigger>
-                                <TooltipContent>Sequences arrive in Phase 3</TooltipContent>
-                            </Tooltip>
-                        </>
-                    }
+                    actions={<RecordHeaderActions actions={actions} />}
                 />
             }
             facts={
