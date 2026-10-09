@@ -43,5 +43,8 @@ import { GmailQuota } from './quota';
         MailSyncWorkers,
         MailSyncSubscriber,
     ],
+    // Sending (P2-3) uses the same Gmail port, quota and retry (`MailSyncService.gmailRequest`) and
+    // stores what it sent through sync's one writer (`importMessage`).
+    exports: [GMAIL_PORT, MailSyncService],
 })
 export class MailSyncModule {}

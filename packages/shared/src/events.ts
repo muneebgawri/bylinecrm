@@ -1,4 +1,4 @@
-import type { EmailSummary } from './mail.js';
+import type { EmailReply, EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
 
@@ -82,7 +82,10 @@ export const DOMAIN_EVENT_TYPES = [
     // and never a second `email.received` / `email.sent`.
     'email.linked',
     // Things a stage rule reacts to. Mail (P2) and meetings (P3) publish them; `related` names the
-    // person and company they concern, which is how the rule engine finds the deals.
+    // person and company they concern, which is how the rule engine finds the deals. `email.replied`
+    // (P2-3): an inbound message answers one the CRM sent — by its In-Reply-To / References, or in
+    // the same Gmail thread — once per reply; `email` describes the reply and `reply` what it answers.
+    // It writes no timeline entry of its own: the reply is on the timeline as the `email.received`.
     'email.replied',
     'meeting.booked',
     // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
@@ -140,8 +143,10 @@ interface DomainEventBase {
     related?: RecordTarget[];
     /** Present on `deal.*` events: the move that happened. */
     stage?: StageChange;
-    /** Present on `email.received`, `email.sent` and `email.linked`: the message, without its body. */
+    /** Present on `email.received`, `email.sent`, `email.linked` and `email.replied`: the message, without its body. */
     email?: EmailSummary;
+    /** Present on `email.replied`: what the reply answers, who wrote it and the deals it concerns. */
+    reply?: EmailReply;
     /** Present on `email.linked`: the person the message is now linked to. */
     link?: { personId: string };
 }
