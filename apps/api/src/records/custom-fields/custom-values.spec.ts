@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { type FieldDefinition, mergeCustomValues, optionsProblem, validateCustomValues } from './custom-values';
 
 const definitions: FieldDefinition[] = [
-    { key: 'beat', type: 'select', options: ['fintech', 'health'], required: true },
-    { key: 'score', type: 'number', options: [], required: false },
-    { key: 'tags', type: 'multiselect', options: ['a', 'b'], required: false },
-    { key: 'since', type: 'date', options: [], required: false },
-    { key: 'site', type: 'url', options: [], required: false },
+    { key: 'beat', label: 'Beat', type: 'select', options: ['fintech', 'health'], required: true },
+    { key: 'score', label: 'Score', type: 'number', options: [], required: false },
+    { key: 'tags', label: 'Tags', type: 'multiselect', options: ['a', 'b'], required: false },
+    { key: 'since', label: 'Since', type: 'date', options: [], required: false },
+    { key: 'site', label: 'Site', type: 'url', options: [], required: false },
 ];
 
 function issues(fn: () => unknown): string[] {
