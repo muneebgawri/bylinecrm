@@ -1,21 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SYSTEM_ROLES } from '@bylinecrm/shared';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
-
-/** A member as a picker shows them: the seat and a display name, nothing that identifies the account. */
-export interface MemberSummaryView {
-    memberId: string;
-    name: string | null;
-}
-
-export interface MemberView {
-    id: string;
-    userId: string;
-    email: string;
-    roleId: string;
-    roleName: string;
-    createdAt: Date;
-}
+import type { MemberSummaryView, MemberView } from './responses';
+export type { MemberSummaryView, MemberView } from './responses';
 
 /**
  * Members of the current workspace. Two rules live here and nowhere else: a member's role is

@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Get, HttpCode, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Requires } from '../auth/decorators';
+import { Requires, TenantController } from '../auth/decorators';
 import type { Page } from '../records/list-query';
 import { parseTarget } from '../records/targets';
 import { ExternalActivityDto, ListTimelineQueryDto } from './dto';
 import { TimelineService, type ExternalActivityResult, type TimelineActivityView } from './timeline.service';
+import { Returns } from '../openapi/responses';
+import { externalActivityResult, timelinePage } from './responses';
 
 /**
  * A record's timeline. Reading one is reading the record (`record:read`); an integration adds
@@ -12,12 +14,13 @@ import { TimelineService, type ExternalActivityResult, type TimelineActivityView
  * history is appended, never edited.
  */
 @ApiTags('timeline')
-@Controller('w/:workspaceId/timeline')
+@TenantController('timeline')
 export class TimelineController {
     constructor(private readonly timeline: TimelineService) {}
 
     @Requires('record:read')
     @Get()
+    @Returns(timelinePage)
     list(@Query() query: ListTimelineQueryDto): Promise<Page<TimelineActivityView>> {
         return this.timeline.list({
             target: parseTarget(query.target),
@@ -31,6 +34,7 @@ export class TimelineController {
     @Requires('record:write')
     @HttpCode(201)
     @Post('external')
+    @Returns(externalActivityResult)
     external(@Body() body: ExternalActivityDto): Promise<ExternalActivityResult> {
         return this.timeline.recordExternal({
             target: parseTarget(body.target),

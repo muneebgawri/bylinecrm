@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Requires } from '../auth/decorators';
+import { Requires, TenantController } from '../auth/decorators';
 import {
     BoardQueryDto,
     CreatePipelineDto,
@@ -22,39 +22,46 @@ import {
     type RuleView,
     type StageView,
 } from './pipelines.service';
+import { Returns } from '../openapi/responses';
+import { boardView, historyEntry, moveResult, pipelineView, ruleView, stageView } from './responses';
 
 /** Pipelines are read by anyone who reads deals and changed with `pipeline:configure`. */
 @ApiTags('pipelines')
-@Controller('w/:workspaceId/pipelines')
+@TenantController('pipelines')
 export class PipelinesController {
     constructor(private readonly pipelines: PipelinesService) {}
 
     @Requires('deal:read')
     @Get()
+    @Returns([pipelineView])
     list(): Promise<PipelineView[]> {
         return this.pipelines.list();
     }
 
     @Requires('deal:read')
     @Get(':pipelineId')
+    @Returns(pipelineView)
     get(@Param('pipelineId', ParseUUIDPipe) pipelineId: string): Promise<PipelineView> {
         return this.pipelines.get(pipelineId);
     }
 
     @Requires('deal:read')
     @Get(':pipelineId/board')
+    @Returns(boardView)
     board(@Param('pipelineId', ParseUUIDPipe) pipelineId: string, @Query() query: BoardQueryDto): Promise<BoardView> {
         return this.pipelines.board(pipelineId, query);
     }
 
     @Requires('pipeline:configure')
     @Post()
+    @Returns(pipelineView)
     create(@Body() body: CreatePipelineDto): Promise<PipelineView> {
         return this.pipelines.create(body);
     }
 
     @Requires('pipeline:configure')
     @Patch(':pipelineId')
+    @Returns(pipelineView)
     update(
         @Param('pipelineId', ParseUUIDPipe) pipelineId: string,
         @Body() body: UpdatePipelineDto,
@@ -71,12 +78,14 @@ export class PipelinesController {
 
     @Requires('pipeline:configure')
     @Post(':pipelineId/stages')
+    @Returns(stageView)
     addStage(@Param('pipelineId', ParseUUIDPipe) pipelineId: string, @Body() body: CreateStageDto): Promise<StageView> {
         return this.pipelines.addStage(pipelineId, body);
     }
 
     @Requires('pipeline:configure')
     @Put(':pipelineId/stages/order')
+    @Returns(pipelineView)
     orderStages(
         @Param('pipelineId', ParseUUIDPipe) pipelineId: string,
         @Body() body: OrderStagesDto,
@@ -86,6 +95,7 @@ export class PipelinesController {
 
     @Requires('pipeline:configure')
     @Patch(':pipelineId/stages/:stageId')
+    @Returns(stageView)
     updateStage(
         @Param('pipelineId', ParseUUIDPipe) pipelineId: string,
         @Param('stageId', ParseUUIDPipe) stageId: string,
@@ -106,18 +116,21 @@ export class PipelinesController {
 
     @Requires('deal:read')
     @Get(':pipelineId/rules')
+    @Returns([ruleView])
     listRules(@Param('pipelineId', ParseUUIDPipe) pipelineId: string): Promise<RuleView[]> {
         return this.pipelines.listRules(pipelineId);
     }
 
     @Requires('pipeline:configure')
     @Post(':pipelineId/rules')
+    @Returns(ruleView)
     createRule(@Param('pipelineId', ParseUUIDPipe) pipelineId: string, @Body() body: CreateRuleDto): Promise<RuleView> {
         return this.pipelines.createRule(pipelineId, body);
     }
 
     @Requires('pipeline:configure')
     @Patch(':pipelineId/rules/:ruleId')
+    @Returns(ruleView)
     updateRule(
         @Param('pipelineId', ParseUUIDPipe) pipelineId: string,
         @Param('ruleId', ParseUUIDPipe) ruleId: string,
@@ -139,18 +152,20 @@ export class PipelinesController {
 
 /** A deal's place in its pipeline: moving it is `deal:move`; its history is reading it. */
 @ApiTags('opportunities')
-@Controller('w/:workspaceId/opportunities')
+@TenantController('opportunities')
 export class DealStageController {
     constructor(private readonly pipelines: PipelinesService) {}
 
     @Requires('deal:move')
     @Post(':opportunityId/move')
+    @Returns(moveResult)
     move(@Param('opportunityId', ParseUUIDPipe) opportunityId: string, @Body() body: MoveDealDto): Promise<MoveResult> {
         return this.pipelines.move(opportunityId, body.stageId, body.close);
     }
 
     @Requires('deal:read')
     @Get(':opportunityId/history')
+    @Returns([historyEntry])
     history(
         @Param('opportunityId', ParseUUIDPipe) opportunityId: string,
         @Query() query: HistoryQueryDto,

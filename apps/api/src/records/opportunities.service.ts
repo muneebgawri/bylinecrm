@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import type { Actor, Money } from '@bylinecrm/shared';
+import type { Actor } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -24,36 +24,8 @@ import {
     stored,
 } from './references';
 import { searchCandidates } from './search';
-
-/** A deal as the API returns it (PAR-007), with its place in its pipeline (P1-2). */
-export interface OpportunityView {
-    id: string;
-    name: string;
-    pipelineId: string;
-    stageId: string;
-    /** When the deal entered its current stage: the latest history row, never a column. */
-    stageEnteredAt: Date;
-    /** Whole days since `stageEnteredAt`, computed at read time. */
-    daysInStage: number;
-    /** Set while the deal is in a won or lost stage. */
-    closedAt: Date | null;
-    lostReason: string | null;
-    /** `null` until an amount is known; the currency is always the deal's. */
-    amount: Money | null;
-    currency: string;
-    /** A calendar date, `YYYY-MM-DD`, or `null`. */
-    closeDate: string | null;
-    probability: number | null;
-    position: number;
-    ownerId: string | null;
-    pointOfContactId: string | null;
-    companyId: string | null;
-    createdBy: Actor;
-    custom: Record<string, unknown>;
-    deletedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type OpportunityView } from './responses';
+export type { OpportunityView } from './responses';
 
 export interface OpportunityInput {
     name?: string | undefined;

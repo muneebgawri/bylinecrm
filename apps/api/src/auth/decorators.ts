@@ -1,4 +1,5 @@
-import { createParamDecorator, SetMetadata, type ExecutionContext } from '@nestjs/common';
+import { applyDecorators, Controller, createParamDecorator, SetMetadata, type ExecutionContext } from '@nestjs/common';
+import { ApiParam } from '@nestjs/swagger';
 import type { Capability } from '@bylinecrm/shared';
 import type { AuthenticatedRequest, Principal } from './principal';
 
@@ -28,3 +29,14 @@ export const ANY_MEMBER_KEY = 'auth:any-member';
  * the same defect as a missing gate.
  */
 export const AnyMember = (reason: string): MethodDecorator => SetMetadata(ANY_MEMBER_KEY, reason);
+
+/**
+ * A controller of tenant routes: mounted under `w/:workspaceId/<path>` and declaring that path
+ * parameter in the OpenAPI document (the guard reads it, so no handler names it with `@Param`).
+ * The one way to mount a tenant controller, so the prefix and its documentation cannot diverge.
+ */
+export const TenantController = (path: string): ClassDecorator =>
+    applyDecorators(
+        Controller(`w/:workspaceId/${path}`),
+        ApiParam({ name: 'workspaceId', description: 'The workspace', schema: { type: 'string', format: 'uuid' } }),
+    );
