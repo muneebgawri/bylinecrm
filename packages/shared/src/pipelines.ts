@@ -7,9 +7,18 @@
 export const STAGE_KINDS = ['open', 'won', 'lost'] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
 
-/** Why a deal entered a stage: a member moved it, a rule did, an import placed it, or it was closed. */
-export const STAGE_HISTORY_REASONS = ['manual', 'rule', 'import', 'close'] as const;
+/**
+ * Why a deal entered a stage: a member moved it, a rule did, an import placed it, it was closed,
+ * or the stage it was in was deleted and its deals moved on (P1-2b).
+ */
+export const STAGE_HISTORY_REASONS = ['manual', 'rule', 'import', 'close', 'stage_deleted'] as const;
 export type StageHistoryReason = (typeof STAGE_HISTORY_REASONS)[number];
+
+/**
+ * The most deals one stage delete may move (P1-2b). The move is one transaction; past this the
+ * request is refused with `payload_too_large` rather than holding the pipeline locked for long.
+ */
+export const STAGE_DELETE_MOVE_LIMIT = 5000;
 
 /**
  * The events a stage rule may react to. Mail (P2) and meetings (P3) emit them; the rule engine

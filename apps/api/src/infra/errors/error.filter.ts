@@ -1,5 +1,11 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, Logger } from '@nestjs/common';
-import { codeForStatus, type ApiErrorBody, type ErrorCode, type FieldError } from '@bylinecrm/shared';
+import {
+    codeForStatus,
+    type ApiErrorBody,
+    type ErrorCode,
+    type ErrorDetails,
+    type FieldError,
+} from '@bylinecrm/shared';
 import type { Request, Response } from 'express';
 import { ZodValidationException } from 'nestjs-zod';
 import { ApiException } from './api-errors';
@@ -45,7 +51,14 @@ export class ErrorFilter implements ExceptionFilter {
 /** The envelope for `exception`. Pure, so every mapping rule is unit-tested without a server. */
 export function toErrorBody(exception: unknown, requestId: string): ApiErrorBody {
     if (exception instanceof ApiException) {
-        return envelope(exception.getStatus(), exception.code, exception.message, requestId, exception.fieldErrors);
+        return envelope(
+            exception.getStatus(),
+            exception.code,
+            exception.message,
+            requestId,
+            exception.fieldErrors,
+            exception.details,
+        );
     }
     if (exception instanceof ZodValidationException) {
         return envelope(400, 'validation.failed', INVALID_REQUEST_MESSAGE, requestId, zodFieldErrors(exception));
@@ -63,12 +76,14 @@ function envelope(
     message: string,
     requestId: string,
     fieldErrors?: readonly FieldError[],
+    details?: ErrorDetails,
 ): ApiErrorBody {
     return {
         statusCode,
         code,
         message,
         ...(fieldErrors && fieldErrors.length > 0 ? { fieldErrors: [...fieldErrors] } : {}),
+        ...(details && Object.keys(details).length > 0 ? { details: { ...details } } : {}),
         requestId,
     };
 }
