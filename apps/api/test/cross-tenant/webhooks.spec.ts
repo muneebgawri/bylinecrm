@@ -17,12 +17,17 @@ import type { Queue } from 'bullmq';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { PrismaService } from '../../src/infra/prisma.service';
 import { hmacHex } from '../../src/webhooks/signature';
+import { WebhooksSweep } from '../../src/webhooks/sweep';
 import {
     WEBHOOK_AUTO_DISABLE_AFTER_DEAD,
     WEBHOOK_MAX_ATTEMPTS,
     WEBHOOK_QUEUE,
+    WEBHOOK_STUCK_DELIVERING_MS,
+    WEBHOOK_SWEEP_GRACE_MS,
 } from '../../src/webhooks/webhooks.constants';
+import { WebhooksService } from '../../src/webhooks/webhooks.service';
 
 interface Browser {
     cookie: string;
@@ -404,5 +409,109 @@ describe('webhooks', () => {
         expect(received.filter((r) => r.path === path).length).toBe(before);
         const log = await deliveriesOf(endpoint.id);
         expect(log.items.some((d) => d.eventName === 'ping')).toBe(true);
+    });
+
+    describe('the stranded-delivery sweep', () => {
+        /**
+         * A delivery row exactly as `enqueueForEvent` writes it, but with no job — what a Redis outage
+         * between the row and the `queue.add` leaves behind. Written as the owner (a fixture), with
+         * the same envelope shape a real delivery carries.
+         */
+        async function strandedRow(endpointId: string, overrides: Record<string, unknown> = {}): Promise<string> {
+            const owner = app.get(PrismaService);
+            const id = crypto.randomUUID();
+            await owner.webhookDelivery.create({
+                data: {
+                    id,
+                    workspaceId: workspace,
+                    endpointId,
+                    eventId: crypto.randomUUID(),
+                    eventName: 'company.created',
+                    payload: {
+                        id,
+                        event: 'company.created',
+                        occurredAt: new Date().toISOString(),
+                        workspaceId: workspace,
+                        data: { type: 'company.created', recordId: crypto.randomUUID(), workspaceId: workspace },
+                    },
+                    ...overrides,
+                },
+            });
+            return id;
+        }
+        const later = () => Date.now() + WEBHOOK_SWEEP_GRACE_MS + 1_000;
+        const hits = (path: string) => received.filter((r) => r.path === path).length;
+        const endpointAt = async (path: string) =>
+            (
+                (
+                    await as(admin)
+                        .post(w('/webhooks'))
+                        .send({ url: `${receiverBase}${path}`, events: ['company.created'] })
+                ).body as { endpoint: Endpoint }
+            ).endpoint;
+
+        it('delivers a delivery written while the queue was unavailable, and running it again never sends twice', async () => {
+            const path = `/swept-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const id = await strandedRow(endpoint.id);
+            const sweep = app.get(WebhooksSweep);
+
+            // Inside the grace period a fresh row is not stranded: nothing is sent.
+            await sweep.run();
+            await new Promise((r) => setTimeout(r, 300));
+            expect(hits(path)).toBe(0);
+
+            const first = await sweep.run(later());
+            expect(first.requeued).toBeGreaterThanOrEqual(1);
+            const log = await until(
+                () => deliveriesOf(endpoint.id),
+                (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
+            );
+            expect(log.items.find((d) => d.id === id)!.attempts).toBe(1);
+
+            await sweep.run(later());
+            await sweep.run(later());
+            await new Promise((r) => setTimeout(r, 500));
+            expect(hits(path)).toBe(1);
+        });
+
+        it('never gives a delivery that still has a live job a second one', async () => {
+            const path = `/live-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const id = await strandedRow(endpoint.id);
+            const queue = app.get<Queue>(getQueueToken(WEBHOOK_QUEUE));
+            // The job exists (delayed), as it would mid-retry or just after the subscriber added it.
+            await app
+                .get(WebhooksService)
+                .enqueue({ deliveryId: id, workspaceId: workspace, endpointId: endpoint.id }, 1_500);
+            await app.get(WebhooksSweep).run(later());
+            await app.get(WebhooksSweep).run(later());
+            expect(await queue.getJob(id)).toBeDefined();
+            await until(
+                () => deliveriesOf(endpoint.id),
+                (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
+            );
+            await new Promise((r) => setTimeout(r, 500));
+            expect(hits(path)).toBe(1);
+        });
+
+        it('returns an attempt abandoned mid-flight to pending with its count kept, then delivers it', async () => {
+            const path = `/stuck-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const id = await strandedRow(endpoint.id, {
+                status: 'delivering',
+                attempts: 1,
+                attemptStartedAt: new Date(Date.now() - WEBHOOK_STUCK_DELIVERING_MS - 1_000),
+            });
+            const result = await app.get(WebhooksSweep).run(later());
+            expect(result.freed).toBeGreaterThanOrEqual(1);
+            const log = await until(
+                () => deliveriesOf(endpoint.id),
+                (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
+            );
+            // The abandoned attempt still counts: this was the second.
+            expect(log.items.find((d) => d.id === id)!.attempts).toBe(2);
+            expect(hits(path)).toBe(1);
+        });
     });
 });

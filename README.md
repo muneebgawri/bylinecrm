@@ -32,6 +32,22 @@ pnpm dev                        # api on :3300, web on :3301 (proxies /api → a
 curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"ok","version":"0.0.0"}
 ```
 
+### Environment you must set before deploying
+
+- **`SECRETS_KEY`** — 32 random bytes, base64 (`openssl rand -base64 32`); webhook signing secrets (and later
+  customers' OAuth client secrets) are encrypted with it. Keep it in the secret store with a backup: if this key is
+  lost, every secret sealed with it is unrecoverable and each webhook endpoint must be rotated.
+- **`WEBHOOK_WORKER`** — `1` (default) runs webhook delivery in this process; `0` on an API when a separate worker
+  process runs it.
+- **`WEBHOOK_ALLOW_PRIVATE_TARGETS`** — `0` in every deployed environment (it admits private/loopback webhook
+  targets, for local receivers only).
+
+## Webhooks (P1-5)
+
+Admins register endpoints under `/api/w/:id/webhooks`; deliveries are signed (`x-byline-signature`, HMAC-SHA256 over
+`<t>.<raw body>`), queued in BullMQ, retried with backoff, and swept if a job was lost. Receiver example, retry
+policy and SSRF rules: `docs/design-notes/P1-5.md`.
+
 ## Gates (all run in CI; run them before you push)
 
 ```bash
