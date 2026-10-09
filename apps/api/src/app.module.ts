@@ -6,6 +6,7 @@ import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { ErrorFilter } from './infra/errors/error.filter';
 import { InfraModule } from './infra/infra.module';
+import { MailAccountsModule } from './mail-accounts/mail-accounts.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
 import { TimelineModule } from './timeline/timeline.module';
@@ -19,6 +20,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         EventsModule,
         HealthModule,
         AuthModule,
+        MailAccountsModule,
         PipelinesModule,
         RecordsModule,
         TimelineModule,
