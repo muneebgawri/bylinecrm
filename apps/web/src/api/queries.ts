@@ -1,20 +1,30 @@
 import type { RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
 import { useMemo } from 'react';
-import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+    QueryClient,
+    useInfiniteQuery,
+    useMutation,
+    useQueries,
+    useQuery,
+    useQueryClient,
+} from '@tanstack/react-query';
 import { isClientError } from './client';
 import {
     apiKeys,
     attachments,
     auth,
+    blocklist,
     companies,
     customFields,
     invites,
+    mailboxes,
     mailSettings,
     me,
     members,
     membersSummary,
     membership,
     notes,
+    oauthClient,
     opportunities,
     people,
     pipelines,
@@ -30,12 +40,16 @@ import type {
     BoardView,
     CompanyInput,
     CompanyView,
+    ConnectMailboxInput,
     CreateApiKeyInput,
+    CreateBlocklistEntryInput,
     CreateInviteInput,
     CreateRoleInput,
     CreateTemplateInput,
     CreateViewInput,
+    GoogleOAuthClientView,
     LoginInput,
+    MailboxView,
     MoveDealInput,
     NoteCreateInput,
     OpportunityCreateInput,
@@ -45,6 +59,7 @@ import type {
     PersonView,
     PreviewTemplateInput,
     PutMailSettingsInput,
+    PutOAuthClientInput,
     CompanyPage,
     OpportunityPage,
     PersonPage,
@@ -102,6 +117,12 @@ export const keys = {
     template: (workspaceId: string, templateId: string) => ['w', workspaceId, 'templates', 'one', templateId] as const,
     templateVariables: (workspaceId: string) => ['w', workspaceId, 'templates', 'variables'] as const,
     mailSettings: (workspaceId: string) => ['w', workspaceId, 'settings', 'mail'] as const,
+    oauthClient: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client'] as const,
+    oauthClientStatus: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client', 'status'] as const,
+    mailboxes: (workspaceId: string) => ['w', workspaceId, 'mailboxes'] as const,
+    mailboxSync: (workspaceId: string, mailboxId: string) =>
+        ['w', workspaceId, 'mailboxes', mailboxId, 'sync'] as const,
+    blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */
@@ -678,5 +699,121 @@ export function usePutMailSettings(workspaceId: string) {
     return useMutation({
         mutationFn: (input: PutMailSettingsInput) => mailSettings.put(workspaceId, input),
         onSuccess: (saved) => client.setQueryData(keys.mailSettings(workspaceId), saved),
+    });
+}
+
+// ---- Google OAuth client, mailboxes, sync and blocklist (P2-1, P2-2) ---------------------------
+
+/** The client as an admin sees it; never the secret, only its last four characters. */
+export const useOAuthClient = (workspaceId: string, enabled = true) =>
+    useQuery({
+        queryKey: keys.oauthClient(workspaceId),
+        queryFn: ({ signal }) => oauthClient.describe(workspaceId, signal),
+        enabled,
+    });
+
+/** Whether Google is set up — what every member may read. */
+export const useOAuthClientStatus = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.oauthClientStatus(workspaceId),
+        queryFn: ({ signal }) => oauthClient.status(workspaceId, signal),
+    });
+
+/**
+ * A write answers with the client as it now stands, so that is what the page shows — no second
+ * request; its status is derived from the same row, so it is refreshed alongside.
+ */
+function useOAuthClientWrite<I>(workspaceId: string, write: (input: I) => Promise<GoogleOAuthClientView>) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: write,
+        onSuccess: (view) => {
+            client.setQueryData(keys.oauthClient(workspaceId), view);
+            return client.invalidateQueries({ queryKey: keys.oauthClientStatus(workspaceId) });
+        },
+    });
+}
+
+export const usePutOAuthClient = (workspaceId: string) =>
+    useOAuthClientWrite(workspaceId, (input: PutOAuthClientInput) => oauthClient.put(workspaceId, input));
+export const useVerifyOAuthClient = (workspaceId: string) =>
+    useOAuthClientWrite(workspaceId, () => oauthClient.verify(workspaceId));
+
+/** Removing the client leaves nothing to show but "not configured", which the server says on the next read. */
+export function useRemoveOAuthClient(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => oauthClient.remove(workspaceId),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.oauthClient(workspaceId) }),
+    });
+}
+
+export const useMailboxes = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.mailboxes(workspaceId),
+        queryFn: ({ signal }) => mailboxes.list(workspaceId, signal),
+    });
+
+/** Each mailbox's sync state, one request per mailbox — a workspace connects a handful. */
+export function useMailboxSyncs(workspaceId: string, list: readonly MailboxView[]) {
+    return useQueries({
+        queries: list.map((mailbox) => ({
+            queryKey: keys.mailboxSync(workspaceId, mailbox.id),
+            queryFn: ({ signal }: { signal: AbortSignal }) => mailboxes.syncState(workspaceId, mailbox.id, signal),
+            enabled: mailbox.status !== 'disconnected',
+        })),
+    });
+}
+
+/** Starts a connect; the caller sends the browser to the answer's `authorizeUrl`. */
+export const useConnectMailbox = (workspaceId: string) =>
+    useMutation({ mutationFn: (input: ConnectMailboxInput) => mailboxes.connect(workspaceId, input) });
+
+/** A write that changes a mailbox refreshes the list (its status may have changed). */
+function useMailboxWrite<O>(workspaceId: string, write: (mailboxId: string) => Promise<O>) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: write,
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.mailboxes(workspaceId), exact: true }),
+    });
+}
+
+export const useCheckMailbox = (workspaceId: string) =>
+    useMailboxWrite(workspaceId, (mailboxId) => mailboxes.check(workspaceId, mailboxId));
+export const useDisconnectMailbox = (workspaceId: string) =>
+    useMailboxWrite(workspaceId, (mailboxId) => mailboxes.disconnect(workspaceId, mailboxId));
+
+export function useSyncMailbox(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (mailboxId: string) => mailboxes.sync(workspaceId, mailboxId),
+        onSuccess: (result, mailboxId) => client.setQueryData(keys.mailboxSync(workspaceId, mailboxId), result.sync),
+    });
+}
+
+export const useBlocklist = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.blocklist(workspaceId),
+        queryFn: ({ signal }) => blocklist.list(workspaceId, signal),
+    });
+
+/** Adding an entry removes stored mail it covers, so threads and timelines are refreshed with it. */
+export function useAddBlocklistEntry(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: CreateBlocklistEntryInput) => blocklist.create(workspaceId, input),
+        onSuccess: () =>
+            Promise.all([
+                client.invalidateQueries({ queryKey: keys.blocklist(workspaceId) }),
+                client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline'] }),
+            ]),
+    });
+}
+
+export function useRemoveBlocklistEntry(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (entryId: string) => blocklist.remove(workspaceId, entryId),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.blocklist(workspaceId) }),
     });
 }
