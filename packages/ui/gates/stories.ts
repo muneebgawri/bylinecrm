@@ -36,8 +36,17 @@ export async function openStory(page: Page, id: string): Promise<void> {
     const body = page.locator('body');
     await expect(body).toHaveClass(/sb-show-main/);
     await expect(body, `story ${id} threw while rendering`).not.toHaveClass(/sb-show-errordisplay/);
-    // Fonts in, and every running animation or transition finished, before anything is measured:
-    // axe reads computed colours and has no animation control of its own.
+    // Fonts in, and every FINITE animation or transition settled, before anything is measured: axe
+    // reads computed colours and has no animation control of its own. Infinite animations (a
+    // skeleton's pulse, a spinner) never finish and are left alone; a cancelled animation rejects
+    // its `finished` promise, and cancelled means settled, so the rejection is swallowed.
     await page.evaluate(() => document.fonts.ready);
-    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    await page.evaluate(() =>
+        Promise.all(
+            document
+                .getAnimations()
+                .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+                .map((animation) => animation.finished.catch(() => undefined)),
+        ),
+    );
 }
