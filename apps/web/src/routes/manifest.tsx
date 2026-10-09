@@ -19,6 +19,12 @@ const records = {
     deal: () => import('./w/records/RecordPages').then((m) => ({ Component: m.DealPage })),
 };
 
+/** The people and companies lists are one chunk: the table, the filter editor's shell, the views. */
+const lists = {
+    people: () => import('./w/lists/ListPage').then((m) => ({ Component: m.PeopleListPage })),
+    companies: () => import('./w/lists/ListPage').then((m) => ({ Component: m.CompaniesListPage })),
+};
+
 const settings = {
     layout: () => import('./w/settings/SettingsLayout').then((m) => ({ Component: m.SettingsLayout })),
     members: () => import('./w/settings/Members').then((m) => ({ Component: m.Members })),
@@ -51,9 +57,9 @@ const workspaceRoutes: RouteObject = {
         { index: true, element: <Navigate to="home" replace /> },
         page('home', 'home', 'Dashboard'),
         page('reports', 'reports', 'Reports'),
-        page('people', 'people', 'People'),
+        { path: 'people', lazy: lists.people, handle: { crumb: 'People' }, errorElement: <RouteError /> },
         { path: 'people/:personId', lazy: records.person, handle: { crumb: 'Person' }, errorElement: <RouteError /> },
-        page('companies', 'companies', 'Companies'),
+        { path: 'companies', lazy: lists.companies, handle: { crumb: 'Companies' }, errorElement: <RouteError /> },
         {
             path: 'companies/:companyId',
             lazy: records.company,

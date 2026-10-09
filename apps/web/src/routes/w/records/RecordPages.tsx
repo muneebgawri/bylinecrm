@@ -1,9 +1,8 @@
 import type { RecordObject } from '@bylinecrm/shared';
 import { EmptyState, Skeleton } from '@bylinecrm/ui';
-import { useMemo } from 'react';
 import { useParams } from 'react-router';
 import { ApiError } from '../../../api/client';
-import { useMembersSummary, useRecord } from '../../../api/queries';
+import { useMembersById, useRecord } from '../../../api/queries';
 import type { CompanyView, OpportunityView, PersonView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
@@ -21,15 +20,6 @@ function useRequiredParam(name: string): string {
     const value = useParams()[name];
     if (!value) throw new Error(`route has no :${name} segment`);
     return value;
-}
-
-/** Member id → name for owners and authors; one query the whole page shares. */
-export function useMembersById(workspaceId: string): ReadonlyMap<string, string> {
-    const members = useMembersSummary(workspaceId);
-    return useMemo(
-        () => new Map((members.data ?? []).map((m) => [m.memberId, m.name ?? 'Unnamed member'])),
-        [members.data],
-    );
 }
 
 /** The page's shape while the record loads: header, fact strip, three columns — no shift. */

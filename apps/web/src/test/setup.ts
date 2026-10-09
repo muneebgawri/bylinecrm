@@ -23,4 +23,16 @@ if (typeof window !== 'undefined') {
             removeListener: () => {},
             dispatchEvent: () => false,
         }) as MediaQueryList;
+    // A list's next page loads when its end scrolls into view; in jsdom nothing does.
+    globalThis.IntersectionObserver ??= class {
+        readonly root = null;
+        readonly rootMargin = '';
+        readonly thresholds = [];
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+            return [];
+        }
+    } as unknown as typeof IntersectionObserver;
 }

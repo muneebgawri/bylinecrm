@@ -1,5 +1,5 @@
 import type { RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
-import { API_BASE, request } from './client';
+import { API_BASE, request, requestFile } from './client';
 import type {
     ApiKeyView,
     AttachmentView,
@@ -31,6 +31,7 @@ import type {
     RoleView,
     RuleView,
     SavedView,
+    SearchResults,
     SignupInput,
     StageHistoryEntry,
     TaskInput,
@@ -61,7 +62,14 @@ export type ListParams = {
     limit?: number | undefined;
     sort?: string | undefined;
     q?: string | undefined;
+    /** The P1-4 filter grammar, already encoded (`lib/filterParam.ts`); the API decodes it. */
+    filter?: string | undefined;
+    /** A saved view's id: its filter and sort are the defaults the inline ones replace. */
+    view?: string | undefined;
 };
+
+/** What an export takes: the list's query and the columns to write, in order. */
+export type ExportParams = Omit<ListParams, 'cursor' | 'limit'> & { columns?: string | undefined };
 
 /**
  * One function per API route, named for what it does, typed by `types.ts`. Paths are built here
@@ -161,6 +169,9 @@ function recordRoutes<View, Input>(segment: string) {
             request<void>('DELETE', workspacePath(workspaceId, `/${segment}/${id}`)),
         restore: (workspaceId: string, id: string) =>
             request<View>('POST', workspacePath(workspaceId, `/${segment}/${id}/restore`)),
+        /** The current list as CSV: the API counts first and refuses (413) past its row cap. */
+        exportCsv: (workspaceId: string, params: ExportParams, signal?: AbortSignal) =>
+            requestFile(workspacePath(workspaceId, `/${segment}/export.csv${query(params)}`), signal),
     };
 }
 
@@ -299,6 +310,23 @@ export const timeline = {
             workspacePath(
                 workspaceId,
                 `/timeline${query({ target: targetParam(params.target), kinds: params.kinds, cursor: params.cursor })}`,
+            ),
+            { signal },
+        ),
+};
+
+export const search = {
+    /** Ranked hits per object under the caller's scope; `objects` narrows to some of the three. */
+    run: (
+        workspaceId: string,
+        params: { q: string; limit?: number | undefined; objects?: readonly RecordObject[] | undefined },
+        signal?: AbortSignal,
+    ) =>
+        request<SearchResults>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/search${query({ q: params.q, limit: params.limit, objects: params.objects?.join(',') })}`,
             ),
             { signal },
         ),

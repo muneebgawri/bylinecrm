@@ -1,7 +1,7 @@
 import { DEFAULT_CURRENCY } from '@bylinecrm/shared';
 import { Badge, Button, FactGrid } from '@bylinecrm/ui';
 import { useId, useState } from 'react';
-import { usePatchRecord, useRecordList } from '../../../api/queries';
+import { usePatchRecord } from '../../../api/queries';
 import type { CompanyView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
@@ -14,6 +14,7 @@ import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesCo
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
+import { countLabel, useRelated } from './related';
 import { TasksPanel } from './TasksPanel';
 import { TimelinePanel } from './TimelinePanel';
 import { useRecordCommands } from './useRecordCommands';
@@ -34,8 +35,8 @@ export function CompanyRecord({
 }) {
     const patch = usePatchRecord(workspaceId, 'company', company.id);
     const write = usePermission('record:write');
-    const people = useRecordList(workspaceId, 'person', { limit: 200 });
-    const deals = useRecordList(workspaceId, 'opportunity', { limit: 200 });
+    const people = useRelated(workspaceId, 'person', 'companyId', company.id);
+    const deals = useRelated(workspaceId, 'opportunity', 'companyId', company.id);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
     const ownerId = useId();
@@ -52,8 +53,8 @@ export function CompanyRecord({
         next: siblings?.next,
     });
 
-    const companyPeople = (people.data?.items ?? []).filter((p) => p.companyId === company.id);
-    const companyDeals = (deals.data?.items ?? []).filter((d) => d.companyId === company.id);
+    const companyPeople = people.items;
+    const companyDeals = deals.items;
 
     const standard: PropertyRow[] = [
         {
@@ -219,10 +220,12 @@ export function CompanyRecord({
                             value: company.ownerId ? (membersById.get(company.ownerId) ?? '…') : 'Unassigned',
                         },
                         { label: 'ARR', value: formatMoney(company.arr) },
-                        { label: 'People', value: people.data ? String(companyPeople.length) : '…' },
+                        { label: 'People', value: people.data ? countLabel(companyPeople.length, people.more) : '…' },
                         {
                             label: 'Open deals',
-                            value: deals.data ? String(companyDeals.filter((d) => !d.closedAt).length) : '…',
+                            value: deals.data
+                                ? countLabel(companyDeals.filter((d) => !d.closedAt).length, deals.more)
+                                : '…',
                         },
                     ]}
                 />
@@ -245,7 +248,7 @@ export function CompanyRecord({
             }
             rail={
                 <>
-                    <RailCard title="People" count={people.data ? companyPeople.length : undefined}>
+                    <RailCard title="People" count={people.data && !people.more ? companyPeople.length : undefined}>
                         {people.isPending ? (
                             <RailLoading />
                         ) : companyPeople.length === 0 ? (
@@ -261,7 +264,7 @@ export function CompanyRecord({
                             ))
                         )}
                     </RailCard>
-                    <RailCard title="Deals" count={deals.data ? companyDeals.length : undefined}>
+                    <RailCard title="Deals" count={deals.data && !deals.more ? companyDeals.length : undefined}>
                         {deals.isPending ? (
                             <RailLoading />
                         ) : companyDeals.length === 0 ? (
