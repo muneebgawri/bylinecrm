@@ -647,11 +647,31 @@
                         }
                     },
                     {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "sort",
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -981,6 +1001,150 @@
                 "tags": ["opportunities"]
             }
         },
+        "/api/w/{workspaceId}/people/query": {
+            "post": {
+                "operationId": "PeopleController_query",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QueryBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/people/group-by": {
+            "get": {
+                "operationId": "PeopleController_groupBy",
+                "parameters": [
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "field",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/people/export.csv": {
+            "get": {
+                "operationId": "PeopleController_exportCsv",
+                "parameters": [
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "columns",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+(,[a-zA-Z0-9_.]+)*$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
         "/api/w/{workspaceId}/people": {
             "get": {
                 "operationId": "PeopleController_list",
@@ -1010,7 +1174,27 @@
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -1082,7 +1266,27 @@
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -1195,6 +1399,150 @@
                 "tags": ["people"]
             }
         },
+        "/api/w/{workspaceId}/companies/query": {
+            "post": {
+                "operationId": "CompaniesController_query",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QueryBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/companies/group-by": {
+            "get": {
+                "operationId": "CompaniesController_groupBy",
+                "parameters": [
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "field",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/companies/export.csv": {
+            "get": {
+                "operationId": "CompaniesController_exportCsv",
+                "parameters": [
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "columns",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+(,[a-zA-Z0-9_.]+)*$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
         "/api/w/{workspaceId}/companies": {
             "get": {
                 "operationId": "CompaniesController_list",
@@ -1224,7 +1572,27 @@
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -1296,7 +1664,27 @@
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -1510,6 +1898,150 @@
                 "tags": ["custom-fields"]
             }
         },
+        "/api/w/{workspaceId}/opportunities/query": {
+            "post": {
+                "operationId": "OpportunitiesController_query",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QueryBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["opportunities"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/group-by": {
+            "get": {
+                "operationId": "OpportunitiesController_groupBy",
+                "parameters": [
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "field",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["opportunities"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/export.csv": {
+            "get": {
+                "operationId": "OpportunitiesController_exportCsv",
+                "parameters": [
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "columns",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+(,[a-zA-Z0-9_.]+)*$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["opportunities"]
+            }
+        },
         "/api/w/{workspaceId}/opportunities": {
             "get": {
                 "operationId": "OpportunitiesController_list",
@@ -1539,7 +2071,27 @@
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -1611,7 +2163,27 @@
                         "required": false,
                         "in": "query",
                         "schema": {
-                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                         }
                     },
@@ -2296,6 +2868,48 @@
                 "tags": ["attachments"]
             }
         },
+        "/api/w/{workspaceId}/search": {
+            "get": {
+                "operationId": "SearchController_find",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 25,
+                            "default": 5,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "objects",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["search"]
+            }
+        },
         "/api/w/{workspaceId}/timeline": {
             "get": {
                 "operationId": "TimelineController_list",
@@ -2367,6 +2981,138 @@
                     }
                 },
                 "tags": ["timeline"]
+            }
+        },
+        "/api/w/{workspaceId}/views": {
+            "get": {
+                "operationId": "ViewsController_list",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["person", "company", "opportunity"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["views"]
+            },
+            "post": {
+                "operationId": "ViewsController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateViewDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["views"]
+            }
+        },
+        "/api/w/{workspaceId}/views/{viewId}": {
+            "get": {
+                "operationId": "ViewsController_get",
+                "parameters": [
+                    {
+                        "name": "viewId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["views"]
+            },
+            "patch": {
+                "operationId": "ViewsController_update",
+                "parameters": [
+                    {
+                        "name": "viewId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateViewDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["views"]
+            },
+            "delete": {
+                "operationId": "ViewsController_remove",
+                "parameters": [
+                    {
+                        "name": "viewId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["views"]
+            }
+        },
+        "/api/w/{workspaceId}/views/{viewId}/duplicate": {
+            "post": {
+                "operationId": "ViewsController_duplicate",
+                "parameters": [
+                    {
+                        "name": "viewId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["views"]
             }
         }
     },
@@ -2795,6 +3541,136 @@
                     }
                 },
                 "required": ["stageId"]
+            },
+            "QueryBodyDto__schema0": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "and": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/QueryBodyDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["and"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "or": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/QueryBodyDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["or"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "QueryBodyDto": {
+                "type": "object",
+                "properties": {
+                    "filter": {
+                        "$ref": "#/components/schemas/QueryBodyDto__schema0"
+                    },
+                    "sort": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$"
+                    },
+                    "view": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "q": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "cursor": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "limit": {
+                        "default": 50,
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200
+                    }
+                }
             },
             "CreatePersonDto": {
                 "type": "object",
@@ -3908,6 +4784,353 @@
                     }
                 },
                 "required": ["target", "kind", "happenedAt", "title", "source", "idempotencyKey"]
+            },
+            "CreateViewDto__schema0": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "and": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/CreateViewDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["and"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "or": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/CreateViewDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["or"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "CreateViewDto": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "icon": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "nullable": true
+                    },
+                    "filter": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CreateViewDto__schema0"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "sorts": {
+                        "maxItems": 3,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "field": {
+                                    "type": "string",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                },
+                                "direction": {
+                                    "type": "string",
+                                    "enum": ["asc", "desc"]
+                                }
+                            },
+                            "required": ["field", "direction"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "columns": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "field": {
+                                    "type": "string",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                },
+                                "width": {
+                                    "type": "integer",
+                                    "minimum": 40,
+                                    "maximum": 2000
+                                }
+                            },
+                            "required": ["field"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "groupBy": {
+                        "type": "string",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$",
+                        "nullable": true
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "isShared": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["object", "name"]
+            },
+            "UpdateViewDto__schema0": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "and": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/UpdateViewDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["and"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "or": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/UpdateViewDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["or"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "UpdateViewDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "icon": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "nullable": true
+                    },
+                    "filter": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/UpdateViewDto__schema0"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "sorts": {
+                        "maxItems": 3,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "field": {
+                                    "type": "string",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                },
+                                "direction": {
+                                    "type": "string",
+                                    "enum": ["asc", "desc"]
+                                }
+                            },
+                            "required": ["field", "direction"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "columns": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "field": {
+                                    "type": "string",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                },
+                                "width": {
+                                    "type": "integer",
+                                    "minimum": 40,
+                                    "maximum": 2000
+                                }
+                            },
+                            "required": ["field"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "groupBy": {
+                        "type": "string",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$",
+                        "nullable": true
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "isShared": {
+                        "type": "boolean"
+                    }
+                }
             }
         }
     }

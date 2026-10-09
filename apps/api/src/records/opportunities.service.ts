@@ -9,8 +9,9 @@ import { daysInStage } from '../pipelines/stage-moves';
 import { actorOf } from './actor';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf } from './diff';
-import { type Page, paginate, parseSort, type SortSpec } from './list-query';
+import { type Page, paginate } from './list-query';
 import type { ListQuery } from './people.service';
+import { resolvePlan } from '../query/query.service';
 import { ownerWhere, resolveOwner } from './record-scope';
 import {
     assertCompanyExists,
@@ -69,18 +70,6 @@ export interface OpportunityInput {
     custom?: Record<string, unknown> | undefined;
 }
 
-export const OPPORTUNITY_SORT_FIELDS = [
-    'createdAt',
-    'updatedAt',
-    'name',
-    'amountMinor',
-    'closeDate',
-    'probability',
-    'position',
-] as const;
-type OpportunitySortField = (typeof OPPORTUNITY_SORT_FIELDS)[number];
-const DEFAULT_SORT: SortSpec<OpportunitySortField> = { field: 'createdAt', direction: 'desc' };
-
 const DIFF_FIELDS = [
     'name',
     'closedAt',
@@ -115,18 +104,19 @@ export class OpportunitiesService {
 
     list(query: ListQuery, deleted = false): Promise<Page<OpportunityView>> {
         const context = this.current();
-        const sort = parseSort(query.sort, OPPORTUNITY_SORT_FIELDS, DEFAULT_SORT);
         return this.rls.withWorkspace(async (tx) => {
+            const plan = await resolvePlan(tx, context, this.customFields, 'opportunity', query);
             const ids = query.q ? await searchCandidates(tx, 'opportunities', query.q, deleted) : undefined;
             if (ids && ids.length === 0) return { items: [], nextCursor: null };
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.opportunity.findMany({
-                    where: { ...where(context, deleted), ...(ids ? { id: { in: ids } } : {}) },
+                    where: {
+                        ...where(context, deleted),
+                        ...(plan.where as Prisma.OpportunityWhereInput),
+                        ...(ids ? { id: { in: ids } } : {}),
+                    },
                     include: withStageInclude,
-                    orderBy: [
-                        { [sort.field]: sort.direction } as Prisma.OpportunityOrderByWithRelationInput,
-                        { id: 'asc' },
-                    ],
+                    orderBy: plan.orderBy as Prisma.OpportunityOrderByWithRelationInput[],
                     ...args,
                 }),
             );
