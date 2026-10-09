@@ -256,7 +256,11 @@ function DataBody<R>({ data }: { data: TableData<R> }) {
     return cards ? <DataCards data={data} /> : <DataTable data={data} />;
 }
 
-function RowMenu<R>({ actions, row }: { actions: TableRowActions<R>; row: R }) {
+/**
+ * A row's one "•••" menu — the table's row end, a phone card's action, and any list that draws its
+ * own cards (the deals list) — so a row's actions are offered the same way everywhere.
+ */
+export function RowActionsMenu<R>({ actions, row }: { actions: TableRowActions<R>; row: R }) {
     const items = actions.items(row);
     if (items === null || items === undefined || items === false) return null;
     return (
@@ -304,7 +308,7 @@ function DataTable<R>({ data }: { data: TableData<R> }) {
                             ))}
                             {data.rowActions && (
                                 <td className={cn(tableClasses.td, 'text-right')}>
-                                    <RowMenu actions={data.rowActions} row={row} />
+                                    <RowActionsMenu actions={data.rowActions} row={row} />
                                 </td>
                             )}
                         </tr>
@@ -321,7 +325,7 @@ function DataCards<R>({ data }: { data: TableData<R> }) {
         data.columns.flatMap((c, i) => (roles[i] === role ? [<span key={c.id}>{c.cell(row)}</span>] : []));
     const items: CardListItem[] = data.rows.map((row) => {
         const primary = slot(row, 'primary');
-        const actions = data.rowActions ? <RowMenu actions={data.rowActions} row={row} /> : undefined;
+        const actions = data.rowActions ? <RowActionsMenu actions={data.rowActions} row={row} /> : undefined;
         return {
             id: data.getRowId(row),
             leading: data.leading?.(row),

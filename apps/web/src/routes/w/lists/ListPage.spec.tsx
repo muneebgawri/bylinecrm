@@ -14,7 +14,9 @@ import { PeopleListPage } from './ListPage';
 const WS = '11111111-2222-4333-8444-555555555555';
 const ME = 'aaaaaaaa-0000-4000-8000-000000000001';
 
-const person = (id: string, nameFirst: string, nameLast: string) => ({
+const ACME = { id: 'c1', name: 'Acme Corp' };
+
+const person = (id: string, nameFirst: string, nameLast: string, company: typeof ACME | null = null) => ({
     id,
     nameFirst,
     nameLast,
@@ -25,8 +27,10 @@ const person = (id: string, nameFirst: string, nameLast: string) => ({
     links: {},
     avatarUrl: null,
     position: 0,
-    companyId: null,
+    companyId: company?.id ?? null,
     ownerId: ME,
+    company,
+    owner: { memberId: ME, name: 'Kate Morgan' },
     createdBy: { kind: 'member', id: ME },
     custom: {},
     deletedAt: null,
@@ -34,7 +38,7 @@ const person = (id: string, nameFirst: string, nameLast: string) => ({
     updatedAt: '2026-10-08T10:00:00.000Z',
 });
 
-const PEOPLE = [person('p1', 'Dana', 'Reyes'), person('p2', 'Sam', 'Okafor')];
+const PEOPLE = [person('p1', 'Dana', 'Reyes', ACME), person('p2', 'Sam', 'Okafor')];
 const MINE = {
     id: 'v1',
     object: 'person',
@@ -70,14 +74,31 @@ function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+/** A list page as the API answers it (P1-4a): the rows and the size of the whole set. */
+const page = (items: unknown[], total = items.length, totalIsExact = true) => ({
+    items,
+    nextCursor: null,
+    total,
+    totalIsExact,
+});
+
 /** A fetch that answers the list page's routes and records every call. */
-function api(calls: Call[]) {
+function api(calls: Call[], total: { people?: number; exact?: boolean } = {}) {
     return vi.fn(async (input: string, init?: RequestInit) => {
         const url = String(input);
         const method = init?.method ?? 'GET';
         calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
         const path = url.split('?')[0] ?? '';
-        if (path.endsWith('/people')) return json({ items: PEOPLE, nextCursor: null });
+        // A saved view's tab count is a one-row read of that view; "My leads" holds one person.
+        if (path.endsWith('/people') && url.includes('view=v1') && url.includes('limit=1'))
+            return json(page([PEOPLE[0]], 1));
+        if (path.endsWith('/people')) return json(page(PEOPLE, total.people ?? PEOPLE.length, total.exact ?? true));
+        if (path.endsWith('/people/bulk')) {
+            const ids = (calls.at(-1)?.body as { ids: string[] }).ids;
+            return json({ results: ids.map((id) => ({ id, ok: true })), succeeded: ids.length, failed: 0 });
+        }
+        if (path.endsWith('/people/export.csv'))
+            return new Response('id\n', { status: 200, headers: { 'Content-Type': 'text/csv' } });
         if (path.endsWith('/views') && method === 'GET') return json([MINE]);
         if (path.endsWith('/views') && method === 'POST') {
             return json({ ...MINE, id: 'v2', name: (calls.at(-1)?.body as { name: string }).name }, 201);
@@ -210,7 +231,7 @@ describe('People list', () => {
             'fetch',
             vi.fn(async (input: string) => {
                 const path = String(input).split('?')[0] ?? '';
-                if (path.endsWith('/people')) return json({ items: [], nextCursor: null });
+                if (path.endsWith('/people')) return json(page([]));
                 if (path.endsWith('/views')) return json([]);
                 return json([]);
             }),
@@ -218,5 +239,71 @@ describe('People list', () => {
         renderAt(`?filter=${encodeFilter({ and: [{ field: 'city', op: 'eq', value: 'Nowhere' }] })}`);
         expect(await screen.findByText('No people match this view')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+    });
+
+    it('shows the total in the footer and a count on every view tab', async () => {
+        const calls: Call[] = [];
+        vi.stubGlobal('fetch', api(calls));
+        renderAt('');
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        expect(screen.getByText(/Page 1 of 1 · 2 of 2 people/)).toBeInTheDocument();
+        const tabs = screen.getByRole('tablist', { name: 'Views' });
+        // The open tab counts from the page's own read; another view from a one-row read of it.
+        expect(within(tabs).getByRole('tab', { name: /All people\s*2/ })).toBeInTheDocument();
+        expect(await within(tabs).findByRole('tab', { name: /My leads\s*1/ })).toBeInTheDocument();
+        expect(calls.filter((c) => c.url.includes('view=v1') && c.url.includes('limit=1'))).toHaveLength(1);
+    });
+
+    it('says "10,000+" when the API stops counting', async () => {
+        vi.stubGlobal('fetch', api([], { people: 10_000, exact: false }));
+        renderAt('');
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        expect(screen.getByText(/2 of 10,000\+ people/)).toBeInTheDocument();
+    });
+
+    it("names a person's company from the row — no request per company", async () => {
+        const calls: Call[] = [];
+        vi.stubGlobal('fetch', api(calls));
+        renderAt('');
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+        expect(calls.filter((c) => c.url.includes('/companies'))).toHaveLength(0);
+    });
+
+    it('deletes a selection with one bulk request and reports the result', async () => {
+        const user = userEvent.setup();
+        const calls: Call[] = [];
+        vi.stubGlobal('fetch', api(calls));
+        renderAt('');
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Dana Reyes' }));
+        await user.click(screen.getByRole('checkbox', { name: 'Select Sam Okafor' }));
+        await user.click(screen.getByRole('button', { name: 'Delete' }));
+        const confirm = await screen.findByRole('dialog', { name: 'Delete 2 people?' });
+        await user.click(within(confirm).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(calls.some((c) => c.url.endsWith('/people/bulk'))).toBe(true));
+        expect(calls.filter((c) => c.url.endsWith('/people/bulk'))).toEqual([
+            { method: 'POST', url: `/api/w/${WS}/people/bulk`, body: { action: 'delete', ids: ['p1', 'p2'] } },
+        ]);
+        // One request, not one per person.
+        expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
+    });
+
+    it('exports a selection with one request whose filter names the ids', async () => {
+        const user = userEvent.setup();
+        const calls: Call[] = [];
+        vi.stubGlobal('fetch', api(calls));
+        vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }));
+        renderAt('');
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Sam Okafor' }));
+        await user.click(screen.getByRole('button', { name: 'Export selected' }));
+        await waitFor(() =>
+            expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/people/export.csv'))).toBe(true),
+        );
+        expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/people/export.csv'))?.body).toMatchObject({
+            filter: { and: [{ field: 'id', op: 'in', value: ['p2'] }] },
+        });
     });
 });

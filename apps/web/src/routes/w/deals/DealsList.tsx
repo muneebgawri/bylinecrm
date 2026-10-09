@@ -1,16 +1,15 @@
-import { sortableFieldNames } from '@bylinecrm/shared';
+import type { ViewSort } from '@bylinecrm/shared';
 import {
     Badge,
     BulkBar,
     BulkBarAction,
     Button,
+    CardList,
     Checkbox,
     cn,
     DropdownMenu,
-    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
     DropdownMenuTrigger,
     EmptyState,
     Select,
@@ -18,22 +17,18 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    RowActionsMenu,
     tableClasses,
     toast,
+    type CardListItem,
 } from '@bylinecrm/ui';
-import {
-    createColumnHelper,
-    flexRender,
-    getCoreRowModel,
-    useReactTable,
-    type VisibilityState,
-} from '@tanstack/react-table';
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import type { BoardView, MemberSummaryView, OpportunityView, StageView } from '../../../api/types';
-import { formatDay } from '../../../lib/format';
+import type { BoardView, OpportunityView, StageView } from '../../../api/types';
 import { formatMoney } from '../../../lib/money';
+import { isSortable, type ListColumn } from '../lists/listConfig';
 import { daysLabel, LANE_FOLD, ROW_ESTIMATE_PX, STAGE_TONES, VIRTUAL_OVERSCAN } from './dealsView';
 import { classifyMove } from './moveGate';
 
@@ -42,21 +37,26 @@ export interface DealsListProps {
     canMove: boolean;
     canBulk: boolean;
     canEdit: boolean;
-    members: readonly MemberSummaryView[];
-    membersById: ReadonlyMap<string, string>;
-    /** `field:asc|desc` over the API's allowlist, or undefined for the API's default. */
-    sort: string | undefined;
-    onSortChange: (sort: string | undefined) => void;
+    /**
+     * The chosen columns from the shared catalogue (P1-UI-6), the identity column first; the stage
+     * and days in stage are the board's own columns and always drawn.
+     */
+    columns: readonly { column: ListColumn<OpportunityView>; width: number }[];
+    /** The list's effective sort; a header click asks for a new one through the URL, never reorders locally. */
+    sorts: readonly ViewSort[];
+    onSortColumn: (field: string) => void;
     onMove: (deal: OpportunityView, stageId: string) => void;
-    onAssign: (deal: OpportunityView, ownerId: string | null) => void;
+    /** Opens the page's owner dialog for these deals — one bulk request (P1-4a). */
+    onBulkAssign: (ids: string[]) => void;
+    /** Exports these deals — one request with an `id in` filter (P1-4a). */
+    onBulkExport: (ids: string[]) => void;
     /** Opens the deal's record drawer (a row's name, a tap on a phone card). */
     onOpen: (deal: OpportunityView) => void;
-    /** A phone (FR-CRMS-UI-12): the rows become stacked cards with 44px controls. */
+    /** Opens the board's Move-to-stage sheet for a deal — how a phone card moves it. */
+    onMoveSheet: (deal: OpportunityView) => void;
+    /** A phone (FR-CRMS-UI-12): the rows become the design system's cards (CardList). */
     stacked: boolean;
 }
-
-/** The columns the API can sort by: the shared descriptors' sortable set, by the same names (P1-4). */
-const SORTABLE: ReadonlySet<string> = new Set(sortableFieldNames('opportunity'));
 
 /** A row of the list is a deal with its stage, from the same board result the lanes draw. */
 interface Row {
@@ -75,13 +75,14 @@ export function DealsList({
     canMove,
     canBulk,
     canEdit,
-    members,
-    membersById,
-    sort,
-    onSortChange,
+    columns: chosen,
+    sorts,
+    onSortColumn,
     onMove,
-    onAssign,
+    onBulkAssign,
+    onBulkExport,
     onOpen,
+    onMoveSheet,
     stacked,
 }: DealsListProps) {
     const rows = useMemo<Row[]>(
@@ -90,128 +91,123 @@ export function DealsList({
     );
     const stages = board.pipeline.stages;
     const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-    const [visibility, setVisibility] = useState<VisibilityState>({});
+    /** A phone's select mode: taps choose cards instead of opening them. */
+    const [selecting, setSelecting] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // The helper types each definition by its own value; the array's type is inferred from them.
-    const columns = useMemo(
-        () => [
-            helper.display({
-                id: 'select',
-                header: () => (
-                    <Checkbox
-                        aria-label="Select all"
-                        checked={
-                            rows.length > 0 && selected.size === rows.length
-                                ? true
-                                : selected.size > 0
-                                  ? 'indeterminate'
-                                  : false
-                        }
-                        onCheckedChange={(checked) =>
-                            setSelected(checked === true ? new Set(rows.map((r) => r.deal.id)) : new Set())
-                        }
-                        disabled={!canBulk}
-                    />
-                ),
-                cell: ({ row }) => (
-                    <Checkbox
-                        aria-label={`Select ${row.original.deal.name}`}
-                        checked={selected.has(row.original.deal.id)}
-                        onCheckedChange={(checked) =>
-                            setSelected((prev) => {
-                                const next = new Set(prev);
-                                if (checked === true) next.add(row.original.deal.id);
-                                else next.delete(row.original.deal.id);
-                                return next;
-                            })
-                        }
-                        disabled={!canBulk}
-                    />
-                ),
-                enableHiding: false,
-            }),
-            helper.accessor((r) => r.deal.name, {
-                id: 'name',
-                header: 'Deal',
-                cell: ({ row }) => (
-                    <button
-                        type="button"
-                        onClick={() => onOpen(row.original.deal)}
-                        className="text-left font-medium hover:underline"
-                    >
-                        {row.original.deal.name}
-                    </button>
-                ),
-                enableHiding: false,
-            }),
-            helper.accessor((r) => r.stage.name, {
-                id: 'stage',
-                header: 'Stage',
-                cell: ({ row }) =>
-                    canMove ? (
-                        <Select
-                            value={row.original.deal.stageId}
-                            onValueChange={(stageId) => {
-                                if (classifyMove(stages, row.original.deal.stageId, stageId).kind !== 'same')
-                                    onMove(row.original.deal, stageId);
-                            }}
-                        >
-                            <SelectTrigger className="h-7.5 w-40" aria-label={`Stage of ${row.original.deal.name}`}>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {stages.map((stage) => (
-                                    <SelectItem key={stage.id} value={stage.id}>
-                                        {stage.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    ) : (
-                        <Badge status={STAGE_TONES[row.original.stage.colour]} dot>
-                            {row.original.stage.name}
-                        </Badge>
+    // The select box, the deal's name (a link), its stage, the chosen catalogue columns, days in stage.
+    const columns = useMemo<ColumnDef<Row, unknown>[]>(
+        () =>
+            [
+                helper.display({
+                    id: 'select',
+                    header: () => (
+                        <Checkbox
+                            aria-label="Select all"
+                            checked={
+                                rows.length > 0 && selected.size === rows.length
+                                    ? true
+                                    : selected.size > 0
+                                      ? 'indeterminate'
+                                      : false
+                            }
+                            onCheckedChange={(checked) =>
+                                setSelected(checked === true ? new Set(rows.map((r) => r.deal.id)) : new Set())
+                            }
+                            disabled={!canBulk}
+                        />
                     ),
-            }),
-            helper.accessor((r) => r.deal.amount?.amountMinor ?? null, {
-                id: 'amount',
-                header: 'Amount',
-                cell: ({ row }) => <span className="tabular-nums">{formatMoney(row.original.deal.amount)}</span>,
-            }),
-            helper.accessor((r) => (r.deal.ownerId ? membersById.get(r.deal.ownerId) : undefined), {
-                id: 'owner',
-                header: 'Owner',
-                cell: ({ getValue }) => getValue() ?? <span className="text-text-faint">Unassigned</span>,
-            }),
-            helper.accessor((r) => r.deal.daysInStage, {
-                id: 'daysInStage',
-                header: 'In stage',
-                cell: ({ row }) => {
-                    const { deal, stage } = row.original;
-                    const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
-                    return (
-                        <span className={cn('tabular-nums', quiet && 'text-warning')}>
-                            {daysLabel(deal.daysInStage)}
-                            {quiet ? ' ⚠' : ''}
-                        </span>
-                    );
-                },
-            }),
-            helper.accessor((r) => r.deal.closeDate, {
-                id: 'closeDate',
-                header: 'Close date',
-                cell: ({ getValue }) => formatDay(getValue()),
-            }),
-        ],
-        [canBulk, canMove, membersById, onMove, onOpen, rows, selected, stages],
+                    cell: ({ row }) => (
+                        <Checkbox
+                            aria-label={`Select ${row.original.deal.name}`}
+                            checked={selected.has(row.original.deal.id)}
+                            onCheckedChange={(checked) =>
+                                setSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked === true) next.add(row.original.deal.id);
+                                    else next.delete(row.original.deal.id);
+                                    return next;
+                                })
+                            }
+                            disabled={!canBulk}
+                        />
+                    ),
+                    enableHiding: false,
+                }),
+                helper.accessor((r) => r.deal.name, {
+                    id: 'name',
+                    header: 'Deal',
+                    cell: ({ row }) => (
+                        <button
+                            type="button"
+                            onClick={() => onOpen(row.original.deal)}
+                            className="text-left font-medium hover:underline"
+                        >
+                            {row.original.deal.name}
+                        </button>
+                    ),
+                    enableHiding: false,
+                }),
+                helper.accessor((r) => r.stage.name, {
+                    id: 'stage',
+                    header: 'Stage',
+                    cell: ({ row }) =>
+                        canMove ? (
+                            <Select
+                                value={row.original.deal.stageId}
+                                onValueChange={(stageId) => {
+                                    if (classifyMove(stages, row.original.deal.stageId, stageId).kind !== 'same')
+                                        onMove(row.original.deal, stageId);
+                                }}
+                            >
+                                <SelectTrigger className="h-7.5 w-40" aria-label={`Stage of ${row.original.deal.name}`}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {stages.map((stage) => (
+                                        <SelectItem key={stage.id} value={stage.id}>
+                                            {stage.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Badge status={STAGE_TONES[row.original.stage.colour]} dot>
+                                {row.original.stage.name}
+                            </Badge>
+                        ),
+                }),
+                ...chosen
+                    .filter(({ column }) => column.field !== 'name')
+                    .map(({ column, width }) =>
+                        helper.display({
+                            id: column.field,
+                            header: column.label,
+                            size: width,
+                            cell: ({ row }) => column.cell(row.original.deal),
+                        }),
+                    ),
+                helper.accessor((r) => r.deal.daysInStage, {
+                    id: 'daysInStage',
+                    header: 'In stage',
+                    cell: ({ row }) => {
+                        const { deal, stage } = row.original;
+                        const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
+                        return (
+                            <span className={cn('tabular-nums', quiet && 'text-warning')}>
+                                {daysLabel(deal.daysInStage)}
+                                {quiet ? ' ⚠' : ''}
+                            </span>
+                        );
+                    },
+                }),
+            ] as ColumnDef<Row, unknown>[],
+        [canBulk, canMove, chosen, onMove, onOpen, rows, selected, stages],
     );
 
     const table = useReactTable({
         data: rows,
         columns,
-        state: { columnVisibility: visibility },
-        onColumnVisibilityChange: setVisibility,
         getCoreRowModel: getCoreRowModel(),
         getRowId: (row) => row.deal.id,
     });
@@ -225,12 +221,7 @@ export function DealsList({
         overscan: VIRTUAL_OVERSCAN,
     });
 
-    const [sortField, sortDir] = sort?.split(':') ?? [];
-    const toggleSort = (apiField: string) => {
-        if (sortField !== apiField) onSortChange(`${apiField}:asc`);
-        else if (sortDir === 'asc') onSortChange(`${apiField}:desc`);
-        else onSortChange(undefined);
-    };
+    const head = sorts[0];
 
     const selectedRows = rows.filter((r) => selected.has(r.deal.id));
 
@@ -246,11 +237,6 @@ export function DealsList({
             return;
         }
         for (const row of selectedRows) if (row.deal.stageId !== stageId) onMove(row.deal, stageId);
-        setSelected(new Set());
-    }
-
-    function bulkAssign(ownerId: string | null) {
-        for (const row of selectedRows) if (row.deal.ownerId !== ownerId) onAssign(row.deal, ownerId);
         setSelected(new Set());
     }
 
@@ -282,115 +268,99 @@ export function DealsList({
                     ))}
                 </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <BulkBarAction disabled={!canEdit}>Assign owner</BulkBarAction>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                    <DropdownMenuItem onSelect={() => bulkAssign(null)}>Unassigned</DropdownMenuItem>
-                    {members.map((m) => (
-                        <DropdownMenuItem key={m.memberId} onSelect={() => bulkAssign(m.memberId)}>
-                            {m.name ?? 'Member'}
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <BulkBarAction
+                disabled={!canEdit}
+                onClick={() => {
+                    onBulkAssign([...selected]);
+                    setSelected(new Set());
+                }}
+            >
+                Assign owner
+            </BulkBarAction>
+            <BulkBarAction onClick={() => onBulkExport([...selected])}>Export selected</BulkBarAction>
         </BulkBar>
     );
 
     if (stacked) {
-        // A phone: one card per deal — the same rows, the same selection and bulk bar, the same
-        // stage select calling the same move — with every control a 44px target (FR-CRMS-UI-12).
+        // A phone (FR-CRMS-UI-12): the design system's CardList, the card every list uses on a phone —
+        // name, company and amount, the stage and days in it — with one "•••" menu per deal. Moving
+        // a deal is the board's Move-to-stage sheet, the one move UI on a phone; a long press or
+        // Select chooses deals for the same bulk bar.
+        const items: CardListItem[] = rows.map(({ deal, stage }) => {
+            const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
+            return {
+                id: deal.id,
+                primary: deal.name,
+                secondary: [deal.company?.name, deal.amount ? formatMoney(deal.amount) : null].filter(
+                    (part): part is string => Boolean(part),
+                ),
+                meta: [
+                    <Badge key="stage" status={STAGE_TONES[stage.colour]} dot>
+                        {stage.name}
+                    </Badge>,
+                    <span key="days" className={cn('text-xs tabular-nums', quiet && 'text-warning')}>
+                        {daysLabel(deal.daysInStage)} in stage{quiet ? ' ⚠' : ''}
+                    </span>,
+                ],
+                actions: (
+                    <RowActionsMenu
+                        row={deal}
+                        actions={{
+                            label: (d) => d.name,
+                            items: (d) => (
+                                <>
+                                    <DropdownMenuItem onSelect={() => onOpen(d)}>Open</DropdownMenuItem>
+                                    {canMove && (
+                                        <DropdownMenuItem onSelect={() => onMoveSheet(d)}>
+                                            Move to stage…
+                                        </DropdownMenuItem>
+                                    )}
+                                </>
+                            ),
+                        }}
+                    />
+                ),
+            };
+        });
+        const byId = new Map(rows.map((r) => [r.deal.id, r.deal]));
         return (
-            <div>
-                <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label={`${rows.length} deals`}>
-                    {rows.map(({ deal, stage }) => {
-                        const quiet = stage.daysThreshold !== null && deal.daysInStage > stage.daysThreshold;
-                        const isSelected = selected.has(deal.id);
-                        return (
-                            <li
-                                key={deal.id}
-                                className={cn(
-                                    'rounded-lg border border-border bg-surface p-3 shadow-sm',
-                                    isSelected && 'border-accent bg-selection',
-                                )}
-                            >
-                                <div className="flex items-start gap-2">
-                                    {canBulk && (
-                                        <button
-                                            type="button"
-                                            role="checkbox"
-                                            aria-checked={isSelected}
-                                            aria-label={`Select ${deal.name}`}
-                                            onClick={() => toggle(deal.id)}
-                                            className="-m-1 grid size-touch shrink-0 place-items-center"
-                                        >
-                                            <span
-                                                aria-hidden
-                                                className={cn(
-                                                    'grid size-5 place-items-center rounded-sm border border-border-strong',
-                                                    isSelected && 'border-accent bg-accent text-accent-foreground',
-                                                )}
-                                            >
-                                                {isSelected && <Check className="size-3.5" />}
-                                            </span>
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpen(deal)}
-                                        className="min-h-touch min-w-0 flex-1 text-left"
-                                    >
-                                        <span className="block truncate text-touch font-semibold">{deal.name}</span>
-                                        <span className="block text-sm text-text-muted tabular-nums">
-                                            {formatMoney(deal.amount)}
-                                            {deal.ownerId ? ` · ${membersById.get(deal.ownerId) ?? 'Member'}` : ''}
-                                        </span>
-                                    </button>
-                                </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                                    {canMove ? (
-                                        <Select
-                                            value={deal.stageId}
-                                            onValueChange={(stageId) => {
-                                                if (classifyMove(stages, deal.stageId, stageId).kind !== 'same')
-                                                    onMove(deal, stageId);
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-full" aria-label={`Stage of ${deal.name}`}>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {stages.map((s) => (
-                                                    <SelectItem key={s.id} value={s.id} className="min-h-touch">
-                                                        {s.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Badge status={STAGE_TONES[stage.colour]} dot>
-                                            {stage.name}
-                                        </Badge>
-                                    )}
-                                    <span
-                                        className={cn(
-                                            'text-sm tabular-nums',
-                                            quiet ? 'text-warning' : 'text-text-muted',
-                                        )}
-                                    >
-                                        {daysLabel(deal.daysInStage)} in stage{quiet ? ' ⚠' : ''}
-                                    </span>
-                                    {deal.closeDate && (
-                                        <span className="text-sm text-text-muted">
-                                            Close {formatDay(deal.closeDate)}
-                                        </span>
-                                    )}
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
+            <div className="flex flex-col gap-2">
+                {canBulk && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-text-muted">{rows.length} deals</span>
+                        <Button
+                            shape="square"
+                            size="sm"
+                            onClick={() => {
+                                if (selecting) {
+                                    setSelecting(false);
+                                    setSelected(new Set());
+                                } else setSelecting(true);
+                            }}
+                        >
+                            {selecting ? 'Done' : 'Select'}
+                        </Button>
+                    </div>
+                )}
+                <CardList
+                    aria-label="Deals"
+                    items={items}
+                    onOpen={(id) => {
+                        const deal = byId.get(id);
+                        if (deal) onOpen(deal);
+                    }}
+                    selecting={selecting}
+                    selected={selected}
+                    onToggle={toggle}
+                    {...(canBulk
+                        ? {
+                              onStartSelecting: (id: string) => {
+                                  setSelecting(true);
+                                  toggle(id);
+                              },
+                          }
+                        : {})}
+                />
                 {bulkBar}
             </div>
         );
@@ -417,28 +387,6 @@ export function DealsList({
         <div className="rounded-lg border border-border bg-surface shadow-sm">
             <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
                 <span className="text-sm text-text-muted">{rows.length} deals</span>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="secondary" size="sm" shape="square" className="ml-auto">
-                            <Columns3 aria-hidden /> Columns
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Show columns</DropdownMenuLabel>
-                        {table
-                            .getAllLeafColumns()
-                            .filter((c) => c.getCanHide())
-                            .map((column) => (
-                                <DropdownMenuCheckboxItem
-                                    key={column.id}
-                                    checked={column.getIsVisible()}
-                                    onCheckedChange={(value) => column.toggleVisibility(value === true)}
-                                >
-                                    {String(column.columnDef.header)}
-                                </DropdownMenuCheckboxItem>
-                            ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
             </div>
             <div ref={scrollRef} className="max-h-[calc(100vh-20rem)] overflow-auto">
                 <table className={tableClasses.table}>
@@ -446,14 +394,17 @@ export function DealsList({
                         {table.getHeaderGroups().map((group) => (
                             <tr key={group.id}>
                                 {group.headers.map((header) => {
-                                    const apiField = SORTABLE.has(header.column.id) ? header.column.id : undefined;
-                                    const active = apiField !== undefined && sortField === apiField;
+                                    const apiField = isSortable('opportunity', header.column.id)
+                                        ? header.column.id
+                                        : undefined;
+                                    const active = apiField !== undefined && head?.field === apiField;
+                                    const sortDir = active ? head?.direction : undefined;
                                     return (
                                         <th key={header.id} className={tableClasses.th}>
                                             {apiField ? (
                                                 <button
                                                     type="button"
-                                                    onClick={() => toggleSort(apiField)}
+                                                    onClick={() => onSortColumn(apiField)}
                                                     className="inline-flex items-center gap-1 hover:text-text"
                                                     aria-sort={
                                                         active

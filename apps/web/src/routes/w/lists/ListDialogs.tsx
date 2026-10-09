@@ -16,10 +16,11 @@ import {
     SelectValue,
     type ToastInput,
 } from '@bylinecrm/ui';
+import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
-import { useBulkChange, useCreateRecord, type BulkResult } from '../../../api/lists';
-import type { CompanyInput, PersonInput } from '../../../api/types';
+import { useBulkChange, useCreateRecord } from '../../../api/lists';
+import type { BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
 import { LIST_COPY, type ListObject } from './listConfig';
 
 /** The message for a failed request: the API's own words when it sent some. */
@@ -28,14 +29,25 @@ export function failureText(error: unknown): string {
     return error instanceof Error ? error.message : 'Something went wrong.';
 }
 
-/** The notice for a change to many records: "Assigned 12 people", or what was refused and why. */
-export function bulkSummary(verb: string, plural: string, result: BulkResult): ToastInput {
-    const total = result.succeeded + result.failed.length;
-    if (result.failed.length === 0) return { title: `${verb} ${total} ${plural}`, tone: 'success' };
+/**
+ * The one notice for a change to many records, from the API's per-record results (P1-4a):
+ * "Assigned 10 people · 2 already were · 1 not found". A record the caller cannot act on reads
+ * `not_found` whatever the reason, so the notice says "not found or not yours", never more.
+ */
+export function bulkSummary(
+    verb: string,
+    noun: { singular: string; plural: string },
+    result: BulkResultView,
+): ToastInput {
+    const unchanged = result.results.filter((r) => r.ok && r.unchanged).length;
+    const changed = result.succeeded - unchanged;
+    const parts = [`${verb} ${changed} ${changed === 1 ? noun.singular : noun.plural}`];
+    if (unchanged) parts.push(`${unchanged} already ${unchanged === 1 ? 'was' : 'were'}`);
+    if (result.failed === 0) return { title: parts.join(' · '), tone: 'success' };
     return {
-        title: `${verb} ${result.succeeded} of ${total} ${plural}`,
-        description: `${result.failed.length} refused: ${failureText(result.failed[0]?.error)}`,
-        tone: 'danger',
+        title: parts.join(' · '),
+        description: `${result.failed} not found or not yours to change.`,
+        tone: 'warning',
     };
 }
 
@@ -137,8 +149,8 @@ export function ConfirmDialog({
     );
 }
 
-/** Assigns an owner to the chosen records; the API refuses rows the caller may not reassign. */
-export function AssignOwnerDialog<O extends ListObject>({
+/** Assigns an owner to the chosen records in one bulk request; the API reports rows it would not change. */
+export function AssignOwnerDialog<O extends RecordObject>({
     workspaceId,
     object,
     ids,
@@ -158,8 +170,13 @@ export function AssignOwnerDialog<O extends ListObject>({
     const copy = LIST_COPY[object];
     const submit = async () => {
         if (!ownerId) return;
-        const result = await change.mutateAsync({ ids, patch: { ownerId } as never });
-        onDone(bulkSummary('Assigned', ids.length === 1 ? copy.singular : copy.plural, result));
+        try {
+            const result = await change.mutateAsync({ action: 'assign_owner', ids, ownerId });
+            onDone(bulkSummary('Assigned', copy, result));
+        } catch (error) {
+            // Refused as a whole (an own-scoped member naming someone else, an owner who left): nothing changed.
+            onDone({ title: 'Nobody was reassigned', description: failureText(error), tone: 'danger' });
+        }
     };
     return (
         <Dialog open onOpenChange={onOpenChange}>

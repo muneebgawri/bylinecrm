@@ -58,6 +58,7 @@ export { StageProgress, type Stage, type StageProgressProps } from './components
 export { CardList, LONG_PRESS_MS, type CardListItem, type CardListProps } from './components/card-list/CardList';
 export {
     DataTableChrome,
+    RowActionsMenu,
     pageWindow,
     phoneRoles,
     tableClasses,
