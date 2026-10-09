@@ -1,6 +1,7 @@
 import { Body, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
+import type { BulkResult } from '@bylinecrm/shared';
+import { BulkBodyDto, ExportBodyDto, ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
 import { ExportService } from '../query/export.service';
 import type { Group } from '../query/group-by';
 import { QueryService } from '../query/query.service';
@@ -17,16 +18,20 @@ import {
     UpdateOpportunityDto,
     UpdateTaskDto,
 } from './dto';
-import type { Page } from './list-query';
+import type { CountedPage, Page } from './list-query';
+import { BulkService } from './bulk/bulk.service';
 import { NotesService, type NoteView } from './notes.service';
 import { OpportunitiesService, type OpportunityView } from './opportunities.service';
 import { parseTarget } from './targets';
 import { TasksService, type TaskView } from './tasks.service';
 import { Returns, ReturnsFile } from '../openapi/responses';
 import { groupView } from '../query/responses';
-import { notePage, noteView, opportunityPage, opportunityView, taskPage, taskView } from './responses';
+import { bulkResultView, notePage, noteView, opportunityPage, opportunityView, taskPage, taskView } from './responses';
 
-/** Deals: read with `deal:read`, every write with `deal:edit`; moving stages is P1-2's `deal:move`. */
+/**
+ * Deals: read with `deal:read`, every write with `deal:edit`; moving stages is P1-2's `deal:move`;
+ * acting on many at once is `deal:bulk` (doc 50 §B), and each write still needs `deal:edit`.
+ */
 @ApiTags('opportunities')
 @TenantController('opportunities')
 export class OpportunitiesController {
@@ -34,6 +39,7 @@ export class OpportunitiesController {
         private readonly opportunities: OpportunitiesService,
         private readonly queries: QueryService,
         private readonly exports: ExportService,
+        private readonly bulkActions: BulkService,
     ) {}
 
     /** The list's twin for a filter too long for a query string: the same parameters in a body. */
@@ -41,7 +47,7 @@ export class OpportunitiesController {
     @HttpCode(200)
     @Post('query')
     @Returns(opportunityPage)
-    query(@Body() body: QueryBodyDto): Promise<Page<OpportunityView>> {
+    query(@Body() body: QueryBodyDto): Promise<CountedPage<OpportunityView>> {
         return this.opportunities.list(body);
     }
 
@@ -51,6 +57,32 @@ export class OpportunitiesController {
     @Returns([groupView])
     groupBy(@Query() query: GroupByQueryDto): Promise<Group[]> {
         return this.queries.groupBy('opportunity', query);
+    }
+
+    /**
+     * Many records at once (P1-4a): assign an owner, delete or restore — named by id or selected
+     * by filter / view / q, at most `BULK_MAX_IDS`. Each goes through the single-record write and
+     * is announced by its own event; the result says, per record, whether it changed.
+     */
+    @Requires('deal:bulk')
+    @HttpCode(200)
+    @Post('bulk')
+    @Returns(bulkResultView)
+    bulk(@Body() body: BulkBodyDto): Promise<BulkResult> {
+        return this.bulkActions.run(this.opportunities, body);
+    }
+
+    /** The export's twin for a filter too long for a query string — a selection of ids, typically. */
+    @Requires('deal:read')
+    @HttpCode(200)
+    @Post('export.csv')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="opportunitys.csv"')
+    @Header('Cache-Control', 'private, no-store')
+    @ReturnsFile('text/csv')
+    async exportCsvSelection(@Body() body: ExportBodyDto, @Res() res: Response): Promise<void> {
+        await this.exports.writeCsv('opportunity', body, res);
+        res.end();
     }
 
     /** The filtered, scoped list as a streamed CSV (RFC 4180, UTF-8 with BOM); `413` past `EXPORT_MAX_ROWS`. */
@@ -68,14 +100,14 @@ export class OpportunitiesController {
     @Requires('deal:read')
     @Get()
     @Returns(opportunityPage)
-    list(@Query() query: ListQueryDto): Promise<Page<OpportunityView>> {
+    list(@Query() query: ListQueryDto): Promise<CountedPage<OpportunityView>> {
         return this.opportunities.list(query);
     }
 
     @Requires('deal:edit')
     @Get('deleted')
     @Returns(opportunityPage)
-    listDeleted(@Query() query: ListQueryDto): Promise<Page<OpportunityView>> {
+    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<OpportunityView>> {
         return this.opportunities.list(query, true);
     }
 

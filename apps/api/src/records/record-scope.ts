@@ -10,6 +10,18 @@ export function ownerWhere(context: WorkspaceRunContext): { ownerId?: string } {
 }
 
 /**
+ * The records a caller can act on in one state: live (`deleted` false) or in the trash, within
+ * their owner scope. The base every record read starts from — a list, a single record, a bulk
+ * action's check of which named ids it may touch.
+ */
+export function recordWhere(
+    context: WorkspaceRunContext,
+    deleted: boolean,
+): { deletedAt: null | { not: null }; ownerId?: string } {
+    return { deletedAt: deleted ? { not: null } : null, ...ownerWhere(context) };
+}
+
+/**
  * Which owner a write may record.
  *
  * `requested` is what the caller asked for: `undefined` when they said nothing, `null` to clear.

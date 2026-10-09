@@ -3,6 +3,7 @@ import { PipelinesModule } from '../pipelines/pipelines.module';
 import { NotesController, OpportunitiesController, TasksController } from './activities.controllers';
 import { AttachmentsController } from './attachments.controller';
 import { AttachmentsService } from './attachments.service';
+import { BulkService } from './bulk/bulk.service';
 import { CompaniesService } from './companies.service';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { QueryModule } from '../query/query.module';
@@ -24,7 +25,15 @@ import { TasksService } from './tasks.service';
         TasksController,
         AttachmentsController,
     ],
-    providers: [PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService, AttachmentsService],
+    providers: [
+        PeopleService,
+        CompaniesService,
+        OpportunitiesService,
+        NotesService,
+        TasksService,
+        AttachmentsService,
+        BulkService,
+    ],
     exports: [PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
 })
 export class RecordsModule {}

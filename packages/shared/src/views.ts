@@ -88,6 +88,16 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
     ],
 };
 
+/**
+ * A record's own id, as a filter may name it: only to read or act on many records by id (a
+ * selection's export, a page of names). It is not in `STANDARD_FIELDS` — a list never offers it
+ * as a column, a sort or a group — but every object's filter, export and bulk route accepts it.
+ */
+export const ID_FIELD: FieldDescriptor = { name: 'id', label: 'ID', kind: 'uuid', sortable: false, groupable: false };
+
+/** How many ids one `in`/`nin` on `id` may carry; more is `413`, never a silently shorter list. */
+export const FILTER_MAX_IDS = 500;
+
 /** The names a list of this object may be sorted by. */
 export function sortableFieldNames(object: RecordObject): readonly string[] {
     return STANDARD_FIELDS[object].filter((f) => f.sortable).map((f) => f.name);
@@ -182,9 +192,14 @@ export function groupNodes(group: FilterGroup): FilterNode[] {
     return 'and' in group ? group.and : group.or;
 }
 
+/** How many values an `in`/`nin` on this field may carry: `FILTER_MAX_IDS` on `id`, else `FILTER_MAX_LIST`. */
+export function filterListLimit(field: string): number {
+    return field === ID_FIELD.name ? FILTER_MAX_IDS : FILTER_MAX_LIST;
+}
+
 /**
  * The structural problem with a filter, or `null`: deeper than `FILTER_MAX_DEPTH`, more than
- * `FILTER_MAX_NODES` conditions and groups, or a list longer than `FILTER_MAX_LIST`.
+ * `FILTER_MAX_NODES` conditions and groups, or a list longer than `filterListLimit` allows.
  */
 export function filterProblem(group: FilterGroup): string | null {
     let nodes = 0;
@@ -199,12 +214,9 @@ export function filterProblem(group: FilterGroup): string | null {
             }
             return null;
         }
-        if (
-            (node.op === 'in' || node.op === 'nin') &&
-            Array.isArray(node.value) &&
-            node.value.length > FILTER_MAX_LIST
-        ) {
-            return `${node.op} takes at most ${FILTER_MAX_LIST} values`;
+        const limit = filterListLimit(node.field);
+        if ((node.op === 'in' || node.op === 'nin') && Array.isArray(node.value) && node.value.length > limit) {
+            return `${node.op} on ${node.field} takes at most ${limit} values`;
         }
         return null;
     };
@@ -251,6 +263,30 @@ export type SavedView = {
 export const EXPORT_MAX_ROWS = 100_000;
 /** How many rows the export reads per page while streaming. */
 export const EXPORT_PAGE_SIZE = 1000;
+
+/**
+ * A list's total: counted over the same filtered, scoped set as its page, up to this many rows.
+ * Past it the list says `totalIsExact: false` and the total is the cap — counting a large table
+ * exactly on every page view is work nobody reads ("10,000+").
+ */
+export const LIST_COUNT_CAP = 10_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk actions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What one bulk request may do to many records of one object. */
+export const BULK_ACTIONS = ['assign_owner', 'delete', 'restore'] as const;
+export type BulkAction = (typeof BULK_ACTIONS)[number];
+/** The most records one bulk request may name or match; more is `413`. */
+export const BULK_MAX_IDS = FILTER_MAX_IDS;
+/** How many records one transaction of a bulk request changes. */
+export const BULK_CHUNK_SIZE = 100;
+/** Why one record of a bulk request was not changed. Not visible to the caller, in any workspace, reads the same. */
+export const BULK_ROW_ERRORS = ['not_found'] as const;
+export type BulkRowError = (typeof BULK_ROW_ERRORS)[number];
+export type BulkRowResult = { id: string; ok: true } | { id: string; ok: false; error: BulkRowError };
+export type BulkResult = { results: BulkRowResult[]; succeeded: number; failed: number };
 
 /** Global search: results per object, default and ceiling. */
 export const SEARCH_GROUP_LIMIT_DEFAULT = 5;

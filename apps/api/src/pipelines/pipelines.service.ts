@@ -19,7 +19,7 @@ import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
-import { withStage, withStageInclude } from '../records/opportunities.service';
+import { opportunityInclude, view as dealView } from '../records/opportunities.service';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { type RawQuery, resolvePlan } from '../query/query.service';
 import { ownerWhere } from '../records/record-scope';
@@ -301,7 +301,7 @@ export class PipelinesService {
             return { deal: after, moved: outcome, rules: forward };
         });
         if (moved.outcome === 'moved') this.moves.announce(context.workspaceId, dealId, actor, moved);
-        return { deal: withStage(deal), rulesThatMayMoveItForward: rules.map(ruleView) };
+        return { deal: dealView(deal), rulesThatMayMoveItForward: rules.map(ruleView) };
     }
 
     history(dealId: string, limit: number): Promise<HistoryEntry[]> {
@@ -349,7 +349,7 @@ export class PipelinesService {
                 const [rows, sums] = await Promise.all([
                     tx.opportunity.findMany({
                         where: stageWhere,
-                        include: withStageInclude,
+                        include: opportunityInclude,
                         orderBy: plan.orderBy as Prisma.OpportunityOrderByWithRelationInput[],
                         take: BOARD_STAGE_LIMIT + 1,
                     }),
@@ -371,7 +371,7 @@ export class PipelinesService {
                     stage: stageView(stage),
                     count,
                     amountMinorByCurrency,
-                    deals: rows.slice(0, BOARD_STAGE_LIMIT).map(withStage),
+                    deals: rows.slice(0, BOARD_STAGE_LIMIT).map(dealView),
                     hasMore: rows.length > BOARD_STAGE_LIMIT,
                 });
             }
@@ -404,7 +404,7 @@ async function findStage(tx: WorkspaceClient, pipelineId: string, stageId: strin
 async function findDeal(tx: WorkspaceClient, context: WorkspaceRunContext, id: string) {
     const row = await tx.opportunity.findFirst({
         where: { id, deletedAt: null, ...ownerWhere(context) },
-        include: withStageInclude,
+        include: opportunityInclude,
     });
     if (!row) throw new NotFoundException('opportunity not found');
     return row;

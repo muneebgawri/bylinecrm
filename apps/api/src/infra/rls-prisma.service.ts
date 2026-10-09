@@ -29,12 +29,32 @@ export class NoWorkspaceError extends Error {
  * migrations and administration and never touches tenant rows on a request's behalf.
  */
 @Injectable()
-export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class RlsPrismaService
+    extends PrismaClient<Prisma.PrismaClientOptions, 'query'>
+    implements OnModuleInit, OnModuleDestroy
+{
+    /** Who hears each SQL statement this client sends; see `observeQueries`. */
+    private readonly queryObservers = new Set<(sql: string) => void>();
+
     constructor(
         @Inject(ENV) env: Env,
         private readonly context: WorkspaceContext,
     ) {
-        super({ datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL) });
+        // Prisma emits a query event per statement; with no observer registered the handler loops over nothing.
+        super({ datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL), log: [{ emit: 'event', level: 'query' }] });
+        this.$on('query', (event) => {
+            for (const observe of this.queryObservers) observe(event.query);
+        });
+    }
+
+    /**
+     * Hears every SQL statement this client sends until the returned function is called. A query
+     * budget is held by it — the record lists' test asserts that a page of fifty rows with their
+     * related names costs the same number of statements as a page of ten (P1-4a: no N+1).
+     */
+    observeQueries(observer: (sql: string) => void): () => void {
+        this.queryObservers.add(observer);
+        return () => this.queryObservers.delete(observer);
     }
 
     async onModuleInit(): Promise<void> {
