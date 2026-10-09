@@ -248,7 +248,12 @@ export function DealsPage() {
                             options={VIEW_OPTIONS}
                         />
                         {canEdit && (
-                            <Button variant="primary" shape="square" onClick={() => setParam(DEALS_PARAMS.create, '1')}>
+                            <Button
+                                data-primary-action
+                                variant="primary"
+                                shape="square"
+                                onClick={() => setParam(DEALS_PARAMS.create, '1')}
+                            >
                                 <Plus aria-hidden /> New deal
                             </Button>
                         )}

@@ -1,0 +1,7 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "types": ["node"]
+    },
+    "include": [".", "../src/routes/paths.ts", "../src/api/types.ts"]
+}

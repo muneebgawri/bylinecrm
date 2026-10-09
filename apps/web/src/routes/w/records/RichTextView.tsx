@@ -81,7 +81,7 @@ function Marked({ node }: { node: RichTextNode }) {
                         href={href}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="text-accent underline-offset-2 hover:underline"
+                        className="text-accent underline underline-offset-2"
                     >
                         {out}
                     </a>

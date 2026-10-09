@@ -41,7 +41,13 @@ export function Invites() {
                 activeTab="all"
                 toolbar={{
                     extra: (
-                        <Button variant="primary" shape="square" size="sm" onClick={() => setCreating(true)}>
+                        <Button
+                            data-primary-action
+                            variant="primary"
+                            shape="square"
+                            size="sm"
+                            onClick={() => setCreating(true)}
+                        >
                             Invite member
                         </Button>
                     ),

@@ -76,7 +76,7 @@ export function RailEmpty({ children }: { children: ReactNode }) {
 /** A rail card while its rows load: the shape, not "nothing here" (loading is not empty, FR-CRMS-UI-7). */
 export function RailLoading() {
     return (
-        <div className="px-4 py-3" aria-busy="true" aria-label="Loading">
+        <div className="px-4 py-3" role="status" aria-busy="true" aria-label="Loading">
             <Skeleton className="h-8" />
         </div>
     );

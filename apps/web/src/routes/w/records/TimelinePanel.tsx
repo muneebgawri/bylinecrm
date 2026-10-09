@@ -111,7 +111,7 @@ export function TimelinePanel({
                             aria-pressed={filter === f.id}
                             onClick={() => setFilter(f.id)}
                             className={cn(
-                                'h-7 rounded-md px-2.5 text-xs font-medium text-text-muted hover:text-text',
+                                'h-7 rounded-md px-2.5 text-xs font-medium text-text-muted hover:text-text max-md:min-h-touch max-md:min-w-touch',
                                 filter === f.id && 'border border-border bg-surface-raised text-text',
                                 focusRing,
                             )}
@@ -123,7 +123,12 @@ export function TimelinePanel({
             </div>
             <div className="px-4 py-2">
                 {query.isPending ? (
-                    <div className="flex flex-col gap-3 py-2" aria-busy="true" aria-label="Loading activity">
+                    <div
+                        className="flex flex-col gap-3 py-2"
+                        role="status"
+                        aria-busy="true"
+                        aria-label="Loading activity"
+                    >
                         <Skeleton className="h-10" />
                         <Skeleton className="h-10" />
                         <Skeleton className="h-10" />

@@ -25,12 +25,12 @@ export function AuthCallback() {
                             ? 'The provider did not confirm your email address, so no session was started.'
                             : 'The server could not be reached to finish signing in.'}
                     </p>
-                    <Button asChild variant="primary" shape="square">
+                    <Button data-primary-action asChild variant="primary" shape="square">
                         <a href={paths.signIn}>Back to sign in</a>
                     </Button>
                 </div>
             ) : (
-                <div className="grid gap-2" aria-label="Checking your session">
+                <div className="grid gap-2" role="status" aria-label="Checking your session">
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-5 w-1/2" />
                 </div>

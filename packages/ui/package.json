@@ -34,7 +34,7 @@
         "test:a11y": "playwright test -c gates/playwright.config.ts --project a11y",
         "test:visual": "playwright test -c gates/playwright.config.ts --project visual",
         "test:visual:update": "playwright test -c gates/playwright.config.ts --project visual --update-snapshots",
-        "visual:baseline": "node gates/baseline.mjs"
+        "visual:baseline": "node ../../scripts/visual-baseline.mjs --job visual-baseline --artifact visual-baselines --dir packages/ui/__snapshots__"
     },
     "peerDependencies": {
         "react": "^19.0.0",

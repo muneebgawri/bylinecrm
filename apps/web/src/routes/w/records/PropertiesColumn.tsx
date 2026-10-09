@@ -55,20 +55,21 @@ export function PropertiesColumn({
                 ))}
             </dl>
             <SectionLabel>Custom fields</SectionLabel>
-            <dl className="m-0 py-1.5">
-                {definitions.isPending ? (
-                    <div className="px-4 py-2">
-                        <Skeleton className="h-6 w-2/3" />
-                    </div>
-                ) : definitions.isError ? (
-                    <p className="m-0 px-4 py-2 text-xs text-text-faint">Custom fields could not be loaded.</p>
-                ) : definitions.data.length === 0 ? (
-                    <p className="m-0 px-4 py-2 text-xs text-text-faint">
-                        None defined for{' '}
-                        {object === 'opportunity' ? 'deals' : `${object === 'person' ? 'people' : 'companies'}`} yet.
-                    </p>
-                ) : (
-                    definitions.data
+            {/* A <dl> holds only term/definition groups; the loading, error and empty states sit outside it. */}
+            {definitions.isPending ? (
+                <div className="px-4 py-2">
+                    <Skeleton className="h-6 w-2/3" />
+                </div>
+            ) : definitions.isError ? (
+                <p className="m-0 px-4 py-2 text-xs text-text-faint">Custom fields could not be loaded.</p>
+            ) : definitions.data.length === 0 ? (
+                <p className="m-0 px-4 py-2 text-xs text-text-faint">
+                    None defined for{' '}
+                    {object === 'opportunity' ? 'deals' : `${object === 'person' ? 'people' : 'companies'}`} yet.
+                </p>
+            ) : (
+                <dl className="m-0 py-1.5">
+                    {definitions.data
                         .filter((d) => !d.archivedAt)
                         .map((definition) => (
                             <Row key={definition.id} label={definition.label}>
@@ -80,9 +81,9 @@ export function PropertiesColumn({
                                     onSave={(v) => onSave({ custom: { [definition.key]: v } })}
                                 />
                             </Row>
-                        ))
-                )}
-            </dl>
+                        ))}
+                </dl>
+            )}
             <SectionLabel>Record</SectionLabel>
             <dl className="m-0 py-1.5 pb-2.5">
                 <Row label="Created">

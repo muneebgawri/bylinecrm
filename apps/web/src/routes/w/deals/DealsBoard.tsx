@@ -15,7 +15,7 @@ import {
 import { Button, CardChip, cn, DealCard, EmptyState, KanbanBoard, KanbanLane, toneSolid } from '@bylinecrm/ui';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowRightLeft, Clock, MoreHorizontal } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { BoardColumn, BoardView, OpportunityView, StageView } from '../../../api/types';
 import { formatDay } from '../../../lib/format';
 import { formatMoneyCompact, formatSums } from '../../../lib/money';
@@ -436,6 +436,7 @@ function DraggableCard({ deal, stage, ownerName, canDrag, canMove, picked, onOpe
         disabled: !canDrag,
     });
     const { role: _role, tabIndex: _tabIndex, ...rest } = attributes;
+    const hintId = useId();
     return (
         // A press that travels less than DRAG_DISTANCE_PX is a click: it opens the deal's drawer, as Enter does.
         <div
@@ -444,7 +445,9 @@ function DraggableCard({ deal, stage, ownerName, canDrag, canMove, picked, onOpe
             {...listeners}
             role="button"
             tabIndex={0}
-            aria-label={`${deal.name}, ${stage?.name ?? 'stage'}. Enter opens it${canMove ? '; Space picks it up to move' : ''}.`}
+            // The card's visible text is its name (WCAG 2.5.3, label in name); the stage and the keys
+            // are its description.
+            aria-describedby={hintId}
             aria-roledescription={canDrag ? 'draggable deal' : 'deal'}
             data-deal-id={deal.id}
             data-picked={picked ? 'true' : undefined}
@@ -457,6 +460,9 @@ function DraggableCard({ deal, stage, ownerName, canDrag, canMove, picked, onOpe
             )}
         >
             <CardBody deal={deal} stage={stage} ownerName={ownerName} highlighted={picked} />
+            <span id={hintId} className="sr-only">
+                {`In ${stage?.name ?? 'this stage'}. Enter opens it${canMove ? '; Space picks it up to move' : ''}.`}
+            </span>
         </div>
     );
 }

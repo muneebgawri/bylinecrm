@@ -102,7 +102,13 @@ export function ContentPage({ id }: { id: PageId }) {
                 subtitle={page.subtitle}
                 actions={
                     page.action && allowed ? (
-                        <Button variant="primary" shape="square" disabled title={`Arrives with ${page.coming}`}>
+                        <Button
+                            data-primary-action
+                            variant="primary"
+                            shape="square"
+                            disabled
+                            title={`Arrives with ${page.coming}`}
+                        >
                             {page.action.label}
                         </Button>
                     ) : undefined

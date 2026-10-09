@@ -28,7 +28,7 @@ export function Workspaces() {
     if (workspaces.isPending) {
         return (
             <Frame>
-                <div className="grid gap-2" aria-label="Loading your workspaces">
+                <div className="grid gap-2" role="status" aria-label="Loading your workspaces">
                     <Skeleton className="h-14" />
                     <Skeleton className="h-14" />
                 </div>
@@ -42,7 +42,7 @@ export function Workspaces() {
     return (
         <Frame
             action={
-                <Button variant="primary" onClick={() => setCreating(true)}>
+                <Button data-primary-action variant="primary" onClick={() => setCreating(true)}>
                     <Plus aria-hidden /> New workspace
                 </Button>
             }

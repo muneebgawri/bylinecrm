@@ -268,7 +268,12 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                             <Upload aria-hidden /> Import
                         </Button>
                         {write.allowed && (
-                            <Button shape="square" variant="primary" onClick={() => setCreating(true)}>
+                            <Button
+                                data-primary-action
+                                shape="square"
+                                variant="primary"
+                                onClick={() => setCreating(true)}
+                            >
                                 <Plus aria-hidden /> {copy.add}
                             </Button>
                         )}
@@ -297,7 +302,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
             {phone ? (
                 <>
                     <div className="flex flex-col gap-2">
-                        <label className="flex h-touch items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:ring-2 focus-within:ring-ring">
+                        <label className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:ring-2 focus-within:ring-ring">
                             <Search aria-hidden className="size-4 shrink-0 text-text-faint" />
                             <input
                                 type="search"
@@ -305,7 +310,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                                 onChange={(e) => setSearchDraft(e.target.value)}
                                 placeholder={copy.search}
                                 aria-label={copy.search}
-                                className="h-full w-full bg-transparent text-touch text-text outline-none placeholder:text-text-faint"
+                                className="min-h-touch w-full bg-transparent text-touch text-text outline-none placeholder:text-text-faint"
                             />
                         </label>
                         <div className="flex flex-wrap gap-2">

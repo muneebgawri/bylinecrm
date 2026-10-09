@@ -135,7 +135,9 @@ function WorkspaceSwitcher({ workspaceId, collapsed }: { workspaceId: string; co
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
-                    aria-label={`Workspace: ${current?.name ?? 'loading'}`}
+                    // Collapsed it shows only the logo, so it needs a name; expanded, the visible
+                    // workspace name is the name, with a hidden prefix (WCAG 2.5.3, label in name).
+                    aria-label={collapsed ? `Workspace: ${current?.name ?? 'loading'}` : undefined}
                     className={cn(
                         'mb-2.5 flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-surface-raised',
                         collapsed && 'justify-center px-0',
@@ -145,6 +147,7 @@ function WorkspaceSwitcher({ workspaceId, collapsed }: { workspaceId: string; co
                     <LogoMark />
                     {!collapsed && (
                         <>
+                            <span className="sr-only">Workspace: </span>
                             <span className="min-w-0 leading-tight">
                                 <b className="block truncate font-semibold">{current?.name ?? '…'}</b>
                                 <span className="text-xs text-text-muted">BylineCRM</span>
@@ -181,7 +184,7 @@ function UserCard({ collapsed, onOpenShortcuts }: { collapsed: boolean; onOpenSh
             <DropdownMenuTrigger asChild>
                 <button
                     type="button"
-                    aria-label={`Account: ${email}`}
+                    aria-label={collapsed ? `Account: ${email}` : undefined}
                     className={cn(
                         'mt-auto flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface p-2 text-left hover:bg-surface-raised',
                         collapsed && 'justify-center border-transparent p-1',
@@ -191,6 +194,7 @@ function UserCard({ collapsed, onOpenShortcuts }: { collapsed: boolean; onOpenSh
                     <Avatar name={name} size="sm" />
                     {!collapsed && (
                         <>
+                            <span className="sr-only">Account: </span>
                             <span className="min-w-0 leading-tight">
                                 <b className="block truncate font-medium">{name}</b>
                                 <span className="block truncate text-xs text-text-muted">{email}</span>

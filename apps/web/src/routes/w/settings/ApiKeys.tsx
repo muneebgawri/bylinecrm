@@ -43,7 +43,13 @@ export function ApiKeys() {
                 activeTab="all"
                 toolbar={{
                     extra: (
-                        <Button variant="primary" shape="square" size="sm" onClick={() => setCreating(true)}>
+                        <Button
+                            data-primary-action
+                            variant="primary"
+                            shape="square"
+                            size="sm"
+                            onClick={() => setCreating(true)}
+                        >
                             New key
                         </Button>
                     ),

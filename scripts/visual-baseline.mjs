@@ -1,27 +1,39 @@
 #!/usr/bin/env node
 /**
- * Regenerate the visual baselines ON THE CI RUNNER for the current branch and pull them down to
- * commit. This is the only supported way to update `__snapshots__/` (see README, "Visual
- * baselines"). It dispatches the CI workflow with `baseline=true`, which adds the
- * `visual-baseline` job, waits for that run, checks that job's own conclusion (another job in
- * the run may fail for its own reasons without invalidating the baselines), and downloads the
- * artifact.
+ * Regenerate a set of visual baselines ON THE CI RUNNER for the current branch and pull them down
+ * to commit. This is the only supported way to update a baseline directory; two sets use it:
+ *
+ *   design system  --job visual-baseline --artifact visual-baselines --dir packages/ui/__snapshots__
+ *   route gate     --job routes-baseline --artifact routes-baselines --dir apps/web/e2e/__snapshots__
+ *
+ * (each package's `*:baseline` script passes its own three). It dispatches the CI workflow with
+ * `baseline=true`, which adds the baseline jobs, waits for that run, checks the named job's own
+ * conclusion (another job in the run may fail for its own reasons without invalidating these
+ * baselines), and downloads the named artifact.
  *
  * The artifact is downloaded into a fresh temporary directory and copied over `__snapshots__/`
  * from there: `gh run download` refuses to overwrite an existing file, and `__snapshots__/` is
  * never empty, so downloading straight into it failed after every successful baseline job.
  */
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const WORKFLOW = 'ci.yml';
-const JOB = 'visual-baseline';
-const ARTIFACT = 'visual-baselines';
-// The directory `gates/playwright.config.ts` reads baselines from (`snapshotPathTemplate`).
-const snapshots = resolve(dirname(fileURLToPath(import.meta.url)), '../__snapshots__');
+
+/** `--job`, `--artifact` and `--dir` (relative to the repository root), all required. */
+function arg(name) {
+    const at = process.argv.indexOf(`--${name}`);
+    const value = at >= 0 ? process.argv[at + 1] : undefined;
+    if (!value) throw new Error(`visual:baseline — missing --${name}`);
+    return value;
+}
+const JOB = arg('job');
+const ARTIFACT = arg('artifact');
+// The directory the gate's Playwright config reads baselines from (its `snapshotPathTemplate`).
+const snapshots = resolve(dirname(fileURLToPath(import.meta.url)), '..', arg('dir'));
 const POLL_ATTEMPTS = 20;
 const POLL_INTERVAL_MS = 3000;
 
@@ -93,6 +105,8 @@ try {
         );
     }
 
+    // A gate's first baselines land in a directory that does not exist yet.
+    mkdirSync(snapshots, { recursive: true });
     let added = 0;
     let changed = 0;
     for (const name of downloaded) {
