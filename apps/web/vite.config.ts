@@ -12,6 +12,18 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '../..', '');
     return {
         plugins: [react(), tailwindcss()],
+        build: {
+            rollupOptions: {
+                output: {
+                    // One `vendor` chunk for the framework so the size budget (.size-limit.json)
+                    // names a stable file; routes split on their own through `lazy`.
+                    manualChunks: (id) =>
+                        /node_modules\/(react|react-dom|scheduler|react-router|@tanstack)\//.test(id)
+                            ? 'vendor'
+                            : undefined,
+                },
+            },
+        },
         server: {
             port: Number(env.WEB_PORT),
             strictPort: true,

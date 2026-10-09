@@ -43,6 +43,9 @@ pnpm scan:licences
 pnpm scan:identifiers
 ```
 
+- **bundle** — `pnpm --filter web build && pnpm --filter web size`: the initial JS and the stylesheet stay under
+  the budgets in `apps/web/.size-limit.json` (gzip). Raise a budget in the PR that needs it, with the reason.
+
 ## Signing in (P0-3)
 
 - Local: `POST /api/auth/signup` (`email`, `password` ≥ 12 chars, `workspaceName`) → session cookie `blc_session`

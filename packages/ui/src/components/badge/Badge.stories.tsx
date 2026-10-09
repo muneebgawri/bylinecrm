@@ -11,15 +11,16 @@ export const Gallery: Story = {
         <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-2">
                 <Badge>Neutral</Badge>
+                <Badge status="accent">Replied</Badge>
                 <Badge status="success">Verified</Badge>
                 <Badge status="warning">Warming 3/14</Badge>
                 <Badge status="danger">Paused</Badge>
-                <Badge status="info">Scheduled</Badge>
+                <Badge status="info">Meeting</Badge>
             </div>
             <div className="flex flex-wrap gap-2">
                 <Badge dot>12 people</Badge>
                 <Badge dot status="success">
-                    Active
+                    Valid
                 </Badge>
                 <Badge dot status="warning">
                     Risky
@@ -29,6 +30,18 @@ export const Gallery: Story = {
                 </Badge>
                 <Badge dot status="info">
                     Syncing
+                </Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                <Badge shape="pill">4,812</Badge>
+                <Badge shape="pill" status="success" dot>
+                    Live
+                </Badge>
+                <Badge shape="pill" status="accent">
+                    ⚑ High
+                </Badge>
+                <Badge shape="pill" status="warning">
+                    ⚠ Quiet
                 </Badge>
             </div>
         </div>

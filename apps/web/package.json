@@ -9,26 +9,32 @@
         "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "size": "size-limit"
     },
     "dependencies": {
         "@bylinecrm/shared": "workspace:*",
         "@bylinecrm/ui": "workspace:*",
         "@tanstack/react-query": "^5.104.1",
+        "lucide-react": "^1.53.0",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
         "react-router": "^7.18.4"
     },
     "devDependencies": {
         "@bylinecrm/eslint-config": "workspace:*",
+        "@size-limit/file": "^14.2.0",
         "@tailwindcss/vite": "^4.3.3",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.0",
+        "@testing-library/user-event": "^14.6.1",
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",
         "@vitejs/plugin-react": "^6.1.2",
         "eslint": "^9.39.4",
         "jsdom": "^28.1.0",
+        "openapi-typescript": "^7.13.0",
+        "size-limit": "^14.2.0",
         "tailwindcss": "^4.3.3",
         "typescript": "^5.9.3",
         "vite": "^8.3.4",

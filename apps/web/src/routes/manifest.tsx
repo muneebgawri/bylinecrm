@@ -1,56 +1,79 @@
-import { Navigate, Outlet, type RouteObject } from 'react-router';
+import { Navigate, type RouteObject } from 'react-router';
 import { RequireAuth } from '../auth/RequireAuth';
+import { AppShell } from '../shell/AppShell';
+import { AuthCallback } from './auth/AuthCallback';
+import { SignIn } from './auth/SignIn';
+import { SignUp } from './auth/SignUp';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
 import { WORKSPACE_PARAM } from './params';
+import { Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
+import { ContentPage, type PageId } from './w/pages';
+import { Workspaces } from './Workspaces';
+
+/** Settings is its own chunk: admins only, loaded on first visit (FR-CRMS-UI-10). */
+const settings = {
+    layout: () => import('./w/settings/SettingsLayout').then((m) => ({ Component: m.SettingsLayout })),
+    members: () => import('./w/settings/Members').then((m) => ({ Component: m.Members })),
+    roles: () => import('./w/settings/Roles').then((m) => ({ Component: m.Roles })),
+    apiKeys: () => import('./w/settings/ApiKeys').then((m) => ({ Component: m.ApiKeys })),
+    invites: () => import('./w/settings/Invites').then((m) => ({ Component: m.Invites })),
+};
 
 /**
- * The route manifest: the one list of pages. Page components are placeholders until the shell
- * mockup is approved (P1-UI-1 is paused on layout by the owner); each is a named export so the
- * approved screens replace them in place without touching the tree below.
+ * The route manifest: the one list of pages. A route's `handle.crumb` is its breadcrumb; its
+ * `errorElement` is the boundary that says what happened (FR-CRMS-UI-7).
  */
-export function Placeholder({ name }: { name: string }) {
-    return <main data-route={name}>{name}</main>;
-}
+const page = (id: PageId, path: string, crumb: string): RouteObject => ({
+    path,
+    element: <ContentPage id={id} />,
+    handle: { crumb },
+    errorElement: <RouteError />,
+});
 
-const protectedRoutes: RouteObject[] = [
-    { path: paths.workspaces, element: <Placeholder name="workspaces" /> },
-    {
-        path: `/w/:${WORKSPACE_PARAM}`,
-        element: <Outlet />,
-        children: [
-            { index: true, element: <RedirectToHome /> },
-            { path: 'home', element: <Placeholder name="home" /> },
-            { path: 'people', element: <Placeholder name="people" /> },
-            { path: 'companies', element: <Placeholder name="companies" /> },
-            { path: 'deals', element: <Placeholder name="deals" /> },
-            {
-                path: 'settings',
-                element: <Outlet />,
-                children: [
-                    { index: true, element: <Navigate to="members" replace /> },
-                    { path: 'members', element: <Placeholder name="settings.members" /> },
-                    { path: 'roles', element: <Placeholder name="settings.roles" /> },
-                    { path: 'api-keys', element: <Placeholder name="settings.api-keys" /> },
-                    { path: 'invites', element: <Placeholder name="settings.invites" /> },
-                ],
-            },
-        ],
-    },
-];
-
-function RedirectToHome() {
-    // The index of `/w/:id` is `home`; relative so the id is not re-spelled here.
-    return <Navigate to="home" replace />;
-}
+const workspaceRoutes: RouteObject = {
+    path: `/w/:${WORKSPACE_PARAM}`,
+    element: <AppShell />,
+    errorElement: <RouteError />,
+    hydrateFallbackElement: <RouteSkeleton />,
+    children: [
+        { index: true, element: <Navigate to="home" replace /> },
+        page('home', 'home', 'Dashboard'),
+        page('reports', 'reports', 'Reports'),
+        page('people', 'people', 'People'),
+        page('companies', 'companies', 'Companies'),
+        page('deals', 'deals', 'Deals'),
+        page('sequences', 'sequences', 'Sequences'),
+        page('templates', 'templates', 'Templates'),
+        page('mailboxes', 'mailboxes', 'Mailboxes'),
+        page('team', 'team', 'Team'),
+        {
+            path: 'settings',
+            lazy: settings.layout,
+            handle: { crumb: 'Settings' },
+            errorElement: <RouteError />,
+            children: [
+                { index: true, element: <Navigate to="members" replace /> },
+                { path: 'members', lazy: settings.members, handle: { crumb: 'Members' } },
+                { path: 'roles', lazy: settings.roles, handle: { crumb: 'Roles' } },
+                { path: 'api-keys', lazy: settings.apiKeys, handle: { crumb: 'API keys' } },
+                { path: 'invites', lazy: settings.invites, handle: { crumb: 'Invites' } },
+            ],
+        },
+    ],
+};
 
 export const routes: RouteObject[] = [
     { path: paths.root, element: <Navigate to={paths.workspaces} replace /> },
-    { path: paths.signIn, element: <Placeholder name="sign-in" /> },
-    { path: paths.signUp, element: <Placeholder name="sign-up" /> },
-    { path: paths.authCallback, element: <Placeholder name="auth-callback" /> },
+    { path: paths.signIn, element: <SignIn />, errorElement: <RouteError /> },
+    { path: paths.signUp, element: <SignUp />, errorElement: <RouteError /> },
+    { path: paths.authCallback, element: <AuthCallback />, errorElement: <RouteError /> },
     { path: paths.status, element: <ServiceStatus /> },
-    { path: paths.forbidden, element: <Placeholder name="403" /> },
-    { element: <RequireAuth />, children: protectedRoutes },
-    { path: '*', element: <Placeholder name="404" /> },
+    { path: paths.forbidden, element: <Forbidden /> },
+    {
+        element: <RequireAuth pending={<RouteSkeleton />} />,
+        errorElement: <RouteError />,
+        children: [{ path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> }, workspaceRoutes],
+    },
+    { path: '*', element: <NotFound /> },
 ];

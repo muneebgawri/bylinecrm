@@ -1,0 +1,14 @@
+[
+    {
+        "name": "initial JS (entry + shared chunks, gzip)",
+        "path": ["dist/assets/index-*.js", "dist/assets/vendor-*.js"],
+        "limit": "190 kB",
+        "gzip": true
+    },
+    {
+        "name": "stylesheet (gzip)",
+        "path": "dist/assets/*.css",
+        "limit": "40 kB",
+        "gzip": true
+    }
+]
