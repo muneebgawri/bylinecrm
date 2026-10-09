@@ -25,9 +25,11 @@
     "scripts": {
         "build": "tsup src/index.ts --format esm,cjs --dts --clean",
         "typecheck": "tsc -p tsconfig.json --noEmit",
-        "lint": "echo 'shared: no sources to lint beyond typecheck'"
+        "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
     },
     "devDependencies": {
+        "@bylinecrm/eslint-config": "workspace:*",
+        "eslint": "^9.39.4",
         "tsup": "^8.5.0",
         "typescript": "^5.9.3"
     }

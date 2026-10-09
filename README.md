@@ -83,3 +83,7 @@ Changing the API means regenerating the file in the same PR — `pnpm --filter a
 
 One work package per branch and PR (doc 49 §5); the loop in doc 49 §3 is the process. The standing rule:
 no hot patches, no band-aids, no divergence — one definition of each thing.
+
+A fresh `git worktree` inherits no `node_modules`, no built `@bylinecrm/shared` and no generated Prisma client:
+run `pnpm install`, `pnpm --filter @bylinecrm/shared build` and `pnpm --filter api prisma:generate` there before
+`pnpm typecheck`, or the errors are stale artefacts, not code.
