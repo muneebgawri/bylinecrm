@@ -26,8 +26,9 @@ export type MoveOutcome =
 /**
  * The one writer of a deal's stage. A new deal is placed through `place`; every later change —
  * a member's move, a rule's, a close — goes through `move`, which writes the history row and the
- * deal's columns in the caller's transaction, and `announce` publishes what happened after it
- * committed. No other code sets `stage_id`.
+ * deal's columns in the caller's transaction (or, when a stage is deleted, `moveAllInStage` for
+ * every deal in it), and `announce` publishes what happened after it committed. No other code
+ * sets `stage_id`.
  */
 @Injectable()
 export class StageMoveService {
@@ -40,12 +41,16 @@ export class StageMoveService {
         actor: EventActor,
         reason: Extract<StageHistoryReason, 'manual' | 'import'>,
     ): Promise<void> {
+        const stage = await tx.pipelineStage.findUnique({ where: { id: deal.stageId }, select: { name: true } });
+        if (!stage) throw new Error(`deal ${deal.id} is placed in a stage that does not exist`);
         await tx.opportunityStageHistory.create({
             data: {
                 workspaceId: deal.workspaceId,
                 opportunityId: deal.id,
                 fromStageId: null,
+                fromStageName: null,
                 toStageId: deal.stageId,
+                toStageName: stage.name,
                 actor,
                 reason,
             },
@@ -88,7 +93,9 @@ export class StageMoveService {
                 workspaceId: deal.workspaceId,
                 opportunityId: deal.id,
                 fromStageId: from.id,
+                fromStageName: from.name,
                 toStageId: to.id,
+                toStageName: to.name,
                 actor,
                 reason,
             },
@@ -98,6 +105,47 @@ export class StageMoveService {
             toKind: to.kind,
             change: { pipelineId: deal.pipelineId, fromStageId: from.id, toStageId: to.id, reason },
         };
+    }
+
+    /**
+     * Moves every deal in `from` — trashed ones included — into `to`, an open stage of the same
+     * pipeline, because `from` is being deleted (P1-2b). Set-based (one update, one batch of history
+     * rows) so a stage with thousands of deals moves inside one short transaction; every deal still
+     * gets its history row and, once the caller announces the returned moves, exactly one event.
+     * The target is open, so a deal that was won or lost is reopened (its close columns cleared) —
+     * the same rule `move` applies.
+     */
+    async moveAllInStage(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        from: { id: string; pipelineId: string; name: string },
+        to: { id: string; pipelineId: string; kind: StageKind; name: string },
+        actor: EventActor,
+    ): Promise<{ dealId: string; moved: Extract<MoveOutcome, { outcome: 'moved' }> }[]> {
+        if (to.pipelineId !== from.pipelineId || to.kind !== 'open') {
+            throw new Error('moveAllInStage moves into an open stage of the same pipeline only');
+        }
+        const deals = await tx.opportunity.findMany({ where: { stageId: from.id }, select: { id: true } });
+        if (deals.length === 0) return [];
+        const reason: StageHistoryReason = 'stage_deleted';
+        await tx.opportunity.updateMany({
+            where: { stageId: from.id },
+            data: { stageId: to.id, ...(await closeColumnsFor(tx, workspaceId, 'open', undefined)) },
+        });
+        await tx.opportunityStageHistory.createMany({
+            data: deals.map((deal) => ({
+                workspaceId,
+                opportunityId: deal.id,
+                fromStageId: from.id,
+                fromStageName: from.name,
+                toStageId: to.id,
+                toStageName: to.name,
+                actor,
+                reason,
+            })),
+        });
+        const change: StageChange = { pipelineId: from.pipelineId, fromStageId: from.id, toStageId: to.id, reason };
+        return deals.map((deal) => ({ dealId: deal.id, moved: { outcome: 'moved', toKind: 'open', change } }));
     }
 
     /**

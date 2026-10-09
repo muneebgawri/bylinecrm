@@ -1,5 +1,5 @@
 import { HttpException } from '@nestjs/common';
-import type { ErrorCode, FieldError } from '@bylinecrm/shared';
+import type { ErrorCode, ErrorDetails, FieldError } from '@bylinecrm/shared';
 
 /**
  * An error whose code and field errors the throw site decides (P1-1d). The exception filter
@@ -13,6 +13,7 @@ export class ApiException extends HttpException {
         readonly code: ErrorCode,
         message: string,
         readonly fieldErrors?: readonly FieldError[],
+        readonly details?: ErrorDetails,
     ) {
         super(message, status);
         this.name = new.target.name;
@@ -40,5 +41,29 @@ export class UniqueConflict extends ApiException {
 export class RateLimited extends ApiException {
     constructor(message = 'too many attempts; try again later') {
         super(429, 'rate_limited', message);
+    }
+}
+
+/**
+ * `409`: the change conflicts with the record's current state. `details` carries the facts a
+ * client needs to resolve it (counts of what is in the way) so it never parses the message.
+ */
+export class StateConflict extends ApiException {
+    constructor(message: string, details?: ErrorDetails) {
+        super(409, 'conflict', message, undefined, details);
+    }
+}
+
+/** `413`: the request asks for more work than one request may do. */
+export class TooLarge extends ApiException {
+    constructor(message: string, details?: ErrorDetails) {
+        super(413, 'payload_too_large', message, undefined, details);
+    }
+}
+
+/** `403`: signed in, but this caller may not do this. */
+export class Forbidden extends ApiException {
+    constructor(message: string) {
+        super(403, 'forbidden', message);
     }
 }

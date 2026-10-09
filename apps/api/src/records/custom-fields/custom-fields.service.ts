@@ -132,6 +132,24 @@ export class CustomFieldsService {
     }
 
     /**
+     * Brings an archived definition back (P1-2b): its key is accepted on records again and the
+     * values records kept are live again. Restoring an active definition changes nothing. It cannot
+     * collide with another field: the key's uniqueness includes archived definitions, so no field
+     * could have taken it while this one was archived.
+     */
+    async restore(id: string): Promise<CustomFieldView> {
+        const workspaceId = this.workspaceId();
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const current = await tx.customFieldDefinition.findUnique({ where: { id } });
+            if (!current) throw new NotFoundException('custom field not found');
+            if (!current.archivedAt) return current;
+            return tx.customFieldDefinition.update({ where: { id }, data: { archivedAt: null } });
+        });
+        await this.invalidate(workspaceId, row.object);
+        return view(row);
+    }
+
+    /**
      * Validates a record's `custom` values against the object's active definitions, inside the
      * caller's transaction. On `patch` the result is merged over `stored`. The result is JSON by
      * construction — every value type the schema admits is a JSON scalar or an array of them —

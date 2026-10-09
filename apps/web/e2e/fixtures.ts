@@ -333,7 +333,9 @@ export const history: StageHistoryEntry[] = [
     {
         id: '0b1e0000-0000-4000-8000-000000000701',
         fromStageId: stageId(1),
+        fromStageName: DEFAULT_STAGES[1]!.name,
         toStageId: stageId(2),
+        toStageName: DEFAULT_STAGES[2]!.name,
         enteredAt: at(4 * 24),
         // A rule-made move names its rule; the API's actor carries the rule's id, never null.
         actor: { kind: 'rule', id: '0b1e0000-0000-4000-8000-000000000601' },
@@ -342,7 +344,9 @@ export const history: StageHistoryEntry[] = [
     {
         id: '0b1e0000-0000-4000-8000-000000000702',
         fromStageId: null,
+        fromStageName: null,
         toStageId: stageId(1),
+        toStageName: DEFAULT_STAGES[1]!.name,
         enteredAt: at(20 * 24),
         actor: member,
         reason: 'manual',

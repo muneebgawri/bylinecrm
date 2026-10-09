@@ -6,6 +6,7 @@ import {
     CreatePipelineDto,
     CreateRuleDto,
     CreateStageDto,
+    DeleteStageQueryDto,
     HistoryQueryDto,
     MoveDealDto,
     OrderStagesDto,
@@ -104,14 +105,20 @@ export class PipelinesController {
         return this.pipelines.updateStage(pipelineId, stageId, body);
     }
 
+    /**
+     * Deletes a stage. With deals in it (trash included) it needs `?moveDealsTo=<open stage id>`:
+     * they move there first, one event each. In the query string, not a body: DELETE bodies do
+     * not reliably survive proxies.
+     */
     @Requires('pipeline:configure')
     @HttpCode(204)
     @Delete(':pipelineId/stages/:stageId')
     removeStage(
         @Param('pipelineId', ParseUUIDPipe) pipelineId: string,
         @Param('stageId', ParseUUIDPipe) stageId: string,
+        @Query() query: DeleteStageQueryDto,
     ): Promise<void> {
-        return this.pipelines.removeStage(pipelineId, stageId);
+        return this.pipelines.removeStage(pipelineId, stageId, query.moveDealsTo);
     }
 
     @Requires('deal:read')

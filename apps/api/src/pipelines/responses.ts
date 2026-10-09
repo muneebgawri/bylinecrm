@@ -62,7 +62,13 @@ export const historyEntry = named(
     z.object({
         id,
         fromStageId: id.nullable(),
+        fromStageName: z.string().nullable().meta({
+            description: 'The stage’s name when the move happened; it may since have been renamed or deleted.',
+        }),
         toStageId: id,
+        toStageName: z.string().meta({
+            description: 'The stage’s name when the move happened; it may since have been renamed or deleted.',
+        }),
         enteredAt: dateTime,
         actor: named('EventActor', eventActor),
         reason: z.enum(STAGE_HISTORY_REASONS),
