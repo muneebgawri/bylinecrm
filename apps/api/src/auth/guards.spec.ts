@@ -106,7 +106,9 @@ describe('WorkspaceGuard', () => {
     function build(membership: { memberId: string; roleId: string } | null) {
         const workspaceContext = new WorkspaceContext();
         const memberships = { find: vi.fn().mockResolvedValue(membership) } as unknown as MembershipService;
-        const roles = { capabilities: vi.fn().mockResolvedValue(new Set(['record:read'])) } as unknown as RolesService;
+        const roles = {
+            access: vi.fn().mockResolvedValue({ capabilities: new Set(['record:read']), recordScope: 'all' }),
+        } as unknown as RolesService;
         const guard = new WorkspaceGuard(workspaceContext, memberships, roles);
         return { guard, workspaceContext, memberships, roles };
     }
@@ -125,7 +127,7 @@ describe('WorkspaceGuard', () => {
                 ),
             ),
         ).rejects.toThrow(/not a member/);
-        expect(roles.capabilities).not.toHaveBeenCalled();
+        expect(roles.access).not.toHaveBeenCalled();
         expect(workspaceContext.get()).toBeUndefined();
     });
 
@@ -144,7 +146,7 @@ describe('WorkspaceGuard', () => {
             ),
         ).rejects.toThrow(/another workspace/);
         expect(memberships.find).not.toHaveBeenCalled();
-        expect(roles.capabilities).not.toHaveBeenCalled();
+        expect(roles.access).not.toHaveBeenCalled();
     });
 
     it('records the member, workspace and capabilities for a member', async () => {

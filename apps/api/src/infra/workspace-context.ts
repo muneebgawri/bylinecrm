@@ -13,6 +13,15 @@ export interface WorkspaceRunContext {
     apiKeyId?: string;
     /** What the caller's role allows; `@Requires()` is checked against this. */
     capabilities: ReadonlySet<Capability>;
+    /** The role the guard resolved the capabilities from, for the caller's own standing (`/me`). */
+    roleId?: string;
+    roleName?: string;
+    /**
+     * Set when the caller's role is scoped to its own records (`recordScope: 'own'`): the member
+     * whose records they are. `withWorkspace` passes it to the restrictive policies; the record
+     * services filter by it. Absent means every owner.
+     */
+    ownerScopeMemberId?: string;
 }
 
 /** The store for one request or job: empty until a guard fills it. */
