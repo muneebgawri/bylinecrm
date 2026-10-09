@@ -197,6 +197,9 @@ importers:
       '@bylinecrm/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@playwright/test':
+        specifier: ^1.64.0
+        version: 1.64.0
       '@size-limit/file':
         specifier: ^14.2.0
         version: 14.2.0(size-limit@14.2.0)
@@ -212,6 +215,9 @@ importers:
       '@testing-library/user-event':
         specifier: ^14.6.1
         version: 14.6.7(@testing-library/dom@10.4.2)
+      '@types/node':
+        specifier: ^22.19.0
+        version: 22.20.5
       '@types/react':
         specifier: ^19.2.0
         version: 19.3.0
@@ -221,6 +227,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.2
         version: 6.1.2(vite@8.3.4(@types/node@22.20.5)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      axe-playwright:
+        specifier: ^2.2.2
+        version: 2.2.2(playwright@1.64.0)
       eslint:
         specifier: ^9.39.4
         version: 9.39.5(jiti@2.7.0)
@@ -230,6 +239,9 @@ importers:
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
+      playwright:
+        specifier: ^1.64.0
+        version: 1.64.0
       size-limit:
         specifier: ^14.2.0
         version: 14.2.0

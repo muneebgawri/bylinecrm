@@ -10,7 +10,7 @@ on:
     workflow_dispatch:
         inputs:
             baseline:
-                description: Regenerate the design system's visual baselines and upload them as an artifact
+                description: Regenerate the visual baselines (design system and route gate) and upload them as artifacts
                 type: boolean
                 default: false
 
@@ -138,6 +138,39 @@ jobs:
                   path: packages/ui/test-results
                   if-no-files-found: ignore
 
+    # The route gate (apps/web/e2e, P0-10): every page of the web app at phone, tablet and desktop
+    # width in both themes — axe at WCAG 2.1 AA, no sideways page scroll, touch targets and field
+    # text sizes on phones, the primary action on screen, and phone screenshots against baselines.
+    # Two shards keep the wall-clock short; `routes` is the one check branch protection names.
+    routes-shard:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/shared build
+            - run: pnpm --filter web build
+            - run: pnpm --filter web test:routes --shard ${{ matrix.shard }}/2
+            - uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: routes-diffs-${{ matrix.shard }}
+                  path: apps/web/e2e/test-results
+                  if-no-files-found: ignore
+
+    routes:
+        needs: routes-shard
+        if: always()
+        runs-on: ubuntu-latest
+        steps:
+            - name: Both shards passed
+              run: test "${{ needs.routes-shard.result }}" = success
+
     visual-baseline:
         if: github.event_name == 'workflow_dispatch' && inputs.baseline
         runs-on: ubuntu-latest
@@ -154,4 +187,22 @@ jobs:
               with:
                   name: visual-baselines
                   path: packages/ui/__snapshots__
+                  if-no-files-found: error
+
+    # The route gate's phone screenshots, made on the runner (apps/web README, "Route gate").
+    routes-baseline:
+        if: github.event_name == 'workflow_dispatch' && inputs.baseline
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/shared build
+            - run: pnpm --filter web build
+            - run: pnpm --filter web test:routes:update
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: routes-baselines
+                  path: apps/web/e2e/__snapshots__
                   if-no-files-found: error

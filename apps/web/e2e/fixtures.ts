@@ -1,0 +1,433 @@
+import {
+    CAPABILITIES,
+    DEFAULT_PIPELINE_NAME,
+    DEFAULT_STAGES,
+    SYSTEM_ROLES,
+    type Capability,
+    type RecordObject,
+} from '@bylinecrm/shared';
+import type {
+    ApiKeyView,
+    AttachmentView,
+    BoardView,
+    CompanyView,
+    CustomFieldView,
+    InviteView,
+    MembershipSummary,
+    MemberSummaryView,
+    MemberView,
+    NoteView,
+    OpportunityView,
+    Page,
+    PersonView,
+    PipelineView,
+    RoleView,
+    RuleView,
+    SavedView,
+    StageHistoryEntry,
+    StageView,
+    TaskView,
+    TimelineActivityView,
+    UserView,
+    WorkspaceView,
+} from '../src/api/types';
+
+/**
+ * The data the route gate renders every page with. It is fixed — ids, names, amounts and every
+ * timestamp — so a screenshot is the same on every run; it is typed against the web app's own
+ * view types, so a shape the app stops understanding fails `tsc` before it fails a page.
+ *
+ * The clock in the browser is frozen at `FIXED_NOW` (routes.spec.ts), so "4 days in stage" and
+ * "2 hours ago" read the same every time too.
+ */
+export const FIXED_NOW = Date.parse('2026-10-09T09:00:00.000Z');
+const at = (hoursAgo: number) => new Date(FIXED_NOW - hoursAgo * 3_600_000).toISOString();
+
+/** Example ids, by kind. Record routes are visited with these (see states.ts). */
+export const IDS = {
+    workspace: '0b1e0000-0000-4000-8000-000000000001',
+    secondWorkspace: '0b1e0000-0000-4000-8000-000000000002',
+    user: '0b1e0000-0000-4000-8000-0000000000a1',
+    member: '0b1e0000-0000-4000-8000-0000000000b1',
+    secondMember: '0b1e0000-0000-4000-8000-0000000000b2',
+    adminRole: '0b1e0000-0000-4000-8000-0000000000c1',
+    memberRole: '0b1e0000-0000-4000-8000-0000000000c2',
+    person: '0b1e0000-0000-4000-8000-0000000000d1',
+    secondPerson: '0b1e0000-0000-4000-8000-0000000000d2',
+    company: '0b1e0000-0000-4000-8000-0000000000e1',
+    secondCompany: '0b1e0000-0000-4000-8000-0000000000e2',
+    deal: '0b1e0000-0000-4000-8000-0000000000f1',
+    secondDeal: '0b1e0000-0000-4000-8000-0000000000f2',
+    thirdDeal: '0b1e0000-0000-4000-8000-0000000000f3',
+    pipeline: '0b1e0000-0000-4000-8000-000000000101',
+    view: '0b1e0000-0000-4000-8000-000000000201',
+} as const;
+
+const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
+const member = { kind: 'member' as const, id: IDS.member };
+
+export const user: UserView = { id: IDS.user, email: 'kate.morgan@example.com', emailVerified: true };
+
+/** Two workspaces, so `/workspaces` shows its picker instead of redirecting to the only one. */
+export const workspaces: WorkspaceView[] = [
+    { id: IDS.workspace, slug: 'pinion', name: 'Pinion Partners' },
+    { id: IDS.secondWorkspace, slug: 'demo', name: 'Demo workspace' },
+];
+
+/** An admin: every capability, so every permission-gated control renders and is checked. */
+export const membership: MembershipSummary = {
+    memberId: IDS.member,
+    userId: IDS.user,
+    roleId: IDS.adminRole,
+    roleName: SYSTEM_ROLES.admin,
+    recordScope: 'all',
+    capabilities: CAPABILITIES,
+};
+
+export const roles: RoleView[] = [
+    { id: IDS.adminRole, name: SYSTEM_ROLES.admin, isSystem: true, capabilities: [...CAPABILITIES] },
+    {
+        id: IDS.memberRole,
+        name: SYSTEM_ROLES.member,
+        isSystem: true,
+        capabilities: ['record:read', 'record:write'] satisfies Capability[],
+    },
+];
+
+export const members: MemberView[] = [
+    {
+        id: IDS.member,
+        userId: IDS.user,
+        email: user.email,
+        roleId: IDS.adminRole,
+        roleName: SYSTEM_ROLES.admin,
+        createdAt: at(24 * 30),
+    },
+    {
+        id: IDS.secondMember,
+        userId: '0b1e0000-0000-4000-8000-0000000000a2',
+        email: 'sam.okafor@example.com',
+        roleId: IDS.memberRole,
+        roleName: SYSTEM_ROLES.member,
+        createdAt: at(24 * 12),
+    },
+];
+
+export const membersSummary: MemberSummaryView[] = [
+    { memberId: IDS.member, name: 'Kate Morgan' },
+    { memberId: IDS.secondMember, name: 'Sam Okafor' },
+];
+
+export const apiKeys: ApiKeyView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000401',
+        name: 'NewswireOS sync',
+        prefix: 'blc_x7k2m9qa',
+        roleId: IDS.memberRole,
+        createdAt: at(24 * 7),
+        lastUsedAt: at(2),
+        revokedAt: null,
+    },
+];
+
+export const invites: InviteView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000501',
+        email: 'daniel.kim@example.com',
+        roleId: IDS.memberRole,
+        expiresAt: at(-24 * 6),
+        acceptedAt: null,
+    },
+];
+
+const noLinks = { linkedin: null, x: null };
+const noAddress = { street: null, city: null, state: null, country: null, postalCode: null };
+const created = (hoursAgo: number) => ({
+    createdBy: member,
+    deletedAt: null,
+    createdAt: at(hoursAgo),
+    updatedAt: at(hoursAgo / 2),
+});
+
+export const companies: CompanyView[] = [
+    {
+        id: IDS.company,
+        name: 'Acme Corp',
+        domain: 'acme.example',
+        employeeCount: 240,
+        arr: { amountMinor: 1_200_000_00, currency: 'USD' },
+        address: { ...noAddress, city: 'Austin', country: 'US' },
+        links: noLinks,
+        icp: true,
+        position: 0,
+        ownerId: IDS.member,
+        custom: {},
+        ...created(24 * 14),
+    },
+    {
+        id: IDS.secondCompany,
+        name: 'Initech',
+        domain: 'initech.example',
+        employeeCount: 1800,
+        arr: null,
+        address: noAddress,
+        links: noLinks,
+        icp: false,
+        position: 1,
+        ownerId: IDS.secondMember,
+        custom: {},
+        ...created(24 * 9),
+    },
+];
+
+export const people: PersonView[] = [
+    {
+        id: IDS.person,
+        nameFirst: 'Dana',
+        nameLast: 'Reyes',
+        emails: { primary: 'dana@acme.example', additional: [] },
+        phones: { primary: { number: '5125550198', countryCode: 'US' }, additional: [] },
+        jobTitle: 'Head of Comms',
+        city: 'Austin',
+        links: { linkedin: { url: 'https://www.linkedin.com/in/danareyes', label: null }, x: null },
+        avatarUrl: null,
+        position: 0,
+        companyId: IDS.company,
+        ownerId: IDS.member,
+        custom: {},
+        ...created(24 * 14),
+    },
+    {
+        id: IDS.secondPerson,
+        nameFirst: 'Sam',
+        nameLast: 'Okafor',
+        emails: { primary: 'sam@initech.example', additional: ['s.okafor@initech.example'] },
+        phones: { primary: null, additional: [] },
+        jobTitle: 'VP Marketing',
+        city: null,
+        links: noLinks,
+        avatarUrl: null,
+        position: 1,
+        companyId: IDS.secondCompany,
+        ownerId: IDS.secondMember,
+        custom: {},
+        ...created(24 * 9),
+    },
+];
+
+export const stages: StageView[] = DEFAULT_STAGES.map((stage, index) => ({
+    id: stageId(index),
+    pipelineId: IDS.pipeline,
+    name: stage.name,
+    position: index,
+    probability: stage.probability,
+    kind: stage.kind,
+    daysThreshold: stage.kind === 'open' ? 14 : null,
+    colour: stage.colour,
+}));
+
+export const pipeline: PipelineView = {
+    id: IDS.pipeline,
+    name: DEFAULT_PIPELINE_NAME,
+    isDefault: true,
+    position: 0,
+    stages,
+    createdAt: at(24 * 30),
+    updatedAt: at(24 * 30),
+};
+
+const deal = (
+    id: string,
+    name: string,
+    stageIndex: number,
+    amountMinor: number,
+    daysInStage: number,
+    companyId: string,
+    pointOfContactId: string,
+): OpportunityView => ({
+    id,
+    name,
+    pipelineId: IDS.pipeline,
+    stageId: stageId(stageIndex),
+    stageEnteredAt: at(daysInStage * 24),
+    daysInStage,
+    closedAt: null,
+    lostReason: null,
+    amount: { amountMinor, currency: 'USD' },
+    currency: 'USD',
+    closeDate: '2026-10-31',
+    probability: DEFAULT_STAGES[stageIndex]?.probability ?? null,
+    position: 0,
+    ownerId: IDS.member,
+    pointOfContactId,
+    companyId,
+    custom: {},
+    ...created(24 * 20),
+});
+
+export const deals: OpportunityView[] = [
+    deal(IDS.deal, 'Series B PR', 2, 12_000_00, 4, IDS.company, IDS.person),
+    deal(IDS.secondDeal, 'IPO wire', 3, 11_000_00, 1, IDS.secondCompany, IDS.secondPerson),
+    deal(IDS.thirdDeal, 'Product launch', 1, 6_500_00, 21, IDS.company, IDS.person),
+];
+
+export const board: BoardView = {
+    pipeline,
+    columns: stages.map((stage) => {
+        const inStage = deals.filter((d) => d.stageId === stage.id);
+        const total = inStage.reduce((sum, d) => sum + (d.amount?.amountMinor ?? 0), 0);
+        return {
+            stage,
+            count: inStage.length,
+            amountMinorByCurrency: inStage.length ? { USD: total } : {},
+            deals: inStage,
+            hasMore: false,
+        };
+    }),
+};
+
+export const rules: RuleView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000601',
+        pipelineId: IDS.pipeline,
+        event: 'email.replied',
+        toStageId: stageId(2),
+        allowBackward: false,
+        enabled: true,
+    },
+];
+
+export const history: StageHistoryEntry[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000701',
+        fromStageId: stageId(1),
+        toStageId: stageId(2),
+        enteredAt: at(4 * 24),
+        actor: { kind: 'rule', id: rules[0]?.id ?? null },
+        reason: 'rule',
+    },
+    {
+        id: '0b1e0000-0000-4000-8000-000000000702',
+        fromStageId: null,
+        toStageId: stageId(1),
+        enteredAt: at(20 * 24),
+        actor: member,
+        reason: 'manual',
+    },
+];
+
+export const savedViews = (object: RecordObject): SavedView[] => [
+    {
+        id: IDS.view,
+        object,
+        name: 'My open items',
+        icon: null,
+        ownerMemberId: IDS.member,
+        isShared: true,
+        filter: null,
+        sorts: [],
+        columns: [],
+        groupBy: null,
+        position: 0,
+        createdAt: at(24 * 3),
+        updatedAt: at(24 * 3),
+    },
+];
+
+export const customFields = (object: RecordObject): CustomFieldView[] =>
+    object === 'person'
+        ? [
+              {
+                  id: '0b1e0000-0000-4000-8000-000000000801',
+                  object,
+                  key: 'beat',
+                  label: 'Beat',
+                  type: 'text',
+                  options: [],
+                  required: false,
+                  position: 0,
+                  archivedAt: null,
+                  createdAt: at(24 * 30),
+                  updatedAt: at(24 * 30),
+              },
+          ]
+        : [];
+
+const doc = (text: string) => ({
+    type: 'doc' as const,
+    content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+});
+
+export const notes: NoteView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000901',
+        title: 'Met at FinCon',
+        body: doc('Interested in EU distribution for Q4; the CFO signs off on anything above $10k.'),
+        bodyText: 'Interested in EU distribution for Q4; the CFO signs off on anything above $10k.',
+        targets: [{ type: 'person', id: IDS.person }],
+        authorId: IDS.member,
+        ...created(24 * 9),
+    },
+];
+
+export const tasks: TaskView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000a01',
+        title: 'Send the pricing deck',
+        body: doc('Attach the EU distribution sheet.'),
+        bodyText: 'Attach the EU distribution sheet.',
+        status: 'todo',
+        dueAt: at(-24),
+        assigneeId: IDS.member,
+        completedAt: null,
+        targets: [{ type: 'person', id: IDS.person }],
+        ...created(24 * 2),
+    },
+];
+
+export const attachments: AttachmentView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000b01',
+        name: 'distribution-list.pdf',
+        mime: 'application/pdf',
+        sizeBytes: 482_113,
+        target: { type: 'person', id: IDS.person },
+        authorId: IDS.member,
+        ...created(24 * 3),
+    },
+];
+
+export const timeline: TimelineActivityView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000c01',
+        target: { type: 'opportunity', id: IDS.deal },
+        kind: 'deal.stage_changed',
+        happenedAt: at(4 * 24),
+        actor: { kind: 'rule', id: rules[0]?.id ?? null },
+        properties: { diff: { stageId: { from: stageId(1), to: stageId(2) } } },
+        linked: null,
+        createdAt: at(4 * 24),
+    },
+    {
+        id: '0b1e0000-0000-4000-8000-000000000c02',
+        target: { type: 'person', id: IDS.person },
+        kind: 'linked-note.created',
+        happenedAt: at(9 * 24),
+        actor: member,
+        properties: { displayName: 'Met at FinCon' },
+        linked: { type: 'note', id: '0b1e0000-0000-4000-8000-000000000901' },
+        createdAt: at(9 * 24),
+    },
+    {
+        id: '0b1e0000-0000-4000-8000-000000000c03',
+        target: { type: 'person', id: IDS.person },
+        kind: 'person.created',
+        happenedAt: at(14 * 24),
+        actor: member,
+        properties: {},
+        linked: null,
+        createdAt: at(14 * 24),
+    },
+];
+
+export const page = <T>(items: T[]): Page<T> => ({ items, nextCursor: null });
