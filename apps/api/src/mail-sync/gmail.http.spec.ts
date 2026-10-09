@@ -43,4 +43,27 @@ describe('GmailHttp', () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
         await expect(new GmailHttp().getProfile('t')).rejects.toMatchObject({ status: null, reason: 'network' });
     });
+
+    it('FR-CRMS-2 sends a raw message as base64url JSON, in the thread when given', async () => {
+        const spy = respond(200, { id: 'sent-1', threadId: 'thr-9', labelIds: ['SENT'] });
+        const mime = 'From: a@x.example\r\nSubject: Hé\r\n\r\nbody';
+        const sent = await new GmailHttp().send('tok', { raw: mime, threadId: 'thr-9' });
+        expect(sent).toEqual({ id: 'sent-1', threadId: 'thr-9' });
+        const [url, init] = spy.mock.calls[0]!;
+        expect(String(url)).toMatch(/\/messages\/send$/);
+        expect(init?.method).toBe('POST');
+        expect((init?.headers as Record<string, string>)['authorization']).toBe('Bearer tok');
+        expect((init?.headers as Record<string, string>)['content-type']).toBe('application/json');
+        const body = JSON.parse(String(init?.body)) as { raw: string; threadId?: string };
+        expect(Buffer.from(body.raw, 'base64url').toString('utf8')).toBe(mime);
+        expect(body.raw).not.toMatch(/[+/=]/);
+        expect(body.threadId).toBe('thr-9');
+    });
+
+    it('FR-CRMS-2 sends a new message without a thread', async () => {
+        const spy = respond(200, { id: 'sent-2', threadId: 'thr-new' });
+        await new GmailHttp().send('tok', { raw: 'x' });
+        const body = JSON.parse(String(spy.mock.calls[0]![1]?.body)) as Record<string, unknown>;
+        expect(body).not.toHaveProperty('threadId');
+    });
 });
