@@ -16,7 +16,7 @@ const SCOPES = [
     },
 ] as const;
 
-function Scope({ disabled }: { disabled?: boolean }) {
+function Scope({ disabled = false }: { disabled?: boolean }) {
     const [value, setValue] = useState<'all' | 'own'>('own');
     return (
         <div className="max-w-md">
