@@ -79,6 +79,13 @@ export const envSchema = z
          */
         WEBHOOK_ALLOW_PRIVATE_TARGETS: flag('0'),
         /**
+         * Whether this process runs the mail-sync worker (P2-2): the every-few-minutes sync of each
+         * connected mailbox and the first import when one connects. On by default, like webhooks; a
+         * separate worker process sets `1` there and `0` on the API. The cross-tenant suite sets `0`:
+         * it drives sync directly against a fake Gmail, and no worker may reach the real one.
+         */
+        MAIL_SYNC_WORKER: flag('1'),
+        /**
          * Whether the tenant client emits an event per SQL statement, for `observeQueries` (P1-4a).
          * Off in production — a statement listener is a test instrument, not a feature. The unit
          * and cross-tenant suites set it to `1`; their query-budget tests (no N+1) need it.

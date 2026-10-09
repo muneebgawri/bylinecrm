@@ -7,6 +7,7 @@ import { HealthModule } from './health/health.module';
 import { ErrorFilter } from './infra/errors/error.filter';
 import { InfraModule } from './infra/infra.module';
 import { MailAccountsModule } from './mail-accounts/mail-accounts.module';
+import { MailSyncModule } from './mail-sync/mail-sync.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
 import { TemplatesModule } from './templates/templates.module';
@@ -22,6 +23,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         HealthModule,
         AuthModule,
         MailAccountsModule,
+        MailSyncModule,
         PipelinesModule,
         RecordsModule,
         TemplatesModule,

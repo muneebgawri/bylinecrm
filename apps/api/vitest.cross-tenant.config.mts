@@ -13,7 +13,9 @@ export default defineConfig({
         passWithNoTests: false,
         environment: 'node',
         // The list query-budget test (no N+1) counts statements; the client emits them only when asked.
-        env: { DB_QUERY_EVENTS: '1' },
+        // No mail-sync worker: the suite drives sync directly against a fake Gmail, and a worker
+        // started by any spec's application would call the real Gmail with a fake token.
+        env: { DB_QUERY_EVENTS: '1', MAIL_SYNC_WORKER: '0' },
         // One process: the suite shares one database and must not race itself.
         fileParallelism: false,
         testTimeout: 30_000,
