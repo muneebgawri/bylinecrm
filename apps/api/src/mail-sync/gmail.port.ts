@@ -1,5 +1,5 @@
 /**
- * Everything mail sync (P2-2) asks Gmail, behind one interface. The HTTP adapter
+ * Everything mail sync (P2-2) and sending (P2-3) ask Gmail, behind one interface. The HTTP adapter
  * (`gmail.http.ts`) is the only code that calls Gmail; tests bind an in-memory fake
  * (`test/support/fake-gmail.ts`), so no test and no CI run ever reaches Google.
  *
@@ -57,6 +57,12 @@ export interface GmailRawMessage {
     payload: GmailPart;
 }
 
+/** What Gmail returns for a sent message: its id, and the thread it went into. */
+export interface GmailSent {
+    id: string;
+    threadId: string;
+}
+
 /**
  * Gmail answered with an error or failed to answer. `status` is the HTTP status (`null` for a
  * network failure or a timeout); `reason` is Gmail's (`rateLimitExceeded`, `notFound`, …) or the
@@ -92,6 +98,13 @@ export interface GmailPort {
 
     /** One message in full: headers, MIME parts, labels. */
     getMessage(accessToken: string, id: string): Promise<GmailRawMessage>;
+
+    /**
+     * Sends a raw RFC 5322 message as the mailbox (P2-3), in `threadId` when it is a reply. The
+     * outcome of a `5xx` or of no answer is unknown — Gmail may have the message — so a caller that
+     * retries looks for it first (a `rfc822msgid:` search through `listMessages`).
+     */
+    send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent>;
 }
 
 /** Injection token for the port. */
