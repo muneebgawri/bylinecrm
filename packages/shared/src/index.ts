@@ -39,3 +39,4 @@ export * from './capabilities.js';
 export * from './events.js';
 export * from './records.js';
 export * from './views.js';
+export * from './timeline.js';

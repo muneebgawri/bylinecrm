@@ -130,7 +130,8 @@ describe('auth flows', () => {
             keyId = (created.body as { key: { id: string } }).key.id;
             expect(secret).toMatch(/^blc_[a-z0-9]{8}_/);
             const listed = await http().get(`/api/w/${workspaceA}/api-keys`).set('Cookie', a.cookie).expect(200);
-            expect(JSON.stringify(listed.body)).not.toContain(secret.split('_')[2]);
+            // The secret part is base64url and may itself contain `_`; take everything after the head.
+            expect(JSON.stringify(listed.body)).not.toContain(secret.replace(/^blc_[a-z0-9]{8}_/, ''));
         });
 
         it('authenticate as a bearer in their own workspace', async () => {

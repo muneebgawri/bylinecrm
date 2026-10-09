@@ -5,9 +5,19 @@ import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
 import { RecordsModule } from './records/records.module';
+import { TimelineModule } from './timeline/timeline.module';
 import { ViewsModule } from './views/views.module';
 
 @Module({
-    imports: [ConfigModule, InfraModule, EventsModule, HealthModule, AuthModule, RecordsModule, ViewsModule],
+    imports: [
+        ConfigModule,
+        InfraModule,
+        EventsModule,
+        HealthModule,
+        AuthModule,
+        RecordsModule,
+        TimelineModule,
+        ViewsModule,
+    ],
 })
 export class AppModule {}
