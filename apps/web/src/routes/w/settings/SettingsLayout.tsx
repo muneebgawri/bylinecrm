@@ -28,7 +28,19 @@ export function SettingsLayout() {
     const nav = useRef<HTMLElement>(null);
     const { pathname } = useLocation();
     useEffect(() => {
-        nav.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const show = () =>
+            nav.current
+                ?.querySelector('[aria-current="page"]')
+                ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+        show();
+        // Widths change when the web font arrives; measure again then, so the position is the same every time.
+        let live = true;
+        void document.fonts?.ready.then(() => {
+            if (live) show();
+        });
+        return () => {
+            live = false;
+        };
     }, [pathname, sections.length]);
     return (
         <div className="p-7">
