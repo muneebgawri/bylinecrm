@@ -35,6 +35,10 @@ model Workspace {
   tasks                  Task[]
   taskTargets            TaskTarget[]
   attachments            Attachment[]
+  pipelines              Pipeline[]
+  pipelineStages         PipelineStage[]
+  stageHistory           OpportunityStageHistory[]
+  stageRules             StageRule[]
 
   @@map("workspaces")
 }
@@ -379,6 +383,13 @@ model Opportunity {
   ownerId          String?                  @map("owner_id") @db.Uuid
   pointOfContactId String?                  @map("point_of_contact_id") @db.Uuid
   companyId        String?                  @map("company_id") @db.Uuid
+  /// The pipeline the deal moves through and the stage it is in now (P1-2). When it entered the
+  /// stage is the latest `stageHistory` row, never a column.
+  pipelineId       String                   @map("pipeline_id") @db.Uuid
+  stageId          String                   @map("stage_id") @db.Uuid
+  /// Written by a close (a move into a won or lost stage), cleared by a reopen.
+  closedAt         DateTime?                @map("closed_at") @db.Timestamptz
+  lostReason       String?                  @map("lost_reason")
   createdBy        Json                     @map("created_by")
   custom           Json                     @default("{}")
   deletedAt        DateTime?                @map("deleted_at") @db.Timestamptz
@@ -386,17 +397,142 @@ model Opportunity {
   updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
   search           Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, COALESCE(name, ''::text))"))
 
-  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  owner          WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  pointOfContact Person?          @relation(fields: [pointOfContactId], references: [id], onDelete: SetNull)
-  company        Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  workspace      Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner          WorkspaceMember?          @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  pointOfContact Person?                   @relation(fields: [pointOfContactId], references: [id], onDelete: SetNull)
+  company        Company?                  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  pipeline       Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage          PipelineStage             @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  stageHistory   OpportunityStageHistory[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
   @@index([workspaceId, companyId])
   @@index([workspaceId, pointOfContactId])
+  @@index([workspaceId, pipelineId, stageId])
   @@index([search], type: Gin)
   @@map("opportunities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipelines, stages, stage history and stage rules (P1-2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum StageKind {
+  open
+  won
+  lost
+
+  @@map("stage_kind")
+}
+
+enum StageHistoryReason {
+  manual
+  rule
+  import
+  close
+
+  @@map("stage_history_reason")
+}
+
+/// The events a rule may react to; the database value is the event type's own spelling.
+enum StageRuleEvent {
+  email_replied  @map("email.replied")
+  meeting_booked @map("meeting.booked")
+
+  @@map("stage_rule_event")
+}
+
+model Pipeline {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  name        String
+  /// The pipeline a new deal goes into when none is named; exactly one per workspace (partial unique index).
+  isDefault   Boolean  @default(false) @map("is_default")
+  position    Float    @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+  rules         StageRule[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  pipelineId    String    @map("pipeline_id") @db.Uuid
+  name          String
+  /// 1-based order in the pipeline; unique per pipeline, checked at the end of the transaction so a reorder can swap.
+  position      Int
+  /// The probability a deal in this stage takes when none of its own is set (0–100, the database checks).
+  probability   Int       @db.SmallInt
+  kind          StageKind @default(open)
+  /// A deal here longer than this many days is flagged; `null` means never.
+  daysThreshold Int?      @map("days_threshold")
+  /// A semantic colour token name (STAGE_COLOURS in @bylinecrm/shared), never a colour value.
+  colour        String
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline      Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+  enteredBy     OpportunityStageHistory[] @relation("entered")
+  leftBy        OpportunityStageHistory[] @relation("left")
+  rules         StageRule[]
+
+  @@unique([pipelineId, position])
+  @@index([workspaceId, pipelineId])
+  @@map("pipeline_stages")
+}
+
+/// One row per stage a deal entered, in order. The latest row's `enteredAt` is when the deal
+/// entered its current stage; days-in-stage is computed from it, never stored.
+model OpportunityStageHistory {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String             @map("workspace_id") @db.Uuid
+  opportunityId String             @map("opportunity_id") @db.Uuid
+  fromStageId   String?            @map("from_stage_id") @db.Uuid
+  toStageId     String             @map("to_stage_id") @db.Uuid
+  enteredAt     DateTime           @default(now()) @map("entered_at") @db.Timestamptz
+  actor         Json
+  reason        StageHistoryReason
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fromStage   PipelineStage? @relation("left", fields: [fromStageId], references: [id], onDelete: Restrict)
+  toStage     PipelineStage  @relation("entered", fields: [toStageId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, opportunityId, enteredAt(sort: Desc)])
+  @@map("opportunity_stage_history")
+}
+
+/// "When this happens to a deal's person or company, move the deal to that stage" — forward only
+/// unless `allowBackward`, and never twice for the same event.
+model StageRule {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String         @map("workspace_id") @db.Uuid
+  pipelineId    String         @map("pipeline_id") @db.Uuid
+  event         StageRuleEvent
+  toStageId     String         @map("to_stage_id") @db.Uuid
+  allowBackward Boolean        @default(false) @map("allow_backward")
+  enabled       Boolean        @default(true)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline  Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  toStage   PipelineStage @relation(fields: [toStageId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, event])
+  @@index([workspaceId, event])
+  @@map("stage_rules")
 }
 
 /// A note (PAR-010): a rich-text document attached to any number of records.
