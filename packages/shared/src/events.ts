@@ -1,3 +1,4 @@
+import type { EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
 
@@ -69,6 +70,11 @@ export const DOMAIN_EVENT_TYPES = [
     'template.updated',
     'template.deleted',
     'template.restored',
+    // Mail a connected mailbox synced (P2-2): about the message (`recordId`); `targets` are the
+    // records it is on — each matched person, their company and their open deals — so the timeline
+    // writes one entry per target, and `email` describes the message (never its body).
+    'email.received',
+    'email.sent',
     // Things a stage rule reacts to. Mail (P2) and meetings (P3) publish them; `related` names the
     // person and company they concern, which is how the rule engine finds the deals.
     'email.replied',
@@ -117,7 +123,7 @@ interface DomainEventBase {
     /** Present on `updated` events: the fields that changed, by name. */
     diff?: Record<string, FieldChange>;
     /**
-     * Present on note, task and attachment events: the records the thing is attached to, so a
+     * Present on note, task, attachment and synced-mail events: the records the thing is on, so a
      * subscriber (the timeline, PAR-014) can write an entry on each of them.
      */
     targets?: RecordTarget[];
@@ -128,6 +134,8 @@ interface DomainEventBase {
     related?: RecordTarget[];
     /** Present on `deal.*` events: the move that happened. */
     stage?: StageChange;
+    /** Present on `email.received` and `email.sent`: the message, without its body. */
+    email?: EmailSummary;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */
