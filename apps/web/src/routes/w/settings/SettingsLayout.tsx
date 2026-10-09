@@ -41,8 +41,5 @@ export function SettingsLayout() {
     );
 }
 
-/** A relative time already formatted for the reader; dates arrive as ISO strings. */
-export function formatDate(iso: string | null | undefined): string {
-    if (!iso) return '—';
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
-}
+/** The settings pages' date column; the one formatter lives in `lib/format`. */
+export { formatDate } from '../../../lib/format';

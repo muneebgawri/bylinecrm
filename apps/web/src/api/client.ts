@@ -73,6 +73,7 @@ export function readCookie(name: string, source: string = document.cookie): stri
 }
 
 export interface RequestOptions {
+    /** JSON, or a `FormData` for a file upload (sent as multipart; the browser sets the boundary). */
     body?: unknown;
     signal?: AbortSignal | undefined;
 }
@@ -83,14 +84,16 @@ export interface RequestOptions {
  */
 export async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
     const headers = new Headers({ Accept: 'application/json' });
-    if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+    const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    if (options.body !== undefined && !multipart) headers.set('Content-Type', 'application/json');
     if (MUTATING.has(method)) {
         const csrf = readCookie(CSRF_COOKIE);
         if (csrf) headers.set(CSRF_HEADER, csrf);
     }
 
     const init: RequestInit = { method, headers, credentials: 'include' };
-    if (options.body !== undefined) init.body = JSON.stringify(options.body);
+    if (multipart) init.body = options.body as FormData;
+    else if (options.body !== undefined) init.body = JSON.stringify(options.body);
     if (options.signal) init.signal = options.signal;
     const response = await fetch(`${API_BASE}${path}`, init);
 
