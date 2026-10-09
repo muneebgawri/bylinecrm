@@ -305,7 +305,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                                 onChange={(e) => setSearchDraft(e.target.value)}
                                 placeholder={copy.search}
                                 aria-label={copy.search}
-                                className="w-full bg-transparent text-touch text-text outline-none placeholder:text-text-faint"
+                                className="h-full w-full bg-transparent text-touch text-text outline-none placeholder:text-text-faint"
                             />
                         </label>
                         <div className="flex flex-wrap gap-2">
