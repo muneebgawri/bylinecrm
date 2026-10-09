@@ -8,6 +8,7 @@ import { ErrorFilter } from './infra/errors/error.filter';
 import { InfraModule } from './infra/infra.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
+import { TemplatesModule } from './templates/templates.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { ViewsModule } from './views/views.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
@@ -21,6 +22,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         AuthModule,
         PipelinesModule,
         RecordsModule,
+        TemplatesModule,
         TimelineModule,
         ViewsModule,
         WebhooksModule,
