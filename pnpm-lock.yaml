@@ -223,6 +223,10 @@ importers:
         version: 8.71.1(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
 
   packages/shared:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@bylinecrm/eslint-config':
         specifier: workspace:*

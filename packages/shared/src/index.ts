@@ -38,3 +38,4 @@ export * from './auth.js';
 export * from './capabilities.js';
 export * from './events.js';
 export * from './records.js';
+export * from './views.js';
