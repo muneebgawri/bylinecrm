@@ -1,28 +1,5 @@
-import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import type { NestExpressApplication } from '@nestjs/platform-express';
-import { SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
-import { AppModule } from './app.module';
+import { createApp } from './app';
 import { ENV, type Env } from './config/env';
-import { openApiDocument } from './openapi/document';
-
-/** Every route lives under this prefix; the web app's dev proxy forwards it. */
-export const API_PREFIX = 'api';
-
-/** Builds the application the way `main` and the boot tests both need it. */
-export async function createApp(): Promise<NestExpressApplication> {
-    const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
-    // `/health` stays where the deployer and the web app already look for it.
-    app.setGlobalPrefix(API_PREFIX, { exclude: ['health'] });
-    app.use(cookieParser());
-    // The client IP for rate limiting comes from the proxy's header once one is in front of us.
-    app.set('trust proxy', 1);
-    app.enableShutdownHooks();
-
-    SwaggerModule.setup(`${API_PREFIX}/docs`, app, openApiDocument(app));
-    return app;
-}
 
 async function bootstrap(): Promise<void> {
     const app = await createApp();
@@ -30,9 +7,7 @@ async function bootstrap(): Promise<void> {
     await app.listen(env.PORT);
 }
 
-if (require.main === module) {
-    bootstrap().catch((error: unknown) => {
-        console.error(error instanceof Error ? error.message : error);
-        process.exit(1);
-    });
-}
+bootstrap().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+});

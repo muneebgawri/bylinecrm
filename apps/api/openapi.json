@@ -13,7 +13,7 @@
                 "tags": ["Health"]
             }
         },
-        "/auth/signup": {
+        "/api/auth/signup": {
             "post": {
                 "operationId": "AuthController_signup",
                 "parameters": [],
@@ -35,7 +35,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/login": {
+        "/api/auth/login": {
             "post": {
                 "operationId": "AuthController_login",
                 "parameters": [],
@@ -57,7 +57,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/logout": {
+        "/api/auth/logout": {
             "post": {
                 "operationId": "AuthController_logout",
                 "parameters": [],
@@ -69,7 +69,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/providers": {
+        "/api/auth/providers": {
             "get": {
                 "operationId": "AuthController_providers",
                 "parameters": [],
@@ -81,7 +81,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/google": {
+        "/api/auth/google": {
             "get": {
                 "operationId": "AuthController_google",
                 "parameters": [],
@@ -93,7 +93,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/google/callback": {
+        "/api/auth/google/callback": {
             "get": {
                 "operationId": "AuthController_googleCallback",
                 "parameters": [],
@@ -105,7 +105,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/oidc/{issuer}": {
+        "/api/auth/oidc/{issuer}": {
             "get": {
                 "operationId": "AuthController_oidcStart",
                 "parameters": [
@@ -126,7 +126,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/oidc/{issuer}/callback": {
+        "/api/auth/oidc/{issuer}/callback": {
             "get": {
                 "operationId": "AuthController_oidcCallback",
                 "parameters": [
@@ -147,7 +147,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/invites/{token}/accept": {
+        "/api/auth/invites/{token}/accept": {
             "post": {
                 "operationId": "AuthController_acceptInvite",
                 "parameters": [
@@ -168,7 +168,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/invites/{token}/signup": {
+        "/api/auth/invites/{token}/signup": {
             "post": {
                 "operationId": "AuthController_acceptInviteSignup",
                 "parameters": [
@@ -199,7 +199,7 @@
                 "tags": ["auth"]
             }
         },
-        "/auth/password/forgot": {
+        "/api/auth/password/forgot": {
             "post": {
                 "operationId": "AuthController_forgotPassword",
                 "parameters": [],
@@ -211,7 +211,7 @@
                 "tags": ["auth"]
             }
         },
-        "/me": {
+        "/api/me": {
             "get": {
                 "operationId": "MeController_me",
                 "parameters": [],
@@ -223,7 +223,7 @@
                 "tags": ["me"]
             }
         },
-        "/me/workspaces": {
+        "/api/me/workspaces": {
             "get": {
                 "operationId": "MeController_workspaces",
                 "parameters": [],
@@ -235,7 +235,7 @@
                 "tags": ["me"]
             }
         },
-        "/workspaces": {
+        "/api/workspaces": {
             "post": {
                 "operationId": "MeController_createWorkspace",
                 "parameters": [],
@@ -257,7 +257,7 @@
                 "tags": ["me"]
             }
         },
-        "/w/{workspaceId}/members": {
+        "/api/w/{workspaceId}/members": {
             "get": {
                 "operationId": "MembersController_list",
                 "parameters": [],
@@ -269,7 +269,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/members/{memberId}/role": {
+        "/api/w/{workspaceId}/members/{memberId}/role": {
             "patch": {
                 "operationId": "MembersController_setRole",
                 "parameters": [
@@ -300,7 +300,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/members/{memberId}": {
+        "/api/w/{workspaceId}/members/{memberId}": {
             "delete": {
                 "operationId": "MembersController_remove",
                 "parameters": [
@@ -321,7 +321,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/roles": {
+        "/api/w/{workspaceId}/roles": {
             "get": {
                 "operationId": "RolesController_list",
                 "parameters": [],
@@ -353,7 +353,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/roles/{roleId}": {
+        "/api/w/{workspaceId}/roles/{roleId}": {
             "patch": {
                 "operationId": "RolesController_update",
                 "parameters": [
@@ -403,7 +403,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/api-keys": {
+        "/api/w/{workspaceId}/api-keys": {
             "get": {
                 "operationId": "ApiKeysController_list",
                 "parameters": [],
@@ -435,7 +435,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/api-keys/{apiKeyId}": {
+        "/api/w/{workspaceId}/api-keys/{apiKeyId}": {
             "delete": {
                 "operationId": "ApiKeysController_revoke",
                 "parameters": [
@@ -456,7 +456,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/invites": {
+        "/api/w/{workspaceId}/invites": {
             "get": {
                 "operationId": "InvitesController_list",
                 "parameters": [],
@@ -488,7 +488,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/invites/{inviteId}": {
+        "/api/w/{workspaceId}/invites/{inviteId}": {
             "delete": {
                 "operationId": "InvitesController_revoke",
                 "parameters": [
@@ -509,7 +509,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/me": {
+        "/api/w/{workspaceId}/me": {
             "get": {
                 "operationId": "WorkspaceMeController_standing",
                 "parameters": [],
@@ -521,7 +521,7 @@
                 "tags": ["workspace"]
             }
         },
-        "/w/{workspaceId}/people": {
+        "/api/w/{workspaceId}/people": {
             "get": {
                 "operationId": "PeopleController_list",
                 "parameters": [
@@ -593,7 +593,7 @@
                 "tags": ["people"]
             }
         },
-        "/w/{workspaceId}/people/deleted": {
+        "/api/w/{workspaceId}/people/deleted": {
             "get": {
                 "operationId": "PeopleController_listDeleted",
                 "parameters": [
@@ -645,7 +645,7 @@
                 "tags": ["people"]
             }
         },
-        "/w/{workspaceId}/people/{personId}": {
+        "/api/w/{workspaceId}/people/{personId}": {
             "get": {
                 "operationId": "PeopleController_get",
                 "parameters": [
@@ -714,7 +714,7 @@
                 "tags": ["people"]
             }
         },
-        "/w/{workspaceId}/people/{personId}/restore": {
+        "/api/w/{workspaceId}/people/{personId}/restore": {
             "post": {
                 "operationId": "PeopleController_restore",
                 "parameters": [
@@ -735,7 +735,7 @@
                 "tags": ["people"]
             }
         },
-        "/w/{workspaceId}/companies": {
+        "/api/w/{workspaceId}/companies": {
             "get": {
                 "operationId": "CompaniesController_list",
                 "parameters": [
@@ -807,7 +807,7 @@
                 "tags": ["companies"]
             }
         },
-        "/w/{workspaceId}/companies/deleted": {
+        "/api/w/{workspaceId}/companies/deleted": {
             "get": {
                 "operationId": "CompaniesController_listDeleted",
                 "parameters": [
@@ -859,7 +859,7 @@
                 "tags": ["companies"]
             }
         },
-        "/w/{workspaceId}/companies/{companyId}": {
+        "/api/w/{workspaceId}/companies/{companyId}": {
             "get": {
                 "operationId": "CompaniesController_get",
                 "parameters": [
@@ -928,7 +928,7 @@
                 "tags": ["companies"]
             }
         },
-        "/w/{workspaceId}/companies/{companyId}/restore": {
+        "/api/w/{workspaceId}/companies/{companyId}/restore": {
             "post": {
                 "operationId": "CompaniesController_restore",
                 "parameters": [
@@ -949,7 +949,7 @@
                 "tags": ["companies"]
             }
         },
-        "/w/{workspaceId}/custom-fields": {
+        "/api/w/{workspaceId}/custom-fields": {
             "get": {
                 "operationId": "CustomFieldsController_list",
                 "parameters": [
@@ -1000,7 +1000,7 @@
                 "tags": ["custom-fields"]
             }
         },
-        "/w/{workspaceId}/custom-fields/{fieldId}": {
+        "/api/w/{workspaceId}/custom-fields/{fieldId}": {
             "patch": {
                 "operationId": "CustomFieldsController_update",
                 "parameters": [

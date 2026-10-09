@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildOpenApiDocument } from './document';
+import { buildOpenApiDocument } from './build';
 
 /**
  * Writes the contract to `apps/api/openapi.json`. The path is one level above both `src/` and

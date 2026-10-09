@@ -6,7 +6,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { WorkspaceContext } from '../../src/infra/workspace-context';
-import { createApp } from '../../src/main';
+import { createApp } from '../../src/app';
 
 interface Browser {
     cookie: string;
