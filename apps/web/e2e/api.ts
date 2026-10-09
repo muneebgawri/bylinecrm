@@ -6,10 +6,11 @@ import * as data from './fixtures';
  * The API, as the route gate sees it: every `/api/**` request the web app makes is answered here
  * from `fixtures.ts`, inside the browser's network layer (Playwright route interception).
  *
- * Why interception and not the Prism mock (`pnpm mock:api`): the committed `openapi.json` has no
- * response schemas yet (#27), so Prism can only answer with empty bodies; and Prism invents its
- * example values, so screenshots would change from run to run. A fixed, typed answer per route
- * makes every page render real content, identically, on every run. The session is the same
+ * Why interception and not the Prism mock (`pnpm mock:api`): Prism answers from the schemas with
+ * values it invents, so the same page would read differently from run to run and the screenshots
+ * could never match; and what a page shows (a deal three weeks quiet, a field left empty) is
+ * chosen here so those states are checked. A fixed, typed answer per route makes every page
+ * render real content, identically, on every run. The session is the same
  * fixture: `/api/me` answering 200 is what "signed in" means to the app (RequireAuth), so no
  * cookie or server is involved.
  *
