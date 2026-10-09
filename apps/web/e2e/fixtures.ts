@@ -386,6 +386,26 @@ export const customFields = (object: RecordObject): CustomFieldView[] =>
           ]
         : [];
 
+/** The archived definitions of an object: one on people, so the collapsed "Archived fields" section is visited. */
+export const archivedCustomFields = (object: RecordObject): CustomFieldView[] =>
+    object === 'person'
+        ? [
+              {
+                  id: '0b1e0000-0000-4000-8000-000000000802',
+                  object,
+                  key: 'region',
+                  label: 'Region',
+                  type: 'text',
+                  options: [],
+                  required: false,
+                  position: 1,
+                  archivedAt: at(24 * 3),
+                  createdAt: at(24 * 60),
+                  updatedAt: at(24 * 3),
+              },
+          ]
+        : [];
+
 const doc = (text: string) => ({
     type: 'doc' as const,
     content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],

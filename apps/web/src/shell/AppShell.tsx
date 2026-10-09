@@ -196,6 +196,22 @@ function useShellCommands({
                 when: () => can(membership, 'deal:edit'),
                 run: () => navigate(`${paths.deals(workspaceId)}?create=1`),
             },
+            {
+                id: 'settings.pipelines',
+                title: 'Pipeline settings',
+                group: 'Go to',
+                keywords: ['stages', 'rules'],
+                when: () => can(membership, 'pipeline:configure'),
+                run: () => navigate(paths.settingsPipelines(workspaceId)),
+            },
+            {
+                id: 'settings.customFields',
+                title: 'Custom fields',
+                group: 'Go to',
+                keywords: ['fields', 'properties'],
+                when: () => can(membership, 'workspace:admin'),
+                run: () => navigate(paths.settingsCustomFields(workspaceId)),
+            },
             { id: 'palette.open', title: 'Search…', group: 'Account', shortcut: 'mod+k', run: openPalette },
             { id: 'sidebar.toggle', title: 'Toggle sidebar', group: 'Account', shortcut: '[', run: toggleSidebar },
             {

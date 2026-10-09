@@ -48,7 +48,13 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/pipelines/${ID}$`), () => data.pipeline],
     [new RegExp(`^${W}/pipelines$`), () => [data.pipeline]],
     [new RegExp(`^${W}/views$`), (_m, url) => data.savedViews(object(url))],
-    [new RegExp(`^${W}/custom-fields$`), (_m, url) => data.customFields(object(url))],
+    [
+        new RegExp(`^${W}/custom-fields$`),
+        (_m, url) =>
+            url.searchParams.get('archived') === 'true'
+                ? data.archivedCustomFields(object(url))
+                : data.customFields(object(url)),
+    ],
     [new RegExp(`^${W}/notes$`), () => data.page(data.notes)],
     [new RegExp(`^${W}/tasks$`), () => data.page(data.tasks)],
     [new RegExp(`^${W}/attachments$`), () => data.attachments],

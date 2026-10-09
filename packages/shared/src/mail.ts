@@ -72,3 +72,70 @@ export const MAILBOX_CONNECT_RESULT_PARAM = 'connect';
 /** One step of the OAuth-client check the setup screen shows (doc 50 §E). */
 export const OAUTH_CHECK_OUTCOMES = ['pass', 'fail', 'unverified'] as const;
 export type OAuthCheckOutcome = (typeof OAUTH_CHECK_OUTCOMES)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sync (P2-2): mail a connected mailbox holds, on the records it concerns (FR-CRMS-2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A message the mailbox received, or one it sent (from its own address, or labelled SENT). */
+export const MAIL_DIRECTIONS = ['inbound', 'outbound'] as const;
+export type MailDirection = (typeof MAIL_DIRECTIONS)[number];
+
+/** Where an address appears on a message. */
+export const MAIL_PARTICIPANT_ROLES = ['from', 'to', 'cc', 'bcc'] as const;
+export type MailParticipantRole = (typeof MAIL_PARTICIPANT_ROLES)[number];
+
+/**
+ * Where a mailbox's sync stands. `syncing` while a run is in progress; `failed` when the last run
+ * stopped — its reason is kept, and the next scheduled run tries again.
+ */
+export const MAIL_SYNC_STATUSES = ['idle', 'syncing', 'failed'] as const;
+export type MailSyncStatus = (typeof MAIL_SYNC_STATUSES)[number];
+
+/**
+ * What an `email.received` / `email.sent` event carries about the message, beside the records it
+ * is on (`targets`): enough for the timeline to show it (subject, snippet, direction) and for reply
+ * detection (P2-3) to recognise a reply (the RFC 5322 ids). Never the body.
+ */
+export type EmailSummary = {
+    /** The CRM's message id (`recordId` of the event). */
+    messageId: string;
+    threadId: string;
+    mailboxId: string;
+    direction: MailDirection;
+    subject: string;
+    snippet: string;
+    /** The sender's address, lower case. */
+    from: string;
+    /** ISO 8601, UTC. */
+    sentAt: string;
+    /** The `Message-ID` header, when the message had one. */
+    rfc822MessageId: string | null;
+    /** The `In-Reply-To` header. */
+    inReplyTo: string | null;
+    /** The `References` header's ids, oldest first. */
+    references: string[];
+};
+
+/**
+ * A blocklist entry is a full address (`someone@example.com`) or a whole domain (`@example.com`),
+ * lower case. A message whose every outside participant is blocklisted is not imported.
+ */
+export const BLOCKLIST_SCOPES = ['personal', 'workspace'] as const;
+export type BlocklistScope = (typeof BLOCKLIST_SCOPES)[number];
+
+const BLOCKLIST_ADDRESS = /^[^\s@]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+const BLOCKLIST_DOMAIN = /^@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+export const BLOCKLIST_VALUE_MAX = 254;
+
+/** The stored form of a blocklist value, or `null` when it is neither an address nor `@domain`. */
+export function normaliseBlocklistValue(raw: string): string | null {
+    const value = raw.trim().toLowerCase();
+    if (value.length === 0 || value.length > BLOCKLIST_VALUE_MAX) return null;
+    return BLOCKLIST_ADDRESS.test(value) || BLOCKLIST_DOMAIN.test(value) ? value : null;
+}
+
+/** Whether a (lower-case) address is covered by an entry: the same address, or its domain. */
+export function blocklistCovers(entry: string, address: string): boolean {
+    return entry.startsWith('@') ? address.endsWith(entry) : address === entry;
+}

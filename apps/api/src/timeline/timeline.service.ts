@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, UnprocessableEntityException } from '@ne
 import {
     EXTERNAL_KIND_PREFIX,
     type DomainEvent,
+    type EmailSummary,
     type LinkedObject,
     type Money,
     type RecordObject,
@@ -180,7 +181,8 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
     const kind = timelineKindOf(event);
     const base = {
         kind,
-        happenedAt: new Date(event.occurredAt),
+        // Mail is on the timeline at the moment it was sent — also when it is linked later.
+        happenedAt: new Date(event.email?.sentAt ?? event.occurredAt),
         actor: event.actor,
     };
     if (isRecordObject(event.object)) {
@@ -200,6 +202,7 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
         const properties = asJson({
             linked: { type: event.object, id: event.recordId, name },
             ...(event.diff ? { diff: event.diff } : {}),
+            ...(event.email ? { email: emailEntry(event.email) } : {}),
         });
         return targets.map((t) => ({
             ...base,
@@ -222,7 +225,24 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
             return (await tx.task.findUnique({ where: { id }, select: { title: true } }))?.title ?? null;
         case 'attachment':
             return (await tx.attachment.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
+        case 'email':
+            return (await tx.mailMessage.findUnique({ where: { id }, select: { subject: true } }))?.subject ?? null;
     }
+}
+
+/**
+ * What a synced email's entry shows (P2-2): enough to read the line without opening the thread —
+ * never the body, which the thread route serves to those allowed to read it.
+ */
+function emailEntry(email: EmailSummary) {
+    return {
+        direction: email.direction,
+        subject: email.subject,
+        snippet: email.snippet,
+        from: email.from,
+        threadId: email.threadId,
+        mailboxId: email.mailboxId,
+    };
 }
 
 /**

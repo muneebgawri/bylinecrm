@@ -6,7 +6,7 @@ import { SignIn } from './auth/SignIn';
 import { SignUp } from './auth/SignUp';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
-import { WORKSPACE_PARAM } from './params';
+import { PIPELINE_PARAM, WORKSPACE_PARAM } from './params';
 import { Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
 import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
@@ -32,6 +32,8 @@ const settings = {
     apiKeys: () => import('./w/settings/ApiKeys').then((m) => ({ Component: m.ApiKeys })),
     invites: () => import('./w/settings/Invites').then((m) => ({ Component: m.Invites })),
     pipelines: () => import('./w/settings/Pipelines').then((m) => ({ Component: m.Pipelines })),
+    pipeline: () => import('./w/settings/PipelineDetail').then((m) => ({ Component: m.PipelineDetail })),
+    customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
 };
 
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
@@ -94,6 +96,8 @@ const workspaceRoutes: RouteObject = {
             lazyPage('api-keys', settings.apiKeys, 'API keys'),
             lazyPage('invites', settings.invites, 'Invites'),
             lazyPage('pipelines', settings.pipelines, 'Pipelines'),
+            lazyPage(`pipelines/:${PIPELINE_PARAM}`, settings.pipeline, 'Pipeline'),
+            lazyPage('custom-fields', settings.customFields, 'Custom fields'),
         ]),
     ],
 };

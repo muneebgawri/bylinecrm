@@ -11,8 +11,12 @@ import type {
     CompanyPage,
     CompanyView,
     CreateApiKeyInput,
+    CreateCustomFieldInput,
     CreateInviteInput,
+    CreatePipelineInput,
     CreateRoleInput,
+    CreateRuleInput,
+    CreateStageInput,
     CreateViewInput,
     CustomFieldView,
     InviteView,
@@ -46,7 +50,11 @@ import type {
     TaskPage,
     TaskView,
     TimelinePage,
+    UpdateCustomFieldInput,
+    UpdatePipelineInput,
     UpdateRoleInput,
+    UpdateRuleInput,
+    UpdateStageInput,
     UpdateViewInput,
     UserView,
     WorkspaceView,
@@ -236,6 +244,36 @@ export const pipelines = {
         ),
     rules: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
         request<RuleView[]>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules`), { signal }),
+    /** Without `stages`, a new pipeline starts with the default stages (the API's one list). */
+    create: (workspaceId: string, input: CreatePipelineInput) =>
+        request<PipelineView>('POST', workspacePath(workspaceId, '/pipelines'), { body: input }),
+    update: (workspaceId: string, pipelineId: string, input: UpdatePipelineInput) =>
+        request<PipelineView>('PATCH', workspacePath(workspaceId, `/pipelines/${pipelineId}`), { body: input }),
+    /** Only an empty, non-default pipeline goes; otherwise a 409 that says why. */
+    remove: (workspaceId: string, pipelineId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/pipelines/${pipelineId}`)),
+    addStage: (workspaceId: string, pipelineId: string, input: CreateStageInput) =>
+        request<PipelineView>('POST', workspacePath(workspaceId, `/pipelines/${pipelineId}/stages`), { body: input }),
+    updateStage: (workspaceId: string, pipelineId: string, stageId: string, input: UpdateStageInput) =>
+        request<PipelineView>('PATCH', workspacePath(workspaceId, `/pipelines/${pipelineId}/stages/${stageId}`), {
+            body: input,
+        }),
+    /** Refused (409) while deals — the trash included — or rules point at the stage. */
+    removeStage: (workspaceId: string, pipelineId: string, stageId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/pipelines/${pipelineId}/stages/${stageId}`)),
+    /** `stageIds` is every stage of the pipeline, in the new order. */
+    orderStages: (workspaceId: string, pipelineId: string, stageIds: readonly string[]) =>
+        request<PipelineView>('PUT', workspacePath(workspaceId, `/pipelines/${pipelineId}/stages/order`), {
+            body: { stageIds },
+        }),
+    createRule: (workspaceId: string, pipelineId: string, input: CreateRuleInput) =>
+        request<RuleView>('POST', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules`), { body: input }),
+    updateRule: (workspaceId: string, pipelineId: string, ruleId: string, input: UpdateRuleInput) =>
+        request<RuleView>('PATCH', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules/${ruleId}`), {
+            body: input,
+        }),
+    removeRule: (workspaceId: string, pipelineId: string, ruleId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules/${ruleId}`)),
 };
 
 export const views = {
@@ -255,6 +293,20 @@ export const customFields = {
         request<CustomFieldView[]>('GET', workspacePath(workspaceId, `/custom-fields${query({ object })}`), {
             signal,
         }),
+    /** The archived definitions of one object: their values stay on records, the field is read-only. */
+    listArchived: (workspaceId: string, object: RecordObject, signal?: AbortSignal) =>
+        request<CustomFieldView[]>(
+            'GET',
+            workspacePath(workspaceId, `/custom-fields${query({ object, archived: 'true' })}`),
+            { signal },
+        ),
+    create: (workspaceId: string, input: CreateCustomFieldInput) =>
+        request<CustomFieldView>('POST', workspacePath(workspaceId, '/custom-fields'), { body: input }),
+    update: (workspaceId: string, fieldId: string, input: UpdateCustomFieldInput) =>
+        request<CustomFieldView>('PATCH', workspacePath(workspaceId, `/custom-fields/${fieldId}`), { body: input }),
+    /** Archives, never deletes: records keep the value. */
+    archive: (workspaceId: string, fieldId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/custom-fields/${fieldId}`)),
 };
 
 export const notes = {

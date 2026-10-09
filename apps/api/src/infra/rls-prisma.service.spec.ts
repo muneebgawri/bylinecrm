@@ -32,12 +32,12 @@ describe('observeQueries (P1-4a)', () => {
 
     it('throws when the client emits no query events, so a forgotten flag fails loudly', () => {
         const client = new RlsPrismaService(env(false), new WorkspaceContext());
-        expect(() => client.observeQueries(() => undefined)).toThrow(/DB_QUERY_EVENTS=1/);
+        expect(() => client.observeQueries(() => undefined, { requestId: 'r' })).toThrow(/DB_QUERY_EVENTS=1/);
     });
 
     it('registers, and stops, when the flag is on', () => {
         const client = new RlsPrismaService(env(true), new WorkspaceContext());
-        const stop = client.observeQueries(() => undefined);
+        const stop = client.observeQueries(() => undefined, { requestId: 'r' });
         expect(typeof stop).toBe('function');
         stop();
     });

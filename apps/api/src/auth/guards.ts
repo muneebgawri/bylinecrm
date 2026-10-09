@@ -9,6 +9,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
 import type { NextFunction, Request, Response } from 'express';
+import { requestIdOf } from '../infra/errors/request-id';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
@@ -31,8 +32,8 @@ const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export class RequestScopeMiddleware implements NestMiddleware {
     constructor(private readonly context: WorkspaceContext) {}
 
-    use(_req: Request, _res: Response, next: NextFunction): void {
-        this.context.begin(next);
+    use(req: Request, res: Response, next: NextFunction): void {
+        this.context.begin(next, requestIdOf(req, res));
     }
 }
 
