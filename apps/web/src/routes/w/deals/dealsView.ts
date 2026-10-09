@@ -1,5 +1,6 @@
 import type { StageColour } from '@bylinecrm/shared';
 import type { Tone } from '@bylinecrm/ui';
+import { CREATE_PARAM } from '../../paths';
 
 /** The two renderings of one result set (FR-CRMS-UI-3). */
 export const DEALS_VIEWS = ['board', 'list'] as const;
@@ -17,7 +18,7 @@ export const DEALS_VIEW_KEY = 'bylinecrm.deals.view';
 export const DEALS_PARAMS = {
     pipeline: 'pipeline',
     render: 'show',
-    create: 'create',
+    create: CREATE_PARAM,
 } as const;
 
 /** Past this many cards a lane virtualises its list (doc 50 §B "⋮ 10 more is the fold"). */

@@ -9,42 +9,29 @@ import type { ReactNode } from 'react';
  * nothing is executed.
  */
 export function RichTextView({ body, className }: { body: RichText; className?: string }) {
-    return <div className={cn('text-[13px] leading-relaxed', className)}>{(body.content ?? []).map(render)}</div>;
+    // The `rich-text` class (styles.css) is the typography, shared with the editor.
+    return (
+        <div className={cn('rich-text text-[13px] leading-relaxed', className)}>{(body.content ?? []).map(render)}</div>
+    );
 }
 
 function render(node: RichTextNode, index: number): ReactNode {
     const children = (node.content ?? []).map(render);
     switch (node.type) {
         case 'paragraph':
-            return (
-                <p key={index} className="m-0 min-h-5 [&+p]:mt-2">
-                    {children}
-                </p>
-            );
+            return <p key={index}>{children}</p>;
         case 'heading': {
             const level =
                 typeof node['attrs'] === 'object' && node['attrs'] && 'level' in node['attrs']
                     ? Number((node['attrs'] as { level?: unknown }).level)
                     : 2;
             const Tag = level <= 1 ? 'h3' : 'h4';
-            return (
-                <Tag key={index} className="mt-3 mb-1 text-sm font-semibold first:mt-0">
-                    {children}
-                </Tag>
-            );
+            return <Tag key={index}>{children}</Tag>;
         }
         case 'bulletList':
-            return (
-                <ul key={index} className="my-1.5 list-disc pl-5">
-                    {children}
-                </ul>
-            );
+            return <ul key={index}>{children}</ul>;
         case 'orderedList':
-            return (
-                <ol key={index} className="my-1.5 list-decimal pl-5">
-                    {children}
-                </ol>
-            );
+            return <ol key={index}>{children}</ol>;
         case 'listItem':
             return <li key={index}>{children}</li>;
         case 'hardBreak':
@@ -77,12 +64,7 @@ function Marked({ node }: { node: RichTextNode }) {
                         ? mark.attrs.href
                         : undefined;
                 out = href ? (
-                    <a
-                        href={href}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="text-accent underline underline-offset-2"
-                    >
+                    <a href={href} target="_blank" rel="noreferrer noopener">
                         {out}
                     </a>
                 ) : (

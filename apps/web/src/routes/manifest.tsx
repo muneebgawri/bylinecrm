@@ -34,6 +34,13 @@ const settings = {
     pipelines: () => import('./w/settings/Pipelines').then((m) => ({ Component: m.Pipelines })),
     pipeline: () => import('./w/settings/PipelineDetail').then((m) => ({ Component: m.PipelineDetail })),
     customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
+    mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
+};
+
+/** Templates are one chunk: the list and the editor, which brings the rich-text editor (FR-CRMS-UI-10). */
+const templates = {
+    list: () => import('./w/templates/TemplatesPage').then((m) => ({ Component: m.TemplatesPage })),
+    editor: () => import('./w/templates/TemplateEditorPage').then((m) => ({ Component: m.TemplateEditorPage })),
 };
 
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
@@ -71,7 +78,13 @@ const workspaceRoutes: RouteObject = {
         { path: 'deals', lazy: dealsPage, handle: { crumb: 'Deals' }, errorElement: <RouteError /> },
         { path: 'deals/:dealId', lazy: records.deal, handle: { crumb: 'Deal' }, errorElement: <RouteError /> },
         page('sequences', 'sequences', 'Sequences'),
-        page('templates', 'templates', 'Templates'),
+        { path: 'templates', lazy: templates.list, handle: { crumb: 'Templates' }, errorElement: <RouteError /> },
+        {
+            path: 'templates/:templateId',
+            lazy: templates.editor,
+            handle: { crumb: 'Template' },
+            errorElement: <RouteError />,
+        },
         page('mailboxes', 'mailboxes', 'Mailboxes'),
         page('team', 'team', 'Team'),
         {
@@ -88,6 +101,7 @@ const workspaceRoutes: RouteObject = {
                 { path: 'pipelines', lazy: settings.pipelines, handle: { crumb: 'Pipelines' } },
                 { path: `pipelines/:${PIPELINE_PARAM}`, lazy: settings.pipeline, handle: { crumb: 'Pipeline' } },
                 { path: 'custom-fields', lazy: settings.customFields, handle: { crumb: 'Custom fields' } },
+                { path: 'mail', lazy: settings.mail, handle: { crumb: 'Mail' } },
             ],
         },
     ],

@@ -9,6 +9,7 @@ import {
     companies,
     customFields,
     invites,
+    mailSettings,
     me,
     members,
     membersSummary,
@@ -19,6 +20,7 @@ import {
     pipelines,
     roles,
     tasks,
+    templates,
     timeline,
     views,
     type ListParams,
@@ -31,6 +33,7 @@ import type {
     CreateApiKeyInput,
     CreateInviteInput,
     CreateRoleInput,
+    CreateTemplateInput,
     CreateViewInput,
     LoginInput,
     MoveDealInput,
@@ -40,12 +43,16 @@ import type {
     OpportunityView,
     PersonInput,
     PersonView,
+    PreviewTemplateInput,
+    PutMailSettingsInput,
     CompanyPage,
     OpportunityPage,
     PersonPage,
     SignupInput,
     TaskCreateInput,
     UpdateRoleInput,
+    UpdateTemplateInput,
+    TemplateListQuery,
     UpdateViewInput,
 } from './types';
 
@@ -88,6 +95,13 @@ export const keys = {
         ] as const,
     views: (workspaceId: string, object: RecordObject) => ['w', workspaceId, 'views', object] as const,
     search: (workspaceId: string, q: string, objects: string) => ['w', workspaceId, 'search', q, objects] as const,
+    /** Every template list of the workspace, whatever its filter — what a template write invalidates. */
+    templates: (workspaceId: string) => ['w', workspaceId, 'templates'] as const,
+    templateList: (workspaceId: string, params: TemplateListQuery) =>
+        ['w', workspaceId, 'templates', 'list', { kind: params.kind ?? '', q: params.q ?? '' }] as const,
+    template: (workspaceId: string, templateId: string) => ['w', workspaceId, 'templates', 'one', templateId] as const,
+    templateVariables: (workspaceId: string) => ['w', workspaceId, 'templates', 'variables'] as const,
+    mailSettings: (workspaceId: string) => ['w', workspaceId, 'settings', 'mail'] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */
@@ -570,3 +584,99 @@ export const useTimeline = (workspaceId: string, target: RecordTarget, kinds: st
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (page) => page.nextCursor ?? undefined,
     });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Templates and workspace mail settings (P2-UI-2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** How many templates a page of the list holds; a workspace has dozens, not thousands. */
+export const TEMPLATE_PAGE_SIZE = 50;
+
+export function useTemplates(workspaceId: string, params: TemplateListQuery) {
+    return useInfiniteQuery({
+        queryKey: keys.templateList(workspaceId, params),
+        queryFn: ({ pageParam, signal }) =>
+            templates.list(workspaceId, { ...params, cursor: pageParam, limit: TEMPLATE_PAGE_SIZE }, signal),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (last) => last.nextCursor ?? undefined,
+    });
+}
+
+export const useTemplate = (workspaceId: string, templateId: string) =>
+    useQuery({
+        queryKey: keys.template(workspaceId, templateId),
+        queryFn: ({ signal }) => templates.get(workspaceId, templateId, signal),
+    });
+
+export const useTemplateVariables = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.templateVariables(workspaceId),
+        queryFn: ({ signal }) => templates.variables(workspaceId, signal),
+        staleTime: 5 * 60_000,
+    });
+
+export function useCreateTemplate(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: CreateTemplateInput) => templates.create(workspaceId, input),
+        onSuccess: (created) => {
+            client.setQueryData(keys.template(workspaceId, created.id), created);
+            return client.invalidateQueries({ queryKey: keys.templates(workspaceId), exact: false });
+        },
+    });
+}
+
+/** Saves with the version the editor loaded; the server answers `409 conflict` when it moved on. */
+export function useUpdateTemplate(workspaceId: string, templateId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: UpdateTemplateInput) => templates.update(workspaceId, templateId, input),
+        onSuccess: (saved) => {
+            client.setQueryData(keys.template(workspaceId, templateId), saved);
+            return client.invalidateQueries({
+                queryKey: keys.templates(workspaceId),
+                predicate: ({ queryKey }) => queryKey[3] === 'list',
+            });
+        },
+    });
+}
+
+export function useDeleteTemplate(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (templateId: string) => templates.remove(workspaceId, templateId),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.templates(workspaceId) }),
+    });
+}
+
+export function useDuplicateTemplate(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (templateId: string) => templates.duplicate(workspaceId, templateId),
+        onSuccess: (copy) => {
+            client.setQueryData(keys.template(workspaceId, copy.id), copy);
+            return client.invalidateQueries({ queryKey: keys.templates(workspaceId) });
+        },
+    });
+}
+
+/** A preview is a read with a body: a mutation, so it runs when asked and is never cached stale. */
+export function usePreviewTemplate(workspaceId: string, templateId: string) {
+    return useMutation({
+        mutationFn: (input: PreviewTemplateInput) => templates.preview(workspaceId, templateId, input),
+    });
+}
+
+export const useMailSettings = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.mailSettings(workspaceId),
+        queryFn: ({ signal }) => mailSettings.get(workspaceId, signal),
+    });
+
+export function usePutMailSettings(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: PutMailSettingsInput) => mailSettings.put(workspaceId, input),
+        onSuccess: (saved) => client.setQueryData(keys.mailSettings(workspaceId), saved),
+    });
+}

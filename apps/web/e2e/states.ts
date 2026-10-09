@@ -14,6 +14,7 @@ const RECORD_IDS: Record<string, string> = {
     person: IDS.person,
     company: IDS.company,
     deal: IDS.deal,
+    template: IDS.outreachTemplate,
     settingsPipeline: IDS.pipeline,
 };
 

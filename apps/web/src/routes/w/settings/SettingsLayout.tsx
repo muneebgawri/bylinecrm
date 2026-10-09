@@ -1,6 +1,7 @@
 import type { Capability } from '@bylinecrm/shared';
 import { PageHeader, cn, focusRing } from '@bylinecrm/ui';
-import { NavLink, Outlet } from 'react-router';
+import { useEffect, useRef } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { can, useMembership } from '../../../auth/capabilities';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
@@ -13,20 +14,42 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'invites', label: 'Invites', to: paths.settingsInvites, requires: 'workspace:admin' },
     { id: 'pipelines', label: 'Pipelines', to: paths.settingsPipelines, requires: 'pipeline:configure' },
     { id: 'custom-fields', label: 'Custom fields', to: paths.settingsCustomFields, requires: 'workspace:admin' },
+    // Readable by every member who reads records — the postal address and unsubscribe wording every
+    // outreach email carries; editable by an admin on the page itself.
+    { id: 'mail', label: 'Mail', to: paths.settingsMail, requires: 'record:read' },
 ];
 
 /** Workspace settings: a section row, then the section's table. The server is still the gate on every write. */
 export function SettingsLayout() {
     const workspaceId = useWorkspaceId();
     const membership = useMembership();
+    const sections = SECTIONS.filter((section) => can(membership, section.requires));
+    // On a phone the section row scrolls inside itself; the open section is kept in view.
+    const nav = useRef<HTMLElement>(null);
+    const { pathname } = useLocation();
+    useEffect(() => {
+        const show = () =>
+            nav.current
+                ?.querySelector('[aria-current="page"]')
+                ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+        show();
+        // Widths change when the web font arrives; measure again then, so the position is the same every time.
+        let live = true;
+        void document.fonts?.ready.then(() => {
+            if (live) show();
+        });
+        return () => {
+            live = false;
+        };
+    }, [pathname, sections.length]);
     return (
         <div className="p-7">
             <PageHeader
                 title="Settings"
-                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, and the fields records carry."
+                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, and how its mail is signed."
             />
-            <nav aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
-                {SECTIONS.filter((section) => can(membership, section.requires)).map((section) => (
+            <nav ref={nav} aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
+                {sections.map((section) => (
                     <NavLink
                         key={section.id}
                         to={section.to(workspaceId)}

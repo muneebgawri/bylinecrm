@@ -1,11 +1,12 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import { Building2, FileText, Inbox, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
+import { Building2, Inbox, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
+import { CREATE_PARAM } from '../paths';
 
 /**
  * The content pages this package does not build (dashboard, people and companies are
- * P1-UI-2/3; deals landed with P1-UI-4; outreach is Phase 3). Each is a designed empty state with the right words, so the
+ * P1-UI-2/3; deals landed with P1-UI-4; templates with P2-UI-2; outreach is Phase 3). Each is a designed empty state with the right words, so the
  * shell, nav, breadcrumbs and permissions are real end to end before the content lands.
  */
 interface PageSpec {
@@ -62,14 +63,6 @@ const PAGES = {
         body: 'A sequence stops itself on a reply, a bounce, an unsubscribe or a stage change.',
         coming: 'Phase 3',
     },
-    templates: {
-        title: 'Templates',
-        subtitle: 'Variable chips, live preview, locked compliance blocks.',
-        icon: <FileText />,
-        empty: 'No templates yet',
-        body: 'A missing variable blocks the send; it is never rendered blank.',
-        coming: 'Phase 2',
-    },
     mailboxes: {
         title: 'Mailboxes',
         subtitle: 'Outreach is spread across these mailboxes; a mailbox pauses itself past the threshold.',
@@ -94,7 +87,7 @@ export function ContentPage({ id }: { id: PageId }) {
     const page: PageSpec = PAGES[id];
     const [params] = useSearchParams();
     const allowed = useCan(page.action?.requires ?? 'record:read');
-    const creating = params.get('create');
+    const creating = params.get(CREATE_PARAM);
     return (
         <div className="p-7">
             <PageHeader
