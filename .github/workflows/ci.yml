@@ -85,6 +85,7 @@ jobs:
 
     a11y:
         runs-on: ubuntu-latest
+        timeout-minutes: 20
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
@@ -94,6 +95,7 @@ jobs:
 
     visual:
         runs-on: ubuntu-latest
+        timeout-minutes: 20
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
@@ -110,6 +112,7 @@ jobs:
     visual-baseline:
         if: github.event_name == 'workflow_dispatch' && inputs.baseline
         runs-on: ubuntu-latest
+        timeout-minutes: 20
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup

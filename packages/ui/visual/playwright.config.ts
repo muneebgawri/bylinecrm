@@ -27,7 +27,8 @@ export default defineConfig({
         baseURL: 'http://127.0.0.1:6007',
     },
     webServer: {
-        command: 'sirv storybook-static --port 6007 --quiet',
+        // --host is explicit: `localhost` resolves to ::1 on some runners and nothing answers on 127.0.0.1.
+        command: 'sirv storybook-static --host 127.0.0.1 --port 6007 --quiet',
         url: 'http://127.0.0.1:6007/iframe.html',
         reuseExistingServer: false,
         cwd: '..',
