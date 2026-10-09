@@ -36,44 +36,32 @@ export const STAGE_COLOUR_LABEL: Record<StageColour, string> = {
     bad: 'Red',
 };
 
-/** "Contacted, position 2 of 5" — how a stage is named while it moves; never by its id. */
-function at(name: string, index: number, total: number): string {
-    return `${name}, position ${index + 1} of ${total}`;
-}
-
 interface Named {
     id: string;
     name: string;
 }
 
 /**
- * dnd-kit's screen-reader announcements for the stage list, written for stages (FR-CRMS-UI-8). The
- * library's defaults read the dragged and target ids aloud — UUIDs — which is what the exit check
- * found on the board; here every message names the stage and its position.
+ * The names the shared drag announcements (`makeDndAnnouncements`, packages/ui) speak while a stage
+ * moves: the stage by its name, the place by its position — "Contacted over position 3 of 6" —
+ * never an id (FR-CRMS-UI-8). The drop's outcome is spoken once by the reorder itself
+ * (`stageMovedText`), so the helper's own "dropped in …" is turned off.
  */
-export function stageReorderAnnouncements(stages: readonly Named[]) {
+export function stageReorderNames(stages: readonly Named[], announce: (text: string) => void) {
     const index = (id: string | number) => stages.findIndex((s) => s.id === String(id));
-    const name = (id: string | number) => stages[index(id)]?.name ?? 'Stage';
-    const total = stages.length;
     return {
-        onDragStart: ({ active }: { active: { id: string | number } }) =>
-            `Picked up ${at(name(active.id), index(active.id), total)}. Use the arrow keys to move it, Space to drop, Escape to cancel.`,
-        onDragOver: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
-            over
-                ? `${name(active.id)} is over position ${index(over.id) + 1} of ${total}.`
-                : `${name(active.id)} is not over a position.`,
-        onDragEnd: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
-            over
-                ? `${name(active.id)} dropped at position ${index(over.id) + 1} of ${total}.`
-                : `${name(active.id)} dropped where it started.`,
-        onDragCancel: ({ active }: { active: { id: string | number } }) =>
-            `Reorder cancelled. ${at(name(active.id), index(active.id), total)}.`,
+        itemName: (id: string | number) => stages[index(id)]?.name ?? 'Stage',
+        containerName: (id: string | number) => `position ${index(id) + 1} of ${stages.length}`,
+        isHome: (activeId: string | number, overId: string | number) => String(activeId) === String(overId),
+        announceDrop: false,
+        announce,
     };
 }
 
-/** The instructions a screen reader hears on a draggable stage, before anything moves. */
-export const STAGE_REORDER_INSTRUCTIONS =
-    'To reorder, press Space to pick up the stage, the arrow keys to move it, and Space again to drop it. Escape cancels.';
+/** What a finished reorder says, from the drag, its keyboard twin or the menu alike. */
+export function stageMovedText(name: string, index: number, total: number): string {
+    return `${name} moved to position ${index + 1} of ${total}.`;
+}
 
 /** The API's key grammar for a custom field: a lower-case letter, then letters, digits or `_`, 64 at most. */
 export const FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;

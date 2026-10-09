@@ -15,12 +15,22 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Badge, Button, cn, DropdownMenuItem, Input, RowActionsMenu, type TableRowActions } from '@bylinecrm/ui';
+import {
+    Badge,
+    Button,
+    cn,
+    DND_INSTRUCTIONS,
+    DropdownMenuItem,
+    Input,
+    makeDndAnnouncements,
+    RowActionsMenu,
+    type TableRowActions,
+} from '@bylinecrm/ui';
 import { GripVertical } from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
 import type { StageView } from '../../../api/types';
 import { StageSwatch } from './StageEditor';
-import { STAGE_KIND_LABEL, STAGE_REORDER_INSTRUCTIONS, stageReorderAnnouncements } from './settingsText';
+import { STAGE_KIND_LABEL, stageMovedText, stageReorderNames } from './settingsText';
 
 /** How far a pointer travels before a press becomes a drag, so the handle still focuses on a click. */
 const DRAG_DISTANCE_PX = 6;
@@ -34,15 +44,18 @@ export interface StageListProps {
     onRename: (stage: StageView, name: string) => void;
     onEdit: (stage: StageView) => void;
     onDelete: (stage: StageView) => void;
+    /** The page's one polite live region (FR-CRMS-UI-8). */
+    announce: (text: string) => void;
 }
 
 /**
  * A pipeline's stages in order (FR-CRMS-9). Reordered by dragging the handle, by its keyboard twin
- * (Space picks the stage up, the arrow keys move it, Space drops it, Escape cancels — announced by
- * name and position, never by id, FR-CRMS-UI-8), or by Move up / Move down in the row's menu, which
- * is the touch path on a phone. Renaming happens in place; everything else in the stage editor.
+ * (Space picks the stage up, the arrow keys move it, Space drops it, Escape cancels), or by Move up /
+ * Move down in the row's menu, which is the touch path on a phone. Every path is announced by name
+ * and position through the page's polite region, never by id (FR-CRMS-UI-8, the shared
+ * `makeDndAnnouncements`). Renaming happens in place; everything else in the stage editor.
  */
-export function StageList({ stages, canConfigure, onReorder, onRename, onEdit, onDelete }: StageListProps) {
+export function StageList({ stages, canConfigure, onReorder, onRename, onEdit, onDelete, announce }: StageListProps) {
     const ordered = useMemo(() => [...stages].sort((a, b) => a.position - b.position), [stages]);
     const ids = ordered.map((s) => s.id);
     const [renaming, setRenaming] = useState<string | null>(null);
@@ -54,7 +67,16 @@ export function StageList({ stages, canConfigure, onReorder, onRename, onEdit, o
     const move = (from: number, to: number) => {
         if (to < 0 || to >= ids.length || from === to) return;
         onReorder(arrayMove(ids, from, to));
+        const stage = ordered[from];
+        if (stage) announce(stageMovedText(stage.name, to, ids.length));
     };
+    const accessibility = useMemo(
+        () => ({
+            announcements: makeDndAnnouncements(stageReorderNames(ordered, announce)),
+            screenReaderInstructions: DND_INSTRUCTIONS,
+        }),
+        [ordered, announce],
+    );
     const onDragEnd = ({ active, over }: DragEndEvent) => {
         if (!over || active.id === over.id) return;
         move(ids.indexOf(String(active.id)), ids.indexOf(String(over.id)));
@@ -107,10 +129,7 @@ export function StageList({ stages, canConfigure, onReorder, onRename, onEdit, o
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={onDragEnd}
-            accessibility={{
-                announcements: stageReorderAnnouncements(ordered),
-                screenReaderInstructions: { draggable: STAGE_REORDER_INSTRUCTIONS },
-            }}
+            accessibility={accessibility}
         >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
                 {list}

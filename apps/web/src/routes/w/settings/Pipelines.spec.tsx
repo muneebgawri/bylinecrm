@@ -98,6 +98,8 @@ describe('FR-CRMS-9: pipeline settings', () => {
         expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({
             stageIds: ['s-contacted', 's-new', 's-replied', 's-won'],
         });
+        // FR-CRMS-UI-8: the menu path is announced like a drag, by name and position.
+        expect(await screen.findByText('New moved to position 2 of 4.')).toBeInTheDocument();
     });
 
     it('refused delete: says why in the server’s words and offers the deals in that pipeline', async () => {

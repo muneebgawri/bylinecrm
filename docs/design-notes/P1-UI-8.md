@@ -22,8 +22,12 @@ settings", "Custom fields". The pipeline segment is named once (`PIPELINE_PARAM`
   its keyboard twin (Space, arrows, Space, Escape) and the row menu's Move up / Move down all send the
   same `PUT …/stages/order` with every id. The menu is the touch path on a phone, where the handle is
   hidden. The order paints before the server answers and is put back if it refuses.
-- **Announcements by name.** `stageReorderAnnouncements` replaces dnd-kit's defaults, which read ids
-  aloud: "Contacted dropped at position 3 of 6". The board has the same defect (P1-UI-9 fixes it there).
+- **Announcements by name, through the shared helper.** The stage list uses P1-UI-9's
+  `makeDndAnnouncements` (packages/ui) with `stageReorderNames`: the stage by name, the place by
+  position ("Contacted over position 3 of 6"), spoken in the page's one polite region; dnd-kit's
+  assertive region stays silent. The drop's outcome is said once by the reorder itself
+  (`stageMovedText`, "Contacted moved to position 3 of 6") whichever path moved it — drag, keyboard
+  twin or the row menu.
 - **A refused delete says why in the server's words.** The stage-delete 409 is shown as sent, with a
   link to the pipeline's deals. "Move deals to…, then retry" from the card is **not** built: the API
   has no bulk move, and moving N deals one request at a time from the browser is the client-side loop
@@ -51,5 +55,4 @@ did not exist. FR ids are in the `describe` titles. The route gate visits the tw
 
 ## Not built here
 
-Restoring an archived field and moving a stage's deals elsewhere both need API routes. The dark-mode
-backdrop and the board's announcements belong to P1-UI-9.
+Restoring an archived field and moving a stage's deals elsewhere both need API routes.

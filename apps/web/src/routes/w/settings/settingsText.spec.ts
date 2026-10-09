@@ -1,4 +1,5 @@
 import { CAPABILITIES } from '@bylinecrm/shared';
+import { makeDndAnnouncements } from '@bylinecrm/ui';
 import { describe, expect, it } from 'vitest';
 import {
     CAPABILITY_AREA_LABEL,
@@ -6,7 +7,8 @@ import {
     FIELD_KEY_PATTERN,
     fieldKeyFromLabel,
     ruleSummary,
-    stageReorderAnnouncements,
+    stageMovedText,
+    stageReorderNames,
 } from './settingsText';
 
 describe('FR-CRMS-9: a stage rule reads as a sentence', () => {
@@ -30,26 +32,33 @@ describe('FR-CRMS-UI-8: stage reorder announcements name stages and positions, n
         { id: '0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a02', name: 'Contacted' },
         { id: '0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a03', name: 'Replied' },
     ];
-    const say = stageReorderAnnouncements(stages);
+    const heard: string[] = [];
+    const say = makeDndAnnouncements(stageReorderNames(stages, (text) => heard.push(text)));
     const active = { id: stages[1]!.id };
     const over = { id: stages[2]!.id };
 
-    it('announces pick-up, movement, drop and cancel in words', () => {
-        expect(say.onDragStart({ active })).toContain('Picked up Contacted, position 2 of 3');
-        expect(say.onDragOver({ active, over })).toBe('Contacted is over position 3 of 3.');
-        expect(say.onDragEnd({ active, over })).toBe('Contacted dropped at position 3 of 3.');
-        expect(say.onDragCancel({ active })).toBe('Reorder cancelled. Contacted, position 2 of 3.');
+    it('speaks pick-up, the position it is over, and a put-back, through the polite region only', () => {
+        heard.length = 0;
+        expect(say.onDragStart({ active })).toBeUndefined();
+        say.onDragOver({ active, over });
+        say.onDragCancel({ active, over: null });
+        expect(heard).toEqual(['Contacted picked up.', 'Contacted over position 3 of 3.', 'Contacted put back.']);
+    });
+
+    it('leaves the drop outcome to the reorder, which says where the stage went', () => {
+        heard.length = 0;
+        say.onDragEnd({ active, over });
+        expect(heard).toEqual([]);
+        expect(stageMovedText('Contacted', 2, 3)).toBe('Contacted moved to position 3 of 3.');
     });
 
     it('never reads an id aloud', () => {
-        const all = [
-            say.onDragStart({ active }),
-            say.onDragOver({ active, over }),
-            say.onDragOver({ active, over: null }),
-            say.onDragEnd({ active, over }),
-            say.onDragEnd({ active, over: null }),
-            say.onDragCancel({ active }),
-        ].join(' ');
+        heard.length = 0;
+        say.onDragStart({ active });
+        say.onDragOver({ active, over });
+        say.onDragOver({ active, over: null });
+        say.onDragEnd({ active, over: active });
+        const all = heard.join(' ');
         for (const stage of stages) expect(all).not.toContain(stage.id);
         expect(all).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
     });

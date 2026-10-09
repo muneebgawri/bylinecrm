@@ -1,6 +1,6 @@
 import { Badge, Button, cn, focusRing, Input, Skeleton } from '@bylinecrm/ui';
 import { ChevronLeft } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useCallback, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
 import { usePipeline, useRules } from '../../../api/queries';
 import { useOrderStages, useRemoveStage, useUpdatePipeline, useUpdateStage } from '../../../api/settings';
@@ -31,6 +31,8 @@ export function PipelineDetail() {
     const removeStage = useRemoveStage(workspaceId, pipelineId);
     const [editing, setEditing] = useState<StageView | 'new' | null>(null);
     const [deleting, setDeleting] = useState<StageView | null>(null);
+    const [announcement, setAnnouncement] = useState('');
+    const announce = useCallback((text: string) => setAnnouncement(text), []);
     if (pipeline.isError) throw pipeline.error;
 
     const closeDelete = () => {
@@ -94,6 +96,7 @@ export function PipelineDetail() {
                             onRename={(stage, name) => updateStage.mutate({ stageId: stage.id, name })}
                             onEdit={setEditing}
                             onDelete={setDeleting}
+                            announce={announce}
                         />
                         {(order.error ?? updateStage.error) && (
                             <p role="alert" className="m-0 border-t border-border px-4 py-2 text-sm text-danger">
@@ -118,6 +121,10 @@ export function PipelineDetail() {
                     onClose={() => setEditing(null)}
                 />
             )}
+            {/* The page's one polite live region: stage moves and drags are announced here (FR-CRMS-UI-8). */}
+            <div aria-live="polite" aria-atomic="true" className="sr-only">
+                {announcement}
+            </div>
             <ConfirmDialog
                 open={deleting !== null}
                 onOpenChange={(open) => !open && closeDelete()}
