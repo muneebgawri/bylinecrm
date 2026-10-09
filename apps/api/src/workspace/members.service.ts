@@ -16,13 +16,14 @@ export class MembersService {
     list(): Promise<MemberView[]> {
         return this.rls.withWorkspace(async (tx) => {
             const members = await tx.workspaceMember.findMany({
-                include: { user: { select: { email: true } }, role: { select: { name: true } } },
+                include: { user: { select: { email: true, displayName: true } }, role: { select: { name: true } } },
                 orderBy: { createdAt: 'asc' },
             });
             return members.map((m) => ({
                 id: m.id,
                 userId: m.userId,
                 email: m.user.email,
+                displayName: m.user.displayName,
                 roleId: m.roleId,
                 roleName: m.role.name,
                 createdAt: m.createdAt,

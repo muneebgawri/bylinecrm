@@ -48,6 +48,7 @@ export const memberView = named(
         id,
         userId: id,
         email: z.email(),
+        displayName: z.string().nullable(),
         roleId: id,
         roleName: z.string(),
         createdAt: dateTime,
