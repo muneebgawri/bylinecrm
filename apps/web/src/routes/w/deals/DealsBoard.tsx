@@ -33,7 +33,6 @@ export interface DealsBoardProps {
     layout: 'lanes' | 'pages';
     /** A finger is the pointer: no drag-and-drop; each card offers "Move to stage" instead. */
     touch: boolean;
-    membersById: ReadonlyMap<string, string>;
     onMove: (deal: OpportunityView, stageId: string) => void;
     /** Opens the "Move to stage" sheet for a card (touch). */
     onMoveSheet: (deal: OpportunityView) => void;
@@ -76,7 +75,6 @@ export function DealsBoard({
     canMove,
     layout,
     touch,
-    membersById,
     onMove,
     onMoveSheet,
     onOpen,
@@ -169,7 +167,6 @@ export function DealsBoard({
             canDrag={canDrag}
             canMove={canMove}
             showMove={canMove && touch}
-            membersById={membersById}
             picked={picked}
             onCardKey={onCardKey}
             onOpen={onOpen}
@@ -196,7 +193,7 @@ export function DealsBoard({
                     <CardBody
                         deal={active}
                         stage={board.pipeline.stages.find((s) => s.id === active.stageId)}
-                        ownerName={ownerName(active, membersById)}
+                        ownerName={ownerName(active)}
                     />
                 )}
             </DragOverlay>
@@ -277,7 +274,6 @@ interface LaneProps {
     canDrag: boolean;
     canMove: boolean;
     showMove: boolean;
-    membersById: ReadonlyMap<string, string>;
     picked: Picked | null;
     onCardKey: (event: KeyboardEvent, deal: OpportunityView, laneIndex: number) => void;
     onOpen: (deal: OpportunityView) => void;
@@ -298,7 +294,6 @@ function Lane({
     canDrag,
     canMove,
     showMove,
-    membersById,
     picked,
     onCardKey,
     onOpen,
@@ -325,7 +320,7 @@ function Lane({
             <DraggableCard
                 deal={deal}
                 stage={column.stage}
-                ownerName={ownerName(deal, membersById)}
+                ownerName={ownerName(deal)}
                 canDrag={canDrag}
                 canMove={canMove}
                 picked={picked?.deal.id === deal.id}
@@ -515,8 +510,9 @@ function CardBody({
     );
 }
 
-function ownerName(deal: OpportunityView, membersById: ReadonlyMap<string, string>): string | undefined {
-    return deal.ownerId ? membersById.get(deal.ownerId) : undefined;
+/** The owner by the name the API embedded on the deal (P1-4a). */
+function ownerName(deal: OpportunityView): string | undefined {
+    return deal.owner ? (deal.owner.name ?? 'Member') : undefined;
 }
 
 /** A readable handle for a card: the id's tail, never its prefix (a UUIDv7 prefix is a timestamp). */

@@ -61,6 +61,10 @@ const deal = (id: string, name: string, stageId: string, days = 2): OpportunityV
     ownerId: 'm-1',
     pointOfContactId: null,
     companyId: null,
+    company: null,
+    pointOfContact: null,
+    // The owner's name rides on the deal (P1-4a); the page never looks members up to name it.
+    owner: { memberId: 'm-1', name: 'Kate Morgan' },
     createdBy: { kind: 'member', id: 'm-1' },
     custom: {},
     deletedAt: null,
@@ -101,6 +105,9 @@ const membership = (capabilities: Capability[]): MembershipSummary => ({
 const savedViews: unknown[] = [];
 const boardUrls: string[] = [];
 
+/** Every bulk and export request the page sent, with its body. */
+const posts: { url: string; body: unknown }[] = [];
+
 interface MoveCall {
     url: string;
     body: unknown;
@@ -115,6 +122,7 @@ function stubApi(moveResponse: (body: { stageId: string }) => Response) {
     const placed = new Map<string, string>();
     savedViews.length = 0;
     boardUrls.length = 0;
+    posts.length = 0;
     const current = (): BoardView => {
         const b = board();
         const all = b.columns.flatMap((c) => c.deals);
@@ -144,6 +152,21 @@ function stubApi(moveResponse: (body: { stageId: string }) => Response) {
                 if (response.ok && dealId) placed.set(dealId, body.stageId);
                 return Promise.resolve(response);
             }
+            if (url.endsWith('/opportunities/bulk')) {
+                const body = JSON.parse(String(init?.body)) as { ids: string[] };
+                posts.push({ url, body });
+                // The first deal changes owner; the second already had that owner.
+                const results = body.ids.map((id, i) =>
+                    i === 0 ? { id, ok: true } : { id, ok: true, unchanged: true },
+                );
+                return Promise.resolve(
+                    new Response(JSON.stringify({ results, succeeded: results.length, failed: 0 }), { status: 200 }),
+                );
+            }
+            if (url.endsWith('/opportunities/export.csv') && init?.method === 'POST') {
+                posts.push({ url, body: JSON.parse(String(init.body)) });
+                return Promise.resolve(new Response('id\n', { status: 200, headers: { 'Content-Type': 'text/csv' } }));
+            }
             if (url.includes('/views') && init?.method === 'POST') {
                 const body = JSON.parse(String(init.body)) as { name: string; filter: unknown; isShared: boolean };
                 const view = {
@@ -167,7 +190,7 @@ function stubApi(moveResponse: (body: { stageId: string }) => Response) {
                 ? current()
                 : url.includes('/views')
                   ? savedViews
-                  : url.endsWith('/rules')
+                  : url.endsWith('/rules') || url.includes('/custom-fields')
                     ? []
                     : url.endsWith('/members/summary')
                       ? [{ memberId: 'm-1', name: 'Kate Morgan' }]
@@ -388,27 +411,24 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         expect(within(laneOf('Contacted')).getByText('⚠ Quiet')).toBeInTheDocument();
     });
 
-    it('adds a filter chip and sends it to the board as base64url', async () => {
+    it('uses the shared view bar and filter panel — an inline filter reaches the board as base64url', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
-        const user = userEvent.setup();
-        renderPage();
+        const filter = Buffer.from(JSON.stringify({ and: [{ field: 'name', op: 'contains', value: 'PR' }] })).toString(
+            'base64url',
+        );
+        renderPage(ALL, `/w/${WS}/deals?filter=${filter}`);
         await card('Series B PR');
-        await user.click(screen.getByRole('button', { name: 'Filter' }));
-        const dialog = await screen.findByRole('dialog', { name: 'Add a filter' });
-        await user.click(within(dialog).getByRole('combobox', { name: 'Condition' }));
-        await user.click(await screen.findByRole('option', { name: 'contains' }));
-        await user.type(within(dialog).getByRole('textbox', { name: 'Value' }), 'PR');
-        await user.click(within(dialog).getByRole('button', { name: 'Add filter' }));
-        expect(await screen.findByText('Name contains PR')).toBeInTheDocument();
-        await waitFor(() => expect(boardUrls.some((u) => u.includes('/board') && u.includes('filter='))).toBe(true));
-        const sent = boardUrls.filter((u) => u.includes('filter=')).at(-1) ?? '';
-        const raw = new URL(sent, 'http://x').searchParams.get('filter') ?? '';
-        expect(JSON.parse(Buffer.from(raw, 'base64url').toString())).toEqual({
-            and: [{ field: 'name', op: 'contains', value: 'PR' }],
-        });
+        // The same tablist and toolbar as people and companies (P1-UI-6), not a deals-only picker.
+        const tabs = screen.getByRole('tablist', { name: 'Views' });
+        expect(within(tabs).getByRole('tab', { name: /All deals/ })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('button', { name: 'Filter · 1' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Remove filter/ })).not.toBeInTheDocument();
+        await waitFor(() =>
+            expect(boardUrls.some((u) => u.includes('/board') && u.includes(`filter=${filter}`))).toBe(true),
+        );
     });
 
-    it('saves the current filter as a view and drives the board by it', async () => {
+    it('saves the current filter as a view through the shared view menu and drives the board by it', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
         const user = userEvent.setup();
         const filter = Buffer.from(JSON.stringify({ and: [{ field: 'closeDate', op: 'is_null' }] })).toString(
@@ -416,19 +436,23 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         );
         renderPage([...ALL, 'view:save'], `/w/${WS}/deals?filter=${filter}`);
         await card('Series B PR');
-        await user.click(screen.getByRole('button', { name: /Saved view: All deals/ }));
-        await user.click(await screen.findByRole('menuitem', { name: /Save current filters/ }));
-        await user.type(await screen.findByRole('textbox', { name: /Name/ }), 'Open dated');
-        await user.click(screen.getByRole('button', { name: 'Save view' }));
-        expect(await screen.findByText('Open dated saved')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Save changes' }));
+        await user.click(await screen.findByRole('menuitem', { name: 'Save as new view…' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Save view' });
+        await user.click(within(dialog).getByRole('textbox', { name: /Name/ }));
+        await user.paste('Open dated');
+        await user.click(within(dialog).getByRole('button', { name: 'Save view' }));
+        await waitFor(() => expect(savedViews).toHaveLength(1));
         expect(savedViews.at(-1)).toMatchObject({
+            object: 'opportunity',
             name: 'Open dated',
             filter: { and: [{ field: 'closeDate', op: 'is_null' }] },
+            columns: expect.arrayContaining([expect.objectContaining({ field: 'name' })]),
         });
         await waitFor(() => expect(boardUrls.some((u) => u.includes('/board') && u.includes('view=v-new'))).toBe(true));
     });
 
-    it('removing a chip removes the filter from the query', async () => {
+    it('clearing the filter panel removes the filter from the query', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
         const user = userEvent.setup();
         const filter = Buffer.from(JSON.stringify({ and: [{ field: 'closeDate', op: 'is_null' }] })).toString(
@@ -436,11 +460,13 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         );
         renderPage(ALL, `/w/${WS}/deals?filter=${filter}`);
         await card('Series B PR');
-        await user.click(screen.getByRole('button', { name: 'Remove filter: Close date is empty' }));
-        await waitFor(() => expect(boardUrls.at(-1)).not.toContain('filter='));
+        await user.click(screen.getByRole('button', { name: 'Filter · 1' }));
+        const panel = await screen.findByRole('dialog', { name: 'Filter deals' });
+        await user.click(within(panel).getByRole('button', { name: 'Clear' }));
+        await waitFor(() => expect(boardUrls.filter((u) => u.includes('/board')).at(-1)).not.toContain('filter='));
     });
 
-    it('offers no Owner filter to an own-scoped member', async () => {
+    it('offers no Owner condition to an own-scoped member', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
         const user = userEvent.setup();
         const client = createQueryClient();
@@ -460,10 +486,49 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         );
         await card('Series B PR');
         await user.click(screen.getByRole('button', { name: 'Filter' }));
-        const dialog = await screen.findByRole('dialog', { name: 'Add a filter' });
-        await user.click(within(dialog).getByRole('combobox', { name: 'Field' }));
+        const panel = await screen.findByRole('dialog', { name: 'Filter deals' });
+        await user.click(await within(panel).findByRole('button', { name: 'Add condition' }));
+        await user.click(within(panel).getByRole('combobox', { name: 'Field' }));
         expect(screen.queryByRole('option', { name: 'Owner' })).not.toBeInTheDocument();
         expect(screen.getByRole('option', { name: 'Amount' })).toBeInTheDocument();
+    });
+
+    it('assigns an owner to selected deals with one bulk request and reports what changed', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        const user = userEvent.setup();
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        await screen.findByRole('columnheader', { name: /Deal/ }, { timeout: FIRST_RENDER_MS });
+        await user.click(screen.getByRole('checkbox', { name: 'Select all' }));
+        await user.click(screen.getByRole('button', { name: 'Assign owner' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Assign owner' });
+        await user.click(within(dialog).getByRole('combobox', { name: 'Owner' }));
+        await user.click(await screen.findByRole('option', { name: 'Kate Morgan' }));
+        await user.click(within(dialog).getByRole('button', { name: 'Assign' }));
+        await waitFor(() => expect(posts).toHaveLength(1));
+        expect(posts[0]).toEqual({
+            url: `/api/w/${WS}/opportunities/bulk`,
+            body: { action: 'assign_owner', ids: ['d-1', 'd-2'], ownerId: 'm-1' },
+        });
+        expect(await screen.findByText('Assigned 1 deal · 1 already was')).toBeInTheDocument();
+    });
+
+    it('exports selected deals with one request whose filter names the ids', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }));
+        const user = userEvent.setup();
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        await screen.findByRole('columnheader', { name: /Deal/ }, { timeout: FIRST_RENDER_MS });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Product PR' }));
+        await user.click(screen.getByRole('button', { name: 'Export selected' }));
+        await waitFor(() => expect(posts).toHaveLength(1));
+        expect(posts[0]?.body).toMatchObject({ filter: { and: [{ field: 'id', op: 'in', value: ['d-2'] }] } });
+    });
+
+    it('names owners from the deal itself, not from a member lookup', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        await screen.findByRole('columnheader', { name: /Deal/ }, { timeout: FIRST_RENDER_MS });
+        expect(screen.getAllByText('Kate Morgan')).toHaveLength(2);
     });
 
     it('opens the deal’s drawer from a click and from Enter', async () => {

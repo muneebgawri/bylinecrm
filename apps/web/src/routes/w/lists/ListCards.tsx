@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 import { useEffect, useRef, type PointerEvent } from 'react';
 import { formatRelative } from '../../../lib/format';
 import { identityName, identitySubline } from './ListTable';
-import type { CellContext, ListObject, ListRow } from './listConfig';
+import { ownerCell, type ListObject, type ListRow } from './listConfig';
 
 /** How long a press must last to start choosing several cards. */
 const LONG_PRESS_MS = 500;
@@ -11,7 +11,6 @@ const LONG_PRESS_MS = 500;
 export interface ListCardsProps<O extends ListObject> {
     object: O;
     rows: readonly ListRow<O>[];
-    context: CellContext;
     /** In select mode a tap chooses a card; otherwise it opens the record. */
     selecting: boolean;
     selected: ReadonlySet<string>;
@@ -31,7 +30,7 @@ export interface ListCardsProps<O extends ListObject> {
  * turns taps into choosing.
  */
 export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
-    const { object, rows, context, selecting, selected, hasMore, loadingMore, onMore } = props;
+    const { object, rows, selecting, selected, hasMore, loadingMore, onMore } = props;
     const sentinel = useRef<HTMLLIElement>(null);
     const press = useRef<{ timer: ReturnType<typeof setTimeout>; fired: boolean } | null>(null);
 
@@ -63,14 +62,8 @@ export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
                 const name = identityName(object, row);
                 const chosen = selected.has(row.id);
                 const secondary =
-                    object === 'person'
-                        ? (() => {
-                              const companyId = (row as ListRow<'person'>).companyId;
-                              return companyId
-                                  ? (context.companies.get(companyId) ?? '…')
-                                  : identitySubline(object, row);
-                          })()
-                        : identitySubline(object, row);
+                    (object === 'person' ? (row as ListRow<'person'>).company?.name : undefined) ??
+                    identitySubline(object, row);
                 return (
                     <li key={row.id}>
                         <button
@@ -115,7 +108,7 @@ export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
                                 )}
                             </span>
                             <span className="flex shrink-0 flex-col items-end gap-1">
-                                <Status object={object} row={row} context={context} />
+                                <Status object={object} row={row} />
                                 <span className="text-xs text-text-faint">{formatRelative(row.updatedAt)}</span>
                             </span>
                         </button>
@@ -132,11 +125,11 @@ export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
 }
 
 /** The one status a card shows: who owns a person; whether a company is an ideal customer. */
-function Status<O extends ListObject>({ object, row, context }: { object: O; row: ListRow<O>; context: CellContext }) {
+function Status<O extends ListObject>({ object, row }: { object: O; row: ListRow<O> }) {
     if (object === 'company') {
         return (row as ListRow<'company'>).icp ? <Badge status="success">Ideal customer</Badge> : null;
     }
-    const ownerId = row.ownerId;
-    if (!ownerId) return <Badge status="warning">No owner</Badge>;
-    return <span className="max-w-28 truncate text-xs text-text-muted">{context.members.get(ownerId) ?? '…'}</span>;
+    const owner = (row as ListRow<'person'>).owner;
+    if (!owner) return ownerCell(owner);
+    return <span className="max-w-28 truncate text-xs text-text-muted">{ownerCell(owner)}</span>;
 }

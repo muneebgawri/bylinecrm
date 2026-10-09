@@ -10,14 +10,13 @@ export const isDealsView = (value: unknown): value is DealsView =>
 /** The person's last choice of rendering, under the shell's storage convention. */
 export const DEALS_VIEW_KEY = 'bylinecrm.deals.view';
 
-/** The URL's names for the page's state, so a shared link opens the same deals the same way. */
+/**
+ * The URL's names for the deals page's own state. The list state (saved view, filter, sort,
+ * search) uses the names every list uses (`LIST_PARAMS`, P1-UI-6), so it is not repeated here.
+ */
 export const DEALS_PARAMS = {
     pipeline: 'pipeline',
     render: 'show',
-    view: 'view',
-    filter: 'filter',
-    sort: 'sort',
-    q: 'q',
     create: 'create',
 } as const;
 
