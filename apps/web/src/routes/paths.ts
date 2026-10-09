@@ -22,6 +22,7 @@ export const paths = {
     deal: (workspaceId: string, dealId: string) => `/w/${workspaceId}/deals/${dealId}`,
     sequences: (workspaceId: string) => `/w/${workspaceId}/sequences`,
     templates: (workspaceId: string) => `/w/${workspaceId}/templates`,
+    template: (workspaceId: string, templateId: string) => `/w/${workspaceId}/templates/${templateId}`,
     mailboxes: (workspaceId: string) => `/w/${workspaceId}/mailboxes`,
     team: (workspaceId: string) => `/w/${workspaceId}/team`,
     settings: (workspaceId: string) => `/w/${workspaceId}/settings`,
@@ -30,7 +31,16 @@ export const paths = {
     settingsApiKeys: (workspaceId: string) => `/w/${workspaceId}/settings/api-keys`,
     settingsInvites: (workspaceId: string) => `/w/${workspaceId}/settings/invites`,
     settingsPipelines: (workspaceId: string) => `/w/${workspaceId}/settings/pipelines`,
+    settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
 } as const;
+
+/** `?create=1` on a list page opens its "new" dialog (the ⌘K and "+ Create" commands land there). */
+export const CREATE_PARAM = 'create';
+
+/** A list page with its "new" dialog open. */
+export function withCreate(path: string): string {
+    return `${path}?${CREATE_PARAM}=1`;
+}
 
 /** The query parameter sign-in uses to return the person where they were. */
 export const RETURN_TO = 'returnTo';
