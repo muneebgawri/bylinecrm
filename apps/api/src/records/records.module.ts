@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PipelinesModule } from '../pipelines/pipelines.module';
 import { NotesController, OpportunitiesController, TasksController } from './activities.controllers';
 import { AttachmentsController } from './attachments.controller';
 import { AttachmentsService } from './attachments.service';
@@ -12,6 +13,7 @@ import { TasksService } from './tasks.service';
 
 /** People, companies, deals, the custom fields on them, and the notes, tasks and files attached to them. */
 @Module({
+    imports: [PipelinesModule],
     controllers: [
         PeopleController,
         CompaniesController,

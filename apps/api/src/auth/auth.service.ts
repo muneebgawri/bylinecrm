@@ -11,6 +11,7 @@ import { MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../infra/prisma.service';
 import { uniqueViolation } from '../infra/prisma-errors';
+import { seedDefaultPipeline } from '../pipelines/seed';
 import { INVITE_TTL_S, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_S, SLUG_SUFFIX_BYTES } from './auth.constants';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
@@ -221,6 +222,8 @@ async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: strin
     await tx.workspaceMember.create({
         data: { workspaceId: workspace.id, userId, roleId: admin.id, displayName: displayNameFor(user.email) },
     });
+    // The pipeline deals go into (P1-2), from the one stage list; a workspace is not usable without it.
+    await seedDefaultPipeline(tx, workspace.id);
     return workspaceView(workspace);
 }
 
