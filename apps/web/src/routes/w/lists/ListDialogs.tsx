@@ -18,16 +18,14 @@ import {
 } from '@bylinecrm/ui';
 import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
-import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
 import type { BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
+import { failureText } from '../../../lib/errors';
 import { LIST_COPY, type ListObject } from './listConfig';
 
-/** The message for a failed request: the API's own words when it sent some. */
-export function failureText(error: unknown): string {
-    if (error instanceof ApiError) return error.fieldErrors[0]?.message ?? error.message;
-    return error instanceof Error ? error.message : 'Something went wrong.';
-}
+/** The shared dialog and message, re-exported where the lists and the deals page already read them. */
+export { ConfirmDialog } from '../../../components/ConfirmDialog';
+export { failureText };
 
 /**
  * The one notice for a change to many records, from the API's per-record results (P1-4a):
@@ -109,41 +107,6 @@ export function SaveViewDialog({
                         </Button>
                     </DialogFooter>
                 </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-export function ConfirmDialog({
-    open,
-    onOpenChange,
-    title,
-    body,
-    confirm,
-    pending,
-    onConfirm,
-}: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    title: string;
-    body: string;
-    confirm: string;
-    pending: boolean;
-    onConfirm: () => void;
-}) {
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogTitle>{title}</DialogTitle>
-                <DialogDescription>{body}</DialogDescription>
-                <DialogFooter>
-                    <Button shape="square" onClick={() => onOpenChange(false)}>
-                        Cancel
-                    </Button>
-                    <Button shape="square" variant="danger" loading={pending} onClick={onConfirm}>
-                        {confirm}
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
