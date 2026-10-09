@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { CAPABILITIES, SYSTEM_ROLES, isCapability, type Capability, type RecordScope } from '@bylinecrm/shared';
+import { UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import type { RoleView } from './responses';
@@ -69,7 +70,7 @@ export class RolesService {
                 });
                 return view(role);
             } catch (error) {
-                throw uniqueViolation(error) ? new ConflictException('a role with that name exists') : error;
+                throw uniqueViolation(error) ? new UniqueConflict('a role with that name exists', 'name') : error;
             }
         });
     }

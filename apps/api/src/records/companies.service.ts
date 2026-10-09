@@ -1,7 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Actor, Address, DomainEvent, Links } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
+import { UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -250,8 +251,8 @@ function notFound(): NotFoundException {
     return new NotFoundException('company not found');
 }
 
-function conflict(): ConflictException {
-    return new ConflictException({ message: 'a company with that domain exists', field: 'domain' });
+function conflict(): UniqueConflict {
+    return new UniqueConflict('a company with that domain exists', 'domain');
 }
 
 export function view(row: CompanyRow): CompanyView {

@@ -37,7 +37,9 @@ describe('InlineText', () => {
     it('rolls back and shows the field error when the API refuses', async () => {
         const onSave = vi
             .fn()
-            .mockRejectedValue(new ApiError(400, 'Bad Request', 'invalid', [{ path: 'city', message: 'too long' }]));
+            .mockRejectedValue(
+                new ApiError(400, 'validation.failed', 'invalid', [{ path: 'city', message: 'too long' }]),
+            );
         renderText(onSave);
         await userEvent.click(screen.getByRole('button', { name: /City: Austin/ }));
         const input = screen.getByRole('textbox', { name: 'City' });
@@ -67,7 +69,9 @@ describe('InlineText', () => {
 
 describe('messageFor', () => {
     it('prefers the field error that names the path, including a nested one', () => {
-        const error = new ApiError(400, 'Bad Request', 'invalid', [{ path: 'custom.beat', message: 'not an option' }]);
+        const error = new ApiError(400, 'validation.failed', 'invalid', [
+            { path: 'custom.beat', message: 'not an option' },
+        ]);
         expect(messageFor(error, 'beat')).toBe('not an option');
         expect(messageFor(error, 'city')).toBe('invalid');
         expect(messageFor(new Error('boom'), 'city')).toBe('boom');

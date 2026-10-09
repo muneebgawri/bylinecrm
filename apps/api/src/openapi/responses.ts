@@ -2,9 +2,11 @@ import { applyDecorators } from '@nestjs/common';
 import { ApiExtension } from '@nestjs/swagger';
 import {
     ACTOR_KINDS,
+    ERROR_CODES,
     RECORD_OBJECTS,
     type Actor,
     type Address,
+    type ApiErrorBody,
     type Emails,
     type Links,
     type Money,
@@ -143,29 +145,36 @@ export type SharedTypeChecks = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The error envelope. One definition, attached to every operation's `4XX`/`5XX` by the document
-// builder. It describes the bodies as they are: Nest's `{ statusCode, message, error }`, the
-// validation pipe's `errors` (zod issues), and the two richer bodies the services send
-// (`field` on a uniqueness conflict, `issues` on invalid custom-field values).
+// The error envelope (P1-1d). One definition, attached to every operation's `4XX`/`5XX` by the
+// document builder, and exactly what `ErrorFilter` sends for every error. Held to the shared
+// `ApiErrorBody` type below, so the filter, the document and the web client cannot drift apart.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const fieldError = named(
+    'FieldError',
+    z.object({
+        path: z.string().meta({ description: 'Dotted path into the request body.', example: 'emails.primary' }),
+        message: z.string(),
+    }),
+);
 
 export const apiError = named(
     'ApiError',
-    z.looseObject({
-        statusCode: z.number().int().optional(),
-        message: z.union([z.string(), z.array(z.string())]),
-        error: z.string().optional(),
-        field: z.string().optional().meta({ description: 'The field a uniqueness conflict is about (409).' }),
-        issues: z
-            .array(z.object({ path: z.string(), message: z.string() }))
-            .optional()
-            .meta({ description: 'Invalid custom-field values (400), one per field.' }),
-        errors: z
-            .array(z.looseObject({ path: z.array(z.union([z.string(), z.number()])), message: z.string() }))
-            .optional()
-            .meta({ description: 'Request validation failures (400): the zod issues.' }),
+    z.object({
+        statusCode: z.number().int().meta({ example: 404 }),
+        code: z.enum(ERROR_CODES).meta({ description: 'Stable machine name; branch on this, never on message.' }),
+        message: z.string().meta({ description: 'Human and safe to show.', example: 'person not found' }),
+        fieldErrors: z
+            .array(fieldError)
+            // Absent, never `undefined`: the filter omits the key when there is nothing to say.
+            .exactOptional()
+            .meta({ description: 'Present when the failure is about specific request fields.' }),
+        requestId: z.string().meta({ description: 'Also in the X-Request-Id header.', example: EXAMPLE_ID }),
     }),
 );
+
+/** Compile-time only: the documented envelope is the shared type. */
+export type ApiErrorCheck = Assert<Same<z.output<typeof apiError>, ApiErrorBody>>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Route decorators. They record what a route returns as an operation extension; the document

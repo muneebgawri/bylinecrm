@@ -1,3 +1,4 @@
+import type { ErrorCode } from './errors.js';
 import { CUSTOM_FIELD_KEY_PATTERN, type CustomFieldType, type RecordObject } from './records.js';
 
 /**
@@ -282,8 +283,12 @@ export type BulkAction = (typeof BULK_ACTIONS)[number];
 export const BULK_MAX_IDS = FILTER_MAX_IDS;
 /** How many records one transaction of a bulk request changes. */
 export const BULK_CHUNK_SIZE = 100;
-/** Why one record of a bulk request was not changed. Not visible to the caller, in any workspace, reads the same. */
-export const BULK_ROW_ERRORS = ['not_found'] as const;
+/**
+ * Why one record of a bulk request was not changed — a code from the one error table (P1-1d).
+ * Not visible to the caller, whatever the reason (another owner's, another workspace's, never
+ * existed), reads the same: `not_found`.
+ */
+export const BULK_ROW_ERRORS = ['not_found'] as const satisfies readonly ErrorCode[];
 export type BulkRowError = (typeof BULK_ROW_ERRORS)[number];
 export type BulkRowResult = { id: string; ok: true } | { id: string; ok: false; error: BulkRowError };
 export type BulkResult = { results: BulkRowResult[]; succeeded: number; failed: number };

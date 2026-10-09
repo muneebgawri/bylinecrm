@@ -1,6 +1,7 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { CustomFieldType, RecordObject } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
+import { UniqueConflict } from '../../infra/errors/api-errors';
 import { uniqueViolation } from '../../infra/prisma-errors';
 import { RedisService } from '../../infra/redis.service';
 import { RlsPrismaService, type WorkspaceClient } from '../../infra/rls-prisma.service';
@@ -83,7 +84,7 @@ export class CustomFieldsService {
                 });
             } catch (error) {
                 throw uniqueViolation(error)
-                    ? new ConflictException(`a ${input.object} field with key "${input.key}" exists`)
+                    ? new UniqueConflict(`a ${input.object} field with key "${input.key}" exists`, 'key')
                     : error;
             }
         });

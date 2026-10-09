@@ -15,6 +15,7 @@ import {
     type ViewSort,
 } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
+import { UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -91,7 +92,7 @@ export class PipelinesService {
                 .create({
                     data: { workspaceId: context.workspaceId, name: input.name, isDefault: input.isDefault ?? false },
                 })
-                .catch(conflict('a pipeline with that name exists'));
+                .catch(conflict('a pipeline with that name exists', 'name'));
             for (const [index, stage] of stages.entries()) {
                 await tx.pipelineStage.create({ data: stageData(context.workspaceId, pipeline.id, index + 1, stage) });
             }
@@ -112,7 +113,7 @@ export class PipelinesService {
                         ...(patch.isDefault ? { isDefault: true } : {}),
                     },
                 })
-                .catch(conflict('a pipeline with that name exists'));
+                .catch(conflict('a pipeline with that name exists', 'name'));
             return pipelineView(await findPipeline(tx, id));
         });
     }
@@ -239,7 +240,7 @@ export class PipelinesService {
                         enabled: input.enabled ?? true,
                     },
                 })
-                .catch(conflict('this pipeline already has a rule for that event'));
+                .catch(conflict('this pipeline already has a rule for that event', 'event'));
             return ruleView(row);
         });
     }
@@ -436,9 +437,9 @@ function stageData(
     };
 }
 
-function conflict(message: string): (error: unknown) => never {
+function conflict(message: string, field: string): (error: unknown) => never {
     return (error: unknown) => {
-        throw uniqueViolation(error) ? new ConflictException(message) : error;
+        throw uniqueViolation(error) ? new UniqueConflict(message, field) : error;
     };
 }
 

@@ -268,7 +268,7 @@ describe('records', () => {
                 .post(w('/people'))
                 .send({ nameFirst: 'Dana', emails: { primary: `dana-${stamp}@acme.test`, additional: [] } })
                 .expect(409);
-            expect(dup.body).toMatchObject({ field: 'emails.primary' });
+            expect(dup.body).toMatchObject({ code: 'conflict.unique', fieldErrors: [{ path: 'emails.primary' }] });
 
             await as(admin)
                 .post(w('/companies'))

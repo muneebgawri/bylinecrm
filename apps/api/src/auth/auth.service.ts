@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
 import {
-    ConflictException,
     ForbiddenException,
     GoneException,
     Injectable,
@@ -10,6 +9,7 @@ import {
 import { MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../infra/prisma.service';
+import { RateLimited, UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { seedDefaultPipeline } from '../pipelines/seed';
 import { INVITE_TTL_S, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_S, SLUG_SUFFIX_BYTES } from './auth.constants';
@@ -60,7 +60,7 @@ export class AuthService {
             });
         } catch (error) {
             // The same message as a bad login: sign-up must not say whether an address is taken.
-            throw uniqueViolation(error) ? new ConflictException('that sign-up cannot be completed') : error;
+            throw uniqueViolation(error) ? new UniqueConflict('that sign-up cannot be completed') : error;
         }
     }
 
@@ -141,9 +141,7 @@ export class AuthService {
                 const created = await tx.user
                     .create({ data: { email: invite.email, passwordHash, emailVerifiedAt: new Date() } })
                     .catch((error: unknown) => {
-                        throw uniqueViolation(error)
-                            ? new ConflictException('sign in to accept this invitation')
-                            : error;
+                        throw uniqueViolation(error) ? new UniqueConflict('sign in to accept this invitation') : error;
                     });
                 userId = created.id;
             } else {
@@ -163,7 +161,7 @@ export class AuthService {
                     },
                 })
                 .catch((error: unknown) => {
-                    throw uniqueViolation(error) ? new ConflictException('already a member') : error;
+                    throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
                 });
             await tx.workspaceInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
             return { workspace: workspaceView(invite.workspace), userId };
@@ -178,14 +176,7 @@ export class AuthService {
 }
 
 /** `429` with the message the login route sends. */
-export class TooManyAttempts extends UnauthorizedException {
-    constructor() {
-        super('too many attempts; try again later');
-    }
-    override getStatus(): number {
-        return 429;
-    }
-}
+export class TooManyAttempts extends RateLimited {}
 
 /** The one spelling of an email address the database ever sees. */
 export function normaliseEmail(email: string): string {
