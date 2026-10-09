@@ -109,6 +109,29 @@ export async function request<T>(method: Method, path: string, options: RequestO
     return payload as T;
 }
 
+/**
+ * Fetches a file the API streams (a CSV export) and returns it as a `Blob` with the name the API
+ * gave it. A refusal arrives as the same `ApiError` a JSON route raises, so the caller can show
+ * the API's reason (an export over the row cap is `413` with a message) instead of a broken file.
+ */
+export async function requestFile(
+    path: string,
+    signal?: AbortSignal,
+): Promise<{ blob: Blob; filename: string | undefined }> {
+    const init: RequestInit = { method: 'GET', credentials: 'include' };
+    if (signal) init.signal = signal;
+    const response = await fetch(`${API_BASE}${path}`, init);
+    if (!response.ok) {
+        const text = await response.text();
+        const error = normaliseError(response, text ? safeJson(text) : undefined);
+        if (error.isUnauthorized) for (const listener of unauthorizedListeners) listener();
+        throw error;
+    }
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1];
+    return { blob: await response.blob(), filename };
+}
+
 function safeJson(text: string): unknown {
     try {
         return JSON.parse(text);

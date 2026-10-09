@@ -16,6 +16,15 @@
     --shadow-*: initial;
 }
 
+/*
+ * Tailwind's `md:` variant IS the phone breakpoint (`BREAKPOINTS.phone` in lib/breakpoints.ts,
+ * 768px = 48rem): below it the phone layout applies (FR-CRMS-UI-12). Declared rather than
+ * inherited so a Tailwind default can't move it; breakpoints.spec.ts holds the two equal.
+ */
+@theme {
+    --breakpoint-md: 48rem;
+}
+
 @theme inline {
     --spacing: var(--bc-spacing);
 

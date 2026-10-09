@@ -1,21 +1,11 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import {
-    Building2,
-    FileText,
-    Handshake,
-    Inbox,
-    LayoutDashboard,
-    ListOrdered,
-    BarChart3,
-    Users,
-    UsersRound,
-} from 'lucide-react';
+import { FileText, Handshake, Inbox, LayoutDashboard, ListOrdered, BarChart3, UsersRound } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 
 /**
- * The content pages this package does not build (dashboard, people, companies, deals are
- * P1-UI-2/3/4; outreach is Phase 3). Each is a designed empty state with the right words, so the
+ * The content pages not yet built (the dashboard and deals have their own packages; outreach is
+ * Phase 3). Each is a designed empty state with the right words, so the
  * shell, nav, breadcrumbs and permissions are real end to end before the content lands.
  */
 interface PageSpec {
@@ -45,24 +35,6 @@ const PAGES = {
         empty: 'No reports yet',
         body: 'Reports are built on the pipeline and outreach data as they land.',
         coming: 'Phase 3',
-    },
-    people: {
-        title: 'People',
-        subtitle: 'Leads and contacts in your portfolio. Verified before they are ever emailed.',
-        icon: <Users />,
-        empty: 'No people yet',
-        body: 'Add a person, or import a list; every address is verified before any sequence can reach it.',
-        action: { label: 'Add person', requires: 'record:write' },
-        coming: 'P1-UI-2',
-    },
-    companies: {
-        title: 'Companies',
-        subtitle: 'Accounts, with their people, deals and NewswireOS history.',
-        icon: <Building2 />,
-        empty: 'No companies yet',
-        body: 'A company is created from a person’s work domain or added by hand.',
-        action: { label: 'Add company', requires: 'record:write' },
-        coming: 'P1-UI-2',
     },
     deals: {
         title: 'Deals',

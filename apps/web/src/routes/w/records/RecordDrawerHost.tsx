@@ -5,7 +5,8 @@ import { paths } from '../../paths';
 import { CompanyRecord } from './CompanyRecord';
 import { DealRecord } from './DealRecord';
 import { PersonRecord } from './PersonRecord';
-import { RecordLoader, useMembersById } from './RecordPages';
+import { useMembersById } from '../../../api/queries';
+import { RecordLoader } from './RecordPages';
 import { OBJECT_LABEL, OPEN_PARAM, parseTarget, withOpen } from './targets';
 
 /**

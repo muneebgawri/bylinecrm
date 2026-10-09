@@ -16,6 +16,8 @@
         "@bylinecrm/shared": "workspace:*",
         "@bylinecrm/ui": "workspace:*",
         "@tanstack/react-query": "^5.104.1",
+        "@tanstack/react-table": "^8",
+        "@tanstack/react-virtual": "^3",
         "@tiptap/extension-link": "^3",
         "@tiptap/react": "^3",
         "@tiptap/starter-kit": "^3",

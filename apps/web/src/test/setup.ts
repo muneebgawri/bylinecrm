@@ -11,4 +11,30 @@ if (typeof window !== 'undefined') {
     globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
     Element.prototype.scrollIntoView ??= () => {};
     Element.prototype.hasPointerCapture ??= () => false;
+    Element.prototype.setPointerCapture ??= () => {};
+    Element.prototype.releasePointerCapture ??= () => {};
+
+    // jsdom has no layout, so no media queries. This one answers `(max-width: Npx)` against
+    // `window.innerWidth` (jsdom's default is 1024): a spec sets the width to see the phone layout.
+    window.matchMedia ??= (query: string) => {
+        const max = /\(max-width:\s*(\d+)px\)/.exec(query);
+        return {
+            matches: max ? window.innerWidth <= Number(max[1]) : false,
+            media: query,
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            addListener: () => {},
+            removeListener: () => {},
+            dispatchEvent: () => false,
+        } as MediaQueryList;
+    };
+    globalThis.IntersectionObserver ??= class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+            return [];
+        }
+    } as unknown as typeof IntersectionObserver;
 }

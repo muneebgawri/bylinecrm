@@ -1,4 +1,13 @@
-import { Drawer, DrawerContent, cn, isBoolean, usePersistedState, useTheme, type Theme } from '@bylinecrm/ui';
+import {
+    cn,
+    Drawer,
+    DrawerContent,
+    isBoolean,
+    type Theme,
+    useIsNarrow,
+    usePersistedState,
+    useTheme,
+} from '@bylinecrm/ui';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 import { useLogout } from '../api/queries';
@@ -15,7 +24,6 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { NAV_ITEMS } from './nav';
 import { SIDEBAR_COLLAPSED_KEY } from './storage';
-import { useIsNarrow } from './useMediaQuery';
 
 /** The record drawer (`?open=<object>:<id>`) lives in the records chunk; nothing loads until it is asked for. */
 const RecordDrawerHost = lazy(() =>

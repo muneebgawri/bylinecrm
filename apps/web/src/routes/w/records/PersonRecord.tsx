@@ -1,18 +1,20 @@
 import { Badge, Button, FactGrid, Tooltip, TooltipContent, TooltipTrigger } from '@bylinecrm/ui';
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
-import { usePatchRecord, useRecord, useRecordList } from '../../../api/queries';
+import { usePatchRecord, useRecord } from '../../../api/queries';
 import type { PersonView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
+import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ComposePlaceholder } from './ComposePlaceholder';
-import { InlineSelect, InlineText } from './InlineEdit';
+import { InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
+import { useRelated } from './related';
 import { TasksPanel } from './TasksPanel';
 import { TimelinePanel } from './TimelinePanel';
 import { useRecordCommands } from './useRecordCommands';
@@ -38,8 +40,7 @@ export function PersonRecord({
     const patch = usePatchRecord(workspaceId, 'person', person.id);
     const write = usePermission('record:write');
     const company = useRecord(workspaceId, 'company', person.companyId ?? '');
-    const companies = useRecordList(workspaceId, 'company', { limit: 200 }, write.allowed);
-    const deals = useRecordList(workspaceId, 'opportunity', { limit: 200 });
+    const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export function PersonRecord({
         next: siblings?.next,
     });
 
-    const personDeals = (deals.data?.items ?? []).filter((d) => d.pointOfContactId === person.id);
+    const personDeals = deals.items;
     const companyName = person.companyId ? (company.data?.name ?? '…') : null;
 
     const standard: PropertyRow[] = [
@@ -157,18 +158,16 @@ export function PersonRecord({
         {
             field: 'companyId',
             control: (
-                <InlineSelect
+                <RecordPicker
+                    workspaceId={workspaceId}
+                    object="company"
                     label="Company"
-                    path="companyId"
                     value={person.companyId}
-                    options={(companies.data?.items ?? (company.data ? [company.data] : [])).map((c) => ({
-                        value: c.id,
-                        label: c.name,
-                    }))}
+                    valueLabel={company.data?.name}
                     clearLabel="No company"
                     canEdit={write.allowed}
                     reason={write.reason}
-                    onSave={(v) => save({ companyId: v })}
+                    onChange={(v) => save({ companyId: v })}
                 />
             ),
         },
@@ -314,7 +313,7 @@ export function PersonRecord({
                             <RailEmpty>Not linked to a company.</RailEmpty>
                         )}
                     </RailCard>
-                    <RailCard title="Deals" count={deals.data ? personDeals.length : undefined}>
+                    <RailCard title="Deals" count={deals.data && !deals.more ? personDeals.length : undefined}>
                         {deals.isPending ? (
                             <RailLoading />
                         ) : personDeals.length === 0 ? (

@@ -1,4 +1,5 @@
 import type { RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
+import { useMemo } from 'react';
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isClientError } from './client';
 import {
@@ -19,6 +20,7 @@ import {
     roles,
     tasks,
     timeline,
+    type ListParams,
 } from './endpoints';
 import type {
     CompanyInput,
@@ -62,6 +64,8 @@ export const keys = {
         ['w', workspaceId, 'attachments', target.type, target.id] as const,
     timeline: (workspaceId: string, target: RecordTarget, kinds: string | undefined) =>
         ['w', workspaceId, 'timeline', target.type, target.id, kinds ?? ''] as const,
+    views: (workspaceId: string, object: RecordObject) => ['w', workspaceId, 'views', object] as const,
+    search: (workspaceId: string, q: string, objects: string) => ['w', workspaceId, 'search', q, objects] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */
@@ -202,13 +206,13 @@ export function useRevokeInvite(workspaceId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The three record objects' routes, picked by object so one hook serves every record page. */
-const recordEndpoints = { person: people, company: companies, opportunity: opportunities } as const;
-type RecordViewOf<O extends RecordObject> = O extends 'person'
+export const recordEndpoints = { person: people, company: companies, opportunity: opportunities } as const;
+export type RecordViewOf<O extends RecordObject> = O extends 'person'
     ? PersonView
     : O extends 'company'
       ? CompanyView
       : OpportunityView;
-type RecordInputOf<O extends RecordObject> = O extends 'person'
+export type RecordInputOf<O extends RecordObject> = O extends 'person'
     ? PersonInput
     : O extends 'company'
       ? CompanyInput
@@ -224,7 +228,7 @@ export function useRecord<O extends RecordObject>(workspaceId: string, object: O
 export function useRecordList<O extends RecordObject>(
     workspaceId: string,
     object: O,
-    params: { q?: string; sort?: string; limit?: number } = {},
+    params: Omit<ListParams, 'cursor'> = {},
     enabled = true,
 ) {
     return useQuery({
@@ -272,6 +276,15 @@ export const useMembersSummary = (workspaceId: string) =>
         queryFn: ({ signal }) => membersSummary.list(workspaceId, signal),
         staleTime: 5 * 60_000,
     });
+
+/** Member id → name for owners and authors; one query every page shares. */
+export function useMembersById(workspaceId: string): ReadonlyMap<string, string> {
+    const members = useMembersSummary(workspaceId);
+    return useMemo(
+        () => new Map((members.data ?? []).map((m) => [m.memberId, m.name ?? 'Unnamed member'])),
+        [members.data],
+    );
+}
 
 export const useCustomFields = (workspaceId: string, object: RecordObject) =>
     useQuery({

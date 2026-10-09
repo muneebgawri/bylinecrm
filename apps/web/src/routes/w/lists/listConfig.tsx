@@ -1,0 +1,254 @@
+import { customFieldKey, STANDARD_FIELDS, type ViewColumn } from '@bylinecrm/shared';
+import { Badge } from '@bylinecrm/ui';
+import type { ReactNode } from 'react';
+import type { CompanyView, CustomFieldView, PersonView } from '../../../api/types';
+import { formatDate, formatRelative } from '../../../lib/format';
+import { formatMoney } from '../../../lib/money';
+
+/** The two record objects that have a list page here; deals have the board (P1-UI-4). */
+export type ListObject = 'person' | 'company';
+export type ListRow<O extends ListObject> = O extends 'person' ? PersonView : CompanyView;
+
+/** What a cell needs besides its row: names for the ids a row carries. */
+export interface CellContext {
+    members: ReadonlyMap<string, string>;
+    companies: ReadonlyMap<string, string>;
+}
+
+/**
+ * One column of a list. `field` is the name the API knows — what a saved view stores, what the
+ * sort parameter and the export's `columns` take — so a column, a sort and an export column are
+ * the same thing. `exportFields` is what an export writes for it (a person's "Name" column is the
+ * first and last name).
+ */
+export interface ListColumn<Row> {
+    field: string;
+    label: string;
+    /** The starting width in pixels; a person can resize it and a view saves it. */
+    width: number;
+    exportFields: readonly string[];
+    cell: (row: Row, context: CellContext) => ReactNode;
+}
+
+const EMPTY = <span className="text-text-faint">—</span>;
+const text = (value: string | null | undefined): ReactNode => (value ? value : EMPTY);
+
+/** A standard field's label, from the shared descriptors (the one place labels are written). */
+function labelOf(object: ListObject, field: string): string {
+    return STANDARD_FIELDS[object].find((f) => f.name === field)?.label ?? field;
+}
+
+export function personName(row: PersonView): string {
+    return `${row.nameFirst} ${row.nameLast}`.trim() || row.emails.primary || 'Unnamed person';
+}
+
+function ownerCell(ownerId: string | null, context: CellContext): ReactNode {
+    if (!ownerId) return <Badge status="warning">No owner</Badge>;
+    return context.members.get(ownerId) ?? '…';
+}
+
+const PERSON_COLUMNS: ListColumn<PersonView>[] = [
+    {
+        field: 'nameFirst',
+        label: 'Name',
+        width: 240,
+        exportFields: ['nameFirst', 'nameLast'],
+        // The identity cell is drawn by the table (avatar + name + title), so this is its text form.
+        cell: (row) => personName(row),
+    },
+    {
+        field: 'emailPrimary',
+        label: labelOf('person', 'emailPrimary'),
+        width: 220,
+        exportFields: ['emailPrimary'],
+        cell: (r) => text(r.emails.primary),
+    },
+    {
+        field: 'companyId',
+        label: labelOf('person', 'companyId'),
+        width: 180,
+        exportFields: ['companyId'],
+        cell: (row, context) => (row.companyId ? (context.companies.get(row.companyId) ?? '…') : EMPTY),
+    },
+    {
+        field: 'jobTitle',
+        label: labelOf('person', 'jobTitle'),
+        width: 180,
+        exportFields: ['jobTitle'],
+        cell: (r) => text(r.jobTitle),
+    },
+    { field: 'city', label: labelOf('person', 'city'), width: 140, exportFields: ['city'], cell: (r) => text(r.city) },
+    {
+        field: 'ownerId',
+        label: labelOf('person', 'ownerId'),
+        width: 150,
+        exportFields: ['ownerId'],
+        cell: (r, c) => ownerCell(r.ownerId, c),
+    },
+    {
+        field: 'createdAt',
+        label: labelOf('person', 'createdAt'),
+        width: 130,
+        exportFields: ['createdAt'],
+        cell: (r) => formatDate(r.createdAt),
+    },
+    {
+        field: 'updatedAt',
+        label: labelOf('person', 'updatedAt'),
+        width: 130,
+        exportFields: ['updatedAt'],
+        cell: (r) => formatRelative(r.updatedAt),
+    },
+];
+
+const COMPANY_COLUMNS: ListColumn<CompanyView>[] = [
+    { field: 'name', label: labelOf('company', 'name'), width: 240, exportFields: ['name'], cell: (r) => r.name },
+    {
+        field: 'domain',
+        label: labelOf('company', 'domain'),
+        width: 180,
+        exportFields: ['domain'],
+        cell: (r) => text(r.domain),
+    },
+    {
+        field: 'employeeCount',
+        label: labelOf('company', 'employeeCount'),
+        width: 120,
+        exportFields: ['employeeCount'],
+        cell: (r) => (r.employeeCount === null ? EMPTY : r.employeeCount.toLocaleString()),
+    },
+    {
+        field: 'arr',
+        label: labelOf('company', 'arr'),
+        width: 140,
+        exportFields: ['arr'],
+        cell: (r) => (r.arr ? formatMoney(r.arr) : EMPTY),
+    },
+    {
+        field: 'icp',
+        label: labelOf('company', 'icp'),
+        width: 130,
+        exportFields: ['icp'],
+        cell: (r) => (r.icp ? <Badge status="success">Ideal customer</Badge> : EMPTY),
+    },
+    {
+        field: 'ownerId',
+        label: labelOf('company', 'ownerId'),
+        width: 150,
+        exportFields: ['ownerId'],
+        cell: (r, c) => ownerCell(r.ownerId, c),
+    },
+    {
+        field: 'createdAt',
+        label: labelOf('company', 'createdAt'),
+        width: 130,
+        exportFields: ['createdAt'],
+        cell: (r) => formatDate(r.createdAt),
+    },
+    {
+        field: 'updatedAt',
+        label: labelOf('company', 'updatedAt'),
+        width: 130,
+        exportFields: ['updatedAt'],
+        cell: (r) => formatRelative(r.updatedAt),
+    },
+];
+
+/** A custom field's value as a cell shows it: lists joined, booleans as words, dates formatted. */
+function customCell(definition: CustomFieldView, value: unknown): ReactNode {
+    if (value === undefined || value === null || value === '') return EMPTY;
+    if (Array.isArray(value)) return value.length ? value.join(', ') : EMPTY;
+    if (definition.type === 'boolean') return value ? 'Yes' : 'No';
+    if (definition.type === 'date' || definition.type === 'datetime') return formatDate(String(value));
+    return String(value);
+}
+
+function customColumns<Row extends { custom: Record<string, unknown> }>(
+    object: ListObject,
+    definitions: readonly CustomFieldView[],
+): ListColumn<Row>[] {
+    return definitions
+        .filter((d) => d.object === object && d.archivedAt === null)
+        .sort((a, b) => a.position - b.position)
+        .map((d) => {
+            const field = `custom.${d.key}`;
+            return {
+                field,
+                label: d.label,
+                width: 160,
+                exportFields: [field],
+                cell: (row: Row) => customCell(d, row.custom[d.key]),
+            };
+        });
+}
+
+/** Every column an object's list can show: its standard ones, then its live custom fields. */
+export function allColumns<O extends ListObject>(
+    object: O,
+    definitions: readonly CustomFieldView[],
+): ListColumn<ListRow<O>>[] {
+    const standard = (object === 'person' ? PERSON_COLUMNS : COMPANY_COLUMNS) as unknown as ListColumn<ListRow<O>>[];
+    return [...standard, ...customColumns<ListRow<O>>(object, definitions)];
+}
+
+/** What a list shows before anyone chooses: the identity column and the few most useful. */
+export const DEFAULT_COLUMNS: Readonly<Record<ListObject, readonly string[]>> = {
+    person: ['nameFirst', 'emailPrimary', 'companyId', 'ownerId', 'city', 'updatedAt'],
+    company: ['name', 'domain', 'employeeCount', 'arr', 'ownerId', 'updatedAt'],
+};
+
+/** The identity column, always first and never hidden: a row is always findable by its name. */
+export const IDENTITY_FIELD: Readonly<Record<ListObject, string>> = { person: 'nameFirst', company: 'name' };
+
+/**
+ * The columns to draw, in order, with widths: a saved view's when it has some (fields that no
+ * longer exist dropped, the identity column kept first), the defaults otherwise.
+ */
+export function resolveColumns<O extends ListObject>(
+    object: O,
+    available: readonly ListColumn<ListRow<O>>[],
+    saved: readonly ViewColumn[] | undefined,
+): { column: ListColumn<ListRow<O>>; width: number }[] {
+    const byField = new Map(available.map((c) => [c.field, c]));
+    const chosen: ViewColumn[] = saved?.length ? [...saved] : DEFAULT_COLUMNS[object].map((field) => ({ field }));
+    const identity = IDENTITY_FIELD[object];
+    if (!chosen.some((c) => c.field === identity)) chosen.unshift({ field: identity });
+    const ordered = [...chosen.filter((c) => c.field === identity), ...chosen.filter((c) => c.field !== identity)];
+    return ordered.flatMap((c) => {
+        const column = byField.get(c.field);
+        return column ? [{ column, width: c.width ?? column.width }] : [];
+    });
+}
+
+/**
+ * Whether a column may be sorted: the shared descriptors decide (P1-4), never this file — a
+ * custom field is not sortable in v1, and a standard field is when its descriptor says so.
+ */
+export function isSortable(object: ListObject, field: string): boolean {
+    return customFieldKey(field) === null && STANDARD_FIELDS[object].some((f) => f.name === field && f.sortable);
+}
+
+/** Labels for the page around the list. */
+export const LIST_COPY: Readonly<
+    Record<
+        ListObject,
+        { title: string; subtitle: string; singular: string; plural: string; add: string; search: string }
+    >
+> = {
+    person: {
+        title: 'People',
+        subtitle: 'Leads and contacts in your portfolio. Verified before they are ever emailed.',
+        singular: 'person',
+        plural: 'people',
+        add: 'Add person',
+        search: 'Search people…',
+    },
+    company: {
+        title: 'Companies',
+        subtitle: 'Accounts, with their people, deals and NewswireOS history.',
+        singular: 'company',
+        plural: 'companies',
+        add: 'Add company',
+        search: 'Search companies…',
+    },
+};

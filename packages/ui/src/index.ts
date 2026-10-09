@@ -2,6 +2,7 @@ export { cn } from './lib/cn';
 export { focusRing } from './lib/focus';
 export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
+export { BREAKPOINTS, NARROW_QUERY, PHONE_QUERY, useIsNarrow, useMediaQuery, usePhone } from './lib/breakpoints';
 
 export * from './theme/theme';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/ThemeProvider';
@@ -22,6 +23,9 @@ export { Skeleton } from './components/skeleton/Skeleton';
 export { EmptyState, type EmptyStateProps } from './components/empty-state/EmptyState';
 export { DataTableShell, type DataTableShellProps } from './components/data-table/DataTableShell';
 export { ThemeToggle } from './components/theme-toggle/ThemeToggle';
+// Popover and Sheet are subpath exports (`@bylinecrm/ui/popover`, `@bylinecrm/ui/sheet`), not
+// re-exported here: only lazily loaded pages use them, and a barrel export would put them in
+// every page's first load (apps/web's `ui` chunk, budgeted by .size-limit.json).
 
 // Shell components (mockup v3, P1-UI-1)
 export { IconTile, iconTileVariants, type IconTileProps } from './components/icon-tile/IconTile';

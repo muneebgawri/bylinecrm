@@ -8,10 +8,13 @@ import { focusRing } from '../../lib/focus';
 /**
  * The mockup's buttons: pills by default (`shape="square"` for the 8px toolbar buttons), a black
  * primary, a bordered secondary with the card shadow, a quiet ghost, a danger fill and a link.
+ * Below the phone breakpoint every size is at least 44×44px (FR-CRMS-UI-12): the desktop sizes
+ * are the mockup's, the phone gets a target a thumb can hit — one rule here, not one per page.
  */
 export const buttonVariants = cva(
     [
         'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap font-medium',
+        'max-md:min-h-11 max-md:min-w-11',
         'transition-colors disabled:pointer-events-none disabled:opacity-50',
         '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         focusRing,
