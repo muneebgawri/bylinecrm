@@ -249,17 +249,20 @@ export async function phoneBottomBar(page: Page): Promise<Finding[]> {
 }
 
 /**
- * The first element matching `selector` ends above PHONE_FOLD_PX with the page scrolled to the
- * top: on the deals board, the first card is on screen without scrolling past the page's chrome.
+ * The first element matching `selector` that is on screen horizontally ends above PHONE_FOLD_PX
+ * with the page scrolled to the top: on the deals board, the first card of the stage shown is on
+ * screen without scrolling past the page's chrome.
  */
 export async function aboveFold(page: Page, selector: string): Promise<Finding[]> {
     const result = await page.evaluate(
         ([sel, fold]) => {
+            // On screen horizontally too: a phone's board pages one stage per screen, and a card
+            // in a stage scrolled off to the side is not "above the fold" for anyone.
             const el = [...document.querySelectorAll(sel)].find((e) => {
                 const r = e.getBoundingClientRect();
-                return r.width > 1 && r.height > 1;
+                return r.width > 1 && r.height > 1 && r.left >= 0 && r.right <= window.innerWidth + 0.5;
             });
-            if (!el) return `nothing matches ${sel}`;
+            if (!el) return `nothing on screen matches ${sel}`;
             const bottom = el.getBoundingClientRect().bottom;
             return bottom > fold ? `the first ${sel} ends at ${Math.round(bottom)}px, below the ${fold}px fold` : '';
         },
