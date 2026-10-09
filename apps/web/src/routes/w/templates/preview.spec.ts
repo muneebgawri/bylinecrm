@@ -50,6 +50,18 @@ describe('template preview', () => {
         expect(line.text).toBe('The workspace postal address is not set, so this outreach email cannot be sent.');
     });
 
+    it('says both when variables are empty and the postal address is missing', () => {
+        const line = resolutionLine(
+            { missing: ['deal.name', MISSING_POSTAL_ADDRESS], sendable: false },
+            4,
+            'Dana Reyes',
+        );
+        expect(line).toEqual({
+            tone: 'warning',
+            text: '1 of 4 variables is empty for Dana Reyes: deal.name. The workspace postal address is not set, so this outreach email cannot be sent.',
+        });
+    });
+
     it('says a template with no variables is ready', () => {
         expect(resolutionLine({ missing: [], sendable: true }, 0, 'Dana Reyes').text).toBe(
             'No variables to fill; ready for Dana Reyes.',

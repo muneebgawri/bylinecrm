@@ -37,19 +37,16 @@ export function resolutionLine(
     variableCount: number,
     recipient: string,
 ): ResolutionLine {
-    if (rendered.missing.includes(MISSING_POSTAL_ADDRESS)) {
-        return {
-            tone: 'warning',
-            text: 'The workspace postal address is not set, so this outreach email cannot be sent.',
-        };
-    }
-    const empty = rendered.missing;
+    const noAddress = rendered.missing.includes(MISSING_POSTAL_ADDRESS);
+    const empty = rendered.missing.filter((path) => path !== MISSING_POSTAL_ADDRESS);
+    const parts: string[] = [];
     if (empty.length > 0) {
-        return {
-            tone: 'warning',
-            text: `${empty.length} of ${variableCount} variable${variableCount === 1 ? ' is' : 's are'} empty for ${recipient}: ${empty.join(', ')}.`,
-        };
+        const noun = variableCount === 1 ? 'variable' : 'variables';
+        const verb = empty.length === 1 ? 'is' : 'are';
+        parts.push(`${empty.length} of ${variableCount} ${noun} ${verb} empty for ${recipient}: ${empty.join(', ')}.`);
     }
+    if (noAddress) parts.push('The workspace postal address is not set, so this outreach email cannot be sent.');
+    if (parts.length > 0) return { tone: 'warning', text: parts.join(' ') };
     if (variableCount === 0) return { tone: 'success', text: `No variables to fill; ready for ${recipient}.` };
     return {
         tone: 'success',

@@ -27,3 +27,41 @@
     outline: 2px solid var(--color-ring);
     outline-offset: 1px;
 }
+
+/*
+ * Rich text, written and read: the one typography for a stored rich-text body, used by the
+ * editor (`components/rich-text/RichTextEditor.tsx`) and the read-only view
+ * (`routes/w/records/RichTextView.tsx`), so what a person types is what is shown. Tailwind's reset
+ * removes every element's own spacing and list markers; these put back exactly what a note or an
+ * email body may contain (paragraphs, two heading levels, lists, links).
+ */
+.rich-text p {
+    margin: 0;
+    min-height: calc(var(--spacing) * 5);
+}
+.rich-text p + p {
+    margin-top: calc(var(--spacing) * 2);
+}
+.rich-text :is(h2, h3, h4) {
+    margin: calc(var(--spacing) * 3) 0 calc(var(--spacing) * 1);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+.rich-text :is(h2, h3, h4):first-child {
+    margin-top: 0;
+}
+.rich-text :is(ul, ol) {
+    margin: calc(var(--spacing) * 1.5) 0;
+    padding-left: calc(var(--spacing) * 5);
+}
+.rich-text ul {
+    list-style: disc;
+}
+.rich-text ol {
+    list-style: decimal;
+}
+.rich-text a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}

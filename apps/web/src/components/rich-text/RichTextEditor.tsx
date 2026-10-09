@@ -174,7 +174,7 @@ export function RichTextEditor({
                 role: 'textbox',
                 ...(spec.singleLine ? {} : { 'aria-multiline': 'true' }),
                 class: cn(
-                    'outline-none px-3 text-[13px] leading-relaxed max-md:text-touch',
+                    'rich-text outline-none px-3 text-[13px] leading-relaxed max-md:text-touch',
                     spec.singleLine ? 'py-1.5 whitespace-nowrap overflow-x-auto' : `py-2 ${spec.minHeightClass}`,
                 ),
             },

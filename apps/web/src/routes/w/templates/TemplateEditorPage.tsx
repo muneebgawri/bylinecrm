@@ -19,6 +19,8 @@ import {
     cn,
     toast,
     useIsMobile,
+    useMediaQuery,
+    useTheme,
 } from '@bylinecrm/ui';
 import { ArrowLeft, Lock, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -635,11 +637,9 @@ function PreviewPane({
                             <RefreshCw aria-hidden />
                         </Button>
                     </div>
-                    <iframe
+                    <PreviewFrame
+                        html={rendered.html}
                         title={`Email preview for ${personName ?? 'the chosen person'}`}
-                        sandbox=""
-                        srcDoc={previewDocument(rendered.html)}
-                        className="h-96 w-full rounded-md border border-border bg-surface max-md:h-[55vh]"
                     />
                     {line && (
                         <p
@@ -669,5 +669,28 @@ function PreviewPane({
                 </Tooltip>
             </div>
         </section>
+    );
+}
+
+/**
+ * The rendered email in a sandbox that runs no script (`sandbox=""`). Its document carries the
+ * page's design tokens, so it is (re)written after the theme has been applied — a passive effect
+ * runs after the theme provider's layout effect — and again whenever the theme or the OS
+ * preference changes, so the preview never shows the previous theme.
+ */
+function PreviewFrame({ html, title }: { html: string; title: string }) {
+    const frame = useRef<HTMLIFrameElement>(null);
+    const { theme } = useTheme();
+    const systemDark = useMediaQuery('(prefers-color-scheme: dark)');
+    useEffect(() => {
+        if (frame.current) frame.current.srcdoc = previewDocument(html);
+    }, [html, theme, systemDark]);
+    return (
+        <iframe
+            ref={frame}
+            title={title}
+            sandbox=""
+            className="h-96 w-full rounded-md border border-border bg-surface max-md:h-[55vh]"
+        />
     );
 }
