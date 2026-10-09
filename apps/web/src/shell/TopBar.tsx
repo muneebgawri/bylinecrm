@@ -9,11 +9,11 @@ import {
     focusRing,
     useIsNarrow,
 } from '@bylinecrm/ui';
-import { Bell, Building2, FileText, Handshake, ListTodo, PanelLeft, Plus, Search, Users } from 'lucide-react';
+import { Bell, Building2, FileText, Handshake, ListTodo, Mail, PanelLeft, Plus, Search, Users } from 'lucide-react';
 import { useMatches, useNavigate } from 'react-router';
 import { useCan } from '../auth/capabilities';
 import { formatShortcut } from '../commands/shortcuts';
-import { paths } from '../routes/paths';
+import { CREATE_PARAM, paths, withCreate } from '../routes/paths';
 
 /** A route declares its breadcrumb through `handle.crumb`; the top bar reads the deepest one. */
 export interface RouteHandle {
@@ -108,25 +108,45 @@ interface CreateEntry {
     allowed: boolean;
 }
 
-/** The black "+ Create" pill and its menu: person, company, deal, note, task. */
+/** The black "+ Create" pill and its menu: person, company, deal, note, task, template. */
 function CreateMenu({ workspaceId }: { workspaceId: string }) {
     const navigate = useNavigate();
     const canWrite = useCan('record:write');
     const canDeal = useCan('deal:edit');
     const canNote = useCan('note:write');
     const canTask = useCan('task:write');
+    const canTemplate = useCan('template:write');
     const entries: CreateEntry[] = [
-        { id: 'person', label: 'Person', icon: Users, to: `${paths.people(workspaceId)}?create=1`, allowed: canWrite },
+        { id: 'person', label: 'Person', icon: Users, to: withCreate(paths.people(workspaceId)), allowed: canWrite },
         {
             id: 'company',
             label: 'Company',
             icon: Building2,
-            to: `${paths.companies(workspaceId)}?create=1`,
+            to: withCreate(paths.companies(workspaceId)),
             allowed: canWrite,
         },
-        { id: 'deal', label: 'Deal', icon: Handshake, to: `${paths.deals(workspaceId)}?create=1`, allowed: canDeal },
-        { id: 'note', label: 'Note', icon: FileText, to: `${paths.people(workspaceId)}?create=note`, allowed: canNote },
-        { id: 'task', label: 'Task', icon: ListTodo, to: `${paths.people(workspaceId)}?create=task`, allowed: canTask },
+        { id: 'deal', label: 'Deal', icon: Handshake, to: withCreate(paths.deals(workspaceId)), allowed: canDeal },
+        {
+            id: 'note',
+            label: 'Note',
+            icon: FileText,
+            to: `${paths.people(workspaceId)}?${CREATE_PARAM}=note`,
+            allowed: canNote,
+        },
+        {
+            id: 'task',
+            label: 'Task',
+            icon: ListTodo,
+            to: `${paths.people(workspaceId)}?${CREATE_PARAM}=task`,
+            allowed: canTask,
+        },
+        {
+            id: 'template',
+            label: 'Template',
+            icon: Mail,
+            to: withCreate(paths.templates(workspaceId)),
+            allowed: canTemplate,
+        },
     ].filter((e) => e.allowed);
     if (entries.length === 0) return null;
     return (

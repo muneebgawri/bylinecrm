@@ -12,7 +12,9 @@ import type {
     BoardView,
     CompanyView,
     CustomFieldView,
+    EmailTemplateView,
     InviteView,
+    MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
     MemberView,
@@ -28,6 +30,7 @@ import type {
     StageHistoryEntry,
     StageView,
     TaskView,
+    TemplateVariablesView,
     TimelineActivityView,
     UserView,
     WorkspaceView,
@@ -63,6 +66,8 @@ export const IDS = {
     fourthDeal: '0b1e0000-0000-4000-8000-0000000000f4',
     pipeline: '0b1e0000-0000-4000-8000-000000000101',
     view: '0b1e0000-0000-4000-8000-000000000201',
+    template: '0b1e0000-0000-4000-8000-0000000007a1',
+    outreachTemplate: '0b1e0000-0000-4000-8000-0000000007a2',
 } as const;
 
 const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
@@ -488,3 +493,81 @@ export const recordPage = <T>(items: T[]): Omit<PersonPage, 'items'> & { items: 
     total: items.length,
     totalIsExact: true,
 });
+
+// ---- Templates and mail settings (P2-UI-2) --------------------------------------------------
+const variable = (path: string) => ({ type: 'variable', attrs: { path } });
+
+export const templates: EmailTemplateView[] = [
+    {
+        id: IDS.template,
+        name: 'Follow-up after a reply',
+        kind: 'personal',
+        subject: 'Re: {{company.name}} — distribution options',
+        body: {
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Hi ' }, variable('person.firstName'), { type: 'text', text: ',' }],
+                },
+                {
+                    type: 'paragraph',
+                    content: [
+                        { type: 'text', text: 'Thanks for getting back to me. Attached is the distribution list for ' },
+                        variable('company.name'),
+                        { type: 'text', text: '.' },
+                    ],
+                },
+            ],
+        },
+        version: 2,
+        updatedBy: member,
+        ...created(24 * 4),
+    },
+    {
+        id: IDS.outreachTemplate,
+        name: 'Intro — PR distribution offer',
+        kind: 'outreach',
+        subject: 'Quick one for {{person.firstName}}',
+        body: {
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    content: [
+                        { type: 'text', text: 'I saw ' },
+                        variable('company.name'),
+                        { type: 'text', text: '’s announcement and thought our distribution could extend its reach.' },
+                    ],
+                },
+            ],
+        },
+        version: 5,
+        updatedBy: member,
+        ...created(24 * 9),
+    },
+];
+
+export const templateVariables: TemplateVariablesView = {
+    standard: [
+        { path: 'person.firstName', source: 'person', label: 'First name', type: 'text', optional: false },
+        { path: 'person.lastName', source: 'person', label: 'Last name', type: 'text', optional: false },
+        { path: 'company.name', source: 'company', label: 'Company name', type: 'text', optional: false },
+        { path: 'deal.amount', source: 'deal', label: 'Deal amount', type: 'money', optional: false },
+        { path: 'sender.signature', source: 'sender', label: 'Signature', type: 'text', optional: true },
+    ],
+    custom: [{ path: 'person.custom.beat', source: 'person', label: 'Beat', type: 'select', optional: false }],
+};
+
+export const mailSettings: MailSettingsView = {
+    postalAddress: {
+        line1: '123 Main Street',
+        line2: 'Suite 400',
+        city: 'Austin',
+        region: 'TX',
+        postalCode: '78701',
+        country: 'US',
+    },
+    defaultSenderName: 'Pinion Partners',
+    unsubscribeFooterText: 'You are receiving this email because we thought it would interest you.',
+};

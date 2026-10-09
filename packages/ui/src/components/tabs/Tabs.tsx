@@ -26,7 +26,7 @@ export const TabsTrigger = forwardRef<
         <TabsPrimitive.Trigger
             ref={ref}
             className={cn(
-                '-mb-px inline-flex items-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-text-muted',
+                '-mb-px inline-flex items-center justify-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-text-muted max-md:min-h-touch max-md:min-w-touch',
                 'hover:text-text data-[state=active]:border-accent data-[state=active]:text-text',
                 'disabled:pointer-events-none disabled:opacity-50',
                 focusRing,

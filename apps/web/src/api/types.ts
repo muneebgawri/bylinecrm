@@ -112,3 +112,22 @@ export type SavedView = Schemas['SavedView'];
 export type CreateViewInput = Loose<Schemas['CreateViewDto']>;
 export type UpdateViewInput = Loose<Schemas['UpdateViewDto']>;
 export type SearchResults = Schemas['SearchResults'];
+
+// ---- Templates and workspace mail settings (P2-4) --------------------------------------------
+export type EmailTemplateView = Schemas['EmailTemplate'];
+export type EmailTemplatePage = Schemas['EmailTemplatePage'];
+export type TemplateVariablesView = Schemas['TemplateVariables'];
+/** One variable the editor offers: a standard one, or one of the workspace's custom fields. */
+export type TemplateVariableView = Schemas['TemplateVariable'] | TemplateVariablesView['custom'][number];
+/** A preview: `missing` names every variable with no value; `sendable` is false whenever it is not empty. */
+export type RenderedEmailView = Schemas['RenderedEmail'];
+export type MailSettingsView = Schemas['MailSettings'];
+export type PostalAddressView = Schemas['PostalAddress'];
+export type CreateTemplateInput = Loose<Schemas['CreateTemplateDto']>;
+/** A patch names the version it edited (`version`); a stale one is answered `409 conflict`. */
+export type UpdateTemplateInput = Loose<Schemas['UpdateTemplateDto']>;
+export type PreviewTemplateInput = Loose<Schemas['PreviewTemplateDto']>;
+export type PutMailSettingsInput = Loose<Schemas['PutMailSettingsDto']>;
+export type TemplateListQuery = Loose<
+    NonNullable<paths['/api/w/{workspaceId}/templates']['get']['parameters']['query']>
+>;

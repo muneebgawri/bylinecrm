@@ -58,6 +58,10 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/tasks$`), () => data.page(data.tasks)],
     [new RegExp(`^${W}/attachments$`), () => data.attachments],
     [new RegExp(`^${W}/timeline$`), () => data.page(data.timeline)],
+    [new RegExp(`^${W}/templates/variables$`), () => data.templateVariables],
+    [new RegExp(`^${W}/templates/${ID}$`), (m) => byId(data.templates, m[1])],
+    [new RegExp(`^${W}/templates$`), () => data.page(data.templates)],
+    [new RegExp(`^${W}/settings/mail$`), () => data.mailSettings],
     [
         new RegExp(`^${W}/search$`),
         () => ({ people: data.people, companies: data.companies, opportunities: data.deals }),

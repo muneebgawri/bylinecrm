@@ -17,10 +17,14 @@ import type {
     CreateRoleInput,
     CreateRuleInput,
     CreateStageInput,
+    CreateTemplateInput,
     CreateViewInput,
     CustomFieldView,
+    EmailTemplatePage,
+    EmailTemplateView,
     InviteView,
     LoginInput,
+    MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
     MemberView,
@@ -38,6 +42,9 @@ import type {
     PersonPage,
     PersonView,
     PipelineView,
+    PreviewTemplateInput,
+    PutMailSettingsInput,
+    RenderedEmailView,
     RoleView,
     RuleView,
     SavedView,
@@ -48,12 +55,15 @@ import type {
     TaskInput,
     TaskPage,
     TaskView,
+    TemplateListQuery,
+    TemplateVariablesView,
     TimelinePage,
     UpdateCustomFieldInput,
     UpdatePipelineInput,
     UpdateRoleInput,
     UpdateRuleInput,
     UpdateStageInput,
+    UpdateTemplateInput,
     UpdateViewInput,
     UserView,
     WorkspaceView,
@@ -405,4 +415,41 @@ export const search = {
             ),
             { signal },
         ),
+};
+
+export const templates = {
+    list: (workspaceId: string, params: TemplateListQuery, signal?: AbortSignal) =>
+        request<EmailTemplatePage>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/templates${query({ kind: params.kind, q: params.q, cursor: params.cursor, limit: params.limit })}`,
+            ),
+            { signal },
+        ),
+    get: (workspaceId: string, templateId: string, signal?: AbortSignal) =>
+        request<EmailTemplateView>('GET', workspacePath(workspaceId, `/templates/${templateId}`), { signal }),
+    /** The registry and the workspace's custom fields: what the editor's variable picker offers. */
+    variables: (workspaceId: string, signal?: AbortSignal) =>
+        request<TemplateVariablesView>('GET', workspacePath(workspaceId, '/templates/variables'), { signal }),
+    create: (workspaceId: string, input: CreateTemplateInput) =>
+        request<EmailTemplateView>('POST', workspacePath(workspaceId, '/templates'), { body: input }),
+    update: (workspaceId: string, templateId: string, input: UpdateTemplateInput) =>
+        request<EmailTemplateView>('PATCH', workspacePath(workspaceId, `/templates/${templateId}`), { body: input }),
+    remove: (workspaceId: string, templateId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/templates/${templateId}`)),
+    duplicate: (workspaceId: string, templateId: string) =>
+        request<EmailTemplateView>('POST', workspacePath(workspaceId, `/templates/${templateId}/duplicate`)),
+    /** Renders against a real record; never sendable while a variable has no value. */
+    preview: (workspaceId: string, templateId: string, input: PreviewTemplateInput) =>
+        request<RenderedEmailView>('POST', workspacePath(workspaceId, `/templates/${templateId}/preview`), {
+            body: input,
+        }),
+};
+
+export const mailSettings = {
+    get: (workspaceId: string, signal?: AbortSignal) =>
+        request<MailSettingsView>('GET', workspacePath(workspaceId, '/settings/mail'), { signal }),
+    put: (workspaceId: string, input: PutMailSettingsInput) =>
+        request<MailSettingsView>('PUT', workspacePath(workspaceId, '/settings/mail'), { body: input }),
 };
