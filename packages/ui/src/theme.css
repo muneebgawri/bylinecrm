@@ -14,10 +14,18 @@
     --font-*: initial;
     --radius-*: initial;
     --shadow-*: initial;
+
+    /* The phone/desktop line (FR-CRMS-UI-12): `max-md:` in CSS, `useIsMobile()` in script.
+       Must equal BREAKPOINT_PX.mobile in lib/breakpoints.ts — breakpoints.spec.ts checks it. */
+    --breakpoint-md: 48rem;
 }
 
 @theme inline {
     --spacing: var(--bc-spacing);
+    /* `min-h-touch`, `size-touch`, … — a finger's 44px, whatever the density (FR-CRMS-UI-12). */
+    --spacing-touch: var(--bc-touch-target);
+    /* `text-touch` — the 16px under which iOS zooms into a focused field. */
+    --text-touch: var(--bc-touch-text);
 
     --color-background: var(--bc-background);
     --color-surface: var(--bc-surface);

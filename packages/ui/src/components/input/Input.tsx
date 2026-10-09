@@ -4,7 +4,8 @@ import { focusRing } from '../../lib/focus';
 
 /** Shared by Input and Textarea so a field looks the same whatever its height. */
 export const fieldClasses = [
-    'w-full rounded-md border border-border bg-surface-raised px-3 text-sm text-text',
+    // On phones: 16px text (iOS zooms into anything smaller) — FR-CRMS-UI-12.
+    'w-full rounded-md border border-border bg-surface-raised px-3 text-sm text-text max-md:text-touch',
     'placeholder:text-text-faint hover:border-border-strong',
     'disabled:cursor-not-allowed disabled:opacity-50',
     'aria-[invalid=true]:border-danger',
@@ -17,7 +18,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     { className, type = 'text', ...props },
     ref,
 ) {
-    return <input ref={ref} type={type} className={cn(fieldClasses, 'h-9', className)} {...props} />;
+    return <input ref={ref} type={type} className={cn(fieldClasses, 'h-9 max-md:h-touch', className)} {...props} />;
 });
 
 export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;

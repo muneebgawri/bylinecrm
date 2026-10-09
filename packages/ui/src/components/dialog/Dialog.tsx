@@ -24,6 +24,11 @@ export const DialogContent = forwardRef<
                 className={cn(
                     'fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4',
                     'rounded-lg border border-border bg-surface-raised p-6 text-text shadow-md',
+                    // On phones every dialog is a bottom sheet: full width, anchored to the bottom,
+                    // clear of the home indicator, scrolling inside itself (FR-CRMS-UI-12).
+                    'max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:max-w-none',
+                    'max-md:max-h-[85dvh] max-md:translate-x-0 max-md:translate-y-0 max-md:overflow-y-auto',
+                    'max-md:rounded-b-none max-md:p-5 max-md:pb-[max(1.25rem,env(safe-area-inset-bottom))]',
                     'motion-reduce:animate-none',
                     className,
                 )}
@@ -31,7 +36,11 @@ export const DialogContent = forwardRef<
             >
                 {children}
                 <DialogPrimitive.Close
-                    className={cn('absolute right-4 top-4 rounded-sm text-text-muted hover:text-text', focusRing)}
+                    className={cn(
+                        'absolute right-4 top-4 rounded-sm text-text-muted hover:text-text',
+                        'max-md:right-2 max-md:top-2 max-md:grid max-md:size-touch max-md:place-items-center',
+                        focusRing,
+                    )}
                 >
                     <X aria-hidden className="size-4" />
                     <span className="sr-only">Close</span>

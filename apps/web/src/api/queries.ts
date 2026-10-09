@@ -19,16 +19,21 @@ import {
     roles,
     tasks,
     timeline,
+    views,
 } from './endpoints';
 import type {
+    BoardQuery,
+    BoardView,
     CompanyInput,
     CompanyView,
     CreateApiKeyInput,
     CreateInviteInput,
     CreateRoleInput,
+    CreateViewInput,
     LoginInput,
     MoveDealInput,
     NoteInput,
+    OpportunityCreateInput,
     OpportunityInput,
     OpportunityView,
     PersonInput,
@@ -36,6 +41,7 @@ import type {
     SignupInput,
     TaskInput,
     UpdateRoleInput,
+    UpdateViewInput,
 } from './types';
 
 /**
@@ -62,6 +68,20 @@ export const keys = {
         ['w', workspaceId, 'attachments', target.type, target.id] as const,
     timeline: (workspaceId: string, target: RecordTarget, kinds: string | undefined) =>
         ['w', workspaceId, 'timeline', target.type, target.id, kinds ?? ''] as const,
+    rules: (workspaceId: string, pipelineId: string) => ['w', workspaceId, 'pipelines', pipelineId, 'rules'] as const,
+    /** Every board of a pipeline, whatever its query — what a move paints into and invalidates. */
+    boards: (workspaceId: string, pipelineId: string) => ['w', workspaceId, 'pipelines', pipelineId, 'board'] as const,
+    /** The board AND the deal list read this one key: one result set, two renderings (FR-CRMS-UI-3). */
+    board: (workspaceId: string, pipelineId: string, params: BoardQuery) =>
+        [
+            'w',
+            workspaceId,
+            'pipelines',
+            pipelineId,
+            'board',
+            { view: params.view ?? '', filter: params.filter ?? '', sort: params.sort ?? '', q: params.q ?? '' },
+        ] as const,
+    views: (workspaceId: string, object: RecordObject) => ['w', workspaceId, 'views', object] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */
@@ -293,18 +313,149 @@ export const useDealHistory = (workspaceId: string, id: string) =>
         queryFn: ({ signal }) => opportunities.history(workspaceId, id, signal),
     });
 
-/** A stage move; the returned deal replaces the cached one and the deal's history and timeline refetch. */
-export function useMoveDeal(workspaceId: string, id: string) {
+export interface MoveDealVariables extends MoveDealInput {
+    dealId: string;
+    pipelineId: string;
+}
+
+/**
+ * The one stage move, used by the deal page, the board, the list and the bulk bar. Before the
+ * server answers, the card is moved in every cached board of the pipeline (the optimistic paint,
+ * FR-CRMS-UI-10); a refusal puts those boards back (the snap-back) and the caller shows the reason.
+ * The answer replaces the cached deal; its history, its timeline, the deal lists and the boards
+ * refetch. Board counts and sums are the API's: they are never adjusted here.
+ */
+export function useMoveDeal(workspaceId: string) {
     const client = useQueryClient();
-    const key = keys.record(workspaceId, 'opportunity', id);
     return useMutation({
-        mutationFn: (input: MoveDealInput) => opportunities.move(workspaceId, id, input),
-        onSuccess: (result) => {
+        mutationFn: (input: MoveDealVariables) => {
+            const body: MoveDealInput = { stageId: input.stageId };
+            if (input.close) body.close = input.close;
+            return opportunities.move(workspaceId, input.dealId, body);
+        },
+        onMutate: async (input) => {
+            const prefix = keys.boards(workspaceId, input.pipelineId);
+            await client.cancelQueries({ queryKey: prefix });
+            const previous = client.getQueriesData<BoardView>({ queryKey: prefix });
+            client.setQueriesData<BoardView>({ queryKey: prefix }, (board) =>
+                board ? moveInBoard(board, input.dealId, input.stageId) : board,
+            );
+            return { previous };
+        },
+        onError: (_error, _input, context) => {
+            for (const [key, board] of context?.previous ?? []) client.setQueryData(key, board);
+        },
+        onSuccess: (result, input) => {
+            const key = keys.record(workspaceId, 'opportunity', input.dealId);
             client.setQueryData(key, result.deal);
             void client.invalidateQueries({ queryKey: [...key, 'history'] });
-            void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline', 'opportunity', id] });
+            void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline', 'opportunity', input.dealId] });
             void client.invalidateQueries({ queryKey: keys.records(workspaceId, 'opportunity'), exact: false });
         },
+        onSettled: (_result, _error, input) =>
+            client.invalidateQueries({ queryKey: keys.boards(workspaceId, input.pipelineId) }),
+    });
+}
+
+/** The same board with one deal in another column; the API's counts and sums are left as they were. */
+export function moveInBoard(board: BoardView, dealId: string, stageId: string): BoardView {
+    let moving: OpportunityView | undefined;
+    const stripped = board.columns.map((column) => {
+        const deal = column.deals.find((d) => d.id === dealId);
+        if (!deal) return column;
+        moving = deal;
+        return { ...column, deals: column.deals.filter((d) => d.id !== dealId) };
+    });
+    if (!moving) return board;
+    const moved = { ...moving, stageId };
+    return {
+        ...board,
+        columns: stripped.map((column) =>
+            column.stage.id === stageId ? { ...column, deals: [moved, ...column.deals] } : column,
+        ),
+    };
+}
+
+export const usePipelines = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.pipelines(workspaceId),
+        queryFn: ({ signal }) => pipelines.list(workspaceId, signal),
+        staleTime: 5 * 60_000,
+    });
+
+export const useRules = (workspaceId: string, pipelineId: string | undefined) =>
+    useQuery({
+        queryKey: keys.rules(workspaceId, pipelineId ?? ''),
+        queryFn: ({ signal }) => pipelines.rules(workspaceId, pipelineId ?? '', signal),
+        enabled: pipelineId !== undefined,
+    });
+
+/**
+ * The board. Another member's move arrives by refetch when the window regains focus — never by
+ * polling (doc 50 §B "stale").
+ */
+export const useBoard = (workspaceId: string, pipelineId: string | undefined, params: BoardQuery) =>
+    useQuery({
+        queryKey: keys.board(workspaceId, pipelineId ?? '', params),
+        queryFn: ({ signal }) => pipelines.board(workspaceId, pipelineId ?? '', params, signal),
+        enabled: pipelineId !== undefined,
+        refetchOnWindowFocus: true,
+    });
+
+export function useCreateDeal(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: OpportunityCreateInput) => opportunities.create(workspaceId, input),
+        onSuccess: (deal) => {
+            void client.invalidateQueries({ queryKey: keys.boards(workspaceId, deal.pipelineId) });
+            void client.invalidateQueries({ queryKey: keys.records(workspaceId, 'opportunity'), exact: false });
+        },
+    });
+}
+
+/** A deal patch from the board or list (owner today); the deal page edits through `usePatchRecord`. */
+export function useUpdateDeal(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: { dealId: string; patch: OpportunityInput }) =>
+            opportunities.update(workspaceId, input.dealId, input.patch),
+        onSuccess: (deal) => {
+            client.setQueryData(keys.record(workspaceId, 'opportunity', deal.id), deal);
+            void client.invalidateQueries({ queryKey: keys.boards(workspaceId, deal.pipelineId) });
+        },
+    });
+}
+
+export const useViews = (workspaceId: string, object: RecordObject) =>
+    useQuery({
+        queryKey: keys.views(workspaceId, object),
+        queryFn: ({ signal }) => views.list(workspaceId, object, signal),
+    });
+
+export function useCreateView(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: CreateViewInput) => views.create(workspaceId, input),
+        onSuccess: (view) => client.invalidateQueries({ queryKey: keys.views(workspaceId, view.object) }),
+    });
+}
+
+export function useUpdateView(workspaceId: string, object: RecordObject) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: { viewId: string } & UpdateViewInput) => {
+            const { viewId, ...rest } = input;
+            return views.update(workspaceId, viewId, rest);
+        },
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.views(workspaceId, object) }),
+    });
+}
+
+export function useDeleteView(workspaceId: string, object: RecordObject) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (viewId: string) => views.remove(workspaceId, viewId),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.views(workspaceId, object) }),
     });
 }
 

@@ -16,9 +16,14 @@ export default defineConfig(({ mode }) => {
             rollupOptions: {
                 output: {
                     // One `vendor` chunk for the framework so the size budget (.size-limit.json)
-                    // names a stable file; routes split on their own through `lazy`.
+                    // names a stable file; routes split on their own through `lazy`. Only React
+                    // Query is framework: TanStack Table and Virtual belong to the pages that use
+                    // them (deals), not to every page's first load. Everything else Rollup splits
+                    // by use; the budget reads index.html for what loads first (.size-limit.js).
                     manualChunks: (id) =>
-                        /node_modules\/(react|react-dom|scheduler|react-router|@tanstack)\//.test(id)
+                        /node_modules\/(\.pnpm\/[^/]+\/node_modules\/)?(react|react-dom|scheduler|react-router|@tanstack\/(react-query|query-core))\//.test(
+                            id,
+                        )
                             ? 'vendor'
                             : undefined,
                 },

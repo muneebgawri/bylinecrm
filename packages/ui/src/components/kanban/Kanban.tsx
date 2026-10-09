@@ -53,7 +53,12 @@ export function KanbanBoard({ className, ...props }: HTMLAttributes<HTMLDivEleme
             role="region"
             aria-label="Pipeline board"
             tabIndex={0}
-            className={cn('grid auto-cols-[minmax(260px,1fr)] grid-flow-col gap-4 overflow-x-auto pb-2', className)}
+            // `relative` so absolutely positioned descendants (sr-only text) are clipped by this scroller
+            // instead of widening the page.
+            className={cn(
+                'relative grid auto-cols-[minmax(260px,1fr)] grid-flow-col gap-4 overflow-x-auto pb-2',
+                className,
+            )}
             {...props}
         />
     );

@@ -11,4 +11,16 @@ if (typeof window !== 'undefined') {
     globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
     Element.prototype.scrollIntoView ??= () => {};
     Element.prototype.hasPointerCapture ??= () => false;
+    // Media queries answer "no" unless a spec says otherwise (`setMedia` in a spec): desktop, fine pointer.
+    window.matchMedia ??= (query: string) =>
+        ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            addListener: () => {},
+            removeListener: () => {},
+            dispatchEvent: () => false,
+        }) as MediaQueryList;
 }

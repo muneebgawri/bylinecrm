@@ -22,6 +22,8 @@ export const BulkBar = forwardRef<HTMLDivElement, BulkBarProps>(function BulkBar
             aria-label={`${count} selected`}
             className={cn(
                 'sticky bottom-3 mx-auto mt-3 flex w-max max-w-full items-center gap-0.5 rounded-lg bg-primary px-2 py-1.5 text-[13px] text-primary-foreground shadow-lg',
+                // On a phone the bar spans the width and scrolls its actions rather than the page.
+                'max-md:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:w-full max-md:overflow-x-auto',
                 className,
             )}
             {...props}
@@ -48,7 +50,7 @@ export const BulkBarAction = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<
                 ref={ref}
                 type={type}
                 className={cn(
-                    'inline-flex h-7.5 items-center gap-1.5 rounded-md px-2.5 font-medium transition-colors hover:bg-primary-foreground/20',
+                    'inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-md px-2.5 font-medium transition-colors hover:bg-primary-foreground/20 max-md:h-touch',
                     '[&_svg]:size-3.5',
                     focusRing,
                     className,

@@ -8,6 +8,7 @@ const SECTIONS = [
     { id: 'roles', label: 'Roles', to: paths.settingsRoles },
     { id: 'api-keys', label: 'API keys', to: paths.settingsApiKeys },
     { id: 'invites', label: 'Invites', to: paths.settingsInvites },
+    { id: 'pipelines', label: 'Pipelines', to: paths.settingsPipelines },
 ] as const;
 
 /** Workspace settings: a section row, then the section's table. Admin-only by the route guard. */
