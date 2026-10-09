@@ -36,3 +36,5 @@ export const WORKSPACE_SETTING = 'app.workspace_id';
 
 export * from './auth.js';
 export * from './capabilities.js';
+export * from './events.js';
+export * from './records.js';
