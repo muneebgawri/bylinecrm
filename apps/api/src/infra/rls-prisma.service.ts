@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { USER_SETTING, WORKSPACE_SETTING } from '@bylinecrm/shared';
+import { OWNER_SETTING, USER_SETTING, WORKSPACE_SETTING } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
 import {
     POOL_EXHAUSTED_CODE,
@@ -45,7 +45,11 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
         await this.$disconnect();
     }
 
-    /** Runs `fn` in a transaction scoped to `workspaceId` (or to the ambient `WorkspaceContext`). */
+    /**
+     * Runs `fn` in a transaction scoped to `workspaceId` (or to the ambient `WorkspaceContext`).
+     * When the context says the caller is own-scoped in that workspace, the owner setting is set
+     * in the same transaction, so the restrictive policies narrow every query inside `fn`.
+     */
     async withWorkspace<T>(fn: (tx: WorkspaceClient) => Promise<T>): Promise<T>;
     async withWorkspace<T>(workspaceId: string, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T>;
     async withWorkspace<T>(
@@ -54,11 +58,15 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
     ): Promise<T> {
         const explicit = typeof idOrFn === 'string';
         const fn = explicit ? maybeFn : idOrFn;
-        const workspaceId = explicit ? idOrFn : this.context.get()?.workspaceId;
+        const current = this.context.get();
+        const workspaceId = explicit ? idOrFn : current?.workspaceId;
         if (!workspaceId) throw new NoWorkspaceError();
         if (!fn) throw new TypeError('withWorkspace needs a callback');
 
-        return this.scoped(WORKSPACE_SETTING, workspaceId, fn);
+        const settings: [string, string][] = [[WORKSPACE_SETTING, workspaceId]];
+        const owner = current?.workspaceId === workspaceId ? current.ownerScopeMemberId : undefined;
+        if (owner) settings.push([OWNER_SETTING, owner]);
+        return this.scoped(settings, fn);
     }
 
     /**
@@ -67,19 +75,24 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
      * workspace guard needs before any workspace is chosen. Tenant tables stay invisible.
      */
     withUser<T>(userId: string, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
-        return this.scoped(USER_SETTING, userId, fn);
+        return this.scoped([[USER_SETTING, userId]], fn);
     }
 
     /**
-     * One transaction, one transaction-local setting (`set_config(..., true)`), bound as a
+     * One transaction, its transaction-local settings (`set_config(..., true)`), each bound as a
      * parameter so it can neither outlive the transaction nor be string-built. A pool-exhausted
      * error is retried with a bounded, doubling delay; any other error propagates.
      */
-    private async scoped<T>(setting: string, value: string, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
+    private async scoped<T>(
+        settings: readonly (readonly [string, string])[],
+        fn: (tx: WorkspaceClient) => Promise<T>,
+    ): Promise<T> {
         for (let attempt = 1; ; attempt++) {
             try {
                 return await this.$transaction(async (tx) => {
-                    await tx.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
+                    for (const [setting, value] of settings) {
+                        await tx.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
+                    }
                     return fn(tx);
                 });
             } catch (error) {

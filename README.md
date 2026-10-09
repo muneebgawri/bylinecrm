@@ -37,7 +37,7 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
 ```bash
 pnpm typecheck
 pnpm lint && pnpm format:check
-pnpm test
+pnpm test                            # package suites run one at a time: three vitest pools at once starve the app-compiling specs
 pnpm --filter api test:cross-tenant   # needs the local stack
 pnpm scan:licences
 pnpm scan:identifiers
@@ -55,6 +55,29 @@ pnpm scan:identifiers
   members, API keys and invitations: `/api/w/:id/{roles,members,api-keys,invites}`. API keys are `blc_<prefix>_<secret>`,
   sent as `Authorization: Bearer …`.
 - OpenAPI: `GET /api/docs` (UI) and `/api/docs-json`.
+
+## Records (P1-1a)
+
+- `/api/w/:id/people` and `/api/w/:id/companies`: list (`?limit`, `?cursor`, `?sort=field:asc|desc`, `?q`), get, create,
+  patch, delete (soft), `POST …/:id/restore`; the trash is `GET …/deleted` (`record:write`). `GET /api/w/:id/me` is the
+  caller's own standing (role, record scope, capabilities) for the UI's permission-aware controls.
+- A role's `recordScope` (`all` | `own`) decides whether its holders see every record or only the ones they own; the
+  rule is applied by the route and enforced again by a restrictive row-level policy.
+- `/api/w/:id/custom-fields`: definitions per object; values travel in a record's `custom` object and are validated
+  against them.
+
+## Working against the mock
+
+`apps/api/openapi.json` is the frozen contract (doc 49 §1). A UI package builds against it before the real endpoint
+exists:
+
+```bash
+pnpm mock:api                           # Prism serves the contract on MOCK_API_PORT (.env; default 3310)
+curl -s localhost:3310/api/w/00000000-0000-4000-8000-000000000000/people | head
+```
+
+Changing the API means regenerating the file in the same PR — `pnpm --filter api openapi:write` — and the unit test
+`openapi.spec.ts` fails until you do, so the diff of the contract is always in the review.
 
 ## Working on it
 

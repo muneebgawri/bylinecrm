@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from './config/config.module';
+import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
+import { RecordsModule } from './records/records.module';
 
 @Module({
-    imports: [ConfigModule, InfraModule, HealthModule, AuthModule],
+    imports: [ConfigModule, InfraModule, EventsModule, HealthModule, AuthModule, RecordsModule],
 })
 export class AppModule {}

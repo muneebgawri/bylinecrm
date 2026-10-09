@@ -1,14 +1,58 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Capability, RecordScope } from '@bylinecrm/shared';
 import { AuthService } from '../auth/auth.service';
-import { Requires } from '../auth/decorators';
+import { AnyMember, Requires } from '../auth/decorators';
 import { CreateApiKeyDto, CreateInviteDto, CreateRoleDto, SetMemberRoleDto, UpdateRoleDto } from '../auth/dto';
 import { ApiKeyService, type ApiKeyView } from '../auth/api-key.service';
 import { normaliseEmail } from '../auth/auth.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
-import { WorkspaceContext } from '../infra/workspace-context';
+import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MembersService, type MemberView } from './members.service';
 import { RolesService, type RoleView } from './roles.service';
+
+/** The caller's own standing in the workspace: what the guard decided, read back. */
+export interface StandingView {
+    workspaceId: string;
+    /** The seat, when the caller is a person; `null` for a key. */
+    memberId: string | null;
+    userId: string | null;
+    /** The key, when the caller is a machine; `null` for a person. */
+    apiKeyId: string | null;
+    roleId: string | null;
+    roleName: string | null;
+    recordScope: RecordScope;
+    capabilities: Capability[];
+}
+
+/** One source: the guard's decision in `WorkspaceContext`; nothing is computed a second time. */
+export function standingOf(context: WorkspaceRunContext): StandingView {
+    return {
+        workspaceId: context.workspaceId,
+        memberId: context.memberId ?? null,
+        userId: context.userId ?? null,
+        apiKeyId: context.apiKeyId ?? null,
+        roleId: context.roleId ?? null,
+        roleName: context.roleName ?? null,
+        recordScope: context.ownerScopeMemberId ? 'own' : 'all',
+        capabilities: [...context.capabilities],
+    };
+}
+
+@ApiTags('workspace')
+@Controller('w/:workspaceId/me')
+export class WorkspaceMeController {
+    constructor(private readonly context: WorkspaceContext) {}
+
+    /** The UI reads this to show or hide controls (FR-CRMS-UI-6); the server stays the gate. */
+    @AnyMember('a caller asking what they may do cannot be asked for a capability first')
+    @Get()
+    standing(): StandingView {
+        const current = this.context.get();
+        if (!current) throw new Error('standing is read inside a workspace scope');
+        return standingOf(current);
+    }
+}
 
 /**
  * Workspace administration. Every route is under `/api/w/:workspaceId`, so the workspace guard
@@ -56,7 +100,7 @@ export class RolesController {
     @Requires('workspace:admin')
     @Post()
     create(@Body() body: CreateRoleDto): Promise<RoleView> {
-        return this.roles.create(body.name, body.capabilities);
+        return this.roles.create(body.name, body.capabilities, body.recordScope);
     }
 
     @Requires('workspace:admin')

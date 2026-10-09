@@ -13,7 +13,7 @@ import { WorkspaceContext } from '../infra/workspace-context';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
 import { ApiKeyService } from './api-key.service';
-import { PUBLIC_KEY, REQUIRES_KEY } from './decorators';
+import { ANY_MEMBER_KEY, PUBLIC_KEY, REQUIRES_KEY } from './decorators';
 import type { AuthenticatedRequest } from './principal';
 import { SessionService } from './session.service';
 
@@ -108,21 +108,33 @@ export class WorkspaceGuard implements CanActivate {
 
         if (principal.kind === 'apiKey') {
             if (principal.workspaceId !== workspaceId) throw new ForbiddenException('key belongs to another workspace');
-            const capabilities = await this.roles.capabilities(workspaceId, principal.roleId);
-            if (!capabilities) throw new ForbiddenException();
-            this.context.set({ workspaceId, apiKeyId: principal.apiKeyId, capabilities });
+            const access = await this.roles.access(workspaceId, principal.roleId);
+            if (!access) throw new ForbiddenException();
+            // A role scoped to "own" records needs a member to be own relative to; a key has none.
+            if (access.recordScope === 'own')
+                throw new ForbiddenException('an own-scoped role cannot act through a key');
+            this.context.set({
+                workspaceId,
+                apiKeyId: principal.apiKeyId,
+                roleId: access.roleId,
+                roleName: access.roleName,
+                capabilities: access.capabilities,
+            });
             return true;
         }
 
         const membership = await this.memberships.find(principal.userId, workspaceId);
         if (!membership) throw new ForbiddenException('not a member of this workspace');
-        const capabilities = await this.roles.capabilities(workspaceId, membership.roleId);
-        if (!capabilities) throw new ForbiddenException();
+        const access = await this.roles.access(workspaceId, membership.roleId);
+        if (!access) throw new ForbiddenException();
         this.context.set({
             workspaceId,
             userId: principal.userId,
             memberId: membership.memberId,
-            capabilities,
+            roleId: access.roleId,
+            roleName: access.roleName,
+            capabilities: access.capabilities,
+            ...(access.recordScope === 'own' ? { ownerScopeMemberId: membership.memberId } : {}),
         });
         return true;
     }
@@ -143,6 +155,8 @@ export class RequiresGuard implements CanActivate {
     canActivate(ctx: ExecutionContext): boolean {
         const req = ctx.switchToHttp().getRequest<Request>();
         if (!isTenantPath(req.path)) return true;
+        // A route open to any member (with its reason written down) has the workspace guard as its gate.
+        if (typeof this.reflector.get<unknown>(ANY_MEMBER_KEY, ctx.getHandler()) === 'string') return true;
         const required = this.reflector.get<unknown>(REQUIRES_KEY, ctx.getHandler());
         if (!isCapability(required)) {
             throw new ForbiddenException('route declares no capability');

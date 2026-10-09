@@ -10,7 +10,7 @@ import {
 import { MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../infra/prisma.service';
-import { uniqueViolation } from '../workspace/roles.service';
+import { uniqueViolation } from '../infra/prisma-errors';
 import { INVITE_TTL_S, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_S, SLUG_SUFFIX_BYTES } from './auth.constants';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';

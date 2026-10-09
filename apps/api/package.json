@@ -15,13 +15,15 @@
         "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
         "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
         "db:ensure-role": "dotenv -e ../../.env -- node ../../scripts/db-ensure-app-role.mjs",
-        "db:setup": "pnpm db:ensure-role && pnpm prisma:migrate:deploy"
+        "db:setup": "pnpm db:ensure-role && pnpm prisma:migrate:deploy",
+        "openapi:write": "nest build && node dist/openapi/write.js && prettier --write openapi.json"
     },
     "dependencies": {
         "@bylinecrm/shared": "workspace:*",
         "@nestjs/bullmq": "^11.0.5",
         "@nestjs/common": "^11.2.7",
         "@nestjs/core": "^11.2.7",
+        "@nestjs/event-emitter": "^3.0.1",
         "@nestjs/platform-express": "^11.2.7",
         "@nestjs/swagger": "^12.0.2",
         "@node-rs/argon2": "^2.2.2",
