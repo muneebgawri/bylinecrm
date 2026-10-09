@@ -46,6 +46,9 @@ export function formatMoneyCompact(money: Money | null | undefined): string {
         currency: money.currency,
         currencyDisplay: 'narrowSymbol',
         notation: 'compact',
+        // Both bounds, so every ICU agrees: a currency's default minimum (2 for USD) would
+        // otherwise turn "$12K" into "$12.0K" on some platforms.
+        minimumFractionDigits: 0,
         maximumFractionDigits: 1,
     }).format(toMajor(money));
 }

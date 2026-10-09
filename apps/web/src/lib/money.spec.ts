@@ -21,6 +21,7 @@ describe('money', () => {
     });
 
     it('compacts large amounts for cards', () => {
-        expect(formatMoneyCompact({ amountMinor: 1200000, currency: 'USD' })).toMatch(/12K/i);
+        expect(formatMoneyCompact({ amountMinor: 1200000, currency: 'USD' })).toBe('$12K');
+        expect(formatMoneyCompact({ amountMinor: 1250000, currency: 'USD' })).toBe('$12.5K');
     });
 });
