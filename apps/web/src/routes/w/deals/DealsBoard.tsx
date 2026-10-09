@@ -12,7 +12,18 @@ import {
     type DragEndEvent,
     type DragStartEvent,
 } from '@dnd-kit/core';
-import { Button, CardChip, cn, DealCard, EmptyState, KanbanBoard, KanbanLane, toneSolid } from '@bylinecrm/ui';
+import {
+    Button,
+    CardChip,
+    cn,
+    DealCard,
+    DND_INSTRUCTIONS,
+    EmptyState,
+    KanbanBoard,
+    KanbanLane,
+    makeDndAnnouncements,
+    toneSolid,
+} from '@bylinecrm/ui';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowRightLeft, Clock, MoreHorizontal } from 'lucide-react';
 import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -87,6 +98,30 @@ export function DealsBoard({
     const columns = board.columns;
     const stageNames = useMemo(() => columns.map((c) => c.stage.name), [columns]);
     const canDrag = canMove && !touch;
+
+    // A pointer drag is announced by name through the page's one polite region; dnd-kit's own
+    // assertive region, which would read ids, stays silent (FR-CRMS-UI-8, packages/ui
+    // dnd-announcements.ts). The drop's outcome is the move hook's to say ("moving to …").
+    const accessibility = useMemo(() => {
+        const deals = new Map(columns.flatMap((c) => c.deals.map((d) => [d.id, d] as const)));
+        const lanes = new Map(columns.map((c) => [c.stage.id, c] as const));
+        return {
+            announcements: makeDndAnnouncements({
+                itemName: (id) => deals.get(String(id))?.name ?? 'Deal',
+                containerName: (id) => lanes.get(String(id))?.stage.name ?? 'a stage',
+                position: (activeId, overId) => {
+                    const lane = lanes.get(String(overId));
+                    if (!lane) return undefined;
+                    const at = lane.deals.findIndex((d) => d.id === String(activeId));
+                    return at >= 0 ? { index: at, total: lane.count } : { index: 0, total: lane.count + 1 };
+                },
+                isHome: (activeId, overId) => deals.get(String(activeId))?.stageId === String(overId),
+                announceDrop: false,
+                announce,
+            }),
+            screenReaderInstructions: DND_INSTRUCTIONS,
+        };
+    }, [announce, columns]);
 
     const onDragStart = useCallback((event: DragStartEvent) => {
         setActive((event.active.data.current as { deal: OpportunityView } | undefined)?.deal ?? null);
@@ -181,6 +216,7 @@ export function DealsBoard({
 
     return (
         <DndContext
+            accessibility={accessibility}
             sensors={sensors}
             collisionDetection={dropUnderPointer}
             onDragStart={onDragStart}

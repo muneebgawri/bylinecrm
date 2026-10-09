@@ -1,5 +1,6 @@
 import { DEFAULT_CURRENCY } from '@bylinecrm/shared';
-import { Badge, Button, FactGrid } from '@bylinecrm/ui';
+import { Badge, FactGrid } from '@bylinecrm/ui';
+import { ListTodo, StickyNote } from 'lucide-react';
 import { useId, useState } from 'react';
 import { usePatchRecord } from '../../../api/queries';
 import type { CompanyView } from '../../../api/types';
@@ -14,6 +15,7 @@ import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesCo
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
+import { RecordActionBar, RecordHeaderActions, type RecordAction } from './recordActions';
 import { countLabel, useRelated } from './related';
 import { TasksPanel } from './TasksPanel';
 import { TimelinePanel } from './TimelinePanel';
@@ -172,9 +174,34 @@ export function CompanyRecord({
         },
     ];
 
+    const actions: RecordAction[] = [
+        {
+            id: 'note',
+            label: 'Add note',
+            short: 'Note',
+            icon: <StickyNote aria-hidden />,
+            onSelect: () => setNotesOpen(true),
+            disabled: !write.allowed,
+            reason: write.reason || undefined,
+            hint: 'Add a note (n)',
+        },
+        {
+            id: 'task',
+            label: 'Add task',
+            short: 'Task',
+            icon: <ListTodo aria-hidden />,
+            primary: true,
+            onSelect: () => setTasksOpen(true),
+            disabled: !write.allowed,
+            reason: write.reason || undefined,
+            hint: 'Add a task (t)',
+        },
+    ];
+
     return (
         <RecordLayout
             layout={layout}
+            bar={<RecordActionBar name={company.name} actions={actions} siblings={siblings} />}
             header={
                 <RecordHeader
                     layout={layout}
@@ -186,31 +213,7 @@ export function CompanyRecord({
                     status={company.icp ? <Badge status="accent">Ideal customer</Badge> : undefined}
                     back={{ to: paths.companies(workspaceId), label: 'Companies' }}
                     siblings={siblings}
-                    actions={
-                        <>
-                            <Button
-                                variant="secondary"
-                                shape="square"
-                                size="sm"
-                                onClick={() => setNotesOpen(true)}
-                                disabled={!write.allowed}
-                                title={write.reason || 'Add a note (n)'}
-                            >
-                                Add note
-                            </Button>
-                            <Button
-                                data-primary-action
-                                variant="primary"
-                                shape="square"
-                                size="sm"
-                                onClick={() => setTasksOpen(true)}
-                                disabled={!write.allowed}
-                                title={write.reason || 'Add a task (t)'}
-                            >
-                                Add task
-                            </Button>
-                        </>
-                    }
+                    actions={<RecordHeaderActions actions={actions} />}
                 />
             }
             facts={

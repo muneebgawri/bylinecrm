@@ -1,7 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 import { BREAKPOINT_PX } from '../../../packages/ui/src/lib/breakpoints';
 import { installApi } from './api';
-import { axe, phoneTables, phoneTargets, primaryAction, sidewaysScroll, type Finding } from './checks';
+import {
+    aboveFold,
+    axe,
+    phoneBottomBar,
+    phoneTables,
+    phoneTargets,
+    primaryAction,
+    sidewaysScroll,
+    type Finding,
+} from './checks';
 import { FIXED_NOW } from './fixtures';
 import { STATES } from './states';
 
@@ -12,7 +21,8 @@ import { STATES } from './states';
  * Each state is opened with the API answered from fixtures (api.ts) and the clock fixed, so the
  * page renders real content the same way every run. Then: axe at WCAG 2.1 AA, no sideways page
  * scroll, the primary action on screen, and — below the phone breakpoint — touch targets, field
- * text sizes and no tables (records are cards on a phone). Findings go to the report table (reporter.ts); any finding fails the state.
+ * text sizes and no tables (records are cards on a phone), plus each state's own phone promises
+ * (states.ts: a record's bottom action bar, the deals board's first card above the fold). Findings go to the report table (reporter.ts); any finding fails the state.
  * On phone widths the state is also compared with its committed screenshot.
  */
 const PALETTE_SHORTCUT = 'ControlOrMeta+k';
@@ -43,6 +53,8 @@ for (const state of STATES) {
             ...primary.findings,
             ...(phone ? await phoneTargets(page) : []),
             ...(phone ? await phoneTables(page) : []),
+            ...(phone && state.phone?.bottomBar ? await phoneBottomBar(page) : []),
+            ...(phone && state.phone?.aboveFold ? await aboveFold(page, state.phone.aboveFold) : []),
             ...unanswered.map((u) => ({
                 check: 'axe' as const,
                 detail: `unanswered API call ${u.method} ${u.path}: ${u.reason}`,
