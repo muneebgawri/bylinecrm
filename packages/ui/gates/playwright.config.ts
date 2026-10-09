@@ -35,6 +35,7 @@ export default defineConfig({
     projects: [
         { name: 'a11y', testMatch: 'a11y.spec.ts' },
         { name: 'visual', testMatch: 'visual.spec.ts' },
+        { name: 'diag', testMatch: 'diag.spec.ts' },
     ],
     webServer: {
         // sirv-cli lets the PORT and HOST environment variables override its flags, so a shell (or
