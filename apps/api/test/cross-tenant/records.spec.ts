@@ -37,7 +37,7 @@ interface Company {
     id: string;
     name: string;
     domain: string | null;
-    arr: { amount: string; currency: string } | null;
+    arr: { amountMinor: number; currency: string } | null;
     ownerId: string | null;
     createdBy: { kind: string; id: string | null };
 }
@@ -380,10 +380,10 @@ describe('records', () => {
         it('deletes softly, lists the trash, restores', async () => {
             const created = await as(admin)
                 .post(w('/companies'))
-                .send({ name: `Trashable ${stamp}`, arr: { amount: '1200.50', currency: 'USD' } })
+                .send({ name: `Trashable ${stamp}`, arr: { amountMinor: 120050 } })
                 .expect(201);
             const id = (created.body as Company).id;
-            expect((created.body as Company).arr).toEqual({ amount: '1200.50', currency: 'USD' });
+            expect((created.body as Company).arr).toEqual({ amountMinor: 120050, currency: 'USD' });
             await as(admin)
                 .delete(w(`/companies/${id}`))
                 .expect(204);

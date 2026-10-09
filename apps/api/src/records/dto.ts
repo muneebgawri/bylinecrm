@@ -4,6 +4,8 @@ import {
     LIST_LIMIT_DEFAULT,
     LIST_LIMIT_MAX,
     RECORD_OBJECTS,
+    TASK_STATUSES,
+    type RichTextNode,
 } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -34,9 +36,11 @@ const address = z.object({
     country: nullableText(120),
     postalCode: nullableText(20),
 });
+const currency = z.string().regex(/^[A-Z]{3}$/, 'ISO 4217, upper case');
+/** An amount: exact minor units; the currency defaults to the workspace's. One shape for every amount. */
 const money = z.object({
-    amount: z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/, 'a decimal with at most two places'),
-    currency: z.string().regex(/^[A-Z]{3}$/, 'ISO 4217, upper case'),
+    amountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    currency: currency.optional(),
 });
 /** Shape only; the keys and types are checked against the workspace's definitions by the service. */
 const custom = z.record(z.string().regex(CUSTOM_FIELD_KEY_PATTERN), z.unknown());
@@ -120,3 +124,91 @@ const queryFlag = z.enum(['true', 'false']).transform((v) => v === 'true');
 export class ListCustomFieldsQueryDto extends createZodDto(
     z.object({ object: z.enum(RECORD_OBJECTS).optional(), archived: queryFlag.optional() }),
 ) {}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deals, notes, tasks, attachments (P1-1b).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a calendar date, YYYY-MM-DD');
+
+const opportunityFields = {
+    name: text(200).min(1),
+    amount: money.nullable(),
+    closeDate: isoDate.nullable(),
+    probability: z.number().int().min(0).max(100).nullable(),
+    position,
+    ownerId: uuid.nullable(),
+    pointOfContactId: uuid.nullable(),
+    companyId: uuid.nullable(),
+    custom,
+};
+export class CreateOpportunityDto extends createZodDto(
+    z.object(opportunityFields).partial().required({ name: true }),
+) {}
+export class UpdateOpportunityDto extends createZodDto(z.object(opportunityFields).partial()) {}
+
+/** A record a note, task or file is attached to. */
+const target = z.object({ type: z.enum(RECORD_OBJECTS), id: uuid });
+const targets = z.array(target).min(1).max(50);
+
+/** The editor's document. Only the root is checked here; nodes are stored as given. */
+const richTextNode: z.ZodType<RichTextNode> = z.lazy(() =>
+    z
+        .object({
+            type: z.string().min(1).max(64),
+            text: z.string().optional(),
+            content: z.array(richTextNode).optional(),
+        })
+        .passthrough(),
+);
+const richText = z.object({ type: z.literal('doc'), content: z.array(richTextNode).optional() });
+
+const noteFields = { title: text(300), body: richText, targets };
+export class CreateNoteDto extends createZodDto(z.object(noteFields).partial().required({ targets: true })) {}
+export class UpdateNoteDto extends createZodDto(z.object(noteFields).partial()) {}
+
+const taskFields = {
+    title: text(300).min(1),
+    body: richText,
+    status: z.enum(TASK_STATUSES),
+    dueAt: z.iso.datetime({ offset: true }).nullable(),
+    assigneeId: uuid.nullable(),
+    targets,
+};
+export class CreateTaskDto extends createZodDto(
+    z.object(taskFields).partial().required({ title: true, targets: true }),
+) {}
+export class UpdateTaskDto extends createZodDto(z.object(taskFields).partial()) {}
+
+/** `target=<object>:<uuid>`; parsed and checked by the service. */
+const targetParam = z.string().regex(/^[a-z]+:[0-9a-fA-F-]{36}$/, 'target is <object>:<uuid>');
+
+/** Notes are listed by the record they are on. */
+export class ListNotesQueryDto extends createZodDto(
+    z.object({
+        target: targetParam,
+        cursor: z.string().min(1).optional(),
+        limit: z.coerce.number().int().min(1).max(LIST_LIMIT_MAX).default(LIST_LIMIT_DEFAULT),
+    }),
+) {}
+
+/** Tasks are listed by the record they are on, or by whom they are assigned to — one or the other. */
+export class ListTasksQueryDto extends createZodDto(
+    z
+        .object({
+            target: targetParam.optional(),
+            assigneeId: uuid.optional(),
+            status: z.enum(TASK_STATUSES).optional(),
+            cursor: z.string().min(1).optional(),
+            limit: z.coerce.number().int().min(1).max(LIST_LIMIT_MAX).default(LIST_LIMIT_DEFAULT),
+        })
+        .refine((q) => Boolean(q.target) !== Boolean(q.assigneeId), {
+            message: 'list tasks by target or by assigneeId, not both and not neither',
+            path: ['target'],
+        }),
+) {}
+
+export class ListAttachmentsQueryDto extends createZodDto(z.object({ target: targetParam })) {}
+
+/** The upload's target travels in the query string; the file is the multipart body. */
+export class UploadAttachmentQueryDto extends createZodDto(z.object({ target: targetParam })) {}

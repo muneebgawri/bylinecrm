@@ -59,6 +59,13 @@ pnpm scan:identifiers
   sent as `Authorization: Bearer …`.
 - OpenAPI: `GET /api/docs` (UI) and `/api/docs-json`.
 
+Migrations: `prisma migrate dev` is interactive and does not run under this harness; CI and the recipe above use
+`migrate deploy`. After editing `schema.prisma`, write the migration SQL by hand (see any under
+`apps/api/prisma/migrations`), apply it with `pnpm --filter api db:setup`, then prove the live database matches the
+schema the way CI does:
+`pnpm --filter api exec dotenv -e ../../.env -- prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code`.
+Never pass `DATABASE_URL` as a `--shadow-database-url`: a shadow database is reset.
+
 ## Records (P1-1a)
 
 - `/api/w/:id/people` and `/api/w/:id/companies`: list (`?limit`, `?cursor`, `?sort=field:asc|desc`, `?q`), get, create,
@@ -68,6 +75,17 @@ pnpm scan:identifiers
   rule is applied by the route and enforced again by a restrictive row-level policy.
 - `/api/w/:id/custom-fields`: definitions per object; values travel in a record's `custom` object and are validated
   against them.
+
+## Deals, notes, tasks, attachments (P1-1b)
+
+- `/api/w/:id/opportunities`: as people and companies (`deal:read` / `deal:edit`); `amount` is exact minor units
+  with a currency that defaults to the workspace's. Stages arrive with P1-2.
+- `/api/w/:id/notes` and `/tasks`: attached to records through `targets` (`{type, id}[]`); list by
+  `?target=person:<id>` (tasks also by `?assigneeId=`); visible to whoever can see a target (tasks: or the
+  assignee); `note:write` / `task:write`.
+- `/api/w/:id/attachments?target=…`: multipart upload (`file` field, ≤ `ATTACHMENT_MAX_BYTES`, allowlisted
+  types), metadata, `GET …/:id/content` download; bytes live under `FILE_STORAGE_ROOT` (`.env`, git-ignored).
+- `GET /api/w/:id/members/summary`: members as pickers show them (`memberId`, `name`), readable with `record:read`.
 
 ## Working against the mock
 
@@ -87,7 +105,7 @@ Changing the API means regenerating the file in the same PR — `pnpm --filter a
 One work package per branch and PR (doc 49 §5); the loop in doc 49 §3 is the process. The standing rule:
 no hot patches, no band-aids, no divergence — one definition of each thing.
 
-A package is built in its own git worktree (`git worktree add -b <branch> ../bylinecrm-wt-<pkg> main`). A
-fresh worktree has no `node_modules` and no built `packages/shared`: run `pnpm install` and
-`pnpm --filter @bylinecrm/shared build` there first, or every gate fails on missing modules rather than on
-your code.
+A package is built in its own git worktree (`git worktree add -b <branch> ../bylinecrm-wt-<pkg> main`). A fresh
+`git worktree` inherits no `node_modules`, no built `@bylinecrm/shared` and no generated Prisma client:
+run `pnpm install`, `pnpm --filter @bylinecrm/shared build` and `pnpm --filter api prisma:generate` there before
+`pnpm typecheck`, or the errors are stale artefacts, not code.
