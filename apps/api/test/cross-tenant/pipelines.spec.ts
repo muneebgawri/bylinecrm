@@ -279,7 +279,9 @@ describe('pipelines, stages, history, rules', () => {
             ).body as { deal: Deal };
             expect(won.deal.closedAt).not.toBeNull();
             expect(won.deal.amount).toEqual({ amountMinor: 1250000, currency: 'USD' });
-            expect(events.map((e) => e.type)).toEqual(['deal.stage_changed', 'deal.won']);
+            // One move, one event: a close is announced as deal.won and nothing else.
+            expect(events.map((e) => e.type)).toEqual(['deal.won']);
+            expect(events[0]?.stage).toMatchObject({ toStageId: stage('Won').id, reason: 'close' });
             const history = (
                 await as(admin)
                     .get(w(`/opportunities/${d.id}/history`))
@@ -287,6 +289,7 @@ describe('pipelines, stages, history, rules', () => {
             ).body as History[];
             expect(history[0]?.reason).toBe('close');
 
+            events.length = 0;
             const reopened = (
                 await as(admin)
                     .post(w(`/opportunities/${d.id}/move`))
@@ -295,6 +298,8 @@ describe('pipelines, stages, history, rules', () => {
             ).body as { deal: Deal };
             expect(reopened.deal.closedAt).toBeNull();
             expect(reopened.deal.stageId).toBe(stage('Meeting').id);
+            // A reopen lands in an open stage, so it is an ordinary stage change.
+            expect(events.map((e) => e.type)).toEqual(['deal.stage_changed']);
         });
 
         it('closes as lost with the reason and emits deal.lost', async () => {
@@ -307,7 +312,38 @@ describe('pipelines, stages, history, rules', () => {
                     .expect(201)
             ).body as { deal: Deal };
             expect(lost.deal.lostReason).toBe('went with a competitor');
-            expect(events.map((e) => e.type)).toEqual(['deal.stage_changed', 'deal.lost']);
+            expect(events.map((e) => e.type)).toEqual(['deal.lost']);
+        });
+
+        it('writes exactly one timeline entry per move, whatever kind of move it is', async () => {
+            const d = await deal(admin, workspace, 'One entry each');
+            const move = (stageId: string, close?: Record<string, unknown>) =>
+                as(admin)
+                    .post(w(`/opportunities/${d.id}/move`))
+                    .send(close ? { stageId, close } : { stageId })
+                    .expect(201);
+            await move(stage('Contacted').id); // open → open
+            await move(stage('Won').id, { wonAmount: { amountMinor: 500 } }); // open → won
+            await move(stage('Replied').id); // won → open (reopen)
+            await move(stage('Lost').id, { lostReason: 'budget' }); // open → lost
+            const page = (
+                await as(admin)
+                    .get(w(`/timeline?target=opportunity:${d.id}&kinds=deal.`))
+                    .expect(200)
+            ).body as { items: { kind: string; properties: { diff?: { stageId?: { to: string } } } }[] };
+            // Newest first: four moves, four entries, each named by where the deal landed.
+            expect(page.items.map((i) => i.kind)).toEqual([
+                'deal.lost',
+                'deal.stage_changed',
+                'deal.won',
+                'deal.stage_changed',
+            ]);
+            expect(page.items.map((i) => i.properties.diff?.stageId?.to)).toEqual([
+                stage('Lost').id,
+                stage('Replied').id,
+                stage('Won').id,
+                stage('Contacted').id,
+            ]);
         });
 
         it('cannot be moved through a plain patch: the stage is not a column a patch may set', async () => {

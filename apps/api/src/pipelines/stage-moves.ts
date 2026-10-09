@@ -2,6 +2,7 @@
  * The rules of moving a deal between stages, as pure functions: the service applies them, the
  * rule engine applies them, the tests pin them.
  */
+import type { DomainEventType, StageKind } from '@bylinecrm/shared';
 
 export type MoveDecision =
     /** Move. */
@@ -20,6 +21,20 @@ export function decideMove(fromPosition: number, toPosition: number, allowBackwa
     if (fromPosition === toPosition) return { kind: 'already' };
     if (toPosition < fromPosition && !allowBackward) return { kind: 'backward' };
     return { kind: 'move' };
+}
+
+/** The event a committed move is announced as. */
+export type MoveEventType = Extract<DomainEventType, 'deal.stage_changed' | 'deal.won' | 'deal.lost'>;
+
+/**
+ * One move is one event, named by the kind of stage the deal lands in: a close is `deal.won` or
+ * `deal.lost` and nothing else; every other move — between open stages, or a reopen out of a won
+ * or lost stage — is `deal.stage_changed`. The stage it came from does not enter into it.
+ */
+export function moveEventType(toKind: StageKind): MoveEventType {
+    if (toKind === 'won') return 'deal.won';
+    if (toKind === 'lost') return 'deal.lost';
+    return 'deal.stage_changed';
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

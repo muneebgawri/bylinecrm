@@ -46,7 +46,10 @@ export const DOMAIN_EVENT_TYPES = [
     'attachment.deleted',
     'attachment.restored',
     // A deal's stage (P1-2): about the opportunity (`recordId`); `diff.stageId` says from where to
-    // where, as any updated field would, and `stage` adds the pipeline and the reason.
+    // where, as any updated field would, and `stage` adds the pipeline and the reason. One move is
+    // exactly one of these three (P1-2a): `deal.won` / `deal.lost` for a move into a won / lost
+    // stage, `deal.stage_changed` for every other move, reopening included. To see every move,
+    // subscribe to all three.
     'deal.stage_changed',
     'deal.won',
     'deal.lost',
@@ -106,7 +109,7 @@ interface DomainEventBase {
     stage?: StageChange;
 }
 
-/** One stage change, as `deal.stage_changed` reports it. */
+/** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */
 export interface StageChange {
     pipelineId: string;
     fromStageId: string | null;

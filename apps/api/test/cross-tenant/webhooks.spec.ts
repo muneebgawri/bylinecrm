@@ -254,6 +254,58 @@ describe('webhooks', () => {
         );
     });
 
+    it('delivers exactly one event per deal move: stage_changed, won, stage_changed on reopen, lost', async () => {
+        const path = `/moves-${stamp}`;
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+        expect(created.status).toBe(201);
+
+        const pipeline = (
+            (await as(admin).get(w('/pipelines'))).body as { stages: { id: string; name: string }[] }[]
+        )[0]!;
+        const stage = (name: string) => pipeline.stages.find((s) => s.name === name)!.id;
+        const dealRes = await as(admin)
+            .post(w('/opportunities'))
+            .send({ name: `Moves ${stamp}` });
+        expect(dealRes.status).toBe(201);
+        const dealId = (dealRes.body as { id: string }).id;
+
+        const move = async (stageId: string, close?: Record<string, unknown>) => {
+            const res = await as(admin)
+                .post(w(`/opportunities/${dealId}/move`))
+                .send(close ? { stageId, close } : { stageId });
+            expect(res.status).toBe(201);
+        };
+        await move(stage('Contacted')); // open → open
+        await move(stage('Won'), { wonAmount: { amountMinor: 500 } }); // open → won
+        await move(stage('Replied')); // won → open (reopen)
+        await move(stage('Lost'), { lostReason: 'budget' }); // open → lost
+
+        const dealEvents = () =>
+            received
+                .filter((r) => r.path === path && String(r.headers[WEBHOOK_EVENT_HEADER]).startsWith('deal.'))
+                .map((r) => {
+                    const body = JSON.parse(r.body) as { data: { stage?: { toStageId: string } } };
+                    return { event: String(r.headers[WEBHOOK_EVENT_HEADER]), to: body.data.stage?.toStageId };
+                });
+        await until(
+            async () => dealEvents(),
+            (seen) => seen.length >= 4,
+        );
+        // Give a stray second delivery time to arrive before asserting there is none.
+        await new Promise((r) => setTimeout(r, 500));
+        const seen = dealEvents();
+        expect(seen.map((s) => s.event).sort()).toEqual(
+            ['deal.lost', 'deal.stage_changed', 'deal.stage_changed', 'deal.won'].sort(),
+        );
+        // Each landing stage is delivered once, under the event that names it.
+        expect(seen.find((s) => s.to === stage('Won'))?.event).toBe('deal.won');
+        expect(seen.find((s) => s.to === stage('Lost'))?.event).toBe('deal.lost');
+        expect(seen.filter((s) => s.to === stage('Contacted')).map((s) => s.event)).toEqual(['deal.stage_changed']);
+        expect(seen.filter((s) => s.to === stage('Replied')).map((s) => s.event)).toEqual(['deal.stage_changed']);
+    });
+
     it('a test send pings the receiver now and reports what it answered', async () => {
         const path = `/ping-${stamp}`;
         const created = await as(admin)

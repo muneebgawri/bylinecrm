@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import { moneyColumns, type MoneyInput } from '../records/references';
-import { decideMove } from './stage-moves';
+import { decideMove, moveEventType } from './stage-moves';
 
 /** The columns a move reads and writes on a deal. */
 export interface DealStageRow {
@@ -101,10 +101,11 @@ export class StageMoveService {
     }
 
     /**
-     * Publishes a committed move: always `deal.stage_changed`, and `deal.won` / `deal.lost` on a
-     * close. The events are about the opportunity, and the move travels as `diff.stageId` — the
-     * shape every `updated` event uses — so the timeline writes it on the deal like any change;
-     * `stage` adds the pipeline and the reason for anything that wants them.
+     * Publishes a committed move as exactly one event (`moveEventType`): `deal.won` or `deal.lost`
+     * for a close, `deal.stage_changed` for every other move. All three are about the opportunity
+     * and carry the same shape — the move as `diff.stageId`, the shape every `updated` event uses,
+     * so the timeline writes it on the deal like any change, and `stage` for the pipeline and the
+     * reason — so the timeline and webhooks need no case of their own.
      */
     announce(
         workspaceId: string,
@@ -112,18 +113,16 @@ export class StageMoveService {
         actor: EventActor,
         moved: Extract<MoveOutcome, { outcome: 'moved' }>,
     ): void {
-        const base = {
-            object: 'opportunity' as const,
+        this.events.publish({
+            type: moveEventType(moved.toKind),
+            object: 'opportunity',
             workspaceId,
             actor,
             occurredAt: new Date().toISOString(),
             recordId: dealId,
             diff: { stageId: { from: moved.change.fromStageId, to: moved.change.toStageId } },
             stage: moved.change,
-        };
-        this.events.publish({ ...base, type: 'deal.stage_changed' });
-        if (moved.toKind === 'won') this.events.publish({ ...base, type: 'deal.won' });
-        if (moved.toKind === 'lost') this.events.publish({ ...base, type: 'deal.lost' });
+        });
     }
 }
 
