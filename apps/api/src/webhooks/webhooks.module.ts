@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ENV, type Env } from '../config/env';
 import { WebhooksRetention } from './retention.processor';
 import { WebhookSender } from './sender';
+import { WebhooksSweep } from './sweep';
 import { WebhookWorkers } from './webhook-workers';
 import { WebhooksController } from './webhooks.controller';
 import { WEBHOOK_MAINTENANCE_QUEUE, WEBHOOK_MAX_ATTEMPTS, WEBHOOK_QUEUE } from './webhooks.constants';
@@ -37,6 +38,7 @@ import { WebhooksSubscriber } from './webhooks.subscriber';
         WebhooksSubscriber,
         WebhooksProcessor,
         WebhooksRetention,
+        WebhooksSweep,
         WebhookWorkers,
     ],
     exports: [WebhooksService],

@@ -42,6 +42,26 @@ export const WEBHOOK_ROTATION_GRACE_S = 24 * 60 * 60;
 export const WEBHOOK_RETENTION_DAYS = { succeeded: 7, failedOrDead: 30 } as const;
 export const WEBHOOK_RETENTION_EVERY_MS = 60 * 60 * 1000;
 
+/**
+ * The stranded-delivery sweep (a delivery whose job was lost — Redis down when it was written, or
+ * a worker killed mid-attempt). It runs at worker start and then on this interval.
+ */
+export const WEBHOOK_SWEEP_EVERY_MS = 60_000;
+/**
+ * A `pending` row is only considered stranded once it is older than this: the subscriber writes
+ * the row and adds its job moments apart, and a fresh row without a job yet is not lost.
+ * Likewise a `failed` row whose retry time passed this long ago with no job.
+ */
+export const WEBHOOK_SWEEP_GRACE_MS = 60_000;
+/**
+ * A `delivering` row whose attempt began longer ago than this was abandoned (the worker died).
+ * Well past the longest an attempt can take — connect, headers and body each have the request
+ * timeout — so a slow but live attempt is never mistaken for a dead one.
+ */
+export const WEBHOOK_STUCK_DELIVERING_MS = 10 * WEBHOOK_REQUEST_TIMEOUT_MS;
+/** Rows handled per sweep pass; a larger backlog is worked through on the next passes. */
+export const WEBHOOK_SWEEP_BATCH = 500;
+
 /** How long a failure's message is kept on the delivery row. */
 export const WEBHOOK_ERROR_MAX_CHARS = 500;
 
