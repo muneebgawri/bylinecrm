@@ -10,6 +10,7 @@ import {
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { optionsProblem } from './custom-fields/custom-values';
+import { filterParam, sortParam } from '../query/dto';
 
 const uuid = z.uuid();
 const text = (max: number) => z.string().trim().max(max);
@@ -78,15 +79,18 @@ const companyFields = {
 export class CreateCompanyDto extends createZodDto(z.object(companyFields).partial().required({ name: true })) {}
 export class UpdateCompanyDto extends createZodDto(z.object(companyFields).partial()) {}
 
-/** Query string of every list endpoint. `sort` is checked against the object's allowlist later. */
+/**
+ * Query string of every record list. `filter` is base64url JSON of the grammar, `sort` is
+ * `field:asc,field2:desc`, `view` a saved view whose filter and sorts apply as defaults; the
+ * planner (P1-4) checks the fields they name against the object.
+ */
 export class ListQueryDto extends createZodDto(
     z.object({
         cursor: z.string().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(LIST_LIMIT_MAX).default(LIST_LIMIT_DEFAULT),
-        sort: z
-            .string()
-            .regex(/^[a-zA-Z]+:(asc|desc)$/, 'sort is field:asc or field:desc')
-            .optional(),
+        sort: sortParam.optional(),
+        filter: filterParam.optional(),
+        view: z.uuid().optional(),
         q: text(200).min(1).optional(),
     }),
 ) {}

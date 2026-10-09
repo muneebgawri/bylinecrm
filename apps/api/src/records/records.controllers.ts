@@ -1,4 +1,22 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Header,
+    HttpCode,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Query,
+    Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import { ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
+import { ExportService } from '../query/export.service';
+import type { Group } from '../query/group-by';
+import { QueryService } from '../query/query.service';
 import { ApiTags } from '@nestjs/swagger';
 import { Requires } from '../auth/decorators';
 import { CompaniesService, type CompanyView } from './companies.service';
@@ -24,7 +42,37 @@ import { PeopleService, type PersonView } from './people.service';
 @ApiTags('people')
 @Controller('w/:workspaceId/people')
 export class PeopleController {
-    constructor(private readonly people: PeopleService) {}
+    constructor(
+        private readonly people: PeopleService,
+        private readonly queries: QueryService,
+        private readonly exports: ExportService,
+    ) {}
+
+    /** The list's twin for a filter too long for a query string: the same parameters in a body. */
+    @Requires('record:read')
+    @HttpCode(200)
+    @Post('query')
+    query(@Body() body: QueryBodyDto): Promise<Page<PersonView>> {
+        return this.people.list(body);
+    }
+
+    /** Counts (and money sums) per value of one field over the filtered, scoped list. */
+    @Requires('record:read')
+    @Get('group-by')
+    groupBy(@Query() query: GroupByQueryDto): Promise<Group[]> {
+        return this.queries.groupBy('person', query);
+    }
+
+    /** The filtered, scoped list as a streamed CSV (RFC 4180, UTF-8 with BOM); `413` past `EXPORT_MAX_ROWS`. */
+    @Requires('record:read')
+    @Get('export.csv')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="persons.csv"')
+    @Header('Cache-Control', 'private, no-store')
+    async exportCsv(@Query() query: ExportQueryDto, @Res() res: Response): Promise<void> {
+        await this.exports.writeCsv('person', query, res);
+        res.end();
+    }
 
     @Requires('record:read')
     @Get()
@@ -73,7 +121,37 @@ export class PeopleController {
 @ApiTags('companies')
 @Controller('w/:workspaceId/companies')
 export class CompaniesController {
-    constructor(private readonly companies: CompaniesService) {}
+    constructor(
+        private readonly companies: CompaniesService,
+        private readonly queries: QueryService,
+        private readonly exports: ExportService,
+    ) {}
+
+    /** The list's twin for a filter too long for a query string: the same parameters in a body. */
+    @Requires('record:read')
+    @HttpCode(200)
+    @Post('query')
+    query(@Body() body: QueryBodyDto): Promise<Page<CompanyView>> {
+        return this.companies.list(body);
+    }
+
+    /** Counts (and money sums) per value of one field over the filtered, scoped list. */
+    @Requires('record:read')
+    @Get('group-by')
+    groupBy(@Query() query: GroupByQueryDto): Promise<Group[]> {
+        return this.queries.groupBy('company', query);
+    }
+
+    /** The filtered, scoped list as a streamed CSV (RFC 4180, UTF-8 with BOM); `413` past `EXPORT_MAX_ROWS`. */
+    @Requires('record:read')
+    @Get('export.csv')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="companys.csv"')
+    @Header('Cache-Control', 'private, no-store')
+    async exportCsv(@Query() query: ExportQueryDto, @Res() res: Response): Promise<void> {
+        await this.exports.writeCsv('company', query, res);
+        res.end();
+    }
 
     @Requires('record:read')
     @Get()

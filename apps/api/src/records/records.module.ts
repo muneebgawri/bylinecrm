@@ -3,7 +3,8 @@ import { NotesController, OpportunitiesController, TasksController } from './act
 import { AttachmentsController } from './attachments.controller';
 import { AttachmentsService } from './attachments.service';
 import { CompaniesService } from './companies.service';
-import { CustomFieldsService } from './custom-fields/custom-fields.service';
+import { CustomFieldsModule } from './custom-fields/custom-fields.module';
+import { QueryModule } from '../query/query.module';
 import { NotesService } from './notes.service';
 import { OpportunitiesService } from './opportunities.service';
 import { PeopleService } from './people.service';
@@ -12,6 +13,7 @@ import { TasksService } from './tasks.service';
 
 /** People, companies, deals, the custom fields on them, and the notes, tasks and files attached to them. */
 @Module({
+    imports: [CustomFieldsModule, QueryModule],
     controllers: [
         PeopleController,
         CompaniesController,
@@ -21,15 +23,7 @@ import { TasksService } from './tasks.service';
         TasksController,
         AttachmentsController,
     ],
-    providers: [
-        PeopleService,
-        CompaniesService,
-        CustomFieldsService,
-        OpportunitiesService,
-        NotesService,
-        TasksService,
-        AttachmentsService,
-    ],
-    exports: [PeopleService, CompaniesService, CustomFieldsService, OpportunitiesService, NotesService, TasksService],
+    providers: [PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService, AttachmentsService],
+    exports: [PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
 })
 export class RecordsModule {}
