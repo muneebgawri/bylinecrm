@@ -8,6 +8,7 @@ import {
 import {
     BOARD_STAGE_LIMIT,
     DEFAULT_STAGES,
+    STAGE_DELETE_MOVE_LIMIT,
     type EventActor,
     type StageColour,
     type StageKind,
@@ -15,7 +16,7 @@ import {
     type ViewSort,
 } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
-import { UniqueConflict } from '../infra/errors/api-errors';
+import { Forbidden, StateConflict, TooLarge, UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -27,6 +28,7 @@ import { ownerWhere } from '../records/record-scope';
 import { stored } from '../records/references';
 import { searchCandidates } from '../records/search';
 import { ruleEventOf, storedRuleEvent } from './rule-events';
+import { planStageDelete, type StageDeletePlan } from './stage-delete';
 import { StageMoveService, type ClosePayload } from './stage-move.service';
 import type { StageView, PipelineView, RuleView, HistoryEntry, MoveResult, BoardColumn, BoardView } from './responses';
 export type { StageView, PipelineView, RuleView, HistoryEntry, MoveResult, BoardColumn, BoardView } from './responses';
@@ -162,26 +164,104 @@ export class PipelinesService {
         });
     }
 
-    /** A stage with deals (trash included) or with a rule pointing at it stays; a pipeline keeps at least one stage. */
-    removeStage(pipelineId: string, stageId: string): Promise<void> {
-        return this.rls.withWorkspace(async (tx) => {
+    /**
+     * Deletes a stage (P1-2b). A rule pointing at it, or being the pipeline's last stage, refuses.
+     * A stage with deals — trashed ones count — goes only when `moveDealsTo` names an open stage of
+     * the same pipeline: every deal moves there through the one move service (one history row and,
+     * after commit, one `deal.stage_changed` each, attributed to the caller), then the stage is
+     * deleted and positions close the gap, all in one transaction. This is a configuration change
+     * over every deal in the stage, so an own-scoped caller — who sees only their own deals — is
+     * refused outright rather than half-served; owner scope does not narrow it for anyone else.
+     */
+    async removeStage(pipelineId: string, stageId: string, moveDealsTo?: string): Promise<void> {
+        const context = this.current();
+        if (context.ownerScopeMemberId) {
+            throw new Forbidden(
+                'deleting a stage moves every deal in it, not only your own; it needs a role that sees all records',
+            );
+        }
+        const actor = actorOf(context);
+        const moved = await this.rls.withWorkspace(async (tx) => {
             const stage = await findStage(tx, pipelineId, stageId);
-            const [deals, rules, siblings] = await Promise.all([
-                tx.opportunity.count({ where: { stageId } }),
+            const [liveDeals, trashedDeals, rules, siblings, target] = await Promise.all([
+                tx.opportunity.count({ where: { stageId, deletedAt: null } }),
+                tx.opportunity.count({ where: { stageId, deletedAt: { not: null } } }),
                 tx.stageRule.count({ where: { toStageId: stageId } }),
                 tx.pipelineStage.count({ where: { pipelineId } }),
+                moveDealsTo === undefined
+                    ? Promise.resolve(null)
+                    : tx.pipelineStage.findFirst({ where: { id: moveDealsTo, pipelineId } }),
             ]);
-            if (deals > 0)
-                throw new ConflictException(
-                    `${deals} deal(s) are in this stage (including the trash); move them first`,
-                );
-            if (rules > 0)
-                throw new ConflictException(`${rules} rule(s) move deals into this stage; change them first`);
-            if (siblings <= 1) throw new ConflictException('a pipeline keeps at least one stage');
+            const plan = planStageDelete({
+                stageId,
+                pipelineId,
+                liveDeals,
+                trashedDeals,
+                rules,
+                siblings,
+                moveDealsTo,
+                target: target ?? undefined,
+                limit: STAGE_DELETE_MOVE_LIMIT,
+            });
+            const moves = await this.carryOut(tx, context.workspaceId, stage, plan, actor);
             await tx.pipelineStage.delete({ where: { id: stage.id } });
             // Close the gap so positions stay 1..n; the unique constraint is checked at commit.
             await tx.$executeRaw`UPDATE "pipeline_stages" SET "position" = "position" - 1 WHERE "pipeline_id" = ${pipelineId}::uuid AND "position" > ${stage.position}`;
+            return moves;
         });
+        for (const { dealId, moved: move } of moved) this.moves.announce(context.workspaceId, dealId, actor, move);
+    }
+
+    /** Turns a refusal into its error, or performs the move a plan calls for. */
+    private async carryOut(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        stage: StageRow,
+        plan: StageDeletePlan,
+        actor: EventActor,
+    ): Promise<Awaited<ReturnType<StageMoveService['moveAllInStage']>>> {
+        switch (plan.kind) {
+            case 'delete':
+                return [];
+            case 'move_then_delete':
+                return this.moves.moveAllInStage(
+                    tx,
+                    workspaceId,
+                    { id: stage.id, pipelineId: stage.pipelineId, name: stage.name },
+                    { ...plan.target, kind: 'open' },
+                    actor,
+                );
+            case 'refuse':
+                break;
+        }
+        switch (plan.reason) {
+            case 'has_rules':
+                throw new StateConflict(`${plan.rules} rule(s) move deals into this stage; change them first`, {
+                    rules: plan.rules,
+                });
+            case 'last_stage':
+                throw new StateConflict('a pipeline keeps at least one stage');
+            case 'has_deals':
+                throw new StateConflict(
+                    `${plan.liveDeals + plan.trashedDeals} deal(s) are in this stage (${plan.trashedDeals} in the trash); name a stage to move them to`,
+                    { liveDeals: plan.liveDeals, trashedDeals: plan.trashedDeals },
+                );
+            case 'target_not_found':
+                throw new NotFoundException('the stage to move deals to is not in this pipeline');
+            case 'target_is_stage':
+                throw new ValidationFailed('deals cannot move to the stage being deleted', [
+                    { path: 'moveDealsTo', message: 'choose another stage' },
+                ]);
+            case 'target_not_open':
+                throw new ValidationFailed('deals move to an open stage; closing them is a member’s decision', [
+                    { path: 'moveDealsTo', message: 'choose an open stage' },
+                ]);
+            case 'too_many':
+                throw new TooLarge(`a stage delete moves at most ${plan.limit} deals; this stage holds ${plan.deals}`, {
+                    deals: plan.deals,
+                    limit: plan.limit,
+                });
+        }
     }
 
     /** `stageIds` is every stage of the pipeline, in the new order. */
@@ -317,7 +397,9 @@ export class PipelinesService {
             return rows.map((row) => ({
                 id: row.id,
                 fromStageId: row.fromStageId,
+                fromStageName: row.fromStageName,
                 toStageId: row.toStageId,
+                toStageName: row.toStageName,
                 enteredAt: row.enteredAt,
                 actor: stored<EventActor>(row.actor),
                 reason: row.reason,
