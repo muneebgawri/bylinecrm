@@ -48,6 +48,10 @@ Admins register endpoints under `/api/w/:id/webhooks`; deliveries are signed (`x
 `<t>.<raw body>`), queued in BullMQ, retried with backoff, and swept if a job was lost. Receiver example, retry
 policy and SSRF rules: `docs/design-notes/P1-5.md`.
 
+A deal's stage move is delivered as exactly one event: `deal.won` or `deal.lost` when it closes, `deal.stage_changed`
+for every other move (reopening included). All three carry the same `stage` payload; subscribe to all three to see
+every move.
+
 ## Gates (all run in CI; run them before you push)
 
 ```bash
