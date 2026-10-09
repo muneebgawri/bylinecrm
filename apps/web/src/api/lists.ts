@@ -8,8 +8,8 @@ import {
     type QueryClient,
 } from '@tanstack/react-query';
 import { search, type ListParams } from './endpoints';
-import { keys, recordEndpoints, type RecordInputOf, type RecordViewOf } from './queries';
-import type { BulkInput, BulkResultView, RecordPage } from './types';
+import { keys, recordEndpoints, type RecordInputOf, type RecordPageOf, type RecordViewOf } from './queries';
+import type { BulkInput, BulkResultView } from './types';
 
 /**
  * The query hooks only the lazily loaded data views use (P1-UI-2, P1-UI-6): a list read by cursor,
@@ -33,7 +33,7 @@ export function useRecordPages<O extends RecordObject>(workspaceId: string, obje
         queryKey: [...keys.records(workspaceId, object), 'pages', params] as const,
         queryFn: ({ pageParam, signal }) =>
             recordEndpoints[object].list(workspaceId, { ...params, cursor: pageParam }, signal) as Promise<
-                RecordPage<RecordViewOf<O>>
+                RecordPageOf<O>
             >,
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (last) => last.nextCursor ?? undefined,

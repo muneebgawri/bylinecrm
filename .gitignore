@@ -12,3 +12,4 @@ test-results/
 playwright-report/
 .data/
 apps/api/contract/generated/
+apps/web/src/api/schema.gen.ts

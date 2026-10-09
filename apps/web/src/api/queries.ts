@@ -34,15 +34,17 @@ import type {
     CreateViewInput,
     LoginInput,
     MoveDealInput,
-    NoteInput,
+    NoteCreateInput,
     OpportunityCreateInput,
     OpportunityInput,
     OpportunityView,
     PersonInput,
     PersonView,
-    RecordPage,
+    CompanyPage,
+    OpportunityPage,
+    PersonPage,
     SignupInput,
-    TaskInput,
+    TaskCreateInput,
     UpdateRoleInput,
     UpdateViewInput,
 } from './types';
@@ -175,8 +177,8 @@ export function useCreateRole(workspaceId: string) {
 export function useUpdateRole(workspaceId: string) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: (input: { roleId: string } & UpdateRoleInput) =>
-            roles.update(workspaceId, input.roleId, { name: input.name, capabilities: input.capabilities }),
+        mutationFn: ({ roleId, ...patch }: { roleId: string } & UpdateRoleInput) =>
+            roles.update(workspaceId, roleId, patch),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.roles(workspaceId) }),
     });
 }
@@ -232,6 +234,19 @@ export type RecordViewOf<O extends RecordObject> = O extends 'person'
     : O extends 'company'
       ? CompanyView
       : OpportunityView;
+/**
+ * A page of one object's records. The three generated page schemas differ only in `items`, so
+ * the page is spelled once with `items` tied to `O` — a conditional over the three whole pages
+ * would collapse to their union inside a generic hook and lose which object it holds.
+ */
+export type RecordPageOf<O extends RecordObject> = Omit<PersonPage, 'items'> & { items: RecordViewOf<O>[] };
+type Assert<T extends true> = T;
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+/** Compile-time only: stops compiling if the API's page shapes ever differ beyond `items`. */
+export type PageShapesAgree = Assert<
+    Same<Omit<PersonPage, 'items'>, Omit<CompanyPage, 'items'>> &
+        Same<Omit<PersonPage, 'items'>, Omit<OpportunityPage, 'items'>>
+>;
 export type RecordInputOf<O extends RecordObject> = O extends 'person'
     ? PersonInput
     : O extends 'company'
@@ -253,8 +268,7 @@ export function useRecordList<O extends RecordObject>(
 ) {
     return useQuery({
         queryKey: [...keys.records(workspaceId, object), 'list', params] as const,
-        queryFn: ({ signal }) =>
-            recordEndpoints[object].list(workspaceId, params, signal) as Promise<RecordPage<RecordViewOf<O>>>,
+        queryFn: ({ signal }) => recordEndpoints[object].list(workspaceId, params, signal) as Promise<RecordPageOf<O>>,
         enabled,
     });
 }
@@ -471,10 +485,8 @@ export function useSaveNote(workspaceId: string, target: RecordTarget) {
         void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline', target.type, target.id] });
     };
     return useMutation({
-        mutationFn: (input: { id?: string; title: string; body: NoteInput['body'] }) =>
-            input.id
-                ? notes.update(workspaceId, input.id, { title: input.title, body: input.body })
-                : notes.create(workspaceId, { title: input.title, body: input.body, targets: [target] }),
+        mutationFn: ({ id, ...note }: { id?: string | undefined } & Omit<NoteCreateInput, 'targets'>) =>
+            id ? notes.update(workspaceId, id, note) : notes.create(workspaceId, { ...note, targets: [target] }),
         onSuccess: invalidate,
     });
 }
@@ -505,16 +517,8 @@ export function useSaveTask(workspaceId: string, target: RecordTarget) {
         void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline', target.type, target.id] });
     };
     return useMutation({
-        mutationFn: (input: { id?: string } & TaskInput & { title: string }) =>
-            input.id
-                ? tasks.update(workspaceId, input.id, {
-                      title: input.title,
-                      body: input.body,
-                      status: input.status,
-                      dueAt: input.dueAt,
-                      assigneeId: input.assigneeId,
-                  })
-                : tasks.create(workspaceId, { ...input, targets: [target] }),
+        mutationFn: ({ id, ...task }: { id?: string | undefined } & Omit<TaskCreateInput, 'targets'>) =>
+            id ? tasks.update(workspaceId, id, task) : tasks.create(workspaceId, { ...task, targets: [target] }),
         onSuccess: invalidate,
     });
 }

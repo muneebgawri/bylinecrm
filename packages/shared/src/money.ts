@@ -33,3 +33,32 @@ export function toMajor(money: Money): number {
 export function formatMoneyIn(money: Money, locale: string | undefined): string {
     return formatterFor(money.currency, locale).format(toMajor(money));
 }
+
+/** A major amount typed by a person → minor units, rounded to the currency's precision. */
+export function toMinor(major: number, currency: string): number {
+    return Math.round(major * 10 ** minorDigits(currency));
+}
+
+const compactFormatters = new Map<string, Intl.NumberFormat>();
+
+/**
+ * "$12K", "¥1.2M" for cards and totals — in `locale`, or the runtime's default when undefined.
+ * Both fraction bounds are set so every ICU agrees: a currency's default minimum (2 for USD)
+ * would otherwise turn "$12K" into "$12.0K" on some platforms.
+ */
+export function formatMoneyCompactIn(money: Money, locale: string | undefined): string {
+    const key = `${locale ?? ''}|${money.currency}`;
+    let formatter = compactFormatters.get(key);
+    if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency: money.currency,
+            currencyDisplay: 'narrowSymbol',
+            notation: 'compact',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 1,
+        });
+        compactFormatters.set(key, formatter);
+    }
+    return formatter.format(toMajor(money));
+}

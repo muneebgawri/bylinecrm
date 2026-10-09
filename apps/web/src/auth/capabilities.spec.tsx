@@ -15,6 +15,8 @@ import {
 
 const membership: MembershipSummary = {
     memberId: 'm',
+    workspaceId: 'w1',
+    apiKeyId: null,
     userId: 'u',
     roleId: 'r',
     roleName: 'member',
