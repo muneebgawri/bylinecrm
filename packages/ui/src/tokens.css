@@ -1,0 +1,137 @@
+/*
+ * BylineCRM design tokens — the ONE place a colour, radius, spacing base or type size is defined.
+ * Components never carry a raw value; they use Tailwind utilities that `theme.css` maps onto these
+ * variables. Light values live on `:root`; dark values apply when the app sets
+ * `data-theme="dark"`, or when it sets nothing and the OS prefers dark. Density is a second
+ * attribute, `data-density`, that scales the spacing base and the root font size.
+ *
+ * Contrast: every text-on-background pair here meets WCAG 2.1 AA (4.5:1); the a11y gate (axe on
+ * every story) is what proves it, so change a value and watch that gate, not this comment.
+ */
+
+:root {
+    color-scheme: light;
+
+    /* Surfaces */
+    --bc-background: #ffffff;
+    --bc-surface: #f8f9fb;
+    --bc-surface-raised: #ffffff;
+    --bc-border: #e2e5ea;
+    --bc-border-strong: #c9ced6;
+
+    /* Text */
+    --bc-text: #111827;
+    --bc-text-muted: #5b6473;
+    --bc-text-faint: #687080;
+
+    /* Accent (interactive) */
+    --bc-accent: #2563eb;
+    --bc-accent-hover: #1d4ed8;
+    --bc-accent-foreground: #ffffff;
+    --bc-accent-soft: #e8efff;
+
+    /* Status — `-soft` is the tinted background a status badge sits on; the base is its text */
+    --bc-success: #166534;
+    --bc-success-soft: #dcfce7;
+    --bc-warning: #92400e;
+    --bc-warning-soft: #fef3c7;
+    --bc-danger: #991b1b;
+    --bc-danger-soft: #fee2e2;
+    --bc-info: #1e40af;
+    --bc-info-soft: #dbeafe;
+
+    /* Focus */
+    --bc-ring: #2563eb;
+
+    /* Shape */
+    --bc-radius-sm: 0.25rem;
+    --bc-radius-md: 0.375rem;
+    --bc-radius-lg: 0.625rem;
+    --bc-radius-full: 9999px;
+
+    /* Type — a system stack with Inter first, so a machine (or CI runner) that has Inter uses it
+       and every other machine gets its own UI font. No font is fetched at runtime. */
+    --bc-font-sans:
+        'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --bc-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --bc-font-size-root: 14px;
+    --bc-line-height: 1.5;
+
+    /* Density — the spacing base every `p-*`/`gap-*` utility multiplies */
+    --bc-spacing: 0.25rem;
+
+    /* Shadows */
+    --bc-shadow-sm: 0 1px 2px 0 rgb(17 24 39 / 0.06);
+    --bc-shadow-md: 0 4px 12px -2px rgb(17 24 39 / 0.12);
+}
+
+[data-density='compact'] {
+    --bc-font-size-root: 13px;
+    --bc-spacing: 0.1875rem;
+}
+
+/* Dark values, as one block so light and dark cannot drift apart */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        color-scheme: dark;
+        --bc-background: #0b0f17;
+        --bc-surface: #111827;
+        --bc-surface-raised: #1a2332;
+        --bc-border: #2b3444;
+        --bc-border-strong: #3b4556;
+        --bc-text: #f3f4f6;
+        --bc-text-muted: #a3acba;
+        --bc-text-faint: #8b95a5;
+        --bc-accent: #7cb0ff;
+        --bc-accent-hover: #9cc3ff;
+        --bc-accent-foreground: #0b0f17;
+        --bc-accent-soft: #172554;
+        --bc-success: #bbf7d0;
+        --bc-success-soft: #14532d;
+        --bc-warning: #fde68a;
+        --bc-warning-soft: #78350f;
+        --bc-danger: #fecaca;
+        --bc-danger-soft: #7f1d1d;
+        --bc-info: #bfdbfe;
+        --bc-info-soft: #1e3a8a;
+        --bc-ring: #7cb0ff;
+        --bc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+        --bc-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+    }
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --bc-background: #0b0f17;
+    --bc-surface: #111827;
+    --bc-surface-raised: #1a2332;
+    --bc-border: #2b3444;
+    --bc-border-strong: #3b4556;
+    --bc-text: #f3f4f6;
+    --bc-text-muted: #a3acba;
+    --bc-text-faint: #8b95a5;
+    --bc-accent: #7cb0ff;
+    --bc-accent-hover: #9cc3ff;
+    --bc-accent-foreground: #0b0f17;
+    --bc-accent-soft: #172554;
+    --bc-success: #bbf7d0;
+    --bc-success-soft: #14532d;
+    --bc-warning: #fde68a;
+    --bc-warning-soft: #78350f;
+    --bc-danger: #fecaca;
+    --bc-danger-soft: #7f1d1d;
+    --bc-info: #bfdbfe;
+    --bc-info-soft: #1e3a8a;
+    --bc-ring: #7cb0ff;
+    --bc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --bc-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+}
+
+html {
+    font-family: var(--bc-font-sans);
+    font-size: var(--bc-font-size-root);
+    line-height: var(--bc-line-height);
+    background-color: var(--bc-background);
+    color: var(--bc-text);
+    -webkit-font-smoothing: antialiased;
+}
