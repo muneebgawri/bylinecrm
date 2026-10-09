@@ -3,11 +3,18 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
+    "sideEffects": [
+        "*.css"
+    ],
     "description": "BylineCRM design system: tokens, Tailwind theme, components. Consumed from source by Vite apps.",
     "exports": {
         ".": {
             "types": "./src/index.ts",
             "default": "./src/index.ts"
+        },
+        "./toaster": {
+            "types": "./src/components/toast/Toaster.tsx",
+            "default": "./src/components/toast/Toaster.tsx"
         },
         "./styles.css": "./src/styles.css",
         "./tokens.css": "./src/tokens.css",
@@ -37,6 +44,7 @@
         "@radix-ui/react-slot": "^1.4.0",
         "@radix-ui/react-switch": "^1.2.6",
         "@radix-ui/react-tabs": "^1.1.13",
+        "@radix-ui/react-toast": "^1",
         "@radix-ui/react-toggle-group": "^1.1.20",
         "@radix-ui/react-tooltip": "^1.2.8",
         "class-variance-authority": "^0.7.1",

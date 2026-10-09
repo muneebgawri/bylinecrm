@@ -1,21 +1,11 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import {
-    Building2,
-    FileText,
-    Handshake,
-    Inbox,
-    LayoutDashboard,
-    ListOrdered,
-    BarChart3,
-    Users,
-    UsersRound,
-} from 'lucide-react';
+import { Building2, FileText, Inbox, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 
 /**
- * The content pages this package does not build (dashboard, people, companies, deals are
- * P1-UI-2/3/4; outreach is Phase 3). Each is a designed empty state with the right words, so the
+ * The content pages this package does not build (dashboard, people and companies are
+ * P1-UI-2/3; deals landed with P1-UI-4; outreach is Phase 3). Each is a designed empty state with the right words, so the
  * shell, nav, breadcrumbs and permissions are real end to end before the content lands.
  */
 interface PageSpec {
@@ -63,15 +53,6 @@ const PAGES = {
         body: 'A company is created from a person’s work domain or added by hand.',
         action: { label: 'Add company', requires: 'record:write' },
         coming: 'P1-UI-2',
-    },
-    deals: {
-        title: 'Deals',
-        subtitle: 'Your pipeline, as a board and as a list.',
-        icon: <Handshake />,
-        empty: 'No deals yet',
-        body: 'Deals move through the stages you configure; a reply can move one for you.',
-        action: { label: 'New deal', requires: 'deal:edit' },
-        coming: 'P1-UI-4',
     },
     sequences: {
         title: 'Sequences',

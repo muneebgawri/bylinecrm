@@ -2,6 +2,16 @@ export { cn } from './lib/cn';
 export { focusRing } from './lib/focus';
 export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
+export {
+    BREAKPOINT_PX,
+    COARSE_POINTER_QUERY,
+    MOBILE_QUERY,
+    NARROW_QUERY,
+    useCoarsePointer,
+    useIsMobile,
+    useIsNarrow,
+    useMediaQuery,
+} from './lib/breakpoints';
 
 export * from './theme/theme';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/ThemeProvider';
@@ -79,3 +89,15 @@ export {
     type KanbanLaneProps,
 } from './components/kanban/Kanban';
 export { WelcomePanel, type WelcomeFact, type WelcomePanelProps } from './components/welcome-panel/WelcomePanel';
+export {
+    TOAST_DURATION_MS,
+    TOAST_LIMIT,
+    ToastStore,
+    toast,
+    toasts,
+    useToasts,
+    type ToastInput,
+    type ToastRecord,
+} from './components/toast/toast-store';
+// The renderer is a subpath of its own (`@bylinecrm/ui/toaster`) so an app can load it lazily;
+// re-exporting it here would put Radix Toast in every page's first load.

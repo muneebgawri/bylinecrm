@@ -3,11 +3,14 @@ import { API_BASE, request } from './client';
 import type {
     ApiKeyView,
     AttachmentView,
+    BoardQuery,
+    BoardView,
     CompanyInput,
     CompanyView,
     CreateApiKeyInput,
     CreateInviteInput,
     CreateRoleInput,
+    CreateViewInput,
     CustomFieldView,
     InviteView,
     LoginInput,
@@ -18,6 +21,7 @@ import type {
     MoveResult,
     NoteInput,
     NoteView,
+    OpportunityCreateInput,
     OpportunityInput,
     OpportunityView,
     Page,
@@ -25,12 +29,15 @@ import type {
     PersonView,
     PipelineView,
     RoleView,
+    RuleView,
+    SavedView,
     SignupInput,
     StageHistoryEntry,
     TaskInput,
     TaskView,
     TimelineActivityView,
     UpdateRoleInput,
+    UpdateViewInput,
     UserView,
     WorkspaceView,
 } from './types';
@@ -161,9 +168,15 @@ export const people = recordRoutes<PersonView, PersonInput>('people');
 export const companies = recordRoutes<CompanyView, CompanyInput>('companies');
 export const opportunities = {
     ...recordRoutes<OpportunityView, OpportunityInput>('opportunities'),
+    /** Create names where the deal starts; omitted, the default pipeline's first stage. */
+    create: (workspaceId: string, input: OpportunityCreateInput) =>
+        request<OpportunityView>('POST', workspacePath(workspaceId, '/opportunities'), { body: input }),
     /** A stage move (P1-2): into a won/lost stage the close payload is required; a backward move answers with the rules that may undo it. */
     move: (workspaceId: string, id: string, input: MoveDealInput) =>
         request<MoveResult>('POST', workspacePath(workspaceId, `/opportunities/${id}/move`), { body: input }),
+    /** The filtered, scoped deals as CSV (P1-4): a download link, not a fetch — the browser streams it. */
+    exportUrl: (workspaceId: string, params: BoardQuery) =>
+        `${API_BASE}${workspacePath(workspaceId, `/opportunities/export.csv${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`)}`,
     history: (workspaceId: string, id: string, signal?: AbortSignal) =>
         request<StageHistoryEntry[]>('GET', workspacePath(workspaceId, `/opportunities/${id}/history`), { signal }),
 };
@@ -173,6 +186,30 @@ export const pipelines = {
         request<PipelineView[]>('GET', workspacePath(workspaceId, '/pipelines'), { signal }),
     get: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
         request<PipelineView>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}`), { signal }),
+    /** Every stage with its deals, count and exact sums under the caller's scope and the query (P1-2, P1-4). */
+    board: (workspaceId: string, pipelineId: string, params: BoardQuery, signal?: AbortSignal) =>
+        request<BoardView>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/pipelines/${pipelineId}/board${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`,
+            ),
+            { signal },
+        ),
+    rules: (workspaceId: string, pipelineId: string, signal?: AbortSignal) =>
+        request<RuleView[]>('GET', workspacePath(workspaceId, `/pipelines/${pipelineId}/rules`), { signal }),
+};
+
+export const views = {
+    /** Shared views and the caller's own, for one object (P1-4). */
+    list: (workspaceId: string, object: RecordObject, signal?: AbortSignal) =>
+        request<SavedView[]>('GET', workspacePath(workspaceId, `/views${query({ object })}`), { signal }),
+    create: (workspaceId: string, input: CreateViewInput) =>
+        request<SavedView>('POST', workspacePath(workspaceId, '/views'), { body: input }),
+    update: (workspaceId: string, viewId: string, input: UpdateViewInput) =>
+        request<SavedView>('PATCH', workspacePath(workspaceId, `/views/${viewId}`), { body: input }),
+    remove: (workspaceId: string, viewId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/views/${viewId}`)),
 };
 
 export const customFields = {

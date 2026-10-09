@@ -25,7 +25,11 @@ const settings = {
     roles: () => import('./w/settings/Roles').then((m) => ({ Component: m.Roles })),
     apiKeys: () => import('./w/settings/ApiKeys').then((m) => ({ Component: m.ApiKeys })),
     invites: () => import('./w/settings/Invites').then((m) => ({ Component: m.Invites })),
+    pipelines: () => import('./w/settings/Pipelines').then((m) => ({ Component: m.Pipelines })),
 };
+
+/** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
+const dealsPage = () => import('./w/deals/DealsPage').then((m) => ({ Component: m.DealsPage }));
 
 /**
  * The route manifest: the one list of pages. A route's `handle.crumb` is its breadcrumb; its
@@ -56,7 +60,7 @@ const workspaceRoutes: RouteObject = {
             handle: { crumb: 'Company' },
             errorElement: <RouteError />,
         },
-        page('deals', 'deals', 'Deals'),
+        { path: 'deals', lazy: dealsPage, handle: { crumb: 'Deals' }, errorElement: <RouteError /> },
         { path: 'deals/:dealId', lazy: records.deal, handle: { crumb: 'Deal' }, errorElement: <RouteError /> },
         page('sequences', 'sequences', 'Sequences'),
         page('templates', 'templates', 'Templates'),
@@ -73,6 +77,7 @@ const workspaceRoutes: RouteObject = {
                 { path: 'roles', lazy: settings.roles, handle: { crumb: 'Roles' } },
                 { path: 'api-keys', lazy: settings.apiKeys, handle: { crumb: 'API keys' } },
                 { path: 'invites', lazy: settings.invites, handle: { crumb: 'Invites' } },
+                { path: 'pipelines', lazy: settings.pipelines, handle: { crumb: 'Pipelines' } },
             ],
         },
     ],

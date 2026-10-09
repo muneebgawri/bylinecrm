@@ -52,3 +52,19 @@ export function formatMoneyCompact(money: Money | null | undefined): string {
         maximumFractionDigits: 1,
     }).format(toMajor(money));
 }
+
+/** A board column's exact per-currency sums, as the API computed them: "$48K · €2K". */
+export function formatSums(byCurrency: Readonly<Record<string, number>>): string {
+    const entries = Object.entries(byCurrency).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return '—';
+    return entries.map(([currency, amountMinor]) => formatMoneyCompact({ amountMinor, currency })).join(' · ');
+}
+
+/** A typed amount ("12,000.50") → `Money` in the currency's minor units, or `null` when it is not a number. */
+export function parseMoneyInput(text: string, currency: string): Money | null {
+    const cleaned = text.replace(/[^\d.-]/g, '');
+    if (!cleaned) return null;
+    const major = Number(cleaned);
+    if (!Number.isFinite(major) || major < 0) return null;
+    return { amountMinor: toMinor(major, currency), currency };
+}
