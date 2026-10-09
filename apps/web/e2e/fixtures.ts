@@ -8,12 +8,17 @@ import {
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
+    BlocklistEntryView,
     AttachmentView,
     BoardView,
     CompanyView,
     CustomFieldView,
     EmailTemplateView,
+    GoogleOAuthClientStatusView,
+    GoogleOAuthClientView,
     InviteView,
+    MailboxSyncView,
+    MailboxView,
     MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
@@ -68,6 +73,9 @@ export const IDS = {
     view: '0b1e0000-0000-4000-8000-000000000201',
     template: '0b1e0000-0000-4000-8000-0000000007a1',
     outreachTemplate: '0b1e0000-0000-4000-8000-0000000007a2',
+    mailbox: '0b1e0000-0000-4000-8000-0000000008a1',
+    poolMailbox: '0b1e0000-0000-4000-8000-0000000008a2',
+    blockedDomain: '0b1e0000-0000-4000-8000-0000000008b1',
 } as const;
 
 const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
@@ -571,3 +579,80 @@ export const mailSettings: MailSettingsView = {
     defaultSenderName: 'Pinion Partners',
     unsubscribeFooterText: 'You are receiving this email because we thought it would interest you.',
 };
+
+// ---- Google client, mailboxes, sync and blocklist (P2-UI-3) ----------------------------------
+
+const REDIRECT_URI = 'https://crm.example.com/api/mail/oauth/callback';
+const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly'];
+
+/** The admin's view: configured, last checked, the redirect URI not yet proven by a sign-in. */
+export const oauthClient: GoogleOAuthClientView = {
+    configured: true,
+    clientId: '123456789012-abc123def456.apps.googleusercontent.com',
+    clientSecretLast4: '1a2b',
+    redirectUri: REDIRECT_URI,
+    scopes: GMAIL_SCOPES,
+    verifiedAt: at(20),
+    lastCheck: {
+        checkedAt: at(21),
+        format: { outcome: 'pass', message: 'The client ID has the shape of a Google web client ID.' },
+        credentials: { outcome: 'pass', message: 'Google knows the client and accepts its secret.' },
+        redirectUri: { outcome: 'unverified', message: 'Google checks the redirect URI when someone signs in.' },
+    },
+    liveMailboxes: 2,
+    configuredBy: IDS.member,
+    updatedAt: at(22),
+};
+
+export const oauthClientStatus: GoogleOAuthClientStatusView = {
+    configured: true,
+    verified: true,
+    redirectUri: REDIRECT_URI,
+    scopes: GMAIL_SCOPES,
+};
+
+/** One personal mailbox working, one shared outreach mailbox Google stopped accepting. */
+export const mailboxes: MailboxView[] = [
+    {
+        id: IDS.mailbox,
+        ownerMemberId: IDS.member,
+        email: 'kate.morgan@example.com',
+        label: null,
+        purpose: 'personal',
+        status: 'connected',
+        grantedScopes: GMAIL_SCOPES,
+        lastError: null,
+        connectedAt: at(20),
+        createdAt: at(20),
+        updatedAt: at(20),
+    },
+    {
+        id: IDS.poolMailbox,
+        ownerMemberId: IDS.secondMember,
+        email: 'outreach@example.com',
+        label: 'Q4 outreach',
+        purpose: 'pool',
+        status: 'reconnect_needed',
+        grantedScopes: GMAIL_SCOPES,
+        lastError: { code: 'invalid_grant', message: 'Google revoked the app’s access.', at: at(3) },
+        connectedAt: at(48),
+        createdAt: at(48),
+        updatedAt: at(3),
+    },
+];
+
+export function mailboxSync(mailboxId: string): MailboxSyncView {
+    return mailboxId === IDS.mailbox
+        ? { mailboxId, status: 'idle', lastSyncedAt: at(0.05), fullSyncCompletedAt: at(19), lastError: null }
+        : {
+              mailboxId,
+              status: 'failed',
+              lastSyncedAt: at(4),
+              fullSyncCompletedAt: at(47),
+              lastError: { code: 'reconnect_needed', message: 'The mailbox needs reconnecting.', at: at(3) },
+          };
+}
+
+export const blocklist: BlocklistEntryView[] = [
+    { id: IDS.blockedDomain, value: '@newsletters.example', scope: 'workspace', createdAt: at(30) },
+];
