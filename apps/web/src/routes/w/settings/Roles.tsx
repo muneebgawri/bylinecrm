@@ -1,4 +1,4 @@
-import { CAPABILITIES, type Capability } from '@bylinecrm/shared';
+import { CAPABILITIES, type Capability, type RecordScope } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -14,18 +14,22 @@ import {
     EmptyState,
     Field,
     Input,
+    RadioGroup,
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useCreateRole, useRemoveRole, useRoles, useUpdateRole } from '../../../api/queries';
 import type { RoleView } from '../../../api/types';
-import { describeCapability } from '../../../auth/capabilities';
 import { useWorkspaceId } from '../../params';
+import { CAPABILITY_AREA_LABEL, CAPABILITY_LABEL } from './settingsText';
 
-/** The catalogue grouped by its subject, for the editor. */
 /** The system admin role holds every capability and is read-only. */
 const isAdmin = (role: RoleView) => role.isSystem && role.name === 'admin';
 
+/** The catalogue grouped by its area, for the editor; labels from `settingsText`. */
 const GROUPS = Array.from(
     CAPABILITIES.reduce((map, cap) => {
         const subject = cap.split(':')[0] ?? cap;
@@ -33,6 +37,23 @@ const GROUPS = Array.from(
         return map;
     }, new Map<string, Capability[]>()),
 );
+
+/** Which records a role's members see (P1-1a's owner scope), in words. */
+const SCOPE_OPTIONS: readonly { value: RecordScope; label: string; description: string }[] = [
+    {
+        value: 'all',
+        label: 'All records',
+        description: 'Members see every person, company and deal they have permission to read.',
+    },
+    {
+        value: 'own',
+        label: 'Only records they own',
+        description:
+            'Members see the people, companies and deals whose owner is them; anyone else’s are hidden, as if they did not exist.',
+    },
+];
+
+const SCOPE_SUMMARY: Record<RecordScope, string> = { all: 'All records', own: 'Only their own records' };
 
 export function Roles() {
     const workspaceId = useWorkspaceId();
@@ -78,6 +99,12 @@ export function Roles() {
                                     )}
                                 </>
                             ),
+                        },
+                        {
+                            id: 'scope',
+                            header: 'Records',
+                            muted: true,
+                            cell: (role) => SCOPE_SUMMARY[role.recordScope],
                         },
                         {
                             id: 'capabilities',
@@ -150,6 +177,7 @@ function RoleForm({
     const update = useUpdateRole(workspaceId);
     const [name, setName] = useState(existing?.name ?? '');
     const [selected, setSelected] = useState<Set<Capability>>(() => new Set(existing?.capabilities ?? []));
+    const [recordScope, setRecordScope] = useState<RecordScope>(existing?.recordScope ?? 'all');
     const readOnly = existing !== null && isAdmin(existing);
 
     const toggle = (cap: Capability) =>
@@ -162,9 +190,10 @@ function RoleForm({
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        const capabilities = [...selected];
-        if (existing) update.mutate({ roleId: existing.id, name, capabilities }, { onSuccess: onClose });
-        else create.mutate({ name, capabilities }, { onSuccess: onClose });
+        // In catalogue order, so the request reads the same whatever order the boxes were ticked.
+        const capabilities = CAPABILITIES.filter((cap) => selected.has(cap));
+        if (existing) update.mutate({ roleId: existing.id, name, capabilities, recordScope }, { onSuccess: onClose });
+        else create.mutate({ name, capabilities, recordScope }, { onSuccess: onClose });
     };
     const pending = create.isPending || update.isPending;
     const error = (create.error ?? update.error) as unknown;
@@ -190,28 +219,40 @@ function RoleForm({
                             />
                         </Field>
                     )}
-                    <fieldset className="grid gap-4 sm:grid-cols-2">
-                        <legend className="sr-only">Capabilities</legend>
+                    {!readOnly && (
+                        <RadioGroup
+                            legend="Which records members see"
+                            options={SCOPE_OPTIONS}
+                            value={recordScope}
+                            onValueChange={setRecordScope}
+                        />
+                    )}
+                    <div className="grid gap-4 sm:grid-cols-2">
                         {GROUPS.map(([subject, caps]) => (
-                            <div key={subject}>
-                                <div className="mb-1.5 text-[11.5px] font-medium text-text-faint capitalize">
-                                    {subject}
-                                </div>
+                            <fieldset key={subject} className="m-0 border-0 p-0">
+                                <legend className="mb-1.5 p-0 text-[11.5px] font-medium text-text-faint">
+                                    {CAPABILITY_AREA_LABEL[subject] ?? subject}
+                                </legend>
                                 {caps.map((cap) => (
-                                    <label key={cap} className="flex items-center gap-2 py-1 text-sm">
+                                    <div key={cap} className="flex items-center gap-2 py-1 text-sm max-md:min-h-touch">
                                         <Checkbox
+                                            id={`cap-${cap}`}
                                             checked={readOnly || selected.has(cap)}
                                             disabled={readOnly}
                                             onCheckedChange={() => toggle(cap)}
-                                            aria-label={cap}
                                         />
-                                        <span className="capitalize">{describeCapability(cap)}</span>
-                                        <code className="ml-auto text-xs text-text-faint">{cap}</code>
-                                    </label>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <label htmlFor={`cap-${cap}`}>{CAPABILITY_LABEL[cap]}</label>
+                                            </TooltipTrigger>
+                                            {/* The catalogue string, for the admin wiring an API key or reading the docs. */}
+                                            <TooltipContent>{cap}</TooltipContent>
+                                        </Tooltip>
+                                    </div>
                                 ))}
-                            </div>
+                            </fieldset>
                         ))}
-                    </fieldset>
+                    </div>
                 </DialogBody>
                 <DialogFooter>
                     <Button type="button" onClick={onClose}>
