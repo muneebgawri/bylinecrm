@@ -1,11 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 
-/** A sort over one field of the per-object allowlist. */
-export interface SortSpec<F extends string> {
-    field: F;
-    direction: 'asc' | 'desc';
-}
-
 /** One page of a list and the cursor that continues it, `null` on the last page. */
 export interface Page<T> {
     items: T[];
@@ -23,20 +17,6 @@ export function decodeCursor(cursor: string): string {
     const id = Buffer.from(cursor, 'base64url').toString('utf8');
     if (!UUID.test(id)) throw new BadRequestException('cursor is not valid');
     return id;
-}
-
-/** Parses `field:asc|desc` against the object's allowlist; anything else is a `400`. */
-export function parseSort<F extends string>(
-    raw: string | undefined,
-    allowed: readonly F[],
-    fallback: SortSpec<F>,
-): SortSpec<F> {
-    if (raw === undefined) return fallback;
-    const [field, direction] = raw.split(':');
-    if (!field || !(allowed as readonly string[]).includes(field) || (direction !== 'asc' && direction !== 'desc')) {
-        throw new BadRequestException(`sort must be one of ${allowed.join(', ')} followed by :asc or :desc`);
-    }
-    return { field: field as F, direction };
 }
 
 /** What a page fetch is given: continue after the cursor row, and take one more than the page. */

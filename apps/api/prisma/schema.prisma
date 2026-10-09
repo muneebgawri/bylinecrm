@@ -35,6 +35,7 @@ model Workspace {
   tasks                  Task[]
   taskTargets            TaskTarget[]
   attachments            Attachment[]
+  savedViews             SavedView[]
   timelineActivities     TimelineActivity[]
   pipelines              Pipeline[]
   pipelineStages         PipelineStage[]
@@ -126,6 +127,7 @@ model WorkspaceMember {
   authoredNotes       Note[]
   assignedTasks       Task[]
   authoredAttachments Attachment[]
+  savedViews          SavedView[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -645,6 +647,36 @@ model Attachment {
   @@index([workspaceId, targetType, targetId])
   @@index([workspaceId, deletedAt])
   @@map("attachments")
+}
+
+/// A saved view (PAR-056): a filter, sorts, columns and grouping over one object, kept by a member
+/// for themselves or shared with the workspace. P1-4.
+model SavedView {
+  id            String       @id @default(uuid()) @db.Uuid
+  workspaceId   String       @map("workspace_id") @db.Uuid
+  object        RecordObject
+  name          String
+  icon          String?
+  /// The member who made it; `null` once that seat is gone (a shared view outlives its author).
+  ownerMemberId String?      @map("owner_member_id") @db.Uuid
+  isShared      Boolean      @default(false) @map("is_shared")
+  /// `FilterGroup` from @bylinecrm/shared, or `null` for "everything".
+  filter        Json?
+  /// `ViewSort[]` from @bylinecrm/shared.
+  sorts         Json         @default("[]")
+  /// `ViewColumn[]` from @bylinecrm/shared.
+  columns       Json         @default("[]")
+  groupBy       String?      @map("group_by")
+  position      Float        @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     WorkspaceMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, object])
+  @@index([workspaceId, ownerMemberId])
+  @@map("saved_views")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { InfraModule } from './infra/infra.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { ViewsModule } from './views/views.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         PipelinesModule,
         RecordsModule,
         TimelineModule,
+        ViewsModule,
         WebhooksModule,
     ],
 })

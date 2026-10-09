@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import type { Actor, Emails, Links, Phones } from '@bylinecrm/shared';
+import type { Actor, Emails, FilterGroup, Links, Phones } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
@@ -8,7 +8,8 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { actorOf } from './actor';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf } from './diff';
-import { type Page, paginate, parseSort, type SortSpec } from './list-query';
+import { type Page, paginate } from './list-query';
+import { resolvePlan } from '../query/query.service';
 import { ownerWhere, resolveOwner } from './record-scope';
 import { assertCompanyExists, assertOwnerIsMember, compact, stored } from './references';
 import { searchCandidates } from './search';
@@ -49,16 +50,16 @@ export interface PersonInput {
     custom?: Record<string, unknown> | undefined;
 }
 
+/** A record list request: paging, plus the filter, sort, view and search the planner resolves (P1-4). */
 export interface ListQuery {
     cursor?: string | undefined;
     limit: number;
     sort?: string | undefined;
+    /** Base64url JSON over the query string, or the parsed grammar from a `POST …/query` body. */
+    filter?: string | FilterGroup | undefined;
+    view?: string | undefined;
     q?: string | undefined;
 }
-
-export const PERSON_SORT_FIELDS = ['createdAt', 'updatedAt', 'nameFirst', 'nameLast', 'jobTitle', 'position'] as const;
-type PersonSortField = (typeof PERSON_SORT_FIELDS)[number];
-const DEFAULT_SORT: SortSpec<PersonSortField> = { field: 'createdAt', direction: 'desc' };
 
 /** The fields an `updated` event reports changes to. */
 const DIFF_FIELDS = [
@@ -90,15 +91,18 @@ export class PeopleService {
     /** Live people, or the trash when `deleted`; a text search narrows the candidates first. */
     list(query: ListQuery, deleted = false): Promise<Page<PersonView>> {
         const context = this.current();
-        const sort = parseSort(query.sort, PERSON_SORT_FIELDS, DEFAULT_SORT);
         return this.rls.withWorkspace(async (tx) => {
+            const plan = await resolvePlan(tx, context, this.customFields, 'person', query);
             const ids = query.q ? await searchCandidates(tx, 'people', query.q, deleted) : undefined;
             if (ids && ids.length === 0) return { items: [], nextCursor: null };
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.person.findMany({
-                    where: { ...where(context, deleted), ...(ids ? { id: { in: ids } } : {}) },
-                    // The field comes from PERSON_SORT_FIELDS, every one a column of the model.
-                    orderBy: [{ [sort.field]: sort.direction } as Prisma.PersonOrderByWithRelationInput, { id: 'asc' }],
+                    where: {
+                        ...where(context, deleted),
+                        ...(plan.where as Prisma.PersonWhereInput),
+                        ...(ids ? { id: { in: ids } } : {}),
+                    },
+                    orderBy: plan.orderBy as Prisma.PersonOrderByWithRelationInput[],
                     ...args,
                 }),
             );
