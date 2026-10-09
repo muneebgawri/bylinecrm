@@ -6,7 +6,7 @@ import { getViolations, injectAxe } from 'axe-playwright';
  * returns findings instead of throwing, so one run reports every problem on every route in one
  * table (reporter.ts) instead of stopping at the first.
  */
-export type Check = 'axe' | 'sideways-scroll' | 'touch-target' | 'input-text-size' | 'primary-action';
+export type Check = 'axe' | 'sideways-scroll' | 'touch-target' | 'input-text-size' | 'primary-action' | 'phone-table';
 
 export interface Finding {
     check: Check;
@@ -129,6 +129,61 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
                     detail: `${describe(el)} has ${size}px text (needs ${text}px)`,
                 });
             }
+        }
+        return findings;
+    });
+}
+
+/**
+ * On a phone, records are stacked cards, never a table (FR-CRMS-UI-12): a table that scrolls
+ * sideways inside its card passes the page-scroll check but is still unusable on a 375px screen.
+ * Two findings:
+ * - any visible `table`, `[role=table]` or `[role=grid]`;
+ * - any visible element that scrolls sideways (`overflow-x` auto or scroll, content wider than the
+ *   box) and holds tabular content (`table`, `[role=row]`, `[role=table]`, `[role=grid]`) — a
+ *   hand-built grid of rows is a table whatever its tags say.
+ * A horizontally scrolling row of chips or tabs (no tabular content) is allowed: that is how the
+ * view chips and stage chips are meant to work on a phone.
+ */
+export async function phoneTables(page: Page): Promise<Finding[]> {
+    return page.evaluate(() => {
+        const TABULAR = 'table, [role="table"], [role="grid"]';
+        const describe = (el: Element) => {
+            const id = el.id ? `#${el.id}` : '';
+            const label = (
+                el.getAttribute('aria-label') ??
+                el.querySelector('th, [role="columnheader"]')?.textContent ??
+                ''
+            )
+                .trim()
+                .replace(/\s+/g, ' ')
+                .slice(0, 40);
+            const role = el.getAttribute('role');
+            return `${el.tagName.toLowerCase()}${id}${role ? `[role=${role}]` : ''}${label ? ` "${label}"` : ''}`;
+        };
+        const visible = (el: Element) => {
+            const style = getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.display === 'none') return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width > 1 && rect.height > 1;
+        };
+        const findings: { check: 'phone-table'; detail: string }[] = [];
+        const reported = new Set<Element>();
+        for (const el of document.querySelectorAll(TABULAR)) {
+            if (!visible(el)) continue;
+            reported.add(el);
+            findings.push({ check: 'phone-table', detail: `${describe(el)} is a table on a phone` });
+        }
+        for (const el of document.querySelectorAll('body *')) {
+            const overflowX = getComputedStyle(el).overflowX;
+            if (overflowX !== 'auto' && overflowX !== 'scroll') continue;
+            if (el.scrollWidth <= el.clientWidth + 1 || !visible(el)) continue;
+            const tabular = el.querySelector(`${TABULAR}, [role="row"]`);
+            if (!tabular || reported.has(tabular)) continue;
+            findings.push({
+                check: 'phone-table',
+                detail: `${describe(el)} scrolls sideways (${el.scrollWidth}px in ${el.clientWidth}px) holding rows`,
+            });
         }
         return findings;
     });

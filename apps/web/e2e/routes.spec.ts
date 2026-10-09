@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { BREAKPOINT_PX } from '../../../packages/ui/src/lib/breakpoints';
 import { installApi } from './api';
-import { axe, phoneTargets, primaryAction, sidewaysScroll, type Finding } from './checks';
+import { axe, phoneTables, phoneTargets, primaryAction, sidewaysScroll, type Finding } from './checks';
 import { FIXED_NOW } from './fixtures';
 import { STATES } from './states';
 
@@ -11,8 +11,8 @@ import { STATES } from './states';
  *
  * Each state is opened with the API answered from fixtures (api.ts) and the clock fixed, so the
  * page renders real content the same way every run. Then: axe at WCAG 2.1 AA, no sideways page
- * scroll, the primary action on screen, and — below the phone breakpoint — touch targets and
- * field text sizes. Findings go to the report table (reporter.ts); any finding fails the state.
+ * scroll, the primary action on screen, and — below the phone breakpoint — touch targets, field
+ * text sizes and no tables (records are cards on a phone). Findings go to the report table (reporter.ts); any finding fails the state.
  * On phone widths the state is also compared with its committed screenshot.
  */
 const PALETTE_SHORTCUT = 'ControlOrMeta+k';
@@ -42,6 +42,7 @@ for (const state of STATES) {
             ...(await sidewaysScroll(page)),
             ...primary.findings,
             ...(phone ? await phoneTargets(page) : []),
+            ...(phone ? await phoneTables(page) : []),
             ...unanswered.map((u) => ({
                 check: 'axe' as const,
                 detail: `unanswered API call ${u.method} ${u.path}: ${u.reason}`,
