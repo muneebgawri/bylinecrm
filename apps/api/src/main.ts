@@ -1,13 +1,11 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { SESSION_COOKIE } from '@bylinecrm/shared';
+import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
-import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import { ENV, type Env } from './config/env';
-import { VERSION } from './version';
+import { openApiDocument } from './openapi/document';
 
 /** Every route lives under this prefix; the web app's dev proxy forwards it. */
 export const API_PREFIX = 'api';
@@ -22,16 +20,7 @@ export async function createApp(): Promise<NestExpressApplication> {
     app.set('trust proxy', 1);
     app.enableShutdownHooks();
 
-    const document = SwaggerModule.createDocument(
-        app,
-        new DocumentBuilder()
-            .setTitle('BylineCRM API')
-            .setVersion(VERSION)
-            .addCookieAuth(SESSION_COOKIE)
-            .addBearerAuth()
-            .build(),
-    );
-    SwaggerModule.setup(`${API_PREFIX}/docs`, app, cleanupOpenApiDoc(document));
+    SwaggerModule.setup(`${API_PREFIX}/docs`, app, openApiDocument(app));
     return app;
 }
 
