@@ -63,6 +63,7 @@ export const IDS = {
     deal: '0b1e0000-0000-4000-8000-0000000000f1',
     secondDeal: '0b1e0000-0000-4000-8000-0000000000f2',
     thirdDeal: '0b1e0000-0000-4000-8000-0000000000f3',
+    fourthDeal: '0b1e0000-0000-4000-8000-0000000000f4',
     pipeline: '0b1e0000-0000-4000-8000-000000000101',
     view: '0b1e0000-0000-4000-8000-000000000201',
     template: '0b1e0000-0000-4000-8000-0000000007a1',
@@ -297,6 +298,9 @@ export const deals: OpportunityView[] = [
     deal(IDS.deal, 'Series B PR', 2, 12_000_00, 4, IDS.company, IDS.person),
     deal(IDS.secondDeal, 'IPO wire', 3, 11_000_00, 1, IDS.secondCompany, IDS.secondPerson),
     deal(IDS.thirdDeal, 'Product launch', 1, 6_500_00, 21, IDS.company, IDS.person),
+    // The first stage holds a deal, so a phone's board — which opens on the first stage — shows a
+    // card for the gate's above-the-fold check to measure (states.ts).
+    deal(IDS.fourthDeal, 'Annual plan', 0, 4_500_00, 2, IDS.secondCompany, IDS.secondPerson),
 ];
 
 export const board: BoardView = {

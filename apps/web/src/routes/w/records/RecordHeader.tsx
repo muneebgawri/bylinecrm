@@ -9,7 +9,10 @@ export interface RecordHeaderProps {
     subtitle?: ReactNode;
     /** A status pill after the name. */
     status?: ReactNode;
-    /** The right side: the primary action and its neighbours. */
+    /**
+     * The right side: the primary action and its neighbours (`RecordHeaderActions`). Hidden on a
+     * phone, where the same actions sit in the bottom bar (`RecordActionBar`, FR-CRMS-UI-12).
+     */
     actions?: ReactNode;
     /** Prev/next within the list the page was opened from; absent when there is no list. */
     siblings?: { prev: string | null; next: string | null } | undefined;
@@ -44,7 +47,8 @@ export function RecordHeader({
                         </Button>
                     )}
                     {siblings && (
-                        <div className="ml-auto flex gap-1">
+                        // On a phone, previous/next live in the bottom bar's "More" sheet.
+                        <div className="ml-auto flex gap-1 max-md:hidden">
                             <Button
                                 asChild={Boolean(siblings.prev)}
                                 variant="secondary"
@@ -92,7 +96,7 @@ export function RecordHeader({
                     </h1>
                     {subtitle && <p className="m-0 mt-0.5 truncate text-[13px] text-text-muted">{subtitle}</p>}
                 </div>
-                {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+                {actions && <div className="flex flex-wrap items-center gap-2 max-md:hidden">{actions}</div>}
             </div>
         </header>
     );
