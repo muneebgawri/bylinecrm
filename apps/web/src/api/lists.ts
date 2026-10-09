@@ -1,13 +1,20 @@
 import type { RecordObject } from '@bylinecrm/shared';
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+    useInfiniteQuery,
+    useMutation,
+    useQueries,
+    useQuery,
+    useQueryClient,
+    type QueryClient,
+} from '@tanstack/react-query';
 import { search, type ListParams } from './endpoints';
 import { keys, recordEndpoints, type RecordInputOf, type RecordViewOf } from './queries';
-import type { CompanyView, PersonView } from './types';
+import type { BulkInput, BulkResultView, RecordPage } from './types';
 
 /**
- * The query hooks only the lazily loaded data views use (P1-UI-2): a list read by cursor, saved
- * views, search, names for ids, create and bulk change. Kept out of `queries.ts`, which the shell
- * imports, so they load with the pages that use them rather than in every first paint (the
+ * The query hooks only the lazily loaded data views use (P1-UI-2, P1-UI-6): a list read by cursor,
+ * the counts on the view tabs, search, create and bulk change. Kept out of `queries.ts`, which the
+ * shell imports, so they load with the pages that use them rather than in every first paint (the
  * `.size-limit.json` budget). The cache keys stay in `queries.ts` — one place for the cache's shape.
  */
 
@@ -18,19 +25,46 @@ export type ListQuery = Omit<ListParams, 'cursor'>;
 
 /**
  * A list read by cursor, page after page, as the table scrolls (desktop) or the cards reach the
- * end (phone). The API gives no total, so the list knows "more" or "no more", never "page 3 of 9".
+ * end (phone). Every page carries the whole set's `total` (P1-4a), so the first page already knows
+ * "page 1 of 9".
  */
 export function useRecordPages<O extends RecordObject>(workspaceId: string, object: O, params: ListQuery) {
     return useInfiniteQuery({
         queryKey: [...keys.records(workspaceId, object), 'pages', params] as const,
         queryFn: ({ pageParam, signal }) =>
-            recordEndpoints[object].list(workspaceId, { ...params, cursor: pageParam }, signal) as Promise<{
-                items: RecordViewOf<O>[];
-                nextCursor: string | null;
-            }>,
+            recordEndpoints[object].list(workspaceId, { ...params, cursor: pageParam }, signal) as Promise<
+                RecordPage<RecordViewOf<O>>
+            >,
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (last) => last.nextCursor ?? undefined,
     });
+}
+
+/** A count the view tabs show: the total and whether it is exact ("10,000+"). */
+export interface ListCount {
+    total: number;
+    exact: boolean;
+}
+
+/**
+ * The size of each saved view, for its tab: one `limit=1` read per view (the API counts the whole
+ * set on every page). The tab the page is showing takes its count from the page's own query, so it
+ * is not asked twice. Kept fresh for a minute — a tab's count is a guide, the open list is the truth.
+ */
+export function useViewCounts(workspaceId: string, object: RecordObject, viewIds: readonly (string | undefined)[]) {
+    const results = useQueries({
+        queries: viewIds.map((view) => ({
+            queryKey: [...keys.records(workspaceId, object), 'count', view ?? ''] as const,
+            queryFn: ({ signal }: { signal: AbortSignal }) =>
+                recordEndpoints[object].list(workspaceId, { view, limit: 1 }, signal),
+            staleTime: 60_000,
+        })),
+    });
+    const counts = new Map<string | undefined, ListCount>();
+    results.forEach((result, i) => {
+        if (result.data) counts.set(viewIds[i], { total: result.data.total, exact: result.data.totalIsExact });
+    });
+    return counts;
 }
 
 /** Global search narrowed to some objects; nothing is asked until there is something to ask. */
@@ -44,30 +78,6 @@ export function useSearch(workspaceId: string, q: string, objects: readonly Reco
     });
 }
 
-/**
- * Display names for the records a page shows by id (a person row's company). One cached read per
- * distinct id, deduplicated with the record pages' own reads. The list API carries the id only,
- * and no route takes many ids at once — when one does, this hook is the one place that changes.
- */
-export function useRecordNames(workspaceId: string, object: 'company' | 'person', ids: readonly string[]) {
-    const unique = [...new Set(ids)];
-    const results = useQueries({
-        queries: unique.map((id) => ({
-            queryKey: keys.record(workspaceId, object, id),
-            queryFn: ({ signal }: { signal: AbortSignal }) => recordEndpoints[object].get(workspaceId, id, signal),
-            staleTime: 5 * 60_000,
-        })),
-    });
-    const names = new Map<string, string>();
-    results.forEach((result, i) => {
-        const view = result.data as PersonView | CompanyView | undefined;
-        const id = unique[i];
-        if (!view || !id) return;
-        names.set(id, 'name' in view ? view.name : `${view.nameFirst} ${view.nameLast}`.trim());
-    });
-    return names;
-}
-
 /** Creates a person or a company; every list of that object refetches. */
 export function useCreateRecord<O extends 'person' | 'company'>(workspaceId: string, object: O) {
     const client = useQueryClient();
@@ -78,57 +88,29 @@ export function useCreateRecord<O extends 'person' | 'company'>(workspaceId: str
     });
 }
 
-/** What a change to many records came to: those the API refused, with the reason for each. */
-export interface BulkResult {
-    succeeded: number;
-    failed: { id: string; error: unknown }[];
-}
-
-/** How many of a bulk change's requests are in flight at once — the browser's per-host budget. */
-export const BULK_CONCURRENCY = 6;
-
-/** Runs `task` over `items`, at most `limit` at a time, settling every one. */
-async function settleAll<T, R>(items: readonly T[], limit: number, task: (item: T) => Promise<R>) {
-    const results: PromiseSettledResult<R>[] = new Array(items.length);
-    let next = 0;
-    const worker = async () => {
-        while (next < items.length) {
-            const index = next;
-            next += 1;
-            try {
-                results[index] = { status: 'fulfilled', value: await task(items[index] as T) };
-            } catch (reason) {
-                results[index] = { status: 'rejected', reason };
-            }
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-    return results;
+/** Every pipeline's boards in a workspace — what a change to many deals can have moved. */
+function invalidateBoards(client: QueryClient, workspaceId: string) {
+    return client.invalidateQueries({
+        predicate: ({ queryKey }) =>
+            queryKey[0] === 'w' &&
+            queryKey[1] === workspaceId &&
+            queryKey[2] === 'pipelines' &&
+            queryKey[4] === 'board',
+    });
 }
 
 /**
- * The same change to many records — one request each, `BULK_CONCURRENCY` at a time; there is no
- * bulk route. A refusal of one does not stop the others: the result names what failed so the page
- * can say so.
+ * One action over many records (P1-4a's `POST …/bulk`): one request, one result per record in the
+ * order named. The API runs each record through its single-record write, so a refusal of one does
+ * not stop the others and a record already as asked comes back `unchanged`.
  */
-export function useBulkChange<O extends 'person' | 'company'>(workspaceId: string, object: O) {
+export function useBulkChange(workspaceId: string, object: RecordObject) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: async (input: {
-            ids: readonly string[];
-            patch: RecordInputOf<O> | 'delete';
-        }): Promise<BulkResult> => {
-            const endpoint = recordEndpoints[object];
-            const outcomes = await settleAll<string, unknown>(input.ids, BULK_CONCURRENCY, (id) =>
-                input.patch === 'delete'
-                    ? endpoint.remove(workspaceId, id)
-                    : endpoint.update(workspaceId, id, input.patch as never),
-            );
-            const failed = outcomes.flatMap((o, i) =>
-                o.status === 'rejected' ? [{ id: input.ids[i] ?? '', error: o.reason as unknown }] : [],
-            );
-            return { succeeded: outcomes.length - failed.length, failed };
+        mutationFn: (input: BulkInput): Promise<BulkResultView> => recordEndpoints[object].bulk(workspaceId, input),
+        onSettled: () => {
+            void client.invalidateQueries({ queryKey: keys.records(workspaceId, object) });
+            if (object === 'opportunity') void invalidateBoards(client, workspaceId);
         },
-        onSettled: () => client.invalidateQueries({ queryKey: keys.records(workspaceId, object) }),
     });
 }
