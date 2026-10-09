@@ -27,8 +27,11 @@ export default defineConfig({
         baseURL: 'http://127.0.0.1:6007',
     },
     webServer: {
-        // --host is explicit: `localhost` resolves to ::1 on some runners and nothing answers on 127.0.0.1.
-        command: 'sirv storybook-static --host 127.0.0.1 --port 6007 --quiet',
+        // sirv-cli lets the PORT and HOST environment variables override its flags, so a shell (or
+        // a CI job) that exports the API's PORT silently moves the server. The flags are the one
+        // place the address is set; `env -u` makes sure nothing else is. --host is explicit because
+        // `localhost` can resolve to ::1 while the probe asks 127.0.0.1.
+        command: 'env -u PORT -u HOST sirv storybook-static --host 127.0.0.1 --port 6007 --quiet',
         url: 'http://127.0.0.1:6007/iframe.html',
         reuseExistingServer: false,
         cwd: '..',
