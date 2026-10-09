@@ -9,7 +9,7 @@ import type {
     PersonView,
     RecordSummaryView,
 } from '../../../api/types';
-import { formatDate, formatRelative } from '../../../lib/format';
+import { formatDate, formatDay, formatRelative } from '../../../lib/format';
 import { formatMoney } from '../../../lib/money';
 
 /** The two record objects that have a list page here; deals have the board and its list (P1-UI-4). */
@@ -193,7 +193,8 @@ const OPPORTUNITY_COLUMNS: ListColumn<OpportunityView>[] = [
         label: labelOf('opportunity', 'closeDate'),
         width: 130,
         exportFields: ['closeDate'],
-        cell: (r) => (r.closeDate ? formatDate(r.closeDate) : EMPTY),
+        // A calendar date, not an instant: no time, no shift by the viewer's time zone.
+        cell: (r) => (r.closeDate ? formatDay(r.closeDate) : EMPTY),
     },
     {
         field: 'probability',
@@ -230,7 +231,8 @@ function customCell(definition: CustomFieldView, value: unknown): ReactNode {
     if (value === undefined || value === null || value === '') return EMPTY;
     if (Array.isArray(value)) return value.length ? value.join(', ') : EMPTY;
     if (definition.type === 'boolean') return value ? 'Yes' : 'No';
-    if (definition.type === 'date' || definition.type === 'datetime') return formatDate(String(value));
+    if (definition.type === 'date') return formatDay(String(value));
+    if (definition.type === 'datetime') return formatDate(String(value));
     return String(value);
 }
 

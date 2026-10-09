@@ -524,6 +524,20 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         expect(posts[0]?.body).toMatchObject({ filter: { and: [{ field: 'id', op: 'in', value: ['d-2'] }] } });
     });
 
+    it('shows a close date as a calendar day — no time, no time-zone shift', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        await screen.findByRole('columnheader', { name: /Deal/ }, { timeout: FIRST_RENDER_MS });
+        const cells = screen.getAllByRole('cell').map((c) => c.textContent ?? '');
+        const close = cells.filter((t) => /2026/.test(t));
+        expect(close.length).toBeGreaterThan(0);
+        // 2026-10-31 is the 31st wherever the viewer is, and carries no clock time.
+        for (const text of close) {
+            expect(text).toMatch(/31/);
+            expect(text).not.toMatch(/\d{1,2}:\d{2}/);
+        }
+    });
+
     it('names owners from the deal itself, not from a member lookup', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
         renderPage(ALL, `/w/${WS}/deals?show=list`);
