@@ -19,10 +19,10 @@ a licence allowlist and an identifier scan (`scripts/`).
 
 ## Run it locally
 
-Requires Node 22 (`.nvmrc`), pnpm 9.15 (`corepack enable`), Docker. PostgreSQL ≥ 14 (the migrations use SQL-standard function bodies; the local stack and CI run 16).
+Requires Node ≥ 22.12 (`.nvmrc`; `require(esm)` is used for two ESM-only libraries), pnpm 9.15 (`corepack enable`), Docker. PostgreSQL ≥ 14 (the migrations use SQL-standard function bodies; the local stack and CI run 16).
 
 ```bash
-cp .env.example .env            # ports: Postgres 5441, Redis 6391, API 3300, web 3301
+cp .env.example .env            # ports: Postgres 5441, Redis 6391, API 3300, web 3301; APP_URL/WEB_URL for auth
 docker compose up -d            # local Postgres + Redis
 pnpm install
 pnpm --filter @bylinecrm/shared build
@@ -42,6 +42,19 @@ pnpm --filter api test:cross-tenant   # needs the local stack
 pnpm scan:licences
 pnpm scan:identifiers
 ```
+
+## Signing in (P0-3)
+
+- Local: `POST /api/auth/signup` (`email`, `password` ≥ 12 chars, `workspaceName`) → session cookie `blc_session`
+  (httpOnly) + `blc_csrf`; send the latter's value as `x-csrf-token` on every POST/PATCH/DELETE. `POST /api/auth/login`,
+  `POST /api/auth/logout`, `GET /api/me`, `GET /api/me/workspaces`.
+- Google / OIDC: set `GOOGLE_CLIENT_ID`+`GOOGLE_CLIENT_SECRET` and/or `OIDC_ISSUERS` (JSON) in `.env`; register the
+  redirect URI `APP_URL/api/auth/oidc/<key>/callback`; the browser goes to `GET /api/auth/oidc/<key>`
+  (`/api/auth/google` for Google). Identity scopes only — never Gmail.
+- Tenant routes live under `/api/w/:workspaceId/…` and each declares the capability it needs (`@Requires`). Roles,
+  members, API keys and invitations: `/api/w/:id/{roles,members,api-keys,invites}`. API keys are `blc_<prefix>_<secret>`,
+  sent as `Authorization: Bearer …`.
+- OpenAPI: `GET /api/docs` (UI) and `/api/docs-json`.
 
 ## Working on it
 
