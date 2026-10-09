@@ -101,23 +101,18 @@ export type Address = {
     postalCode: string | null;
 };
 
-/** An amount with its currency. The amount travels as a decimal string, never a float. */
-export type Money = {
-    amount: string;
-    currency: string;
-};
-
 /**
- * An amount in the currency's minor unit (cents, pence), exact and integral — what a deal's
- * `amount` is (PAR-007), so pipeline sums never round. `Money` above is a reported decimal
- * (a company's ARR); this is the arithmetic one. ISO 4217 decides what "minor" means per currency.
+ * An amount with its currency: the currency's minor unit (cents, pence), exact and integral, and
+ * the ISO 4217 code. One representation of money for everything — a deal's amount (PAR-007), a
+ * company's ARR — so sums never round and nothing converts. ISO 4217 decides what "minor" means
+ * per currency; the client formats.
  */
-export type MinorMoney = {
+export type Money = {
     amountMinor: number;
     currency: string;
 };
 
-/** The currency a workspace's deals take when a caller names none; a workspace setting (P1-2 edits it). */
+/** The currency an amount takes when a caller names none; a workspace setting (a later package edits it). */
 export const DEFAULT_CURRENCY = 'USD';
 
 /**

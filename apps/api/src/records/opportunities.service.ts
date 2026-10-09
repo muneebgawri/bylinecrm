@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Actor, MinorMoney } from '@bylinecrm/shared';
+import type { Actor, Money } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -10,7 +10,16 @@ import { diffOf } from './diff';
 import { type Page, paginate, parseSort, type SortSpec } from './list-query';
 import type { ListQuery } from './people.service';
 import { ownerWhere, resolveOwner } from './record-scope';
-import { assertCompanyExists, assertOwnerIsMember, assertPersonExists, compact, stored } from './references';
+import {
+    assertCompanyExists,
+    assertOwnerIsMember,
+    assertPersonExists,
+    compact,
+    defaultCurrency,
+    moneyColumns,
+    type MoneyInput,
+    stored,
+} from './references';
 import { searchCandidates } from './search';
 
 /** A deal as the API returns it (PAR-007). Stage and pipeline arrive with P1-2. */
@@ -18,7 +27,7 @@ export interface OpportunityView {
     id: string;
     name: string;
     /** `null` until an amount is known; the currency is always the deal's. */
-    amount: MinorMoney | null;
+    amount: Money | null;
     currency: string;
     /** A calendar date, `YYYY-MM-DD`, or `null`. */
     closeDate: string | null;
@@ -36,7 +45,7 @@ export interface OpportunityView {
 
 export interface OpportunityInput {
     name?: string | undefined;
-    amount?: { amountMinor: number; currency?: string | undefined } | null | undefined;
+    amount?: MoneyInput | null | undefined;
     closeDate?: string | null | undefined;
     probability?: number | null | undefined;
     position?: number | undefined;
@@ -116,12 +125,14 @@ export class OpportunitiesService {
             await assertCompanyExists(tx, input.companyId ?? null);
             await assertPersonExists(tx, input.pointOfContactId ?? null);
             const custom = await this.customFields.validated(tx, 'opportunity', input.custom ?? {}, 'create');
+            // A deal always has a currency, amount or not: the workspace's unless the caller named one.
+            const money = await moneyColumns(tx, context.workspaceId, input.amount ?? null);
             const currency = input.amount?.currency ?? (await defaultCurrency(tx, context.workspaceId));
             return tx.opportunity.create({
                 data: {
                     ...compact(fields(input)),
                     name: input.name,
-                    amountMinor: input.amount ? BigInt(input.amount.amountMinor) : null,
+                    amountMinor: money.amountMinor ?? null,
                     currency,
                     workspaceId: context.workspaceId,
                     ownerId,
@@ -163,13 +174,15 @@ export class OpportunitiesService {
                       stored<Record<string, unknown>>(current.custom),
                   )
                 : undefined;
+            // `amount: null` clears the amount and keeps the deal's currency; a value may change it.
+            const resolved = await moneyColumns(tx, context.workspaceId, patch.amount);
             const money =
                 patch.amount === undefined
                     ? {}
                     : patch.amount === null
                       ? { amountMinor: null }
                       : {
-                            amountMinor: BigInt(patch.amount.amountMinor),
+                            amountMinor: resolved.amountMinor,
                             ...(patch.amount.currency ? { currency: patch.amount.currency } : {}),
                         };
             const updated = await tx.opportunity.update({
@@ -248,13 +261,6 @@ function fields(input: OpportunityInput) {
         pointOfContactId: input.pointOfContactId,
         companyId: input.companyId,
     };
-}
-
-/** The workspace's default currency, read under the policy that lets a workspace see itself. */
-async function defaultCurrency(tx: WorkspaceClient, workspaceId: string): Promise<string> {
-    const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { defaultCurrency: true } });
-    if (!workspace) throw new Error('the current workspace is not readable');
-    return workspace.defaultCurrency;
 }
 
 function where(context: WorkspaceRunContext, deleted: boolean): Prisma.OpportunityWhereInput {

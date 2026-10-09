@@ -251,7 +251,8 @@ model Company {
   name          String
   domain        String?
   employeeCount Int?                     @map("employee_count")
-  arrAmount     Decimal?                 @map("arr_amount") @db.Decimal(14, 2)
+  /// ARR in the currency's minor unit, with `arrCurrency`: both or neither (the database checks).
+  arrMinor      BigInt?                  @map("arr_minor")
   arrCurrency   String?                  @map("arr_currency") @db.Char(3)
   /// `Address` from @bylinecrm/shared.
   address       Json                     @default("{\"street\":null,\"city\":null,\"state\":null,\"country\":null,\"postalCode\":null}")

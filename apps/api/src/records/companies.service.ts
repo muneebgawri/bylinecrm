@@ -11,7 +11,7 @@ import { diffOf } from './diff';
 import { type Page, paginate, parseSort, type SortSpec } from './list-query';
 import type { ListQuery } from './people.service';
 import { ownerWhere, resolveOwner } from './record-scope';
-import { assertOwnerIsMember, compact, stored } from './references';
+import { assertOwnerIsMember, compact, moneyColumns, type MoneyInput, stored } from './references';
 import { searchCandidates } from './search';
 
 /** A company as the API returns it (PAR-005). */
@@ -37,7 +37,7 @@ export interface CompanyInput {
     name?: string | undefined;
     domain?: string | null | undefined;
     employeeCount?: number | null | undefined;
-    arr?: Money | null | undefined;
+    arr?: MoneyInput | null | undefined;
     address?: Address | undefined;
     links?: Links | undefined;
     icp?: boolean | undefined;
@@ -52,7 +52,7 @@ export const COMPANY_SORT_FIELDS = [
     'name',
     'domain',
     'employeeCount',
-    'arrAmount',
+    'arrMinor',
     'position',
 ] as const;
 type CompanySortField = (typeof COMPANY_SORT_FIELDS)[number];
@@ -115,10 +115,12 @@ export class CompaniesService {
             const ownerId = resolveOwner(context, input.ownerId, undefined);
             await assertOwnerIsMember(tx, ownerId);
             const custom = await this.customFields.validated(tx, 'company', input.custom ?? {}, 'create');
+            const arr = await moneyColumns(tx, context.workspaceId, input.arr);
             try {
                 return await tx.company.create({
                     data: {
                         ...compact(fields(input)),
+                        ...arrColumns(arr),
                         name: input.name,
                         workspaceId: context.workspaceId,
                         ownerId,
@@ -156,10 +158,11 @@ export class CompaniesService {
                       stored<Record<string, unknown>>(current.custom),
                   )
                 : undefined;
+            const arr = await moneyColumns(tx, context.workspaceId, patch.arr);
             try {
                 const updated = await tx.company.update({
                     where: { id },
-                    data: { ...compact(fields(patch)), ownerId, ...(custom ? { custom } : {}) },
+                    data: { ...compact(fields(patch)), ...arrColumns(arr), ownerId, ...(custom ? { custom } : {}) },
                 });
                 return { before: current, after: updated };
             } catch (error) {
@@ -226,19 +229,24 @@ export class CompaniesService {
     }
 }
 
-/** The columns a caller may set. `arr` is one value to the API and two columns in the table. */
+/** The plain columns a caller may set; `arr` is resolved by `moneyColumns` and named by `arrColumns`. */
 function fields(input: CompanyInput) {
     return {
         name: input.name,
         domain: input.domain,
         employeeCount: input.employeeCount,
-        arrAmount:
-            input.arr === undefined ? undefined : input.arr === null ? null : new Prisma.Decimal(input.arr.amount),
-        arrCurrency: input.arr === undefined ? undefined : input.arr === null ? null : input.arr.currency,
         address: input.address,
         links: input.links,
         icp: input.icp,
         position: input.position,
+    };
+}
+
+/** `arr` is one value to the API and the `arr_minor` + `arr_currency` pair in the table. */
+function arrColumns(money: { amountMinor?: bigint | null; currency?: string | null }) {
+    return {
+        ...(money.amountMinor !== undefined ? { arrMinor: money.amountMinor } : {}),
+        ...(money.currency !== undefined ? { arrCurrency: money.currency } : {}),
     };
 }
 
@@ -267,8 +275,8 @@ export function view(row: CompanyRow): CompanyView {
         domain: row.domain,
         employeeCount: row.employeeCount,
         arr:
-            row.arrAmount !== null && row.arrCurrency !== null
-                ? { amount: row.arrAmount.toFixed(2), currency: row.arrCurrency }
+            row.arrMinor !== null && row.arrCurrency !== null
+                ? { amountMinor: Number(row.arrMinor), currency: row.arrCurrency }
                 : null,
         address: stored<Address>(row.address),
         links: stored<Links>(row.links),

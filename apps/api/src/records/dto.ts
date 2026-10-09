@@ -36,9 +36,11 @@ const address = z.object({
     country: nullableText(120),
     postalCode: nullableText(20),
 });
+const currency = z.string().regex(/^[A-Z]{3}$/, 'ISO 4217, upper case');
+/** An amount: exact minor units; the currency defaults to the workspace's. One shape for every amount. */
 const money = z.object({
-    amount: z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/, 'a decimal with at most two places'),
-    currency: z.string().regex(/^[A-Z]{3}$/, 'ISO 4217, upper case'),
+    amountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    currency: currency.optional(),
 });
 /** Shape only; the keys and types are checked against the workspace's definitions by the service. */
 const custom = z.record(z.string().regex(CUSTOM_FIELD_KEY_PATTERN), z.unknown());
@@ -127,17 +129,11 @@ export class ListCustomFieldsQueryDto extends createZodDto(
 // Deals, notes, tasks, attachments (P1-1b).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const currency = z.string().regex(/^[A-Z]{3}$/, 'ISO 4217, upper case');
-/** A deal's amount: exact minor units; the currency defaults to the workspace's. */
-const minorMoney = z.object({
-    amountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    currency: currency.optional(),
-});
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a calendar date, YYYY-MM-DD');
 
 const opportunityFields = {
     name: text(200).min(1),
-    amount: minorMoney.nullable(),
+    amount: money.nullable(),
     closeDate: isoDate.nullable(),
     probability: z.number().int().min(0).max(100).nullable(),
     position,
