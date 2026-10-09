@@ -37,7 +37,7 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
 ```bash
 pnpm typecheck
 pnpm lint && pnpm format:check
-pnpm test
+pnpm test                            # package suites run one at a time: three vitest pools at once starve the app-compiling specs
 pnpm --filter api test:cross-tenant   # needs the local stack
 pnpm scan:licences
 pnpm scan:identifiers

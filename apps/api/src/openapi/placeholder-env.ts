@@ -16,3 +16,10 @@ export const PLACEHOLDER_ENV = {
 export function applyPlaceholderEnv(): void {
     for (const [name, value] of Object.entries(PLACEHOLDER_ENV)) process.env[name] ??= value;
 }
+
+/**
+ * How long a spec may take to create the whole application in-process (the router walk, the
+ * contract snapshot). Measured at ~2.5 s on a quiet machine; the headroom is for a two-core CI
+ * runner with another suite's workers alongside. One number, used by every such spec.
+ */
+export const APP_COMPILE_TIMEOUT_MS = 60_000;

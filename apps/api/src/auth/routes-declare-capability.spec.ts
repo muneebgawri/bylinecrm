@@ -5,7 +5,7 @@ import { Test } from '@nestjs/testing';
 import { isCapability } from '@bylinecrm/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../app.module';
-import { applyPlaceholderEnv } from '../openapi/placeholder-env';
+import { APP_COMPILE_TIMEOUT_MS, applyPlaceholderEnv } from '../openapi/placeholder-env';
 import { ANY_MEMBER_KEY, REQUIRES_KEY } from './decorators';
 import { TENANT_PATH } from './guards';
 
@@ -39,7 +39,7 @@ describe('tenant routes declare a capability', () => {
                 });
             }
         }
-    });
+    }, APP_COMPILE_TIMEOUT_MS);
 
     it('finds the tenant routes this package added', () => {
         expect(routes.length).toBeGreaterThanOrEqual(30);
