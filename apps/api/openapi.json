@@ -3381,7 +3381,156 @@
                 "tags": ["people"]
             }
         },
+        "/api/w/{workspaceId}/people/bulk": {
+            "post": {
+                "operationId": "people_bulk",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BulkResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
         "/api/w/{workspaceId}/people/export.csv": {
+            "post": {
+                "operationId": "people_exportCsvSelection",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExportBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["people"]
+            },
             "get": {
                 "operationId": "people_exportCsv",
                 "parameters": [
@@ -4298,7 +4447,156 @@
                 "tags": ["companies"]
             }
         },
+        "/api/w/{workspaceId}/companies/bulk": {
+            "post": {
+                "operationId": "companies_bulk",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BulkResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
         "/api/w/{workspaceId}/companies/export.csv": {
+            "post": {
+                "operationId": "companies_exportCsvSelection",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExportBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            },
             "get": {
                 "operationId": "companies_exportCsv",
                 "parameters": [
@@ -5521,7 +5819,156 @@
                 "tags": ["opportunities"]
             }
         },
+        "/api/w/{workspaceId}/opportunities/bulk": {
+            "post": {
+                "operationId": "opportunities_bulk",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BulkResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["opportunities"]
+            }
+        },
         "/api/w/{workspaceId}/opportunities/export.csv": {
+            "post": {
+                "operationId": "opportunities_exportCsvSelection",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExportBodyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["opportunities"]
+            },
             "get": {
                 "operationId": "opportunities_exportCsv",
                 "parameters": [
@@ -9943,6 +10390,267 @@
                     }
                 }
             },
+            "BulkBodyDto__schema0": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "and": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/BulkBodyDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["and"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "or": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/BulkBodyDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["or"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "BulkBodyDto": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["assign_owner", "delete", "restore"]
+                    },
+                    "ids": {
+                        "description": "At most BULK_MAX_IDS (500) distinct ids; more is 413.",
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                    },
+                    "filter": {
+                        "$ref": "#/components/schemas/BulkBodyDto__schema0"
+                    },
+                    "view": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "q": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "ownerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    }
+                },
+                "required": ["action"]
+            },
+            "ExportBodyDto__schema0": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "and": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/ExportBodyDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["and"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "or": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/ExportBodyDto__schema0"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "field": {
+                                                    "type": "string",
+                                                    "pattern": "^(?:[a-zA-Z][a-zA-Z0-9]{0,63}|custom\\.[a-z][a-z0-9_]{0,63})$"
+                                                },
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "eq",
+                                                        "neq",
+                                                        "in",
+                                                        "nin",
+                                                        "contains",
+                                                        "starts",
+                                                        "gt",
+                                                        "gte",
+                                                        "lt",
+                                                        "lte",
+                                                        "between",
+                                                        "is_null",
+                                                        "not_null"
+                                                    ]
+                                                },
+                                                "value": {}
+                                            },
+                                            "required": ["field", "op"],
+                                            "additionalProperties": false
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": ["or"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "ExportBodyDto": {
+                "type": "object",
+                "properties": {
+                    "filter": {
+                        "$ref": "#/components/schemas/ExportBodyDto__schema0"
+                    },
+                    "sort": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$"
+                    },
+                    "view": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "q": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "columns": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z0-9_.]+(,[a-zA-Z0-9_.]+)*$"
+                    }
+                }
+            },
             "CreatePersonDto": {
                 "type": "object",
                 "properties": {
@@ -12202,6 +12910,21 @@
                 },
                 "required": ["status", "db", "redis", "rls", "version"]
             },
+            "RecordSummary": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["id", "name"]
+            },
             "Person": {
                 "type": "object",
                 "properties": {
@@ -12255,6 +12978,24 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "company": {
+                        "nullable": true,
+                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
                     "createdBy": {
                         "$ref": "#/components/schemas/Actor"
                     },
@@ -12295,6 +13036,8 @@
                     "position",
                     "companyId",
                     "ownerId",
+                    "company",
+                    "owner",
                     "createdBy",
                     "custom",
                     "deletedAt",
@@ -12314,9 +13057,18 @@
                     "nextCursor": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
                     }
                 },
-                "required": ["items", "nextCursor"]
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
             },
             "Company": {
                 "type": "object",
@@ -12367,6 +13119,15 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
                     "createdBy": {
                         "$ref": "#/components/schemas/Actor"
                     },
@@ -12405,6 +13166,7 @@
                     "icp",
                     "position",
                     "ownerId",
+                    "owner",
                     "createdBy",
                     "custom",
                     "deletedAt",
@@ -12424,9 +13186,18 @@
                     "nextCursor": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
                     }
                 },
-                "required": ["items", "nextCursor"]
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
             },
             "Opportunity": {
                 "type": "object",
@@ -12521,6 +13292,33 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "pointOfContact": {
+                        "nullable": true,
+                        "description": "The point of contact, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
+                    "company": {
+                        "nullable": true,
+                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
                     "createdBy": {
                         "$ref": "#/components/schemas/Actor"
                     },
@@ -12565,6 +13363,9 @@
                     "ownerId",
                     "pointOfContactId",
                     "companyId",
+                    "owner",
+                    "pointOfContact",
+                    "company",
                     "createdBy",
                     "custom",
                     "deletedAt",
@@ -12584,9 +13385,18 @@
                     "nextCursor": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
                     }
                 },
-                "required": ["items", "nextCursor"]
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
             },
             "Note": {
                 "type": "object",
@@ -12920,6 +13730,66 @@
                     "createdAt",
                     "updatedAt"
                 ]
+            },
+            "BulkResult": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "ok": {
+                                            "type": "boolean",
+                                            "enum": [true]
+                                        }
+                                    },
+                                    "required": ["id", "ok"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "ok": {
+                                            "type": "boolean",
+                                            "enum": [false]
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "enum": ["not_found"],
+                                            "description": "not_found: not visible to the caller in this state — whether or not it exists elsewhere."
+                                        }
+                                    },
+                                    "required": ["id", "ok", "error"]
+                                }
+                            ]
+                        }
+                    },
+                    "succeeded": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    }
+                },
+                "required": ["results", "succeeded", "failed"]
             },
             "Stage": {
                 "type": "object",
