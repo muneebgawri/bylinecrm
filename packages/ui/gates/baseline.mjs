@@ -16,18 +16,21 @@ const JOB = 'visual-baseline';
 const ARTIFACT = 'visual-baselines';
 const snapshots = resolve(dirname(fileURLToPath(import.meta.url)), '../__snapshots__');
 
-const gh = (args, opts = {}) =>
-    execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...opts }).trim();
+/** `capture` returns gh's stdout; `run` streams it to the terminal (progress output) and returns nothing. */
+const capture = (args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
+const run = (args) => {
+    execFileSync('gh', args, { stdio: 'inherit' });
+};
 const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim();
 
 console.log(`visual:baseline — dispatching ${WORKFLOW} on ${branch}`);
-gh(['workflow', 'run', WORKFLOW, '--ref', branch, '-f', 'baseline=true']);
+run(['workflow', 'run', WORKFLOW, '--ref', branch, '-f', 'baseline=true']);
 
 // The dispatch returns before the run is listed; poll briefly for the id.
 let id = '';
 for (let attempt = 0; attempt < 20 && !id; attempt++) {
     await new Promise((r) => setTimeout(r, 3000));
-    const json = gh([
+    const json = capture([
         'run',
         'list',
         '--workflow',
@@ -47,14 +50,14 @@ for (let attempt = 0; attempt < 20 && !id; attempt++) {
 if (!id) throw new Error('the baseline run did not appear within a minute; check `gh run list`');
 
 console.log(`visual:baseline — watching run ${id}`);
-gh(['run', 'watch', id], { stdio: 'inherit' });
+run(['run', 'watch', id]);
 
-const jobs = JSON.parse(gh(['run', 'view', id, '--json', 'jobs'])).jobs;
+const jobs = JSON.parse(capture(['run', 'view', id, '--json', 'jobs'])).jobs;
 const job = jobs.find((j) => j.name === JOB);
 if (!job || job.conclusion !== 'success') {
     throw new Error(`job ${JOB} finished with "${job?.conclusion ?? 'missing'}" — see \`gh run view ${id}\``);
 }
 
 console.log(`visual:baseline — downloading ${ARTIFACT} into ${snapshots}`);
-gh(['run', 'download', id, '-n', ARTIFACT, '-D', snapshots], { stdio: 'inherit' });
+run(['run', 'download', id, '-n', ARTIFACT, '-D', snapshots]);
 console.log('visual:baseline — done; review `git status` and commit the baselines with the change that caused them.');

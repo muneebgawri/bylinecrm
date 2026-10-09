@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import {
     applyDensity,
     applyTheme,
@@ -49,8 +49,10 @@ export function ThemeProvider({ children, root }: ThemeProviderProps) {
         readStored(DENSITY_STORAGE_KEY, isDensity, 'comfortable'),
     );
 
-    useEffect(() => applyTheme(root ?? document.documentElement, theme), [root, theme]);
-    useEffect(() => applyDensity(root ?? document.documentElement, density), [root, density]);
+    // Layout effects run before paint, so a change never shows a frame of the previous mode. The
+    // very first paint is covered earlier still, by the bootstrap script in the app's index.html.
+    useLayoutEffect(() => applyTheme(root ?? document.documentElement, theme), [root, theme]);
+    useLayoutEffect(() => applyDensity(root ?? document.documentElement, density), [root, density]);
 
     const setTheme = useCallback((next: Theme) => {
         setThemeState(next);
