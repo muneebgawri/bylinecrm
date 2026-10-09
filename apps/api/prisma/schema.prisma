@@ -443,6 +443,7 @@ enum StageHistoryReason {
   rule
   import
   close
+  stage_deleted
 
   @@map("stage_history_reason")
 }
@@ -495,8 +496,6 @@ model PipelineStage {
   workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   pipeline      Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   opportunities Opportunity[]
-  enteredBy     OpportunityStageHistory[] @relation("entered")
-  leftBy        OpportunityStageHistory[] @relation("left")
   rules         StageRule[]
 
   @@unique([pipelineId, position])
@@ -510,16 +509,18 @@ model OpportunityStageHistory {
   id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId   String             @map("workspace_id") @db.Uuid
   opportunityId String             @map("opportunity_id") @db.Uuid
+  /// The stage ids this row recorded. Not foreign keys: history outlives the stages it names (P1-2b).
   fromStageId   String?            @map("from_stage_id") @db.Uuid
   toStageId     String             @map("to_stage_id") @db.Uuid
+  /// The stage names when the row was written, so a deleted stage still reads as itself.
+  fromStageName String?            @map("from_stage_name")
+  toStageName   String             @map("to_stage_name")
   enteredAt     DateTime           @default(now()) @map("entered_at") @db.Timestamptz
   actor         Json
   reason        StageHistoryReason
 
   workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   opportunity Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  fromStage   PipelineStage? @relation("left", fields: [fromStageId], references: [id], onDelete: Restrict)
-  toStage     PipelineStage  @relation("entered", fields: [toStageId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId, opportunityId, enteredAt(sort: Desc)])
   @@map("opportunity_stage_history")
