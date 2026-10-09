@@ -170,7 +170,7 @@ export function Members() {
 
 export function TableSkeleton() {
     return (
-        <div className="grid gap-3 p-4" aria-label="Loading">
+        <div className="grid gap-3 p-4" role="status" aria-label="Loading">
             <Skeleton className="h-9" />
             <Skeleton className="h-9" />
             <Skeleton className="h-9" />

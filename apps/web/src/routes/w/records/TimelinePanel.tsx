@@ -111,7 +111,7 @@ export function TimelinePanel({
                             aria-pressed={filter === f.id}
                             onClick={() => setFilter(f.id)}
                             className={cn(
-                                'h-7 rounded-md px-2.5 text-xs font-medium text-text-muted hover:text-text',
+                                'h-7 rounded-md px-2.5 text-xs font-medium text-text-muted hover:text-text max-md:min-h-touch max-md:min-w-touch',
                                 filter === f.id && 'border border-border bg-surface-raised text-text',
                                 focusRing,
                             )}

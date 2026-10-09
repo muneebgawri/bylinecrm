@@ -1,5 +1,5 @@
 import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, focusRing } from '@bylinecrm/ui';
-import { Pencil } from 'lucide-react';
+import { ExternalLink, Pencil } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ApiError } from '../../../api/client';
 
@@ -24,8 +24,14 @@ export interface InlineProps {
 export interface InlineTextProps extends InlineProps {
     value: string | null;
     type?: 'text' | 'email' | 'url' | 'number' | 'date' | 'tel';
-    /** How the value reads at rest when it is set; defaults to the value itself. */
+    /** How the value reads at rest when it is set; defaults to the value itself. Text only — a link goes in `href`. */
     display?: ((value: string) => ReactNode) | undefined;
+    /**
+     * Where the value opens, when it is a link (a profile URL). The link is its own control beside
+     * the edit button, never inside it: a link inside a button is two controls in one and a screen
+     * reader or a tap can reach only one of them.
+     */
+    href?: ((value: string) => string) | undefined;
     placeholder?: string | undefined;
 }
 
@@ -44,6 +50,7 @@ export function InlineText({
     value,
     type = 'text',
     display,
+    href,
     placeholder,
     canEdit,
     reason,
@@ -57,6 +64,8 @@ export function InlineText({
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const errorId = useId();
+    const nameId = useId();
+    const valueId = useId();
 
     // A value that changed underneath (a refetch after a save, another member's edit) wins over
     // what we remembered — only when the prop itself changed, never because editing ended. This
@@ -125,33 +134,63 @@ export function InlineText({
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={onKey}
                     onBlur={() => void commit()}
-                    className="h-7 px-2 text-[13px]"
+                    className="h-7 px-2 text-[13px] max-md:h-touch max-md:text-touch"
                 />
             ) : (
-                <button
-                    type="button"
-                    onClick={begin}
-                    disabled={!canEdit}
-                    title={canEdit ? `Edit ${label.toLowerCase()}` : reason}
-                    aria-label={`${label}: ${shown ?? 'not set'}`}
-                    aria-describedby={error ? errorId : undefined}
-                    className={cn(
-                        'flex min-h-7 w-full items-center gap-1.5 rounded-sm px-1 text-left text-[13px] disabled:cursor-default',
-                        canEdit && 'hover:bg-surface-raised',
-                        saving && 'opacity-70',
-                        focusRing,
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={begin}
+                        disabled={!canEdit}
+                        title={canEdit ? `Edit ${label.toLowerCase()}` : reason}
+                        aria-labelledby={`${nameId} ${valueId}`}
+                        aria-describedby={error ? errorId : undefined}
+                        className={cn(
+                            'flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-1 text-left text-[13px] disabled:cursor-default max-md:min-h-touch',
+                            canEdit && 'hover:bg-surface-raised',
+                            saving && 'opacity-70',
+                            focusRing,
+                        )}
+                    >
+                        {/* The name is the field's label then the value as it reads (WCAG 2.5.3, label in
+                            name); `aria-labelledby` joins the two with a space. */}
+                        <span id={nameId} className="sr-only">
+                            {label}:
+                        </span>
+                        <span id={valueId} className={cn('min-w-0 truncate', shown === null && 'text-text-faint')}>
+                            {shown === null ? (
+                                <>
+                                    <span aria-hidden>—</span>
+                                    <span className="sr-only">not set</span>
+                                </>
+                            ) : display ? (
+                                display(shown)
+                            ) : (
+                                shown
+                            )}
+                        </span>
+                        {canEdit && (
+                            <Pencil
+                                aria-hidden
+                                className="ml-auto size-3 shrink-0 text-text-faint opacity-0 group-hover:opacity-100"
+                            />
+                        )}
+                    </button>
+                    {href && shown !== null && (
+                        <a
+                            href={href(shown)}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`Open ${label}`}
+                            className={cn(
+                                'grid size-7 shrink-0 place-items-center rounded-sm text-text-faint hover:text-accent max-md:size-touch',
+                                focusRing,
+                            )}
+                        >
+                            <ExternalLink aria-hidden className="size-3.5" />
+                        </a>
                     )}
-                >
-                    <span className={cn('min-w-0 truncate', shown === null && 'text-text-faint')}>
-                        {shown === null ? '—' : display ? display(shown) : shown}
-                    </span>
-                    {canEdit && (
-                        <Pencil
-                            aria-hidden
-                            className="ml-auto size-3 shrink-0 text-text-faint opacity-0 group-hover:opacity-100"
-                        />
-                    )}
-                </button>
+                </div>
             )}
             {error && (
                 <p id={errorId} role="alert" className="m-0 px-1 text-xs text-danger">

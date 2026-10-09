@@ -87,7 +87,7 @@ function DataTableChromeInner<T extends string>(
             {hasTop && (
                 <div className="flex flex-wrap items-center gap-2 border-b border-border px-4.5 py-3">
                     {tabs && tabs.length > 0 && (
-                        <div role="tablist" aria-label="Rows" className="flex gap-1">
+                        <div role="tablist" aria-label="Rows" className="flex max-w-full gap-1 overflow-x-auto">
                             {tabs.map((tab) => {
                                 const active = tab.id === activeTab;
                                 return (
@@ -98,7 +98,7 @@ function DataTableChromeInner<T extends string>(
                                         aria-selected={active}
                                         onClick={() => onTabChange?.(tab.id)}
                                         className={cn(
-                                            'h-8 rounded-md border border-transparent px-3 font-medium text-text-muted transition-colors',
+                                            'h-8 shrink-0 rounded-md border border-transparent px-3 font-medium text-text-muted transition-colors max-md:h-touch',
                                             active && 'border-border bg-surface-raised text-text',
                                             focusRing,
                                         )}
@@ -118,7 +118,7 @@ function DataTableChromeInner<T extends string>(
                         {search && (
                             <label
                                 htmlFor={searchId}
-                                className="flex h-8.5 min-w-55 items-center gap-2 rounded-md border border-border bg-surface px-3 text-text-faint focus-within:ring-2 focus-within:ring-ring"
+                                className="flex h-8.5 min-w-55 items-center gap-2 rounded-md border border-border bg-surface px-3 text-text-faint focus-within:ring-2 focus-within:ring-ring max-md:h-auto max-md:min-w-0 max-md:flex-1"
                             >
                                 <Search aria-hidden className="size-3.75 shrink-0" />
                                 <input
@@ -128,7 +128,7 @@ function DataTableChromeInner<T extends string>(
                                     onChange={(e) => search.onChange(e.target.value)}
                                     placeholder={search.placeholder ?? 'Search…'}
                                     aria-label={search.placeholder ?? 'Search'}
-                                    className="w-full bg-transparent text-sm text-text outline-none placeholder:text-text-faint"
+                                    className="w-full bg-transparent text-sm text-text outline-none placeholder:text-text-faint max-md:min-h-touch max-md:text-touch"
                                 />
                             </label>
                         )}
@@ -151,7 +151,9 @@ function DataTableChromeInner<T extends string>(
                     </div>
                 </div>
             )}
-            <div className="overflow-x-auto">{children}</div>
+            {/* `relative`: an absolutely positioned cell part (an sr-only label) would otherwise escape this
+                scroll container and widen the whole page. */}
+            <div className="relative overflow-x-auto">{children}</div>
             {pagination && <Footer {...pagination} />}
         </div>
     );
@@ -185,7 +187,7 @@ function Footer({
                             <button
                                 type="button"
                                 className={cn(
-                                    'inline-flex items-center gap-0.5 rounded-sm px-1 font-semibold text-text',
+                                    'inline-flex items-center gap-0.5 rounded-sm px-1 font-semibold text-text max-md:min-h-touch max-md:min-w-touch',
                                     focusRing,
                                 )}
                             >
@@ -237,7 +239,7 @@ function PageButton({
             type="button"
             aria-current={current ? 'page' : undefined}
             className={cn(
-                'grid h-7.5 min-w-7.5 place-items-center rounded-md px-1.5 text-text-muted transition-colors hover:bg-surface-raised hover:text-text',
+                'grid h-7.5 min-w-7.5 place-items-center rounded-md px-1.5 text-text-muted transition-colors hover:bg-surface-raised hover:text-text max-md:h-touch max-md:min-w-touch',
                 'disabled:pointer-events-none disabled:opacity-50',
                 current && 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground',
                 focusRing,

@@ -98,7 +98,8 @@ function Shell({ workspaceId }: { workspaceId: string }) {
                 sidebarCollapsed={narrow ? !drawerOpen : collapsed}
                 onOpenPalette={() => setPaletteOpen(true)}
             />
-            <div className="flex min-h-0 flex-col overflow-hidden">
+            {/* min-w-0: a grid item is as wide as its content by default, so a wide table pushed the page sideways. */}
+            <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
                 <OfflineBanner />
                 <main className="min-w-0 flex-1 overflow-y-auto">
                     <Outlet />

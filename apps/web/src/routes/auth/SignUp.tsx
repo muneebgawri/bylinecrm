@@ -59,7 +59,14 @@ export function SignUp() {
                         onChange={(e) => setWorkspaceName(e.target.value)}
                     />
                 </Field>
-                <Button type="submit" variant="primary" shape="square" loading={signup.isPending} className="w-full">
+                <Button
+                    data-primary-action
+                    type="submit"
+                    variant="primary"
+                    shape="square"
+                    loading={signup.isPending}
+                    className="w-full"
+                >
                     Create workspace
                 </Button>
             </form>

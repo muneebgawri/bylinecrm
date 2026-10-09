@@ -191,11 +191,8 @@ export function PersonRecord({
                     path="links.linkedin.url"
                     type="url"
                     value={person.links.linkedin?.url ?? null}
-                    display={(v) => (
-                        <a href={v} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                            {v.replace(/^https?:\/\/(www\.)?/, '')}
-                        </a>
-                    )}
+                    display={(v) => v.replace(/^https?:\/\/(www\.)?/, '')}
+                    href={(v) => v}
                     canEdit={write.allowed}
                     reason={write.reason}
                     onSave={(v) => save({ links: { ...person.links, linkedin: v ? { url: v, label: null } : null } })}
@@ -218,7 +215,7 @@ export function PersonRecord({
                             {companyName && person.companyId && (
                                 <Link
                                     to={paths.company(workspaceId, person.companyId)}
-                                    className="text-text hover:underline"
+                                    className="text-text underline decoration-border-strong underline-offset-2 hover:decoration-current"
                                 >
                                     {companyName}
                                 </Link>
@@ -256,6 +253,7 @@ export function PersonRecord({
                                 <TooltipTrigger asChild>
                                     <span tabIndex={0}>
                                         <Button
+                                            data-primary-action
                                             variant="primary"
                                             shape="square"
                                             size="sm"

@@ -42,7 +42,7 @@ export function Workspaces() {
     return (
         <Frame
             action={
-                <Button variant="primary" onClick={() => setCreating(true)}>
+                <Button data-primary-action variant="primary" onClick={() => setCreating(true)}>
                     <Plus aria-hidden /> New workspace
                 </Button>
             }

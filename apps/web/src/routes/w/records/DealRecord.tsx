@@ -237,7 +237,7 @@ export function DealRecord({
                             disabled={s.id === deal.stageId || moveDeal.isPending}
                             onClick={() => requestMove(s)}
                             className={cn(
-                                'h-7 rounded-md border border-border px-2.5 text-xs font-medium text-text-muted hover:bg-surface-raised hover:text-text disabled:opacity-50',
+                                'h-7 rounded-md border border-border px-2.5 text-xs font-medium text-text-muted hover:bg-surface-raised hover:text-text disabled:opacity-50 max-md:h-touch',
                                 s.kind === 'won' && 'text-success',
                                 s.kind === 'lost' && 'text-danger',
                                 focusRing,
@@ -274,7 +274,7 @@ export function DealRecord({
                             {deal.companyId && company.data && (
                                 <Link
                                     to={paths.company(workspaceId, deal.companyId)}
-                                    className="text-text hover:underline"
+                                    className="text-text underline decoration-border-strong underline-offset-2 hover:decoration-current"
                                 >
                                     {company.data.name}
                                 </Link>
@@ -313,6 +313,7 @@ export function DealRecord({
                                 Add note
                             </Button>
                             <Button
+                                data-primary-action
                                 variant="primary"
                                 shape="square"
                                 size="sm"

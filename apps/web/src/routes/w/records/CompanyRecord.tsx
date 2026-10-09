@@ -198,6 +198,7 @@ export function CompanyRecord({
                                 Add note
                             </Button>
                             <Button
+                                data-primary-action
                                 variant="primary"
                                 shape="square"
                                 size="sm"
