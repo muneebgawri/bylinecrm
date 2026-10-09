@@ -77,6 +77,8 @@ export interface AttemptOutcome {
     /** True when nothing further will be tried: success, dead, or a delivery no longer deliverable. */
     final: boolean;
     statusCode: number | null;
+    /** When not final: how long until the next attempt — the same wait written to `nextAttemptAt`. */
+    retryDelayMs: number | null;
 }
 
 type EndpointRow = Prisma.WebhookEndpointGetPayload<object>;
@@ -238,7 +240,7 @@ export class WebhooksService {
             });
             return row.id;
         });
-        const outcome = await this.attempt({ deliveryId, workspaceId, endpointId: id }, 1, { singleShot: true });
+        const outcome = await this.attempt({ deliveryId, workspaceId, endpointId: id }, { singleShot: true });
         const delivery = await this.rls.withWorkspace(workspaceId, async (tx) =>
             deliveryView(await tx.webhookDelivery.findUniqueOrThrow({ where: { id: deliveryId } })),
         );
@@ -330,13 +332,16 @@ export class WebhooksService {
     }
 
     /**
-     * One attempt at one delivery, by the worker (attempt `n` of the schedule) or by a test send
-     * (`singleShot`: one try, recorded, never dead and never counted against the endpoint).
-     * Reads the row and the endpoint fresh, signs with every valid secret, sends, and records the
-     * result — success, a wait for the next attempt, or death and (after enough deaths) the
-     * endpoint's automatic disable.
+     * One attempt at one delivery, by the worker or by a test send (`singleShot`: one try,
+     * recorded, never dead and never counted against the endpoint). Reads the row and the endpoint
+     * fresh, signs with every valid secret, sends, and records the result — success, a wait for the
+     * next attempt, or death and (after enough deaths) the endpoint's automatic disable.
+     *
+     * **The row counts the attempts, not the queue.** This attempt is `row.attempts + 1`, and the
+     * wait before the next is computed from it. A job the sweep re-enqueued starts with BullMQ's own
+     * count at zero; reading the row means it neither restarts the schedule nor exceeds the limit.
      */
-    async attempt(job: DeliveryJob, attempt: number, options: { singleShot?: boolean } = {}): Promise<AttemptOutcome> {
+    async attempt(job: DeliveryJob, options: { singleShot?: boolean } = {}): Promise<AttemptOutcome> {
         const prepared = await this.rls.withWorkspace(job.workspaceId, async (tx) => {
             const delivery = await tx.webhookDelivery.findUnique({
                 where: { id: job.deliveryId },
@@ -353,13 +358,15 @@ export class WebhooksService {
                 });
                 return { skip: 'endpoint disabled' as const };
             }
+            const attempt = delivery.attempts + 1;
             await tx.webhookDelivery.update({
                 where: { id: delivery.id },
-                data: { status: 'delivering', attempts: attempt },
+                data: { status: 'delivering', attempts: attempt, attemptStartedAt: new Date() },
             });
-            return { delivery, endpoint, secrets: this.validSecrets(endpoint) };
+            return { delivery, endpoint, attempt, secrets: this.validSecrets(endpoint) };
         });
-        if ('skip' in prepared) return { ok: false, final: true, statusCode: null };
+        if ('skip' in prepared) return { ok: false, final: true, statusCode: null, retryDelayMs: null };
+        const attempt = prepared.attempt;
 
         let outcome: SendOutcome;
         try {
@@ -374,6 +381,7 @@ export class WebhooksService {
         }
 
         const final = outcome.ok || options.singleShot === true || attempt >= WEBHOOK_MAX_ATTEMPTS;
+        const retryDelayMs = final ? null : backoffDelayMs(attempt);
         await this.rls.withWorkspace(job.workspaceId, async (tx) => {
             if (outcome.ok) {
                 await tx.webhookDelivery.update({
@@ -413,7 +421,7 @@ export class WebhooksService {
                         status: 'failed',
                         lastStatusCode: outcome.statusCode,
                         lastError: outcome.error,
-                        nextAttemptAt: new Date(Date.now() + backoffDelayMs(attempt)),
+                        nextAttemptAt: new Date(Date.now() + (retryDelayMs ?? 0)),
                     },
                 });
                 return;
@@ -444,13 +452,23 @@ export class WebhooksService {
                 );
             }
         });
-        return { ok: outcome.ok, final, statusCode: outcome.statusCode };
+        return { ok: outcome.ok, final, statusCode: outcome.statusCode, retryDelayMs };
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────
 
-    private enqueue(job: DeliveryJob): Promise<unknown> {
-        return this.queue.add('deliver', job, { jobId: job.deliveryId, removeOnComplete: true, removeOnFail: true });
+    /**
+     * The one way a delivery gets onto the queue — from an event, a redelivery or the sweep. The
+     * job's id is the delivery's, so adding a delivery that already has a live job is a no-op: the
+     * queue, not the caller, guarantees one job per delivery.
+     */
+    enqueue(job: DeliveryJob, delayMs = 0): Promise<unknown> {
+        return this.queue.add('deliver', job, {
+            jobId: job.deliveryId,
+            delay: delayMs,
+            removeOnComplete: true,
+            removeOnFail: true,
+        });
     }
 
     /** The secrets that sign right now: the current one, and the previous while its window is open. */

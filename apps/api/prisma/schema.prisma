@@ -782,6 +782,8 @@ model WebhookDelivery {
   status         WebhookDeliveryStatus @default(pending)
   attempts       Int                   @default(0)
   nextAttemptAt  DateTime?             @map("next_attempt_at") @db.Timestamptz
+  /// When the current or last attempt began; the sweep frees a `delivering` row stuck past the threshold.
+  attemptStartedAt DateTime?           @map("attempt_started_at") @db.Timestamptz
   lastStatusCode Int?                  @map("last_status_code")
   lastError      String?               @map("last_error")
   createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz

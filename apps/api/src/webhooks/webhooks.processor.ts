@@ -4,17 +4,26 @@ import { RedisService } from '../infra/redis.service';
 import { WEBHOOK_ENDPOINT_RATE } from './webhooks.constants';
 import { WebhooksService, type DeliveryJob } from './webhooks.service';
 
-/** Thrown to make the queue retry on its schedule; the row already says why and when. */
-class RetryableDeliveryError extends Error {
-    constructor(statusCode: number | null) {
-        super(`delivery attempt failed${statusCode === null ? '' : ` with HTTP ${statusCode}`}; the queue will retry`);
+/**
+ * Thrown to make the queue retry. It carries the wait the service computed from the row's
+ * attempt count, and the queue's backoff strategy uses exactly that — so the queue and the
+ * row's `nextAttemptAt` cannot disagree, even for a job the sweep re-enqueued.
+ */
+export class RetryableDeliveryError extends Error {
+    constructor(
+        statusCode: number | null,
+        readonly retryDelayMs: number,
+    ) {
+        super(
+            `delivery attempt failed${statusCode === null ? '' : ` with HTTP ${statusCode}`}; retrying in ${retryDelayMs} ms`,
+        );
         this.name = 'RetryableDeliveryError';
     }
 }
 
 /**
- * What the delivery worker does with one job. One job is one delivery; attempts and backoff are
- * the queue's, configured from the same constants the service writes `nextAttemptAt` from, so the
+ * What the delivery worker does with one job. One job is one delivery; the row decides the attempt
+ * number and the wait before the next (the queue only carries out the retry it is told to), so the
  * row and the queue agree. Per endpoint, no more than the rate constant allows is started in a
  * window; a job past it is put back to sleep until the window turns, not failed.
  */
@@ -33,10 +42,11 @@ export class WebhooksProcessor {
             await job.moveToDelayed(Date.now() + wait, token);
             throw new DelayedError();
         }
-        const attempt = job.attemptsMade + 1;
-        const outcome = await this.webhooks.attempt(job.data, attempt);
-        if (!outcome.ok && !outcome.final) throw new RetryableDeliveryError(outcome.statusCode);
-        if (!outcome.ok) this.logger.warn(`delivery ${job.data.deliveryId} is dead after ${attempt} attempts`);
+        const outcome = await this.webhooks.attempt(job.data);
+        if (!outcome.ok && !outcome.final) {
+            throw new RetryableDeliveryError(outcome.statusCode, outcome.retryDelayMs ?? 0);
+        }
+        if (!outcome.ok) this.logger.warn(`delivery ${job.data.deliveryId} ended without success`);
     }
 
     /**

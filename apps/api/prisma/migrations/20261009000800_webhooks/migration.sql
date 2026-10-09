@@ -46,6 +46,9 @@ CREATE TABLE "webhook_deliveries" (
     "status" "webhook_delivery_status" NOT NULL DEFAULT 'pending',
     "attempts" INTEGER NOT NULL DEFAULT 0,
     "next_attempt_at" TIMESTAMPTZ,
+    -- When the current or last attempt began; the sweep returns a `delivering` row stuck past the
+    -- stuck threshold to `pending`.
+    "attempt_started_at" TIMESTAMPTZ,
     "last_status_code" INTEGER,
     "last_error" TEXT,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
