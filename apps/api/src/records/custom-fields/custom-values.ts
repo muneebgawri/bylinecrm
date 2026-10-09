@@ -1,6 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
 import type { CustomFieldType } from '@bylinecrm/shared';
 import { z } from 'zod';
+import { ValidationFailed } from '../../infra/errors/api-errors';
 
 /** What the validator needs to know about one field. */
 export interface FieldDefinition {
@@ -73,7 +73,7 @@ export function customValuesSchema(definitions: readonly FieldDefinition[], mode
     return z.strictObject(shape);
 }
 
-/** Validates `values`, or throws a `400` whose issues are keyed `custom.<key>`. */
+/** Validates `values`, or throws a `400` whose field errors are keyed `custom.<key>`. */
 export function validateCustomValues(
     definitions: readonly FieldDefinition[],
     values: Record<string, unknown>,
@@ -81,15 +81,15 @@ export function validateCustomValues(
 ): Record<string, unknown> {
     const result = customValuesSchema(definitions, mode).safeParse(values);
     if (result.success) return result.data as Record<string, unknown>;
-    throw new BadRequestException({
-        message: 'custom field values are invalid',
-        issues: result.error.issues.flatMap((issue) =>
+    throw new ValidationFailed(
+        'custom field values are invalid',
+        result.error.issues.flatMap((issue) =>
             // An unknown key is reported once per key, under that key, like every other problem.
             issue.code === 'unrecognized_keys'
                 ? issue.keys.map((key) => ({ path: `custom.${key}`, message: 'unknown custom field' }))
                 : [{ path: ['custom', ...issue.path.map(String)].join('.'), message: issue.message }],
         ),
-    });
+    );
 }
 
 /**
