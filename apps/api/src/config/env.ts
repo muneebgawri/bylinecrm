@@ -35,6 +35,12 @@ export const envSchema = z
         APP_URL: z.url(),
         /** Where a browser is sent after an identity-provider sign-in completes. */
         WEB_URL: z.url(),
+        /**
+         * Where attachment bytes are kept by the local-disk driver (P1-1b): a directory, relative
+         * to the process's working directory or absolute. Git-ignored; one server's disk. A
+         * shared store is a different driver behind the same interface, not a different variable.
+         */
+        FILE_STORAGE_ROOT: z.string().min(1).default('.data/attachments'),
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
