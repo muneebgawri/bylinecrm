@@ -178,3 +178,11 @@ function isEnvelope(payload: unknown): payload is ApiErrorBody {
     const body = payload as Partial<ApiErrorBody>;
     return typeof body.code === 'string' && typeof body.message === 'string' && typeof body.requestId === 'string';
 }
+
+/**
+ * The API's message for one request-body path (`postalAddress.city`), when it named that field;
+ * `undefined` otherwise. A form places each message under its own field with this.
+ */
+export function fieldErrorAt(error: unknown, path: string): string | undefined {
+    return error instanceof ApiError ? error.fieldErrors.find((f) => f.path === path)?.message : undefined;
+}

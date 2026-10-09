@@ -1,4 +1,5 @@
 import { Button, Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, cn } from '@bylinecrm/ui';
+import type { RecordObject } from '@bylinecrm/shared';
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { useState } from 'react';
 import { messageFor } from '../routes/w/records/InlineEdit';
@@ -11,7 +12,7 @@ const PICKER_RESULTS = 10;
 
 export interface RecordPickerProps {
     workspaceId: string;
-    object: 'company' | 'person';
+    object: RecordObject;
     value: string | null;
     /** The chosen record's name, when the page already knows it; shown on the trigger. */
     valueLabel?: string | null | undefined;
@@ -30,7 +31,7 @@ export interface RecordPickerProps {
 }
 
 /**
- * Picks one company or person by searching for it (`GET /search`), not by loading a list: it
+ * Picks one company, person or deal by searching for it (`GET /search`), not by loading a list: it
  * works the same with ten records or a hundred thousand. Desktop: a popover; phone: a sheet.
  * The one record picker — owner/company/contact fields and the filter builder use it.
  */

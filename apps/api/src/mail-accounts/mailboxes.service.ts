@@ -74,6 +74,16 @@ export class MailboxesService {
         return this.rls.withWorkspace(async (tx) => view(await this.visible(tx, context, id)));
     }
 
+    /**
+     * The mailbox if the caller may act on it (its owner or an admin): `404` if they cannot see it,
+     * `403` if they see it but it is not theirs. For routes about a mailbox that live elsewhere
+     * (P2-2's sync trigger), so the rule stays this one.
+     */
+    assertChangeable(id: string): Promise<MailboxView> {
+        const context = this.current();
+        return this.rls.withWorkspace(async (tx) => view(await this.changeable(tx, context, id)));
+    }
+
     // ── Changing ─────────────────────────────────────────────────────────────────────────────
 
     /** The label only. A different purpose is refused: it is fixed when the mailbox connects. */

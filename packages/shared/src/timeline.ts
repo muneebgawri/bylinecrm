@@ -8,13 +8,17 @@ import { ACTOR_KINDS, RECORD_OBJECTS, type Actor, type RecordObject } from './re
  * - `<object>.<action>` — the record's own domain event (`person.updated`), written by the
  *   timeline's subscriber from the catalogue; the kind IS the event type, never a second spelling.
  * - `linked-<thing>.<action>` — a note, task or attachment on the record was created, changed,
- *   deleted or restored; one entry per record the thing is on.
+ *   deleted or restored, or a synced email concerns it; one entry per record the thing is on.
  * - `external.<kind>` — something an integration reported (an order paid elsewhere); the API
  *   knows nothing about the integration beyond the name it gives itself.
  */
 
-/** The things that attach to a record and leave `linked-…` entries on it. */
-export const LINKED_OBJECTS = ['note', 'task', 'attachment'] as const;
+/**
+ * The things that attach to a record and leave `linked-…` entries on it. Synced mail (P2-2) is one:
+ * a message is on every record it concerns, so `email.received` leaves `linked-email.received` on
+ * each (doc 50 §A: mail is a timeline entry, one list).
+ */
+export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email'] as const;
 export type LinkedObject = (typeof LINKED_OBJECTS)[number];
 
 export function isLinkedObject(value: unknown): value is LinkedObject {
@@ -32,9 +36,14 @@ export type TimelineKind = OwnKind | LinkedKind | `external.${string}`;
 
 /**
  * The kind an event's entry carries. One function: the subscriber writes with it, a reader
- * filters with its prefixes (`kinds=linked-note` matches every linked-note action).
+ * filters with its prefixes (`kinds=linked-note` matches every linked-note action). A later match
+ * of synced mail (`email.linked`) writes the same entry the import would have —
+ * `linked-email.received` or `linked-email.sent`, by the message's direction.
  */
-export function timelineKindOf(event: Pick<DomainEvent, 'type' | 'object'>): OwnKind | LinkedKind {
+export function timelineKindOf(event: Pick<DomainEvent, 'type' | 'object' | 'email'>): OwnKind | LinkedKind {
+    if (event.type === 'email.linked' && event.email) {
+        return `linked-email.${event.email.direction === 'inbound' ? 'received' : 'sent'}`;
+    }
     return (isLinkedObject(event.object) ? `linked-${event.type}` : event.type) as OwnKind | LinkedKind;
 }
 
