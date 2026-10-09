@@ -81,7 +81,10 @@ export function Pipelines() {
                                 <span className="inline-flex items-center gap-2">
                                     <Link
                                         to={paths.settingsPipeline(workspaceId, p.id)}
-                                        className={cn('font-medium hover:underline max-md:py-3', focusRing)}
+                                        className={cn(
+                                            'inline-flex items-center font-medium hover:underline max-md:min-h-touch',
+                                            focusRing,
+                                        )}
                                     >
                                         {p.name}
                                     </Link>
