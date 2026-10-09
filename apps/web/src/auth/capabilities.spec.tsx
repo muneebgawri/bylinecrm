@@ -1,13 +1,24 @@
-import { renderHook } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient } from '../api/queries';
 import type { MembershipSummary } from '../api/types';
-import { CapabilitiesProvider, can, describeCapability, useCan, usePermission } from './capabilities';
+import {
+    CapabilitiesProvider,
+    WorkspaceCapabilities,
+    can,
+    describeCapability,
+    useCan,
+    usePermission,
+} from './capabilities';
 
 const membership: MembershipSummary = {
-    workspaceId: 'ws',
     memberId: 'm',
+    userId: 'u',
     roleId: 'r',
+    roleName: 'member',
+    recordScope: 'all',
     capabilities: ['record:read', 'deal:move'],
 };
 
@@ -32,6 +43,25 @@ describe('useCan', () => {
     it('gives a disabled control its reason', () => {
         const { result } = renderHook(() => usePermission('deal:bulk'), { wrapper: withMembership(membership) });
         expect(result.current).toEqual({ allowed: false, reason: 'Your role cannot bulk deals.' });
+    });
+});
+
+describe('WorkspaceCapabilities', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('allows nothing until GET /w/:id/me answers, then answers from it', async () => {
+        const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(membership), { status: 200 })));
+        vi.stubGlobal('fetch', fetchMock);
+        const client = createQueryClient();
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={client}>
+                <WorkspaceCapabilities workspaceId="ws-1">{children}</WorkspaceCapabilities>
+            </QueryClientProvider>
+        );
+        const { result } = renderHook(() => useCan('deal:move'), { wrapper });
+        expect(result.current).toBe(false);
+        await waitFor(() => expect(result.current).toBe(true));
+        expect(fetchMock).toHaveBeenCalledWith('/api/w/ws-1/me', expect.anything());
     });
 });
 

@@ -43,17 +43,14 @@ sign someone out.
 
 ## Permission model on the client (FR-CRMS-UI-6)
 
-`useCan(capability)` reads a `MembershipSummary` (`workspaceId, memberId, roleId,
-capabilities[]`) from `CapabilitiesProvider`. Until a membership is known nothing is allowed —
-no control is shown on a guess — and the server remains the gate. `usePermission` adds the
-reason text a disabled control shows.
-
-**Owed by the API.** No read endpoint returns the signed-in member's capabilities:
-`GET /me/workspaces` is `{id, slug, name}`, `/me` is the user, and `GET /w/:id/members` needs
-`workspace:admin`. The brief said to stop rather than infer from role names, so the provider is
-the swap point and its data source is the open question. Two shapes would do: extend
-`WorkspaceView` on `/me/workspaces` with `memberId, roleId, capabilities`, or add
-`GET /w/:id/me`. Either is a small P0-3 follow-up; the hook does not change.
+`useCan(capability)` reads a `MembershipSummary` from `CapabilitiesProvider`; `WorkspaceCapabilities`
+fills it from **`GET /w/:workspaceId/me`** — `{ memberId, userId, roleId, roleName, recordScope:
+'all'|'own', capabilities[] }` (an API-key principal has `memberId`/`userId` null and `apiKeyId`
+set), gated by the workspace guard only. The route ships in P1-1a's PR with the OpenAPI freeze;
+until it merges the query answers 404, which reads as "membership unknown": nothing is allowed,
+no control is shown on a guess, and the server remains the gate. `usePermission` adds the reason
+text a disabled control shows. `recordScope` is carried so list views can say "showing your
+records" without a second request.
 
 ## Command registry and shortcuts (FR-CRMS-UI-4)
 

@@ -6,6 +6,7 @@ import type {
     CreateRoleInput,
     InviteView,
     LoginInput,
+    MembershipSummary,
     MemberView,
     RoleView,
     SignupInput,
@@ -39,6 +40,12 @@ export const me = {
     profile: (signal?: AbortSignal) => request<UserView>('GET', '/me', { signal }),
     workspaces: (signal?: AbortSignal) => request<WorkspaceView[]>('GET', '/me/workspaces', { signal }),
     createWorkspace: (name: string) => request<WorkspaceView>('POST', '/workspaces', { body: { name } }),
+};
+
+export const membership = {
+    /** The caller's own standing in the workspace: what every permission-aware control reads. */
+    me: (workspaceId: string, signal?: AbortSignal) =>
+        request<MembershipSummary>('GET', workspacePath(workspaceId, '/me'), { signal }),
 };
 
 export const members = {

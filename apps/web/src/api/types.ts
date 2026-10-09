@@ -57,14 +57,18 @@ export interface InviteView {
 }
 
 /**
- * The signed-in member's standing in one workspace: what `useCan` reads. No current endpoint
- * returns it (see the P1-UI-1 design note, "Owed by the API"); the type is the contract the web
- * app needs and the provider that fills it is the swap point.
+ * The caller's standing in one workspace: `GET /w/:workspaceId/me`, gated by the workspace guard
+ * only (agreed with P1-1a, which ships the route with the OpenAPI freeze). A person has a
+ * `memberId` and `userId`; an API-key principal has neither and carries `apiKeyId` instead.
+ * `recordScope: 'own'` is the account-manager rule — reads are limited to records they own.
  */
 export interface MembershipSummary {
-    workspaceId: string;
-    memberId: string;
+    memberId: string | null;
+    userId: string | null;
+    apiKeyId?: string | null;
     roleId: string;
+    roleName: string;
+    recordScope: 'all' | 'own';
     capabilities: readonly Capability[];
 }
 

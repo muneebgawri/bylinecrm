@@ -1,6 +1,6 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isClientError } from './client';
-import { apiKeys, auth, invites, me, members, roles } from './endpoints';
+import { apiKeys, auth, invites, me, members, membership, roles } from './endpoints';
 import type {
     CreateApiKeyInput,
     CreateInviteInput,
@@ -17,6 +17,7 @@ import type {
 export const keys = {
     me: ['me'] as const,
     workspaces: ['me', 'workspaces'] as const,
+    membership: (workspaceId: string) => ['w', workspaceId, 'me'] as const,
     members: (workspaceId: string) => ['w', workspaceId, 'members'] as const,
     roles: (workspaceId: string) => ['w', workspaceId, 'roles'] as const,
     apiKeys: (workspaceId: string) => ['w', workspaceId, 'api-keys'] as const,
@@ -44,6 +45,12 @@ export const useWorkspaces = () =>
 export const useProviders = () =>
     useQuery({ queryKey: keys.providers, queryFn: () => auth.providers(), staleTime: Infinity });
 
+/** The caller's standing in the workspace; `CapabilitiesProvider` is fed from this. */
+export const useMembershipQuery = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.membership(workspaceId),
+        queryFn: ({ signal }) => membership.me(workspaceId, signal),
+    });
 export const useMembers = (workspaceId: string) =>
     useQuery({ queryKey: keys.members(workspaceId), queryFn: ({ signal }) => members.list(workspaceId, signal) });
 export const useRoles = (workspaceId: string) =>

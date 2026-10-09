@@ -60,3 +60,8 @@ pnpm scan:identifiers
 
 One work package per branch and PR (doc 49 §5); the loop in doc 49 §3 is the process. The standing rule:
 no hot patches, no band-aids, no divergence — one definition of each thing.
+
+A package is built in its own git worktree (`git worktree add -b <branch> ../bylinecrm-wt-<pkg> main`). A
+fresh worktree has no `node_modules` and no built `packages/shared`: run `pnpm install` and
+`pnpm --filter @bylinecrm/shared build` there first, or every gate fails on missing modules rather than on
+your code.

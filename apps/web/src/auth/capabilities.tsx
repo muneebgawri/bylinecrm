@@ -1,13 +1,12 @@
 import type { Capability } from '@bylinecrm/shared';
 import { createContext, useContext, type ReactNode } from 'react';
+import { useMembershipQuery } from '../api/queries';
 import type { MembershipSummary } from '../api/types';
 
 /**
- * Permission-aware controls (FR-CRMS-UI-6) read the member's capabilities from here. The
- * provider is the swap point: the shell will fill it from the API once an endpoint returns the
- * current member's standing (see the design note); tests fill it directly. Until a membership
- * is known, nothing is allowed — a control is never shown on a guess. The server is still the
- * gate: this hook decides what to show, never what is permitted.
+ * Permission-aware controls (FR-CRMS-UI-6) read the caller's capabilities from here. Until a
+ * membership is known, nothing is allowed — a control is never shown on a guess. The server is
+ * still the gate: this hook decides what to show, never what is permitted.
  */
 const CapabilitiesContext = createContext<MembershipSummary | null>(null);
 
@@ -16,8 +15,19 @@ export interface CapabilitiesProviderProps {
     children: ReactNode;
 }
 
+/** Provides a known membership; tests and the workspace layout use it. */
 export function CapabilitiesProvider({ membership, children }: CapabilitiesProviderProps) {
     return <CapabilitiesContext.Provider value={membership}>{children}</CapabilitiesContext.Provider>;
+}
+
+/**
+ * Fills the provider from `GET /w/:id/me` for the workspace routes. While loading, or if the
+ * request fails, the membership is unknown and controls stay hidden; the route's own error
+ * handling reports the failure — a permission read never decides what the page shows.
+ */
+export function WorkspaceCapabilities({ workspaceId, children }: { workspaceId: string; children: ReactNode }) {
+    const query = useMembershipQuery(workspaceId);
+    return <CapabilitiesProvider membership={query.data ?? null}>{children}</CapabilitiesProvider>;
 }
 
 /** The current membership, or `null` while unknown (outside a workspace, or still loading). */
