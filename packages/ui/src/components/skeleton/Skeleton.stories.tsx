@@ -6,10 +6,19 @@ const meta = { title: 'Components/Skeleton', component: Skeleton } satisfies Met
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A record page's three columns while loading — the shape of the content, so nothing shifts when it lands. */
+/**
+ * A record page's three columns while loading — the shape of the content, so nothing shifts when it
+ * lands. The container is a `status` region: that is what announces "loading" and what permits the
+ * label (a plain div's generic role prohibits `aria-label`, and the a11y gate says so).
+ */
 export const RecordPage: Story = {
     render: () => (
-        <div className="grid max-w-4xl grid-cols-[14rem_1fr_14rem] gap-6" aria-busy="true" aria-label="Loading record">
+        <div
+            role="status"
+            aria-busy="true"
+            aria-label="Loading record"
+            className="grid max-w-4xl grid-cols-[14rem_1fr_14rem] gap-6"
+        >
             <div className="grid gap-3">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-9" />
