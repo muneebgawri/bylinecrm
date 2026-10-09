@@ -9,6 +9,7 @@ import {
     type Density,
     type Theme,
 } from './theme';
+import { readStored, writeStored } from '../lib/persisted';
 
 interface ThemeContextValue {
     theme: Theme;
@@ -18,24 +19,6 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-/** localStorage can throw (private windows, blocked storage); a preference that cannot be read is the default. */
-function readStored<T>(key: string, guard: (value: unknown) => value is T, fallback: T): T {
-    try {
-        const raw = window.localStorage.getItem(key);
-        return guard(raw) ? raw : fallback;
-    } catch {
-        return fallback;
-    }
-}
-
-function writeStored(key: string, value: string): void {
-    try {
-        window.localStorage.setItem(key, value);
-    } catch {
-        // Nothing to do: the choice still applies for this page; it just will not persist.
-    }
-}
 
 export interface ThemeProviderProps {
     children: ReactNode;

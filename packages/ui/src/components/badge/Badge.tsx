@@ -1,29 +1,24 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { forwardRef, type HTMLAttributes } from 'react';
 import { cn } from '../../lib/cn';
+import { toneSoft } from '../../lib/tones';
 
 /**
- * Status semantics — the ONE definition of what each colour means across the product:
- *   neutral  informational, no judgement (a tag, a count)
- *   success  done, verified, healthy, paid
- *   warning  needs attention but nothing is broken (stale, warming, risky)
- *   danger   broken, refused, failed, paused by a rule
- *   info     in progress, scheduled, system-originated
- * A component that needs a colour for a state picks the meaning, never the hue.
+ * A status chip. The meaning of each tone is defined once in `lib/tones.ts`; this component only
+ * adds the shape — the mockup's 6px "pill" by default, a round one with `shape="pill"`.
+ * `StatusBadge` is the same component under the name the shell spec uses.
  */
 export const badgeVariants = cva(
-    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap',
+    'inline-flex h-5.5 items-center gap-1.5 px-2 text-xs font-medium whitespace-nowrap border border-transparent',
     {
         variants: {
-            status: {
-                neutral: 'border-border bg-surface text-text-muted',
-                success: 'border-transparent bg-success-soft text-success',
-                warning: 'border-transparent bg-warning-soft text-warning',
-                danger: 'border-transparent bg-danger-soft text-danger',
-                info: 'border-transparent bg-info-soft text-info',
+            status: toneSoft,
+            shape: {
+                square: 'rounded-sm',
+                pill: 'rounded-full',
             },
         },
-        defaultVariants: { status: 'neutral' },
+        defaultVariants: { status: 'neutral', shape: 'square' },
     },
 );
 
@@ -33,13 +28,16 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement>, VariantProp
 }
 
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
-    { className, status, dot = false, children, ...props },
+    { className, status, shape, dot = false, children, ...props },
     ref,
 ) {
     return (
-        <span ref={ref} className={cn(badgeVariants({ status }), className)} {...props}>
-            {dot && <span aria-hidden className="size-1.5 rounded-full bg-current" />}
+        <span ref={ref} className={cn(badgeVariants({ status, shape }), className)} {...props}>
+            {dot && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />}
             {children}
         </span>
     );
 });
+
+export { Badge as StatusBadge };
+export type { BadgeProps as StatusBadgeProps };

@@ -1,0 +1,79 @@
+import { Navigate, type RouteObject } from 'react-router';
+import { RequireAuth } from '../auth/RequireAuth';
+import { AppShell } from '../shell/AppShell';
+import { AuthCallback } from './auth/AuthCallback';
+import { SignIn } from './auth/SignIn';
+import { SignUp } from './auth/SignUp';
+import { Home as ServiceStatus } from './home';
+import { paths } from './paths';
+import { WORKSPACE_PARAM } from './params';
+import { Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
+import { ContentPage, type PageId } from './w/pages';
+import { Workspaces } from './Workspaces';
+
+/** Settings is its own chunk: admins only, loaded on first visit (FR-CRMS-UI-10). */
+const settings = {
+    layout: () => import('./w/settings/SettingsLayout').then((m) => ({ Component: m.SettingsLayout })),
+    members: () => import('./w/settings/Members').then((m) => ({ Component: m.Members })),
+    roles: () => import('./w/settings/Roles').then((m) => ({ Component: m.Roles })),
+    apiKeys: () => import('./w/settings/ApiKeys').then((m) => ({ Component: m.ApiKeys })),
+    invites: () => import('./w/settings/Invites').then((m) => ({ Component: m.Invites })),
+};
+
+/**
+ * The route manifest: the one list of pages. A route's `handle.crumb` is its breadcrumb; its
+ * `errorElement` is the boundary that says what happened (FR-CRMS-UI-7).
+ */
+const page = (id: PageId, path: string, crumb: string): RouteObject => ({
+    path,
+    element: <ContentPage id={id} />,
+    handle: { crumb },
+    errorElement: <RouteError />,
+});
+
+const workspaceRoutes: RouteObject = {
+    path: `/w/:${WORKSPACE_PARAM}`,
+    element: <AppShell />,
+    errorElement: <RouteError />,
+    hydrateFallbackElement: <RouteSkeleton />,
+    children: [
+        { index: true, element: <Navigate to="home" replace /> },
+        page('home', 'home', 'Dashboard'),
+        page('reports', 'reports', 'Reports'),
+        page('people', 'people', 'People'),
+        page('companies', 'companies', 'Companies'),
+        page('deals', 'deals', 'Deals'),
+        page('sequences', 'sequences', 'Sequences'),
+        page('templates', 'templates', 'Templates'),
+        page('mailboxes', 'mailboxes', 'Mailboxes'),
+        page('team', 'team', 'Team'),
+        {
+            path: 'settings',
+            lazy: settings.layout,
+            handle: { crumb: 'Settings' },
+            errorElement: <RouteError />,
+            children: [
+                { index: true, element: <Navigate to="members" replace /> },
+                { path: 'members', lazy: settings.members, handle: { crumb: 'Members' } },
+                { path: 'roles', lazy: settings.roles, handle: { crumb: 'Roles' } },
+                { path: 'api-keys', lazy: settings.apiKeys, handle: { crumb: 'API keys' } },
+                { path: 'invites', lazy: settings.invites, handle: { crumb: 'Invites' } },
+            ],
+        },
+    ],
+};
+
+export const routes: RouteObject[] = [
+    { path: paths.root, element: <Navigate to={paths.workspaces} replace /> },
+    { path: paths.signIn, element: <SignIn />, errorElement: <RouteError /> },
+    { path: paths.signUp, element: <SignUp />, errorElement: <RouteError /> },
+    { path: paths.authCallback, element: <AuthCallback />, errorElement: <RouteError /> },
+    { path: paths.status, element: <ServiceStatus /> },
+    { path: paths.forbidden, element: <Forbidden /> },
+    {
+        element: <RequireAuth pending={<RouteSkeleton />} />,
+        errorElement: <RouteError />,
+        children: [{ path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> }, workspaceRoutes],
+    },
+    { path: '*', element: <NotFound /> },
+];

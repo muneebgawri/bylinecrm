@@ -1,56 +1,65 @@
 /*
- * BylineCRM design tokens — the ONE place a colour, radius, spacing base or type size is defined.
+ * BylineCRM design tokens — the ONE place a colour, radius, spacing base, type size or shadow is
+ * defined. Values are the approved shell mockup's (docs/design/shell-mockup-v3.html, 2026-10-09).
  * Components never carry a raw value; they use Tailwind utilities that `theme.css` maps onto these
  * variables. Light values live on `:root`; dark values apply when the app sets
- * `data-theme="dark"`, or when it sets nothing and the OS prefers dark. Density is a second
- * attribute, `data-density`, that scales the spacing base and the root font size.
+ * `data-theme="dark"`, or when it sets nothing and the OS prefers dark (`color-scheme` follows, so
+ * native controls and scrollbars match). Density is a second attribute, `data-density`, that
+ * scales the spacing base and the root font size.
  *
  * Contrast: every text-on-background pair here meets WCAG 2.1 AA (4.5:1); the a11y gate (axe on
  * every story) is what proves it, so change a value and watch that gate, not this comment.
+ * Four of the mockup's values were under AA at small sizes and are the nearest passing ones
+ * instead (recorded in docs/design-notes/P1-UI-1.md): light accent #6d4aff→#6a48f7, light success
+ * #17803d→#167c3b, light muted/faint #667085/#98a2b3→#5f6877/#656f7d, dark faint #6b7687→#7f8c9f.
  */
 
 :root {
     color-scheme: light;
 
     /* Surfaces */
-    --bc-background: #ffffff;
-    --bc-surface: #f8f9fb;
-    --bc-surface-raised: #ffffff;
-    --bc-border: #e2e5ea;
-    --bc-border-strong: #c9ced6;
+    --bc-background: #f5f6f8;
+    --bc-surface: #ffffff;
+    --bc-surface-raised: #f7f8fa;
+    --bc-border: #e6e8ec;
+    --bc-border-strong: #d2d6dc;
+    --bc-selection: #f3f0ff;
 
     /* Text */
-    --bc-text: #111827;
-    --bc-text-muted: #5b6473;
-    --bc-text-faint: #687080;
+    --bc-text: #101828;
+    --bc-text-muted: #5f6877;
+    --bc-text-faint: #656f7d;
 
-    /* Accent (interactive) */
-    --bc-accent: #2563eb;
-    --bc-accent-hover: #1d4ed8;
+    /* Primary (the black pill button, the logo mark, the active page number) */
+    --bc-primary: #101828;
+    --bc-primary-foreground: #ffffff;
+
+    /* Accent (interactive, the purple) */
+    --bc-accent: #6a48f7;
     --bc-accent-foreground: #ffffff;
-    --bc-accent-soft: #e8efff;
+    --bc-accent-soft: #efeaff;
 
     /* Status — `-soft` is the tinted background a status badge sits on; the base is its text */
-    --bc-success: #166534;
-    --bc-success-soft: #dcfce7;
-    --bc-warning: #92400e;
-    --bc-warning-soft: #fef3c7;
-    --bc-danger: #991b1b;
-    --bc-danger-soft: #fee2e2;
-    --bc-info: #1e40af;
-    --bc-info-soft: #dbeafe;
+    --bc-success: #167c3b;
+    --bc-success-soft: #e5f6ec;
+    --bc-warning: #b54708;
+    --bc-warning-soft: #fff3e4;
+    --bc-danger: #b42318;
+    --bc-danger-soft: #fee4e2;
+    --bc-info: #175cd3;
+    --bc-info-soft: #e7f0ff;
 
     /* Focus */
-    --bc-ring: #2563eb;
+    --bc-ring: #6a48f7;
 
-    /* Shape */
-    --bc-radius-sm: 0.25rem;
-    --bc-radius-md: 0.375rem;
-    --bc-radius-lg: 0.625rem;
+    /* Shape: 12px cards, 8px controls, 6px chips, pills */
+    --bc-radius-sm: 6px;
+    --bc-radius-md: 8px;
+    --bc-radius-lg: 12px;
+    --bc-radius-xl: 14px;
     --bc-radius-full: 9999px;
 
-    /* Type — a system stack with Inter first, so a machine (or CI runner) that has Inter uses it
-       and every other machine gets its own UI font. No font is fetched at runtime. */
+    /* Type — Inter is self-hosted (fonts.css, OFL); the stack falls back to the platform UI font */
     --bc-font-sans:
         'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --bc-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -60,9 +69,15 @@
     /* Density — the spacing base every `p-*`/`gap-*` utility multiplies */
     --bc-spacing: 0.25rem;
 
-    /* Shadows */
-    --bc-shadow-sm: 0 1px 2px 0 rgb(17 24 39 / 0.06);
-    --bc-shadow-md: 0 4px 12px -2px rgb(17 24 39 / 0.12);
+    /* Shadows: card, hover, overlay */
+    --bc-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+    --bc-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
+    --bc-shadow-lg: 0 20px 48px rgba(16, 24, 40, 0.18);
+
+    /* Layout: the shell's fixed dimensions, so the app and the stories agree */
+    --bc-sidebar-width: 240px;
+    --bc-sidebar-collapsed-width: 64px;
+    --bc-topbar-height: 56px;
 }
 
 [data-density='compact'] {
@@ -74,57 +89,63 @@
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) {
         color-scheme: dark;
-        --bc-background: #0b0f17;
-        --bc-surface: #111827;
-        --bc-surface-raised: #1a2332;
-        --bc-border: #2b3444;
-        --bc-border-strong: #3b4556;
-        --bc-text: #f3f4f6;
-        --bc-text-muted: #a3acba;
-        --bc-text-faint: #8b95a5;
-        --bc-accent: #7cb0ff;
-        --bc-accent-hover: #9cc3ff;
-        --bc-accent-foreground: #0b0f17;
-        --bc-accent-soft: #172554;
-        --bc-success: #bbf7d0;
-        --bc-success-soft: #14532d;
-        --bc-warning: #fde68a;
-        --bc-warning-soft: #78350f;
-        --bc-danger: #fecaca;
-        --bc-danger-soft: #7f1d1d;
-        --bc-info: #bfdbfe;
-        --bc-info-soft: #1e3a8a;
-        --bc-ring: #7cb0ff;
-        --bc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-        --bc-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+        --bc-background: #0e1117;
+        --bc-surface: #151a22;
+        --bc-surface-raised: #1b212b;
+        --bc-border: #262d38;
+        --bc-border-strong: #364050;
+        --bc-selection: #241f45;
+        --bc-text: #eef1f5;
+        --bc-text-muted: #9aa5b5;
+        --bc-text-faint: #7f8c9f;
+        --bc-primary: #eef1f5;
+        --bc-primary-foreground: #0e1117;
+        --bc-accent: #9b84ff;
+        --bc-accent-foreground: #0e1117;
+        --bc-accent-soft: #2a2350;
+        --bc-success: #4ade80;
+        --bc-success-soft: #15301f;
+        --bc-warning: #fdba74;
+        --bc-warning-soft: #3a2510;
+        --bc-danger: #fda29b;
+        --bc-danger-soft: #3b1a17;
+        --bc-info: #8ab4ff;
+        --bc-info-soft: #1b2a44;
+        --bc-ring: #9b84ff;
+        --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+        --bc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+        --bc-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
     }
 }
 
 :root[data-theme='dark'] {
     color-scheme: dark;
-    --bc-background: #0b0f17;
-    --bc-surface: #111827;
-    --bc-surface-raised: #1a2332;
-    --bc-border: #2b3444;
-    --bc-border-strong: #3b4556;
-    --bc-text: #f3f4f6;
-    --bc-text-muted: #a3acba;
-    --bc-text-faint: #8b95a5;
-    --bc-accent: #7cb0ff;
-    --bc-accent-hover: #9cc3ff;
-    --bc-accent-foreground: #0b0f17;
-    --bc-accent-soft: #172554;
-    --bc-success: #bbf7d0;
-    --bc-success-soft: #14532d;
-    --bc-warning: #fde68a;
-    --bc-warning-soft: #78350f;
-    --bc-danger: #fecaca;
-    --bc-danger-soft: #7f1d1d;
-    --bc-info: #bfdbfe;
-    --bc-info-soft: #1e3a8a;
-    --bc-ring: #7cb0ff;
-    --bc-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-    --bc-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+    --bc-background: #0e1117;
+    --bc-surface: #151a22;
+    --bc-surface-raised: #1b212b;
+    --bc-border: #262d38;
+    --bc-border-strong: #364050;
+    --bc-selection: #241f45;
+    --bc-text: #eef1f5;
+    --bc-text-muted: #9aa5b5;
+    --bc-text-faint: #7f8c9f;
+    --bc-primary: #eef1f5;
+    --bc-primary-foreground: #0e1117;
+    --bc-accent: #9b84ff;
+    --bc-accent-foreground: #0e1117;
+    --bc-accent-soft: #2a2350;
+    --bc-success: #4ade80;
+    --bc-success-soft: #15301f;
+    --bc-warning: #fdba74;
+    --bc-warning-soft: #3a2510;
+    --bc-danger: #fda29b;
+    --bc-danger-soft: #3b1a17;
+    --bc-info: #8ab4ff;
+    --bc-info-soft: #1b2a44;
+    --bc-ring: #9b84ff;
+    --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --bc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --bc-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
 }
 
 html {

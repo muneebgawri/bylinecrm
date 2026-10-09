@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Plus, Trash2 } from 'lucide-react';
+import { Filter, Plus, Trash2 } from 'lucide-react';
 import { inMode } from '../../../.storybook/modes';
 import { Button } from './Button';
 
@@ -11,13 +11,33 @@ export const Gallery: Story = {
     render: () => (
         <div className="flex flex-col gap-6">
             <div className="flex flex-wrap items-center gap-3">
-                <Button>Primary</Button>
-                <Button variant="secondary">Secondary</Button>
+                <Button variant="primary">
+                    <Plus aria-hidden /> Create
+                </Button>
+                <Button variant="accent">Accent</Button>
+                <Button>Secondary</Button>
                 <Button variant="ghost">Ghost</Button>
                 <Button variant="danger">
                     <Trash2 aria-hidden /> Delete
                 </Button>
                 <Button variant="link">Link</Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+                <Button shape="square" variant="primary">
+                    Add person
+                </Button>
+                <Button shape="square">
+                    <Filter aria-hidden /> Filter
+                </Button>
+                <Button shape="square" size="sm">
+                    Review
+                </Button>
+                <Button shape="square" size="xs">
+                    Prep
+                </Button>
+                <Button variant="ghost" size="sm">
+                    Snooze
+                </Button>
             </div>
             <div className="flex flex-wrap items-center gap-3">
                 <Button size="sm">Small</Button>
@@ -28,11 +48,11 @@ export const Gallery: Story = {
                 </Button>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-                <Button loading>Saving</Button>
-                <Button disabled>Disabled</Button>
-                <Button variant="secondary" loading>
-                    Loading
+                <Button variant="primary" loading>
+                    Saving
                 </Button>
+                <Button disabled>Disabled</Button>
+                <Button loading>Loading</Button>
                 <Button asChild>
                     <a href="#people">As link</a>
                 </Button>

@@ -24,13 +24,16 @@
     --color-surface-raised: var(--bc-surface-raised);
     --color-border: var(--bc-border);
     --color-border-strong: var(--bc-border-strong);
+    --color-selection: var(--bc-selection);
 
     --color-text: var(--bc-text);
     --color-text-muted: var(--bc-text-muted);
     --color-text-faint: var(--bc-text-faint);
 
+    --color-primary: var(--bc-primary);
+    --color-primary-foreground: var(--bc-primary-foreground);
+
     --color-accent: var(--bc-accent);
-    --color-accent-hover: var(--bc-accent-hover);
     --color-accent-foreground: var(--bc-accent-foreground);
     --color-accent-soft: var(--bc-accent-soft);
 
@@ -51,8 +54,14 @@
     --radius-sm: var(--bc-radius-sm);
     --radius-md: var(--bc-radius-md);
     --radius-lg: var(--bc-radius-lg);
+    --radius-xl: var(--bc-radius-xl);
     --radius-full: var(--bc-radius-full);
 
     --shadow-sm: var(--bc-shadow-sm);
     --shadow-md: var(--bc-shadow-md);
+    --shadow-lg: var(--bc-shadow-lg);
+
+    --width-sidebar: var(--bc-sidebar-width);
+    --width-sidebar-collapsed: var(--bc-sidebar-collapsed-width);
+    --height-topbar: var(--bc-topbar-height);
 }

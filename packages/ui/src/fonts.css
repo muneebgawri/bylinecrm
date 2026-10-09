@@ -1,0 +1,12 @@
+/*
+ * Inter, self-hosted (SIL Open Font License 1.1 — fonts/LICENSE-OFL.txt). One variable file
+ * covers every weight; `font-display: swap` shows the fallback stack until it arrives rather than
+ * blank text. Nothing is fetched from a third party at runtime (doc 48 §10.1).
+ */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('./fonts/InterVariable.woff2') format('woff2');
+}

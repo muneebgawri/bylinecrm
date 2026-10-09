@@ -81,6 +81,17 @@ jobs:
             - run: pnpm --filter api db:setup
             - run: pnpm --filter api test:cross-tenant
 
+    # The web bundle's size budget (apps/web/.size-limit.json, FR-CRMS-UI-10): a production build,
+    # then size-limit over the initial chunks. A chunk over budget fails the job.
+    bundle:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - run: pnpm --filter @bylinecrm/shared build
+            - run: pnpm --filter web build
+            - run: pnpm --filter web size
+
     licence-scan:
         runs-on: ubuntu-latest
         steps:
