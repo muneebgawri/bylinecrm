@@ -47,7 +47,7 @@ describe('RequireAuth', () => {
     });
 
     it('sends a signed-out person to sign-in, remembering where they were', async () => {
-        stubMe(401, { statusCode: 401, message: 'Unauthorized' });
+        stubMe(401, { statusCode: 401, code: 'unauthorized', message: 'Unauthorized', requestId: 'req-0123456789' });
         renderAt('/w/ws-1/people?view=mine');
         const location = await screen.findByRole('status');
         expect(location).toHaveTextContent(
