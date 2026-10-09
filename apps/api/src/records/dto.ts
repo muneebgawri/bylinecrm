@@ -142,8 +142,13 @@ const opportunityFields = {
     companyId: uuid.nullable(),
     custom,
 };
+/** Where a new deal starts (P1-2): the default pipeline's first stage unless the caller names one. A move is a route of its own. */
+const placement = { pipelineId: uuid, stageId: uuid };
 export class CreateOpportunityDto extends createZodDto(
-    z.object(opportunityFields).partial().required({ name: true }),
+    z
+        .object({ ...opportunityFields, ...placement })
+        .partial()
+        .required({ name: true }),
 ) {}
 export class UpdateOpportunityDto extends createZodDto(z.object(opportunityFields).partial()) {}
 

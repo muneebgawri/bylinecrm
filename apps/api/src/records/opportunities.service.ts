@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { Actor, Money } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { StageMoveService } from '../pipelines/stage-move.service';
+import { daysInStage } from '../pipelines/stage-moves';
 import { actorOf } from './actor';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf } from './diff';
@@ -22,10 +24,19 @@ import {
 } from './references';
 import { searchCandidates } from './search';
 
-/** A deal as the API returns it (PAR-007). Stage and pipeline arrive with P1-2. */
+/** A deal as the API returns it (PAR-007), with its place in its pipeline (P1-2). */
 export interface OpportunityView {
     id: string;
     name: string;
+    pipelineId: string;
+    stageId: string;
+    /** When the deal entered its current stage: the latest history row, never a column. */
+    stageEnteredAt: Date;
+    /** Whole days since `stageEnteredAt`, computed at read time. */
+    daysInStage: number;
+    /** Set while the deal is in a won or lost stage. */
+    closedAt: Date | null;
+    lostReason: string | null;
     /** `null` until an amount is known; the currency is always the deal's. */
     amount: Money | null;
     currency: string;
@@ -45,6 +56,9 @@ export interface OpportunityView {
 
 export interface OpportunityInput {
     name?: string | undefined;
+    /** Create only: where the deal starts. Defaults to the default pipeline's first stage. */
+    pipelineId?: string | undefined;
+    stageId?: string | undefined;
     amount?: MoneyInput | null | undefined;
     closeDate?: string | null | undefined;
     probability?: number | null | undefined;
@@ -69,6 +83,8 @@ const DEFAULT_SORT: SortSpec<OpportunitySortField> = { field: 'createdAt', direc
 
 const DIFF_FIELDS = [
     'name',
+    'closedAt',
+    'lostReason',
     'amount',
     'currency',
     'closeDate',
@@ -80,7 +96,12 @@ const DIFF_FIELDS = [
     'custom',
 ] as const;
 
-type OpportunityRow = Prisma.OpportunityGetPayload<Record<string, never>>;
+/** The deal's current stage and its latest history row, which say where it is and since when. */
+export const withStageInclude = {
+    stage: true,
+    stageHistory: { orderBy: { enteredAt: 'desc' as const }, take: 1 },
+} as const;
+type OpportunityRow = Prisma.OpportunityGetPayload<{ include: typeof withStageInclude }>;
 
 @Injectable()
 export class OpportunitiesService {
@@ -89,6 +110,7 @@ export class OpportunitiesService {
         private readonly context: WorkspaceContext,
         private readonly customFields: CustomFieldsService,
         private readonly events: DomainEvents,
+        private readonly moves: StageMoveService,
     ) {}
 
     list(query: ListQuery, deleted = false): Promise<Page<OpportunityView>> {
@@ -100,6 +122,7 @@ export class OpportunitiesService {
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.opportunity.findMany({
                     where: { ...where(context, deleted), ...(ids ? { id: { in: ids } } : {}) },
+                    include: withStageInclude,
                     orderBy: [
                         { [sort.field]: sort.direction } as Prisma.OpportunityOrderByWithRelationInput,
                         { id: 'asc' },
@@ -128,7 +151,8 @@ export class OpportunitiesService {
             // A deal always has a currency, amount or not: the workspace's unless the caller named one.
             const money = await moneyColumns(tx, context.workspaceId, input.amount ?? null);
             const currency = input.amount?.currency ?? (await defaultCurrency(tx, context.workspaceId));
-            return tx.opportunity.create({
+            const placement = await startingStage(tx, input.pipelineId, input.stageId);
+            const created = await tx.opportunity.create({
                 data: {
                     ...compact(fields(input)),
                     name: input.name,
@@ -138,8 +162,11 @@ export class OpportunitiesService {
                     ownerId,
                     createdBy: actor,
                     custom,
+                    ...placement,
                 },
             });
+            await this.moves.place(tx, created, actor, 'manual');
+            return find(tx, context, created.id);
         });
         this.events.publish({
             type: 'opportunity.created',
@@ -188,6 +215,7 @@ export class OpportunitiesService {
             const updated = await tx.opportunity.update({
                 where: { id },
                 data: { ...compact(fields(patch)), ...money, ownerId, ...(custom ? { custom } : {}) },
+                include: withStageInclude,
             });
             return { before: current, after: updated };
         });
@@ -254,6 +282,7 @@ export class OpportunitiesService {
 function fields(input: OpportunityInput) {
     return {
         name: input.name,
+        // pipelineId / stageId are placement (create) and moves (P1-2); never plain columns here.
         closeDate:
             input.closeDate === undefined ? undefined : input.closeDate === null ? null : dateOnly(input.closeDate),
         probability: input.probability,
@@ -268,9 +297,35 @@ function where(context: WorkspaceRunContext, deleted: boolean): Prisma.Opportuni
 }
 
 async function find(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<OpportunityRow> {
-    const row = await tx.opportunity.findFirst({ where: { id, ...where(context, false) } });
+    const row = await tx.opportunity.findFirst({ where: { id, ...where(context, false) }, include: withStageInclude });
     if (!row) throw notFound();
     return row;
+}
+
+/**
+ * Where a new deal starts: the stage named (which must belong to the pipeline named or, with no
+ * pipeline, to the default one), else the first stage of the pipeline named or of the default.
+ * The stage must be open — a deal is not born closed.
+ */
+async function startingStage(
+    tx: WorkspaceClient,
+    pipelineId: string | undefined,
+    stageId: string | undefined,
+): Promise<{ pipelineId: string; stageId: string }> {
+    const pipeline = pipelineId
+        ? await tx.pipeline.findUnique({ where: { id: pipelineId }, select: { id: true } })
+        : await tx.pipeline.findFirst({ where: { isDefault: true }, select: { id: true } });
+    if (!pipeline)
+        throw new UnprocessableEntityException(
+            pipelineId ? 'pipeline not found' : 'this workspace has no default pipeline',
+        );
+    const stage = stageId
+        ? await tx.pipelineStage.findFirst({ where: { id: stageId, pipelineId: pipeline.id } })
+        : await tx.pipelineStage.findFirst({ where: { pipelineId: pipeline.id }, orderBy: { position: 'asc' } });
+    if (!stage)
+        throw new UnprocessableEntityException(stageId ? 'stage is not in that pipeline' : 'pipeline has no stages');
+    if (stage.kind !== 'open') throw new UnprocessableEntityException('a deal starts in an open stage');
+    return { pipelineId: pipeline.id, stageId: stage.id };
 }
 
 function notFound(): NotFoundException {
@@ -282,10 +337,22 @@ function dateOnly(value: string): Date {
     return new Date(`${value}T00:00:00.000Z`);
 }
 
+/** The view of a row loaded with `withStageInclude`. */
+export function withStage(row: OpportunityRow): OpportunityView {
+    return view(row);
+}
+
 export function view(row: OpportunityRow): OpportunityView {
+    const entered = row.stageHistory[0]?.enteredAt ?? row.createdAt;
     return {
         id: row.id,
         name: row.name,
+        pipelineId: row.pipelineId,
+        stageId: row.stageId,
+        stageEnteredAt: entered,
+        daysInStage: daysInStage(entered),
+        closedAt: row.closedAt,
+        lostReason: row.lostReason,
         amount: row.amountMinor === null ? null : { amountMinor: Number(row.amountMinor), currency: row.currency },
         currency: row.currency,
         closeDate: row.closeDate ? row.closeDate.toISOString().slice(0, 10) : null,
