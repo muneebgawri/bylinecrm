@@ -36,5 +36,8 @@ export async function openStory(page: Page, id: string): Promise<void> {
     const body = page.locator('body');
     await expect(body).toHaveClass(/sb-show-main/);
     await expect(body, `story ${id} threw while rendering`).not.toHaveClass(/sb-show-errordisplay/);
+    // Fonts in, and every running animation or transition finished, before anything is measured:
+    // axe reads computed colours and has no animation control of its own.
     await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 }

@@ -4,6 +4,25 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>BylineCRM</title>
+        <!--
+            Theme bootstrap: applies the stored theme and density to <html> before any stylesheet
+            or script loads, so a dark-mode user never sees a frame of the light theme. The keys
+            and attribute names must match packages/ui/src/theme/theme.ts; theme-bootstrap.spec.ts
+            fails the build if they drift.
+        -->
+        <script>
+            (function () {
+                try {
+                    var theme = localStorage.getItem('bylinecrm.theme');
+                    if (theme === 'light' || theme === 'dark')
+                        document.documentElement.setAttribute('data-theme', theme);
+                    var density = localStorage.getItem('bylinecrm.density');
+                    if (density === 'compact') document.documentElement.setAttribute('data-density', density);
+                } catch (_) {
+                    /* storage unavailable: the OS preference applies through the stylesheet */
+                }
+            })();
+        </script>
     </head>
     <body>
         <div id="root"></div>
