@@ -5,7 +5,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LOGIN_MAX_ATTEMPTS } from '../../src/auth/auth.constants';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
-import { createApp } from '../../src/main';
+import { createApp } from '../../src/app';
 
 /** A signed-in browser: the two cookies and the header a mutation needs. */
 interface Browser {

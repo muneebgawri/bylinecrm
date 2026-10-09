@@ -12,7 +12,9 @@ export class RedisService extends Redis implements OnModuleDestroy {
         super(env.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false, lazyConnect: true });
     }
 
+    /** A lazy client that never connected (`wait`) or already ended has nothing to quit. */
     async onModuleDestroy(): Promise<void> {
+        if (this.status === 'wait' || this.status === 'end') return;
         await this.quit();
     }
 }

@@ -1,0 +1,1893 @@
+{
+    "openapi": "3.0.0",
+    "paths": {
+        "/health": {
+            "get": {
+                "operationId": "HealthController_get",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["Health"]
+            }
+        },
+        "/api/auth/signup": {
+            "post": {
+                "operationId": "AuthController_signup",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SignupDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "operationId": "AuthController_login",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "operationId": "AuthController_logout",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/providers": {
+            "get": {
+                "operationId": "AuthController_providers",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/google": {
+            "get": {
+                "operationId": "AuthController_google",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/google/callback": {
+            "get": {
+                "operationId": "AuthController_googleCallback",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/oidc/{issuer}": {
+            "get": {
+                "operationId": "AuthController_oidcStart",
+                "parameters": [
+                    {
+                        "name": "issuer",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/oidc/{issuer}/callback": {
+            "get": {
+                "operationId": "AuthController_oidcCallback",
+                "parameters": [
+                    {
+                        "name": "issuer",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/invites/{token}/accept": {
+            "post": {
+                "operationId": "AuthController_acceptInvite",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/invites/{token}/signup": {
+            "post": {
+                "operationId": "AuthController_acceptInviteSignup",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AcceptInviteSignupDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/auth/password/forgot": {
+            "post": {
+                "operationId": "AuthController_forgotPassword",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["auth"]
+            }
+        },
+        "/api/me": {
+            "get": {
+                "operationId": "MeController_me",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["me"]
+            }
+        },
+        "/api/me/workspaces": {
+            "get": {
+                "operationId": "MeController_workspaces",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["me"]
+            }
+        },
+        "/api/workspaces": {
+            "post": {
+                "operationId": "MeController_createWorkspace",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateWorkspaceDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["me"]
+            }
+        },
+        "/api/w/{workspaceId}/members": {
+            "get": {
+                "operationId": "MembersController_list",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/members/{memberId}/role": {
+            "patch": {
+                "operationId": "MembersController_setRole",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetMemberRoleDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/members/{memberId}": {
+            "delete": {
+                "operationId": "MembersController_remove",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/roles": {
+            "get": {
+                "operationId": "RolesController_list",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            },
+            "post": {
+                "operationId": "RolesController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRoleDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/roles/{roleId}": {
+            "patch": {
+                "operationId": "RolesController_update",
+                "parameters": [
+                    {
+                        "name": "roleId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRoleDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            },
+            "delete": {
+                "operationId": "RolesController_remove",
+                "parameters": [
+                    {
+                        "name": "roleId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/api-keys": {
+            "get": {
+                "operationId": "ApiKeysController_list",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            },
+            "post": {
+                "operationId": "ApiKeysController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateApiKeyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/api-keys/{apiKeyId}": {
+            "delete": {
+                "operationId": "ApiKeysController_revoke",
+                "parameters": [
+                    {
+                        "name": "apiKeyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/invites": {
+            "get": {
+                "operationId": "InvitesController_list",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            },
+            "post": {
+                "operationId": "InvitesController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateInviteDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/invites/{inviteId}": {
+            "delete": {
+                "operationId": "InvitesController_revoke",
+                "parameters": [
+                    {
+                        "name": "inviteId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/me": {
+            "get": {
+                "operationId": "WorkspaceMeController_standing",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["workspace"]
+            }
+        },
+        "/api/w/{workspaceId}/people": {
+            "get": {
+                "operationId": "PeopleController_list",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            },
+            "post": {
+                "operationId": "PeopleController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePersonDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/people/deleted": {
+            "get": {
+                "operationId": "PeopleController_listDeleted",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/people/{personId}": {
+            "get": {
+                "operationId": "PeopleController_get",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            },
+            "patch": {
+                "operationId": "PeopleController_update",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdatePersonDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            },
+            "delete": {
+                "operationId": "PeopleController_remove",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/people/{personId}/restore": {
+            "post": {
+                "operationId": "PeopleController_restore",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/companies": {
+            "get": {
+                "operationId": "CompaniesController_list",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            },
+            "post": {
+                "operationId": "CompaniesController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateCompanyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/companies/deleted": {
+            "get": {
+                "operationId": "CompaniesController_listDeleted",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z]+:(asc|desc)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/companies/{companyId}": {
+            "get": {
+                "operationId": "CompaniesController_get",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            },
+            "patch": {
+                "operationId": "CompaniesController_update",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateCompanyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            },
+            "delete": {
+                "operationId": "CompaniesController_remove",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/companies/{companyId}/restore": {
+            "post": {
+                "operationId": "CompaniesController_restore",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/custom-fields": {
+            "get": {
+                "operationId": "CustomFieldsController_list",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["person", "company", "opportunity"]
+                        }
+                    },
+                    {
+                        "name": "archived",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["true", "false"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["custom-fields"]
+            },
+            "post": {
+                "operationId": "CustomFieldsController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateCustomFieldDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["custom-fields"]
+            }
+        },
+        "/api/w/{workspaceId}/custom-fields/{fieldId}": {
+            "patch": {
+                "operationId": "CustomFieldsController_update",
+                "parameters": [
+                    {
+                        "name": "fieldId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateCustomFieldDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["custom-fields"]
+            },
+            "delete": {
+                "operationId": "CustomFieldsController_archive",
+                "parameters": [
+                    {
+                        "name": "fieldId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["custom-fields"]
+            }
+        }
+    },
+    "info": {
+        "title": "BylineCRM API",
+        "description": "",
+        "version": "0.0.0",
+        "contact": {}
+    },
+    "tags": [],
+    "servers": [],
+    "components": {
+        "securitySchemes": {
+            "cookie": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "blc_session"
+            },
+            "bearer": {
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "type": "http"
+            }
+        },
+        "schemas": {
+            "SignupDto": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "maxLength": 254,
+                        "format": "email",
+                        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    "password": {
+                        "type": "string",
+                        "minLength": 12,
+                        "maxLength": 256
+                    },
+                    "workspaceName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    }
+                },
+                "required": ["email", "password", "workspaceName"]
+            },
+            "LoginDto": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "maxLength": 254,
+                        "format": "email",
+                        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    "password": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                    }
+                },
+                "required": ["email", "password"]
+            },
+            "AcceptInviteSignupDto": {
+                "type": "object",
+                "properties": {
+                    "password": {
+                        "type": "string",
+                        "minLength": 12,
+                        "maxLength": 256
+                    }
+                },
+                "required": ["password"]
+            },
+            "CreateWorkspaceDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    }
+                },
+                "required": ["name"]
+            },
+            "SetMemberRoleDto": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                },
+                "required": ["roleId"]
+            },
+            "CreateRoleDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "capabilities": {
+                        "maxItems": 21,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "record:read",
+                                "record:write",
+                                "note:write",
+                                "task:write",
+                                "deal:read",
+                                "deal:move",
+                                "deal:edit",
+                                "deal:bulk",
+                                "view:save",
+                                "view:share",
+                                "pipeline:configure",
+                                "email:send",
+                                "template:read",
+                                "template:write",
+                                "template:send_test",
+                                "outreach:write",
+                                "sequence:write",
+                                "sequence:enrol",
+                                "mailbox:read",
+                                "mailbox:manage",
+                                "workspace:admin"
+                            ]
+                        }
+                    },
+                    "recordScope": {
+                        "type": "string",
+                        "enum": ["all", "own"]
+                    }
+                },
+                "required": ["name", "capabilities"]
+            },
+            "UpdateRoleDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "capabilities": {
+                        "maxItems": 21,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "record:read",
+                                "record:write",
+                                "note:write",
+                                "task:write",
+                                "deal:read",
+                                "deal:move",
+                                "deal:edit",
+                                "deal:bulk",
+                                "view:save",
+                                "view:share",
+                                "pipeline:configure",
+                                "email:send",
+                                "template:read",
+                                "template:write",
+                                "template:send_test",
+                                "outreach:write",
+                                "sequence:write",
+                                "sequence:enrol",
+                                "mailbox:read",
+                                "mailbox:manage",
+                                "workspace:admin"
+                            ]
+                        }
+                    },
+                    "recordScope": {
+                        "type": "string",
+                        "enum": ["all", "own"]
+                    }
+                }
+            },
+            "CreateApiKeyDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "roleId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                },
+                "required": ["name", "roleId"]
+            },
+            "CreateInviteDto": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "maxLength": 254,
+                        "format": "email",
+                        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    "roleId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                },
+                "required": ["email", "roleId"]
+            },
+            "CreatePersonDto": {
+                "type": "object",
+                "properties": {
+                    "nameFirst": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "nameLast": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "emails": {
+                        "type": "object",
+                        "properties": {
+                            "primary": {
+                                "type": "string",
+                                "maxLength": 254,
+                                "format": "email",
+                                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                                "nullable": true
+                            },
+                            "additional": {
+                                "maxItems": 20,
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "maxLength": 254,
+                                    "format": "email",
+                                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                }
+                            }
+                        },
+                        "required": ["primary", "additional"]
+                    },
+                    "phones": {
+                        "type": "object",
+                        "properties": {
+                            "primary": {
+                                "type": "object",
+                                "properties": {
+                                    "number": {
+                                        "type": "string",
+                                        "pattern": "^[0-9]{3,15}$"
+                                    },
+                                    "countryCode": {
+                                        "type": "string",
+                                        "pattern": "^[A-Z]{2}$"
+                                    }
+                                },
+                                "required": ["number", "countryCode"],
+                                "nullable": true
+                            },
+                            "additional": {
+                                "maxItems": 20,
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "number": {
+                                            "type": "string",
+                                            "pattern": "^[0-9]{3,15}$"
+                                        },
+                                        "countryCode": {
+                                            "type": "string",
+                                            "pattern": "^[A-Z]{2}$"
+                                        }
+                                    },
+                                    "required": ["number", "countryCode"]
+                                }
+                            }
+                        },
+                        "required": ["primary", "additional"]
+                    },
+                    "jobTitle": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "nullable": true
+                    },
+                    "city": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "nullable": true
+                    },
+                    "links": {
+                        "type": "object",
+                        "properties": {
+                            "linkedin": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            },
+                            "x": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            }
+                        },
+                        "required": ["linkedin", "x"]
+                    },
+                    "avatarUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "companyId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "ownerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
+            "UpdatePersonDto": {
+                "type": "object",
+                "properties": {
+                    "nameFirst": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "nameLast": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "emails": {
+                        "type": "object",
+                        "properties": {
+                            "primary": {
+                                "type": "string",
+                                "maxLength": 254,
+                                "format": "email",
+                                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                                "nullable": true
+                            },
+                            "additional": {
+                                "maxItems": 20,
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "maxLength": 254,
+                                    "format": "email",
+                                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                                }
+                            }
+                        },
+                        "required": ["primary", "additional"]
+                    },
+                    "phones": {
+                        "type": "object",
+                        "properties": {
+                            "primary": {
+                                "type": "object",
+                                "properties": {
+                                    "number": {
+                                        "type": "string",
+                                        "pattern": "^[0-9]{3,15}$"
+                                    },
+                                    "countryCode": {
+                                        "type": "string",
+                                        "pattern": "^[A-Z]{2}$"
+                                    }
+                                },
+                                "required": ["number", "countryCode"],
+                                "nullable": true
+                            },
+                            "additional": {
+                                "maxItems": 20,
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "number": {
+                                            "type": "string",
+                                            "pattern": "^[0-9]{3,15}$"
+                                        },
+                                        "countryCode": {
+                                            "type": "string",
+                                            "pattern": "^[A-Z]{2}$"
+                                        }
+                                    },
+                                    "required": ["number", "countryCode"]
+                                }
+                            }
+                        },
+                        "required": ["primary", "additional"]
+                    },
+                    "jobTitle": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "nullable": true
+                    },
+                    "city": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "nullable": true
+                    },
+                    "links": {
+                        "type": "object",
+                        "properties": {
+                            "linkedin": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            },
+                            "x": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            }
+                        },
+                        "required": ["linkedin", "x"]
+                    },
+                    "avatarUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "companyId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "ownerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
+            "CreateCompanyDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "domain": {
+                        "type": "string",
+                        "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                        "nullable": true
+                    },
+                    "employeeCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "nullable": true
+                    },
+                    "arr": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "pattern": "^-?\\d{1,12}(\\.\\d{1,2})?$"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                            }
+                        },
+                        "required": ["amount", "currency"],
+                        "nullable": true
+                    },
+                    "address": {
+                        "type": "object",
+                        "properties": {
+                            "street": {
+                                "type": "string",
+                                "maxLength": 200,
+                                "nullable": true
+                            },
+                            "city": {
+                                "type": "string",
+                                "maxLength": 120,
+                                "nullable": true
+                            },
+                            "state": {
+                                "type": "string",
+                                "maxLength": 120,
+                                "nullable": true
+                            },
+                            "country": {
+                                "type": "string",
+                                "maxLength": 120,
+                                "nullable": true
+                            },
+                            "postalCode": {
+                                "type": "string",
+                                "maxLength": 20,
+                                "nullable": true
+                            }
+                        },
+                        "required": ["street", "city", "state", "country", "postalCode"]
+                    },
+                    "links": {
+                        "type": "object",
+                        "properties": {
+                            "linkedin": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            },
+                            "x": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            }
+                        },
+                        "required": ["linkedin", "x"]
+                    },
+                    "icp": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "ownerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": ["name"]
+            },
+            "UpdateCompanyDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "domain": {
+                        "type": "string",
+                        "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                        "nullable": true
+                    },
+                    "employeeCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "nullable": true
+                    },
+                    "arr": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "pattern": "^-?\\d{1,12}(\\.\\d{1,2})?$"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{3}$"
+                            }
+                        },
+                        "required": ["amount", "currency"],
+                        "nullable": true
+                    },
+                    "address": {
+                        "type": "object",
+                        "properties": {
+                            "street": {
+                                "type": "string",
+                                "maxLength": 200,
+                                "nullable": true
+                            },
+                            "city": {
+                                "type": "string",
+                                "maxLength": 120,
+                                "nullable": true
+                            },
+                            "state": {
+                                "type": "string",
+                                "maxLength": 120,
+                                "nullable": true
+                            },
+                            "country": {
+                                "type": "string",
+                                "maxLength": 120,
+                                "nullable": true
+                            },
+                            "postalCode": {
+                                "type": "string",
+                                "maxLength": 20,
+                                "nullable": true
+                            }
+                        },
+                        "required": ["street", "city", "state", "country", "postalCode"]
+                    },
+                    "links": {
+                        "type": "object",
+                        "properties": {
+                            "linkedin": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            },
+                            "x": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "format": "uri"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "maxLength": 120,
+                                        "nullable": true
+                                    }
+                                },
+                                "required": ["url", "label"],
+                                "nullable": true
+                            }
+                        },
+                        "required": ["linkedin", "x"]
+                    },
+                    "icp": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "ownerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
+            "CreateCustomFieldDto": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "key": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                    },
+                    "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "text",
+                            "number",
+                            "boolean",
+                            "date",
+                            "datetime",
+                            "select",
+                            "multiselect",
+                            "url",
+                            "email",
+                            "phone"
+                        ]
+                    },
+                    "options": {
+                        "maxItems": 200,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                        }
+                    },
+                    "required": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "number"
+                    }
+                },
+                "required": ["object", "key", "label", "type"]
+            },
+            "UpdateCustomFieldDto": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "options": {
+                        "maxItems": 200,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                        }
+                    },
+                    "required": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "number"
+                    }
+                }
+            }
+        }
+    }
+}

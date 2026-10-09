@@ -19,3 +19,12 @@ export const CurrentPrincipal = createParamDecorator((_: unknown, ctx: Execution
     if (!principal) throw new Error('CurrentPrincipal used on a route the auth guard did not authenticate');
     return principal;
 });
+
+export const ANY_MEMBER_KEY = 'auth:any-member';
+/**
+ * A tenant route any member or key of the workspace may call, with the workspace guard as its
+ * whole gate — a caller asking what *they* may do cannot be asked for a capability first. The
+ * reason is required and the router-walking test reads it: an exemption nobody explained is
+ * the same defect as a missing gate.
+ */
+export const AnyMember = (reason: string): MethodDecorator => SetMetadata(ANY_MEMBER_KEY, reason);

@@ -5,7 +5,8 @@ import { Test } from '@nestjs/testing';
 import { isCapability } from '@bylinecrm/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../app.module';
-import { REQUIRES_KEY } from './decorators';
+import { APP_COMPILE_TIMEOUT_MS, applyPlaceholderEnv } from '../openapi/placeholder-env';
+import { ANY_MEMBER_KEY, REQUIRES_KEY } from './decorators';
 import { TENANT_PATH } from './guards';
 
 /**
@@ -14,17 +15,10 @@ import { TENANT_PATH } from './guards';
  * a request ever reaches it. The module is compiled, not initialised: no connection is opened.
  */
 describe('tenant routes declare a capability', () => {
-    const routes: { route: string; capability: unknown }[] = [];
+    const routes: { route: string; capability: unknown; openReason: unknown }[] = [];
 
     beforeAll(async () => {
-        Object.assign(process.env, {
-            DATABASE_URL: 'postgresql://owner:x@localhost:1/db',
-            RLS_DATABASE_URL: 'postgresql://bylinecrm_app:x@localhost:1/db',
-            REDIS_URL: 'redis://localhost:1',
-            PORT: '1',
-            APP_URL: 'http://localhost:1',
-            WEB_URL: 'http://localhost:2',
-        });
+        applyPlaceholderEnv();
         const moduleRef = await Test.createTestingModule({ imports: [AppModule, DiscoveryModule] }).compile();
         const discovery = moduleRef.get(DiscoveryService);
         const scanner = moduleRef.get(MetadataScanner);
@@ -41,17 +35,24 @@ describe('tenant routes declare a capability', () => {
                 routes.push({
                     route: `${controller.name}.${name}`,
                     capability: Reflect.getMetadata(REQUIRES_KEY, handler),
+                    openReason: Reflect.getMetadata(ANY_MEMBER_KEY, handler),
                 });
             }
         }
-    });
+    }, APP_COMPILE_TIMEOUT_MS);
 
     it('finds the tenant routes this package added', () => {
-        expect(routes.length).toBeGreaterThanOrEqual(12);
+        expect(routes.length).toBeGreaterThanOrEqual(30);
     });
 
-    it('every one of them names a capability from the catalogue', () => {
-        const undeclared = routes.filter((r) => !isCapability(r.capability)).map((r) => r.route);
-        expect(undeclared, 'tenant routes with no @Requires()').toEqual([]);
+    it('every one of them names a capability from the catalogue, or is open to any member for a written reason', () => {
+        const open = (r: { openReason: unknown }) => typeof r.openReason === 'string' && r.openReason.trim().length > 0;
+        const undeclared = routes.filter((r) => !isCapability(r.capability) && !open(r)).map((r) => r.route);
+        expect(undeclared, 'tenant routes with no @Requires() and no @AnyMember(reason)').toEqual([]);
+    });
+
+    it('the routes open to any member are exactly the ones that ask what the caller may do', () => {
+        const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
+        expect(open).toEqual(['WorkspaceMeController.standing']);
     });
 });

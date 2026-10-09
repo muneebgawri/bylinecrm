@@ -9,6 +9,7 @@ import {
     InvitesController,
     MembersController,
     RolesController,
+    WorkspaceMeController,
 } from '../workspace/workspace.controllers';
 import { ApiKeyService } from './api-key.service';
 import { AuthController, MeController } from './auth.controller';
@@ -33,6 +34,7 @@ import { SessionService } from './session.service';
         RolesController,
         ApiKeysController,
         InvitesController,
+        WorkspaceMeController,
     ],
     providers: [
         AuthService,
