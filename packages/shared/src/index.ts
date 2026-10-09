@@ -41,3 +41,4 @@ export * from './pipelines.js';
 export * from './records.js';
 export * from './views.js';
 export * from './timeline.js';
+export * from './webhooks.js';

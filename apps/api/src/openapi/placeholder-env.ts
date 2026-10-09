@@ -11,6 +11,10 @@ export const PLACEHOLDER_ENV = {
     PORT: '1',
     APP_URL: 'http://localhost:1',
     WEB_URL: 'http://localhost:2',
+    // Any 32 bytes: nothing is sealed or opened while only compiling.
+    SECRETS_KEY: Buffer.alloc(32, 1).toString('base64'),
+    // No worker in a process that never connects.
+    WEBHOOK_WORKER: '0',
 } as const;
 
 export function applyPlaceholderEnv(): void {

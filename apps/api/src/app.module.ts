@@ -8,6 +8,7 @@ import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { ViewsModule } from './views/views.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { ViewsModule } from './views/views.module';
         RecordsModule,
         TimelineModule,
         ViewsModule,
+        WebhooksModule,
     ],
 })
 export class AppModule {}
