@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
  */
 describe('the default stages', () => {
     const sql = readFileSync(
-        resolve(__dirname, '../../prisma/migrations/20261009000600_pipelines/migration.sql'),
+        resolve(__dirname, '../../prisma/migrations/20261009000700_pipelines/migration.sql'),
         'utf8',
     );
 

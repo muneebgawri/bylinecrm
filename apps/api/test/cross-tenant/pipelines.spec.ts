@@ -220,10 +220,39 @@ describe('pipelines, stages, history, rules', () => {
             expect(history.map((h) => h.reason)).toEqual(['manual', 'manual']);
             expect(history[0]).toMatchObject({ fromStageId: stage('New').id, toStageId: stage('Contacted').id });
             expect(events.map((e) => e.type)).toEqual(['deal.stage_changed']);
+            expect(events[0]?.object).toBe('opportunity');
             expect(events[0]?.stage).toMatchObject({
                 fromStageId: stage('New').id,
                 toStageId: stage('Contacted').id,
                 reason: 'manual',
+            });
+            expect(events[0]?.diff).toEqual({ stageId: { from: stage('New').id, to: stage('Contacted').id } });
+        });
+
+        it('leaves exactly one deal.stage_changed entry on the deal’s timeline per move', async () => {
+            const d = await deal(admin, workspace, 'On the timeline');
+            await as(admin)
+                .post(w(`/opportunities/${d.id}/move`))
+                .send({ stageId: stage('Contacted').id })
+                .expect(201);
+            const page = (
+                await as(admin)
+                    .get(w(`/timeline?target=opportunity:${d.id}&kinds=deal.stage_changed`))
+                    .expect(200)
+            ).body as {
+                items: {
+                    kind: string;
+                    target: { type: string; id: string };
+                    properties: { diff?: Record<string, unknown> };
+                }[];
+            };
+            expect(page.items).toHaveLength(1);
+            expect(page.items[0]).toMatchObject({
+                kind: 'deal.stage_changed',
+                target: { type: 'opportunity', id: d.id },
+            });
+            expect(page.items[0]?.properties.diff).toEqual({
+                stageId: { from: stage('New').id, to: stage('Contacted').id },
             });
         });
 
@@ -346,7 +375,8 @@ describe('pipelines, stages, history, rules', () => {
                     .expect(200)
             ).body as History[];
             expect(history).toHaveLength(2);
-            expect(history[0]).toMatchObject({ reason: 'rule', actor: { kind: 'system', id: null } });
+            expect(history[0]).toMatchObject({ reason: 'rule', actor: { kind: 'rule' } });
+            expect((history[0]?.actor as { id: string | null }).id).toBeTruthy();
             expect(events.filter((e) => e.type === 'deal.stage_changed')).toHaveLength(1);
         });
 

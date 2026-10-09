@@ -6,8 +6,18 @@ import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
+import { TimelineModule } from './timeline/timeline.module';
 
 @Module({
-    imports: [ConfigModule, InfraModule, EventsModule, HealthModule, AuthModule, PipelinesModule, RecordsModule],
+    imports: [
+        ConfigModule,
+        InfraModule,
+        EventsModule,
+        HealthModule,
+        AuthModule,
+        PipelinesModule,
+        RecordsModule,
+        TimelineModule,
+    ],
 })
 export class AppModule {}

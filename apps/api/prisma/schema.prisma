@@ -35,6 +35,7 @@ model Workspace {
   tasks                  Task[]
   taskTargets            TaskTarget[]
   attachments            Attachment[]
+  timelineActivities     TimelineActivity[]
   pipelines              Pipeline[]
   pipelineStages         PipelineStage[]
   stageHistory           OpportunityStageHistory[]
@@ -641,4 +642,48 @@ model Attachment {
   @@index([workspaceId, targetType, targetId])
   @@index([workspaceId, deletedAt])
   @@map("attachments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline (P1-3). One append-only list per record of what happened to it: its own domain
+// events, the notes/tasks/files attached to it (one entry per record the thing is on), and
+// what integrations report. Tenant table under RLS; the app role may read and insert, never
+// update or delete — the migration grants exactly that.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The things that attach to a record and leave `linked-…` entries on its timeline.
+enum LinkedObject {
+  note
+  task
+  attachment
+
+  @@map("linked_object")
+}
+
+/// One thing that happened to one record (PAR-013). `kind` is `<object>.<action>`,
+/// `linked-<thing>.<action>` or `external.<kind>` (see `@bylinecrm/shared` timeline.ts).
+model TimelineActivity {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  targetType  RecordObject @map("target_type")
+  targetId    String       @map("target_id") @db.Uuid
+  kind        String
+  happenedAt  DateTime     @map("happened_at") @db.Timestamptz
+  /// `TimelineActor` from @bylinecrm/shared: who did it, or which rule or integration.
+  actor       Json
+  /// The field diff of an update, the linked thing's id and name, an external event's payload.
+  properties  Json         @default("{}")
+  linkedType  LinkedObject? @map("linked_type")
+  linkedId    String?      @map("linked_id") @db.Uuid
+  /// External entries only: the integration's name and its key, unique together per workspace.
+  source         String? 
+  idempotencyKey String?   @map("idempotency_key")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, source, idempotencyKey])
+  @@index([workspaceId, targetType, targetId, happenedAt(sort: Desc)])
+  @@index([workspaceId, linkedType, linkedId])
+  @@map("timeline_activities")
 }

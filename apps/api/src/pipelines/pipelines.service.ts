@@ -8,7 +8,7 @@ import {
 import {
     BOARD_STAGE_LIMIT,
     DEFAULT_STAGES,
-    type Actor,
+    type EventActor,
     type StageColour,
     type StageHistoryReason,
     type StageKind,
@@ -67,7 +67,7 @@ export interface HistoryEntry {
     fromStageId: string | null;
     toStageId: string;
     enteredAt: Date;
-    actor: Actor;
+    actor: EventActor;
     reason: StageHistoryReason;
 }
 
@@ -380,7 +380,7 @@ export class PipelinesService {
                 fromStageId: row.fromStageId,
                 toStageId: row.toStageId,
                 enteredAt: row.enteredAt,
-                actor: stored<Actor>(row.actor),
+                actor: stored<EventActor>(row.actor),
                 reason: row.reason,
             }));
         });

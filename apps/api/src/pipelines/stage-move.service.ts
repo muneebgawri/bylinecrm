@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import type { Actor, StageChange, StageHistoryReason, StageKind } from '@bylinecrm/shared';
+import type { EventActor, StageChange, StageHistoryReason, StageKind } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
@@ -37,7 +37,7 @@ export class StageMoveService {
     async place(
         tx: WorkspaceClient,
         deal: DealStageRow,
-        actor: Actor,
+        actor: EventActor,
         reason: Extract<StageHistoryReason, 'manual' | 'import'>,
     ): Promise<void> {
         await tx.opportunityStageHistory.create({
@@ -61,7 +61,7 @@ export class StageMoveService {
         tx: WorkspaceClient,
         deal: DealStageRow,
         toStageId: string,
-        actor: Actor,
+        actor: EventActor,
         options: { reason: StageHistoryReason; allowBackward: boolean; close?: ClosePayload | undefined },
     ): Promise<MoveOutcome> {
         const [from, to] = await Promise.all([
@@ -100,23 +100,30 @@ export class StageMoveService {
         };
     }
 
-    /** Publishes a committed move: always `deal.stage_changed`, and `deal.won` / `deal.lost` on a close. */
+    /**
+     * Publishes a committed move: always `deal.stage_changed`, and `deal.won` / `deal.lost` on a
+     * close. The events are about the opportunity, and the move travels as `diff.stageId` — the
+     * shape every `updated` event uses — so the timeline writes it on the deal like any change;
+     * `stage` adds the pipeline and the reason for anything that wants them.
+     */
     announce(
         workspaceId: string,
         dealId: string,
-        actor: Actor,
+        actor: EventActor,
         moved: Extract<MoveOutcome, { outcome: 'moved' }>,
     ): void {
         const base = {
-            object: 'deal' as const,
+            object: 'opportunity' as const,
             workspaceId,
             actor,
             occurredAt: new Date().toISOString(),
             recordId: dealId,
+            diff: { stageId: { from: moved.change.fromStageId, to: moved.change.toStageId } },
+            stage: moved.change,
         };
-        this.events.publish({ ...base, type: 'deal.stage_changed', stage: moved.change });
-        if (moved.toKind === 'won') this.events.publish({ ...base, type: 'deal.won', stage: moved.change });
-        if (moved.toKind === 'lost') this.events.publish({ ...base, type: 'deal.lost', stage: moved.change });
+        this.events.publish({ ...base, type: 'deal.stage_changed' });
+        if (moved.toKind === 'won') this.events.publish({ ...base, type: 'deal.won' });
+        if (moved.toKind === 'lost') this.events.publish({ ...base, type: 'deal.lost' });
     }
 }
 

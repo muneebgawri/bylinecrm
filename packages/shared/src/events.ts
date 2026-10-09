@@ -6,8 +6,15 @@ import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
  * things that happen to them — a deal's stage changing (P1-2), mail (P2) and meetings (P3).
  * One list; `ObjectOfEvent` derives an event's object from its type against it.
  */
-export const EVENT_OBJECTS = [...RECORD_OBJECTS, 'note', 'task', 'attachment', 'deal', 'email', 'meeting'] as const;
+export const EVENT_OBJECTS = [...RECORD_OBJECTS, 'note', 'task', 'attachment', 'email', 'meeting'] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
+
+/**
+ * Event types whose prefix is a word for the object rather than the object's own name: a
+ * `deal.*` event is about an opportunity. One table; `ObjectOfEvent` and `objectOfEvent` read it,
+ * so the timeline writes a `deal.stage_changed` entry on the opportunity with no special case.
+ */
+export const EVENT_PREFIX_OBJECTS = { deal: 'opportunity' } as const satisfies Record<string, EventObject>;
 
 /**
  * The domain events the API publishes after a record mutation commits. One catalogue: the
@@ -38,7 +45,8 @@ export const DOMAIN_EVENT_TYPES = [
     'attachment.created',
     'attachment.deleted',
     'attachment.restored',
-    // A deal's stage (P1-2). `recordId` is the opportunity; `stage` says from where to where and why.
+    // A deal's stage (P1-2): about the opportunity (`recordId`); `diff.stageId` says from where to
+    // where, as any updated field would, and `stage` adds the pipeline and the reason.
     'deal.stage_changed',
     'deal.won',
     'deal.lost',
@@ -49,12 +57,20 @@ export const DOMAIN_EVENT_TYPES = [
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
-/** The object an event type is about: the part before the dot. */
-export type ObjectOfEvent<T extends DomainEventType> = T extends `${infer O}.${string}`
-    ? O extends EventObject
-        ? O
-        : never
-    : never;
+type PrefixOf<T extends string> = T extends `${infer O}.${string}` ? O : never;
+
+/** The object an event type is about: the part before the dot, or what `EVENT_PREFIX_OBJECTS` maps it to. */
+export type ObjectOfEvent<T extends DomainEventType> =
+    PrefixOf<T> extends keyof typeof EVENT_PREFIX_OBJECTS
+        ? (typeof EVENT_PREFIX_OBJECTS)[PrefixOf<T>]
+        : PrefixOf<T> extends EventObject
+          ? PrefixOf<T>
+          : never;
+
+export function objectOfEvent<T extends DomainEventType>(type: T): ObjectOfEvent<T> {
+    const prefix = type.slice(0, type.indexOf('.'));
+    return ((EVENT_PREFIX_OBJECTS as Record<string, EventObject>)[prefix] ?? prefix) as ObjectOfEvent<T>;
+}
 
 /** One field's change, as `updated` events report it. */
 export interface FieldChange {
@@ -62,9 +78,15 @@ export interface FieldChange {
     to: unknown;
 }
 
+/**
+ * Who caused an event: a record's actors, or — for a move the rule engine made — the rule
+ * (`id` is the rule's). The timeline shows a rule's move as the rule's, not the system's.
+ */
+export type EventActor = Actor | { kind: 'rule'; id: string };
+
 interface DomainEventBase {
     workspaceId: string;
-    actor: Actor;
+    actor: EventActor;
     /** ISO 8601, UTC. */
     occurredAt: string;
     recordId: string;
