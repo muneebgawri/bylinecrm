@@ -4,10 +4,11 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.gen.ts",
+        "build": "pnpm run generate:api && vite build",
         "dev": "vite",
         "lint": "eslint \"src/**/*.{ts,tsx}\" \"e2e/**/*.ts\" --max-warnings 0",
-        "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p e2e/tsconfig.json --noEmit",
+        "typecheck": "pnpm run generate:api && tsc -p tsconfig.json --noEmit && tsc -p e2e/tsconfig.json --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
         "size": "size-limit",

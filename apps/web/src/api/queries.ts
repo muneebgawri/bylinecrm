@@ -40,7 +40,9 @@ import type {
     OpportunityView,
     PersonInput,
     PersonView,
-    RecordPage,
+    CompanyPage,
+    OpportunityPage,
+    PersonPage,
     SignupInput,
     TaskInput,
     UpdateRoleInput,
@@ -232,6 +234,11 @@ export type RecordViewOf<O extends RecordObject> = O extends 'person'
     : O extends 'company'
       ? CompanyView
       : OpportunityView;
+export type RecordPageOf<O extends RecordObject> = O extends 'person'
+    ? PersonPage
+    : O extends 'company'
+      ? CompanyPage
+      : OpportunityPage;
 export type RecordInputOf<O extends RecordObject> = O extends 'person'
     ? PersonInput
     : O extends 'company'
@@ -253,8 +260,7 @@ export function useRecordList<O extends RecordObject>(
 ) {
     return useQuery({
         queryKey: [...keys.records(workspaceId, object), 'list', params] as const,
-        queryFn: ({ signal }) =>
-            recordEndpoints[object].list(workspaceId, params, signal) as Promise<RecordPage<RecordViewOf<O>>>,
+        queryFn: ({ signal }) => recordEndpoints[object].list(workspaceId, params, signal) as Promise<RecordPageOf<O>>,
         enabled,
     });
 }
