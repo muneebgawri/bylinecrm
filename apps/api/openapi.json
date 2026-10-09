@@ -8458,6 +8458,946 @@
                 "tags": ["search"]
             }
         },
+        "/api/w/{workspaceId}/templates": {
+            "get": {
+                "operationId": "templates_list",
+                "parameters": [
+                    {
+                        "name": "kind",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["personal", "outreach"]
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplatePage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            },
+            "post": {
+                "operationId": "templates_create",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateTemplateDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplate"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/templates/deleted": {
+            "get": {
+                "operationId": "templates_listDeleted",
+                "parameters": [
+                    {
+                        "name": "kind",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["personal", "outreach"]
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplatePage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/templates/variables": {
+            "get": {
+                "operationId": "templates_variables",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TemplateVariables"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/templates/{templateId}": {
+            "get": {
+                "operationId": "templates_get",
+                "parameters": [
+                    {
+                        "name": "templateId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplate"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            },
+            "patch": {
+                "operationId": "templates_update",
+                "parameters": [
+                    {
+                        "name": "templateId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "If-Match",
+                        "in": "header",
+                        "description": "The version you edited, e.g. \"3\" (or send `version`).",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateTemplateDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplate"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            },
+            "delete": {
+                "operationId": "templates_remove",
+                "parameters": [
+                    {
+                        "name": "templateId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/templates/{templateId}/restore": {
+            "post": {
+                "operationId": "templates_restore",
+                "parameters": [
+                    {
+                        "name": "templateId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplate"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/templates/{templateId}/duplicate": {
+            "post": {
+                "operationId": "templates_duplicate",
+                "parameters": [
+                    {
+                        "name": "templateId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailTemplate"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/templates/{templateId}/preview": {
+            "post": {
+                "operationId": "templates_preview",
+                "parameters": [
+                    {
+                        "name": "templateId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreviewTemplateDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RenderedEmail"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
+        "/api/w/{workspaceId}/settings/mail": {
+            "get": {
+                "operationId": "mailSettings_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            },
+            "put": {
+                "operationId": "mailSettings_put",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutMailSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["templates"]
+            }
+        },
         "/api/w/{workspaceId}/timeline": {
             "get": {
                 "operationId": "timeline_list",
@@ -11709,6 +12649,239 @@
                     }
                 }
             },
+            "CreateTemplateDto__schema0": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CreateTemplateDto__schema0"
+                        }
+                    },
+                    "attrs": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "marks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64
+                                },
+                                "attrs": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            },
+                            "required": ["type"]
+                        }
+                    }
+                },
+                "required": ["type"],
+                "additionalProperties": {}
+            },
+            "CreateTemplateDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["personal", "outreach"]
+                    },
+                    "subject": {
+                        "default": "",
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "body": {
+                        "default": {
+                            "type": "doc",
+                            "content": []
+                        },
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["doc"]
+                            },
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/CreateTemplateDto__schema0"
+                                }
+                            }
+                        },
+                        "required": ["type"]
+                    }
+                },
+                "required": ["name", "kind"]
+            },
+            "UpdateTemplateDto__schema0": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/UpdateTemplateDto__schema0"
+                        }
+                    },
+                    "attrs": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "marks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64
+                                },
+                                "attrs": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            },
+                            "required": ["type"]
+                        }
+                    }
+                },
+                "required": ["type"],
+                "additionalProperties": {}
+            },
+            "UpdateTemplateDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["personal", "outreach"]
+                    },
+                    "subject": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "body": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["doc"]
+                            },
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/UpdateTemplateDto__schema0"
+                                }
+                            }
+                        },
+                        "required": ["type"]
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                    }
+                }
+            },
+            "PreviewTemplateDto": {
+                "type": "object",
+                "properties": {
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "dealId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                },
+                "required": ["personId"]
+            },
+            "PutMailSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "postalAddress": {
+                        "type": "object",
+                        "properties": {
+                            "line1": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                            },
+                            "line2": {
+                                "type": "string",
+                                "maxLength": 300,
+                                "nullable": true
+                            },
+                            "city": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                            },
+                            "region": {
+                                "type": "string",
+                                "maxLength": 300,
+                                "nullable": true
+                            },
+                            "postalCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                            },
+                            "country": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{2}$"
+                            }
+                        },
+                        "required": ["line1", "city", "postalCode", "country"],
+                        "nullable": true
+                    },
+                    "defaultSenderName": {
+                        "type": "string",
+                        "maxLength": 300,
+                        "nullable": true
+                    },
+                    "unsubscribeFooterText": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                    }
+                },
+                "required": ["postalAddress", "defaultSenderName", "unsubscribeFooterText"]
+            },
             "ExternalActivityDto": {
                 "type": "object",
                 "properties": {
@@ -12154,7 +13327,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 29,
+                        "maxItems": 33,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -12186,6 +13359,10 @@
                                 "deal.stage_changed",
                                 "deal.won",
                                 "deal.lost",
+                                "template.created",
+                                "template.updated",
+                                "template.deleted",
+                                "template.restored",
                                 "email.replied",
                                 "meeting.booked"
                             ]
@@ -12212,7 +13389,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 29,
+                        "maxItems": 33,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -12244,6 +13421,10 @@
                                 "deal.stage_changed",
                                 "deal.won",
                                 "deal.lost",
+                                "template.created",
+                                "template.updated",
+                                "template.deleted",
+                                "template.restored",
                                 "email.replied",
                                 "meeting.booked"
                             ]
@@ -14129,6 +15310,235 @@
                     }
                 },
                 "required": ["person", "company", "opportunity"]
+            },
+            "EmailTemplate": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["personal", "outreach"]
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Plain text; variables are `{{path}}` tokens."
+                    },
+                    "body": {
+                        "description": "The template subset of rich text; variables are `variable` nodes.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RichText"
+                            }
+                        ]
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Name it when you PATCH (body `version` or `If-Match`)."
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "updatedBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "kind",
+                    "subject",
+                    "body",
+                    "version",
+                    "createdBy",
+                    "updatedBy",
+                    "createdAt",
+                    "updatedAt",
+                    "deletedAt"
+                ]
+            },
+            "EmailTemplatePage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/EmailTemplate"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
+            },
+            "RenderedEmail": {
+                "type": "object",
+                "properties": {
+                    "subject": {
+                        "type": "string"
+                    },
+                    "html": {
+                        "type": "string"
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "missing": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Variables with no value for this recipient (and `workspace.postal_address` for an outreach template with none set), in order of first use. Each is marked in `html` (`data-missing-variable`) and kept as `{{path}}` in `subject` and `text`; nothing is ever rendered blank."
+                    },
+                    "sendable": {
+                        "type": "boolean",
+                        "description": "False whenever `missing` is not empty."
+                    }
+                },
+                "required": ["subject", "html", "text", "missing", "sendable"]
+            },
+            "TemplateVariable": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "example": "person.firstName"
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["person", "company", "deal", "sender"]
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "`text`, `email` or `money` for a standard variable; the custom field’s type otherwise."
+                    },
+                    "optional": {
+                        "type": "boolean",
+                        "description": "Renders empty instead of blocking the send (only `sender.signature`)."
+                    }
+                },
+                "required": ["path", "source", "label", "type", "optional"]
+            },
+            "TemplateVariables": {
+                "type": "object",
+                "properties": {
+                    "standard": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TemplateVariable"
+                        }
+                    },
+                    "custom": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "example": "person.firstName"
+                                },
+                                "source": {
+                                    "type": "string",
+                                    "enum": ["person", "company", "deal"]
+                                },
+                                "label": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "description": "`text`, `email` or `money` for a standard variable; the custom field’s type otherwise."
+                                },
+                                "optional": {
+                                    "type": "boolean",
+                                    "description": "Renders empty instead of blocking the send (only `sender.signature`)."
+                                }
+                            },
+                            "required": ["path", "source", "label", "type", "optional"]
+                        }
+                    }
+                },
+                "required": ["standard", "custom"]
+            },
+            "PostalAddress": {
+                "type": "object",
+                "properties": {
+                    "line1": {
+                        "type": "string"
+                    },
+                    "line2": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "city": {
+                        "type": "string"
+                    },
+                    "region": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "postalCode": {
+                        "type": "string"
+                    },
+                    "country": {
+                        "type": "string",
+                        "example": "US"
+                    }
+                },
+                "required": ["line1", "line2", "city", "region", "postalCode", "country"]
+            },
+            "MailSettings": {
+                "type": "object",
+                "properties": {
+                    "postalAddress": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PostalAddress"
+                            }
+                        ]
+                    },
+                    "defaultSenderName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "unsubscribeFooterText": {
+                        "type": "string"
+                    }
+                },
+                "required": ["postalAddress", "defaultSenderName", "unsubscribeFooterText"]
             },
             "TimelineActor": {
                 "anyOf": [
