@@ -13,15 +13,18 @@ import type {
     RecordTarget,
     RichText,
     SavedView,
+    SearchResults,
     StageColour,
     StageHistoryReason,
     StageKind,
     StageRuleEvent,
     TaskStatus,
     TimelineActor,
+    ViewColumn,
+    ViewSort,
 } from '@bylinecrm/shared';
 
-export type { SavedView };
+export type { SavedView, SearchResults };
 
 /**
  * The API's response and request shapes as the web app reads them. These mirror the P0-3
@@ -417,13 +420,15 @@ export interface CreateViewInput {
     object: RecordObject;
     name: string;
     filter?: FilterGroup | null | undefined;
-    sorts?: SavedView['sorts'] | undefined;
+    sorts?: ViewSort[] | undefined;
+    columns?: ViewColumn[] | undefined;
     isShared?: boolean | undefined;
 }
 
 export interface UpdateViewInput {
     name?: string | undefined;
     filter?: FilterGroup | null | undefined;
-    sorts?: SavedView['sorts'] | undefined;
+    sorts?: ViewSort[] | undefined;
+    columns?: ViewColumn[] | undefined;
     isShared?: boolean | undefined;
 }
