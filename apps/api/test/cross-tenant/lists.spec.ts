@@ -293,29 +293,56 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
                     .expect(201);
             }
             const rls = app.get(RlsPrismaService);
+            const emitter = app.get(EventEmitter2);
+            // A deliberately noisy background listener: it reads `people` while the request under
+            // test runs. Work that is not the request's must not count against the request.
+            const NOISE = 'test.lists.noise';
+            const noisy = async (): Promise<void> => {
+                await rls.withWorkspace(workspace, (tx) => tx.person.findMany({ take: 5 }));
+                await rls.withWorkspace(workspace, (tx) => tx.company.findMany({ take: 5 }));
+            };
+            emitter.on(NOISE, noisy);
+            const LIST_MODELS = new Set(['Person', 'Company', 'WorkspaceMember']);
             const statements = async (limit: number): Promise<number> => {
                 let count = 0;
-                const stop = rls.observeQueries((sql) => {
-                    // The list's own tables; the auth guard's and any background job's are not the list's cost.
-                    if (/"(people|companies|workspace_members)"/.test(sql)) count += 1;
-                });
+                const requestId = `nplus1-${limit}-${Math.random().toString(36).slice(2, 10)}`;
+                // Only the request tagged with this id is observed; the noise runs in its own context.
+                const stop = rls.observeQueries(
+                    (query) => {
+                        if (
+                            (query.model && LIST_MODELS.has(query.model)) ||
+                            /"?(people|companies|workspace_members)"?\b/.test(query.sql ?? '')
+                        ) {
+                            count += 1;
+                        }
+                    },
+                    { requestId },
+                );
                 try {
-                    const res = page<Person>(
-                        await as(admin)
+                    const [res] = await Promise.all([
+                        as(admin)
                             .get(w(`/people?limit=${limit}`))
+                            .set('X-Request-Id', requestId)
                             .expect(200),
-                    );
-                    expect(res.items).toHaveLength(limit);
-                    expect(res.items.every((p) => p.company !== null)).toBe(true);
+                        // Noise only in the larger request: if it were counted, fifty would exceed ten.
+                        limit === 50 ? emitter.emitAsync(NOISE) : Promise.resolve([]),
+                    ]);
+                    const listed = page<Person>(res);
+                    expect(listed.items).toHaveLength(limit);
+                    expect(listed.items.every((p) => p.company !== null)).toBe(true);
                 } finally {
                     stop();
                 }
                 return count;
             };
-            const ten = await statements(10);
-            const fifty = await statements(50);
-            expect(ten).toBeGreaterThan(0);
-            expect(fifty).toBe(ten);
+            try {
+                const ten = await statements(10);
+                const fifty = await statements(50);
+                expect(ten).toBeGreaterThan(0);
+                expect(fifty).toBe(ten);
+            } finally {
+                emitter.off(NOISE, noisy);
+            }
         });
     });
 

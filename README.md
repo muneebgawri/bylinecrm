@@ -39,6 +39,9 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
   lost, every secret sealed with it is unrecoverable and each webhook endpoint must be rotated.
 - **`WEBHOOK_WORKER`** — `1` (default) runs webhook delivery in this process; `0` on an API when a separate worker
   process runs it.
+- **`MAIL_SYNC_WORKER`** — `1` (default) runs Gmail sync in this process (a sync of every connected mailbox every
+  two minutes, and a first import when one connects); `0` on an API when a separate worker process runs it. The
+  cross-tenant suite sets `0`.
 - **`WEBHOOK_ALLOW_PRIVATE_TARGETS`** — `0` in every deployed environment (it admits private/loopback webhook
   targets, for local receivers only).
 

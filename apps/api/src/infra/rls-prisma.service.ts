@@ -29,44 +29,63 @@ export class NoWorkspaceError extends Error {
  * migrations and administration and never touches tenant rows on a request's behalf.
  */
 @Injectable()
-export class RlsPrismaService
-    extends PrismaClient<Prisma.PrismaClientOptions, 'query'>
-    implements OnModuleInit, OnModuleDestroy
-{
-    /** Who hears each SQL statement this client sends; see `observeQueries`. */
-    private readonly queryObservers = new Set<(sql: string) => void>();
+export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+    /** Who hears the operations of which request; see `observeQueries`. */
+    private readonly queryObservers = new Map<(query: ObservedQuery) => void, string>();
     private readonly queryEvents: boolean;
+    /**
+     * With `DB_QUERY_EVENTS=1`, the client every transaction runs on: the same client extended with
+     * a hook that sees each operation in the async context of the code that issued it — which a
+     * Prisma statement event does not (its callback runs in no request's context). Null otherwise.
+     */
+    private readonly observed: Pick<PrismaClient, '$transaction'> | null;
 
     constructor(
         @Inject(ENV) env: Env,
         private readonly context: WorkspaceContext,
     ) {
-        super({
-            datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL),
-            // A statement event per query only where a test asked for it (`DB_QUERY_EVENTS=1`).
-            ...(env.DB_QUERY_EVENTS ? { log: [{ emit: 'event' as const, level: 'query' as const }] } : {}),
-        });
+        super({ datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL) });
         this.queryEvents = env.DB_QUERY_EVENTS;
-        if (this.queryEvents) {
-            this.$on('query', (event) => {
-                for (const observe of this.queryObservers) observe(event.query);
-            });
-        }
+        this.observed = this.queryEvents
+            ? (this.$extends({
+                  query: {
+                      $allOperations: ({ model, operation, args, query }) => {
+                          this.notify(() => ({ model: model ?? null, operation, sql: sqlOf(args) }));
+                          return query(args);
+                      },
+                  },
+              }) as unknown as Pick<PrismaClient, '$transaction'>)
+            : null;
     }
 
     /**
-     * Hears every SQL statement this client sends until the returned function is called. A query
-     * budget is held by it — the record lists' test asserts that a page of fifty rows with their
-     * related names costs the same number of statements as a page of ten (P1-4a: no N+1). Needs
-     * `DB_QUERY_EVENTS=1`; without it this throws, so a test that forgot the flag fails instead of
-     * counting zero statements and passing.
+     * Hears every operation one request sends — the request whose `X-Request-Id` is
+     * `scope.requestId` — until the returned function is called. Work running at the same time in
+     * any other context (another request, a background listener of an earlier one, a job) is not
+     * heard, so a query budget measures the request alone: the record lists' test asserts that a
+     * page of fifty rows with their related names costs as many operations as a page of ten
+     * (P1-4a: no N+1). Needs `DB_QUERY_EVENTS=1`; without it this throws, so a test that forgot the
+     * flag fails instead of counting nothing and passing.
      */
-    observeQueries(observer: (sql: string) => void): () => void {
+    observeQueries(observer: (query: ObservedQuery) => void, scope: { requestId: string }): () => void {
         if (!this.queryEvents) {
             throw new Error('observeQueries needs DB_QUERY_EVENTS=1: this client emits no query events');
         }
-        this.queryObservers.add(observer);
+        this.queryObservers.set(observer, scope.requestId);
         return () => this.queryObservers.delete(observer);
+    }
+
+    /** Tells the observers of the current request about an operation; described only if someone listens. */
+    private notify(describe: () => ObservedQuery): void {
+        if (this.queryObservers.size === 0) return;
+        const requestId = this.context.requestId();
+        if (!requestId) return;
+        let query: ObservedQuery | null = null;
+        for (const [observe, observed] of this.queryObservers) {
+            if (observed !== requestId) continue;
+            query ??= describe();
+            observe(query);
+        }
     }
 
     async onModuleInit(): Promise<void> {
@@ -121,11 +140,12 @@ export class RlsPrismaService
     ): Promise<T> {
         for (let attempt = 1; ; attempt++) {
             try {
-                return await this.$transaction(async (tx) => {
+                return await (this.observed ?? this).$transaction(async (tx) => {
+                    const client = tx as WorkspaceClient;
                     for (const [setting, value] of settings) {
-                        await tx.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
+                        await client.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
                     }
-                    return fn(tx);
+                    return fn(client);
                 });
             } catch (error) {
                 if (!isPoolExhausted(error) || attempt >= POOL_RETRY_ATTEMPTS) throw error;
@@ -133,6 +153,23 @@ export class RlsPrismaService
             }
         }
     }
+}
+
+/** One operation a request sent: its model (null for a raw query) and, for a raw query, its SQL. */
+export interface ObservedQuery {
+    model: string | null;
+    operation: string;
+    sql: string | null;
+}
+
+/**
+ * The SQL text of a raw operation's arguments — a tagged template's `Sql` (it has a `sql` string)
+ * or an unsafe call's leading string; null for a model operation.
+ */
+function sqlOf(args: unknown): string | null {
+    if (Array.isArray(args) && typeof args[0] === 'string') return args[0];
+    const sql = (args as { sql?: unknown } | null)?.sql;
+    return typeof sql === 'string' ? sql : null;
 }
 
 /** Applies the pool constants unless the URL sets its own; an operator's explicit value wins. */
