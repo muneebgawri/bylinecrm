@@ -23,7 +23,29 @@ export interface RouteState {
     url: string;
     /** What to do after the page settles to reach the state (open a palette, …). */
     after?: 'palette';
+    /** What this state promises on a phone beyond every page's checks (FR-CRMS-UI-12). */
+    phone?: PhoneExpectations;
 }
+
+export interface PhoneExpectations {
+    /** A record's actions sit in a bar fixed to the bottom of the screen. */
+    bottomBar?: true;
+    /** The first element matching this selector is above the phone fold (checks.ts, PHONE_FOLD_PX). */
+    aboveFold?: string;
+}
+
+/**
+ * Per-state phone promises, by state name. A record — as a page or as the drawer over a list —
+ * keeps its actions in the bottom bar; the deals board shows its first card without scrolling.
+ */
+const PHONE: Record<string, PhoneExpectations> = {
+    person: { bottomBar: true },
+    company: { bottomBar: true },
+    deal: { bottomBar: true },
+    'drawer-person': { bottomBar: true },
+    'drawer-deal': { bottomBar: true },
+    deals: { aboveFold: '[data-deal-id]' },
+};
 
 function routeStates(): RouteState[] {
     return Object.entries(paths).map(([name, path]): RouteState => {
@@ -46,4 +68,12 @@ const EXTRA_STATES: RouteState[] = [
     { name: 'palette', url: paths.home(IDS.workspace), after: 'palette' },
 ];
 
-export const STATES: readonly RouteState[] = [...routeStates(), ...EXTRA_STATES];
+export const STATES: readonly RouteState[] = [...routeStates(), ...EXTRA_STATES].map((state) => {
+    const phone = PHONE[state.name];
+    return phone ? { ...state, phone } : state;
+});
+
+// A phone promise for a state that no longer exists is a promise nobody checks: fail loudly.
+for (const name of Object.keys(PHONE)) {
+    if (!STATES.some((s) => s.name === name)) throw new Error(`route gate: PHONE names an unknown state "${name}"`);
+}

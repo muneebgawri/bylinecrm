@@ -6,7 +6,15 @@ import { getViolations, injectAxe } from 'axe-playwright';
  * returns findings instead of throwing, so one run reports every problem on every route in one
  * table (reporter.ts) instead of stopping at the first.
  */
-export type Check = 'axe' | 'sideways-scroll' | 'touch-target' | 'input-text-size' | 'primary-action' | 'phone-table';
+export type Check =
+    | 'axe'
+    | 'sideways-scroll'
+    | 'touch-target'
+    | 'input-text-size'
+    | 'primary-action'
+    | 'phone-table'
+    | 'bottom-bar'
+    | 'above-fold';
 
 export interface Finding {
     check: Check;
@@ -208,4 +216,54 @@ export async function primaryAction(page: Page): Promise<{ findings: Finding[]; 
         present: result.present,
         findings: result.off ? [{ check: 'primary-action', detail: `the primary action ${result.off}` }] : [],
     };
+}
+
+/**
+ * The height of the smallest phone the product is held to (iPhone SE, 375×667). The gate's phone
+ * viewport is taller; what a page promises "above the fold" is checked against this line instead,
+ * so a layout that only works on tall phones fails (FR-CRMS-UI-12).
+ */
+export const PHONE_FOLD_PX = 667;
+
+/**
+ * A record page on a phone keeps its actions in a bar fixed to the bottom of the screen
+ * (`data-bottom-bar`), not at the top of the page where they scroll away (FR-CRMS-UI-12). The bar
+ * must be visible and inside the viewport with the page scrolled to the top.
+ */
+export async function phoneBottomBar(page: Page): Promise<Finding[]> {
+    const result = await page.evaluate(() => {
+        const bars = [...document.querySelectorAll('[data-bottom-bar]')].filter((el) => {
+            const style = getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 1 && rect.height > 1;
+        });
+        const bar = bars[0];
+        if (!bar) return 'no visible [data-bottom-bar] on a record page';
+        const rect = bar.getBoundingClientRect();
+        if (rect.top < 0 || rect.bottom > window.innerHeight + 0.5) {
+            return `the bottom bar spans ${Math.round(rect.top)}–${Math.round(rect.bottom)}px of a ${window.innerHeight}px viewport`;
+        }
+        return '';
+    });
+    return result ? [{ check: 'bottom-bar', detail: result }] : [];
+}
+
+/**
+ * The first element matching `selector` ends above PHONE_FOLD_PX with the page scrolled to the
+ * top: on the deals board, the first card is on screen without scrolling past the page's chrome.
+ */
+export async function aboveFold(page: Page, selector: string): Promise<Finding[]> {
+    const result = await page.evaluate(
+        ([sel, fold]) => {
+            const el = [...document.querySelectorAll(sel)].find((e) => {
+                const r = e.getBoundingClientRect();
+                return r.width > 1 && r.height > 1;
+            });
+            if (!el) return `nothing matches ${sel}`;
+            const bottom = el.getBoundingClientRect().bottom;
+            return bottom > fold ? `the first ${sel} ends at ${Math.round(bottom)}px, below the ${fold}px fold` : '';
+        },
+        [selector, PHONE_FOLD_PX] as const,
+    );
+    return result ? [{ check: 'above-fold', detail: result }] : [];
 }
