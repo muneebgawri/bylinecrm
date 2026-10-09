@@ -25,9 +25,16 @@ export function stories(): StoryEntry[] {
     return Object.values(index.entries).filter((entry) => entry.type === 'story');
 }
 
-/** Opens one story in the preview iframe and waits until it has rendered and its fonts are in. */
+/**
+ * Opens one story in the preview iframe and waits until Storybook says it has rendered. The
+ * signal is Storybook's own `sb-show-main` class on `body` (it sets `sb-show-errordisplay`
+ * instead when the story throws), not the contents of `#storybook-root`: a story whose whole
+ * output is a portal — a dialog, the ⌘K palette — leaves the root empty by design.
+ */
 export async function openStory(page: Page, id: string): Promise<void> {
     await page.goto(`/iframe.html?id=${id}&viewMode=story`);
-    await expect(page.locator('#storybook-root')).not.toBeEmpty();
+    const body = page.locator('body');
+    await expect(body).toHaveClass(/sb-show-main/);
+    await expect(body, `story ${id} threw while rendering`).not.toHaveClass(/sb-show-errordisplay/);
     await page.evaluate(() => document.fonts.ready);
 }

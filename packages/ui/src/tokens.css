@@ -22,7 +22,7 @@
     /* Text */
     --bc-text: #111827;
     --bc-text-muted: #5b6473;
-    --bc-text-faint: #8a93a2;
+    --bc-text-faint: #687080;
 
     /* Accent (interactive) */
     --bc-accent: #2563eb;
@@ -81,7 +81,7 @@
         --bc-border-strong: #3b4556;
         --bc-text: #f3f4f6;
         --bc-text-muted: #a3acba;
-        --bc-text-faint: #7b8595;
+        --bc-text-faint: #8b95a5;
         --bc-accent: #7cb0ff;
         --bc-accent-hover: #9cc3ff;
         --bc-accent-foreground: #0b0f17;
@@ -109,7 +109,7 @@
     --bc-border-strong: #3b4556;
     --bc-text: #f3f4f6;
     --bc-text-muted: #a3acba;
-    --bc-text-faint: #7b8595;
+    --bc-text-faint: #8b95a5;
     --bc-accent: #7cb0ff;
     --bc-accent-hover: #9cc3ff;
     --bc-accent-foreground: #0b0f17;
