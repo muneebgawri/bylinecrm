@@ -7,13 +7,16 @@ import {
     type SchemaObject,
     SwaggerModule,
 } from '@nestjs/swagger';
-import { SESSION_COOKIE } from '@bylinecrm/shared';
+import { REQUEST_ID_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { z } from 'zod';
 import { VERSION } from '../version';
 import { RETURNS_EXTENSION, apiError, componentName, responseSchemas, type ReturnsSpec } from './responses';
 
 const SCHEMA_REF = '#/components/schemas/';
+
+/** The header component's name in the document; the header's wire name is the shared `REQUEST_ID_HEADER`. */
+const REQUEST_ID_COMPONENT = 'RequestId';
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'options', 'head', 'trace'] as const;
 
 /**
@@ -61,6 +64,12 @@ function applyResponses(document: OpenAPIObject): OpenAPIObject {
         schemas[name] = rest as SchemaObject;
     }
     const errorRef = { $ref: `${SCHEMA_REF}${componentName(apiError)}` };
+    // Every response carries the request id (P1-1d); one header component, referenced everywhere.
+    (components.headers ??= {})[REQUEST_ID_COMPONENT] = {
+        description: 'The id of this request; quote it when reporting a problem. An inbound well-formed id is echoed.',
+        schema: { type: 'string' },
+    };
+    const requestIdHeader = { [REQUEST_ID_HEADER]: { $ref: `#/components/headers/${REQUEST_ID_COMPONENT}` } };
 
     for (const item of Object.values(document.paths)) {
         for (const method of HTTP_METHODS) {
@@ -68,19 +77,27 @@ function applyResponses(document: OpenAPIObject): OpenAPIObject {
             if (!operation) continue;
             const spec = operation[RETURNS_EXTENSION] as ReturnsSpec | undefined;
             delete operation[RETURNS_EXTENSION];
-            operation.responses = withBody(operation.responses, spec);
+            operation.responses = withBody(operation.responses, spec, errorRef);
             for (const range of ['4XX', '5XX'] as const) {
                 operation.responses[range] ??= {
                     description: 'The error envelope',
                     content: { 'application/json': { schema: errorRef } },
                 };
             }
+            for (const response of Object.values(operation.responses)) {
+                if (!response || '$ref' in response) continue;
+                response.headers = { ...response.headers, ...requestIdHeader };
+            }
         }
     }
     return document;
 }
 
-function withBody(responses: ResponsesObject, spec: ReturnsSpec | undefined): ResponsesObject {
+function withBody(
+    responses: ResponsesObject,
+    spec: ReturnsSpec | undefined,
+    errorRef: { $ref: string },
+): ResponsesObject {
     if (!spec) return responses;
     const success = Object.keys(responses).find((code) => /^2\d\d$/.test(code));
     if (spec.kind === 'redirect') {
@@ -89,7 +106,13 @@ function withBody(responses: ResponsesObject, spec: ReturnsSpec | undefined): Re
     }
     if (spec.kind === 'not-implemented') {
         const { [success ?? '']: _dropped, ...rest } = responses;
-        return { ...rest, '501': { description: 'Not implemented yet.' } };
+        return {
+            ...rest,
+            '501': {
+                description: 'Not implemented yet; the body is the error envelope.',
+                content: { 'application/json': { schema: errorRef } },
+            },
+        };
     }
     if (!success) throw new Error('a route that declares a body has no 2xx response to put it on');
     const content =
