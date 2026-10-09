@@ -60,6 +60,17 @@ describe('FR-CRMS-UI-7: a record URL opened directly', () => {
                 if (path.endsWith('/me/profile'))
                     return json({ email: 'kate@example.test', displayName: 'Kate Morgan', completed: true });
                 if (path.endsWith('/api/me')) return json({ id: 'u', email: 'kate@example.test', emailVerified: true });
+                if (path.endsWith(`/w/${WS}/me`))
+                    return json({
+                        workspaceId: WS,
+                        memberId: 'm',
+                        userId: 'u',
+                        apiKeyId: null,
+                        roleId: 'r',
+                        roleName: 'admin',
+                        recordScope: 'all',
+                        capabilities: ['record:read'],
+                    });
                 return json({});
             }),
         );

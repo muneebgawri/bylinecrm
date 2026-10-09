@@ -9,16 +9,19 @@ import {
     useIsNarrow,
 } from '@bylinecrm/ui';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router';
-import { useLogout } from '../api/queries';
+import { Navigate, Outlet, useNavigate } from 'react-router';
+import { useLogout, useProfile } from '../api/queries';
+import { useAuthGate } from '../auth/RequireAuth';
 import { WorkspaceCapabilities, useMembership } from '../auth/capabilities';
 import { can } from '../auth/capabilities';
 import { useRegisterCommands, type Command } from '../commands/registry';
 import { useCommandShortcuts } from '../commands/shortcuts';
 import { useWorkspaceId } from '../routes/params';
 import { paths } from '../routes/paths';
+import { RouteSkeleton } from '../routes/states';
 import { CommandPalette } from './CommandPalette';
 import { OfflineBanner } from './OfflineBanner';
+import { ProfileDialog } from './ProfileDialog';
 import { ShortcutsSheet } from './ShortcutsSheet';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -33,22 +36,34 @@ const RecordDrawerHost = lazy(() =>
     import('../routes/w/records/RecordDrawerHost').then((m) => ({ default: m.RecordDrawerHost })),
 );
 
-/** The workspace routes' frame. Resolves the member's standing first, then renders the shell. */
+/**
+ * The workspace routes' frame, and their sign-in guard (`useAuthGate`, the rule `RequireAuth` uses).
+ * The frame — sidebar, top bar — is drawn from the first frame; until the person is known to be
+ * signed in, only the content area shows its loading state (P1-UI-10, FR-CRMS-UI-7). A signed-out
+ * visitor is sent to sign-in. Permission-gated items wait for the membership (FR-CRMS-UI-6).
+ */
 export function AppShell() {
     const workspaceId = useWorkspaceId();
+    const gate = useAuthGate();
+    if (gate.state === 'signed-out') return <Navigate to={gate.to} replace />;
     return (
         <WorkspaceCapabilities workspaceId={workspaceId}>
-            <Shell workspaceId={workspaceId} />
+            <Shell workspaceId={workspaceId} signedIn={gate.state === 'signed-in'} />
         </WorkspaceCapabilities>
     );
 }
 
-function Shell({ workspaceId }: { workspaceId: string }) {
+function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boolean }) {
     const narrow = useIsNarrow();
     const [collapsed, setCollapsed] = usePersistedState(SIDEBAR_COLLAPSED_KEY, isBoolean, false);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [profileOpen, setProfileOpen] = useState(false);
+    const profile = useProfile();
+    // Asked once: a person who has not confirmed their name sees the prompt until they save or
+    // dismiss it (either confirms it server-side), on whichever device they sign in from first.
+    const needsName = profile.data?.completed === false;
 
     const toggleSidebar = useCallback(() => {
         if (narrow) setDrawerOpen((open) => !open);
@@ -59,6 +74,7 @@ function Shell({ workspaceId }: { workspaceId: string }) {
         workspaceId,
         openPalette: () => setPaletteOpen(true),
         openShortcuts: () => setShortcutsOpen(true),
+        openProfile: () => setProfileOpen(true),
         toggleSidebar,
     });
     useCommandShortcuts();
@@ -69,6 +85,7 @@ function Shell({ workspaceId }: { workspaceId: string }) {
             collapsed={!narrow && collapsed}
             onNavigate={narrow ? () => setDrawerOpen(false) : undefined}
             onOpenShortcuts={() => setShortcutsOpen(true)}
+            onOpenProfile={() => setProfileOpen(true)}
         />
     );
 
@@ -101,15 +118,21 @@ function Shell({ workspaceId }: { workspaceId: string }) {
             {/* min-w-0: a grid item is as wide as its content by default, so a wide table pushed the page sideways. */}
             <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
                 <OfflineBanner />
-                <main className="min-w-0 flex-1 overflow-y-auto">
-                    <Outlet />
-                </main>
+                <main className="min-w-0 flex-1 overflow-y-auto">{signedIn ? <Outlet /> : <RouteSkeleton />}</main>
             </div>
             <Suspense fallback={null}>
                 <RecordDrawerHost />
             </Suspense>
             <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
             <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+            {profile.data && (
+                <ProfileDialog
+                    profile={profile.data}
+                    mode={needsName ? 'prompt' : 'edit'}
+                    open={profileOpen || needsName}
+                    onOpenChange={setProfileOpen}
+                />
+            )}
             <Suspense fallback={null}>
                 <Toaster />
             </Suspense>
@@ -122,11 +145,13 @@ function useShellCommands({
     workspaceId,
     openPalette,
     openShortcuts,
+    openProfile,
     toggleSidebar,
 }: {
     workspaceId: string;
     openPalette: () => void;
     openShortcuts: () => void;
+    openProfile: () => void;
     toggleSidebar: () => void;
 }) {
     const navigate = useNavigate();
@@ -184,6 +209,13 @@ function useShellCommands({
             },
             { id: 'shortcuts.open', title: 'Keyboard shortcuts', group: 'Account', shortcut: '?', run: openShortcuts },
             {
+                id: 'account.profile',
+                title: 'Edit profile',
+                group: 'Account',
+                keywords: ['name', 'display name', 'account'],
+                run: openProfile,
+            },
+            {
                 id: 'account.workspaces',
                 title: 'Switch workspace',
                 group: 'Account',
@@ -196,7 +228,18 @@ function useShellCommands({
                 run: () => logout.mutate(undefined, { onSettled: () => navigate(paths.signIn) }),
             },
         ],
-        [workspaceId, membership, theme, setTheme, navigate, logout, openPalette, openShortcuts, toggleSidebar],
+        [
+            workspaceId,
+            membership,
+            theme,
+            setTheme,
+            navigate,
+            logout,
+            openPalette,
+            openShortcuts,
+            openProfile,
+            toggleSidebar,
+        ],
     );
     useRegisterCommands(commands, [commands]);
 }

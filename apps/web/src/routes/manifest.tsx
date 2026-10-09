@@ -1,4 +1,4 @@
-import { Navigate, type RouteObject } from 'react-router';
+import { Navigate, type LazyRouteFunction, type RouteObject } from 'react-router';
 import { RequireAuth } from '../auth/RequireAuth';
 import { AppShell } from '../shell/AppShell';
 import { AuthCallback } from './auth/AuthCallback';
@@ -48,44 +48,53 @@ const page = (id: PageId, path: string, crumb: string): RouteObject => ({
     errorElement: <RouteError />,
 });
 
-const workspaceRoutes: RouteObject = {
-    path: `/w/:${WORKSPACE_PARAM}`,
-    element: <AppShell />,
+/**
+ * A page whose code loads on first visit. Its own `hydrateFallbackElement` is what React Router
+ * draws while the code loads on a direct visit — inside the shell's content area — so the shell is
+ * on screen from the first frame and only the content waits (P1-UI-10, FR-CRMS-UI-7). Without it the
+ * nearest fallback was the workspace route's, which replaced the whole shell.
+ */
+const lazyPage = (
+    path: string,
+    lazy: LazyRouteFunction<RouteObject>,
+    crumb: string,
+    children?: RouteObject[],
+): RouteObject => ({
+    path,
+    lazy,
+    handle: { crumb },
     errorElement: <RouteError />,
     hydrateFallbackElement: <RouteSkeleton />,
+    ...(children ? { children } : {}),
+});
+
+const workspaceRoutes: RouteObject = {
+    path: `/w/:${WORKSPACE_PARAM}`,
+    // The shell guards itself (`useAuthGate`): it draws its frame at once and holds the content.
+    element: <AppShell />,
+    errorElement: <RouteError />,
     children: [
         { index: true, element: <Navigate to="home" replace /> },
         page('home', 'home', 'Dashboard'),
         page('reports', 'reports', 'Reports'),
-        { path: 'people', lazy: lists.people, handle: { crumb: 'People' }, errorElement: <RouteError /> },
-        { path: 'people/:personId', lazy: records.person, handle: { crumb: 'Person' }, errorElement: <RouteError /> },
-        { path: 'companies', lazy: lists.companies, handle: { crumb: 'Companies' }, errorElement: <RouteError /> },
-        {
-            path: 'companies/:companyId',
-            lazy: records.company,
-            handle: { crumb: 'Company' },
-            errorElement: <RouteError />,
-        },
-        { path: 'deals', lazy: dealsPage, handle: { crumb: 'Deals' }, errorElement: <RouteError /> },
-        { path: 'deals/:dealId', lazy: records.deal, handle: { crumb: 'Deal' }, errorElement: <RouteError /> },
+        lazyPage('people', lists.people, 'People'),
+        lazyPage('people/:personId', records.person, 'Person'),
+        lazyPage('companies', lists.companies, 'Companies'),
+        lazyPage('companies/:companyId', records.company, 'Company'),
+        lazyPage('deals', dealsPage, 'Deals'),
+        lazyPage('deals/:dealId', records.deal, 'Deal'),
         page('sequences', 'sequences', 'Sequences'),
         page('templates', 'templates', 'Templates'),
         page('mailboxes', 'mailboxes', 'Mailboxes'),
         page('team', 'team', 'Team'),
-        {
-            path: 'settings',
-            lazy: settings.layout,
-            handle: { crumb: 'Settings' },
-            errorElement: <RouteError />,
-            children: [
-                { index: true, element: <Navigate to="members" replace /> },
-                { path: 'members', lazy: settings.members, handle: { crumb: 'Members' } },
-                { path: 'roles', lazy: settings.roles, handle: { crumb: 'Roles' } },
-                { path: 'api-keys', lazy: settings.apiKeys, handle: { crumb: 'API keys' } },
-                { path: 'invites', lazy: settings.invites, handle: { crumb: 'Invites' } },
-                { path: 'pipelines', lazy: settings.pipelines, handle: { crumb: 'Pipelines' } },
-            ],
-        },
+        lazyPage('settings', settings.layout, 'Settings', [
+            { index: true, element: <Navigate to="members" replace /> },
+            lazyPage('members', settings.members, 'Members'),
+            lazyPage('roles', settings.roles, 'Roles'),
+            lazyPage('api-keys', settings.apiKeys, 'API keys'),
+            lazyPage('invites', settings.invites, 'Invites'),
+            lazyPage('pipelines', settings.pipelines, 'Pipelines'),
+        ]),
     ],
 };
 
@@ -99,7 +108,8 @@ export const routes: RouteObject[] = [
     {
         element: <RequireAuth pending={<RouteSkeleton />} />,
         errorElement: <RouteError />,
-        children: [{ path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> }, workspaceRoutes],
+        children: [{ path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> }],
     },
+    workspaceRoutes,
     { path: '*', element: <NotFound /> },
 ];

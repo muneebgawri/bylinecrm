@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../api/queries';
 import type { MembershipSummary } from '../api/types';
 import { CapabilitiesProvider } from '../auth/capabilities';
-import { Sidebar, displayName } from './Sidebar';
+import { Sidebar } from './Sidebar';
 
 const member: MembershipSummary = {
     memberId: 'm',
@@ -43,7 +43,12 @@ function renderSidebar(membership: MembershipSummary | null, collapsed = false) 
                 path: '/w/:workspaceId/*',
                 element: (
                     <CapabilitiesProvider membership={membership}>
-                        <Sidebar workspaceId="ws-1" collapsed={collapsed} onOpenShortcuts={() => undefined} />
+                        <Sidebar
+                            workspaceId="ws-1"
+                            collapsed={collapsed}
+                            onOpenShortcuts={() => undefined}
+                            onOpenProfile={() => undefined}
+                        />
                     </CapabilitiesProvider>
                 ),
             },
@@ -106,12 +111,5 @@ describe('Sidebar', () => {
     it('keeps every link when collapsed, named for assistive tech', async () => {
         renderSidebar(member, true);
         expect(await screen.findByRole('link', { name: 'People' })).toBeInTheDocument();
-    });
-});
-
-describe('displayName', () => {
-    it('reads a name out of an email until profiles exist', () => {
-        expect(displayName('kate.morgan@pinionpartners.co')).toBe('Kate Morgan');
-        expect(displayName('ops@x.io')).toBe('Ops');
     });
 });
