@@ -52,6 +52,8 @@ export type TaskView = Schemas['Task'];
 export type AttachmentView = Schemas['Attachment'];
 export type TimelineActivityView = Schemas['TimelineActivity'];
 export type CustomFieldView = Schemas['CustomField'];
+export type CreateCustomFieldInput = Loose<Schemas['CreateCustomFieldDto']>;
+export type UpdateCustomFieldInput = Loose<Schemas['UpdateCustomFieldDto']>;
 /** A related record named on a row; `null` on the row when none, trashed or not visible. */
 export type RecordSummaryView = Schemas['RecordSummary'];
 
@@ -87,6 +89,12 @@ export type PipelineView = Schemas['Pipeline'];
 export type StageView = Schemas['Stage'];
 export type StageHistoryEntry = Schemas['StageHistoryEntry'];
 export type RuleView = Schemas['StageRule'];
+export type CreatePipelineInput = Loose<Schemas['CreatePipelineDto']>;
+export type UpdatePipelineInput = Loose<Schemas['UpdatePipelineDto']>;
+export type CreateStageInput = Loose<Schemas['CreateStageDto']>;
+export type UpdateStageInput = Loose<Schemas['UpdateStageDto']>;
+export type CreateRuleInput = Loose<Schemas['CreateRuleDto']>;
+export type UpdateRuleInput = Loose<Schemas['UpdateRuleDto']>;
 /** What a move returns: the deal, and the rules that may move it forward again after a backward move. */
 export type MoveResult = Schemas['MoveResult'];
 export type MoveDealInput = Loose<Schemas['MoveDealDto']>;

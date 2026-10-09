@@ -18,6 +18,7 @@ import { useMailSettings, usePutMailSettings } from '../../../api/queries';
 import type { MailSettingsView, PutMailSettingsInput } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { countries } from '../../../lib/countries';
+import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 
 /**
@@ -139,7 +140,7 @@ function MailSettingsForm({ workspaceId, settings }: { workspaceId: string; sett
                 if (!(e instanceof ApiError) || e.fieldErrors.length === 0) {
                     toast({
                         title: 'Mail settings were not saved',
-                        description: e instanceof ApiError ? e.message : 'The server could not be reached.',
+                        description: failureText(e),
                         tone: 'danger',
                     });
                 }

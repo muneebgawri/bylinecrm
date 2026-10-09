@@ -31,6 +31,8 @@ export const paths = {
     settingsApiKeys: (workspaceId: string) => `/w/${workspaceId}/settings/api-keys`,
     settingsInvites: (workspaceId: string) => `/w/${workspaceId}/settings/invites`,
     settingsPipelines: (workspaceId: string) => `/w/${workspaceId}/settings/pipelines`,
+    settingsPipeline: (workspaceId: string, pipelineId: string) => `/w/${workspaceId}/settings/pipelines/${pipelineId}`,
+    settingsCustomFields: (workspaceId: string) => `/w/${workspaceId}/settings/custom-fields`,
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
 } as const;
 

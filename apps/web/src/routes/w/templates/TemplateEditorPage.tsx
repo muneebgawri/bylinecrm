@@ -40,6 +40,7 @@ import { useRegisterCommands } from '../../../commands/registry';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { RichTextEditor, type RichTextHandle } from '../../../components/rich-text/RichTextEditor';
 import { countryName } from '../../../lib/countries';
+import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { KindMenu, OUTREACH_REASON } from './kind';
@@ -194,7 +195,7 @@ function TemplateEditor({
                     if (!(error instanceof ApiError) || error.fieldErrors.length === 0) {
                         toast({
                             title: 'The template was not saved',
-                            description: error instanceof ApiError ? error.message : 'The server could not be reached.',
+                            description: failureText(error),
                             tone: 'danger',
                         });
                     }
@@ -245,7 +246,7 @@ function TemplateEditor({
                 onError: (error) =>
                     toast({
                         title: 'The copy was not saved',
-                        description: error instanceof ApiError ? error.message : 'The server could not be reached.',
+                        description: failureText(error),
                         tone: 'danger',
                     }),
             },

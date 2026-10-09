@@ -6,7 +6,7 @@ import { SignIn } from './auth/SignIn';
 import { SignUp } from './auth/SignUp';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
-import { WORKSPACE_PARAM } from './params';
+import { PIPELINE_PARAM, WORKSPACE_PARAM } from './params';
 import { Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
 import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
@@ -32,6 +32,8 @@ const settings = {
     apiKeys: () => import('./w/settings/ApiKeys').then((m) => ({ Component: m.ApiKeys })),
     invites: () => import('./w/settings/Invites').then((m) => ({ Component: m.Invites })),
     pipelines: () => import('./w/settings/Pipelines').then((m) => ({ Component: m.Pipelines })),
+    pipeline: () => import('./w/settings/PipelineDetail').then((m) => ({ Component: m.PipelineDetail })),
+    customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
     mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
 };
 
@@ -97,6 +99,8 @@ const workspaceRoutes: RouteObject = {
                 { path: 'api-keys', lazy: settings.apiKeys, handle: { crumb: 'API keys' } },
                 { path: 'invites', lazy: settings.invites, handle: { crumb: 'Invites' } },
                 { path: 'pipelines', lazy: settings.pipelines, handle: { crumb: 'Pipelines' } },
+                { path: `pipelines/:${PIPELINE_PARAM}`, lazy: settings.pipeline, handle: { crumb: 'Pipeline' } },
+                { path: 'custom-fields', lazy: settings.customFields, handle: { crumb: 'Custom fields' } },
                 { path: 'mail', lazy: settings.mail, handle: { crumb: 'Mail' } },
             ],
         },

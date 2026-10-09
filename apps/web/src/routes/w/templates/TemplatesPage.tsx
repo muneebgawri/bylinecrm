@@ -22,6 +22,8 @@ import { ApiError, fieldErrorAt } from '../../../api/client';
 import { useCreateTemplate, useDeleteTemplate, useDuplicateTemplate, useTemplates } from '../../../api/queries';
 import type { EmailTemplateView } from '../../../api/types';
 import { useCan, usePermission } from '../../../auth/capabilities';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useWorkspaceId } from '../../params';
@@ -175,7 +177,7 @@ export function TemplatesPage() {
                                                 onError: (e) =>
                                                     toast({
                                                         title: 'The template was not duplicated',
-                                                        description: e instanceof ApiError ? e.message : undefined,
+                                                        description: failureText(e),
                                                         tone: 'danger',
                                                     }),
                                             })
@@ -200,42 +202,29 @@ export function TemplatesPage() {
                 onClose={() => setCreating(false)}
                 outreachAllowed={outreachWrite}
             />
-            <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
-                <DialogContent>
-                    <DialogTitle>Delete “{deleting?.name}”?</DialogTitle>
-                    <DialogDescription>
-                        It moves to the trash and stops appearing in pickers. Emails already sent with it are not
-                        affected.
-                    </DialogDescription>
-                    <DialogFooter>
-                        <Button variant="ghost" shape="square" onClick={() => setDeleting(null)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="danger"
-                            shape="square"
-                            loading={remove.isPending}
-                            onClick={() => {
-                                if (!deleting) return;
-                                remove.mutate(deleting.id, {
-                                    onSuccess: () => {
-                                        toast({ title: 'Template deleted' });
-                                        setDeleting(null);
-                                    },
-                                    onError: (e) =>
-                                        toast({
-                                            title: 'The template was not deleted',
-                                            description: e instanceof ApiError ? e.message : undefined,
-                                            tone: 'danger',
-                                        }),
-                                });
-                            }}
-                        >
-                            Delete
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <ConfirmDialog
+                open={deleting !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDeleting(null);
+                        remove.reset();
+                    }
+                }}
+                title={`Delete “${deleting?.name ?? ''}”?`}
+                body="It moves to the trash and stops appearing in pickers. Emails already sent with it are not affected."
+                confirm="Delete"
+                pending={remove.isPending}
+                error={remove.isError ? failureText(remove.error) : undefined}
+                onConfirm={() => {
+                    if (!deleting) return;
+                    remove.mutate(deleting.id, {
+                        onSuccess: () => {
+                            toast({ title: 'Template deleted' });
+                            setDeleting(null);
+                        },
+                    });
+                }}
+            />
         </div>
     );
 }
@@ -274,12 +263,11 @@ function NewTemplateDialog({
             },
         );
     };
+    // A field's own error sits under the field; anything else is said once, here.
     const general =
-        create.error instanceof ApiError && create.error.fieldErrors.length === 0
-            ? create.error.message
-            : create.isError && !(create.error instanceof ApiError)
-              ? 'The server could not be reached.'
-              : null;
+        create.isError && !(create.error instanceof ApiError && create.error.fieldErrors.length > 0)
+            ? failureText(create.error)
+            : null;
     return (
         <Dialog open={open} onOpenChange={(o) => !o && close()}>
             <DialogContent>
