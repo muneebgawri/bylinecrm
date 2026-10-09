@@ -10,7 +10,8 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-/// A tenant. Global table: the app role reads only the current workspace's row.
+/// A tenant. Global table: the app role reads the current workspace's row, or a workspace the
+/// signed-in user is a member of.
 model Workspace {
     id        String   @id @default(uuid()) @db.Uuid
     slug      String   @unique
@@ -19,35 +20,164 @@ model Workspace {
     updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
     members WorkspaceMember[]
+    roles   Role[]
+    apiKeys ApiKey[]
+    invites WorkspaceInvite[]
 
     @@map("workspaces")
 }
 
-/// A person who can sign in. Global table; credentials and sessions arrive with P0-3.
-/// `email` is stored lower-cased by the application and unique as stored.
+/// A person who can sign in. Global table, written only by AuthService through the owner client.
+/// `email` is stored lower-cased by the application and unique as stored. `passwordHash` is null
+/// for a user who only ever signed in through an identity provider.
 model User {
-    id        String   @id @default(uuid()) @db.Uuid
-    email     String   @unique
-    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+    id              String    @id @default(uuid()) @db.Uuid
+    email           String    @unique
+    passwordHash    String?   @map("password_hash")
+    emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+    createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+    updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
     memberships WorkspaceMember[]
+    sessions    Session[]
+    identities  ExternalIdentity[]
 
     @@map("users")
 }
 
-/// A user's seat in a workspace. The first tenant table: `workspace_id` + RLS.
+/// A signed-in browser. The cookie carries a random token; only its hash is stored. Global table
+/// out of the app role's reach: sessions are read before any workspace is known, by the auth layer.
+model Session {
+    id            String    @id @default(uuid()) @db.Uuid
+    userId        String    @map("user_id") @db.Uuid
+    tokenHash     String    @unique @map("token_hash")
+    createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+    expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+    lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
+    revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
+    /// The session this one replaced on rotation, kept for the audit trail.
+    rotatedFromId String?   @map("rotated_from_id") @db.Uuid
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@map("sessions")
+}
+
+/// A user's account at an identity provider (Google, or any OIDC issuer the operator configured).
+/// Global, owner-only, like sessions.
+model ExternalIdentity {
+    id        String   @id @default(uuid()) @db.Uuid
+    userId    String   @map("user_id") @db.Uuid
+    /// The issuer key from configuration (`google`, or the operator's name for an OIDC issuer).
+    provider  String
+    /// The provider's stable subject identifier for the user.
+    subject   String
+    email     String
+    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, subject])
+    @@index([userId])
+    @@map("external_identities")
+}
+
+/// A user's seat in a workspace, with the role that decides what they may do there.
 model WorkspaceMember {
     id          String   @id @default(uuid()) @db.Uuid
     workspaceId String   @map("workspace_id") @db.Uuid
     userId      String   @map("user_id") @db.Uuid
+    roleId      String   @map("role_id") @db.Uuid
     createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
     updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
     workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
     user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    role      Role      @relation(fields: [roleId], references: [id])
+
+    createdApiKeys ApiKey[]
+    sentInvites    WorkspaceInvite[]
 
     @@unique([workspaceId, userId])
     @@index([userId])
+    @@index([roleId])
     @@map("workspace_members")
+}
+
+/// A named set of capabilities in a workspace. The two system roles (`admin`, `member`) exist from
+/// creation and cannot be deleted; `admin` holds every capability by construction and has no
+/// permission rows.
+model Role {
+    id          String   @id @default(uuid()) @db.Uuid
+    workspaceId String   @map("workspace_id") @db.Uuid
+    name        String
+    isSystem    Boolean  @default(false) @map("is_system")
+    createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+    updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+    workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    permissions RolePermission[]
+    members     WorkspaceMember[]
+    apiKeys     ApiKey[]
+    invites     WorkspaceInvite[]
+
+    @@unique([workspaceId, name])
+    @@map("roles")
+}
+
+/// One capability granted to one role. `capability` is a value from the shared catalogue; the
+/// application validates it, the database stores the string.
+model RolePermission {
+    id          String @id @default(uuid()) @db.Uuid
+    workspaceId String @map("workspace_id") @db.Uuid
+    roleId      String @map("role_id") @db.Uuid
+    capability  String
+
+    role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+    @@unique([roleId, capability])
+    @@map("role_permissions")
+}
+
+/// A machine credential for one workspace, acting with one role. The secret is shown once and
+/// only its hash is kept; `prefix` identifies the key without revealing it.
+model ApiKey {
+    id          String    @id @default(uuid()) @db.Uuid
+    workspaceId String    @map("workspace_id") @db.Uuid
+    name        String
+    prefix      String    @unique
+    secretHash  String    @map("secret_hash")
+    roleId      String    @map("role_id") @db.Uuid
+    createdById String    @map("created_by_id") @db.Uuid
+    lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+    revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+    createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+    workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    role      Role            @relation(fields: [roleId], references: [id])
+    createdBy WorkspaceMember @relation(fields: [createdById], references: [id])
+
+    @@map("api_keys")
+}
+
+/// An invitation to join a workspace, sent to an email address with a role. The token is shown
+/// once; only its hash is stored. Accepting it requires signing in as that email.
+model WorkspaceInvite {
+    id          String    @id @default(uuid()) @db.Uuid
+    workspaceId String    @map("workspace_id") @db.Uuid
+    email       String
+    roleId      String    @map("role_id") @db.Uuid
+    tokenHash   String    @unique @map("token_hash")
+    invitedById String    @map("invited_by_id") @db.Uuid
+    expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+    acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz
+    createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+    workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    role      Role            @relation(fields: [roleId], references: [id])
+    invitedBy WorkspaceMember @relation(fields: [invitedById], references: [id])
+
+    @@index([workspaceId, email])
+    @@map("workspace_invites")
 }

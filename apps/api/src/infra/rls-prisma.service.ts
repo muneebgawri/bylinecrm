@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { WORKSPACE_SETTING } from '@bylinecrm/shared';
+import { USER_SETTING, WORKSPACE_SETTING } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
 import {
     POOL_EXHAUSTED_CODE,
@@ -45,12 +45,7 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
         await this.$disconnect();
     }
 
-    /**
-     * Runs `fn` in a transaction scoped to `workspaceId` (or to the ambient `WorkspaceContext`).
-     * The setting is transaction-local (`set_config(..., true)`) and bound as a parameter, so it
-     * cannot outlive the transaction or be string-built. A pool-exhausted error is retried with a
-     * bounded, doubling delay; any other error propagates.
-     */
+    /** Runs `fn` in a transaction scoped to `workspaceId` (or to the ambient `WorkspaceContext`). */
     async withWorkspace<T>(fn: (tx: WorkspaceClient) => Promise<T>): Promise<T>;
     async withWorkspace<T>(workspaceId: string, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T>;
     async withWorkspace<T>(
@@ -63,10 +58,28 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
         if (!workspaceId) throw new NoWorkspaceError();
         if (!fn) throw new TypeError('withWorkspace needs a callback');
 
+        return this.scoped(WORKSPACE_SETTING, workspaceId, fn);
+    }
+
+    /**
+     * Runs `fn` in a transaction that knows only who the caller is, not which workspace: the
+     * policies then show the user their own row and their own memberships, which is what the
+     * workspace guard needs before any workspace is chosen. Tenant tables stay invisible.
+     */
+    withUser<T>(userId: string, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
+        return this.scoped(USER_SETTING, userId, fn);
+    }
+
+    /**
+     * One transaction, one transaction-local setting (`set_config(..., true)`), bound as a
+     * parameter so it can neither outlive the transaction nor be string-built. A pool-exhausted
+     * error is retried with a bounded, doubling delay; any other error propagates.
+     */
+    private async scoped<T>(setting: string, value: string, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
         for (let attempt = 1; ; attempt++) {
             try {
                 return await this.$transaction(async (tx) => {
-                    await tx.$executeRaw`SELECT set_config(${WORKSPACE_SETTING}, ${workspaceId}, true)`;
+                    await tx.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
                     return fn(tx);
                 });
             } catch (error) {

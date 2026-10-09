@@ -22,6 +22,7 @@ describe('workspace isolation', () => {
     let userA: string;
     let userB: string;
     let memberB: string;
+    let roleB: string;
 
     beforeAll(async () => {
         await Promise.all([owner.$connect(), rls.$connect()]);
@@ -37,9 +38,11 @@ describe('workspace isolation', () => {
         const wb = await owner.workspace.create({ data: { slug: `b-${stamp}`, name: 'B' } });
         const ua = await owner.user.create({ data: { email: `a-${stamp}@example.test` } });
         const ub = await owner.user.create({ data: { email: `b-${stamp}@example.test` } });
-        await owner.workspaceMember.create({ data: { workspaceId: wa.id, userId: ua.id } });
-        const mb = await owner.workspaceMember.create({ data: { workspaceId: wb.id, userId: ub.id } });
-        [a, b, userA, userB, memberB] = [wa.id, wb.id, ua.id, ub.id, mb.id];
+        const ra = await owner.role.create({ data: { workspaceId: wa.id, name: 'admin', isSystem: true } });
+        const rb = await owner.role.create({ data: { workspaceId: wb.id, name: 'admin', isSystem: true } });
+        await owner.workspaceMember.create({ data: { workspaceId: wa.id, userId: ua.id, roleId: ra.id } });
+        const mb = await owner.workspaceMember.create({ data: { workspaceId: wb.id, userId: ub.id, roleId: rb.id } });
+        [a, b, userA, userB, memberB, roleB] = [wa.id, wb.id, ua.id, ub.id, mb.id, rb.id];
     });
 
     afterEach(async () => {
@@ -68,7 +71,9 @@ describe('workspace isolation', () => {
 
     it('is refused a row written into the other workspace', async () => {
         await expect(
-            rls.withWorkspace(a, (tx) => tx.workspaceMember.create({ data: { workspaceId: b, userId: userA } })),
+            rls.withWorkspace(a, (tx) =>
+                tx.workspaceMember.create({ data: { workspaceId: b, userId: userA, roleId: roleB } }),
+            ),
         ).rejects.toThrow(/row-level security/);
     });
 
@@ -96,7 +101,7 @@ describe('workspace isolation', () => {
     });
 
     it('takes the workspace from the ambient context when no id is passed', async () => {
-        const members = await context.run({ workspaceId: b }, () =>
+        const members = await context.run({ workspaceId: b, capabilities: new Set() }, () =>
             rls.withWorkspace((tx) => tx.workspaceMember.findMany()),
         );
         expect(members.map((m) => m.id)).toEqual([memberB]);

@@ -45,6 +45,8 @@ jobs:
             REDIS_URL: redis://127.0.0.1:6379
             PORT: '3300'
             WEB_PORT: '3301'
+            APP_URL: http://localhost:3300
+            WEB_URL: http://localhost:3301
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
@@ -58,6 +60,8 @@ jobs:
             REDIS_URL: redis://127.0.0.1:6379
             PORT: '3300'
             WEB_PORT: '3301'
+            APP_URL: http://localhost:3300
+            WEB_URL: http://localhost:3301
         services:
             postgres:
                 image: postgres:16
