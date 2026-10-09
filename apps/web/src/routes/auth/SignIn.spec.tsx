@@ -67,7 +67,10 @@ describe('SignIn', () => {
 
     it('says the pair does not match on a 401 without revealing which half', async () => {
         const user = userEvent.setup();
-        stubApi({ status: 401, body: { statusCode: 401, message: 'Unauthorized' } });
+        stubApi({
+            status: 401,
+            body: { statusCode: 401, code: 'unauthorized', message: 'Unauthorized', requestId: 'req-0123456789' },
+        });
         renderSignIn();
         await user.type(await screen.findByLabelText(/Email/), 'a@b.c');
         await user.type(screen.getByLabelText(/Password/), 'wrong');

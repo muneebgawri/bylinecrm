@@ -14,6 +14,11 @@
                                     "$ref": "#/components/schemas/HealthStatus"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -24,6 +29,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -33,6 +43,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -63,6 +78,11 @@
                                     "$ref": "#/components/schemas/SignedUp"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -73,6 +93,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -82,6 +107,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -112,6 +142,11 @@
                                     "$ref": "#/components/schemas/SignedIn"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -122,6 +157,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -131,6 +171,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -144,7 +189,12 @@
                 "parameters": [],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -153,6 +203,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -163,6 +218,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -183,6 +243,11 @@
                                     "$ref": "#/components/schemas/AuthProviders"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -193,6 +258,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -202,6 +272,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -215,7 +290,12 @@
                 "parameters": [],
                 "responses": {
                     "302": {
-                        "description": "A redirect; the `Location` header says where."
+                        "description": "A redirect; the `Location` header says where.",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -224,6 +304,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -234,6 +319,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -247,7 +337,12 @@
                 "parameters": [],
                 "responses": {
                     "302": {
-                        "description": "A redirect; the `Location` header says where."
+                        "description": "A redirect; the `Location` header says where.",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -256,6 +351,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -266,6 +366,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -288,7 +393,12 @@
                 ],
                 "responses": {
                     "302": {
-                        "description": "A redirect; the `Location` header says where."
+                        "description": "A redirect; the `Location` header says where.",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -297,6 +407,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -307,6 +422,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -329,7 +449,12 @@
                 ],
                 "responses": {
                     "302": {
-                        "description": "A redirect; the `Location` header says where."
+                        "description": "A redirect; the `Location` header says where.",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -338,6 +463,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -348,6 +478,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -377,6 +512,11 @@
                                     "$ref": "#/components/schemas/Workspace"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -387,6 +527,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -396,6 +541,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -435,6 +585,11 @@
                                     "$ref": "#/components/schemas/Workspace"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -445,6 +600,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -454,6 +614,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -467,7 +632,19 @@
                 "parameters": [],
                 "responses": {
                     "501": {
-                        "description": "Not implemented yet."
+                        "description": "Not implemented yet; the body is the error envelope.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -476,6 +653,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -486,6 +668,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -506,6 +693,11 @@
                                     "$ref": "#/components/schemas/User"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -516,6 +708,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -525,6 +722,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -548,6 +750,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -558,6 +765,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -567,6 +779,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -597,6 +814,11 @@
                                     "$ref": "#/components/schemas/Workspace"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -607,6 +829,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -616,6 +843,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -650,6 +882,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -660,6 +897,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -669,6 +911,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -703,6 +950,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -713,6 +965,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -722,6 +979,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -764,7 +1026,12 @@
                 },
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -773,6 +1040,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -783,6 +1055,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -815,7 +1092,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -824,6 +1106,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -834,6 +1121,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -868,6 +1160,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -878,6 +1175,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -887,6 +1189,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -926,6 +1233,11 @@
                                     "$ref": "#/components/schemas/Role"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -936,6 +1248,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -945,6 +1262,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -994,6 +1316,11 @@
                                     "$ref": "#/components/schemas/Role"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1004,6 +1331,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1013,6 +1345,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1043,7 +1380,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -1052,6 +1394,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -1062,6 +1409,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1096,6 +1448,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1106,6 +1463,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1115,6 +1477,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1154,6 +1521,11 @@
                                     "$ref": "#/components/schemas/CreatedApiKey"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1164,6 +1536,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1173,6 +1550,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1205,7 +1587,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -1214,6 +1601,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -1224,6 +1616,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1258,6 +1655,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1268,6 +1670,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1277,6 +1684,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1316,6 +1728,11 @@
                                     "$ref": "#/components/schemas/CreatedInvite"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1326,6 +1743,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1335,6 +1757,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1367,7 +1794,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -1376,6 +1808,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -1386,6 +1823,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1417,6 +1859,11 @@
                                     "$ref": "#/components/schemas/Standing"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1427,6 +1874,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1436,6 +1888,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1470,6 +1927,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1480,6 +1942,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1489,6 +1956,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1528,6 +2000,11 @@
                                     "$ref": "#/components/schemas/Pipeline"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1538,6 +2015,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1547,6 +2029,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1586,6 +2073,11 @@
                                     "$ref": "#/components/schemas/Pipeline"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1596,6 +2088,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1605,6 +2102,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1652,6 +2154,11 @@
                                     "$ref": "#/components/schemas/Pipeline"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1662,6 +2169,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1671,6 +2183,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1701,7 +2218,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -1710,6 +2232,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -1720,6 +2247,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1798,6 +2330,11 @@
                                     "$ref": "#/components/schemas/Board"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1808,6 +2345,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1817,6 +2359,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1866,6 +2413,11 @@
                                     "$ref": "#/components/schemas/Stage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1876,6 +2428,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1885,6 +2442,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -1934,6 +2496,11 @@
                                     "$ref": "#/components/schemas/Pipeline"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -1944,6 +2511,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -1953,6 +2525,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2010,6 +2587,11 @@
                                     "$ref": "#/components/schemas/Stage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2020,6 +2602,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2029,6 +2616,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2067,7 +2659,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -2076,6 +2673,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -2086,6 +2688,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2128,6 +2735,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2138,6 +2750,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2147,6 +2764,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2194,6 +2816,11 @@
                                     "$ref": "#/components/schemas/StageRule"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2204,6 +2831,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2213,6 +2845,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2270,6 +2907,11 @@
                                     "$ref": "#/components/schemas/StageRule"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2280,6 +2922,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2289,6 +2936,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2327,7 +2979,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -2336,6 +2993,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -2346,6 +3008,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2395,6 +3062,11 @@
                                     "$ref": "#/components/schemas/MoveResult"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2405,6 +3077,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2414,6 +3091,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2467,6 +3149,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2477,6 +3164,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2486,6 +3178,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2527,6 +3224,11 @@
                                     "$ref": "#/components/schemas/PersonPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2537,6 +3239,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2546,6 +3253,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2628,6 +3340,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2638,6 +3355,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2647,6 +3369,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2727,6 +3454,11 @@
                                     "format": "binary"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2737,6 +3469,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2746,6 +3483,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2836,6 +3578,11 @@
                                     "$ref": "#/components/schemas/PersonPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2846,6 +3593,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2855,6 +3607,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -2894,6 +3651,11 @@
                                     "$ref": "#/components/schemas/Person"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -2904,6 +3666,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -2913,6 +3680,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3003,6 +3775,11 @@
                                     "$ref": "#/components/schemas/PersonPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3013,6 +3790,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3022,6 +3804,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3061,6 +3848,11 @@
                                     "$ref": "#/components/schemas/Person"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3071,6 +3863,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3080,6 +3877,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3127,6 +3929,11 @@
                                     "$ref": "#/components/schemas/Person"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3137,6 +3944,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3146,6 +3958,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3176,7 +3993,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -3185,6 +4007,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -3195,6 +4022,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3234,6 +4066,11 @@
                                     "$ref": "#/components/schemas/Person"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3244,6 +4081,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3253,6 +4095,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3294,6 +4141,11 @@
                                     "$ref": "#/components/schemas/CompanyPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3304,6 +4156,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3313,6 +4170,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3395,6 +4257,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3405,6 +4272,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3414,6 +4286,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3494,6 +4371,11 @@
                                     "format": "binary"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3504,6 +4386,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3513,6 +4400,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3603,6 +4495,11 @@
                                     "$ref": "#/components/schemas/CompanyPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3613,6 +4510,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3622,6 +4524,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3661,6 +4568,11 @@
                                     "$ref": "#/components/schemas/Company"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3671,6 +4583,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3680,6 +4597,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3770,6 +4692,11 @@
                                     "$ref": "#/components/schemas/CompanyPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3780,6 +4707,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3789,6 +4721,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3828,6 +4765,11 @@
                                     "$ref": "#/components/schemas/Company"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3838,6 +4780,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3847,6 +4794,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3894,6 +4846,11 @@
                                     "$ref": "#/components/schemas/Company"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -3904,6 +4861,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -3913,6 +4875,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -3943,7 +4910,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -3952,6 +4924,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -3962,6 +4939,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4001,6 +4983,11 @@
                                     "$ref": "#/components/schemas/Company"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4011,6 +4998,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4020,6 +5012,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4072,6 +5069,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4082,6 +5084,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4091,6 +5098,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4130,6 +5142,11 @@
                                     "$ref": "#/components/schemas/CustomField"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4140,6 +5157,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4149,6 +5171,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4198,6 +5225,11 @@
                                     "$ref": "#/components/schemas/CustomField"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4208,6 +5240,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4217,6 +5254,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4247,7 +5289,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -4256,6 +5303,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -4266,6 +5318,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4307,6 +5364,11 @@
                                     "$ref": "#/components/schemas/OpportunityPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4317,6 +5379,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4326,6 +5393,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4408,6 +5480,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4418,6 +5495,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4427,6 +5509,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4507,6 +5594,11 @@
                                     "format": "binary"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4517,6 +5609,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4526,6 +5623,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4616,6 +5718,11 @@
                                     "$ref": "#/components/schemas/OpportunityPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4626,6 +5733,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4635,6 +5747,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4674,6 +5791,11 @@
                                     "$ref": "#/components/schemas/Opportunity"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4684,6 +5806,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4693,6 +5820,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4783,6 +5915,11 @@
                                     "$ref": "#/components/schemas/OpportunityPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4793,6 +5930,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4802,6 +5944,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4841,6 +5988,11 @@
                                     "$ref": "#/components/schemas/Opportunity"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4851,6 +6003,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4860,6 +6017,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4907,6 +6069,11 @@
                                     "$ref": "#/components/schemas/Opportunity"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -4917,6 +6084,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -4926,6 +6098,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -4956,7 +6133,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -4965,6 +6147,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -4975,6 +6162,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5014,6 +6206,11 @@
                                     "$ref": "#/components/schemas/Opportunity"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5024,6 +6221,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5033,6 +6235,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5093,6 +6300,11 @@
                                     "$ref": "#/components/schemas/NotePage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5103,6 +6315,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5112,6 +6329,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5151,6 +6373,11 @@
                                     "$ref": "#/components/schemas/Note"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5161,6 +6388,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5170,6 +6402,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5230,6 +6467,11 @@
                                     "$ref": "#/components/schemas/NotePage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5240,6 +6482,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5249,6 +6496,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5288,6 +6540,11 @@
                                     "$ref": "#/components/schemas/Note"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5298,6 +6555,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5307,6 +6569,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5354,6 +6621,11 @@
                                     "$ref": "#/components/schemas/Note"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5364,6 +6636,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5373,6 +6650,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5403,7 +6685,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -5412,6 +6699,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -5422,6 +6714,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5461,6 +6758,11 @@
                                     "$ref": "#/components/schemas/Note"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5471,6 +6773,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5480,6 +6787,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5559,6 +6871,11 @@
                                     "$ref": "#/components/schemas/TaskPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5569,6 +6886,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5578,6 +6900,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5617,6 +6944,11 @@
                                     "$ref": "#/components/schemas/Task"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5627,6 +6959,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5636,6 +6973,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5715,6 +7057,11 @@
                                     "$ref": "#/components/schemas/TaskPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5725,6 +7072,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5734,6 +7086,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5773,6 +7130,11 @@
                                     "$ref": "#/components/schemas/Task"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5783,6 +7145,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5792,6 +7159,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5839,6 +7211,11 @@
                                     "$ref": "#/components/schemas/Task"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5849,6 +7226,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5858,6 +7240,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5888,7 +7275,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -5897,6 +7289,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -5907,6 +7304,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -5946,6 +7348,11 @@
                                     "$ref": "#/components/schemas/Task"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -5956,6 +7363,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -5965,6 +7377,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6008,6 +7425,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6018,6 +7440,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6027,6 +7454,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6083,6 +7515,11 @@
                                     "$ref": "#/components/schemas/Attachment"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6093,6 +7530,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6102,6 +7544,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6145,6 +7592,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6155,6 +7607,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6164,6 +7621,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6203,6 +7665,11 @@
                                     "$ref": "#/components/schemas/Attachment"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6213,6 +7680,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6222,6 +7694,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6252,7 +7729,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -6261,6 +7743,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -6271,6 +7758,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6311,6 +7803,11 @@
                                     "format": "binary"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6321,6 +7818,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6330,6 +7832,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6369,6 +7876,11 @@
                                     "$ref": "#/components/schemas/Attachment"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6379,6 +7891,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6388,6 +7905,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6448,6 +7970,11 @@
                                     "$ref": "#/components/schemas/SearchResults"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6458,6 +7985,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6467,6 +7999,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6536,6 +8073,11 @@
                                     "$ref": "#/components/schemas/TimelinePage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6546,6 +8088,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6555,6 +8102,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6596,6 +8148,11 @@
                                     "$ref": "#/components/schemas/ExternalActivityResult"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6606,6 +8163,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6615,6 +8177,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6658,6 +8225,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6668,6 +8240,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6677,6 +8254,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6716,6 +8298,11 @@
                                     "$ref": "#/components/schemas/SavedView"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6726,6 +8313,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6735,6 +8327,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6774,6 +8371,11 @@
                                     "$ref": "#/components/schemas/SavedView"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6784,6 +8386,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6793,6 +8400,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6840,6 +8452,11 @@
                                     "$ref": "#/components/schemas/SavedView"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6850,6 +8467,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6859,6 +8481,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6889,7 +8516,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -6898,6 +8530,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -6908,6 +8545,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -6947,6 +8589,11 @@
                                     "$ref": "#/components/schemas/SavedView"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -6957,6 +8604,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -6966,6 +8618,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7000,6 +8657,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7010,6 +8672,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7019,6 +8686,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7053,6 +8725,11 @@
                                     }
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7063,6 +8740,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7072,6 +8754,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7111,6 +8798,11 @@
                                     "$ref": "#/components/schemas/WebhookEndpointWithSecret"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7121,6 +8813,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7130,6 +8827,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7169,6 +8871,11 @@
                                     "$ref": "#/components/schemas/WebhookEndpoint"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7179,6 +8886,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7188,6 +8900,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7235,6 +8952,11 @@
                                     "$ref": "#/components/schemas/WebhookEndpoint"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7245,6 +8967,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7254,6 +8981,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7284,7 +9016,12 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": ""
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
                     },
                     "4XX": {
                         "description": "The error envelope",
@@ -7293,6 +9030,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     },
@@ -7303,6 +9045,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7342,6 +9089,11 @@
                                     "$ref": "#/components/schemas/WebhookEndpointWithSecret"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7352,6 +9104,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7361,6 +9118,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7400,6 +9162,11 @@
                                     "$ref": "#/components/schemas/WebhookTestResult"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7410,6 +9177,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7419,6 +9191,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7487,6 +9264,11 @@
                                     "$ref": "#/components/schemas/WebhookDeliveryPage"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7497,6 +9279,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7506,6 +9293,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -7553,6 +9345,11 @@
                                     "$ref": "#/components/schemas/WebhookDelivery"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "4XX": {
@@ -7563,6 +9360,11 @@
                                     "$ref": "#/components/schemas/ApiError"
                                 }
                             }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
                         }
                     },
                     "5XX": {
@@ -7572,6 +9374,11 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiError"
                                 }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
                             }
                         }
                     }
@@ -9936,80 +11743,68 @@
                 },
                 "required": ["type"]
             },
+            "FieldError": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Dotted path into the request body.",
+                        "example": "emails.primary"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": ["path", "message"]
+            },
             "ApiError": {
                 "type": "object",
                 "properties": {
                     "statusCode": {
                         "type": "integer",
                         "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
+                        "maximum": 9007199254740991,
+                        "example": 404
+                    },
+                    "code": {
+                        "type": "string",
+                        "enum": [
+                            "validation.failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "conflict.unique",
+                            "gone",
+                            "payload_too_large",
+                            "unsupported_media_type",
+                            "unprocessable",
+                            "rate_limited",
+                            "bad_request",
+                            "not_implemented",
+                            "internal"
+                        ],
+                        "description": "Stable machine name; branch on this, never on message."
                     },
                     "message": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            }
-                        ]
+                        "type": "string",
+                        "description": "Human and safe to show.",
+                        "example": "person not found"
                     },
-                    "error": {
-                        "type": "string"
-                    },
-                    "field": {
-                        "description": "The field a uniqueness conflict is about (409).",
-                        "type": "string"
-                    },
-                    "issues": {
-                        "description": "Invalid custom-field values (400), one per field.",
+                    "fieldErrors": {
+                        "description": "Present when the failure is about specific request fields.",
                         "type": "array",
                         "items": {
-                            "type": "object",
-                            "properties": {
-                                "path": {
-                                    "type": "string"
-                                },
-                                "message": {
-                                    "type": "string"
-                                }
-                            },
-                            "required": ["path", "message"]
+                            "$ref": "#/components/schemas/FieldError"
                         }
                     },
-                    "errors": {
-                        "description": "Request validation failures (400): the zod issues.",
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "path": {
-                                    "type": "array",
-                                    "items": {
-                                        "anyOf": [
-                                            {
-                                                "type": "string"
-                                            },
-                                            {
-                                                "type": "number"
-                                            }
-                                        ]
-                                    }
-                                },
-                                "message": {
-                                    "type": "string"
-                                }
-                            },
-                            "required": ["path", "message"],
-                            "additionalProperties": {}
-                        }
+                    "requestId": {
+                        "type": "string",
+                        "description": "Also in the X-Request-Id header.",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     }
                 },
-                "required": ["message"],
-                "additionalProperties": {}
+                "required": ["statusCode", "code", "message", "requestId"]
             },
             "User": {
                 "type": "object",
@@ -11998,6 +13793,14 @@
                     }
                 },
                 "required": ["name", "object"]
+            }
+        },
+        "headers": {
+            "RequestId": {
+                "description": "The id of this request; quote it when reporting a problem. An inbound well-formed id is echoed.",
+                "schema": {
+                    "type": "string"
+                }
             }
         }
     }

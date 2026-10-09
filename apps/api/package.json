@@ -32,6 +32,7 @@
         "bullmq": "^6.3.11",
         "busboy": "1.6.0",
         "cookie-parser": "^1.4.7",
+        "express": "5.2.1",
         "ioredis": "^5.10.1",
         "nestjs-zod": "^5.5.0",
         "openid-client": "^6.8.8",
