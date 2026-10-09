@@ -8,5 +8,5 @@
         "noEmit": true,
         "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
     },
-    "include": ["src", ".storybook", "visual", "vite.config.ts"]
+    "include": ["src", ".storybook", "gates", "vite.config.ts"]
 }

@@ -60,8 +60,11 @@ Each component's gallery is exported in three modes (`Gallery`, `GalleryDark`, `
 through `.storybook/modes.ts`, so both gates cover light, dark and compact without the story
 files repeating the list.
 
-**a11y** — `.storybook/test-runner.ts`. No rule is disabled. If one must be, it is disabled in
-that file with its reason beside it, and reviewed like code.
+Both gates are one Playwright harness in `gates/` (two projects, `a11y` and `visual`) over the
+same list of stories read from the build's `index.json`.
+
+**a11y** — `gates/a11y.spec.ts`. No rule is disabled. If one must be, it is disabled in that
+file with its reason beside it, and reviewed like code.
 
 ### Visual baselines
 
