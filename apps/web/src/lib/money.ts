@@ -1,56 +1,24 @@
-import type { Money } from '@bylinecrm/shared';
+import { formatMoneyCompactIn, formatMoneyIn, toMinor, type Money } from '@bylinecrm/shared';
 
 /**
- * The one money formatter. `Money` is exact minor units plus an ISO 4217 code; how many minor
- * units make a major unit is the currency's business (JPY has none, BHD has three), and
- * `Intl.NumberFormat` already knows — so the fraction digits are read from it rather than
- * assumed to be two.
+ * The web app's view of money. Every rule — how many minor units a currency has, how an amount is
+ * written, the compact form — lives in `@bylinecrm/shared`'s money module, which the API's
+ * rendered emails use too, so the product formats an amount one way. This module only adds what is
+ * the web's own: the reader's locale (the runtime default), the em dash for "no amount", and
+ * parsing what a person types.
  */
-const formatters = new Map<string, Intl.NumberFormat>();
+const READER_LOCALE = undefined;
 
-function formatterFor(currency: string): Intl.NumberFormat {
-    let formatter = formatters.get(currency);
-    if (!formatter) {
-        formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' });
-        formatters.set(currency, formatter);
-    }
-    return formatter;
-}
-
-/** The number of minor-unit digits the currency has: 2 for USD, 0 for JPY, 3 for BHD. */
-export function minorDigits(currency: string): number {
-    return formatterFor(currency).resolvedOptions().maximumFractionDigits ?? 2;
-}
-
-/** Minor units → the major amount as a number, for input fields and sums the reader sees. */
-export function toMajor(money: Money): number {
-    return money.amountMinor / 10 ** minorDigits(money.currency);
-}
-
-/** A major amount typed by a person → minor units, rounded to the currency's precision. */
-export function toMinor(major: number, currency: string): number {
-    return Math.round(major * 10 ** minorDigits(currency));
-}
+export { minorDigits, toMajor, toMinor } from '@bylinecrm/shared';
 
 /** "$12,000.00", "¥1,200", or an em dash for no amount. */
 export function formatMoney(money: Money | null | undefined): string {
-    if (!money) return '—';
-    return formatterFor(money.currency).format(toMajor(money));
+    return money ? formatMoneyIn(money, READER_LOCALE) : '—';
 }
 
-/** "$12k" for cards and lane totals; the full form stays in the tooltip. */
+/** "$12K" for cards and lane totals; the full form stays in the tooltip. */
 export function formatMoneyCompact(money: Money | null | undefined): string {
-    if (!money) return '—';
-    return new Intl.NumberFormat(undefined, {
-        style: 'currency',
-        currency: money.currency,
-        currencyDisplay: 'narrowSymbol',
-        notation: 'compact',
-        // Both bounds, so every ICU agrees: a currency's default minimum (2 for USD) would
-        // otherwise turn "$12K" into "$12.0K" on some platforms.
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 1,
-    }).format(toMajor(money));
+    return money ? formatMoneyCompactIn(money, READER_LOCALE) : '—';
 }
 
 /** A board column's exact per-currency sums, as the API computed them: "$48K · €2K". */

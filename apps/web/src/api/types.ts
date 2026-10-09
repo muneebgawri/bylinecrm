@@ -11,6 +11,20 @@ import type { components, paths } from './schema.gen';
  */
 type Schemas = components['schemas'];
 
+type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
+/**
+ * What the app may send for a request shape: the generated type, except an optional key may also
+ * be present with `undefined`. That is exactly what reaches the API — the client serialises bodies
+ * with `JSON.stringify` and builds query strings without undefined values, so `{ a: undefined }`
+ * and `{}` are the same request; arrays are read-only because the client only reads them. Responses
+ * are never loosened: what the API returns is read exactly.
+ */
+export type Loose<T> = T extends (infer U)[]
+    ? readonly Loose<U>[]
+    : T extends object
+      ? { [K in Exclude<keyof T, OptionalKeys<T>>]: Loose<T[K]> } & { [K in OptionalKeys<T>]?: Loose<T[K]> | undefined }
+      : T;
+
 // ---- Account, workspaces, membership (P0-3) ------------------------------------------------
 export type UserView = Schemas['User'];
 export type WorkspaceView = Schemas['Workspace'];
@@ -22,12 +36,12 @@ export type InviteView = Schemas['Invite'];
 export type MembershipSummary = Schemas['Standing'];
 export type MemberSummaryView = Schemas['MemberSummary'];
 
-export type SignupInput = Schemas['SignupDto'];
-export type LoginInput = Schemas['LoginDto'];
-export type CreateRoleInput = Schemas['CreateRoleDto'];
-export type UpdateRoleInput = Schemas['UpdateRoleDto'];
-export type CreateApiKeyInput = Schemas['CreateApiKeyDto'];
-export type CreateInviteInput = Schemas['CreateInviteDto'];
+export type SignupInput = Loose<Schemas['SignupDto']>;
+export type LoginInput = Loose<Schemas['LoginDto']>;
+export type CreateRoleInput = Loose<Schemas['CreateRoleDto']>;
+export type UpdateRoleInput = Loose<Schemas['UpdateRoleDto']>;
+export type CreateApiKeyInput = Loose<Schemas['CreateApiKeyDto']>;
+export type CreateInviteInput = Loose<Schemas['CreateInviteDto']>;
 
 // ---- Records (P1-1a/P1-1b/P1-3/P1-4a) -------------------------------------------------------
 export type PersonView = Schemas['Person'];
@@ -49,21 +63,21 @@ export type NotePage = Schemas['NotePage'];
 export type TaskPage = Schemas['TaskPage'];
 export type TimelinePage = Schemas['TimelinePage'];
 
-export type PersonInput = Schemas['UpdatePersonDto'];
-export type PersonCreateInput = Schemas['CreatePersonDto'];
-export type CompanyInput = Schemas['UpdateCompanyDto'];
-export type CompanyCreateInput = Schemas['CreateCompanyDto'];
-export type OpportunityInput = Schemas['UpdateOpportunityDto'];
+export type PersonInput = Loose<Schemas['UpdatePersonDto']>;
+export type PersonCreateInput = Loose<Schemas['CreatePersonDto']>;
+export type CompanyInput = Loose<Schemas['UpdateCompanyDto']>;
+export type CompanyCreateInput = Loose<Schemas['CreateCompanyDto']>;
+export type OpportunityInput = Loose<Schemas['UpdateOpportunityDto']>;
 /** Create takes where the deal starts; a patch cannot change the stage (that is a move). */
-export type OpportunityCreateInput = Schemas['CreateOpportunityDto'];
-export type NoteInput = Schemas['UpdateNoteDto'];
-export type NoteCreateInput = Schemas['CreateNoteDto'];
-export type TaskInput = Schemas['UpdateTaskDto'];
-export type TaskCreateInput = Schemas['CreateTaskDto'];
+export type OpportunityCreateInput = Loose<Schemas['CreateOpportunityDto']>;
+export type NoteInput = Loose<Schemas['UpdateNoteDto']>;
+export type NoteCreateInput = Loose<Schemas['CreateNoteDto']>;
+export type TaskInput = Loose<Schemas['UpdateTaskDto']>;
+export type TaskCreateInput = Loose<Schemas['CreateTaskDto']>;
 
 /** `POST …/bulk`: one action over ids or over a list's selection, never both. */
-export type BulkInput = Schemas['BulkBodyDto'];
-export type BulkAction = BulkInput['action'];
+export type BulkInput = Loose<Schemas['BulkBodyDto']>;
+export type BulkAction = Schemas['BulkBodyDto']['action'];
 export type BulkResultView = Schemas['BulkResult'];
 /** One record's outcome, in the order named: refused rows read `not_found` whatever the reason. */
 export type BulkRowResult = BulkResultView['results'][number];
@@ -75,18 +89,18 @@ export type StageHistoryEntry = Schemas['StageHistoryEntry'];
 export type RuleView = Schemas['StageRule'];
 /** What a move returns: the deal, and the rules that may move it forward again after a backward move. */
 export type MoveResult = Schemas['MoveResult'];
-export type MoveDealInput = Schemas['MoveDealDto'];
+export type MoveDealInput = Loose<Schemas['MoveDealDto']>;
 export type BoardView = Schemas['Board'];
 export type BoardColumn = Schemas['BoardColumn'];
 /**
  * The board and the deal list take the same query: a saved view's id, an inline filter (base64url
  * JSON, which replaces the view's filter whole), a sort, and a search.
  */
-export type BoardQuery = NonNullable<
-    paths['/api/w/{workspaceId}/pipelines/{pipelineId}/board']['get']['parameters']['query']
+export type BoardQuery = Loose<
+    NonNullable<paths['/api/w/{workspaceId}/pipelines/{pipelineId}/board']['get']['parameters']['query']>
 >;
 
 export type SavedView = Schemas['SavedView'];
-export type CreateViewInput = Schemas['CreateViewDto'];
-export type UpdateViewInput = Schemas['UpdateViewDto'];
+export type CreateViewInput = Loose<Schemas['CreateViewDto']>;
+export type UpdateViewInput = Loose<Schemas['UpdateViewDto']>;
 export type SearchResults = Schemas['SearchResults'];

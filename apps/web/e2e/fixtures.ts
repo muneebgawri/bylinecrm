@@ -18,8 +18,8 @@ import type {
     MemberView,
     NoteView,
     OpportunityView,
-    Page,
-    RecordPage,
+    NotePage,
+    PersonPage,
     PersonView,
     PipelineView,
     RoleView,
@@ -77,20 +77,29 @@ export const workspaces: WorkspaceView[] = [
 
 /** An admin: every capability, so every permission-gated control renders and is checked. */
 export const membership: MembershipSummary = {
+    workspaceId: IDS.workspace,
     memberId: IDS.member,
+    apiKeyId: null,
     userId: IDS.user,
     roleId: IDS.adminRole,
     roleName: SYSTEM_ROLES.admin,
     recordScope: 'all',
-    capabilities: CAPABILITIES,
+    capabilities: [...CAPABILITIES],
 };
 
 export const roles: RoleView[] = [
-    { id: IDS.adminRole, name: SYSTEM_ROLES.admin, isSystem: true, capabilities: [...CAPABILITIES] },
+    {
+        id: IDS.adminRole,
+        name: SYSTEM_ROLES.admin,
+        isSystem: true,
+        recordScope: 'all',
+        capabilities: [...CAPABILITIES],
+    },
     {
         id: IDS.memberRole,
         name: SYSTEM_ROLES.member,
         isSystem: true,
+        recordScope: 'all',
         capabilities: ['record:read', 'record:write'] satisfies Capability[],
     },
 ];
@@ -317,7 +326,8 @@ export const history: StageHistoryEntry[] = [
         fromStageId: stageId(1),
         toStageId: stageId(2),
         enteredAt: at(4 * 24),
-        actor: { kind: 'rule', id: rules[0]?.id ?? null },
+        // A rule-made move names its rule; the API's actor carries the rule's id, never null.
+        actor: { kind: 'rule', id: '0b1e0000-0000-4000-8000-000000000601' },
         reason: 'rule',
     },
     {
@@ -417,7 +427,8 @@ export const timeline: TimelineActivityView[] = [
         target: { type: 'opportunity', id: IDS.deal },
         kind: 'deal.stage_changed',
         happenedAt: at(4 * 24),
-        actor: { kind: 'rule', id: rules[0]?.id ?? null },
+        // A rule-made move names its rule; the API's actor carries the rule's id, never null.
+        actor: { kind: 'rule', id: '0b1e0000-0000-4000-8000-000000000601' },
         properties: { diff: { stageId: { from: stageId(1), to: stageId(2) } } },
         linked: null,
         createdAt: at(4 * 24),
@@ -444,9 +455,10 @@ export const timeline: TimelineActivityView[] = [
     },
 ];
 
-export const page = <T>(items: T[]): Page<T> => ({ items, nextCursor: null });
+/** A cursor page (notes, tasks, timeline): the generated page shape with these rows. */
+export const page = <T>(items: T[]): Omit<NotePage, 'items'> & { items: T[] } => ({ items, nextCursor: null });
 /** A record list's page (P1-4a): the rows and the size of the whole set. */
-export const recordPage = <T>(items: T[]): RecordPage<T> => ({
+export const recordPage = <T>(items: T[]): Omit<PersonPage, 'items'> & { items: T[] } => ({
     items,
     nextCursor: null,
     total: items.length,

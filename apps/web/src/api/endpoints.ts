@@ -22,6 +22,7 @@ import type {
     MemberView,
     MoveDealInput,
     MoveResult,
+    NoteCreateInput,
     NoteInput,
     NotePage,
     NoteView,
@@ -39,6 +40,7 @@ import type {
     SearchResults,
     SignupInput,
     StageHistoryEntry,
+    TaskCreateInput,
     TaskInput,
     TaskPage,
     TaskView,
@@ -258,7 +260,7 @@ export const notes = {
             workspacePath(workspaceId, `/notes${query({ target: targetParam(target), cursor })}`),
             { signal },
         ),
-    create: (workspaceId: string, input: NoteInput & { targets: RecordTarget[] }) =>
+    create: (workspaceId: string, input: NoteCreateInput) =>
         request<NoteView>('POST', workspacePath(workspaceId, '/notes'), { body: input }),
     update: (workspaceId: string, id: string, input: NoteInput) =>
         request<NoteView>('PATCH', workspacePath(workspaceId, `/notes/${id}`), { body: input }),
@@ -289,7 +291,7 @@ export const tasks = {
             ),
             { signal },
         ),
-    create: (workspaceId: string, input: TaskInput & { title: string; targets: RecordTarget[] }) =>
+    create: (workspaceId: string, input: TaskCreateInput) =>
         request<TaskView>('POST', workspacePath(workspaceId, '/tasks'), { body: input }),
     update: (workspaceId: string, id: string, input: TaskInput) =>
         request<TaskView>('PATCH', workspacePath(workspaceId, `/tasks/${id}`), { body: input }),

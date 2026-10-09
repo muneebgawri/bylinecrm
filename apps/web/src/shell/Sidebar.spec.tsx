@@ -10,6 +10,8 @@ import { Sidebar, displayName } from './Sidebar';
 
 const member: MembershipSummary = {
     memberId: 'm',
+    workspaceId: 'w1',
+    apiKeyId: null,
     userId: 'u',
     roleId: 'r',
     roleName: 'member',
