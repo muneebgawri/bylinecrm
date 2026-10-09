@@ -15,13 +15,15 @@ export const PopoverClose = PopoverPrimitive.Close;
 export const PopoverContent = forwardRef<
     ComponentRef<typeof PopoverPrimitive.Content>,
     ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(function PopoverContent({ className, align = 'start', sideOffset = 6, ...props }, ref) {
+>(function PopoverContent({ className, align = 'start', sideOffset = 6, collisionPadding = 16, ...props }, ref) {
     return (
         <PopoverPrimitive.Portal>
             <PopoverPrimitive.Content
                 ref={ref}
                 align={align}
                 sideOffset={sideOffset}
+                // Never flush against the viewport edge: a panel near the right of a toolbar shifts in.
+                collisionPadding={collisionPadding}
                 className={cn(
                     'z-50 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto rounded-lg border border-border bg-surface p-3 text-text shadow-lg outline-none',
                     className,
