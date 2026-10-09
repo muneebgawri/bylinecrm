@@ -16,6 +16,7 @@ import { STATES } from './states';
  * On phone widths the state is also compared with its committed screenshot.
  */
 const PALETTE_SHORTCUT = 'ControlOrMeta+k';
+const SETTLE_TIMEOUT_MS = 20_000;
 
 for (const state of STATES) {
     test(state.name, async ({ page }, testInfo) => {
@@ -65,5 +66,7 @@ for (const state of STATES) {
 async function settle(page: import('@playwright/test').Page): Promise<void> {
     await page.waitForLoadState('networkidle');
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
-    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    // A lazy route chunk plus its queries can take longer than expect's 5s default on a loaded
+    // runner; the gate is about the settled page, so it waits for it rather than flaking.
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: SETTLE_TIMEOUT_MS });
 }
