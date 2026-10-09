@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Actor, Address, Links, Money } from '@bylinecrm/shared';
+import type { Actor, Address, Links } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
@@ -14,25 +14,8 @@ import { resolvePlan } from '../query/query.service';
 import { ownerWhere, resolveOwner } from './record-scope';
 import { assertOwnerIsMember, compact, moneyColumns, type MoneyInput, stored } from './references';
 import { searchCandidates } from './search';
-
-/** A company as the API returns it (PAR-005). */
-export interface CompanyView {
-    id: string;
-    name: string;
-    domain: string | null;
-    employeeCount: number | null;
-    arr: Money | null;
-    address: Address;
-    links: Links;
-    icp: boolean;
-    position: number;
-    ownerId: string | null;
-    createdBy: Actor;
-    custom: Record<string, unknown>;
-    deletedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type CompanyView } from './responses';
+export type { CompanyView } from './responses';
 
 export interface CompanyInput {
     name?: string | undefined;

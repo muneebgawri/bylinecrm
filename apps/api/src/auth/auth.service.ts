@@ -16,19 +16,8 @@ import { INVITE_TTL_S, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_S, SLUG_SUFFIX_BYTES } f
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
 import { hashToken, randomToken } from './tokens';
-
-/** A user as `/api/me` reports them. */
-export interface UserView {
-    id: string;
-    email: string;
-    emailVerified: boolean;
-}
-
-export interface WorkspaceView {
-    id: string;
-    slug: string;
-    name: string;
-}
+import type { UserView, WorkspaceView } from '../workspace/responses';
+export type { UserView, WorkspaceView } from '../workspace/responses';
 
 /** What an identity provider told us about the person who just signed in. */
 export interface VerifiedIdentity {

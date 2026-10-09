@@ -12,21 +12,8 @@ import {
     validateCustomValues,
     type ValidationMode,
 } from './custom-values';
-
-/** A definition as the API returns it. */
-export interface CustomFieldView {
-    id: string;
-    object: RecordObject;
-    key: string;
-    label: string;
-    type: CustomFieldType;
-    options: string[];
-    required: boolean;
-    position: number;
-    archivedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type CustomFieldView } from '../responses';
+export type { CustomFieldView } from '../responses';
 
 export interface CreateCustomFieldInput {
     object: RecordObject;

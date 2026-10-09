@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiExtraModels, ApiTags } from '@nestjs/swagger';
-import { Requires } from '../auth/decorators';
+import { Requires, TenantController } from '../auth/decorators';
 import { WorkspaceContext } from '../infra/workspace-context';
 import type { Page } from '../records/list-query';
 import { CreateWebhookDto, ListDeliveriesQueryDto, UpdateWebhookDto, WebhookEnvelopeDto } from './dto';
@@ -10,6 +10,15 @@ import {
     type WebhookEndpointView,
     type WebhookEventView,
 } from './webhooks.service';
+import { Returns } from '../openapi/responses';
+import {
+    endpointWithSecret,
+    webhookDeliveryPage,
+    webhookDeliveryView,
+    webhookEndpointView,
+    webhookEventView,
+    webhookTestResult,
+} from './responses';
 
 /**
  * Outbound webhooks: what the workspace's administrators register, test, rotate and inspect.
@@ -18,7 +27,7 @@ import {
  */
 @ApiTags('webhooks')
 @ApiExtraModels(WebhookEnvelopeDto)
-@Controller('w/:workspaceId/webhooks')
+@TenantController('webhooks')
 export class WebhooksController {
     constructor(
         private readonly webhooks: WebhooksService,
@@ -28,12 +37,14 @@ export class WebhooksController {
     /** The catalogue an endpoint may subscribe to; the delivery body is `WebhookEnvelopeDto`. */
     @Requires('workspace:admin')
     @Get('events')
+    @Returns([webhookEventView])
     events(): WebhookEventView[] {
         return this.webhooks.events();
     }
 
     @Requires('workspace:admin')
     @Get()
+    @Returns([webhookEndpointView])
     list(): Promise<WebhookEndpointView[]> {
         return this.webhooks.list();
     }
@@ -41,6 +52,7 @@ export class WebhooksController {
     /** The response carries the signing secret once; it is not shown again. */
     @Requires('workspace:admin')
     @Post()
+    @Returns(endpointWithSecret)
     create(@Body() body: CreateWebhookDto): Promise<{ endpoint: WebhookEndpointView; secret: string }> {
         const memberId = this.context.get()?.memberId;
         if (!memberId) throw new Error('webhook endpoints are created by a member, not by an API key');
@@ -49,12 +61,14 @@ export class WebhooksController {
 
     @Requires('workspace:admin')
     @Get(':endpointId')
+    @Returns(webhookEndpointView)
     get(@Param('endpointId', ParseUUIDPipe) endpointId: string): Promise<WebhookEndpointView> {
         return this.webhooks.get(endpointId);
     }
 
     @Requires('workspace:admin')
     @Patch(':endpointId')
+    @Returns(webhookEndpointView)
     update(
         @Param('endpointId', ParseUUIDPipe) endpointId: string,
         @Body() body: UpdateWebhookDto,
@@ -72,6 +86,7 @@ export class WebhooksController {
     /** A new secret, shown once; the previous one keeps signing for the grace window. */
     @Requires('workspace:admin')
     @Post(':endpointId/rotate')
+    @Returns(endpointWithSecret)
     rotate(
         @Param('endpointId', ParseUUIDPipe) endpointId: string,
     ): Promise<{ endpoint: WebhookEndpointView; secret: string }> {
@@ -82,6 +97,7 @@ export class WebhooksController {
     @Requires('workspace:admin')
     @HttpCode(200)
     @Post(':endpointId/test')
+    @Returns(webhookTestResult)
     test(
         @Param('endpointId', ParseUUIDPipe) endpointId: string,
     ): Promise<{ delivery: WebhookDeliveryView; statusCode: number | null; ok: boolean }> {
@@ -90,6 +106,7 @@ export class WebhooksController {
 
     @Requires('workspace:admin')
     @Get(':endpointId/deliveries')
+    @Returns(webhookDeliveryPage)
     deliveries(
         @Param('endpointId', ParseUUIDPipe) endpointId: string,
         @Query() query: ListDeliveriesQueryDto,
@@ -101,6 +118,7 @@ export class WebhooksController {
     @Requires('workspace:admin')
     @HttpCode(201)
     @Post(':endpointId/deliveries/:deliveryId/redeliver')
+    @Returns(webhookDeliveryView)
     redeliver(
         @Param('endpointId', ParseUUIDPipe) endpointId: string,
         @Param('deliveryId', ParseUUIDPipe) deliveryId: string,
