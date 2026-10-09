@@ -77,9 +77,15 @@ To update baselines after an intended change:
 pnpm --filter @bylinecrm/ui visual:baseline
 ```
 
-That dispatches CI on your branch with `baseline=true` (which adds the `visual-baseline` job),
-waits for it, and downloads the new `__snapshots__/` for you to review and commit **in the same
-PR** as the change that moved the pixels. The job lives inside `ci.yml` because GitHub only
+The procedure, step by step:
+
+1. Push your branch (the dispatch runs CI on the pushed commit, not your working tree).
+2. Run the command above; it dispatches CI with `baseline=true`, which adds the `visual-baseline` job.
+3. It waits for that run, and fails if the `visual-baseline` job itself did not succeed.
+4. It downloads the artifact to a temporary directory, checks it holds non-empty PNGs only, copies them into `__snapshots__/`, and prints `N files updated (new, changed, unchanged)`.
+5. Review `git status` and commit the baselines **in the same PR** as the change that moved the pixels.
+
+The job lives inside `ci.yml` because GitHub only
 dispatches a workflow that already exists on the default branch. A baseline is a reviewed
 decision, not a fixture. Never commit a locally generated baseline.
 
