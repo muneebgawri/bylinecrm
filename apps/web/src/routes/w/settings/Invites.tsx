@@ -8,6 +8,7 @@ import {
     DialogDescription,
     DialogFooter,
     DialogTitle,
+    DropdownMenuItem,
     EmptyState,
     Field,
     Input,
@@ -16,14 +17,12 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    tableClasses,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useCreateInvite, useInvites, useRevokeInvite, useRoles } from '../../../api/queries';
 import { useWorkspaceId } from '../../params';
 import { SecretOnce } from './ApiKeys';
-import { TableSkeleton } from './Members';
 import { formatDate } from './SettingsLayout';
 
 export function Invites() {
@@ -52,65 +51,47 @@ export function Invites() {
                         </Button>
                     ),
                 }}
-            >
-                {invites.isPending ? (
-                    <TableSkeleton />
-                ) : invites.data.length === 0 ? (
-                    <EmptyState
-                        className="m-4"
-                        title="No invitations"
-                        body="Invite a colleague by email; they join with the role you pick."
-                    />
-                ) : (
-                    <table className={tableClasses.table}>
-                        <thead>
-                            <tr>
-                                <th className={tableClasses.th}>Email</th>
-                                <th className={tableClasses.th}>Role</th>
-                                <th className={tableClasses.th}>Expires</th>
-                                <th className={tableClasses.th}>Status</th>
-                                <th className={tableClasses.th}>
-                                    <span className="sr-only">Actions</span>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {invites.data.map((inv) => (
-                                <tr key={inv.id} className={tableClasses.tr}>
-                                    <td className={`${tableClasses.td} font-medium`}>{inv.email}</td>
-                                    <td className={tableClasses.td}>{roleName(inv.roleId)}</td>
-                                    <td className={`${tableClasses.td} ${tableClasses.muted}`}>
-                                        {formatDate(inv.expiresAt)}
-                                    </td>
-                                    <td className={tableClasses.td}>
-                                        {inv.acceptedAt ? (
-                                            <Badge status="success">Accepted</Badge>
-                                        ) : new Date(inv.expiresAt) < new Date() ? (
-                                            <Badge status="warning">Expired</Badge>
-                                        ) : (
-                                            <Badge status="info">Pending</Badge>
-                                        )}
-                                    </td>
-                                    <td className={`${tableClasses.td} text-right`}>
-                                        {!inv.acceptedAt && (
-                                            <Button
-                                                size="sm"
-                                                shape="square"
-                                                variant="ghost"
-                                                className="text-danger"
-                                                loading={revoke.isPending && revoke.variables === inv.id}
-                                                onClick={() => revoke.mutate(inv.id)}
-                                            >
-                                                Revoke
-                                            </Button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </DataTableChrome>
+                data={{
+                    label: 'Invitations',
+                    loading: invites.isPending,
+                    rows: invites.data ?? [],
+                    getRowId: (inv) => inv.id,
+                    empty: (
+                        <EmptyState
+                            className="m-4"
+                            title="No invitations"
+                            body="Invite a colleague by email; they join with the role you pick."
+                        />
+                    ),
+                    columns: [
+                        { id: 'email', header: 'Email', className: 'font-medium', cell: (inv) => inv.email },
+                        { id: 'role', header: 'Role', cell: (inv) => roleName(inv.roleId) },
+                        { id: 'expires', header: 'Expires', muted: true, cell: (inv) => formatDate(inv.expiresAt) },
+                        {
+                            id: 'status',
+                            header: 'Status',
+                            phone: 'meta',
+                            cell: (inv) =>
+                                inv.acceptedAt ? (
+                                    <Badge status="success">Accepted</Badge>
+                                ) : new Date(inv.expiresAt) < new Date() ? (
+                                    <Badge status="warning">Expired</Badge>
+                                ) : (
+                                    <Badge status="info">Pending</Badge>
+                                ),
+                        },
+                    ],
+                    rowActions: {
+                        label: (inv) => inv.email,
+                        items: (inv) =>
+                            inv.acceptedAt ? null : (
+                                <DropdownMenuItem destructive onSelect={() => revoke.mutate(inv.id)}>
+                                    Revoke
+                                </DropdownMenuItem>
+                            ),
+                    },
+                }}
+            />
             <InviteDialog workspaceId={workspaceId} open={creating} onClose={() => setCreating(false)} />
         </>
     );

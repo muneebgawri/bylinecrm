@@ -10,10 +10,10 @@ import {
     DialogDescription,
     DialogFooter,
     DialogTitle,
+    DropdownMenuItem,
     EmptyState,
     Field,
     Input,
-    tableClasses,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
@@ -21,9 +21,11 @@ import { useCreateRole, useRemoveRole, useRoles, useUpdateRole } from '../../../
 import type { RoleView } from '../../../api/types';
 import { describeCapability } from '../../../auth/capabilities';
 import { useWorkspaceId } from '../../params';
-import { TableSkeleton } from './Members';
 
 /** The catalogue grouped by its subject, for the editor. */
+/** The system admin role holds every capability and is read-only. */
+const isAdmin = (role: RoleView) => role.isSystem && role.name === 'admin';
+
 const GROUPS = Array.from(
     CAPABILITIES.reduce((map, cap) => {
         const subject = cap.split(':')[0] ?? cap;
@@ -56,67 +58,52 @@ export function Roles() {
                         </Button>
                     ),
                 }}
-            >
-                {roles.isPending ? (
-                    <TableSkeleton />
-                ) : (
-                    <table className={tableClasses.table}>
-                        <thead>
-                            <tr>
-                                <th className={tableClasses.th}>Role</th>
-                                <th className={tableClasses.th}>Capabilities</th>
-                                <th className={tableClasses.th}>
-                                    <span className="sr-only">Actions</span>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {roles.data.map((role) => (
-                                <tr key={role.id} className={tableClasses.tr}>
-                                    <td className={tableClasses.td}>
-                                        <span className="font-medium">{role.name}</span>
-                                        {role.isSystem && (
-                                            <Badge className="ml-2" shape="pill">
-                                                system
-                                            </Badge>
-                                        )}
-                                    </td>
-                                    <td className={`${tableClasses.td} ${tableClasses.muted}`}>
-                                        {role.name === 'admin' && role.isSystem
-                                            ? 'Everything'
-                                            : `${role.capabilities.length} of ${CAPABILITIES.length}`}
-                                    </td>
-                                    <td className={`${tableClasses.td} text-right`}>
-                                        <Button
-                                            size="sm"
-                                            shape="square"
-                                            variant="ghost"
-                                            onClick={() => setEditing(role)}
-                                        >
-                                            {role.name === 'admin' && role.isSystem ? 'View' : 'Edit'}
-                                        </Button>
-                                        {!role.isSystem && (
-                                            <Button
-                                                size="sm"
-                                                shape="square"
-                                                variant="ghost"
-                                                className="text-danger"
-                                                loading={remove.isPending && remove.variables === role.id}
-                                                onClick={() => remove.mutate(role.id)}
-                                            >
-                                                Delete
-                                            </Button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </DataTableChrome>
-            {roles.data?.length === 0 && (
-                <EmptyState className="mt-4" title="No roles" body="Every workspace has admin and member." />
-            )}
+                data={{
+                    label: 'Roles',
+                    loading: roles.isPending,
+                    rows: roles.data ?? [],
+                    getRowId: (role) => role.id,
+                    empty: <EmptyState className="m-4" title="No roles" body="Every workspace has admin and member." />,
+                    columns: [
+                        {
+                            id: 'role',
+                            header: 'Role',
+                            cell: (role) => (
+                                <>
+                                    <span className="font-medium">{role.name}</span>
+                                    {role.isSystem && (
+                                        <Badge className="ml-2" shape="pill">
+                                            system
+                                        </Badge>
+                                    )}
+                                </>
+                            ),
+                        },
+                        {
+                            id: 'capabilities',
+                            header: 'Capabilities',
+                            muted: true,
+                            cell: (role) =>
+                                isAdmin(role) ? 'Everything' : `${role.capabilities.length} of ${CAPABILITIES.length}`,
+                        },
+                    ],
+                    rowActions: {
+                        label: (role) => role.name,
+                        items: (role) => (
+                            <>
+                                <DropdownMenuItem onSelect={() => setEditing(role)}>
+                                    {isAdmin(role) ? 'View' : 'Edit'}
+                                </DropdownMenuItem>
+                                {!role.isSystem && (
+                                    <DropdownMenuItem destructive onSelect={() => remove.mutate(role.id)}>
+                                        Delete
+                                    </DropdownMenuItem>
+                                )}
+                            </>
+                        ),
+                    },
+                }}
+            />
             <RoleDialog workspaceId={workspaceId} role={editing} onClose={() => setEditing(null)} />
         </>
     );
@@ -163,7 +150,7 @@ function RoleForm({
     const update = useUpdateRole(workspaceId);
     const [name, setName] = useState(existing?.name ?? '');
     const [selected, setSelected] = useState<Set<Capability>>(() => new Set(existing?.capabilities ?? []));
-    const readOnly = existing?.isSystem === true && existing.name === 'admin';
+    const readOnly = existing !== null && isAdmin(existing);
 
     const toggle = (cap: Capability) =>
         setSelected((current) => {
