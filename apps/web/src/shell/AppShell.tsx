@@ -1,4 +1,4 @@
-import { Drawer, DrawerContent, cn, isBoolean, usePersistedState, useTheme } from '@bylinecrm/ui';
+import { Drawer, DrawerContent, cn, isBoolean, usePersistedState, useTheme, type Theme } from '@bylinecrm/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 import { useLogout } from '../api/queries';
@@ -156,7 +156,8 @@ function useShellCommands({
                 group: 'Account',
                 keywords: ['dark', 'light', 'appearance'],
                 shortcut: 'mod+shift+l',
-                run: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
+                // "Toggle" flips what is on screen: under `system` that is the OS preference, not the setting.
+                run: () => setTheme(effectiveTheme(theme) === 'dark' ? 'light' : 'dark'),
             },
             { id: 'shortcuts.open', title: 'Keyboard shortcuts', group: 'Account', shortcut: '?', run: openShortcuts },
             {
@@ -175,4 +176,10 @@ function useShellCommands({
         [workspaceId, membership, theme, setTheme, navigate, logout, openPalette, openShortcuts, toggleSidebar],
     );
     useRegisterCommands(commands, [commands]);
+}
+
+/** The theme the viewer actually sees: `system` resolves through the OS preference. */
+export function effectiveTheme(theme: Theme): 'light' | 'dark' {
+    if (theme !== 'system') return theme;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }

@@ -27,7 +27,12 @@ export default defineConfig(({ mode }) => {
         server: {
             port: Number(env.WEB_PORT),
             strictPort: true,
-            proxy: { '/api': { target: `http://127.0.0.1:${env.PORT}`, rewrite: (p) => p.replace(/^\/api/, '') } },
+            // The API serves everything under `/api` (its global prefix) and `/health` on its own; both
+            // are forwarded as-is, the same two routes the production edge sends to the API.
+            proxy: {
+                '/api': { target: `http://127.0.0.1:${env.PORT}` },
+                '/health': { target: `http://127.0.0.1:${env.PORT}` },
+            },
         },
         test: {
             environment: 'jsdom',
