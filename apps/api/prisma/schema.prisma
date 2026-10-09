@@ -43,6 +43,8 @@ model Workspace {
   stageRules             StageRule[]
   webhookEndpoints       WebhookEndpoint[]
   webhookDeliveries      WebhookDelivery[]
+  emailTemplates         EmailTemplate[]
+  mailSettings           WorkspaceMailSettings?
 
   @@map("workspaces")
 }
@@ -795,4 +797,54 @@ model WebhookDelivery {
   @@index([workspaceId, endpointId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("webhook_deliveries")
+}
+
+enum TemplateKind {
+  personal
+  outreach
+
+  @@map("template_kind")
+}
+
+/// An email template (P2-4). `body` is the editor's rich-text document restricted to the template
+/// subset (`TEMPLATE_BODY_NODES`); variables are `variable` nodes in it and `{{path}}` tokens in
+/// `subject`. `version` is the optimistic-concurrency counter a PATCH must name.
+model EmailTemplate {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  name        String
+  kind        TemplateKind
+  subject     String       @default("")
+  /// `RichText` from @bylinecrm/shared.
+  body        Json
+  version     Int          @default(1)
+  /// `Actor` from @bylinecrm/shared.
+  createdBy   Json         @map("created_by")
+  /// `Actor` from @bylinecrm/shared.
+  updatedBy   Json         @map("updated_by")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, deletedAt, updatedAt(sort: Desc)])
+  @@map("email_templates")
+}
+
+/// The workspace's mail settings (P2-4): one row per workspace, absent until first saved — a
+/// workspace without one reads the defaults in @bylinecrm/shared.
+model WorkspaceMailSettings {
+  workspaceId           String   @id @map("workspace_id") @db.Uuid
+  /// `PostalAddress` from @bylinecrm/shared, or null.
+  postalAddress         Json?    @map("postal_address")
+  defaultSenderName     String?  @map("default_sender_name")
+  unsubscribeFooterText String   @map("unsubscribe_footer_text")
+  /// `Actor` from @bylinecrm/shared.
+  updatedBy             Json     @map("updated_by")
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_mail_settings")
 }
