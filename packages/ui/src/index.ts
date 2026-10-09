@@ -1,5 +1,5 @@
 export { cn } from './lib/cn';
-export { focusRing } from './lib/focus';
+export { focusRing, focusWithinRing } from './lib/focus';
 export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
 export {
@@ -22,6 +22,7 @@ export { Field, type FieldProps } from './components/field/Field';
 export * from './components/select/Select';
 export { Checkbox, type CheckboxProps } from './components/checkbox/Checkbox';
 export { Switch, type SwitchProps } from './components/switch/Switch';
+export { RadioGroup, type RadioGroupProps, type RadioOption } from './components/radio-group/RadioGroup';
 export { Badge, StatusBadge, badgeVariants, type BadgeProps, type StatusBadgeProps } from './components/badge/Badge';
 export * from './components/tooltip/Tooltip';
 export * from './components/dialog/Dialog';
