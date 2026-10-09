@@ -1,6 +1,34 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 
+/** What a caller may send for an amount: minor units, and a currency that defaults to the workspace's. */
+export type MoneyInput = { amountMinor: number; currency?: string | undefined };
+
+/** The workspace's default currency, read under the policy that lets a workspace see itself. */
+export async function defaultCurrency(tx: WorkspaceClient, workspaceId: string): Promise<string> {
+    const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { defaultCurrency: true } });
+    if (!workspace) throw new Error('the current workspace is not readable');
+    return workspace.defaultCurrency;
+}
+
+/**
+ * The two columns an amount is stored in, from what the caller sent: `undefined` leaves both
+ * alone, `null` clears both, a value sets both (the currency defaulting to the workspace's). One
+ * rule for every money column; the database checks the pair stays consistent.
+ */
+export async function moneyColumns(
+    tx: WorkspaceClient,
+    workspaceId: string,
+    input: MoneyInput | null | undefined,
+): Promise<{ amountMinor?: bigint | null; currency?: string | null }> {
+    if (input === undefined) return {};
+    if (input === null) return { amountMinor: null, currency: null };
+    return {
+        amountMinor: BigInt(input.amountMinor),
+        currency: input.currency ?? (await defaultCurrency(tx, workspaceId)),
+    };
+}
+
 /**
  * A write naming an owner names a member of this workspace. The lookup runs under the row-level
  * policies, so another workspace's member is simply not found — `422`, never a confirmation
@@ -17,6 +45,13 @@ export async function assertCompanyExists(tx: WorkspaceClient, companyId: string
     if (companyId === null) return;
     const company = await tx.company.findFirst({ where: { id: companyId, deletedAt: null }, select: { id: true } });
     if (!company) throw new UnprocessableEntityException('company not found');
+}
+
+/** A deal's point of contact is a live person the caller can see. */
+export async function assertPersonExists(tx: WorkspaceClient, personId: string | null): Promise<void> {
+    if (personId === null) return;
+    const person = await tx.person.findFirst({ where: { id: personId, deletedAt: null }, select: { id: true } });
+    if (!person) throw new UnprocessableEntityException('person not found');
 }
 
 /**

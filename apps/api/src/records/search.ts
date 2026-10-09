@@ -9,6 +9,7 @@ import type { WorkspaceClient } from '../infra/rls-prisma.service';
 const SEARCHABLE = {
     people: { table: Prisma.raw('"people"'), prefixColumn: Prisma.raw('"email_primary"') },
     companies: { table: Prisma.raw('"companies"'), prefixColumn: Prisma.raw('"domain"') },
+    opportunities: { table: Prisma.raw('"opportunities"'), prefixColumn: null },
 } as const;
 export type SearchableTable = keyof typeof SEARCHABLE;
 
@@ -27,10 +28,12 @@ export async function searchCandidates(
     const { table: name, prefixColumn } = SEARCHABLE[table];
     const deletedClause = deleted ? Prisma.sql`"deleted_at" IS NOT NULL` : Prisma.sql`"deleted_at" IS NULL`;
     const prefix = `${q.toLowerCase().replace(/[\\%_]/g, '\\$&')}%`;
+    // A table with no prefix column matches on the vector alone; `FALSE` keeps one query shape.
+    const prefixClause = prefixColumn ? Prisma.sql`${prefixColumn} LIKE ${prefix}` : Prisma.sql`FALSE`;
     const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM ${name}
         WHERE ${deletedClause}
-          AND ("search" @@ plainto_tsquery('simple', ${q}) OR ${prefixColumn} LIKE ${prefix})
+          AND ("search" @@ plainto_tsquery('simple', ${q}) OR ${prefixClause})
         ORDER BY ts_rank("search", plainto_tsquery('simple', ${q})) DESC, "id"
         LIMIT ${SEARCH_CANDIDATE_LIMIT}`;
     return rows.map((r) => r.id);

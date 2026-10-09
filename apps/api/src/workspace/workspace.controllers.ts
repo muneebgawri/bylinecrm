@@ -8,7 +8,7 @@ import { ApiKeyService, type ApiKeyView } from '../auth/api-key.service';
 import { normaliseEmail } from '../auth/auth.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
-import { MembersService, type MemberView } from './members.service';
+import { MembersService, type MemberSummaryView, type MemberView } from './members.service';
 import { RolesService, type RoleView } from './roles.service';
 
 /** The caller's own standing in the workspace: what the guard decided, read back. */
@@ -68,6 +68,13 @@ export class MembersController {
     @Get()
     list(): Promise<MemberView[]> {
         return this.members.list();
+    }
+
+    /** Declared before `:memberId` so the literal segment wins. */
+    @Requires('record:read')
+    @Get('summary')
+    summary(): Promise<MemberSummaryView[]> {
+        return this.members.summary();
     }
 
     @Requires('workspace:admin')

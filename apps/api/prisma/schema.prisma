@@ -2,192 +2,206 @@
 // security (see the P0-2 migration); the policies are the backstop, the route guard is the gate.
 
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 /// A tenant. Global table: the app role reads the current workspace's row, or a workspace the
 /// signed-in user is a member of.
 model Workspace {
-    id        String   @id @default(uuid()) @db.Uuid
-    slug      String   @unique
-    name      String
-    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id              String   @id @default(uuid()) @db.Uuid
+  slug            String   @unique
+  name            String
+  /// ISO 4217, upper case (the database checks): what a deal takes when the caller names no currency.
+  defaultCurrency String   @default("USD") @map("default_currency") @db.Char(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-    members WorkspaceMember[]
-    roles   Role[]
-    apiKeys ApiKey[]
-    invites WorkspaceInvite[]
+  members WorkspaceMember[]
+  roles   Role[]
+  apiKeys ApiKey[]
+  invites WorkspaceInvite[]
 
-    people                 Person[]
-    companies              Company[]
-    customFieldDefinitions CustomFieldDefinition[]
+  people                 Person[]
+  companies              Company[]
+  customFieldDefinitions CustomFieldDefinition[]
+  opportunities          Opportunity[]
+  notes                  Note[]
+  noteTargets            NoteTarget[]
+  tasks                  Task[]
+  taskTargets            TaskTarget[]
+  attachments            Attachment[]
 
-    @@map("workspaces")
+  @@map("workspaces")
 }
 
 /// A person who can sign in. Global table, written only by AuthService through the owner client.
 /// `email` is stored lower-cased by the application and unique as stored. `passwordHash` is null
 /// for a user who only ever signed in through an identity provider.
 model User {
-    id              String    @id @default(uuid()) @db.Uuid
-    email           String    @unique
-    passwordHash    String?   @map("password_hash")
-    emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
-    createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique
+  passwordHash    String?   @map("password_hash")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-    memberships WorkspaceMember[]
-    sessions    Session[]
-    identities  ExternalIdentity[]
+  memberships WorkspaceMember[]
+  sessions    Session[]
+  identities  ExternalIdentity[]
 
-    @@map("users")
+  @@map("users")
 }
 
 /// A signed-in browser. The cookie carries a random token; only its hash is stored. Global table
 /// out of the app role's reach: sessions are read before any workspace is known, by the auth layer.
 model Session {
-    id            String    @id @default(uuid()) @db.Uuid
-    userId        String    @map("user_id") @db.Uuid
-    tokenHash     String    @unique @map("token_hash")
-    createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
-    expiresAt     DateTime  @map("expires_at") @db.Timestamptz
-    lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
-    revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
-    /// The session this one replaced on rotation, kept for the audit trail.
-    rotatedFromId String?   @map("rotated_from_id") @db.Uuid
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
+  /// The session this one replaced on rotation, kept for the audit trail.
+  rotatedFromId String?   @map("rotated_from_id") @db.Uuid
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
-    @@map("sessions")
+  @@index([userId])
+  @@map("sessions")
 }
 
 /// A user's account at an identity provider (Google, or any OIDC issuer the operator configured).
 /// Global, owner-only, like sessions.
 model ExternalIdentity {
-    id        String   @id @default(uuid()) @db.Uuid
-    userId    String   @map("user_id") @db.Uuid
-    /// The issuer key from configuration (`google`, or the operator's name for an OIDC issuer).
-    provider  String
-    /// The provider's stable subject identifier for the user.
-    subject   String
-    email     String
-    createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// The issuer key from configuration (`google`, or the operator's name for an OIDC issuer).
+  provider  String
+  /// The provider's stable subject identifier for the user.
+  subject   String
+  email     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@unique([provider, subject])
-    @@index([userId])
-    @@map("external_identities")
+  @@unique([provider, subject])
+  @@index([userId])
+  @@map("external_identities")
 }
 
 /// A user's seat in a workspace, with the role that decides what they may do there.
 model WorkspaceMember {
-    id          String   @id @default(uuid()) @db.Uuid
-    workspaceId String   @map("workspace_id") @db.Uuid
-    userId      String   @map("user_id") @db.Uuid
-    roleId      String   @map("role_id") @db.Uuid
-    createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  /// How the member is shown to other members; pickers read it and never the email.
+  displayName String?  @map("display_name")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-    workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    role      Role      @relation(fields: [roleId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id])
 
-    createdApiKeys ApiKey[]
-    sentInvites    WorkspaceInvite[]
-    ownedPeople    Person[]
-    ownedCompanies Company[]
+  createdApiKeys      ApiKey[]
+  sentInvites         WorkspaceInvite[]
+  ownedPeople         Person[]
+  ownedCompanies      Company[]
+  ownedOpportunities  Opportunity[]
+  authoredNotes       Note[]
+  assignedTasks       Task[]
+  authoredAttachments Attachment[]
 
-    @@unique([workspaceId, userId])
-    @@index([userId])
-    @@index([roleId])
-    @@map("workspace_members")
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("workspace_members")
 }
 
 /// A named set of capabilities in a workspace. The two system roles (`admin`, `member`) exist from
 /// creation and cannot be deleted; `admin` holds every capability by construction and has no
 /// permission rows.
 model Role {
-    id          String      @id @default(uuid()) @db.Uuid
-    workspaceId String      @map("workspace_id") @db.Uuid
-    name        String
-    isSystem    Boolean     @default(false) @map("is_system")
-    /// Every record, or only the holder's own (doc 48 §5). The admin role is always `all`.
-    recordScope RecordScope @default(all) @map("record_scope")
-    createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  id          String      @id @default(uuid()) @db.Uuid
+  workspaceId String      @map("workspace_id") @db.Uuid
+  name        String
+  isSystem    Boolean     @default(false) @map("is_system")
+  /// Every record, or only the holder's own (doc 48 §5). The admin role is always `all`.
+  recordScope RecordScope @default(all) @map("record_scope")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
-    workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    permissions RolePermission[]
-    members     WorkspaceMember[]
-    apiKeys     ApiKey[]
-    invites     WorkspaceInvite[]
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  members     WorkspaceMember[]
+  apiKeys     ApiKey[]
+  invites     WorkspaceInvite[]
 
-    @@unique([workspaceId, name])
-    @@map("roles")
+  @@unique([workspaceId, name])
+  @@map("roles")
 }
 
 /// One capability granted to one role. `capability` is a value from the shared catalogue; the
 /// application validates it, the database stores the string.
 model RolePermission {
-    id          String @id @default(uuid()) @db.Uuid
-    workspaceId String @map("workspace_id") @db.Uuid
-    roleId      String @map("role_id") @db.Uuid
-    capability  String
+  id          String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  roleId      String @map("role_id") @db.Uuid
+  capability  String
 
-    role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-    @@unique([roleId, capability])
-    @@map("role_permissions")
+  @@unique([roleId, capability])
+  @@map("role_permissions")
 }
 
 /// A machine credential for one workspace, acting with one role. The secret is shown once and
 /// only its hash is kept; `prefix` identifies the key without revealing it.
 model ApiKey {
-    id          String    @id @default(uuid()) @db.Uuid
-    workspaceId String    @map("workspace_id") @db.Uuid
-    name        String
-    prefix      String    @unique
-    secretHash  String    @map("secret_hash")
-    roleId      String    @map("role_id") @db.Uuid
-    createdById String    @map("created_by_id") @db.Uuid
-    lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
-    revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
-    createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  prefix      String    @unique
+  secretHash  String    @map("secret_hash")
+  roleId      String    @map("role_id") @db.Uuid
+  createdById String    @map("created_by_id") @db.Uuid
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-    workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    role      Role            @relation(fields: [roleId], references: [id])
-    createdBy WorkspaceMember @relation(fields: [createdById], references: [id])
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role      Role            @relation(fields: [roleId], references: [id])
+  createdBy WorkspaceMember @relation(fields: [createdById], references: [id])
 
-    @@map("api_keys")
+  @@map("api_keys")
 }
 
 /// An invitation to join a workspace, sent to an email address with a role. The token is shown
 /// once; only its hash is stored. Accepting it requires signing in as that email.
 model WorkspaceInvite {
-    id          String    @id @default(uuid()) @db.Uuid
-    workspaceId String    @map("workspace_id") @db.Uuid
-    email       String
-    roleId      String    @map("role_id") @db.Uuid
-    tokenHash   String    @unique @map("token_hash")
-    invitedById String    @map("invited_by_id") @db.Uuid
-    expiresAt   DateTime  @map("expires_at") @db.Timestamptz
-    acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz
-    createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  email       String
+  roleId      String    @map("role_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  invitedById String    @map("invited_by_id") @db.Uuid
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-    workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    role      Role            @relation(fields: [roleId], references: [id])
-    invitedBy WorkspaceMember @relation(fields: [invitedById], references: [id])
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role      Role            @relation(fields: [roleId], references: [id])
+  invitedBy WorkspaceMember @relation(fields: [invitedById], references: [id])
 
-    @@index([workspaceId, email])
-    @@map("workspace_invites")
+  @@index([workspaceId, email])
+  @@map("workspace_invites")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,135 +213,296 @@ model WorkspaceInvite {
 
 /// What a role lets its holder reach: every record, or only their own.
 enum RecordScope {
-    all
-    own
+  all
+  own
 
-    @@map("record_scope")
+  @@map("record_scope")
 }
 
 /// The objects a workspace can add custom fields to.
 enum RecordObject {
-    person
-    company
-    opportunity
+  person
+  company
+  opportunity
 
-    @@map("record_object")
+  @@map("record_object")
 }
 
 enum CustomFieldType {
-    text
-    number
-    boolean
-    date
-    datetime
-    select
-    multiselect
-    url
-    email
-    phone
+  text
+  number
+  boolean
+  date
+  datetime
+  select
+  multiselect
+  url
+  email
+  phone
 
-    @@map("custom_field_type")
+  @@map("custom_field_type")
 }
 
 /// A company (PAR-005/006). `domain` is stored lower-cased (the database checks) and is unique
 /// per workspace among non-null values, deleted rows included.
 model Company {
-    id            String                   @id @default(uuid()) @db.Uuid
-    workspaceId   String                   @map("workspace_id") @db.Uuid
-    name          String
-    domain        String?
-    employeeCount Int?                     @map("employee_count")
-    arrAmount     Decimal?                 @map("arr_amount") @db.Decimal(14, 2)
-    arrCurrency   String?                  @map("arr_currency") @db.Char(3)
-    /// `Address` from @bylinecrm/shared.
-    address       Json                     @default("{\"street\":null,\"city\":null,\"state\":null,\"country\":null,\"postalCode\":null}")
-    /// `Links` from @bylinecrm/shared.
-    links         Json                     @default("{\"linkedin\":null,\"x\":null}")
-    /// Ideal-customer-profile flag.
-    icp           Boolean                  @default(false)
-    /// Manual ordering in views (PAR-084); defaults to the creation instant.
-    position      Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
-    ownerId       String?                  @map("owner_id") @db.Uuid
-    /// `Actor` from @bylinecrm/shared: who created the record and how (PAR-003).
-    createdBy     Json                     @map("created_by")
-    /// Values of the workspace's custom fields, by key; validated against the definitions.
-    custom        Json                     @default("{}")
-    deletedAt     DateTime?                @map("deleted_at") @db.Timestamptz
-    createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
-    /// Generated by the database (the expression is the migration's; Prisma only knows it exists).
-    search Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((COALESCE(name, ''::text) || ' '::text) || COALESCE(domain, ''::text)))"))
+  id            String                   @id @default(uuid()) @db.Uuid
+  workspaceId   String                   @map("workspace_id") @db.Uuid
+  name          String
+  domain        String?
+  employeeCount Int?                     @map("employee_count")
+  /// ARR in the currency's minor unit, with `arrCurrency`: both or neither (the database checks).
+  arrMinor      BigInt?                  @map("arr_minor")
+  arrCurrency   String?                  @map("arr_currency") @db.Char(3)
+  /// `Address` from @bylinecrm/shared.
+  address       Json                     @default("{\"street\":null,\"city\":null,\"state\":null,\"country\":null,\"postalCode\":null}")
+  /// `Links` from @bylinecrm/shared.
+  links         Json                     @default("{\"linkedin\":null,\"x\":null}")
+  /// Ideal-customer-profile flag.
+  icp           Boolean                  @default(false)
+  /// Manual ordering in views (PAR-084); defaults to the creation instant.
+  position      Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  ownerId       String?                  @map("owner_id") @db.Uuid
+  /// `Actor` from @bylinecrm/shared: who created the record and how (PAR-003).
+  createdBy     Json                     @map("created_by")
+  /// Values of the workspace's custom fields, by key; validated against the definitions.
+  custom        Json                     @default("{}")
+  deletedAt     DateTime?                @map("deleted_at") @db.Timestamptz
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  /// Generated by the database (the expression is the migration's; Prisma only knows it exists).
+  search        Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((COALESCE(name, ''::text) || ' '::text) || COALESCE(domain, ''::text)))"))
 
-    workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    owner     WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-    people    Person[]
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner         WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  people        Person[]
+  opportunities Opportunity[]
 
-    @@index([workspaceId, deletedAt])
-    @@index([workspaceId, ownerId])
-    @@index([search], type: Gin)
-    @@map("companies")
+  @@index([workspaceId, deletedAt])
+  @@index([workspaceId, ownerId])
+  @@index([search], type: Gin)
+  @@map("companies")
 }
 
 /// A person (PAR-001/002). The primary email is unique per workspace, case-insensitively,
 /// deleted rows included; the generated `email_primary` column is what the index covers.
 model Person {
-    id           String                   @id @default(uuid()) @db.Uuid
-    workspaceId  String                   @map("workspace_id") @db.Uuid
-    nameFirst    String                   @default("") @map("name_first")
-    nameLast     String                   @default("") @map("name_last")
-    /// `Emails` from @bylinecrm/shared.
-    emails       Json                     @default("{\"primary\":null,\"additional\":[]}")
-    /// `Phones` from @bylinecrm/shared.
-    phones       Json                     @default("{\"primary\":null,\"additional\":[]}")
-    jobTitle     String?                  @map("job_title")
-    city         String?
-    /// `Links` from @bylinecrm/shared.
-    links        Json                     @default("{\"linkedin\":null,\"x\":null}")
-    avatarUrl    String?                  @map("avatar_url")
-    position     Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
-    companyId    String?                  @map("company_id") @db.Uuid
-    ownerId      String?                  @map("owner_id") @db.Uuid
-    createdBy    Json                     @map("created_by")
-    custom       Json                     @default("{}")
-    deletedAt    DateTime?                @map("deleted_at") @db.Timestamptz
-    createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt    DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
-    /// Generated by the database from `emails`: the uniqueness index is built on it. Readable, never written.
-    emailPrimary String? @default(dbgenerated("lower(NULLIF((emails ->> 'primary'::text), ''::text))")) @map("email_primary")
-    /// Generated by the database (the expression is the migration's; Prisma only knows it exists).
-    search Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((((((COALESCE(name_first, ''::text) || ' '::text) || COALESCE(name_last, ''::text)) || ' '::text) || COALESCE((emails ->> 'primary'::text), ''::text)) || ' '::text) || COALESCE(job_title, ''::text)))"))
+  id           String                   @id @default(uuid()) @db.Uuid
+  workspaceId  String                   @map("workspace_id") @db.Uuid
+  nameFirst    String                   @default("") @map("name_first")
+  nameLast     String                   @default("") @map("name_last")
+  /// `Emails` from @bylinecrm/shared.
+  emails       Json                     @default("{\"primary\":null,\"additional\":[]}")
+  /// `Phones` from @bylinecrm/shared.
+  phones       Json                     @default("{\"primary\":null,\"additional\":[]}")
+  jobTitle     String?                  @map("job_title")
+  city         String?
+  /// `Links` from @bylinecrm/shared.
+  links        Json                     @default("{\"linkedin\":null,\"x\":null}")
+  avatarUrl    String?                  @map("avatar_url")
+  position     Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  companyId    String?                  @map("company_id") @db.Uuid
+  ownerId      String?                  @map("owner_id") @db.Uuid
+  createdBy    Json                     @map("created_by")
+  custom       Json                     @default("{}")
+  deletedAt    DateTime?                @map("deleted_at") @db.Timestamptz
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  /// Generated by the database from `emails`: the uniqueness index is built on it. Readable, never written.
+  emailPrimary String?                  @default(dbgenerated("lower(NULLIF((emails ->> 'primary'::text), ''::text))")) @map("email_primary")
+  /// Generated by the database (the expression is the migration's; Prisma only knows it exists).
+  search       Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((((((COALESCE(name_first, ''::text) || ' '::text) || COALESCE(name_last, ''::text)) || ' '::text) || COALESCE((emails ->> 'primary'::text), ''::text)) || ' '::text) || COALESCE(job_title, ''::text)))"))
 
-    workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    company   Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
-    owner     WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company    Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  owner      WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  contactFor Opportunity[]
 
-    @@index([workspaceId, deletedAt])
-    @@index([workspaceId, ownerId])
-    @@index([workspaceId, companyId])
-    @@index([search], type: Gin)
-    @@map("people")
+  @@index([workspaceId, deletedAt])
+  @@index([workspaceId, ownerId])
+  @@index([workspaceId, companyId])
+  @@index([search], type: Gin)
+  @@map("people")
 }
 
 /// A field a workspace added to one of its objects (PAR-073/074). Values live in each record's
 /// `custom` column under `key`. A definition is never deleted while a record may hold its value:
 /// it is archived, and an archived key is unknown to the validator from then on.
 model CustomFieldDefinition {
-    id          String          @id @default(uuid()) @db.Uuid
-    workspaceId String          @map("workspace_id") @db.Uuid
-    object      RecordObject
-    key         String
-    label       String
-    type        CustomFieldType
-    /// For `select`/`multiselect`: the allowed values, as strings. Empty otherwise.
-    options     Json            @default("[]")
-    required    Boolean         @default(false)
-    position    Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
-    archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
-    createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
-    updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  id          String          @id @default(uuid()) @db.Uuid
+  workspaceId String          @map("workspace_id") @db.Uuid
+  object      RecordObject
+  key         String
+  label       String
+  type        CustomFieldType
+  /// For `select`/`multiselect`: the allowed values, as strings. Empty otherwise.
+  options     Json            @default("[]")
+  required    Boolean         @default(false)
+  position    Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
 
-    workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-    @@unique([workspaceId, object, key])
-    @@map("custom_field_definitions")
+  @@unique([workspaceId, object, key])
+  @@map("custom_field_definitions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deals, notes, tasks, attachments (P1-1b). `opportunities` is owner-bearing like people and
+// companies. Notes, tasks and attachments are attached to records through polymorphic targets
+// (`target_type` + `target_id`, no foreign key — records are only ever soft-deleted); who may
+// see one follows from its targets and is decided in the service.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+
+  @@map("task_status")
+}
+
+/// A deal (PAR-007). The amount is exact, in the currency's minor unit. Stage and pipeline arrive
+/// with P1-2, which adds its columns and the stage history beside this table.
+model Opportunity {
+  id               String                   @id @default(uuid()) @db.Uuid
+  workspaceId      String                   @map("workspace_id") @db.Uuid
+  name             String
+  amountMinor      BigInt?                  @map("amount_minor")
+  currency         String                   @db.Char(3)
+  closeDate        DateTime?                @map("close_date") @db.Date
+  /// 0–100 (the database checks).
+  probability      Int?                     @db.SmallInt
+  position         Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  ownerId          String?                  @map("owner_id") @db.Uuid
+  pointOfContactId String?                  @map("point_of_contact_id") @db.Uuid
+  companyId        String?                  @map("company_id") @db.Uuid
+  createdBy        Json                     @map("created_by")
+  custom           Json                     @default("{}")
+  deletedAt        DateTime?                @map("deleted_at") @db.Timestamptz
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  search           Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, COALESCE(name, ''::text))"))
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner          WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  pointOfContact Person?          @relation(fields: [pointOfContactId], references: [id], onDelete: SetNull)
+  company        Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, deletedAt])
+  @@index([workspaceId, ownerId])
+  @@index([workspaceId, companyId])
+  @@index([workspaceId, pointOfContactId])
+  @@index([search], type: Gin)
+  @@map("opportunities")
+}
+
+/// A note (PAR-010): a rich-text document attached to any number of records.
+model Note {
+  id          String                   @id @default(uuid()) @db.Uuid
+  workspaceId String                   @map("workspace_id") @db.Uuid
+  title       String                   @default("")
+  /// `RichText` from @bylinecrm/shared, stored as the editor produced it.
+  body        Json                     @default("{\"type\":\"doc\",\"content\":[]}")
+  /// Derived from `body` by the application on every write; the search vector is built on it.
+  bodyText    String                   @default("") @map("body_text")
+  authorId    String?                  @map("author_id") @db.Uuid
+  createdBy   Json                     @map("created_by")
+  deletedAt   DateTime?                @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  search      Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(body_text, ''::text)))"))
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    WorkspaceMember? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  targets   NoteTarget[]
+
+  @@index([workspaceId, deletedAt])
+  @@index([search], type: Gin)
+  @@map("notes")
+}
+
+/// One record a note is attached to. `RecordObject` names the table; `targetId` the row.
+model NoteTarget {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  noteId      String       @map("note_id") @db.Uuid
+  targetType  RecordObject @map("target_type")
+  targetId    String       @map("target_id") @db.Uuid
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, targetType, targetId])
+  @@index([workspaceId, targetType, targetId])
+  @@map("note_targets")
+}
+
+/// A task (PAR-011). `completedAt` is set exactly when `status` is `done` (the database checks).
+model Task {
+  id          String                   @id @default(uuid()) @db.Uuid
+  workspaceId String                   @map("workspace_id") @db.Uuid
+  title       String
+  body        Json                     @default("{\"type\":\"doc\",\"content\":[]}")
+  bodyText    String                   @default("") @map("body_text")
+  status      TaskStatus               @default(todo)
+  dueAt       DateTime?                @map("due_at") @db.Timestamptz
+  assigneeId  String?                  @map("assignee_id") @db.Uuid
+  completedAt DateTime?                @map("completed_at") @db.Timestamptz
+  createdBy   Json                     @map("created_by")
+  deletedAt   DateTime?                @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  search      Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(body_text, ''::text)))"))
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee  WorkspaceMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  targets   TaskTarget[]
+
+  @@index([workspaceId, deletedAt])
+  @@index([workspaceId, assigneeId])
+  @@index([workspaceId, status])
+  @@index([search], type: Gin)
+  @@map("tasks")
+}
+
+model TaskTarget {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  taskId      String       @map("task_id") @db.Uuid
+  targetType  RecordObject @map("target_type")
+  targetId    String       @map("target_id") @db.Uuid
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, targetType, targetId])
+  @@index([workspaceId, targetType, targetId])
+  @@map("task_targets")
+}
+
+/// A file on one record (PAR-016). The bytes are behind `FileStorage` under `storageKey`.
+model Attachment {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  name        String
+  storageKey  String       @unique @map("storage_key")
+  mime        String
+  sizeBytes   BigInt       @map("size_bytes")
+  targetType  RecordObject @map("target_type")
+  targetId    String       @map("target_id") @db.Uuid
+  authorId    String?      @map("author_id") @db.Uuid
+  createdBy   Json         @map("created_by")
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    WorkspaceMember? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, targetType, targetId])
+  @@index([workspaceId, deletedAt])
+  @@map("attachments")
 }

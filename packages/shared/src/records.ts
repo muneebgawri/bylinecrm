@@ -101,8 +101,63 @@ export type Address = {
     postalCode: string | null;
 };
 
-/** An amount with its currency. The amount travels as a decimal string, never a float. */
+/**
+ * An amount with its currency: the currency's minor unit (cents, pence), exact and integral, and
+ * the ISO 4217 code. One representation of money for everything — a deal's amount (PAR-007), a
+ * company's ARR — so sums never round and nothing converts. ISO 4217 decides what "minor" means
+ * per currency; the client formats.
+ */
 export type Money = {
-    amount: string;
+    amountMinor: number;
     currency: string;
 };
+
+/** The currency an amount takes when a caller names none; a workspace setting (a later package edits it). */
+export const DEFAULT_CURRENCY = 'USD';
+
+/**
+ * A record a note, task or attachment is attached to (PAR-010/011/016): the object and the row.
+ * The objects are exactly the record objects, so a target can be anything a custom field can be
+ * on; the `type:id` spelling is how a target travels in a query string.
+ */
+export type RecordTarget = {
+    type: RecordObject;
+    id: string;
+};
+
+export const TASK_STATUSES = ['todo', 'in_progress', 'done'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+/**
+ * Rich text as the editor produces it: a ProseMirror/Tiptap document. The API stores it as
+ * given and derives plain text from it for search; it never interprets the nodes otherwise.
+ */
+export type RichText = {
+    type: 'doc';
+    content?: RichTextNode[] | undefined;
+};
+export type RichTextNode = {
+    type: string;
+    text?: string | undefined;
+    content?: RichTextNode[] | undefined;
+    [key: string]: unknown;
+};
+
+/** The largest file an attachment may be, and the content types it may carry. */
+export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+export const ATTACHMENT_MIME_ALLOWLIST = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/csv',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+] as const;
