@@ -10,11 +10,13 @@ import { CreateBlocklistEntryDto, ListThreadsQueryDto } from './dto';
 import { MailReadService } from './mail-read.service';
 import { MailSyncWorkers } from './mail-sync.workers';
 import {
+    blocklistEntryCreated,
     blocklistEntryView,
     mailThreadPage,
     mailThreadView,
     mailboxSyncTriggered,
     mailboxSyncView,
+    type BlocklistEntryCreated,
     type BlocklistEntryView,
     type MailThreadSummary,
     type MailThreadView,
@@ -90,12 +92,15 @@ export class BlocklistController {
         return this.blocklist.list();
     }
 
-    /** `scope: workspace` is an admin's; `personal` (the default) applies to the mailboxes the caller owns. */
+    /**
+     * `scope: workspace` is an admin's; `personal` (the default) applies to the caller's personal
+     * mailboxes. Stored mail the entry now fully covers is purged at once; the counts are returned.
+     */
     @Requires('mailbox:manage')
     @HttpCode(201)
     @Post()
-    @Returns(blocklistEntryView)
-    create(@Body() body: CreateBlocklistEntryDto): Promise<BlocklistEntryView> {
+    @Returns(blocklistEntryCreated)
+    create(@Body() body: CreateBlocklistEntryDto): Promise<BlocklistEntryCreated> {
         return this.blocklist.create(body);
     }
 

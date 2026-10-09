@@ -39,18 +39,20 @@ export async function membersByAddress(
 
 /**
  * Re-points every participant with one of `addresses` at the person the address belongs to now
- * (or at no one). Returns how many participants changed. Idempotent.
+ * (or at no one). Returns the messages whose participants changed. Idempotent.
  */
-export async function rematchAddresses(tx: WorkspaceClient, addresses: readonly string[]): Promise<number> {
-    if (addresses.length === 0) return 0;
-    return tx.$executeRaw`
+export async function rematchAddresses(tx: WorkspaceClient, addresses: readonly string[]): Promise<string[]> {
+    if (addresses.length === 0) return [];
+    const rows = await tx.$queryRaw<{ message_id: string }[]>`
         UPDATE mail_participants mp
         SET person_id = x.person_id
         FROM (
             SELECT a.address, (${PERSON_FOR_ADDRESS}) AS person_id
             FROM unnest(${[...new Set(addresses)]}::text[]) AS a(address)
         ) x
-        WHERE mp.address = x.address AND mp.person_id IS DISTINCT FROM x.person_id`;
+        WHERE mp.address = x.address AND mp.person_id IS DISTINCT FROM x.person_id
+        RETURNING mp.message_id`;
+    return [...new Set(rows.map((r) => r.message_id))];
 }
 
 /** The subquery choosing an address's person: primary first, then the earliest additional. */

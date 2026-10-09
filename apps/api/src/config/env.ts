@@ -86,9 +86,10 @@ export const envSchema = z
          */
         MAIL_SYNC_WORKER: flag('1'),
         /**
-         * Whether the tenant client emits an event per SQL statement, for `observeQueries` (P1-4a).
-         * Off in production — a statement listener is a test instrument, not a feature. The unit
-         * and cross-tenant suites set it to `1`; their query-budget tests (no N+1) need it.
+         * Whether the tenant client reports each operation, with the request it belongs to, to
+         * `observeQueries` (P1-4a). Off in production — an operation observer is a test instrument,
+         * not a feature. The unit and cross-tenant suites set it to `1`; their query-budget tests
+         * (no N+1) need it.
          */
         DB_QUERY_EVENTS: flag('0'),
         /** Google sign-in (identity only). Both or neither. */

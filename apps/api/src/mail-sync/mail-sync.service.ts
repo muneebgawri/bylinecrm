@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { blocklistCovers, type DomainEvent, type EmailSummary, type MailSyncStatus } from '@bylinecrm/shared';
+import type { DomainEvent, MailSyncStatus } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
-import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { MailboxTokens, MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
 import { GMAIL_PORT, GmailApiError, type GmailPort, type GmailRawMessage } from './gmail.port';
 import {
@@ -17,7 +17,10 @@ import {
 } from './mail-sync.constants';
 import { membersByAddress, personsByAddress, recordTargetsForPeople } from './matching';
 import { parseGmailMessage, type ParsedMessage } from './parse-message';
+import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
 import { GmailQuota } from './quota';
+import { recountThread } from './threads';
+import { emailSummaryOf } from './summary';
 import { withGmailRetry, type RetryOptions } from './retry';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
@@ -283,19 +286,7 @@ export class MailSyncService {
                 });
                 await recountThread(tx, thread.id);
                 const targets = await recordTargetsForPeople(tx, [...people.values()]);
-                const email: EmailSummary = {
-                    messageId: row.id,
-                    threadId: thread.id,
-                    mailboxId: mailbox.id,
-                    direction,
-                    subject: parsed.subject,
-                    snippet: parsed.snippet,
-                    from: parsed.from,
-                    sentAt: parsed.sentAt.toISOString(),
-                    rfc822MessageId: parsed.rfc822MessageId,
-                    inReplyTo: parsed.inReplyTo,
-                    references: parsed.references,
-                };
+                const email = emailSummaryOf(row);
                 const event: DomainEvent = {
                     type: direction === 'inbound' ? 'email.received' : 'email.sent',
                     object: 'email',
@@ -326,15 +317,15 @@ export class MailSyncService {
         return new Set(rows.map((r) => r.providerMessageId));
     }
 
-    /** The workspace's entries and the mailbox owner's own. */
+    /** The entries that apply to this mailbox (`entriesFor`: the workspace's, and its owner's own on a personal mailbox). */
     private async blocklistFor(mailbox: MailboxRow): Promise<string[]> {
         const rows = await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
             tx.blocklistEntry.findMany({
                 where: { OR: [{ memberId: null }, { memberId: mailbox.ownerMemberId }] },
-                select: { value: true },
+                select: { value: true, memberId: true },
             }),
         );
-        return rows.map((r) => r.value);
+        return entriesFor(mailbox, rows);
     }
 
     // ── State ────────────────────────────────────────────────────────────────────────────────
@@ -389,28 +380,16 @@ function classify(
     const labels = raw.labelIds ?? [];
     if (labels.some((l) => (SKIPPED_LABELS as readonly string[]).includes(l))) return 'label';
     const parsed = parseGmailMessage(raw);
-    const outside = [...new Set(parsed.participants.map((p) => p.address))].filter((a) => a !== mailbox.email);
-    if (outside.length > 0 && outside.every((a) => blocklist.some((entry) => blocklistCovers(entry, a)))) {
+    if (
+        everyOutsideBlocked(
+            mailbox.email,
+            parsed.participants.map((p) => p.address),
+            blocklist,
+        )
+    )
         return 'blocked';
-    }
     const direction = parsed.from === mailbox.email || labels.includes(SENT_LABEL) ? 'outbound' : 'inbound';
     return { parsed, direction };
-}
-
-/** A thread's count, last message and subject come from its rows after every write (one writer). */
-async function recountThread(tx: WorkspaceClient, threadId: string): Promise<void> {
-    await tx.$executeRaw`
-        UPDATE mail_threads t SET
-            message_count = s.count,
-            last_message_at = s.last_at,
-            subject = COALESCE(s.first_subject, t.subject),
-            updated_at = now()
-        FROM (
-            SELECT count(*)::int AS count, max(sent_at) AS last_at,
-                   (SELECT subject FROM mail_messages f WHERE f.thread_id = ${threadId}::uuid ORDER BY f.sent_at ASC, f.id ASC LIMIT 1) AS first_subject
-            FROM mail_messages WHERE thread_id = ${threadId}::uuid
-        ) s
-        WHERE t.id = ${threadId}::uuid`;
 }
 
 /** `items` mapped with at most `concurrency` in flight; results in input order. */

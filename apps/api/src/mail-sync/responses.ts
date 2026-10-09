@@ -102,9 +102,21 @@ export const blocklistEntryView = named(
     }),
 );
 
+export const blocklistEntryCreated = named(
+    'BlocklistEntryCreated',
+    z.object({
+        entry: blocklistEntryView,
+        purged: z.object({ messages: z.number().int(), threads: z.number().int() }).meta({
+            description:
+                'Stored mail the new entry fully covers, deleted with its timeline entries, and threads left empty. Removing the entry later does not bring it back.',
+        }),
+    }),
+);
+
 export type MailThreadSummary = z.output<typeof mailThreadSummary>;
 export type MailThreadView = z.output<typeof mailThreadView>;
 export type MailMessageView = z.output<typeof mailMessageView>;
 export type MailboxSyncView = z.output<typeof mailboxSyncView>;
 export type MailboxSyncTriggered = z.output<typeof mailboxSyncTriggered>;
 export type BlocklistEntryView = z.output<typeof blocklistEntryView>;
+export type BlocklistEntryCreated = z.output<typeof blocklistEntryCreated>;

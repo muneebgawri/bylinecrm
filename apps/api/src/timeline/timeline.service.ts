@@ -181,7 +181,8 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
     const kind = timelineKindOf(event);
     const base = {
         kind,
-        happenedAt: new Date(event.occurredAt),
+        // Mail is on the timeline at the moment it was sent — also when it is linked later.
+        happenedAt: new Date(event.email?.sentAt ?? event.occurredAt),
         actor: event.actor,
     };
     if (isRecordObject(event.object)) {
