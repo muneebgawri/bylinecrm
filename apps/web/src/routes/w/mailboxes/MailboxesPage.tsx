@@ -9,7 +9,7 @@ import {
     Skeleton,
     toast,
 } from '@bylinecrm/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
     useCheckMailbox,
@@ -55,9 +55,12 @@ export function MailboxesPage() {
     const [connecting, setConnecting] = useState(params.get(CREATE_PARAM) === '1');
     // The callback's result is read once, then taken off the URL so a reload doesn't repeat it.
     const [result] = useState(() => connectResultFrom(params.get(MAILBOX_CONNECT_RESULT_PARAM)));
+    // Announced once per visit: effects can run twice before the URL change lands (StrictMode in development).
+    const announced = useRef(false);
     useEffect(() => {
         if (!params.has(MAILBOX_CONNECT_RESULT_PARAM) && !params.has(CREATE_PARAM)) return;
-        if (result) {
+        if (result && !announced.current) {
+            announced.current = true;
             const message = CONNECT_RESULT_MESSAGES[result];
             toast({ title: message.title, description: message.body, tone: message.tone });
         }
@@ -309,6 +312,7 @@ function MailboxStatus({ mailbox }: { mailbox: MailboxView }) {
 
 function SyncState({ mailbox, sync }: { mailbox: MailboxView; sync: MailboxSyncView | undefined }) {
     if (mailbox.status === 'disconnected') return <span>—</span>;
+    if (mailbox.status === 'reconnect_needed') return <span>Paused until it is reconnected</span>;
     if (!sync) return <span>Checking…</span>;
     if (sync.status === 'syncing') return <span>Syncing now</span>;
     if (sync.status === 'failed') {

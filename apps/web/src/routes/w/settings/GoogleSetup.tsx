@@ -106,7 +106,7 @@ function AdminSetup({ workspaceId }: { workspaceId: string }) {
                     </Link>{' '}
                     page.
                     {view.liveMailboxes > 0 &&
-                        ` ${view.liveMailboxes} ${view.liveMailboxes === 1 ? 'is' : 'are'} connected through this client.`}
+                        ` ${view.liveMailboxes} ${view.liveMailboxes === 1 ? 'mailbox uses' : 'mailboxes use'} this client.`}
                 </p>
             </Step>
         </ol>

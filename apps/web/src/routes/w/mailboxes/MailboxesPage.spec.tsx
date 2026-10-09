@@ -1,7 +1,7 @@
 import type { Capability } from '@bylinecrm/shared';
 import { toasts } from '@bylinecrm/ui';
 import { Toaster } from '@bylinecrm/ui/toaster';
-import { screen, waitFor, within } from '@testing-library/react';
+import { configure, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BlocklistEntryView, GoogleOAuthClientStatusView, MailboxSyncView, MailboxView } from '../../../api/types';
@@ -130,6 +130,19 @@ describe('FR-CRMS-1: connecting a Google mailbox', () => {
         page('?connect=scope_too_broad');
         expect(await screen.findByText('Full mailbox access was granted')).toBeInTheDocument();
         expect(screen.getByText(/mail\.google\.com/)).toBeInTheDocument();
+    });
+
+    it('announces the result once, even when effects run twice (the app renders in StrictMode)', async () => {
+        configure({ reactStrictMode: true });
+        try {
+            api();
+            page('?connect=denied');
+            expect(await screen.findByText('Google access was declined')).toBeInTheDocument();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(screen.getAllByText('Google access was declined')).toHaveLength(1);
+        } finally {
+            configure({ reactStrictMode: false });
+        }
     });
 
     it('confirms a connect and marks the mailbox that just connected', async () => {
