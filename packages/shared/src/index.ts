@@ -33,3 +33,6 @@ export const APP_DB_ROLE = 'bylinecrm_app';
  * `withWorkspace` sets it; the policies read it through `app_workspace_id()`; unset means no rows.
  */
 export const WORKSPACE_SETTING = 'app.workspace_id';
+
+export * from './auth.js';
+export * from './capabilities.js';
