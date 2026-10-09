@@ -186,6 +186,14 @@ function stubApi(moveResponse: (body: { stageId: string }) => Response) {
                 return Promise.resolve(new Response(JSON.stringify(view), { status: 201 }));
             }
             boardUrls.push(url);
+            // A view tab's count: the list API's one-row read of that view, across all pipelines.
+            if (url.includes('/opportunities?') && url.includes('limit=1')) {
+                const big = url.includes('view=v-big');
+                const count = big
+                    ? { items: [], nextCursor: 'c', total: 10_000, totalIsExact: false }
+                    : { items: [], nextCursor: 'c', total: 42, totalIsExact: true };
+                return Promise.resolve(new Response(JSON.stringify(count), { status: 200 }));
+            }
             const body = url.includes('/board')
                 ? current()
                 : url.includes('/views')
@@ -522,6 +530,34 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         await user.click(screen.getByRole('button', { name: 'Export selected' }));
         await waitFor(() => expect(posts).toHaveLength(1));
         expect(posts[0]?.body).toMatchObject({ filter: { and: [{ field: 'id', op: 'in', value: ['d-2'] }] } });
+    });
+
+    it('counts every view tab from the list API, as people and companies do — not from the board', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        savedViews.push({
+            id: 'v-big',
+            object: 'opportunity',
+            name: 'Everything',
+            icon: null,
+            ownerMemberId: 'm-1',
+            isShared: false,
+            filter: null,
+            sorts: [],
+            columns: [],
+            groupBy: null,
+            position: 1,
+            createdAt: '',
+            updatedAt: '',
+        });
+        renderPage();
+        await card('Series B PR');
+        const tabs = screen.getByRole('tablist', { name: 'Views' });
+        // 42 is the list API's total across pipelines; the board this page shows holds 2 deals.
+        expect(await within(tabs).findByRole('tab', { name: /All deals\s*42/ })).toBeInTheDocument();
+        expect(await within(tabs).findByRole('tab', { name: /Everything\s*10,000\+/ })).toBeInTheDocument();
+        const countReads = boardUrls.filter((u) => u.includes('/opportunities?') && u.includes('limit=1'));
+        expect(countReads.some((u) => u.includes('view=v-big'))).toBe(true);
+        expect(countReads.some((u) => !u.includes('view='))).toBe(true);
     });
 
     it('shows a close date as a calendar day — no time, no time-zone shift', async () => {

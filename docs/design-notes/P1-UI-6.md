@@ -32,10 +32,12 @@ own view picker and filter chips; there is now one of each.
   "Page 2 of 9 · 120 of 1,034 people" (pages loaded of pages in the set — the list still loads by
   cursor); past the API's cap, "10,000+" and "Page 2 of 200+". A phone shows "1,034 people" above the
   cards and keeps infinite scroll.
-- **Tab counts:** the open tab counts from the page's own read; every other saved view from one
-  `limit=1` read of that view (`useViewCounts`, cached a minute). Deals: the board is per pipeline,
-  so the open tab shows the pipeline's deal count and the other tabs show none rather than a
-  workspace-wide number that would not match the board.
+- **Tab counts, one way everywhere (architect review):** every view tab — people, companies and
+  deals — shows its view's total from the same hook, `useViewCounts`: one `limit=1` list read per
+  view, with "10,000+" when the API stops counting. A deals tab counts its view across all
+  pipelines, as the view's filter defines it; the board's per-lane counts and sums are its own and
+  unchanged. On people and companies the open tab takes its count from the page's own read (the same
+  `total`), so it is not read twice.
 - **Bulk:** assign owner and delete are one `POST …/bulk` request. **Deleted:** the client-side loop
   (`settleAll`, `BULK_CONCURRENCY` = 6 requests at a time). `bulkSummary` reads the per-record results:
   "Assigned 10 people · 2 already were", and "N not found or not yours to change" for refused rows —

@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ApiError } from '../../../api/client';
 import { opportunities } from '../../../api/endpoints';
+import { useViewCounts } from '../../../api/lists';
 import { useBoard, useCustomFields, useMembersById, usePipelines, useRules, useViews } from '../../../api/queries';
 import type { OpportunityView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
@@ -104,6 +105,11 @@ export function DealsPage() {
     );
     const viewColumns: ViewColumn[] = columns.map(({ column, width }) => ({ field: column.field, width }));
     const sortParam = formatSort(state.sorts);
+    // Every tab counts its view the way people and companies do — one `limit=1` list read per view,
+    // across all pipelines as the view's filter defines it — not from the board, which counts one
+    // pipeline. The board's lane counts and sums are its own.
+    const tabViews = useMemo(() => [undefined, ...(views.data ?? []).map((v) => v.id)], [views.data]);
+    const tabCounts = useViewCounts(workspaceId, 'opportunity', tabViews);
 
     const board = useBoard(workspaceId, pipelineId, {
         view: state.viewId,
@@ -279,12 +285,7 @@ export function DealsPage() {
                         setColumnsDraft(null);
                     }}
                     phone={mobile}
-                    // The board counts its own pipeline only; the open tab shows that, others none.
-                    counts={
-                        dealCount === undefined
-                            ? undefined
-                            : new Map([[state.viewId, { total: dealCount, exact: true }]])
-                    }
+                    counts={tabCounts}
                 />
             </div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
