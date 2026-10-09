@@ -17,7 +17,11 @@
         "format:check": "prettier --check .",
         "scan:licences": "node scripts/licence-scan.mjs",
         "scan:identifiers": "node scripts/identifier-scan.mjs",
-        "prepare": "husky"
+        "prepare": "husky",
+        "storybook": "pnpm --filter @bylinecrm/ui storybook",
+        "build-storybook": "turbo build-storybook",
+        "test:a11y": "turbo test:a11y",
+        "test:visual": "turbo test:visual"
     },
     "devDependencies": {
         "husky": "^9.1.7",
@@ -37,6 +41,10 @@
         ],
         "*.{json,yml,yaml,md,mjs}": [
             "prettier --write"
+        ],
+        "packages/ui/**/*.{ts,tsx}": [
+            "prettier --write",
+            "eslint --fix --no-warn-ignored --max-warnings 0 --config packages/ui/eslint.config.mjs"
         ]
     },
     "dependencies": {

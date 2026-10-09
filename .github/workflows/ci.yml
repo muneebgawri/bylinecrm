@@ -4,20 +4,23 @@ on:
     push:
         branches: [main]
     pull_request:
+    # `baseline: true` adds the visual-baseline job (see packages/ui/README.md, "Visual baselines").
+    # It lives in this file because GitHub only dispatches a workflow that exists on the default
+    # branch — a separate workflow could never produce its own first baseline from a PR.
+    workflow_dispatch:
+        inputs:
+            baseline:
+                description: Regenerate the design system's visual baselines and upload them as an artifact
+                type: boolean
+                default: false
 
 concurrency:
     group: ci-${{ github.ref }}
     cancel-in-progress: true
 
-env:
-    DATABASE_URL: postgresql://bylinecrm:bylinecrm@127.0.0.1:5432/bylinecrm
-    RLS_DATABASE_URL: postgresql://bylinecrm_app:bylinecrm_app@127.0.0.1:5432/bylinecrm
-    REDIS_URL: redis://127.0.0.1:6379
-    PORT: '3300'
-    WEB_PORT: '3301'
-    APP_URL: http://localhost:3300
-    WEB_URL: http://localhost:3301
-
+# The API's environment is set on the jobs that run the API, never globally: tools such as
+# sirv-cli read PORT/HOST from the environment ahead of their own flags, and a global PORT moved
+# the design system's static server off the port the gates were probing.
 jobs:
     typecheck:
         runs-on: ubuntu-latest
@@ -36,6 +39,14 @@ jobs:
 
     test:
         runs-on: ubuntu-latest
+        env:
+            DATABASE_URL: postgresql://bylinecrm:bylinecrm@127.0.0.1:5432/bylinecrm
+            RLS_DATABASE_URL: postgresql://bylinecrm_app:bylinecrm_app@127.0.0.1:5432/bylinecrm
+            REDIS_URL: redis://127.0.0.1:6379
+            PORT: '3300'
+            WEB_PORT: '3301'
+            APP_URL: http://localhost:3300
+            WEB_URL: http://localhost:3301
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
@@ -43,6 +54,14 @@ jobs:
 
     cross-tenant:
         runs-on: ubuntu-latest
+        env:
+            DATABASE_URL: postgresql://bylinecrm:bylinecrm@127.0.0.1:5432/bylinecrm
+            RLS_DATABASE_URL: postgresql://bylinecrm_app:bylinecrm_app@127.0.0.1:5432/bylinecrm
+            REDIS_URL: redis://127.0.0.1:6379
+            PORT: '3300'
+            WEB_PORT: '3301'
+            APP_URL: http://localhost:3300
+            WEB_URL: http://localhost:3301
         services:
             postgres:
                 image: postgres:16
@@ -75,3 +94,49 @@ jobs:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
             - run: pnpm scan:identifiers
+
+    a11y:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/ui build-storybook
+            - run: pnpm --filter @bylinecrm/ui test:a11y
+
+    visual:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/ui build-storybook
+            - run: pnpm --filter @bylinecrm/ui test:visual
+              env:
+                  DEBUG: pw:webserver
+            - uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: visual-diffs
+                  path: packages/ui/test-results
+                  if-no-files-found: ignore
+
+    visual-baseline:
+        if: github.event_name == 'workflow_dispatch' && inputs.baseline
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+            - uses: ./.github/actions/setup
+            - uses: ./.github/actions/ui-browser
+            - run: pnpm --filter @bylinecrm/ui build-storybook
+            - run: pnpm --filter @bylinecrm/ui test:visual:update
+              env:
+                  DEBUG: pw:webserver
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: visual-baselines
+                  path: packages/ui/__snapshots__
+                  if-no-files-found: error

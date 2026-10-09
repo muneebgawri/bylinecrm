@@ -1,0 +1,4 @@
+/* The same three lines a consuming app writes (see src/styles.css). */
+@import 'tailwindcss';
+@import '../src/styles.css';
+@source '../src';

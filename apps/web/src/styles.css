@@ -1,2 +1,8 @@
-/* Tailwind v4 entry. The design system (tokens, Pressboard-named variables) arrives with P0-5. */
+/*
+ * The app's one stylesheet. Tailwind, then the design system (its tokens and the theme that maps
+ * utilities onto them), then the source directory Tailwind must scan for the components' classes.
+ * There is no app-level palette: a colour the design system does not define is not available here.
+ */
 @import 'tailwindcss';
+@import '@bylinecrm/ui/styles.css';
+@source '../../../packages/ui/src';

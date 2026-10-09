@@ -1,0 +1,24 @@
+{
+    "name": "@bylinecrm/eslint-config",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "One ESLint floor for every package. A package imports a config; it never copies one.",
+    "exports": {
+        "./base": "./base.mjs",
+        "./react": "./react.mjs"
+    },
+    "scripts": {
+        "lint": "echo 'eslint-config: nothing to lint'",
+        "typecheck": "echo 'eslint-config: nothing to typecheck'"
+    },
+    "dependencies": {
+        "@eslint/js": "^9.39.4",
+        "eslint-plugin-react-hooks": "^7.1.1",
+        "globals": "^16.5.0",
+        "typescript-eslint": "^8.71.1"
+    },
+    "peerDependencies": {
+        "eslint": "^9.0.0"
+    }
+}
