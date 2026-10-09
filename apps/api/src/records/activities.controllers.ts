@@ -1,4 +1,22 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Header,
+    HttpCode,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Query,
+    Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import { ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
+import { ExportService } from '../query/export.service';
+import type { Group } from '../query/group-by';
+import { QueryService } from '../query/query.service';
 import { ApiTags } from '@nestjs/swagger';
 import { Requires } from '../auth/decorators';
 import {
@@ -22,7 +40,37 @@ import { TasksService, type TaskView } from './tasks.service';
 @ApiTags('opportunities')
 @Controller('w/:workspaceId/opportunities')
 export class OpportunitiesController {
-    constructor(private readonly opportunities: OpportunitiesService) {}
+    constructor(
+        private readonly opportunities: OpportunitiesService,
+        private readonly queries: QueryService,
+        private readonly exports: ExportService,
+    ) {}
+
+    /** The list's twin for a filter too long for a query string: the same parameters in a body. */
+    @Requires('deal:read')
+    @HttpCode(200)
+    @Post('query')
+    query(@Body() body: QueryBodyDto): Promise<Page<OpportunityView>> {
+        return this.opportunities.list(body);
+    }
+
+    /** Counts and amount sums per value of one field over the filtered, scoped list (the board's totals). */
+    @Requires('deal:read')
+    @Get('group-by')
+    groupBy(@Query() query: GroupByQueryDto): Promise<Group[]> {
+        return this.queries.groupBy('opportunity', query);
+    }
+
+    /** The filtered, scoped list as a streamed CSV (RFC 4180, UTF-8 with BOM); `413` past `EXPORT_MAX_ROWS`. */
+    @Requires('deal:read')
+    @Get('export.csv')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="opportunities.csv"')
+    @Header('Cache-Control', 'private, no-store')
+    async exportCsv(@Query() query: ExportQueryDto, @Res() res: Response): Promise<void> {
+        await this.exports.writeCsv('opportunity', query, res);
+        res.end();
+    }
 
     @Requires('deal:read')
     @Get()

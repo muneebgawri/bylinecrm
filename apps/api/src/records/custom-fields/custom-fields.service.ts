@@ -156,13 +156,17 @@ export class CustomFieldsService {
         mode: ValidationMode,
         stored: Record<string, unknown> = {},
     ): Promise<Prisma.InputJsonObject> {
-        const definitions = await this.definitions(tx, object);
+        const definitions = await this.activeDefinitions(tx, object);
         const valid = validateCustomValues(definitions, values, mode);
         return (mode === 'patch' ? mergeCustomValues(stored, valid) : valid) as Prisma.InputJsonObject;
     }
 
-    /** The active definitions of one object: from the cache when it has them, else from the rows. */
-    private async definitions(tx: WorkspaceClient, object: RecordObject): Promise<FieldDefinition[]> {
+    /**
+     * The active definitions of one object: from the cache when it has them, else from the rows.
+     * Public because the query machinery (P1-4) resolves `custom.<key>` fields against the same list
+     * the validator uses — one source of what a workspace's custom fields are.
+     */
+    async activeDefinitions(tx: WorkspaceClient, object: RecordObject): Promise<FieldDefinition[]> {
         const key = cacheKey(this.workspaceId(), object);
         try {
             const cached = await this.redis.get(key);
@@ -172,7 +176,7 @@ export class CustomFieldsService {
         }
         const rows = await tx.customFieldDefinition.findMany({
             where: { object, archivedAt: null },
-            select: { key: true, type: true, options: true, required: true },
+            select: { key: true, label: true, type: true, options: true, required: true },
         });
         const definitions = rows.map((r) => ({ ...r, options: r.options as string[] }));
         try {
@@ -199,7 +203,8 @@ export class CustomFieldsService {
 }
 
 function cacheKey(workspaceId: string, object: RecordObject): string {
-    return `custom-fields:${workspaceId}:${object}`;
+    // `v2`: the cached shape gained `label` in P1-4; an older entry would lack it.
+    return `custom-fields:v2:${workspaceId}:${object}`;
 }
 
 function view(row: {

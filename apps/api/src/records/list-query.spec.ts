@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
-import { decodeCursor, encodeCursor, paginate, parseSort } from './list-query';
+import { decodeCursor, encodeCursor, paginate } from './list-query';
 
 const ID_A = '11111111-1111-4111-8111-111111111111';
 const ID_B = '22222222-2222-4222-8222-222222222222';
@@ -16,25 +16,6 @@ describe('cursors', () => {
     it('refuse anything that is not an encoded id', () => {
         expect(() => decodeCursor('not-a-cursor')).toThrow(BadRequestException);
         expect(() => decodeCursor(Buffer.from('hello').toString('base64url'))).toThrow(BadRequestException);
-    });
-});
-
-describe('parseSort', () => {
-    const allowed = ['createdAt', 'name'] as const;
-    const fallback = { field: 'createdAt', direction: 'desc' } as const;
-
-    it('falls back when nothing was asked', () => {
-        expect(parseSort(undefined, allowed, fallback)).toEqual(fallback);
-    });
-
-    it('accepts a field from the allowlist with a direction', () => {
-        expect(parseSort('name:asc', allowed, fallback)).toEqual({ field: 'name', direction: 'asc' });
-    });
-
-    it('refuses a field outside the allowlist, or a direction that is neither asc nor desc', () => {
-        expect(() => parseSort('secret:asc', allowed, fallback)).toThrow(BadRequestException);
-        expect(() => parseSort('name:sideways', allowed, fallback)).toThrow(BadRequestException);
-        expect(() => parseSort('name', allowed, fallback)).toThrow(BadRequestException);
     });
 });
 

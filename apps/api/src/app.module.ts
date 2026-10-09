@@ -7,6 +7,7 @@ import { InfraModule } from './infra/infra.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { ViewsModule } from './views/views.module';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { TimelineModule } from './timeline/timeline.module';
         PipelinesModule,
         RecordsModule,
         TimelineModule,
+        ViewsModule,
     ],
 })
 export class AppModule {}
