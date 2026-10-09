@@ -4,6 +4,7 @@ import { ConfigModule } from './config/config.module';
 import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
+import { PipelinesModule } from './pipelines/pipelines.module';
 import { RecordsModule } from './records/records.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { ViewsModule } from './views/views.module';
@@ -15,6 +16,7 @@ import { ViewsModule } from './views/views.module';
         EventsModule,
         HealthModule,
         AuthModule,
+        PipelinesModule,
         RecordsModule,
         TimelineModule,
         ViewsModule,

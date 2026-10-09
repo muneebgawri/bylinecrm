@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { type FilterGroup, filterGroupSchema, type RecordObject, type ViewSort } from '@bylinecrm/shared';
+import { type FilterGroup, type RecordObject, type ViewSort } from '@bylinecrm/shared';
+import { filterGroupSchema } from './grammar';
 import type { FieldDefinition } from '../records/custom-fields/custom-values';
 import { compileFilter, type CompiledWhere } from './compile-filter';
 import { resolveFields, type ResolvedField } from './fields';
@@ -23,8 +24,8 @@ export interface QueryPlan {
     sorts: ViewSort[];
 }
 
-/** The order a list takes when neither the request nor a view names one. */
-const DEFAULT_SORT: ViewSort = { field: 'createdAt', direction: 'desc' };
+/** The order a list takes when neither the request nor a view names one; a caller may name its own (the board: position). */
+export const DEFAULT_SORT: ViewSort = { field: 'createdAt', direction: 'desc' };
 
 /**
  * Resolves a request against the object's fields (standard + the workspace's custom ones) and
@@ -35,6 +36,7 @@ export function planQuery(
     object: RecordObject,
     request: QueryRequest,
     definitions: readonly FieldDefinition[],
+    defaultSort: ViewSort = DEFAULT_SORT,
 ): QueryPlan {
     const fields = resolveFields(object, definitions);
     const filter = request.filter ?? request.view?.filter ?? null;
@@ -42,7 +44,7 @@ export function planQuery(
     return {
         fields,
         where: filter ? compileFilter(filter, fields) : {},
-        orderBy: orderBy(sorts, fields, DEFAULT_SORT),
+        orderBy: orderBy(sorts, fields, defaultSort),
         sorts,
     };
 }

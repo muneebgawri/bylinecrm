@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { CUSTOM_FIELD_KEY_PATTERN, type CustomFieldType, type RecordObject } from './records.js';
 
 /**
@@ -166,26 +165,13 @@ export type FilterCondition = {
 export type FilterGroup = { and: FilterNode[] } | { or: FilterNode[] };
 export type FilterNode = FilterGroup | FilterCondition;
 
-const filterCondition = z
-    .object({
-        field: z.string().regex(FIELD_NAME_PATTERN, 'a field is a standard name or custom.<key>'),
-        op: z.enum(FILTER_OPERATORS),
-        value: z.unknown().optional(),
-    })
-    .strict();
-
 /**
- * The shape of a filter: groups of `and`/`or` over conditions, to `FILTER_MAX_DEPTH`. Depth and
- * node count are checked by `filterProblem`, the semantics (does the field exist, may it take
- * this operator, is the value the right type) by the API against the object's fields.
+ * The shape of a filter — groups of `and`/`or` over conditions — is checked by the API's zod
+ * schema (`query/grammar.ts`, built from these types and constants); its structural limits by
+ * `filterProblem` below; its semantics (does the field exist, may it take this operator, is the
+ * value the right type) by the API against the object's fields. The shared package carries no
+ * schema library: the web app's bundle budget is the reason, and the types are the contract.
  */
-export const filterGroupSchema: z.ZodType<FilterGroup> = z.lazy(() =>
-    z.union([
-        z.object({ and: z.array(filterNodeSchema) }).strict(),
-        z.object({ or: z.array(filterNodeSchema) }).strict(),
-    ]),
-);
-const filterNodeSchema: z.ZodType<FilterNode> = z.lazy(() => z.union([filterGroupSchema, filterCondition]));
 
 export function isFilterGroup(node: FilterNode): node is FilterGroup {
     return 'and' in node || 'or' in node;
@@ -236,13 +222,9 @@ export type ViewColumn = { field: string; width?: number | undefined };
 
 /** How many sort fields a list may order by. */
 export const SORT_MAX_FIELDS = 3;
-
-export const viewSortSchema = z
-    .object({ field: z.string().regex(FIELD_NAME_PATTERN), direction: z.enum(['asc', 'desc']) })
-    .strict();
-export const viewColumnSchema = z
-    .object({ field: z.string().regex(FIELD_NAME_PATTERN), width: z.number().int().min(40).max(2000).optional() })
-    .strict();
+/** A view column's width in pixels: the narrowest and the widest the UI allows. */
+export const VIEW_COLUMN_WIDTH_MIN = 40;
+export const VIEW_COLUMN_WIDTH_MAX = 2000;
 
 /** A saved view as the API returns it (PAR-056). */
 export type SavedView = {

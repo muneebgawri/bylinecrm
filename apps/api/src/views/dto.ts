@@ -1,13 +1,7 @@
-import {
-    FIELD_NAME_PATTERN,
-    RECORD_OBJECTS,
-    filterGroupSchema,
-    SORT_MAX_FIELDS,
-    viewColumnSchema,
-    viewSortSchema,
-} from '@bylinecrm/shared';
+import { FIELD_NAME_PATTERN, RECORD_OBJECTS, SORT_MAX_FIELDS } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { filterGroupSchema, viewColumnSchema, viewSortSchema } from '../query/grammar';
 
 const text = (max: number) => z.string().trim().max(max);
 

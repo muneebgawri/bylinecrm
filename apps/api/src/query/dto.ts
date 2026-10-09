@@ -1,6 +1,5 @@
 import {
     FIELD_NAME_PATTERN,
-    filterGroupSchema,
     LIST_LIMIT_DEFAULT,
     LIST_LIMIT_MAX,
     RECORD_OBJECTS,
@@ -9,6 +8,7 @@ import {
 } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { filterGroupSchema } from './grammar';
 
 const text = (max: number) => z.string().trim().max(max);
 

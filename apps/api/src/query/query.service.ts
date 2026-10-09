@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { FilterGroup, RecordObject } from '@bylinecrm/shared';
+import type { FilterGroup, RecordObject, ViewSort } from '@bylinecrm/shared';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
@@ -29,6 +29,7 @@ export async function resolvePlan(
     customFields: CustomFieldsService,
     object: RecordObject,
     raw: RawQuery,
+    defaultSort?: ViewSort,
 ): Promise<QueryPlan> {
     const view = raw.view ? await loadView(tx, context, object, raw.view) : undefined;
     const filter = typeof raw.filter === 'string' ? decodeFilterParam(raw.filter) : raw.filter;
@@ -37,6 +38,7 @@ export async function resolvePlan(
         object,
         { filter, sort: raw.sort, view: view ? { filter: view.filter, sorts: view.sorts } : undefined },
         definitions,
+        defaultSort,
     );
 }
 

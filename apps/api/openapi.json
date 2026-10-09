@@ -533,6 +533,474 @@
                 "tags": ["workspace"]
             }
         },
+        "/api/w/{workspaceId}/pipelines": {
+            "get": {
+                "operationId": "PipelinesController_list",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            },
+            "post": {
+                "operationId": "PipelinesController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePipelineDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}": {
+            "get": {
+                "operationId": "PipelinesController_get",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            },
+            "patch": {
+                "operationId": "PipelinesController_update",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdatePipelineDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            },
+            "delete": {
+                "operationId": "PipelinesController_remove",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/board": {
+            "get": {
+                "operationId": "PipelinesController_board",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 20000,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "pattern": "^[a-zA-Z0-9_.]+:(asc|desc)(,[a-zA-Z0-9_.]+:(asc|desc))*$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "view",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/stages": {
+            "post": {
+                "operationId": "PipelinesController_addStage",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateStageDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/stages/order": {
+            "put": {
+                "operationId": "PipelinesController_orderStages",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OrderStagesDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/stages/{stageId}": {
+            "patch": {
+                "operationId": "PipelinesController_updateStage",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "stageId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateStageDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            },
+            "delete": {
+                "operationId": "PipelinesController_removeStage",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "stageId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/rules": {
+            "get": {
+                "operationId": "PipelinesController_listRules",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            },
+            "post": {
+                "operationId": "PipelinesController_createRule",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRuleDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/rules/{ruleId}": {
+            "patch": {
+                "operationId": "PipelinesController_updateRule",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "ruleId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRuleDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            },
+            "delete": {
+                "operationId": "PipelinesController_removeRule",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "ruleId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/move": {
+            "post": {
+                "operationId": "DealStageController_move",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MoveDealDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": ["opportunities"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/history": {
+            "get": {
+                "operationId": "DealStageController_history",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": ["opportunities"]
+            }
+        },
         "/api/w/{workspaceId}/people/query": {
             "post": {
                 "operationId": "PeopleController_query",
@@ -2864,6 +3332,216 @@
                 },
                 "required": ["email", "roleId"]
             },
+            "CreatePipelineDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "isDefault": {
+                        "type": "boolean"
+                    },
+                    "stages": {
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                },
+                                "probability": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                },
+                                "kind": {
+                                    "type": "string",
+                                    "enum": ["open", "won", "lost"]
+                                },
+                                "daysThreshold": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991,
+                                    "nullable": true
+                                },
+                                "colour": {
+                                    "type": "string",
+                                    "enum": ["neutral", "accent", "info", "ok", "warn", "bad"]
+                                }
+                            },
+                            "required": ["name", "probability", "colour"]
+                        }
+                    }
+                },
+                "required": ["name"]
+            },
+            "UpdatePipelineDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "isDefault": {
+                        "type": "boolean",
+                        "enum": [true]
+                    }
+                }
+            },
+            "CreateStageDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "probability": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["open", "won", "lost"]
+                    },
+                    "daysThreshold": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991,
+                        "nullable": true
+                    },
+                    "colour": {
+                        "type": "string",
+                        "enum": ["neutral", "accent", "info", "ok", "warn", "bad"]
+                    }
+                },
+                "required": ["name", "probability", "colour"]
+            },
+            "OrderStagesDto": {
+                "type": "object",
+                "properties": {
+                    "stageIds": {
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                    }
+                },
+                "required": ["stageIds"]
+            },
+            "UpdateStageDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "probability": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["open", "won", "lost"]
+                    },
+                    "daysThreshold": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991,
+                        "nullable": true
+                    },
+                    "colour": {
+                        "type": "string",
+                        "enum": ["neutral", "accent", "info", "ok", "warn", "bad"]
+                    }
+                }
+            },
+            "CreateRuleDto": {
+                "type": "object",
+                "properties": {
+                    "event": {
+                        "type": "string",
+                        "enum": ["email.replied", "meeting.booked"]
+                    },
+                    "toStageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "allowBackward": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["event", "toStageId"]
+            },
+            "UpdateRuleDto": {
+                "type": "object",
+                "properties": {
+                    "toStageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "allowBackward": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "MoveDealDto": {
+                "type": "object",
+                "properties": {
+                    "stageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "close": {
+                        "type": "object",
+                        "properties": {
+                            "wonAmount": {
+                                "type": "object",
+                                "properties": {
+                                    "amountMinor": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "pattern": "^[A-Z]{3}$"
+                                    }
+                                },
+                                "required": ["amountMinor"]
+                            },
+                            "lostReason": {
+                                "type": "string",
+                                "maxLength": 500
+                            }
+                        }
+                    }
+                },
+                "required": ["stageId"]
+            },
             "QueryBodyDto__schema0": {
                 "anyOf": [
                     {
@@ -3676,6 +4354,16 @@
                     "custom": {
                         "type": "object",
                         "additionalProperties": {}
+                    },
+                    "pipelineId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "stageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     }
                 },
                 "required": ["name"]
