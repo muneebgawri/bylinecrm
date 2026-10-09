@@ -8,6 +8,7 @@ import {
     DialogDescription,
     DialogFooter,
     DialogTitle,
+    DropdownMenuItem,
     EmptyState,
     Field,
     Input,
@@ -16,13 +17,11 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    tableClasses,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useApiKeys, useCreateApiKey, useRevokeApiKey, useRoles } from '../../../api/queries';
 import { useWorkspaceId } from '../../params';
-import { TableSkeleton } from './Members';
 import { formatDate } from './SettingsLayout';
 
 export function ApiKeys() {
@@ -54,71 +53,60 @@ export function ApiKeys() {
                         </Button>
                     ),
                 }}
-            >
-                {keys.isPending ? (
-                    <TableSkeleton />
-                ) : keys.data.length === 0 ? (
-                    <EmptyState
-                        className="m-4"
-                        title="No API keys"
-                        body="A key lets a machine call this workspace with a role's permissions."
-                    />
-                ) : (
-                    <table className={tableClasses.table}>
-                        <thead>
-                            <tr>
-                                <th className={tableClasses.th}>Name</th>
-                                <th className={tableClasses.th}>Prefix</th>
-                                <th className={tableClasses.th}>Created</th>
-                                <th className={tableClasses.th}>Last used</th>
-                                <th className={tableClasses.th}>Status</th>
-                                <th className={tableClasses.th}>
-                                    <span className="sr-only">Actions</span>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {keys.data.map((k) => (
-                                <tr key={k.id} className={tableClasses.tr}>
-                                    <td className={`${tableClasses.td} font-medium`}>{k.name}</td>
-                                    <td className={tableClasses.td}>
-                                        <code className="text-xs">{k.prefix}…</code>
-                                    </td>
-                                    <td className={`${tableClasses.td} ${tableClasses.muted}`}>
-                                        {formatDate(k.createdAt)}
-                                    </td>
-                                    <td className={`${tableClasses.td} ${tableClasses.muted}`}>
-                                        {formatDate(k.lastUsedAt)}
-                                    </td>
-                                    <td className={tableClasses.td}>
-                                        {k.revokedAt ? (
-                                            <Badge status="danger">Revoked</Badge>
-                                        ) : (
-                                            <Badge status="success" dot>
-                                                Active
-                                            </Badge>
-                                        )}
-                                    </td>
-                                    <td className={`${tableClasses.td} text-right`}>
-                                        {!k.revokedAt && (
-                                            <Button
-                                                size="sm"
-                                                shape="square"
-                                                variant="ghost"
-                                                className="text-danger"
-                                                loading={revoke.isPending && revoke.variables === k.id}
-                                                onClick={() => revoke.mutate(k.id)}
-                                            >
-                                                Revoke
-                                            </Button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </DataTableChrome>
+                data={{
+                    label: 'API keys',
+                    loading: keys.isPending,
+                    rows: keys.data ?? [],
+                    getRowId: (k) => k.id,
+                    empty: (
+                        <EmptyState
+                            className="m-4"
+                            title="No API keys"
+                            body="A key lets a machine call this workspace with a role's permissions."
+                        />
+                    ),
+                    columns: [
+                        { id: 'name', header: 'Name', className: 'font-medium', cell: (k) => k.name },
+                        { id: 'prefix', header: 'Prefix', cell: (k) => <code className="text-xs">{k.prefix}…</code> },
+                        {
+                            id: 'created',
+                            header: 'Created',
+                            muted: true,
+                            phone: 'hidden',
+                            cell: (k) => formatDate(k.createdAt),
+                        },
+                        {
+                            id: 'lastUsed',
+                            header: 'Last used',
+                            muted: true,
+                            phone: 'secondary',
+                            cell: (k) => formatDate(k.lastUsedAt),
+                        },
+                        {
+                            id: 'status',
+                            header: 'Status',
+                            phone: 'meta',
+                            cell: (k) =>
+                                k.revokedAt ? (
+                                    <Badge status="danger">Revoked</Badge>
+                                ) : (
+                                    <Badge status="success" dot>
+                                        Active
+                                    </Badge>
+                                ),
+                        },
+                    ],
+                    rowActions: {
+                        label: (k) => k.name,
+                        items: (k) =>
+                            k.revokedAt ? null : (
+                                <DropdownMenuItem destructive onSelect={() => revoke.mutate(k.id)}>
+                                    Revoke
+                                </DropdownMenuItem>
+                            ),
+                    },
+                }}
+            />
             <CreateKeyDialog workspaceId={workspaceId} open={creating} onClose={() => setCreating(false)} />
         </>
     );

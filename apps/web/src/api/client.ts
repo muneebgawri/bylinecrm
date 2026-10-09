@@ -87,19 +87,7 @@ export interface RequestOptions {
  * any non-2xx response and lets network failures propagate as the `TypeError` fetch raises.
  */
 export async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
-    const headers = new Headers({ Accept: 'application/json' });
-    const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
-    if (options.body !== undefined && !multipart) headers.set('Content-Type', 'application/json');
-    if (MUTATING.has(method)) {
-        const csrf = readCookie(CSRF_COOKIE);
-        if (csrf) headers.set(CSRF_HEADER, csrf);
-    }
-
-    const init: RequestInit = { method, headers, credentials: 'include' };
-    if (multipart) init.body = options.body as FormData;
-    else if (options.body !== undefined) init.body = JSON.stringify(options.body);
-    if (options.signal) init.signal = options.signal;
-    const response = await fetch(`${API_BASE}${path}`, init);
+    const response = await send(method, path, options);
 
     if (response.status === 204) return undefined as T;
     const text = await response.text();
@@ -120,11 +108,10 @@ export async function request<T>(method: Method, path: string, options: RequestO
  */
 export async function requestFile(
     path: string,
-    signal?: AbortSignal,
+    options: RequestOptions & { method?: 'GET' | 'POST' } = {},
 ): Promise<{ blob: Blob; filename: string | undefined }> {
-    const init: RequestInit = { method: 'GET', credentials: 'include' };
-    if (signal) init.signal = signal;
-    const response = await fetch(`${API_BASE}${path}`, init);
+    const { method = 'GET', ...rest } = options;
+    const response = await send(method, path, rest);
     if (!response.ok) {
         const text = await response.text();
         const error = normaliseError(response, text ? safeJson(text) : undefined);
@@ -134,6 +121,26 @@ export async function requestFile(
     const disposition = response.headers.get('Content-Disposition') ?? '';
     const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1];
     return { blob: await response.blob(), filename };
+}
+
+/**
+ * The one place a request leaves the app: base URL, credentials, the CSRF header on a mutating
+ * method, JSON or multipart body. `request` and `requestFile` differ only in how they read the answer.
+ */
+function send(method: Method, path: string, options: RequestOptions): Promise<Response> {
+    const headers = new Headers({ Accept: 'application/json' });
+    const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    if (options.body !== undefined && !multipart) headers.set('Content-Type', 'application/json');
+    if (MUTATING.has(method)) {
+        const csrf = readCookie(CSRF_COOKIE);
+        if (csrf) headers.set(CSRF_HEADER, csrf);
+    }
+
+    const init: RequestInit = { method, headers, credentials: 'include' };
+    if (multipart) init.body = options.body as FormData;
+    else if (options.body !== undefined) init.body = JSON.stringify(options.body);
+    if (options.signal) init.signal = options.signal;
+    return fetch(`${API_BASE}${path}`, init);
 }
 
 function safeJson(text: string): unknown {

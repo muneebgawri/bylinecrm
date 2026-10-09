@@ -22,7 +22,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { personName, type CellContext, type ListColumn, type ListObject, type ListRow } from './listConfig';
+import { personName, type ListColumn, type ListObject, type ListRow } from './listConfig';
 import { isSortable } from './listConfig';
 
 /** Row height the virtualiser starts from; real rows are measured. */
@@ -37,7 +37,6 @@ export interface ListTableProps<O extends ListObject> {
     object: O;
     rows: readonly ListRow<O>[];
     columns: readonly { column: ListColumn<ListRow<O>>; width: number }[];
-    context: CellContext;
     sorts: readonly ViewSort[];
     onSortColumn: (field: string) => void;
     selected: ReadonlySet<string>;
@@ -49,8 +48,6 @@ export interface ListTableProps<O extends ListObject> {
     hasMore: boolean;
     loadingMore: boolean;
     onMore: () => void;
-    /** The ids of the rows on screen — names are looked up for these only, not every loaded row. */
-    onVisible: (ids: string[]) => void;
     canWrite: boolean;
     writeReason: string;
     onAssign: (ids: string[]) => void;
@@ -61,10 +58,10 @@ export interface ListTableProps<O extends ListObject> {
  * The desktop list (FR-CRMS-UI-1): TanStack Table for the columns (order, visibility and width
  * come from the view), TanStack Virtual for the rows, so 100,000 rows cost what 30 do. Sorting is
  * the server's: a header click changes the URL, never reorders the loaded rows. The next page is
- * asked for as the scroll nears the end; there is no page number because the API pages by cursor.
+ * asked for as the scroll nears the end (the API pages by cursor; the page footer shows the total).
  */
 export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
-    const { object, rows, columns, context, sorts, selected, hasMore, loadingMore, onMore, onResize } = props;
+    const { object, rows, columns, sorts, selected, hasMore, loadingMore, onMore, onResize } = props;
     const scrollRef = useRef<HTMLDivElement>(null);
     const [sizing, setSizing] = useState<ColumnSizingState>({});
     const widths = useMemo(() => Object.fromEntries(columns.map((c) => [c.column.field, c.width])), [columns]);
@@ -121,13 +118,6 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
     useEffect(() => {
         if (last && last.index >= tableRows.length - FETCH_AHEAD_ROWS && hasMore && !loadingMore) onMore();
     }, [last, tableRows.length, hasMore, loadingMore, onMore]);
-
-    const first = items[0]?.index ?? 0;
-    const end = (last?.index ?? -1) + 1;
-    const { onVisible } = props;
-    useEffect(() => {
-        onVisible(rows.slice(first, end).map((r) => r.id));
-    }, [first, end, rows, onVisible]);
 
     const allChosen = rows.length > 0 && rows.every((r) => selected.has(r.id));
     const someChosen = !allChosen && rows.some((r) => selected.has(r.id));
@@ -295,7 +285,7 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
                                                     )}
                                                 />
                                             ) : (
-                                                spec?.cell(record, context)
+                                                spec?.cell(record)
                                             )}
                                         </td>
                                     );

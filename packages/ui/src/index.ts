@@ -55,11 +55,18 @@ export {
 } from './components/segmented-control/SegmentedControl';
 export { FactGrid, type Fact, type FactGridProps } from './components/fact-grid/FactGrid';
 export { StageProgress, type Stage, type StageProgressProps } from './components/stage-progress/StageProgress';
+export { CardList, LONG_PRESS_MS, type CardListItem, type CardListProps } from './components/card-list/CardList';
 export {
     DataTableChrome,
+    RowActionsMenu,
     pageWindow,
+    phoneRoles,
     tableClasses,
     type DataTableChromeProps,
+    type PhoneRole,
+    type TableColumn,
+    type TableData,
+    type TableRowActions,
     type TablePagination,
     type TableSearch,
     type TableTab,

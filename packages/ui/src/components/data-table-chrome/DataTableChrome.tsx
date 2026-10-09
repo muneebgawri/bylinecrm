@@ -1,8 +1,10 @@
-import { ChevronDown, Columns3, Filter, ListFilter, Search } from 'lucide-react';
+import { ChevronDown, Columns3, Filter, ListFilter, MoreHorizontal, Search } from 'lucide-react';
 import { forwardRef, useId, type HTMLAttributes, type ReactNode } from 'react';
+import { useIsMobile } from '../../lib/breakpoints';
 import { cn } from '../../lib/cn';
 import { focusRing } from '../../lib/focus';
 import { Button } from '../button/Button';
+import { CardList, type CardListItem } from '../card-list/CardList';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -10,6 +12,7 @@ import {
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from '../dropdown-menu/DropdownMenu';
+import { Skeleton } from '../skeleton/Skeleton';
 
 export interface TableTab<T extends string = string> {
     id: T;
@@ -43,7 +46,62 @@ export interface TablePagination {
     selectionLabel?: ReactNode;
 }
 
-export interface DataTableChromeProps<T extends string = string> extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+/**
+ * Where a column goes when the table becomes cards on a phone (doc 48 FR-CRMS-UI-12):
+ * `primary` the card's name line, `secondary` the muted line under it, `meta` stacked at the card's
+ * end, `hidden` not on the card. Unset, the first column is primary, the next two secondary and
+ * the rest hidden — so a page gets a sensible card by declaring nothing.
+ */
+export type PhoneRole = 'primary' | 'secondary' | 'meta' | 'hidden';
+
+export interface TableColumn<R> {
+    id: string;
+    /** The column heading on a desktop. Plain text: it is also the cell's name for a screen reader. */
+    header: string;
+    cell: (row: R) => ReactNode;
+    phone?: PhoneRole;
+    /** Quiet text (dates, counts). */
+    muted?: boolean;
+    className?: string;
+}
+
+export interface TableRowActions<R> {
+    /** Names the row in the menu button's label: "Actions for Dana Reyes". */
+    label: (row: R) => string;
+    /** The menu's items (`DropdownMenuItem`s and friends), or `null` when the row has none. */
+    items: (row: R) => ReactNode;
+}
+
+/** The rows drawn by the chrome itself: a table on a desktop, cards on a phone, from one definition. */
+export interface TableData<R> {
+    columns: readonly TableColumn<R>[];
+    rows: readonly R[];
+    getRowId: (row: R) => string;
+    /** One "•••" menu per row, at the row's end on a desktop and on the card on a phone. */
+    rowActions?: TableRowActions<R>;
+    /** An avatar or icon at the start of a phone card. */
+    leading?: (row: R) => ReactNode;
+    /** Names the phone card list ("Members"). */
+    label: string;
+    loading?: boolean;
+    /** Shown instead of rows when there are none (and not loading). */
+    empty?: ReactNode;
+    /**
+     * `auto` (the default): cards below `BREAKPOINT_PX.mobile`, a table above. `table` and `cards`
+     * force one, for a story or test rendered at a fixed width.
+     */
+    layout?: 'auto' | 'table' | 'cards';
+}
+
+/** The phone role of each column: its own, or the default by position. */
+export function phoneRoles<R>(columns: readonly TableColumn<R>[]): PhoneRole[] {
+    return columns.map((c, i) => c.phone ?? (i === 0 ? 'primary' : i <= 2 ? 'secondary' : 'hidden'));
+}
+
+export interface DataTableChromeProps<T extends string = string, R = unknown> extends Omit<
+    HTMLAttributes<HTMLDivElement>,
+    'title'
+> {
     tabs?: readonly TableTab<T>[];
     activeTab?: T;
     onTabChange?: (id: T) => void;
@@ -55,8 +113,16 @@ export interface DataTableChromeProps<T extends string = string> extends Omit<HT
      * loads as it scrolls says "120 shown · loading more" here. Ignored when `pagination` is set.
      */
     footer?: ReactNode;
-    /** The table itself; it scrolls horizontally inside the chrome. */
-    children: ReactNode;
+    /**
+     * Rows the chrome draws itself — a table on a desktop and `CardList` cards on a phone. Use this
+     * for every ordinary table, so no page can show a table on a phone.
+     */
+    data?: TableData<R>;
+    /**
+     * A body of the caller's own, for a list the chrome cannot draw (a virtualised record list,
+     * which renders its own `CardList` on a phone). Ignored when `data` is set.
+     */
+    children?: ReactNode;
 }
 
 const DEFAULT_PAGE_SIZES = [25, 50, 100] as const;
@@ -67,7 +133,7 @@ export function pageWindow(page: number, pageCount: number, width = 3): number[]
     return Array.from({ length: Math.min(width, pageCount) }, (_, i) => start + i);
 }
 
-function DataTableChromeInner<T extends string>(
+function DataTableChromeInner<T extends string, R>(
     {
         className,
         tabs,
@@ -77,9 +143,10 @@ function DataTableChromeInner<T extends string>(
         toolbar,
         pagination,
         footer,
+        data,
         children,
         ...props
-    }: DataTableChromeProps<T>,
+    }: DataTableChromeProps<T, R>,
     ref: React.ForwardedRef<HTMLDivElement>,
 ) {
     const searchId = useId();
@@ -159,7 +226,7 @@ function DataTableChromeInner<T extends string>(
             )}
             {/* `relative`: an absolutely positioned cell part (an sr-only label) would otherwise escape this
                 scroll container and widen the whole page. */}
-            <div className="relative overflow-x-auto">{children}</div>
+            {data ? <DataBody data={data} /> : <div className="relative overflow-x-auto">{children}</div>}
             {pagination ? (
                 <Footer {...pagination} />
             ) : (
@@ -171,6 +238,104 @@ function DataTableChromeInner<T extends string>(
             )}
         </div>
     );
+}
+
+function DataBody<R>({ data }: { data: TableData<R> }) {
+    const mobile = useIsMobile();
+    const cards = data.layout === 'cards' || (data.layout !== 'table' && mobile);
+    if (data.loading) {
+        return (
+            <div className="grid gap-3 p-4" role="status" aria-label="Loading" aria-busy="true">
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+            </div>
+        );
+    }
+    if (data.rows.length === 0) return <>{data.empty}</>;
+    return cards ? <DataCards data={data} /> : <DataTable data={data} />;
+}
+
+/**
+ * A row's one "•••" menu — the table's row end, a phone card's action, and any list that draws its
+ * own cards (the deals list) — so a row's actions are offered the same way everywhere.
+ */
+export function RowActionsMenu<R>({ actions, row }: { actions: TableRowActions<R>; row: R }) {
+    const items = actions.items(row);
+    if (items === null || items === undefined || items === false) return null;
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" shape="square" aria-label={`Actions for ${actions.label(row)}`}>
+                    <MoreHorizontal aria-hidden />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">{items}</DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+function DataTable<R>({ data }: { data: TableData<R> }) {
+    return (
+        // `relative`: an absolutely positioned cell part (an sr-only label) would otherwise escape
+        // this scroll container and widen the whole page.
+        <div className="relative overflow-x-auto">
+            <table className={tableClasses.table}>
+                <thead>
+                    <tr>
+                        {data.columns.map((c) => (
+                            <th key={c.id} scope="col" className={tableClasses.th}>
+                                {c.header}
+                            </th>
+                        ))}
+                        {data.rowActions && (
+                            <th scope="col" className={tableClasses.th}>
+                                <span className="sr-only">Actions</span>
+                            </th>
+                        )}
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.rows.map((row) => (
+                        <tr key={data.getRowId(row)} className={tableClasses.tr}>
+                            {data.columns.map((c) => (
+                                <td
+                                    key={c.id}
+                                    className={cn(tableClasses.td, c.muted && tableClasses.muted, c.className)}
+                                >
+                                    {c.cell(row)}
+                                </td>
+                            ))}
+                            {data.rowActions && (
+                                <td className={cn(tableClasses.td, 'text-right')}>
+                                    <RowActionsMenu actions={data.rowActions} row={row} />
+                                </td>
+                            )}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function DataCards<R>({ data }: { data: TableData<R> }) {
+    const roles = phoneRoles(data.columns);
+    const slot = (row: R, role: PhoneRole) =>
+        data.columns.flatMap((c, i) => (roles[i] === role ? [<span key={c.id}>{c.cell(row)}</span>] : []));
+    const items: CardListItem[] = data.rows.map((row) => {
+        const primary = slot(row, 'primary');
+        const actions = data.rowActions ? <RowActionsMenu actions={data.rowActions} row={row} /> : undefined;
+        return {
+            id: data.getRowId(row),
+            leading: data.leading?.(row),
+            primary: primary.length > 1 ? <>{primary}</> : primary[0],
+            secondary: slot(row, 'secondary'),
+            meta: slot(row, 'meta'),
+            ...(actions ? { actions } : {}),
+        };
+    });
+    return <CardList aria-label={data.label} items={items} className="p-3" />;
 }
 
 function Footer({
@@ -265,11 +430,13 @@ function PageButton({
 }
 
 /**
- * Everything around a table: the tab row with counts, search, Filter / Sort / Columns, and the
- * footer with "Page x of y · rows per page · Previous 1 2 3 Next". The rows are the caller's.
+ * Everything around a table: the tab row with counts, search, Filter / Sort / Columns, the rows,
+ * and the footer with "Page x of y · rows per page · Previous 1 2 3 Next". Rows given as `data`
+ * are drawn as a table on a desktop and as cards on a phone; `children` is for a body the caller
+ * draws itself.
  */
-export const DataTableChrome = forwardRef(DataTableChromeInner) as <T extends string = string>(
-    props: DataTableChromeProps<T> & { ref?: React.ForwardedRef<HTMLDivElement> },
+export const DataTableChrome = forwardRef(DataTableChromeInner) as <T extends string = string, R = unknown>(
+    props: DataTableChromeProps<T, R> & { ref?: React.ForwardedRef<HTMLDivElement> },
 ) => React.ReactElement;
 
 /** Table primitives styled to the chrome: raised header row, hover rows, selection tint. */

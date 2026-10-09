@@ -8,17 +8,11 @@ import {
     DialogDescription,
     DialogFooter,
     DialogTitle,
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
-    DropdownMenuTrigger,
     EmptyState,
-    Skeleton,
-    tableClasses,
 } from '@bylinecrm/ui';
-import { MoreHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useMe, useMembers, useRemoveMember, useRoles, useSetMemberRole } from '../../../api/queries';
 import type { MemberView } from '../../../api/types';
@@ -52,93 +46,67 @@ export function Members() {
                 tabs={[{ id: 'all', label: 'All', count: members.data?.length }]}
                 activeTab="all"
                 search={{ value: q, onChange: setQ, placeholder: 'Search members…' }}
-            >
-                {members.isPending ? (
-                    <TableSkeleton />
-                ) : rows.length === 0 ? (
-                    <EmptyState
-                        className="m-4"
-                        title={q ? 'No members match' : 'No members yet'}
-                        body={q ? 'Try another name or role.' : 'Invite colleagues from the Invites section.'}
-                    />
-                ) : (
-                    <table className={tableClasses.table}>
-                        <thead>
-                            <tr>
-                                <th className={tableClasses.th}>Member</th>
-                                <th className={tableClasses.th}>Role</th>
-                                <th className={tableClasses.th}>Joined</th>
-                                <th className={tableClasses.th}>
-                                    <span className="sr-only">Actions</span>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((m) => {
-                                const isMe = m.userId === me.data?.id;
-                                return (
-                                    <tr key={m.id} className={tableClasses.tr}>
-                                        <td className={tableClasses.td}>
-                                            <AvatarCell name={displayName(m.email)} subline={m.email} />
-                                        </td>
-                                        <td className={tableClasses.td}>
-                                            <Badge status={m.roleName === 'admin' ? 'accent' : 'neutral'}>
-                                                {m.roleName}
-                                            </Badge>
-                                            {isMe && (
-                                                <Badge className="ml-2" shape="pill">
-                                                    You
-                                                </Badge>
-                                            )}
-                                        </td>
-                                        <td className={`${tableClasses.td} ${tableClasses.muted}`}>
-                                            {formatDate(m.createdAt)}
-                                        </td>
-                                        <td className={`${tableClasses.td} text-right`}>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        shape="square"
-                                                        aria-label={`Actions for ${m.email}`}
-                                                    >
-                                                        <MoreHorizontal aria-hidden />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <div className="px-2 pt-1.5 pb-1 text-[11.5px] font-medium text-text-faint">
-                                                        Role
-                                                    </div>
-                                                    <DropdownMenuRadioGroup
-                                                        value={m.roleId}
-                                                        onValueChange={(roleId) =>
-                                                            setRole.mutate({ memberId: m.id, roleId })
-                                                        }
-                                                    >
-                                                        {(roles.data ?? []).map((r) => (
-                                                            <DropdownMenuRadioItem key={r.id} value={r.id}>
-                                                                {r.name}
-                                                            </DropdownMenuRadioItem>
-                                                        ))}
-                                                    </DropdownMenuRadioGroup>
-                                                    <DropdownMenuItem
-                                                        destructive
-                                                        disabled={isMe}
-                                                        onSelect={() => setRemoving(m)}
-                                                    >
-                                                        Remove from workspace
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                )}
-            </DataTableChrome>
+                data={{
+                    label: 'Members',
+                    loading: members.isPending,
+                    rows,
+                    getRowId: (m) => m.id,
+                    empty: (
+                        <EmptyState
+                            className="m-4"
+                            title={q ? 'No members match' : 'No members yet'}
+                            body={q ? 'Try another name or role.' : 'Invite colleagues from the Invites section.'}
+                        />
+                    ),
+                    columns: [
+                        {
+                            id: 'member',
+                            header: 'Member',
+                            cell: (m) => <AvatarCell name={displayName(m.email)} subline={m.email} />,
+                        },
+                        {
+                            id: 'role',
+                            header: 'Role',
+                            cell: (m) => (
+                                <>
+                                    <Badge status={m.roleName === 'admin' ? 'accent' : 'neutral'}>{m.roleName}</Badge>
+                                    {m.userId === me.data?.id && (
+                                        <Badge className="ml-2" shape="pill">
+                                            You
+                                        </Badge>
+                                    )}
+                                </>
+                            ),
+                        },
+                        { id: 'joined', header: 'Joined', muted: true, cell: (m) => formatDate(m.createdAt) },
+                    ],
+                    rowActions: {
+                        label: (m) => m.email,
+                        items: (m) => (
+                            <>
+                                <div className="px-2 pt-1.5 pb-1 text-[11.5px] font-medium text-text-faint">Role</div>
+                                <DropdownMenuRadioGroup
+                                    value={m.roleId}
+                                    onValueChange={(roleId) => setRole.mutate({ memberId: m.id, roleId })}
+                                >
+                                    {(roles.data ?? []).map((r) => (
+                                        <DropdownMenuRadioItem key={r.id} value={r.id}>
+                                            {r.name}
+                                        </DropdownMenuRadioItem>
+                                    ))}
+                                </DropdownMenuRadioGroup>
+                                <DropdownMenuItem
+                                    destructive
+                                    disabled={m.userId === me.data?.id}
+                                    onSelect={() => setRemoving(m)}
+                                >
+                                    Remove from workspace
+                                </DropdownMenuItem>
+                            </>
+                        ),
+                    },
+                }}
+            />
             <Dialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
                 <DialogContent>
                     <DialogTitle>Remove {removing?.email}?</DialogTitle>
@@ -165,15 +133,5 @@ export function Members() {
                 </DialogContent>
             </Dialog>
         </>
-    );
-}
-
-export function TableSkeleton() {
-    return (
-        <div className="grid gap-3 p-4" role="status" aria-label="Loading">
-            <Skeleton className="h-9" />
-            <Skeleton className="h-9" />
-            <Skeleton className="h-9" />
-        </div>
     );
 }
