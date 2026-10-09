@@ -8,8 +8,9 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { actorOf } from './actor';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf } from './diff';
-import { type Page, paginate, parseSort, type SortSpec } from './list-query';
+import { type Page, paginate } from './list-query';
 import type { ListQuery } from './people.service';
+import { resolvePlan } from '../query/query.service';
 import { ownerWhere, resolveOwner } from './record-scope';
 import { assertOwnerIsMember, compact, moneyColumns, type MoneyInput, stored } from './references';
 import { searchCandidates } from './search';
@@ -46,18 +47,6 @@ export interface CompanyInput {
     custom?: Record<string, unknown> | undefined;
 }
 
-export const COMPANY_SORT_FIELDS = [
-    'createdAt',
-    'updatedAt',
-    'name',
-    'domain',
-    'employeeCount',
-    'arrMinor',
-    'position',
-] as const;
-type CompanySortField = (typeof COMPANY_SORT_FIELDS)[number];
-const DEFAULT_SORT: SortSpec<CompanySortField> = { field: 'createdAt', direction: 'desc' };
-
 const DIFF_FIELDS = [
     'name',
     'domain',
@@ -84,18 +73,18 @@ export class CompaniesService {
 
     list(query: ListQuery, deleted = false): Promise<Page<CompanyView>> {
         const context = this.current();
-        const sort = parseSort(query.sort, COMPANY_SORT_FIELDS, DEFAULT_SORT);
         return this.rls.withWorkspace(async (tx) => {
+            const plan = await resolvePlan(tx, context, this.customFields, 'company', query);
             const ids = query.q ? await searchCandidates(tx, 'companies', query.q, deleted) : undefined;
             if (ids && ids.length === 0) return { items: [], nextCursor: null };
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.company.findMany({
-                    where: { ...where(context, deleted), ...(ids ? { id: { in: ids } } : {}) },
-                    // The field comes from COMPANY_SORT_FIELDS, every one a column of the model.
-                    orderBy: [
-                        { [sort.field]: sort.direction } as Prisma.CompanyOrderByWithRelationInput,
-                        { id: 'asc' },
-                    ],
+                    where: {
+                        ...where(context, deleted),
+                        ...(plan.where as Prisma.CompanyWhereInput),
+                        ...(ids ? { id: { in: ids } } : {}),
+                    },
+                    orderBy: plan.orderBy as Prisma.CompanyOrderByWithRelationInput[],
                     ...args,
                 }),
             );

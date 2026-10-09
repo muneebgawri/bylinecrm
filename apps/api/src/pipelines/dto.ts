@@ -1,6 +1,7 @@
 import { LIST_LIMIT_DEFAULT, LIST_LIMIT_MAX, STAGE_COLOURS, STAGE_KINDS, STAGE_RULE_EVENTS } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { queryParams } from '../query/dto';
 
 const uuid = z.uuid();
 const text = (max: number) => z.string().trim().max(max);
@@ -61,16 +62,8 @@ export class MoveDealDto extends createZodDto(
     }),
 ) {}
 
-/** The board takes the same query as the deal list; the per-stage page is fixed. */
-export class BoardQueryDto extends createZodDto(
-    z.object({
-        sort: z
-            .string()
-            .regex(/^[a-zA-Z]+:(asc|desc)$/, 'sort is field:asc or field:desc')
-            .optional(),
-        q: text(200).min(1).optional(),
-    }),
-) {}
+/** The board takes the same filter, sort, view and search as the deal list; the per-stage page is fixed. */
+export class BoardQueryDto extends createZodDto(z.object(queryParams)) {}
 
 export class HistoryQueryDto extends createZodDto(
     z.object({

@@ -13,19 +13,16 @@ import {
     type StageHistoryReason,
     type StageKind,
     type StageRuleEvent,
+    type ViewSort,
 } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
-import { parseSort, type SortSpec } from '../records/list-query';
-import {
-    OPPORTUNITY_SORT_FIELDS,
-    withStage,
-    withStageInclude,
-    type OpportunityView,
-} from '../records/opportunities.service';
+import { withStage, withStageInclude, type OpportunityView } from '../records/opportunities.service';
+import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
+import { type RawQuery, resolvePlan } from '../query/query.service';
 import { ownerWhere } from '../records/record-scope';
 import { stored } from '../records/references';
 import { searchCandidates } from '../records/search';
@@ -109,7 +106,8 @@ type StageRow = Prisma.PipelineStageGetPayload<Record<string, never>>;
 type PipelineRow = Prisma.PipelineGetPayload<{ include: { stages: true } }>;
 type RuleRow = Prisma.StageRuleGetPayload<Record<string, never>>;
 
-const DEFAULT_SORT: SortSpec<(typeof OPPORTUNITY_SORT_FIELDS)[number]> = { field: 'position', direction: 'asc' };
+/** A board's columns read top-down in manual order unless the request or a view says otherwise. */
+const BOARD_SORT: ViewSort = { field: 'position', direction: 'asc' };
 
 @Injectable()
 export class PipelinesService {
@@ -117,6 +115,7 @@ export class PipelinesService {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         private readonly moves: StageMoveService,
+        private readonly customFields: CustomFieldsService,
     ) {}
 
     // ── Pipelines ────────────────────────────────────────────────────────────
@@ -389,18 +388,20 @@ export class PipelinesService {
     /**
      * The board: every stage with the deals in it under the caller's scope and the query, and
      * per-stage count and sums over that same set — an own-scoped member's totals are their own.
-     * P1-4's compiled filter plugs into `where` beside `q`.
+     * The filter, sort and view parameters are the deal list's, resolved by the same planner
+     * (P1-4): one compiler, one call site here.
      */
-    board(pipelineId: string, query: { sort?: string | undefined; q?: string | undefined }): Promise<BoardView> {
+    board(pipelineId: string, query: RawQuery): Promise<BoardView> {
         const context = this.current();
-        const sort = parseSort(query.sort, OPPORTUNITY_SORT_FIELDS, DEFAULT_SORT);
         return this.rls.withWorkspace(async (tx) => {
             const pipeline = await findPipeline(tx, pipelineId);
+            const plan = await resolvePlan(tx, context, this.customFields, 'opportunity', query, BOARD_SORT);
             const ids = query.q ? await searchCandidates(tx, 'opportunities', query.q, false) : undefined;
             const where: Prisma.OpportunityWhereInput = {
                 pipelineId,
                 deletedAt: null,
                 ...ownerWhere(context),
+                ...(plan.where as Prisma.OpportunityWhereInput),
                 ...(ids ? { id: { in: ids } } : {}),
             };
             const columns: BoardColumn[] = [];
@@ -410,10 +411,7 @@ export class PipelinesService {
                     tx.opportunity.findMany({
                         where: stageWhere,
                         include: withStageInclude,
-                        orderBy: [
-                            { [sort.field]: sort.direction } as Prisma.OpportunityOrderByWithRelationInput,
-                            { id: 'asc' },
-                        ],
+                        orderBy: plan.orderBy as Prisma.OpportunityOrderByWithRelationInput[],
                         take: BOARD_STAGE_LIMIT + 1,
                     }),
                     tx.opportunity.groupBy({

@@ -5,6 +5,8 @@ import { z } from 'zod';
 /** What the validator needs to know about one field. */
 export interface FieldDefinition {
     key: string;
+    /** Shown as a column header and in the filter editor; the key is the value's name, the label the human's. */
+    label: string;
     type: CustomFieldType;
     options: string[];
     required: boolean;
