@@ -30,11 +30,13 @@ import {
     mailboxConnectResult,
     mailboxDisconnected,
     mailboxView,
+    oauthClientStatus,
     oauthClientView,
     type ConnectStart,
     type MailboxCheck,
     type MailboxDisconnected,
     type MailboxView,
+    type OAuthClientStatus,
     type OAuthClientView,
 } from './responses';
 
@@ -53,6 +55,17 @@ export class OAuthClientController {
     @Returns(oauthClientView)
     describe(): Promise<OAuthClientView> {
         return this.clients.describe();
+    }
+
+    /**
+     * Whether Google is set up and proven, for any member connecting a mailbox (doc 50 §E: "Your
+     * admin has set up Google; connect your mailbox below"). No client ID, nothing about the secret.
+     */
+    @Requires('mailbox:read')
+    @Get('status')
+    @Returns(oauthClientStatus)
+    status(): Promise<OAuthClientStatus> {
+        return this.clients.status();
     }
 
     /** Sets the client; the secret is stored encrypted and never shown again beyond its last four characters. */

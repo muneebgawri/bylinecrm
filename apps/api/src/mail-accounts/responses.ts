@@ -46,6 +46,20 @@ export const oauthClientView = named(
     }),
 );
 
+/**
+ * What any member may know about the workspace's Google setup (doc 50 §E): whether it is there and
+ * proven, and what Google will show. Never the client ID or anything about the secret.
+ */
+export const oauthClientStatus = named(
+    'GoogleOAuthClientStatus',
+    z.object({
+        configured: z.boolean(),
+        verified: z.boolean().meta({ description: 'A mailbox has connected through the client.' }),
+        redirectUri: z.url(),
+        scopes: z.array(z.string()),
+    }),
+);
+
 const mailboxError = z.object({
     code: z.string().meta({ description: 'Why the mailbox stopped: `invalid_grant`, `scope_missing`, …' }),
     message: z.string(),
@@ -101,6 +115,7 @@ export const mailboxConnectResult = named('MailboxConnectResult', z.enum(MAILBOX
 
 export type OAuthClientView = z.output<typeof oauthClientView>;
 export type OAuthClientCheck = z.output<typeof oauthClientCheck>;
+export type OAuthClientStatus = z.output<typeof oauthClientStatus>;
 export type MailboxView = z.output<typeof mailboxView>;
 export type ConnectStart = z.output<typeof connectStart>;
 export type MailboxDisconnected = z.output<typeof mailboxDisconnected>;

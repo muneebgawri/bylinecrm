@@ -234,6 +234,21 @@ describe('mail accounts', () => {
             expect(row!.client_secret_ciphertext.startsWith('v1.')).toBe(true);
         });
 
+        it('any member may see whether Google is set up — never the client ID; another workspace may not', async () => {
+            const res = track(await as(member).get(w('/mail/oauth-client/status')));
+            expect(res.status).toBe(200);
+            expect(res.body).toEqual({ configured: true, verified: false, redirectUri, scopes: [...GMAIL_SCOPES] });
+            expect(res.text).not.toContain(clientId);
+            expect(res.text).not.toContain('WXYZ');
+
+            const fromOutside = track(await as(otherAdmin).get(w('/mail/oauth-client/status')));
+            expect(fromOutside.status).toBe(403);
+            const theirs = track(await as(admin).get(w('/mail/oauth-client/status', otherWorkspace)));
+            expect(theirs.status).toBe(403);
+            const own = track(await as(otherAdmin).get(w('/mail/oauth-client/status', otherWorkspace)));
+            expect(own.body).toMatchObject({ configured: false, verified: false });
+        });
+
         it('verify reports what Google says without a sign-in: credentials, and the redirect URI only if wrong', async () => {
             // Unknown to "Google" yet: the credentials are refused.
             let res = track(await as(admin).post(w('/mail/oauth-client/verify')));
@@ -288,6 +303,8 @@ describe('mail accounts', () => {
 
             const client = track(await as(admin).get(w('/mail/oauth-client'))).body as ClientView;
             expect(client.verifiedAt).not.toBeNull();
+            const status = track(await as(member).get(w('/mail/oauth-client/status')));
+            expect(status.body).toMatchObject({ configured: true, verified: true });
             expect(client.liveMailboxes).toBe(1);
 
             const announced = events.slice(before);

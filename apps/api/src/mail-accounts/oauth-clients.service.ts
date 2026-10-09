@@ -17,7 +17,7 @@ import {
     GOOGLE_CLIENT_ID_PATTERN,
     MAIL_OAUTH_CALLBACK_PATH,
 } from './mail-accounts.constants';
-import type { OAuthClientCheck, OAuthClientView } from './responses';
+import type { OAuthClientCheck, OAuthClientStatus, OAuthClientView } from './responses';
 
 type ClientRow = Prisma.GoogleOAuthClientGetPayload<object>;
 
@@ -51,6 +51,19 @@ export class OAuthClientsService {
         return this.rls.withWorkspace(async (tx) => {
             const row = await tx.googleOAuthClient.findFirst();
             return this.view(row, await liveMailboxes(tx));
+        });
+    }
+
+    /** What a member connecting a mailbox needs to know: set up or not, proven or not — nothing identifying. */
+    status(): Promise<OAuthClientStatus> {
+        return this.rls.withWorkspace(async (tx) => {
+            const row = await tx.googleOAuthClient.findFirst({ select: { verifiedAt: true } });
+            return {
+                configured: row !== null,
+                verified: row?.verifiedAt != null,
+                redirectUri: this.redirectUri(),
+                scopes: [...GMAIL_SCOPES],
+            };
         });
     }
 
