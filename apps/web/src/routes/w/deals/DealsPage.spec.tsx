@@ -315,7 +315,12 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         stubApi(
             () =>
                 new Response(
-                    JSON.stringify({ statusCode: 409, error: 'Conflict', message: 'You no longer own this deal' }),
+                    JSON.stringify({
+                        statusCode: 409,
+                        code: 'conflict',
+                        message: 'You no longer own this deal',
+                        requestId: 'req-0123456789',
+                    }),
                     {
                         status: 409,
                     },

@@ -50,37 +50,63 @@ describe('request', () => {
         expect(new Headers(sentInit(fetchMock).headers).get('Content-Type')).toBe('application/json');
     });
 
-    it('normalises a Nest error envelope into ApiError', async () => {
-        stubFetch(403, { statusCode: 403, error: 'Forbidden', message: 'not a member of this workspace' });
+    it('reads the one error envelope into ApiError, request id included', async () => {
+        stubFetch(403, {
+            statusCode: 403,
+            code: 'forbidden',
+            message: 'not a member of this workspace',
+            requestId: 'req-0123456789',
+        });
         await expect(request('GET', '/w/x/members')).rejects.toMatchObject({
             name: 'ApiError',
             status: 403,
-            code: 'Forbidden',
+            code: 'forbidden',
             message: 'not a member of this workspace',
+            requestId: 'req-0123456789',
             isForbidden: true,
+            fieldErrors: [],
         });
     });
 
-    it('carries validation issues as field errors by dotted path', async () => {
+    it('carries field errors by dotted path', async () => {
         stubFetch(400, {
             statusCode: 400,
-            message: 'Validation failed',
-            errors: [{ path: ['emails', 'primary'], message: 'Invalid email' }],
+            code: 'validation.failed',
+            message: 'the request is not valid',
+            fieldErrors: [{ path: 'emails.primary', message: 'Invalid email' }],
+            requestId: 'req-0123456789',
         });
         const error = await request('POST', '/w/x/people', { body: {} }).catch((e: unknown) => e);
         expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).code).toBe('validation.failed');
         expect((error as ApiError).fieldErrors).toEqual([{ path: 'emails.primary', message: 'Invalid email' }]);
         expect(isClientError(error)).toBe(true);
+    });
+
+    it('a body that is not the envelope (a proxy page) is coded from its status', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() =>
+                Promise.resolve(new Response('<html>Bad Gateway</html>', { status: 502, statusText: 'Bad Gateway' })),
+            ),
+        );
+        await expect(request('GET', '/me')).rejects.toMatchObject({
+            status: 502,
+            code: 'internal',
+            message: 'Bad Gateway',
+            requestId: null,
+            fieldErrors: [],
+        });
     });
 
     it('tells the unauthorized listeners on a 401, once per response', async () => {
         const listener = vi.fn();
         const off = onUnauthorized(listener);
-        stubFetch(401, { statusCode: 401, message: 'Unauthorized' });
+        stubFetch(401, { statusCode: 401, code: 'unauthorized', message: 'Unauthorized', requestId: 'req-0123456789' });
         await expect(request('GET', '/me')).rejects.toMatchObject({ isUnauthorized: true });
         expect(listener).toHaveBeenCalledTimes(1);
         off();
-        stubFetch(401, { statusCode: 401, message: 'Unauthorized' });
+        stubFetch(401, { statusCode: 401, code: 'unauthorized', message: 'Unauthorized', requestId: 'req-0123456789' });
         await request('GET', '/me').catch(() => undefined);
         expect(listener).toHaveBeenCalledTimes(1);
     });

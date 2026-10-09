@@ -51,7 +51,14 @@ describe('record hooks', () => {
 
         // Later reads (the invalidation after settling) answer with the unchanged record.
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(respond(200, person));
-        release(respond(400, { statusCode: 400, message: 'city is too long', error: 'Bad Request' }));
+        release(
+            respond(400, {
+                statusCode: 400,
+                code: 'validation.failed',
+                message: 'city is too long',
+                requestId: 'req-0123456789',
+            }),
+        );
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(client.getQueryData<typeof person>(keys.record(WS, 'person', ID))?.city).toBe('Austin');
     });

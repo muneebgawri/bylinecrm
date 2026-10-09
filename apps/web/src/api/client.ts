@@ -1,4 +1,13 @@
-import { CSRF_COOKIE, CSRF_HEADER } from '@bylinecrm/shared';
+import {
+    CSRF_COOKIE,
+    CSRF_HEADER,
+    codeForStatus,
+    type ApiErrorBody,
+    type ErrorCode,
+    type FieldError,
+} from '@bylinecrm/shared';
+
+export type { FieldError } from '@bylinecrm/shared';
 
 /**
  * The one place the web app knows how to talk to the API: the base path, that the session
@@ -15,23 +24,18 @@ const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-export interface FieldError {
-    /** Dotted path into the request body: `emails.primary`. */
-    path: string;
-    message: string;
-}
-
 /**
- * Every failed request, in one shape. `status` is the HTTP status, `code` is the API's short
- * error name when it sends one (`Unauthorized`, `Forbidden`, …) or the status text, and
- * `fieldErrors` carries validation failures by path so a form can place them.
+ * Every failed request, in one shape — the API's one error envelope (`ApiErrorBody`). `code` is
+ * the stable machine name to branch on, `fieldErrors` carry failures by body path so a form can
+ * place them, and `requestId` is what a person quotes when reporting a problem.
  */
 export class ApiError extends Error {
     constructor(
         readonly status: number,
-        readonly code: string,
+        readonly code: ErrorCode,
         message: string,
         readonly fieldErrors: readonly FieldError[] = [],
+        readonly requestId: string | null = null,
     ) {
         super(message);
         this.name = 'ApiError';
@@ -140,23 +144,30 @@ function safeJson(text: string): unknown {
     }
 }
 
-interface ErrorBody {
-    statusCode?: number;
-    error?: string;
-    message?: string | string[];
-    errors?: { path?: Array<string | number> | string; message?: string }[];
+/**
+ * The API's error envelope into `ApiError`. A body that is not the envelope (an edge proxy's
+ * 502 page, an empty body) still becomes an `ApiError`, coded from its status the same way the
+ * API codes one.
+ */
+function normaliseError(response: Response, payload: unknown): ApiError {
+    if (isEnvelope(payload)) {
+        return new ApiError(
+            response.status,
+            payload.code,
+            payload.message,
+            payload.fieldErrors ?? [],
+            payload.requestId,
+        );
+    }
+    return new ApiError(
+        response.status,
+        codeForStatus(response.status),
+        response.statusText || `HTTP ${response.status}`,
+    );
 }
 
-/** Nest's error envelope and nestjs-zod's validation envelope, folded into `ApiError`. */
-function normaliseError(response: Response, payload: unknown): ApiError {
-    const body: ErrorBody = typeof payload === 'object' && payload !== null ? (payload as ErrorBody) : {};
-    const message = Array.isArray(body.message)
-        ? body.message.join('; ')
-        : (body.message ?? response.statusText ?? `HTTP ${response.status}`);
-    const fieldErrors: FieldError[] = (body.errors ?? []).flatMap((issue) =>
-        issue.message
-            ? [{ path: Array.isArray(issue.path) ? issue.path.join('.') : (issue.path ?? ''), message: issue.message }]
-            : [],
-    );
-    return new ApiError(response.status, body.error ?? response.statusText ?? 'Error', message, fieldErrors);
+function isEnvelope(payload: unknown): payload is ApiErrorBody {
+    if (typeof payload !== 'object' || payload === null) return false;
+    const body = payload as Partial<ApiErrorBody>;
+    return typeof body.code === 'string' && typeof body.message === 'string' && typeof body.requestId === 'string';
 }

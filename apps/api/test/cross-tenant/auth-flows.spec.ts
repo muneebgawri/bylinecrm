@@ -85,7 +85,11 @@ describe('auth flows', () => {
             .post('/api/auth/login')
             .send({ email: `nobody-${stamp}@example.test`, password })
             .expect(401);
-        expect(res.body).toEqual(unknown.body);
+        // The same answer either way (no account enumeration); only each request's own id differs.
+        const { requestId: _wrong, ...wrongPassword } = res.body as Record<string, unknown>;
+        const { requestId: _unknown, ...unknownEmail } = unknown.body as Record<string, unknown>;
+        expect(wrongPassword).toEqual(unknownEmail);
+        expect(wrongPassword).toMatchObject({ statusCode: 401, code: 'unauthorized' });
     });
 
     it("refuses a member of A on B's routes before any workspace-scoped query", async () => {

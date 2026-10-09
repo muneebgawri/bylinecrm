@@ -1,7 +1,8 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { Actor, Emails, FilterGroup, Links, Phones } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
+import { UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -262,8 +263,8 @@ function notFound(): NotFoundException {
     return new NotFoundException('person not found');
 }
 
-function conflict(): ConflictException {
-    return new ConflictException({ message: 'a person with that primary email exists', field: 'emails.primary' });
+function conflict(): UniqueConflict {
+    return new UniqueConflict('a person with that primary email exists', 'emails.primary');
 }
 
 export function view(row: PersonRow): PersonView {

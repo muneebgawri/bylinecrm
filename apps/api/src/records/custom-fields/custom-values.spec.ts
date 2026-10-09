@@ -1,5 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
+import { ValidationFailed } from '../../infra/errors/api-errors';
 import { type FieldDefinition, mergeCustomValues, optionsProblem, validateCustomValues } from './custom-values';
 
 const definitions: FieldDefinition[] = [
@@ -10,17 +10,15 @@ const definitions: FieldDefinition[] = [
     { key: 'site', label: 'Site', type: 'url', options: [], required: false },
 ];
 
+/** The field paths a refused value set is reported under. */
 function issues(fn: () => unknown): string[] {
     try {
         fn();
     } catch (error) {
-        if (error instanceof BadRequestException) {
-            const body = error.getResponse() as { issues: { path: string }[] };
-            return body.issues.map((i) => i.path);
-        }
+        if (error instanceof ValidationFailed) return (error.fieldErrors ?? []).map((e) => e.path);
         throw error;
     }
-    throw new Error('expected a BadRequestException');
+    throw new Error('expected a ValidationFailed');
 }
 
 describe('validateCustomValues', () => {
