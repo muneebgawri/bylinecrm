@@ -70,7 +70,7 @@ jobs:
             WEBHOOK_ALLOW_PRIVATE_TARGETS: '1'
         services:
             postgres:
-                image: postgres:16
+                image: public.ecr.aws/docker/library/postgres:16
                 env:
                     POSTGRES_USER: bylinecrm
                     POSTGRES_PASSWORD: bylinecrm
@@ -78,7 +78,7 @@ jobs:
                 ports: ['5432:5432']
                 options: --health-cmd "pg_isready -U bylinecrm" --health-interval 5s --health-timeout 3s --health-retries 10
             redis:
-                image: redis:7
+                image: public.ecr.aws/docker/library/redis:7
                 ports: ['6379:6379']
                 options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
         steps:
