@@ -11,5 +11,7 @@ export default defineConfig({
         include: ['src/**/*.spec.ts'],
         passWithNoTests: false,
         environment: 'node',
+        // Query budgets are test instruments: the client emits statement events only when asked.
+        env: { DB_QUERY_EVENTS: '1' },
     },
 });

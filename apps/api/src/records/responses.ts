@@ -188,7 +188,14 @@ export const bulkResultView = named(
     z.object({
         results: z.array(
             z.union([
-                z.object({ id, ok: z.literal(true) }),
+                z.object({
+                    id,
+                    ok: z.literal(true),
+                    unchanged: z
+                        .literal(true)
+                        .optional()
+                        .meta({ description: 'Already as asked: nothing written, no event.' }),
+                }),
                 z.object({
                     id,
                     ok: z.literal(false),

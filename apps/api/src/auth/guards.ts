@@ -7,13 +7,13 @@ import {
     type NestMiddleware,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, isCapability } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
 import type { NextFunction, Request, Response } from 'express';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
 import { ApiKeyService } from './api-key.service';
-import { ANY_MEMBER_KEY, PUBLIC_KEY, REQUIRES_KEY } from './decorators';
+import { ANY_MEMBER_KEY, PUBLIC_KEY, REQUIRES_KEY, requiredCapabilities } from './decorators';
 import type { AuthenticatedRequest } from './principal';
 import { SessionService } from './session.service';
 
@@ -141,9 +141,9 @@ export class WorkspaceGuard implements CanActivate {
 }
 
 /**
- * The capability a tenant route declared with `@Requires()`, checked against what the workspace
- * guard recorded. A tenant route that declared nothing is refused outright: an undeclared gate
- * is a defect, not an open door.
+ * The capabilities a tenant route declared with `@Requires()` — all of them — checked against what
+ * the workspace guard recorded. A tenant route that declared nothing is refused outright: an
+ * undeclared gate is a defect, not an open door.
  */
 @Injectable()
 export class RequiresGuard implements CanActivate {
@@ -157,13 +157,14 @@ export class RequiresGuard implements CanActivate {
         if (!isTenantPath(req.path)) return true;
         // A route open to any member (with its reason written down) has the workspace guard as its gate.
         if (typeof this.reflector.get<unknown>(ANY_MEMBER_KEY, ctx.getHandler()) === 'string') return true;
-        const required = this.reflector.get<unknown>(REQUIRES_KEY, ctx.getHandler());
-        if (!isCapability(required)) {
+        const required = requiredCapabilities(this.reflector.get<unknown>(REQUIRES_KEY, ctx.getHandler()));
+        if (!required) {
             throw new ForbiddenException('route declares no capability');
         }
-        const current = this.context.get();
-        if (!current?.capabilities.has(required)) {
-            throw new ForbiddenException(`requires ${required}`);
+        const held = this.context.get()?.capabilities;
+        const missing = required.filter((capability) => !held?.has(capability));
+        if (missing.length > 0) {
+            throw new ForbiddenException(`requires ${missing.join(', ')}`);
         }
         return true;
     }

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { BULK_MAX_IDS, CSRF_COOKIE, CSRF_HEADER, type FilterGroup, SESSION_COOKIE } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
@@ -46,7 +47,7 @@ interface Deal {
     owner: { memberId: string; name: string | null } | null;
 }
 interface BulkResult {
-    results: ({ id: string; ok: true } | { id: string; ok: false; error: string })[];
+    results: ({ id: string; ok: true; unchanged?: true } | { id: string; ok: false; error: string })[];
     succeeded: number;
     failed: number;
 }
@@ -390,8 +391,9 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
                     .send({ action: 'assign_owner', ids: [repsOwnPerson, adminPeople[0]!], ownerId: repMemberId })
                     .expect(200)
             ).body as BulkResult;
+            // The rep's own person already is theirs: ok, unchanged — nothing written, nothing announced.
             expect(res.results).toEqual([
-                { id: repsOwnPerson, ok: true },
+                { id: repsOwnPerson, ok: true, unchanged: true },
                 { id: adminPeople[0], ok: false, error: 'not_found' },
             ]);
             const adminsAda = page<Person>(
@@ -402,7 +404,52 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
             expect(adminsAda.items[0]!.ownerId).toBe(adminMemberId);
         });
 
-        it('deals in bulk need deal:bulk; the request shape is checked', async () => {
+        it('a no-op writes and announces nothing — by PATCH or in bulk; a real change announces exactly once', async () => {
+            const emitter = app.get(EventEmitter2);
+            const announced: string[] = [];
+            const hear = (event: { recordId: string }) => announced.push(event.recordId);
+            emitter.on('person.updated', hear);
+            try {
+                const target = adminPeople[1]!;
+                const before = (
+                    await as(admin)
+                        .get(w(`/people/${target}`))
+                        .expect(200)
+                ).body as { updatedAt: string };
+
+                const patched = await as(admin)
+                    .patch(w(`/people/${target}`))
+                    .send({ ownerId: adminMemberId })
+                    .expect(200);
+                expect((patched.body as { updatedAt: string }).updatedAt).toBe(before.updatedAt);
+
+                const same = (
+                    await as(admin)
+                        .post(w('/people/bulk'))
+                        .send({ action: 'assign_owner', ids: [target], ownerId: adminMemberId })
+                        .expect(200)
+                ).body as BulkResult;
+                expect(same.results).toEqual([{ id: target, ok: true, unchanged: true }]);
+                expect(announced).toEqual([]);
+
+                const moved = (
+                    await as(admin)
+                        .post(w('/people/bulk'))
+                        .send({ action: 'assign_owner', ids: [target], ownerId: repMemberId })
+                        .expect(200)
+                ).body as BulkResult;
+                expect(moved.results).toEqual([{ id: target, ok: true }]);
+                expect(announced).toEqual([target]);
+            } finally {
+                emitter.off('person.updated', hear);
+            }
+            await as(admin)
+                .post(w('/people/bulk'))
+                .send({ action: 'assign_owner', ids: [adminPeople[1]!], ownerId: adminMemberId })
+                .expect(200);
+        });
+
+        it('deals in bulk need deal:bulk and deal:edit; the request shape is checked', async () => {
             await as(rep)
                 .post(w('/opportunities/bulk'))
                 .send({ action: 'delete', ids: [NOWHERE] })

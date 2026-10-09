@@ -30,7 +30,7 @@ import { bulkResultView, notePage, noteView, opportunityPage, opportunityView, t
 
 /**
  * Deals: read with `deal:read`, every write with `deal:edit`; moving stages is P1-2's `deal:move`;
- * acting on many at once is `deal:bulk` (doc 50 §B), and each write still needs `deal:edit`.
+ * acting on many at once needs `deal:bulk` (doc 50 §B) and `deal:edit`, since each change is an edit.
  */
 @ApiTags('opportunities')
 @TenantController('opportunities')
@@ -64,7 +64,7 @@ export class OpportunitiesController {
      * by filter / view / q, at most `BULK_MAX_IDS`. Each goes through the single-record write and
      * is announced by its own event; the result says, per record, whether it changed.
      */
-    @Requires('deal:bulk')
+    @Requires('deal:bulk', 'deal:edit')
     @HttpCode(200)
     @Post('bulk')
     @Returns(bulkResultView)

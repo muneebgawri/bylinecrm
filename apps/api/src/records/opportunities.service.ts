@@ -9,7 +9,7 @@ import { daysInStage } from '../pipelines/stage-moves';
 import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
-import { diffOf } from './diff';
+import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
 import type { ListQuery } from './people.service';
 import { listScope } from '../query/query.service';
@@ -83,7 +83,6 @@ type OpportunityRow = Prisma.OpportunityGetPayload<{ include: typeof opportunity
 @Injectable()
 export class OpportunitiesService implements BulkRecords {
     readonly object = 'opportunity' as const;
-    readonly editCapability = 'deal:edit' as const;
 
     constructor(
         private readonly rls: RlsPrismaService,
@@ -158,7 +157,7 @@ export class OpportunitiesService implements BulkRecords {
     async update(id: string, patch: OpportunityInput): Promise<OpportunityView> {
         const context = this.current();
         const { after, event } = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch));
-        this.events.publish(event);
+        if (event) this.events.publish(event);
         return view(after);
     }
 
@@ -183,7 +182,7 @@ export class OpportunitiesService implements BulkRecords {
         context: WorkspaceRunContext,
         id: string,
         patch: OpportunityInput,
-    ): Promise<{ after: OpportunityRow; event: DomainEvent }> {
+    ): Promise<{ after: OpportunityRow; event: DomainEvent | null }> {
         const current = await find(tx, context, id);
         const ownerId = resolveOwner(context, patch.ownerId, current.ownerId);
         if (ownerId !== current.ownerId) await assertOwnerIsMember(tx, ownerId);
@@ -213,11 +212,10 @@ export class OpportunitiesService implements BulkRecords {
                         amountMinor: resolved.amountMinor,
                         ...(patch.amount.currency ? { currency: patch.amount.currency } : {}),
                     };
-        const after = await tx.opportunity.update({
-            where: { id },
-            data: { ...compact(fields(patch)), ...money, ownerId, ...(custom ? { custom } : {}) },
-            include: opportunityInclude,
-        });
+        const data = { ...compact(fields(patch)), ...money, ownerId, ...(custom ? { custom } : {}) };
+        // Nothing would change: no write, no `updated` event, the record as it was.
+        if (isEmpty(projectedChanges(current, data, view, DIFF_FIELDS))) return { after: current, event: null };
+        const after = await tx.opportunity.update({ where: { id }, data, include: opportunityInclude });
         return {
             after,
             event: event(context, 'opportunity.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),

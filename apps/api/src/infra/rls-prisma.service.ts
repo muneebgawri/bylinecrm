@@ -35,24 +35,36 @@ export class RlsPrismaService
 {
     /** Who hears each SQL statement this client sends; see `observeQueries`. */
     private readonly queryObservers = new Set<(sql: string) => void>();
+    private readonly queryEvents: boolean;
 
     constructor(
         @Inject(ENV) env: Env,
         private readonly context: WorkspaceContext,
     ) {
-        // Prisma emits a query event per statement; with no observer registered the handler loops over nothing.
-        super({ datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL), log: [{ emit: 'event', level: 'query' }] });
-        this.$on('query', (event) => {
-            for (const observe of this.queryObservers) observe(event.query);
+        super({
+            datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL),
+            // A statement event per query only where a test asked for it (`DB_QUERY_EVENTS=1`).
+            ...(env.DB_QUERY_EVENTS ? { log: [{ emit: 'event' as const, level: 'query' as const }] } : {}),
         });
+        this.queryEvents = env.DB_QUERY_EVENTS;
+        if (this.queryEvents) {
+            this.$on('query', (event) => {
+                for (const observe of this.queryObservers) observe(event.query);
+            });
+        }
     }
 
     /**
      * Hears every SQL statement this client sends until the returned function is called. A query
      * budget is held by it — the record lists' test asserts that a page of fifty rows with their
-     * related names costs the same number of statements as a page of ten (P1-4a: no N+1).
+     * related names costs the same number of statements as a page of ten (P1-4a: no N+1). Needs
+     * `DB_QUERY_EVENTS=1`; without it this throws, so a test that forgot the flag fails instead of
+     * counting zero statements and passing.
      */
     observeQueries(observer: (sql: string) => void): () => void {
+        if (!this.queryEvents) {
+            throw new Error('observeQueries needs DB_QUERY_EVENTS=1: this client emits no query events');
+        }
         this.queryObservers.add(observer);
         return () => this.queryObservers.delete(observer);
     }

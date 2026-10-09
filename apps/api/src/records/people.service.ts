@@ -9,7 +9,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
-import { diffOf } from './diff';
+import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
 import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
@@ -71,7 +71,6 @@ type PersonRow = Prisma.PersonGetPayload<{ include: typeof personInclude }>;
 @Injectable()
 export class PeopleService implements BulkRecords {
     readonly object = 'person' as const;
-    readonly editCapability = 'record:write' as const;
 
     constructor(
         private readonly rls: RlsPrismaService,
@@ -137,7 +136,7 @@ export class PeopleService implements BulkRecords {
     async update(id: string, patch: PersonInput): Promise<PersonView> {
         const context = this.current();
         const { after, event } = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch));
-        this.events.publish(event);
+        if (event) this.events.publish(event);
         return view(after);
     }
 
@@ -166,7 +165,7 @@ export class PeopleService implements BulkRecords {
         context: WorkspaceRunContext,
         id: string,
         patch: PersonInput,
-    ): Promise<{ after: PersonRow; event: DomainEvent }> {
+    ): Promise<{ after: PersonRow; event: DomainEvent | null }> {
         const current = await find(tx, context, id);
         const ownerId = resolveOwner(context, patch.ownerId, current.ownerId);
         if (ownerId !== current.ownerId) await assertOwnerIsMember(tx, ownerId);
@@ -187,12 +186,11 @@ export class PeopleService implements BulkRecords {
             patch.nameLast ?? current.nameLast,
             (patch.emails ?? stored<Emails>(current.emails)).primary,
         );
+        const data = { ...compact(fields(patch)), ownerId, ...(custom ? { custom } : {}) };
+        // Nothing would change: no write, no `updated` event, the record as it was.
+        if (isEmpty(projectedChanges(current, data, view, DIFF_FIELDS))) return { after: current, event: null };
         try {
-            const after = await tx.person.update({
-                where: { id },
-                data: { ...compact(fields(patch)), ownerId, ...(custom ? { custom } : {}) },
-                include: personInclude,
-            });
+            const after = await tx.person.update({ where: { id }, data, include: personInclude });
             return {
                 after,
                 event: event(context, 'person.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),

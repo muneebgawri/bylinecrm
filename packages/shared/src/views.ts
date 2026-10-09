@@ -290,7 +290,11 @@ export const BULK_CHUNK_SIZE = 100;
  */
 export const BULK_ROW_ERRORS = ['not_found'] as const satisfies readonly ErrorCode[];
 export type BulkRowError = (typeof BULK_ROW_ERRORS)[number];
-export type BulkRowResult = { id: string; ok: true } | { id: string; ok: false; error: BulkRowError };
+/**
+ * One record's outcome. `unchanged: true` when it already was as asked (an owner assigned to its
+ * current owner): nothing was written and no event announced — a no-op is no event.
+ */
+export type BulkRowResult = { id: string; ok: true; unchanged?: true } | { id: string; ok: false; error: BulkRowError };
 export type BulkResult = { results: BulkRowResult[]; succeeded: number; failed: number };
 
 /** Global search: results per object, default and ceiling. */

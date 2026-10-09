@@ -65,13 +65,38 @@ describe('RequiresGuard', () => {
     class Routes {
         @Requires('deal:bulk')
         declared(): void {}
+        @Requires('deal:bulk', 'deal:edit')
+        both(): void {}
         undeclared(): void {}
     }
     const declared = Routes.prototype.declared;
+    const both = Routes.prototype.both;
     const undeclared = Routes.prototype.undeclared;
 
-    it('records the capability on the handler', () => {
-        expect(Reflect.getMetadata(REQUIRES_KEY, declared)).toBe('deal:bulk');
+    it('records the capabilities on the handler', () => {
+        expect(Reflect.getMetadata(REQUIRES_KEY, declared)).toEqual(['deal:bulk']);
+        expect(Reflect.getMetadata(REQUIRES_KEY, both)).toEqual(['deal:bulk', 'deal:edit']);
+    });
+
+    it('a route that names several needs all of them: one of the two is 403, naming what is missing', () => {
+        const path = { path: `/api/w/${WORKSPACE_A}/opportunities/bulk` };
+        for (const held of [['deal:bulk'], ['deal:edit']] as const) {
+            expect(() =>
+                workspaceContext.run({ workspaceId: WORKSPACE_A, capabilities: new Set(held) }, () =>
+                    guard.canActivate(context(path, both)),
+                ),
+            ).toThrow(ForbiddenException);
+        }
+        expect(() =>
+            workspaceContext.run({ workspaceId: WORKSPACE_A, capabilities: new Set(['deal:bulk']) }, () =>
+                guard.canActivate(context(path, both)),
+            ),
+        ).toThrow(/requires deal:edit/);
+        const allowed = workspaceContext.run(
+            { workspaceId: WORKSPACE_A, capabilities: new Set(['deal:bulk', 'deal:edit']) },
+            () => guard.canActivate(context(path, both)),
+        );
+        expect(allowed).toBe(true);
     });
 
     it('passes when the caller holds the declared capability', () => {

@@ -1,5 +1,5 @@
 import { ForbiddenException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
-import { BULK_CHUNK_SIZE, BULK_MAX_IDS, type Capability, type DomainEvent } from '@bylinecrm/shared';
+import { BULK_CHUNK_SIZE, BULK_MAX_IDS, type DomainEvent } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 import type { DomainEvents } from '../../events/domain-events.service';
 import type { RlsPrismaService, WorkspaceClient } from '../../infra/rls-prisma.service';
@@ -18,9 +18,10 @@ const OTHER = uuid(900_002);
  */
 function harness(options: {
     visible: Set<string>;
-    capabilities?: Capability[];
     ownerScope?: string;
     vanishOnWrite?: Set<string>;
+    /** Ids whose owner already is the one asked for: the single update reports no change. */
+    alreadyOwned?: Set<string>;
 }) {
     const transactions: string[][] = [];
     const published: DomainEvent[] = [];
@@ -50,7 +51,7 @@ function harness(options: {
     const context: WorkspaceRunContext = {
         workspaceId: uuid(1),
         memberId: MEMBER,
-        capabilities: new Set(options.capabilities ?? ['record:write']),
+        capabilities: new Set(['record:write']),
         ...(options.ownerScope ? { ownerScopeMemberId: options.ownerScope } : {}),
     };
     const contexts = { get: () => context } as unknown as WorkspaceContext;
@@ -73,8 +74,8 @@ function harness(options: {
     };
     const records: BulkRecords = {
         object: 'person',
-        editCapability: 'record:write',
         updateIn: (_tx, _ctx, id, patch) => {
+            if (options.alreadyOwned?.has(id)) return Promise.resolve({ event: null });
             step('assign_owner', id, patch.ownerId);
             return Promise.resolve(announce('person.updated', id));
         },
@@ -159,6 +160,21 @@ describe('BulkService', () => {
         ]);
     });
 
+    it('a record already owned as asked is ok and unchanged, and announced by nothing', async () => {
+        const h = harness({ visible: new Set([uuid(1), uuid(2)]), alreadyOwned: new Set([uuid(1)]) });
+        const result = await h.service.run(h.records, {
+            action: 'assign_owner',
+            ids: [uuid(1), uuid(2)],
+            ownerId: OTHER,
+        });
+        expect(result.results).toEqual([
+            { id: uuid(1), ok: true, unchanged: true },
+            { id: uuid(2), ok: true },
+        ]);
+        expect(result).toMatchObject({ succeeded: 2, failed: 0 });
+        expect(h.published.map((e) => e.recordId)).toEqual([uuid(2)]);
+    });
+
     it('an own-scoped caller may only assign to themselves — refused before anything changes', async () => {
         const h = harness({ visible: new Set([uuid(1)]), ownerScope: MEMBER });
         await expect(
@@ -167,12 +183,5 @@ describe('BulkService', () => {
         expect(h.writes).toHaveLength(0);
         await h.service.run(h.records, { action: 'assign_owner', ids: [uuid(1)], ownerId: MEMBER });
         expect(h.writes).toHaveLength(1);
-    });
-
-    it('needs the object’s edit capability beside the route’s gate', async () => {
-        const h = harness({ visible: new Set([uuid(1)]), capabilities: ['record:read'] });
-        await expect(h.service.run(h.records, { action: 'delete', ids: [uuid(1)] })).rejects.toBeInstanceOf(
-            ForbiddenException,
-        );
     });
 });

@@ -1,11 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
+import { Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import {
     type BulkAction,
     BULK_CHUNK_SIZE,
     BULK_MAX_IDS,
     type BulkResult,
     type BulkRowResult,
-    type Capability,
     type DomainEvent,
     type FilterGroup,
     type RecordObject,
@@ -27,14 +26,13 @@ import { assertOwnerIsMember } from '../references';
  */
 export interface BulkRecords {
     readonly object: RecordObject;
-    /** What one write to this object needs. Checked beside the bulk route's own gate. */
-    readonly editCapability: Capability;
+    /** `event: null` when the record already was as asked — nothing written, nothing announced. */
     updateIn(
         tx: WorkspaceClient,
         context: WorkspaceRunContext,
         id: string,
         patch: { ownerId: string | null },
-    ): Promise<{ event: DomainEvent }>;
+    ): Promise<{ event: DomainEvent | null }>;
     removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }>;
     restoreIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }>;
 }
@@ -96,9 +94,6 @@ export class BulkService {
 
     async run(records: BulkRecords, request: BulkRequest): Promise<BulkResult> {
         const context = this.current();
-        if (!context.capabilities.has(records.editCapability)) {
-            throw new ForbiddenException(`changing ${records.object} records needs ${records.editCapability}`);
-        }
         const deleted = request.action === 'restore';
         const ownerId =
             request.action === 'assign_owner' ? resolveOwner(context, request.ownerId ?? null, undefined) : undefined;
@@ -160,8 +155,12 @@ export class BulkService {
             }
             try {
                 const { event } = await write(records, action, tx, context, id, ownerId);
-                events.push(event);
-                rows.push({ id, ok: true });
+                if (event) {
+                    events.push(event);
+                    rows.push({ id, ok: true });
+                } else {
+                    rows.push({ id, ok: true, unchanged: true });
+                }
             } catch (error) {
                 // Gone between the check and the write (another request deleted it): the same answer.
                 if (!(error instanceof NotFoundException)) throw error;
@@ -185,7 +184,7 @@ function write(
     context: WorkspaceRunContext,
     id: string,
     ownerId: string | null,
-): Promise<{ event: DomainEvent }> {
+): Promise<{ event: DomainEvent | null }> {
     switch (action) {
         case 'assign_owner':
             return records.updateIn(tx, context, id, { ownerId });
