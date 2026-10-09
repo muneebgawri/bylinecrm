@@ -1,5 +1,5 @@
 import { Drawer, DrawerContent, cn, isBoolean, usePersistedState, useTheme, type Theme } from '@bylinecrm/ui';
-import { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 import { useLogout } from '../api/queries';
 import { WorkspaceCapabilities, useMembership } from '../auth/capabilities';
@@ -16,6 +16,11 @@ import { TopBar } from './TopBar';
 import { NAV_ITEMS } from './nav';
 import { SIDEBAR_COLLAPSED_KEY } from './storage';
 import { useIsNarrow } from './useMediaQuery';
+
+/** The record drawer (`?open=<object>:<id>`) lives in the records chunk; nothing loads until it is asked for. */
+const RecordDrawerHost = lazy(() =>
+    import('../routes/w/records/RecordDrawerHost').then((m) => ({ default: m.RecordDrawerHost })),
+);
 
 /** The workspace routes' frame. Resolves the member's standing first, then renders the shell. */
 export function AppShell() {
@@ -88,6 +93,9 @@ function Shell({ workspaceId }: { workspaceId: string }) {
                     <Outlet />
                 </main>
             </div>
+            <Suspense fallback={null}>
+                <RecordDrawerHost />
+            </Suspense>
             <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
             <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
         </div>

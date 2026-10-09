@@ -13,7 +13,10 @@ function matched(path: string): string[] {
 
 describe('route manifest', () => {
     it('declares every path in `paths`', () => {
-        const all = Object.values(paths).map((p) => (typeof p === 'function' ? p(ws) : p));
+        // A path builder takes the workspace id and, for a record page, the record id.
+        const all = Object.values(paths).map((p) =>
+            typeof p === 'function' ? (p as (...ids: string[]) => string)(ws, ws) : p,
+        );
         for (const path of all) {
             const leaf = matched(path).at(-1);
             expect(leaf, path).not.toBe('*');
