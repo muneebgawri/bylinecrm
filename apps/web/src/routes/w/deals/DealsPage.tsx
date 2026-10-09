@@ -1,4 +1,4 @@
-import { DEFAULT_CURRENCY, type FilterGroup, type SavedView, type ViewSort } from '@bylinecrm/shared';
+import { DEFAULT_CURRENCY, ID_FIELD, type ViewColumn, type ViewSort } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -18,31 +18,34 @@ import {
     useIsMobile,
     writeStored,
 } from '@bylinecrm/ui';
-import { Download, Plus, Settings2 } from 'lucide-react';
+import { Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ApiError } from '../../../api/client';
 import { opportunities } from '../../../api/endpoints';
-import { useBoard, useMembersSummary, usePipelines, useRules, useUpdateDeal } from '../../../api/queries';
+import { useViewCounts } from '../../../api/lists';
+import { useBoard, useCustomFields, useMembersById, usePipelines, useRules, useViews } from '../../../api/queries';
 import type { OpportunityView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
-import { decodeFilter, encodeFilter } from '../../../lib/filterParam';
+import { useDebounced } from '../../../lib/useDebounced';
+import { useKeyedState } from '../../../lib/useKeyedState';
+import { saveFile } from '../../../lib/saveFile';
 import { useRegisterCommands } from '../../../commands/registry';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { withOpen } from '../records/targets';
+import { AssignOwnerDialog, failureText } from '../lists/ListDialogs';
+import { allColumns, IDENTITY_FIELD, isSortable, resolveColumns } from '../lists/listConfig';
+import { ListToolbar, useFilterFields } from '../lists/ListToolbar';
+import { formatSort, useListState } from '../lists/useListState';
+import { ViewBar } from '../lists/ViewBar';
 import { ruleEventLabel } from './BackwardMoveDialog';
 import { DealsBoard } from './DealsBoard';
 import { DealsList } from './DealsList';
 import { DEALS_PARAMS, DEALS_VIEW_KEY, isDealsView, type DealsView } from './dealsView';
-import { FilterChips } from './FilterChips';
 import { MoveSheet } from './MoveSheet';
 import { NewDealDialog } from './NewDealDialog';
 import { useDealMove } from './useDealMove';
-import { ViewPicker } from './ViewPicker';
-
-/** How long typing pauses before the search reaches the URL (and so the API). */
-const SEARCH_DEBOUNCE_MS = 300;
 
 const VIEW_OPTIONS = [
     { value: 'board', label: 'Board' },
@@ -65,8 +68,8 @@ export function DealsPage() {
     const canBulk = useCan('deal:bulk');
     const canEdit = useCan('deal:edit');
     const configure = usePermission('pipeline:configure');
-    const canSaveView = useCan('view:save');
-    const canShareView = useCan('view:share');
+    const canSaveView = usePermission('view:save');
+    const canShareView = usePermission('view:share');
     const membership = useMembership();
     // A phone gets one stage per screen and stacked cards; a finger gets "Move to stage" instead of drag.
     const mobile = useIsMobile();
@@ -74,6 +77,7 @@ export function DealsPage() {
     const navigate = useNavigate();
     const location = useLocation();
     const [moving, setMoving] = useState<OpportunityView | null>(null);
+    const [assigning, setAssigning] = useState<string[] | null>(null);
 
     const pipelines = usePipelines(workspaceId);
     const pipelineId =
@@ -81,39 +85,42 @@ export function DealsPage() {
     const pipeline = pipelines.data?.find((p) => p.id === pipelineId);
     const urlRender = params.get(DEALS_PARAMS.render);
     const view: DealsView = isDealsView(urlRender) ? urlRender : storedView();
-    const savedViewId = params.get(DEALS_PARAMS.view) ?? undefined;
-    const filterParam = params.get(DEALS_PARAMS.filter) ?? undefined;
-    const sort = params.get(DEALS_PARAMS.sort) ?? undefined;
-    const q = params.get(DEALS_PARAMS.q) ?? undefined;
     const creating = params.get(DEALS_PARAMS.create) !== null;
 
-    const board = useBoard(workspaceId, pipelineId, { view: savedViewId, filter: filterParam, sort, q });
+    // The list state every list shares (P1-UI-6): saved view, inline filter, sort, search — in the
+    // URL under the same names, read and written by the same hook as people and companies.
+    const { state, update, selectView, encodedFilter } = useListState();
+    const views = useViews(workspaceId, 'opportunity');
+    const savedView = views.data?.find((v) => v.id === state.viewId);
+    const filter = state.filter ?? savedView?.filter ?? null;
+    const sorts: ViewSort[] = state.sorts.length ? state.sorts : (savedView?.sorts ?? []);
+    const fields = useFilterFields(workspaceId, 'opportunity');
+    const members = useMembersById(workspaceId);
+    const customFields = useCustomFields(workspaceId, 'opportunity');
+    const available = useMemo(() => allColumns('opportunity', customFields.data ?? []), [customFields.data]);
+    const [columnsDraft, setColumnsDraft] = useKeyedState<ViewColumn[] | null>(state.viewId ?? '__all__', null);
+    const columns = useMemo(
+        () => resolveColumns('opportunity', available, columnsDraft ?? savedView?.columns),
+        [available, columnsDraft, savedView?.columns],
+    );
+    const viewColumns: ViewColumn[] = columns.map(({ column, width }) => ({ field: column.field, width }));
+    const sortParam = formatSort(state.sorts);
+    // Every tab counts its view the way people and companies do — one `limit=1` list read per view,
+    // across all pipelines as the view's filter defines it — not from the board, which counts one
+    // pipeline. The board's lane counts and sums are its own.
+    const tabViews = useMemo(() => [undefined, ...(views.data ?? []).map((v) => v.id)], [views.data]);
+    const tabCounts = useViewCounts(workspaceId, 'opportunity', tabViews);
+
+    const board = useBoard(workspaceId, pipelineId, {
+        view: state.viewId,
+        filter: encodedFilter,
+        sort: sortParam,
+        q: state.q || undefined,
+    });
     const rules = useRules(workspaceId, pipelineId);
-    const members = useMembersSummary(workspaceId);
-    const updateDeal = useUpdateDeal(workspaceId);
     const [announcement, setAnnouncement] = useState('');
     const announce = useCallback((text: string) => setAnnouncement(text), []);
     const move = useDealMove(workspaceId, board.data, announce);
-
-    const membersById = useMemo(
-        () => new Map((members.data ?? []).map((m) => [m.memberId, m.name ?? 'Member'])),
-        [members.data],
-    );
-
-    // The saved view, its filter and sort, and the inline overrides — the API applies the same rule:
-    // an inline filter or sort replaces the view's whole (P1-4).
-    const [selectedView, setSelectedView] = useState<SavedView | null>(null);
-    // Cheap to recompute from the URL's strings on each render, so neither is memoised.
-    const inlineFilter = decodeFilter(filterParam);
-    const shownFilter: FilterGroup | null =
-        inlineFilter ?? (selectedView && selectedView.id === savedViewId ? selectedView.filter : null);
-    const currentSorts: ViewSort[] = (sort ?? '')
-        .split(',')
-        .filter(Boolean)
-        .map((part) => {
-            const [field = '', direction] = part.split(':');
-            return { field, direction: direction === 'desc' ? 'desc' : 'asc' };
-        });
 
     const setParam = useCallback(
         (key: string, value: string | undefined) =>
@@ -137,49 +144,49 @@ export function DealsPage() {
         [setParam],
     );
 
-    const selectView = useCallback(
-        (next: SavedView | null) => {
-            setSelectedView(next);
-            setParams(
-                (prev) => {
-                    const p = new URLSearchParams(prev);
-                    for (const key of [DEALS_PARAMS.view, DEALS_PARAMS.filter, DEALS_PARAMS.sort]) p.delete(key);
-                    if (next) p.set(DEALS_PARAMS.view, next.id);
-                    return p;
-                },
-                { replace: true },
-            );
-        },
-        [setParams],
-    );
-    const setFilter = useCallback(
-        (next: FilterGroup | null) => setParam(DEALS_PARAMS.filter, next ? encodeFilter(next) : undefined),
-        [setParam],
-    );
-
-    // Search: typed locally, written to the URL after a pause.
-    const [search, setSearch] = useState(q ?? '');
+    // Search: typed freely, sent once typing pauses (the same rule every list uses).
+    const [searchDraft, setSearchDraft] = useState(state.q);
+    const settledSearch = useDebounced(searchDraft);
     useEffect(() => {
-        const handle = setTimeout(() => {
-            if ((search.trim() || undefined) !== q) setParam(DEALS_PARAMS.q, search.trim() || undefined);
-        }, SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(handle);
-    }, [q, search, setParam]);
+        if (settledSearch !== state.q) update({ q: settledSearch });
+    }, [settledSearch, state.q, update]);
 
-    const onAssign = useCallback(
-        (deal: OpportunityView, ownerId: string | null) =>
-            updateDeal.mutate(
-                { dealId: deal.id, patch: { ownerId } },
-                {
-                    onError: (error) =>
-                        toast({
-                            title: `${deal.name} was not reassigned`,
-                            description: error instanceof ApiError ? error.message : 'The server could not be reached.',
-                            tone: 'danger',
-                        }),
-                },
-            ),
-        [updateDeal],
+    const sortColumn = (field: string) => {
+        if (!isSortable('opportunity', field)) return;
+        const head = sorts[0];
+        const next: ViewSort[] =
+            head?.field === field
+                ? head.direction === 'asc'
+                    ? [{ field, direction: 'desc' }]
+                    : []
+                : [{ field, direction: 'asc' }];
+        update({ sorts: next });
+    };
+
+    const exportColumns = columns.flatMap((c) => c.column.exportFields).join(',');
+    /** Exports the deals the page shows, or (with ids) a selection — one request either way (P1-4a). */
+    const exportDeals = useCallback(
+        async (ids?: readonly string[]) => {
+            try {
+                const { blob, filename } = ids
+                    ? await opportunities.exportSelection(workspaceId, {
+                          filter: { and: [{ field: ID_FIELD.name, op: 'in', value: [...ids] }] },
+                          sort: sortParam,
+                          columns: exportColumns,
+                      })
+                    : await opportunities.exportCsv(workspaceId, {
+                          view: state.viewId,
+                          filter: encodedFilter,
+                          sort: sortParam,
+                          q: state.q || undefined,
+                          columns: exportColumns,
+                      });
+                saveFile(blob, filename ?? 'deals.csv');
+            } catch (error) {
+                toast({ title: 'The export did not run', description: failureText(error), tone: 'danger' });
+            }
+        },
+        [workspaceId, sortParam, exportColumns, state.viewId, state.q, encodedFilter],
     );
 
     useRegisterCommands(
@@ -208,7 +215,6 @@ export function DealsPage() {
             navigate({ search: withOpen(location.search, { type: 'opportunity', id: deal.id }) }),
         [location.search, navigate],
     );
-    const exportHref = opportunities.exportUrl(workspaceId, { view: savedViewId, filter: filterParam, sort, q });
     const enabledRules = (rules.data ?? []).filter((r) => r.enabled);
     const stagesById = new Map(pipeline?.stages.map((s) => [s.id, s]) ?? []);
     const dealCount = board.data?.columns.reduce((n, c) => n + c.count, 0);
@@ -261,63 +267,87 @@ export function DealsPage() {
                 }
             />
 
-            {/* Views and filters: one row that wraps on a desktop and scrolls sideways on a phone (FR-CRMS-UI-12). */}
-            <div className="relative mb-3 flex flex-wrap items-center gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1">
-                <ViewPicker
-                    workspaceId={workspaceId}
-                    viewId={savedViewId}
+            {/* The same view bar and toolbar as every list (P1-UI-6). */}
+            <div className="mb-3">
+                <ViewBar
+                    object="opportunity"
+                    views={views.data ?? []}
+                    viewId={state.viewId}
                     onSelect={selectView}
-                    current={{ filter: shownFilter, sorts: currentSorts }}
                     memberId={membership?.memberId ?? null}
-                    canSave={canSaveView}
-                    canShare={canShareView}
-                />
-                <FilterChips
-                    filter={shownFilter}
-                    onChange={setFilter}
-                    members={members.data ?? []}
-                    ownerFilterAllowed={membership?.recordScope !== 'own'}
-                    currency={currency}
+                    canSave={canSaveView.allowed}
+                    canShare={canShareView.allowed}
+                    dirty={state.filter !== null || state.sorts.length > 0 || columnsDraft !== null}
+                    current={{ filter, sorts, columns: viewColumns }}
+                    workspaceId={workspaceId}
+                    onSaved={() => {
+                        update({ filter: null, sorts: [] });
+                        setColumnsDraft(null);
+                    }}
+                    phone={mobile}
+                    counts={tabCounts}
                 />
             </div>
-            <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Input
                     type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchDraft}
+                    onChange={(e) => setSearchDraft(e.target.value)}
                     placeholder="Search deals…"
                     aria-label="Search deals"
                     className="h-8.5 w-64 max-md:w-full"
                 />
-                {enabledRules.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
-                        <Badge status="info">Stage rules</Badge>
-                        {enabledRules.map((rule) => (
-                            <span key={rule.id}>
-                                {ruleEventLabel(rule.event)} →{' '}
-                                <b className="font-medium text-text">{stagesById.get(rule.toStageId)?.name ?? '…'}</b>
-                            </span>
-                        ))}
-                        <span className="text-text-faint">· never backward unless asked</span>
-                    </div>
-                )}
-                <div className="ml-auto flex items-center gap-1 max-md:ml-0">
-                    {canRead && (
-                        <Button variant="ghost" size="sm" shape="square" asChild>
-                            <a href={exportHref} download>
-                                <Download aria-hidden /> Export CSV
-                            </a>
-                        </Button>
-                    )}
-                    {configure.allowed ? (
-                        <Button variant="ghost" size="sm" shape="square" asChild>
-                            <Link to={paths.settingsPipelines(workspaceId)}>
-                                <Settings2 aria-hidden /> Configure pipeline
-                            </Link>
-                        </Button>
-                    ) : null}
-                </div>
+                <ListToolbar
+                    object="opportunity"
+                    workspaceId={workspaceId}
+                    fields={fields}
+                    filter={filter}
+                    onFilter={(next) => update({ filter: next })}
+                    sorts={sorts}
+                    onSorts={(next) => update({ sorts: next })}
+                    // Columns belong to the list rendering; the board's cards have none.
+                    {...(view === 'list'
+                        ? {
+                              columns: {
+                                  shown: columns.map((c) => c.column.field),
+                                  all: available.map((c) => ({ field: c.field, label: c.label })),
+                                  locked: [IDENTITY_FIELD.opportunity],
+                                  onChange: (choice) =>
+                                      setColumnsDraft(
+                                          choice
+                                              .filter((c) => c.visible)
+                                              .map((c) => ({
+                                                  field: c.field,
+                                                  width: columns.find((x) => x.column.field === c.field)?.width,
+                                              })),
+                                      ),
+                              },
+                          }
+                        : {})}
+                    members={members}
+                    phone={mobile}
+                    onExport={() => exportDeals()}
+                />
+                {configure.allowed ? (
+                    <Button variant="ghost" size="sm" shape="square" asChild className="ml-auto max-md:ml-0">
+                        <Link to={paths.settingsPipelines(workspaceId)}>
+                            <Settings2 aria-hidden /> Configure pipeline
+                        </Link>
+                    </Button>
+                ) : null}
             </div>
+            {enabledRules.length > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
+                    <Badge status="info">Stage rules</Badge>
+                    {enabledRules.map((rule) => (
+                        <span key={rule.id}>
+                            {ruleEventLabel(rule.event)} →{' '}
+                            <b className="font-medium text-text">{stagesById.get(rule.toStageId)?.name ?? '…'}</b>
+                        </span>
+                    ))}
+                    <span className="text-text-faint">· never backward unless asked</span>
+                </div>
+            )}
 
             {membership === null ? (
                 // The member's standing is not known yet: loading, not a refusal (found in the browser walk).
@@ -340,7 +370,6 @@ export function DealsPage() {
                     canMove={canMove}
                     layout={mobile ? 'pages' : 'lanes'}
                     touch={mobile || coarse}
-                    membersById={membersById}
                     onMove={move.request}
                     onMoveSheet={setMoving}
                     onOpen={openDeal}
@@ -353,13 +382,14 @@ export function DealsPage() {
                     canMove={canMove}
                     canBulk={canBulk}
                     canEdit={canEdit}
-                    members={members.data ?? []}
-                    membersById={membersById}
-                    sort={sort}
-                    onSortChange={(next) => setParam(DEALS_PARAMS.sort, next)}
+                    columns={columns}
+                    sorts={sorts}
+                    onSortColumn={sortColumn}
                     onMove={move.request}
-                    onAssign={onAssign}
+                    onBulkAssign={setAssigning}
+                    onBulkExport={(ids) => void exportDeals(ids)}
                     onOpen={openDeal}
+                    onMoveSheet={setMoving}
                     stacked={mobile}
                 />
             )}
@@ -384,6 +414,19 @@ export function DealsPage() {
                 onClose={() => setMoving(null)}
                 onPick={move.request}
             />
+            {assigning && (
+                <AssignOwnerDialog
+                    workspaceId={workspaceId}
+                    object="opportunity"
+                    ids={assigning}
+                    members={members}
+                    onOpenChange={(o) => !o && setAssigning(null)}
+                    onDone={(summary) => {
+                        setAssigning(null);
+                        toast(summary);
+                    }}
+                />
+            )}
             <NewDealDialog
                 workspaceId={workspaceId}
                 pipeline={pipeline}

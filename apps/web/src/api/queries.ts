@@ -40,6 +40,7 @@ import type {
     OpportunityView,
     PersonInput,
     PersonView,
+    RecordPage,
     SignupInput,
     TaskInput,
     UpdateRoleInput,
@@ -253,10 +254,7 @@ export function useRecordList<O extends RecordObject>(
     return useQuery({
         queryKey: [...keys.records(workspaceId, object), 'list', params] as const,
         queryFn: ({ signal }) =>
-            recordEndpoints[object].list(workspaceId, params, signal) as Promise<{
-                items: RecordViewOf<O>[];
-                nextCursor: string | null;
-            }>,
+            recordEndpoints[object].list(workspaceId, params, signal) as Promise<RecordPage<RecordViewOf<O>>>,
         enabled,
     });
 }
@@ -421,19 +419,6 @@ export function useCreateDeal(workspaceId: string) {
         onSuccess: (deal) => {
             void client.invalidateQueries({ queryKey: keys.boards(workspaceId, deal.pipelineId) });
             void client.invalidateQueries({ queryKey: keys.records(workspaceId, 'opportunity'), exact: false });
-        },
-    });
-}
-
-/** A deal patch from the board or list (owner today); the deal page edits through `usePatchRecord`. */
-export function useUpdateDeal(workspaceId: string) {
-    const client = useQueryClient();
-    return useMutation({
-        mutationFn: (input: { dealId: string; patch: OpportunityInput }) =>
-            opportunities.update(workspaceId, input.dealId, input.patch),
-        onSuccess: (deal) => {
-            client.setQueryData(keys.record(workspaceId, 'opportunity', deal.id), deal);
-            void client.invalidateQueries({ queryKey: keys.boards(workspaceId, deal.pipelineId) });
         },
     });
 }

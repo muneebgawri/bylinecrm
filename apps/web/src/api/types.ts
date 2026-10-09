@@ -108,6 +108,40 @@ export interface Page<T> {
     nextCursor: string | null;
 }
 
+/**
+ * A page of a record list (P1-4a): the cursor page plus the size of the whole filtered, scoped set.
+ * Past the API's count cap `total` is the cap and `totalIsExact` is false ("10,000+").
+ */
+export interface RecordPage<T> extends Page<T> {
+    total: number;
+    totalIsExact: boolean;
+}
+
+/** A related record named on a row (P1-4a); `null` when none, trashed or not visible to the caller. */
+export interface RecordSummaryView {
+    id: string;
+    name: string;
+}
+
+/** `POST …/bulk` (P1-4a): one action over ids or over a list's selection, never both. */
+export type BulkAction = 'assign_owner' | 'delete' | 'restore';
+export interface BulkInput {
+    action: BulkAction;
+    ids?: readonly string[];
+    filter?: FilterGroup;
+    view?: string;
+    q?: string;
+    ownerId?: string | null;
+}
+
+/** One record's outcome, in the order named: refused rows read `not_found` whatever the reason. */
+export type BulkRowResult = { id: string; ok: true; unchanged?: true } | { id: string; ok: false; error: 'not_found' };
+export interface BulkResultView {
+    results: BulkRowResult[];
+    succeeded: number;
+    failed: number;
+}
+
 export interface PersonView {
     id: string;
     nameFirst: string;
@@ -121,6 +155,9 @@ export interface PersonView {
     position: number;
     companyId: string | null;
     ownerId: string | null;
+    /** The company and owner by name (P1-4a); `null` when none, trashed or not visible. */
+    company: RecordSummaryView | null;
+    owner: MemberSummaryView | null;
     createdBy: Actor;
     custom: Record<string, unknown>;
     deletedAt: string | null;
@@ -139,6 +176,8 @@ export interface CompanyView {
     icp: boolean;
     position: number;
     ownerId: string | null;
+    /** The owner by name (P1-4a); `null` when the company has none. */
+    owner: MemberSummaryView | null;
     createdBy: Actor;
     custom: Record<string, unknown>;
     deletedAt: string | null;
@@ -167,6 +206,10 @@ export interface OpportunityView {
     ownerId: string | null;
     pointOfContactId: string | null;
     companyId: string | null;
+    /** Related records by name (P1-4a); `null` when none, trashed or not visible. */
+    company: RecordSummaryView | null;
+    pointOfContact: RecordSummaryView | null;
+    owner: MemberSummaryView | null;
     createdBy: Actor;
     custom: Record<string, unknown>;
     deletedAt: string | null;

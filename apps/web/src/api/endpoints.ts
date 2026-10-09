@@ -1,10 +1,12 @@
-import type { RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
+import type { FilterGroup, RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
 import { API_BASE, request, requestFile } from './client';
 import type {
     ApiKeyView,
     AttachmentView,
     BoardQuery,
     BoardView,
+    BulkInput,
+    BulkResultView,
     CompanyInput,
     CompanyView,
     CreateApiKeyInput,
@@ -28,6 +30,7 @@ import type {
     PersonInput,
     PersonView,
     PipelineView,
+    RecordPage,
     RoleView,
     RuleView,
     SavedView,
@@ -70,6 +73,15 @@ export type ListParams = {
 
 /** What an export takes: the list's query and the columns to write, in order. */
 export type ExportParams = Omit<ListParams, 'cursor' | 'limit'> & { columns?: string | undefined };
+
+/** `POST …/export.csv`: the export's query as JSON — the filter as the grammar, not encoded. */
+export type ExportBody = {
+    filter?: FilterGroup | undefined;
+    sort?: string | undefined;
+    view?: string | undefined;
+    q?: string | undefined;
+    columns?: string | undefined;
+};
 
 /**
  * One function per API route, named for what it does, typed by `types.ts`. Paths are built here
@@ -158,7 +170,7 @@ export const membersSummary = {
 function recordRoutes<View, Input>(segment: string) {
     return {
         list: (workspaceId: string, params: ListParams = {}, signal?: AbortSignal) =>
-            request<Page<View>>('GET', workspacePath(workspaceId, `/${segment}${query(params)}`), { signal }),
+            request<RecordPage<View>>('GET', workspacePath(workspaceId, `/${segment}${query(params)}`), { signal }),
         get: (workspaceId: string, id: string, signal?: AbortSignal) =>
             request<View>('GET', workspacePath(workspaceId, `/${segment}/${id}`), { signal }),
         create: (workspaceId: string, input: Input) =>
@@ -171,7 +183,16 @@ function recordRoutes<View, Input>(segment: string) {
             request<View>('POST', workspacePath(workspaceId, `/${segment}/${id}/restore`)),
         /** The current list as CSV: the API counts first and refuses (413) past its row cap. */
         exportCsv: (workspaceId: string, params: ExportParams, signal?: AbortSignal) =>
-            requestFile(workspacePath(workspaceId, `/${segment}/export.csv${query(params)}`), signal),
+            requestFile(workspacePath(workspaceId, `/${segment}/export.csv${query(params)}`), { signal }),
+        /**
+         * The same export with the filter in a body (P1-4a): a selection's 500 ids do not fit in a
+         * URL, so "export selected" sends `{ filter: id in [...] }` here.
+         */
+        exportSelection: (workspaceId: string, body: ExportBody) =>
+            requestFile(workspacePath(workspaceId, `/${segment}/export.csv`), { method: 'POST', body }),
+        /** One action over many records (P1-4a): one request, one result per record in the order named. */
+        bulk: (workspaceId: string, input: BulkInput) =>
+            request<BulkResultView>('POST', workspacePath(workspaceId, `/${segment}/bulk`), { body: input }),
     };
 }
 
@@ -185,9 +206,6 @@ export const opportunities = {
     /** A stage move (P1-2): into a won/lost stage the close payload is required; a backward move answers with the rules that may undo it. */
     move: (workspaceId: string, id: string, input: MoveDealInput) =>
         request<MoveResult>('POST', workspacePath(workspaceId, `/opportunities/${id}/move`), { body: input }),
-    /** The filtered, scoped deals as CSV (P1-4): a download link, not a fetch — the browser streams it. */
-    exportUrl: (workspaceId: string, params: BoardQuery) =>
-        `${API_BASE}${workspacePath(workspaceId, `/opportunities/export.csv${query({ view: params.view, filter: params.filter, sort: params.sort, q: params.q })}`)}`,
     history: (workspaceId: string, id: string, signal?: AbortSignal) =>
         request<StageHistoryEntry[]>('GET', workspacePath(workspaceId, `/opportunities/${id}/history`), { signal }),
 };
