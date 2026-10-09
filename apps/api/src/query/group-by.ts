@@ -4,14 +4,8 @@ import type { Prisma } from '@prisma/client';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import type { CompiledWhere } from './compile-filter';
 import { fieldNamed, type ResolvedField } from './fields';
-
-/** One group of a grouped list: the field's value, how many rows carry it, and the money they add up to. */
-export interface Group {
-    value: unknown;
-    count: number;
-    /** The object's money field summed in minor units; absent for people, who have none. */
-    sum?: { amountMinor: number; field: string } | undefined;
-}
+import type { Group } from './responses';
+export type { Group } from './responses';
 
 /** The money field a group sums, per object; people carry none. */
 const SUM_COLUMN: Readonly<Partial<Record<RecordObject, { column: 'arrMinor' | 'amountMinor'; field: string }>>> = {

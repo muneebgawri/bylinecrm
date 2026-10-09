@@ -13,27 +13,8 @@ import { resolvePlan } from '../query/query.service';
 import { ownerWhere, resolveOwner } from './record-scope';
 import { assertCompanyExists, assertOwnerIsMember, compact, stored } from './references';
 import { searchCandidates } from './search';
-
-/** A person as the API returns it (PAR-001). */
-export interface PersonView {
-    id: string;
-    nameFirst: string;
-    nameLast: string;
-    emails: Emails;
-    phones: Phones;
-    jobTitle: string | null;
-    city: string | null;
-    links: Links;
-    avatarUrl: string | null;
-    position: number;
-    companyId: string | null;
-    ownerId: string | null;
-    createdBy: Actor;
-    custom: Record<string, unknown>;
-    deletedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type PersonView } from './responses';
+export type { PersonView } from './responses';
 
 export interface PersonInput {
     nameFirst?: string | undefined;

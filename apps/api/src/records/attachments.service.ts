@@ -10,20 +10,8 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { actorOf } from './actor';
 import { stored } from './references';
 import { anyTargetReadable, assertTargetsReadable } from './targets';
-
-/** A file on a record as the API returns it (PAR-016); the bytes are a separate route. */
-export interface AttachmentView {
-    id: string;
-    name: string;
-    mime: string;
-    sizeBytes: number;
-    target: RecordTarget;
-    authorId: string | null;
-    createdBy: Actor;
-    deletedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type AttachmentView } from './responses';
+export type { AttachmentView } from './responses';
 
 export interface UploadInput {
     target: RecordTarget;

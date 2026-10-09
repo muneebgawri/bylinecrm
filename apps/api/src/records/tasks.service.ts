@@ -11,24 +11,8 @@ import { assertOwnerIsMember, compact, stored } from './references';
 import { EMPTY_RICH_TEXT, richTextToPlain } from './rich-text';
 import { completedAtFor } from './task-rules';
 import { anyTargetReadable, assertTargetsReadable, dedupeTargets, targetRows } from './targets';
-
-/** A task as the API returns it (PAR-011). */
-export interface TaskView {
-    id: string;
-    title: string;
-    body: RichText;
-    bodyText: string;
-    status: TaskStatus;
-    dueAt: Date | null;
-    assigneeId: string | null;
-    /** Set exactly while `status` is `done`. */
-    completedAt: Date | null;
-    targets: RecordTarget[];
-    createdBy: Actor;
-    deletedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type TaskView } from './responses';
+export type { TaskView } from './responses';
 
 export interface TaskInput {
     title?: string | undefined;

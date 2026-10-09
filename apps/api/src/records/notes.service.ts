@@ -10,21 +10,8 @@ import { type Page, paginate } from './list-query';
 import { compact, stored } from './references';
 import { EMPTY_RICH_TEXT, richTextToPlain } from './rich-text';
 import { anyTargetReadable, assertTargetsReadable, dedupeTargets, targetRows } from './targets';
-
-/** A note as the API returns it (PAR-010), with the records it is on. */
-export interface NoteView {
-    id: string;
-    title: string;
-    body: RichText;
-    /** Derived from `body`: what search and previews read. */
-    bodyText: string;
-    targets: RecordTarget[];
-    authorId: string | null;
-    createdBy: Actor;
-    deletedAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
+import { type NoteView } from './responses';
+export type { NoteView } from './responses';
 
 export interface NoteInput {
     title?: string | undefined;
