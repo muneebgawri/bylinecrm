@@ -6,7 +6,8 @@
     "description": "One ESLint floor for every package. A package imports a config; it never copies one.",
     "exports": {
         "./base": "./base.mjs",
-        "./react": "./react.mjs"
+        "./react": "./react.mjs",
+        "./nest": "./nest.mjs"
     },
     "scripts": {
         "lint": "echo 'eslint-config: nothing to lint'",

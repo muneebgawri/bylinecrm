@@ -12,9 +12,15 @@ importers:
         specifier: workspace:*
         version: link:packages/shared
     devDependencies:
+      '@bylinecrm/eslint-config':
+        specifier: workspace:*
+        version: link:packages/eslint-config
       '@stoplight/prism-cli':
         specifier: ^5.14.2
         version: 5.16.0
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.5(jiti@2.7.0)
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -88,9 +94,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
-      '@eslint/js':
-        specifier: ^9.39.4
-        version: 9.39.5
+      '@bylinecrm/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@nestjs/cli':
         specifier: ^11.0.24
         version: 11.0.24(@swc/core@1.16.13)(@types/node@22.20.5)(esbuild@0.27.7)(prettier@3.9.9)
@@ -124,9 +130,6 @@ importers:
       eslint:
         specifier: ^9.39.4
         version: 9.39.5(jiti@2.7.0)
-      globals:
-        specifier: ^16.5.0
-        version: 16.5.0
       prisma:
         specifier: ^6.19.3
         version: 6.19.3(typescript@5.9.3)
@@ -136,9 +139,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.71.1
-        version: 8.71.1(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       unplugin-swc:
         specifier: ^2.0.0
         version: 2.0.0(@swc/core@1.16.13)(esbuild@0.27.7)(rolldown@1.2.13)(rollup@4.64.3)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(webpack@5.106.2(@swc/core@1.16.13)(esbuild@0.27.7))
@@ -224,6 +224,12 @@ importers:
 
   packages/shared:
     devDependencies:
+      '@bylinecrm/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.5(jiti@2.7.0)
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(@swc/core@1.16.13)(jiti@2.7.0)(postcss@8.5.29)(typescript@5.9.3)(yaml@2.9.1)
