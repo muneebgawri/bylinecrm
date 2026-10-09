@@ -36,9 +36,14 @@ export type TimelineKind = OwnKind | LinkedKind | `external.${string}`;
 
 /**
  * The kind an event's entry carries. One function: the subscriber writes with it, a reader
- * filters with its prefixes (`kinds=linked-note` matches every linked-note action).
+ * filters with its prefixes (`kinds=linked-note` matches every linked-note action). A later match
+ * of synced mail (`email.linked`) writes the same entry the import would have —
+ * `linked-email.received` or `linked-email.sent`, by the message's direction.
  */
-export function timelineKindOf(event: Pick<DomainEvent, 'type' | 'object'>): OwnKind | LinkedKind {
+export function timelineKindOf(event: Pick<DomainEvent, 'type' | 'object' | 'email'>): OwnKind | LinkedKind {
+    if (event.type === 'email.linked' && event.email) {
+        return `linked-email.${event.email.direction === 'inbound' ? 'received' : 'sent'}`;
+    }
     return (isLinkedObject(event.object) ? `linked-${event.type}` : event.type) as OwnKind | LinkedKind;
 }
 
