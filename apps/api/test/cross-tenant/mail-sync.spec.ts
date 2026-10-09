@@ -69,7 +69,8 @@ interface EmailEvent {
     workspaceId: string;
     recordId: string;
     targets: { type: string; id: string }[];
-    email: { subject: string; direction: string; from: string; inReplyTo: string | null };
+    email: { messageId: string; subject: string; direction: string; from: string; inReplyTo: string | null };
+    link?: { personId: string };
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -127,6 +128,7 @@ describe('mail sync', () => {
     let dealId: string;
 
     const events: EmailEvent[] = [];
+    let webhookEndpoint: string;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -173,7 +175,9 @@ describe('mail sync', () => {
         owner = app.get(PrismaService);
         sync = app.get(MailSyncService);
         app.get(EventEmitter2).onAny((type: string | string[], payload: unknown) => {
-            if (type === 'email.received' || type === 'email.sent') events.push(payload as EmailEvent);
+            if (type === 'email.received' || type === 'email.sent' || type === 'email.linked') {
+                events.push(payload as EmailEvent);
+            }
         });
 
         const signUp = async (email: string, name: string) => {
@@ -239,9 +243,31 @@ describe('mail sync', () => {
             .send({ name: `Series B ${stamp}`, companyId: acmeId, pointOfContactId: danaId });
         expect(deal.status).toBe(201);
         dealId = (deal.body as { id: string }).id;
+
+        const endpoint = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: 'http://127.0.0.1:9/mail-sync-hook', events: ['*'] });
+        expect(endpoint.status).toBe(201);
+        webhookEndpoint =
+            (endpoint.body as { endpoint?: { id: string }; id?: string }).endpoint?.id ??
+            (endpoint.body as { id: string }).id;
     });
 
+    /** The webhook deliveries written for this workspace's endpoint, by event name. */
+    async function deliveries(eventName: string, recordId?: string): Promise<number> {
+        const rows = await owner.webhookDelivery.findMany({
+            where: { endpointId: webhookEndpoint, eventName },
+            select: { payload: true },
+        });
+        return recordId
+            ? rows.filter((r) => (r.payload as { data?: { recordId?: string } }).data?.recordId === recordId).length
+            : rows.length;
+    }
+
     afterAll(async () => {
+        // Retire the counting endpoint: its receiver never answers, and a live endpoint's retries
+        // would run in later specs' workers, inside their requests' timing.
+        if (webhookEndpoint) await as(admin).delete(w(`/webhooks/${webhookEndpoint}`));
         await app?.close();
     });
 
@@ -486,12 +512,15 @@ describe('mail sync', () => {
             expect(bad.body).toMatchObject({ code: 'validation.failed', fieldErrors: [{ path: 'value' }] });
             const personal = await as(member).post(w('/mail/blocklist')).send({ value: 'Noisy@Vendor.example' });
             expect(personal.status).toBe(201);
-            expect(personal.body).toMatchObject({ value: 'noisy@vendor.example', scope: 'personal' });
+            expect(personal.body).toMatchObject({
+                entry: { value: 'noisy@vendor.example', scope: 'personal' },
+                purged: { messages: 0, threads: 0 },
+            });
             const created = await as(admin)
                 .post(w('/mail/blocklist'))
                 .send({ value: '@SPAM.example', scope: 'workspace' });
             expect(created.status).toBe(201);
-            workspaceEntry = (created.body as { id: string }).id;
+            workspaceEntry = (created.body as { entry: { id: string } }).entry.id;
             const dup = await as(admin).post(w('/mail/blocklist')).send({ value: '@spam.example', scope: 'workspace' });
             expect(dup.status).toBe(409);
             expect(dup.body).toMatchObject({ code: 'conflict.unique' });
@@ -537,6 +566,172 @@ describe('mail sync', () => {
             expect(memberRun).toMatchObject({ imported: 0, blocked: 1 });
             const adminRun = await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(adminRun).toMatchObject({ imported: 1, blocked: 0 });
+        });
+    });
+
+    describe('a later match writes the timeline', () => {
+        const kai = `kai-${stamp}@later.example`;
+        let messageId: string;
+        let kaiId: string;
+        let laterCo: string;
+        let laterDeal: string;
+
+        const emailEntriesOn = (targetId: string) =>
+            owner.timelineActivity.count({ where: { linkedType: 'email', linkedId: messageId, targetId } });
+
+        it('mail from an unknown address is on no timeline until someone has the address', async () => {
+            gmail.deliver(adminEmail, { from: kai, to: [adminEmail], subject: 'Intro from Later', text: 'Hi there' });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            const imported = events.find((e) => e.type === 'email.received' && e.email.subject === 'Intro from Later')!;
+            expect(imported.targets).toEqual([]);
+            messageId = imported.recordId;
+            expect(await owner.timelineActivity.count({ where: { linkedType: 'email', linkedId: messageId } })).toBe(0);
+        });
+
+        it('a person gaining the address puts the mail on them, their company and their open deal — once, as email.linked', async () => {
+            laterCo = (
+                (
+                    await as(admin)
+                        .post(w('/companies'))
+                        .send({ name: `Later ${stamp}` })
+                ).body as { id: string }
+            ).id;
+            const created = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Kai', emails: { primary: null, additional: [] }, companyId: laterCo });
+            kaiId = (created.body as { id: string }).id;
+            laterDeal = (
+                (
+                    await as(admin)
+                        .post(w('/opportunities'))
+                        .send({ name: `Later deal ${stamp}`, companyId: laterCo, pointOfContactId: kaiId })
+                ).body as { id: string }
+            ).id;
+            const receivedBefore = await deliveries('email.received', messageId);
+
+            await as(admin)
+                .patch(w(`/people/${kaiId}`))
+                .send({ emails: { primary: kai, additional: [] } })
+                .expect(200);
+
+            for (const target of [kaiId, laterCo, laterDeal]) {
+                expect(
+                    await eventually(
+                        () => emailEntriesOn(target),
+                        (n) => n === 1,
+                    ),
+                ).toBe(1);
+            }
+            const entries = await timeline(`person:${kaiId}`);
+            expect(entries.filter((e) => e.linked?.id === messageId).map((e) => e.kind)).toEqual([
+                'linked-email.received',
+            ]);
+            const linked = events.filter((e) => e.type === 'email.linked' && e.recordId === messageId);
+            expect(linked).toHaveLength(1);
+            expect(linked[0]!.link).toEqual({ personId: kaiId });
+            expect(
+                await eventually(
+                    () => deliveries('email.linked', messageId),
+                    (n) => n === 1,
+                ),
+            ).toBe(1);
+            expect(await deliveries('email.received', messageId)).toBe(receivedBefore);
+        });
+
+        it('a person losing the address (deleted) takes the mail off their records; restoring puts it back once', async () => {
+            await as(admin).delete(w(`/people/${kaiId}`));
+            for (const target of [kaiId, laterCo, laterDeal]) {
+                expect(
+                    await eventually(
+                        () => emailEntriesOn(target),
+                        (n) => n === 0,
+                    ),
+                ).toBe(0);
+            }
+            await as(admin).post(w(`/people/${kaiId}/restore`));
+            for (const target of [kaiId, laterCo, laterDeal]) {
+                expect(
+                    await eventually(
+                        () => emailEntriesOn(target),
+                        (n) => n === 1,
+                    ),
+                ).toBe(1);
+            }
+            expect(events.filter((e) => e.type === 'email.linked' && e.recordId === messageId)).toHaveLength(2);
+        });
+    });
+
+    describe('a blocklist entry purges what it now covers', () => {
+        const promo = `promo-${stamp}@purge.example`;
+        let promoPerson: string;
+        let blockedMessage: string;
+        let mixedMessage: string;
+
+        it('a workspace entry deletes fully covered mail, its participants, its timeline entries and emptied threads; mixed mail stays', async () => {
+            promoPerson = (
+                (
+                    await as(admin)
+                        .post(w('/people'))
+                        .send({ nameFirst: 'Promo', emails: { primary: promo, additional: [] } })
+                ).body as { id: string }
+            ).id;
+            const blocked = gmail.deliver(adminEmail, {
+                from: promo,
+                to: [adminEmail],
+                subject: 'Big sale',
+                text: 's',
+            });
+            gmail.deliver(adminEmail, { from: dana, to: [adminEmail], cc: [promo], subject: 'Mixed purge', text: 'm' });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            blockedMessage = (await owner.mailMessage.findFirst({
+                where: { mailboxId: adminMailbox, providerMessageId: blocked.id },
+            }))!.id;
+            mixedMessage = (await owner.mailMessage.findFirst({
+                where: { mailboxId: adminMailbox, subject: 'Mixed purge' },
+            }))!.id;
+            const blockedThread = (await owner.mailMessage.findUnique({ where: { id: blockedMessage } }))!.threadId;
+            expect(
+                await eventually(
+                    () => owner.timelineActivity.count({ where: { linkedId: blockedMessage } }),
+                    (n) => n === 1,
+                ),
+            ).toBe(1);
+
+            const res = await as(admin)
+                .post(w('/mail/blocklist'))
+                .send({ value: '@purge.example', scope: 'workspace' });
+            expect(res.status).toBe(201);
+            expect(res.body).toMatchObject({
+                entry: { value: '@purge.example', scope: 'workspace' },
+                purged: { messages: 1, threads: 1 },
+            });
+
+            expect(await owner.mailMessage.count({ where: { id: blockedMessage } })).toBe(0);
+            expect(await owner.mailParticipant.count({ where: { messageId: blockedMessage } })).toBe(0);
+            expect(await owner.mailThread.count({ where: { id: blockedThread } })).toBe(0);
+            expect(await owner.timelineActivity.count({ where: { linkedId: blockedMessage } })).toBe(0);
+            expect(await owner.mailMessage.count({ where: { id: mixedMessage } })).toBe(1);
+            expect((await timeline(`person:${promoPerson}`)).some((e) => e.linked?.id === blockedMessage)).toBe(false);
+        });
+
+        it('a personal entry purges only its owner’s personal mailboxes', async () => {
+            const news = `news-${stamp}@letters.example`;
+            gmail.deliver(memberEmail, { from: news, to: [memberEmail], subject: 'Weekly', text: 'w' });
+            gmail.deliver(adminEmail, { from: news, to: [adminEmail], subject: 'Weekly', text: 'w' });
+            await sync.syncMailbox(workspace, memberMailbox, noWait);
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            const res = await as(member).post(w('/mail/blocklist')).send({ value: news });
+            expect(res.status).toBe(201);
+            expect(res.body).toMatchObject({ purged: { messages: 1, threads: 1 } });
+            expect(await owner.mailMessage.count({ where: { mailboxId: memberMailbox, fromAddress: news } })).toBe(0);
+            expect(await owner.mailMessage.count({ where: { mailboxId: adminMailbox, fromAddress: news } })).toBe(1);
+        });
+
+        it('removing the entry does not bring the mail back', async () => {
+            const entries = (await as(admin).get(w('/mail/blocklist'))).body as { id: string; value: string }[];
+            const entry = entries.find((e) => e.value === '@purge.example')!;
+            expect((await as(admin).delete(w(`/mail/blocklist/${entry.id}`))).status).toBe(204);
+            expect(await owner.mailMessage.count({ where: { id: blockedMessage } })).toBe(0);
         });
     });
 
