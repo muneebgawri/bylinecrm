@@ -3,10 +3,11 @@ import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
 
 /**
  * The objects an event can be about: the record objects, the things attached to them, and the
- * things that happen to them — a deal's stage changing (P1-2), mail (P2) and meetings (P3).
+ * things that happen to them — a deal's stage changing (P1-2), mail (P2) and meetings (P3) — and
+ * the workspace's email templates (P2-4).
  * One list; `ObjectOfEvent` derives an event's object from its type against it.
  */
-export const EVENT_OBJECTS = [...RECORD_OBJECTS, 'note', 'task', 'attachment', 'email', 'meeting'] as const;
+export const EVENT_OBJECTS = [...RECORD_OBJECTS, 'note', 'task', 'attachment', 'email', 'meeting', 'template'] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
 /**
@@ -53,6 +54,12 @@ export const DOMAIN_EVENT_TYPES = [
     'deal.stage_changed',
     'deal.won',
     'deal.lost',
+    // Email templates (P2-4): about the template (`recordId`). They leave no timeline entry — a
+    // template is not on a record — but a webhook endpoint may subscribe to them.
+    'template.created',
+    'template.updated',
+    'template.deleted',
+    'template.restored',
     // Things a stage rule reacts to. Mail (P2) and meetings (P3) publish them; `related` names the
     // person and company they concern, which is how the rule engine finds the deals.
     'email.replied',
