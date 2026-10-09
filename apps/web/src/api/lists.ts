@@ -1,8 +1,8 @@
 import type { RecordObject } from '@bylinecrm/shared';
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { search, views, type ListParams } from './endpoints';
+import { search, type ListParams } from './endpoints';
 import { keys, recordEndpoints, type RecordInputOf, type RecordViewOf } from './queries';
-import type { CompanyView, CreateViewInput, PersonView, UpdateViewInput } from './types';
+import type { CompanyView, PersonView } from './types';
 
 /**
  * The query hooks only the lazily loaded data views use (P1-UI-2): a list read by cursor, saved
@@ -30,39 +30,6 @@ export function useRecordPages<O extends RecordObject>(workspaceId: string, obje
             }>,
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (last) => last.nextCursor ?? undefined,
-    });
-}
-
-export const useViews = (workspaceId: string, object: RecordObject) =>
-    useQuery({
-        queryKey: keys.views(workspaceId, object),
-        queryFn: ({ signal }) => views.list(workspaceId, object, signal),
-    });
-
-export function useCreateView(workspaceId: string) {
-    const client = useQueryClient();
-    return useMutation({
-        mutationFn: (input: CreateViewInput) => views.create(workspaceId, input),
-        onSuccess: (view) => client.invalidateQueries({ queryKey: keys.views(workspaceId, view.object) }),
-    });
-}
-
-export function useUpdateView(workspaceId: string, object: RecordObject) {
-    const client = useQueryClient();
-    return useMutation({
-        mutationFn: (input: { viewId: string } & UpdateViewInput) => {
-            const { viewId, ...rest } = input;
-            return views.update(workspaceId, viewId, rest);
-        },
-        onSuccess: () => client.invalidateQueries({ queryKey: keys.views(workspaceId, object) }),
-    });
-}
-
-export function useDeleteView(workspaceId: string, object: RecordObject) {
-    const client = useQueryClient();
-    return useMutation({
-        mutationFn: (viewId: string) => views.remove(workspaceId, viewId),
-        onSuccess: () => client.invalidateQueries({ queryKey: keys.views(workspaceId, object) }),
     });
 }
 

@@ -1,22 +1,22 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * The widths at which the layout changes — one definition. Components and the shell read these
- * (or the hooks below); none spells a pixel width of its own.
+ * The widths the product changes layout at — one definition for CSS and script (FR-CRMS-UI-12).
  *
- * - `phone` (FR-CRMS-UI-12): below it, tables become stacked cards, popovers become bottom sheets
- *   and selection actions move to a bottom bar. Tailwind's `md:` variant is the same width —
- *   `theme.css` declares `--breakpoint-md: 48rem` and a spec holds the two equal.
- * - `shell` (mockup v3): at or below it the sidebar is a drawer and search collapses to an icon.
+ * `mobile` is Tailwind's `md` (`--breakpoint-md: 48rem` in `theme.css`; a spec keeps the two
+ * equal): below it a screen is a phone — one column, bottom sheets, 44px touch targets, 16px
+ * inputs. CSS uses `max-md:`; script uses `useIsMobile()`. `narrow` is where the shell's sidebar
+ * becomes a drawer (mockup v3); it is a layout width of the shell, not a second "mobile".
  */
-export const BREAKPOINTS = { phone: 768, shell: 900 } as const;
+export const BREAKPOINT_PX = { mobile: 768, narrow: 900 } as const;
 
-/** Matches a viewport narrower than `phone`. */
-export const PHONE_QUERY = `(max-width: ${BREAKPOINTS.phone - 1}px)`;
-/** Matches a viewport at or below `shell`. */
-export const NARROW_QUERY = `(max-width: ${BREAKPOINTS.shell}px)`;
+/** Below `mobile`: the phone layout. The .98 avoids a gap at exactly 767.5px on fractional zoom. */
+export const MOBILE_QUERY = `(max-width: ${BREAKPOINT_PX.mobile - 0.02}px)`;
+export const NARROW_QUERY = `(max-width: ${BREAKPOINT_PX.narrow}px)`;
+/** A touch screen as the main pointer: no drag-and-drop, explicit buttons instead. */
+export const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
-/** Whether a media query matches now, kept current as the viewport changes. */
+/** Whether a media query matches, re-rendering when it changes. `false` where there is no window. */
 export function useMediaQuery(query: string): boolean {
     return useSyncExternalStore(
         (notify) => {
@@ -29,12 +29,6 @@ export function useMediaQuery(query: string): boolean {
     );
 }
 
-/** True below the phone breakpoint. */
-export function usePhone(): boolean {
-    return useMediaQuery(PHONE_QUERY);
-}
-
-/** True at or below the shell breakpoint. */
-export function useIsNarrow(): boolean {
-    return useMediaQuery(NARROW_QUERY);
-}
+export const useIsMobile = (): boolean => useMediaQuery(MOBILE_QUERY);
+export const useIsNarrow = (): boolean => useMediaQuery(NARROW_QUERY);
+export const useCoarsePointer = (): boolean => useMediaQuery(COARSE_POINTER_QUERY);

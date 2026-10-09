@@ -2,7 +2,16 @@ export { cn } from './lib/cn';
 export { focusRing } from './lib/focus';
 export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
-export { BREAKPOINTS, NARROW_QUERY, PHONE_QUERY, useIsNarrow, useMediaQuery, usePhone } from './lib/breakpoints';
+export {
+    BREAKPOINT_PX,
+    COARSE_POINTER_QUERY,
+    MOBILE_QUERY,
+    NARROW_QUERY,
+    useCoarsePointer,
+    useIsMobile,
+    useIsNarrow,
+    useMediaQuery,
+} from './lib/breakpoints';
 
 export * from './theme/theme';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/ThemeProvider';
@@ -23,9 +32,6 @@ export { Skeleton } from './components/skeleton/Skeleton';
 export { EmptyState, type EmptyStateProps } from './components/empty-state/EmptyState';
 export { DataTableShell, type DataTableShellProps } from './components/data-table/DataTableShell';
 export { ThemeToggle } from './components/theme-toggle/ThemeToggle';
-// Popover and Sheet are subpath exports (`@bylinecrm/ui/popover`, `@bylinecrm/ui/sheet`), not
-// re-exported here: only lazily loaded pages use them, and a barrel export would put them in
-// every page's first load (apps/web's `ui` chunk, budgeted by .size-limit.json).
 
 // Shell components (mockup v3, P1-UI-1)
 export { IconTile, iconTileVariants, type IconTileProps } from './components/icon-tile/IconTile';
@@ -83,3 +89,15 @@ export {
     type KanbanLaneProps,
 } from './components/kanban/Kanban';
 export { WelcomePanel, type WelcomeFact, type WelcomePanelProps } from './components/welcome-panel/WelcomePanel';
+export {
+    TOAST_DURATION_MS,
+    TOAST_LIMIT,
+    ToastStore,
+    toast,
+    toasts,
+    useToasts,
+    type ToastInput,
+    type ToastRecord,
+} from './components/toast/toast-store';
+// The renderer is a subpath of its own (`@bylinecrm/ui/toaster`) so an app can load it lazily;
+// re-exporting it here would put Radix Toast in every page's first load.

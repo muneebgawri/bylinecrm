@@ -1,6 +1,5 @@
-import { cn, usePhone } from '@bylinecrm/ui';
+import { cn, Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger, useIsMobile } from '@bylinecrm/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@bylinecrm/ui/popover';
-import { Sheet, SheetContent, SheetTrigger } from '@bylinecrm/ui/sheet';
 import type { ReactElement, ReactNode } from 'react';
 
 export interface ResponsivePanelProps {
@@ -19,7 +18,7 @@ export interface ResponsivePanelProps {
 
 /**
  * One panel, two forms (FR-CRMS-UI-12): a popover anchored to its trigger on a desktop or tablet,
- * a bottom sheet on a phone. The content is the same component either way, so the filter and sort
+ * the design system's dialog — a bottom sheet — on a phone. The content is the same component either way, so the filter and sort
  * editors are written once and only their frame changes with the screen.
  */
 export function ResponsivePanel({
@@ -31,15 +30,20 @@ export function ResponsivePanel({
     footer,
     widthClass = 'w-[min(36rem,calc(100vw-2rem))]',
 }: ResponsivePanelProps) {
-    const phone = usePhone();
+    const phone = useIsMobile();
     if (phone) {
+        // The design system's Dialog is a bottom sheet below the phone breakpoint: the same
+        // content, risen from the bottom edge, its actions in a row a thumb reaches.
         return (
-            <Sheet open={open} onOpenChange={onOpenChange}>
-                <SheetTrigger asChild>{trigger}</SheetTrigger>
-                <SheetContent title={title} footer={footer}>
-                    {children}
-                </SheetContent>
-            </Sheet>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogTrigger asChild>{trigger}</DialogTrigger>
+                <DialogContent>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription className="sr-only">{title}</DialogDescription>
+                    <div className="flex flex-col gap-3">{children}</div>
+                    {footer && <div className="flex gap-2 border-t border-border pt-3">{footer}</div>}
+                </DialogContent>
+            </Dialog>
         );
     }
     return (

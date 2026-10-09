@@ -1,11 +1,11 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import { FileText, Handshake, Inbox, LayoutDashboard, ListOrdered, BarChart3, UsersRound } from 'lucide-react';
+import { Building2, FileText, Inbox, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 
 /**
- * The content pages not yet built (the dashboard and deals have their own packages; outreach is
- * Phase 3). Each is a designed empty state with the right words, so the
+ * The content pages this package does not build (dashboard, people and companies are
+ * P1-UI-2/3; deals landed with P1-UI-4; outreach is Phase 3). Each is a designed empty state with the right words, so the
  * shell, nav, breadcrumbs and permissions are real end to end before the content lands.
  */
 interface PageSpec {
@@ -36,14 +36,23 @@ const PAGES = {
         body: 'Reports are built on the pipeline and outreach data as they land.',
         coming: 'Phase 3',
     },
-    deals: {
-        title: 'Deals',
-        subtitle: 'Your pipeline, as a board and as a list.',
-        icon: <Handshake />,
-        empty: 'No deals yet',
-        body: 'Deals move through the stages you configure; a reply can move one for you.',
-        action: { label: 'New deal', requires: 'deal:edit' },
-        coming: 'P1-UI-4',
+    people: {
+        title: 'People',
+        subtitle: 'Leads and contacts in your portfolio. Verified before they are ever emailed.',
+        icon: <Users />,
+        empty: 'No people yet',
+        body: 'Add a person, or import a list; every address is verified before any sequence can reach it.',
+        action: { label: 'Add person', requires: 'record:write' },
+        coming: 'P1-UI-2',
+    },
+    companies: {
+        title: 'Companies',
+        subtitle: 'Accounts, with their people, deals and NewswireOS history.',
+        icon: <Building2 />,
+        empty: 'No companies yet',
+        body: 'A company is created from a person’s work domain or added by hand.',
+        action: { label: 'Add company', requires: 'record:write' },
+        coming: 'P1-UI-2',
     },
     sequences: {
         title: 'Sequences',

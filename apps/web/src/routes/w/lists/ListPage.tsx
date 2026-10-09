@@ -14,22 +14,22 @@ import {
     focusRing,
     PageHeader,
     Skeleton,
-    usePhone,
+    toast,
+    useIsMobile,
 } from '@bylinecrm/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@bylinecrm/ui/popover';
 import { Building2, Columns3, Download, Filter, ListFilter, Plus, Search, Upload, Users } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { useCustomFields, useMembersById } from '../../../api/queries';
 import {
-    useBulkChange,
     useCreateView,
+    useCustomFields,
     useDeleteView,
-    useRecordNames,
-    useRecordPages,
+    useMembersById,
     useUpdateView,
     useViews,
-} from '../../../api/lists';
+} from '../../../api/queries';
+import { useBulkChange, useRecordNames, useRecordPages } from '../../../api/lists';
 import { companies as companiesApi, people as peopleApi } from '../../../api/endpoints';
 import { useMembership, usePermission } from '../../../auth/capabilities';
 import { ResponsivePanel } from '../../../components/ResponsivePanel';
@@ -91,7 +91,7 @@ export function CompaniesListPage() {
  */
 function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     const workspaceId = useWorkspaceId();
-    const phone = usePhone();
+    const phone = useIsMobile();
     const navigate = useNavigate();
     const location = useLocation();
     const copy = LIST_COPY[object];
@@ -167,7 +167,6 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
         setSelecting(false);
     };
 
-    const [notice, setNotice] = useState<string | null>(null);
     const [assigning, setAssigning] = useState<string[] | null>(null);
     const [deleting, setDeleting] = useState<string[] | null>(null);
     const [creating, setCreating] = useState(false);
@@ -209,7 +208,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
         const result = await bulk.mutateAsync({ ids, patch: 'delete' });
         setDeleting(null);
         clearSelection();
-        setNotice(bulkSummary('Deleted', ids.length === 1 ? copy.singular : copy.plural, result));
+        toast(bulkSummary('Deleted', ids.length === 1 ? copy.singular : copy.plural, result));
     };
 
     const toolbar = (
@@ -236,7 +235,6 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
             members={members}
             phone={phone}
             onExport={async () => {
-                setNotice(null);
                 const api = object === 'person' ? peopleApi : companiesApi;
                 try {
                     const { blob, filename } = await api.exportCsv(workspaceId, {
@@ -248,7 +246,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     });
                     saveFile(blob, filename ?? `${copy.plural}.csv`);
                 } catch (error) {
-                    setNotice(`Export failed: ${failureText(error)}`);
+                    toast({ title: 'The export did not run', description: failureText(error), tone: 'danger' });
                 }
             }}
         />
@@ -293,20 +291,13 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     update({ filter: null, sorts: [] });
                     setColumnsDraft(null);
                 }}
-                onNotice={setNotice}
                 phone={phone}
             />
-
-            {notice && (
-                <p role="status" className="m-0 rounded-md border border-border bg-surface px-3 py-2 text-sm">
-                    {notice}
-                </p>
-            )}
 
             {phone ? (
                 <>
                     <div className="flex flex-col gap-2">
-                        <label className="flex h-11 items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:ring-2 focus-within:ring-ring">
+                        <label className="flex h-touch items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:ring-2 focus-within:ring-ring">
                             <Search aria-hidden className="size-4 shrink-0 text-text-faint" />
                             <input
                                 type="search"
@@ -314,7 +305,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                                 onChange={(e) => setSearchDraft(e.target.value)}
                                 placeholder={copy.search}
                                 aria-label={copy.search}
-                                className="w-full bg-transparent text-base text-text outline-none placeholder:text-text-faint"
+                                className="w-full bg-transparent text-touch text-text outline-none placeholder:text-text-faint"
                             />
                         </label>
                         <div className="flex flex-wrap gap-2">
@@ -460,7 +451,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     onDone={(summary) => {
                         setAssigning(null);
                         clearSelection();
-                        setNotice(summary);
+                        toast(summary);
                     }}
                 />
             )}
@@ -758,7 +749,6 @@ function ViewBar({
     current,
     workspaceId,
     onSaved,
-    onNotice,
     phone,
 }: {
     object: ListObject;
@@ -772,7 +762,6 @@ function ViewBar({
     current: Pick<SavedView, 'filter' | 'sorts' | 'columns'>;
     workspaceId: string;
     onSaved: () => void;
-    onNotice: (text: string) => void;
     phone: boolean;
 }) {
     const create = useCreateView(workspaceId);
@@ -802,7 +791,7 @@ function ViewBar({
                             aria-selected={active}
                             onClick={() => onSelect(tab.id === ALL ? undefined : tab.id)}
                             className={cn(
-                                'h-8 shrink-0 rounded-md border border-transparent px-3 text-sm font-medium whitespace-nowrap text-text-muted max-md:h-11 max-md:rounded-full max-md:border-border max-md:bg-surface',
+                                'h-8 shrink-0 rounded-md border border-transparent px-3 text-sm font-medium whitespace-nowrap text-text-muted max-md:h-touch max-md:rounded-full max-md:border-border max-md:bg-surface',
                                 active &&
                                     'border-border bg-surface text-text shadow-sm max-md:border-accent max-md:bg-accent-soft max-md:text-accent',
                                 focusRing,
@@ -829,9 +818,15 @@ function ViewBar({
                                         .mutateAsync({ viewId: selected.id, ...current })
                                         .then(() => {
                                             onSaved();
-                                            onNotice(`Saved “${selected.name}”.`);
+                                            toast({ title: `Saved “${selected.name}”`, tone: 'success' });
                                         })
-                                        .catch((e: unknown) => onNotice(`Couldn't save the view: ${failureText(e)}`))
+                                        .catch((e: unknown) =>
+                                            toast({
+                                                title: 'The view was not saved',
+                                                description: failureText(e),
+                                                tone: 'danger',
+                                            }),
+                                        )
                                 }
                             >
                                 Update “{selected.name}”
@@ -853,13 +848,20 @@ function ViewBar({
                                     void updateView
                                         .mutateAsync({ viewId: selected.id, isShared: !selected.isShared })
                                         .then(() =>
-                                            onNotice(
-                                                selected.isShared
-                                                    ? 'Only you see this view now.'
-                                                    : 'Shared with the workspace.',
-                                            ),
+                                            toast({
+                                                title: selected.isShared
+                                                    ? 'Only you see this view now'
+                                                    : 'Shared with the workspace',
+                                                tone: 'success',
+                                            }),
                                         )
-                                        .catch((e: unknown) => onNotice(failureText(e)))
+                                        .catch((e: unknown) =>
+                                            toast({
+                                                title: 'Sharing did not change',
+                                                description: failureText(e),
+                                                tone: 'danger',
+                                            }),
+                                        )
                                 }
                             >
                                 {selected.isShared ? 'Stop sharing' : 'Share with the workspace'}
@@ -890,7 +892,7 @@ function ViewBar({
                                 setSaving(false);
                                 onSaved();
                                 onSelect(created.id);
-                                onNotice(`Saved “${created.name}”.`);
+                                toast({ title: `Saved “${created.name}”`, tone: 'success' });
                             })
                             .catch((e: unknown) => setSaveError(failureText(e)))
                     }

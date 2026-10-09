@@ -11,15 +11,10 @@ if (typeof window !== 'undefined') {
     globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
     Element.prototype.scrollIntoView ??= () => {};
     Element.prototype.hasPointerCapture ??= () => false;
-    Element.prototype.setPointerCapture ??= () => {};
-    Element.prototype.releasePointerCapture ??= () => {};
-
-    // jsdom has no layout, so no media queries. This one answers `(max-width: Npx)` against
-    // `window.innerWidth` (jsdom's default is 1024): a spec sets the width to see the phone layout.
-    window.matchMedia ??= (query: string) => {
-        const max = /\(max-width:\s*(\d+)px\)/.exec(query);
-        return {
-            matches: max ? window.innerWidth <= Number(max[1]) : false,
+    // Media queries answer "no" unless a spec says otherwise (`setMedia` in a spec): desktop, fine pointer.
+    window.matchMedia ??= (query: string) =>
+        ({
+            matches: false,
             media: query,
             onchange: null,
             addEventListener: () => {},
@@ -27,9 +22,12 @@ if (typeof window !== 'undefined') {
             addListener: () => {},
             removeListener: () => {},
             dispatchEvent: () => false,
-        } as MediaQueryList;
-    };
+        }) as MediaQueryList;
+    // A list's next page loads when its end scrolls into view; in jsdom nothing does.
     globalThis.IntersectionObserver ??= class {
+        readonly root = null;
+        readonly rootMargin = '';
+        readonly thresholds = [];
         observe() {}
         unobserve() {}
         disconnect() {}

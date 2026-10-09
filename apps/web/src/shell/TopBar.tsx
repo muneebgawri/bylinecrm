@@ -1,12 +1,12 @@
 import {
     Button,
-    cn,
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-    focusRing,
     IconTile,
+    cn,
+    focusRing,
     useIsNarrow,
 } from '@bylinecrm/ui';
 import { Bell, Building2, FileText, Handshake, ListTodo, PanelLeft, Plus, Search, Users } from 'lucide-react';
@@ -72,7 +72,7 @@ export function TopBar({ workspaceId, onToggleSidebar, sidebarCollapsed, onOpenP
                 aria-keyshortcuts="Meta+K Control+K"
                 className={cn(
                     'ml-auto flex h-9 items-center gap-2 rounded-md border border-border bg-surface-raised px-3 text-left text-text-faint hover:text-text-muted',
-                    narrow ? 'w-9 justify-center px-0' : 'w-70',
+                    narrow ? 'w-9 justify-center px-0 max-md:size-touch' : 'w-70',
                     focusRing,
                 )}
             >

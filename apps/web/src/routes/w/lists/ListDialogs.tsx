@@ -14,6 +14,7 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    type ToastInput,
 } from '@bylinecrm/ui';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
@@ -27,11 +28,15 @@ export function failureText(error: unknown): string {
     return error instanceof Error ? error.message : 'Something went wrong.';
 }
 
-/** "Assigned 12 people." / "Assigned 10 of 12 people; 2 were refused: …" */
-export function bulkSummary(verb: string, plural: string, result: BulkResult): string {
+/** The notice for a change to many records: "Assigned 12 people", or what was refused and why. */
+export function bulkSummary(verb: string, plural: string, result: BulkResult): ToastInput {
     const total = result.succeeded + result.failed.length;
-    if (result.failed.length === 0) return `${verb} ${total} ${plural}.`;
-    return `${verb} ${result.succeeded} of ${total} ${plural}; ${result.failed.length} refused: ${failureText(result.failed[0]?.error)}`;
+    if (result.failed.length === 0) return { title: `${verb} ${total} ${plural}`, tone: 'success' };
+    return {
+        title: `${verb} ${result.succeeded} of ${total} ${plural}`,
+        description: `${result.failed.length} refused: ${failureText(result.failed[0]?.error)}`,
+        tone: 'danger',
+    };
 }
 
 export function SaveViewDialog({
@@ -146,7 +151,7 @@ export function AssignOwnerDialog<O extends ListObject>({
     ids: readonly string[];
     members: ReadonlyMap<string, string>;
     onOpenChange: (open: boolean) => void;
-    onDone: (summary: string) => void;
+    onDone: (summary: ToastInput) => void;
 }) {
     const [ownerId, setOwnerId] = useState<string | undefined>();
     const change = useBulkChange(workspaceId, object);

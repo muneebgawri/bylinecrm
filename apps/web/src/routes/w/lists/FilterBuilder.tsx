@@ -250,7 +250,10 @@ function ValueEditor({ field, condition, workspaceId, members, onValue }: ValueE
                 <fieldset className="m-0 flex flex-wrap gap-x-3 gap-y-1.5 border-0 p-0">
                     <legend className="sr-only">{label}</legend>
                     {choices.map((choice) => (
-                        <label key={choice.value} className="flex min-h-9 items-center gap-1.5 text-sm max-md:min-h-11">
+                        <label
+                            key={choice.value}
+                            className="flex min-h-9 items-center gap-1.5 text-sm max-md:min-h-touch"
+                        >
                             <Checkbox
                                 checked={chosen.has(choice.value)}
                                 onCheckedChange={(on) => {
@@ -509,7 +512,7 @@ function ReferenceEditor({
                                     <button
                                         type="button"
                                         aria-label={`Remove ${labels.get(id) ?? 'this one'}`}
-                                        className="grid place-items-center rounded-sm max-md:size-11"
+                                        className="grid place-items-center rounded-sm max-md:size-touch"
                                         onClick={() => onValue(ids.filter((v) => v !== id))}
                                     >
                                         <X aria-hidden className="size-3" />

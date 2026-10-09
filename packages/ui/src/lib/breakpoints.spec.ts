@@ -1,20 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BREAKPOINTS, NARROW_QUERY, PHONE_QUERY } from './breakpoints';
+import { BREAKPOINT_PX, MOBILE_QUERY } from './breakpoints';
 
-const REM = 16;
-
+/** The CSS (`max-md:`) and the script (`useIsMobile`) must switch at the same width. */
 describe('breakpoints', () => {
-    it("holds Tailwind's md variant equal to the phone breakpoint", () => {
-        const css = readFileSync(resolve(process.cwd(), 'src/theme.css'), 'utf8');
-        const match = /--breakpoint-md:\s*([\d.]+)rem/.exec(css);
-        expect(match).not.toBeNull();
-        expect(Number(match?.[1]) * REM).toBe(BREAKPOINTS.phone);
+    it('keeps Tailwind md and BREAKPOINT_PX.mobile equal', () => {
+        const theme = readFileSync(resolve(__dirname, '../theme.css'), 'utf8');
+        const rem = /--breakpoint-md:\s*([\d.]+)rem/.exec(theme)?.[1];
+        expect(rem, 'theme.css declares --breakpoint-md').toBeDefined();
+        expect(Number(rem) * 16).toBe(BREAKPOINT_PX.mobile);
     });
 
-    it('builds the queries from the one definition', () => {
-        expect(PHONE_QUERY).toBe(`(max-width: ${BREAKPOINTS.phone - 1}px)`);
-        expect(NARROW_QUERY).toBe(`(max-width: ${BREAKPOINTS.shell}px)`);
+    it('matches below the mobile width only', () => {
+        expect(MOBILE_QUERY).toBe('(max-width: 767.98px)');
     });
 });

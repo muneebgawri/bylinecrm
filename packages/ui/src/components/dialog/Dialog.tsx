@@ -9,8 +9,7 @@ export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
 /**
- * Content = overlay + centred panel + close button; below the phone breakpoint the same dialog
- * rises from the bottom edge as a sheet, full width and thumb-reachable (FR-CRMS-UI-12). A DialogTitle is required inside it (Radix
+ * Content = overlay + centred panel + close button. A DialogTitle is required inside it (Radix
  * warns without one and axe fails the story): a dialog with no name is a dialog nobody can find.
  */
 export const DialogContent = forwardRef<
@@ -25,7 +24,11 @@ export const DialogContent = forwardRef<
                 className={cn(
                     'fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4',
                     'rounded-lg border border-border bg-surface-raised p-6 text-text shadow-md',
-                    'max-md:top-auto max-md:bottom-0 max-md:max-h-[85vh] max-md:translate-y-0 max-md:overflow-y-auto max-md:rounded-b-none max-md:pb-[max(1.5rem,env(safe-area-inset-bottom))]',
+                    // On phones every dialog is a bottom sheet: full width, anchored to the bottom,
+                    // clear of the home indicator, scrolling inside itself (FR-CRMS-UI-12).
+                    'max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:max-w-none',
+                    'max-md:max-h-[85dvh] max-md:translate-x-0 max-md:translate-y-0 max-md:overflow-y-auto',
+                    'max-md:rounded-b-none max-md:p-5 max-md:pb-[max(1.25rem,env(safe-area-inset-bottom))]',
                     'motion-reduce:animate-none',
                     className,
                 )}
@@ -34,7 +37,8 @@ export const DialogContent = forwardRef<
                 {children}
                 <DialogPrimitive.Close
                     className={cn(
-                        'absolute right-4 top-4 grid place-items-center rounded-sm text-text-muted hover:text-text max-md:right-2 max-md:top-2 max-md:size-11',
+                        'absolute right-4 top-4 rounded-sm text-text-muted hover:text-text',
+                        'max-md:right-2 max-md:top-2 max-md:grid max-md:size-touch max-md:place-items-center',
                         focusRing,
                     )}
                 >

@@ -1,12 +1,12 @@
 import {
-    cn,
     Drawer,
     DrawerContent,
+    cn,
     isBoolean,
-    type Theme,
-    useIsNarrow,
     usePersistedState,
     useTheme,
+    type Theme,
+    useIsNarrow,
 } from '@bylinecrm/ui';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
@@ -23,6 +23,9 @@ import { ShortcutsSheet } from './ShortcutsSheet';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { NAV_ITEMS } from './nav';
+
+/** The toast renderer loads after first paint; the store (`toast()`) is tiny and always there. */
+const Toaster = lazy(() => import('@bylinecrm/ui/toaster').then((m) => ({ default: m.Toaster })));
 import { SIDEBAR_COLLAPSED_KEY } from './storage';
 
 /** The record drawer (`?open=<object>:<id>`) lives in the records chunk; nothing loads until it is asked for. */
@@ -106,6 +109,9 @@ function Shell({ workspaceId }: { workspaceId: string }) {
             </Suspense>
             <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
             <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+            <Suspense fallback={null}>
+                <Toaster />
+            </Suspense>
         </div>
     );
 }

@@ -54,7 +54,7 @@ export function DealRecord({
     const edit = usePermission('deal:edit');
     const move = usePermission('deal:move');
     const pipeline = usePipeline(workspaceId, deal.pipelineId);
-    const moveDeal = useMoveDeal(workspaceId, deal.id);
+    const moveDeal = useMoveDeal(workspaceId);
     const history = useDealHistory(workspaceId, deal.id);
     const company = useRecord(workspaceId, 'company', deal.companyId ?? '');
     const contact = useRecord(workspaceId, 'person', deal.pointOfContactId ?? '');
@@ -88,7 +88,7 @@ export function DealRecord({
             setClosing(stage);
             return;
         }
-        moveDeal.mutate({ stageId: stage.id });
+        moveDeal.mutate({ dealId: deal.id, pipelineId: deal.pipelineId, stageId: stage.id });
     };
 
     const standard: PropertyRow[] = [
@@ -397,7 +397,10 @@ export function DealRecord({
                     error={moveDeal.isError ? messageFor(moveDeal.error, 'close') : null}
                     onCancel={() => setClosing(null)}
                     onConfirm={(close) =>
-                        moveDeal.mutate({ stageId: closing.id, close }, { onSuccess: () => setClosing(null) })
+                        moveDeal.mutate(
+                            { dealId: deal.id, pipelineId: deal.pipelineId, stageId: closing.id, close },
+                            { onSuccess: () => setClosing(null) },
+                        )
                     }
                 />
             )}

@@ -4,6 +4,7 @@ import type {
     Capability,
     CustomFieldType,
     Emails,
+    FilterGroup,
     LinkedObject,
     Links,
     Money,
@@ -16,11 +17,11 @@ import type {
     StageColour,
     StageHistoryReason,
     StageKind,
+    StageRuleEvent,
     TaskStatus,
     TimelineActor,
     ViewColumn,
     ViewSort,
-    FilterGroup,
 } from '@bylinecrm/shared';
 
 export type { SavedView, SearchResults };
@@ -206,7 +207,7 @@ export interface StageHistoryEntry {
 export interface RuleView {
     id: string;
     pipelineId: string;
-    event: string;
+    event: StageRuleEvent;
     toStageId: string;
     allowBackward: boolean;
     enabled: boolean;
@@ -379,9 +380,41 @@ export interface CreateInviteInput {
     roleId: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Saved views (P1-4): the API's create and patch bodies.
-// ─────────────────────────────────────────────────────────────────────────────
+// ---- The pipeline board and saved views (P1-2, P1-4; P1-UI-4) ------------------------------
+
+export interface BoardColumn {
+    stage: StageView;
+    /** Deals in this stage under the current query and the caller's scope — not the whole stage. */
+    count: number;
+    /** Exact sums per currency, from the API; the UI formats and never adds them up itself. */
+    amountMinorByCurrency: Record<string, number>;
+    deals: OpportunityView[];
+    /** The column carries at most `BOARD_STAGE_LIMIT`; true when the stage holds more. */
+    hasMore: boolean;
+}
+
+export interface BoardView {
+    pipeline: PipelineView;
+    columns: BoardColumn[];
+}
+
+/**
+ * The board and the deal list take the same query (P1-4): a saved view's id, an inline filter
+ * (base64url JSON, which replaces the view's filter whole), a sort, and a search.
+ */
+export interface BoardQuery {
+    view?: string | undefined;
+    filter?: string | undefined;
+    sort?: string | undefined;
+    q?: string | undefined;
+}
+
+/** Create takes where the deal starts; a patch cannot change the stage (that is a move). */
+export type OpportunityCreateInput = OpportunityInput & {
+    name: string;
+    pipelineId?: string | undefined;
+    stageId?: string | undefined;
+};
 
 export interface CreateViewInput {
     object: RecordObject;
