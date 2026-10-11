@@ -21,7 +21,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from 'react';
 import { personName, type ListColumn, type ListObject, type ListRow } from './listConfig';
 import { isSortable } from './listConfig';
 
@@ -123,7 +123,16 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
     const someChosen = !allChosen && rows.some((r) => selected.has(r.id));
     const padTop = items[0]?.start ?? 0;
     const padBottom = last ? virtualizer.getTotalSize() - last.end : 0;
-    const totalWidth = table.getTotalSize();
+    // The columns fill the card (P1-UI-10): when they add up to less than the space there is, the
+    // last data column takes the rest, so no empty band sits right of the row menu. A saved width
+    // is still the column's own; the spare space is only added when drawing.
+    const available = useElementWidth(scrollRef);
+    const spare = Math.max(0, available - table.getTotalSize());
+    const lastField = columns.at(-1)?.column.field;
+    const widthOf = (id: string, size: number) => (id === lastField ? size + spare : size);
+    const totalWidth = table.getTotalSize() + spare;
+    // An identity cell's second line repeats nothing already in a column (a company's domain).
+    const shown = new Set(columns.map((c) => c.column.field));
     const sortOf = (field: string) => sorts.find((s) => s.field === field);
 
     return (
@@ -134,7 +143,7 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
                         <tr key={group.id}>
                             {group.headers.map((header) => {
                                 const id = header.column.id;
-                                const style = { width: header.getSize() };
+                                const style = { width: widthOf(id, header.getSize()) };
                                 if (id === '__select') {
                                     return (
                                         <th key={id} className={tableClasses.th} style={style}>
@@ -270,7 +279,7 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
                                             {identity ? (
                                                 <AvatarCell
                                                     name={identityName(object, record)}
-                                                    subline={identitySubline(object, record)}
+                                                    subline={tableSubline(object, record, shown)}
                                                     nameAs={(name) => (
                                                         <button
                                                             type="button"
@@ -308,12 +317,45 @@ export function identityName<O extends ListObject>(object: O, row: ListRow<O>): 
     return object === 'person' ? personName(row as ListRow<'person'>) : (row as ListRow<'company'>).name;
 }
 
-export function identitySubline<O extends ListObject>(object: O, row: ListRow<O>): string | undefined {
+/** The identity cell's second line and the field it comes from: a person's title (else address), a company's domain. */
+function sublineOf<O extends ListObject>(object: O, row: ListRow<O>): { field: string; text: string } | undefined {
     if (object === 'person') {
         const p = row as ListRow<'person'>;
-        return p.jobTitle ?? p.emails.primary ?? undefined;
+        if (p.jobTitle) return { field: 'jobTitle', text: p.jobTitle };
+        return p.emails.primary ? { field: 'emailPrimary', text: p.emails.primary } : undefined;
     }
-    return (row as ListRow<'company'>).domain ?? undefined;
+    const domain = (row as ListRow<'company'>).domain;
+    return domain ? { field: 'domain', text: domain } : undefined;
+}
+
+/** A card's second line (phones have no columns, so it is always shown). */
+export function identitySubline<O extends ListObject>(object: O, row: ListRow<O>): string | undefined {
+    return sublineOf(object, row)?.text;
+}
+
+/** The table's: dropped when its field is already a visible column, so nothing is shown twice. */
+function tableSubline<O extends ListObject>(
+    object: O,
+    row: ListRow<O>,
+    shown: ReadonlySet<string>,
+): string | undefined {
+    const subline = sublineOf(object, row);
+    return subline && !shown.has(subline.field) ? subline.text : undefined;
+}
+
+/** An element's inner width, kept current as it resizes; the offset width where layout has no client box. */
+function useElementWidth(ref: RefObject<HTMLElement | null>): number {
+    const [width, setWidth] = useState(0);
+    useLayoutEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        const read = () => setWidth(element.clientWidth || element.offsetWidth);
+        read();
+        const observer = new ResizeObserver(read);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [ref]);
+    return width;
 }
 
 function RowMenu({

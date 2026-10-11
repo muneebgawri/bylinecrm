@@ -66,6 +66,10 @@ model User {
   email           String    @unique
   passwordHash    String?   @map("password_hash")
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  /// How the person is shown to other members, in every workspace; pickers read it, never the email.
+  displayName        String?   @map("display_name")
+  /// When the person confirmed their name (saved, or kept the suggestion); `null` asks once.
+  profileCompletedAt DateTime? @map("profile_completed_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -120,8 +124,6 @@ model WorkspaceMember {
   workspaceId String   @map("workspace_id") @db.Uuid
   userId      String   @map("user_id") @db.Uuid
   roleId      String   @map("role_id") @db.Uuid
-  /// How the member is shown to other members; pickers read it and never the email.
-  displayName String?  @map("display_name")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

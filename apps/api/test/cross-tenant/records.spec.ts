@@ -258,6 +258,16 @@ describe('records', () => {
         });
     });
 
+    describe('composite fields on create (exit check: person-create)', () => {
+        it('a person created with only a primary email gets an empty additional list', async () => {
+            const created = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Only', nameLast: 'Primary', emails: { primary: `only-${stamp}@x.test` } })
+                .expect(201);
+            expect((created.body as Person).emails).toEqual({ primary: `only-${stamp}@x.test`, additional: [] });
+        });
+    });
+
     describe('uniqueness', () => {
         it('refuses a second primary email, case-insensitively, and a second domain', async () => {
             await as(admin)

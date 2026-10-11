@@ -22,6 +22,7 @@ import { useDealHistory, useMoveDeal, usePatchRecord, usePipeline, useRecord } f
 import type { OpportunityView, StageView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatDate, formatDay } from '../../../lib/format';
+import { fieldLabel, fieldTitle } from './fields';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
@@ -133,7 +134,7 @@ export function DealRecord({
             field: 'closeDate',
             control: (
                 <InlineText
-                    label="Close date"
+                    label={fieldTitle('closeDate')}
                     path="closeDate"
                     type="date"
                     value={deal.closeDate}
@@ -214,7 +215,7 @@ export function DealRecord({
         <div>
             <StageProgress
                 title={`${pipeline.data.name} · ${currentStage.name}`}
-                meta={`${formatMoney(deal.amount)} · ${deal.daysInStage}d in stage${deal.closedAt ? ` · closed ${formatDay(deal.closedAt)}` : ''}`}
+                meta={`${formatMoney(deal.amount)} · ${deal.daysInStage}d in stage${deal.closedAt ? ` · ${fieldLabel('closedAt')} ${formatDay(deal.closedAt)}` : ''}`}
                 stages={stages.map((s) => ({ label: s.name }))}
                 current={current}
             />
@@ -322,7 +323,7 @@ export function DealRecord({
                 <FactGrid
                     facts={[
                         { label: 'Owner', value: deal.ownerId ? (membersById.get(deal.ownerId) ?? '…') : 'Unassigned' },
-                        { label: 'Close date', value: formatDay(deal.closeDate) },
+                        { label: fieldTitle('closeDate'), value: formatDay(deal.closeDate) },
                         { label: 'Probability', value: deal.probability === null ? '—' : `${deal.probability}%` },
                         {
                             label: 'Contact',

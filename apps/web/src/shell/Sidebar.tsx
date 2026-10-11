@@ -7,6 +7,7 @@ import {
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
+    Skeleton,
     THEMES,
     Tooltip,
     TooltipContent,
@@ -16,14 +17,14 @@ import {
     useTheme,
     type Theme,
 } from '@bylinecrm/ui';
-import { Check, ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, Plus, Sun } from 'lucide-react';
+import { Check, ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router';
-import { useLogout, useMe, useWorkspaces } from '../api/queries';
-import type { WorkspaceView } from '../api/types';
-import { useCan } from '../auth/capabilities';
+import { useLogout, useProfile, useWorkspaces } from '../api/queries';
+import type { MembershipSummary, WorkspaceView } from '../api/types';
+import { can, useMembership } from '../auth/capabilities';
 import { paths } from '../routes/paths';
 import { LogoMark } from './LogoMark';
-import { NAV, type NavItem } from './nav';
+import { NAV, type NavGroup, type NavItem } from './nav';
 
 export const THEME_LABELS: Record<Theme, string> = { light: 'Light', dark: 'Dark', system: 'System' };
 export const THEME_ICONS: Record<Theme, typeof Sun> = { light: Sun, dark: Moon, system: Monitor };
@@ -34,13 +35,25 @@ export interface SidebarProps {
     /** Closes the drawer under 900px after a navigation. */
     onNavigate?: (() => void) | undefined;
     onOpenShortcuts: () => void;
+    onOpenProfile: () => void;
+}
+
+/** The items of a group the member may use; every item while the membership is still unknown. */
+function visibleItems(group: NavGroup, membership: MembershipSummary | null): readonly NavItem[] {
+    return group.items.filter((item) => !item.requires || can(membership, item.requires));
 }
 
 /**
  * The 240px sidebar: workspace switcher at the top, four nav groups, the user card at the
  * bottom. Collapsed, it shows icons with tooltips and keeps the same structure.
+ *
+ * A group is never a heading with nothing under it (P1-UI-10): until the membership is known, each
+ * gated item is a loading row in its place (so nothing shifts when it resolves); once known, a
+ * group the member can use nothing in is not drawn at all.
  */
-export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts }: SidebarProps) {
+export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, onOpenProfile }: SidebarProps) {
+    const membership = useMembership();
+    const known = membership !== null;
     return (
         <aside
             aria-label="Sidebar"
@@ -48,29 +61,37 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts }:
         >
             <WorkspaceSwitcher workspaceId={workspaceId} collapsed={collapsed} />
             <nav aria-label="Primary" className="flex flex-col gap-1.5">
-                {NAV.map((group) => (
-                    <div key={group.label} className="flex flex-col gap-0.5">
-                        <div
-                            className={cn(
-                                'px-2.5 pt-2.5 pb-1 text-[11.5px] font-medium text-text-faint',
-                                collapsed && 'sr-only',
+                {NAV.map((group) => {
+                    const items = known ? visibleItems(group, membership) : group.items;
+                    if (items.length === 0) return null;
+                    return (
+                        <div key={group.label} className="flex flex-col gap-0.5">
+                            <div
+                                className={cn(
+                                    'px-2.5 pt-2.5 pb-1 text-[11.5px] font-medium text-text-faint',
+                                    collapsed && 'sr-only',
+                                )}
+                            >
+                                {group.label}
+                            </div>
+                            {items.map((item) =>
+                                known || !item.requires ? (
+                                    <NavEntry
+                                        key={item.id}
+                                        item={item}
+                                        workspaceId={workspaceId}
+                                        collapsed={collapsed}
+                                        onNavigate={onNavigate}
+                                    />
+                                ) : (
+                                    <NavSkeleton key={item.id} collapsed={collapsed} />
+                                ),
                             )}
-                        >
-                            {group.label}
                         </div>
-                        {group.items.map((item) => (
-                            <NavEntry
-                                key={item.id}
-                                item={item}
-                                workspaceId={workspaceId}
-                                collapsed={collapsed}
-                                onNavigate={onNavigate}
-                            />
-                        ))}
-                    </div>
-                ))}
+                    );
+                })}
             </nav>
-            <UserCard collapsed={collapsed} onOpenShortcuts={onOpenShortcuts} />
+            <UserCard collapsed={collapsed} onOpenShortcuts={onOpenShortcuts} onOpenProfile={onOpenProfile} />
         </aside>
     );
 }
@@ -86,8 +107,6 @@ function NavEntry({
     collapsed: boolean;
     onNavigate?: (() => void) | undefined;
 }) {
-    const allowed = useCan(item.requires ?? 'record:read') || !item.requires;
-    if (!allowed) return null;
     const Icon = item.icon;
     const link = (
         <NavLink
@@ -123,6 +142,20 @@ function NavEntry({
             <TooltipTrigger asChild>{link}</TooltipTrigger>
             <TooltipContent side="right">{item.label}</TooltipContent>
         </Tooltip>
+    );
+}
+
+/** A nav row's place while the membership loads: same height, no label to read out. */
+function NavSkeleton({ collapsed }: { collapsed: boolean }) {
+    return (
+        <div
+            data-nav-skeleton
+            aria-hidden
+            className={cn('flex h-9 items-center gap-2.5 px-2.5', collapsed && 'justify-center px-0')}
+        >
+            <Skeleton className="size-4.25 shrink-0 rounded-sm" />
+            {!collapsed && <Skeleton className="h-3 w-24" />}
+        </div>
     );
 }
 
@@ -172,13 +205,22 @@ function WorkspaceSwitcher({ workspaceId, collapsed }: { workspaceId: string; co
     );
 }
 
-function UserCard({ collapsed, onOpenShortcuts }: { collapsed: boolean; onOpenShortcuts: () => void }) {
-    const me = useMe();
+function UserCard({
+    collapsed,
+    onOpenShortcuts,
+    onOpenProfile,
+}: {
+    collapsed: boolean;
+    onOpenShortcuts: () => void;
+    onOpenProfile: () => void;
+}) {
+    const profile = useProfile();
     const navigate = useNavigate();
     const logout = useLogout();
     const { theme, setTheme } = useTheme();
-    const email = me.data?.email ?? '';
-    const name = displayName(email);
+    const email = profile.data?.email ?? '';
+    // The person's own name (P1-UI-10); the address only while the profile loads or has none.
+    const name = profile.data?.displayName ?? email;
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -218,6 +260,9 @@ function UserCard({ collapsed, onOpenShortcuts }: { collapsed: boolean; onOpenSh
                         );
                     })}
                 </DropdownMenuRadioGroup>
+                <DropdownMenuItem onSelect={onOpenProfile}>
+                    <UserRound aria-hidden /> Edit profile
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={onOpenShortcuts}>
                     <Keyboard aria-hidden /> Keyboard shortcuts
                 </DropdownMenuItem>
@@ -230,14 +275,4 @@ function UserCard({ collapsed, onOpenShortcuts }: { collapsed: boolean; onOpenSh
             </DropdownMenuContent>
         </DropdownMenu>
     );
-}
-
-/** Until profiles have names (P1-1b), the part of the email before the @, title-cased. */
-export function displayName(email: string): string {
-    const local = email.split('@')[0] ?? '';
-    return local
-        .split(/[._-]+/)
-        .filter(Boolean)
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
 }

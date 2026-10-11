@@ -17,7 +17,6 @@ import { useMemo, useState } from 'react';
 import { useMe, useMembers, useRemoveMember, useRoles, useSetMemberRole } from '../../../api/queries';
 import type { MemberView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
-import { displayName } from '../../../shell/Sidebar';
 import { formatDate } from './SettingsLayout';
 
 export function Members() {
@@ -62,7 +61,7 @@ export function Members() {
                         {
                             id: 'member',
                             header: 'Member',
-                            cell: (m) => <AvatarCell name={displayName(m.email)} subline={m.email} />,
+                            cell: (m) => <AvatarCell name={m.displayName ?? m.email} subline={m.email} />,
                         },
                         {
                             id: 'role',

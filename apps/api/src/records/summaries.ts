@@ -19,7 +19,8 @@ export const PERSON_SUMMARY_SELECT = {
     emails: true,
     deletedAt: true,
 } as const;
-export const MEMBER_SUMMARY_SELECT = { id: true, displayName: true } as const;
+/** A member is named by their person's display name (`users.display_name`, P1-UI-10): one per person. */
+export const MEMBER_SUMMARY_SELECT = { id: true, user: { select: { displayName: true } } } as const;
 
 /** A person's name as everything that shows one reads it: first and last, else the primary email. */
 export function personName(nameFirst: string, nameLast: string, primaryEmail: string | null | undefined): string {
@@ -40,6 +41,12 @@ export function personSummary(
     return { id: person.id, name: personName(person.nameFirst, person.nameLast, emails?.primary) };
 }
 
-export function memberSummary(member: { id: string; displayName: string | null } | null): MemberSummaryView | null {
-    return member ? { memberId: member.id, name: member.displayName } : null;
+export function memberSummaryOf(member: { id: string; user: { displayName: string | null } }): MemberSummaryView {
+    return { memberId: member.id, name: member.user.displayName };
+}
+
+export function memberSummary(
+    member: { id: string; user: { displayName: string | null } } | null,
+): MemberSummaryView | null {
+    return member ? memberSummaryOf(member) : null;
 }
