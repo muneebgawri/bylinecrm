@@ -9,13 +9,14 @@ import {
     useIsNarrow,
 } from '@bylinecrm/ui';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
-import { Navigate, Outlet, useNavigate } from 'react-router';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { useLogout, useProfile } from '../api/queries';
 import { useAuthGate } from '../auth/RequireAuth';
 import { WorkspaceCapabilities, useMembership } from '../auth/capabilities';
 import { can } from '../auth/capabilities';
 import { useRegisterCommands, type Command } from '../commands/registry';
 import { useCommandShortcuts } from '../commands/shortcuts';
+import { THREAD_PARAM } from '../routes/w/mail/thread';
 import { useWorkspaceId } from '../routes/params';
 import { paths, withCreate } from '../routes/paths';
 import { RouteSkeleton } from '../routes/states';
@@ -34,6 +35,10 @@ import { SIDEBAR_COLLAPSED_KEY } from './storage';
 /** The record drawer (`?open=<object>:<id>`) lives in the records chunk; nothing loads until it is asked for. */
 const RecordDrawerHost = lazy(() =>
     import('../routes/w/records/RecordDrawerHost').then((m) => ({ default: m.RecordDrawerHost })),
+);
+/** An email thread (`?thread=<id>`), over a page or over the record drawer; loaded only once one is opened. */
+const ThreadDrawerHost = lazy(() =>
+    import('../routes/w/mail/ThreadDrawerHost').then((m) => ({ default: m.ThreadDrawerHost })),
 );
 
 /**
@@ -61,6 +66,7 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const profile = useProfile();
+    const threadOpen = new URLSearchParams(useLocation().search).has(THREAD_PARAM);
     // Asked once: a person who has not confirmed their name sees the prompt until they save or
     // dismiss it (either confirms it server-side), on whichever device they sign in from first.
     const needsName = profile.data?.completed === false;
@@ -123,6 +129,11 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
             <Suspense fallback={null}>
                 <RecordDrawerHost />
             </Suspense>
+            {threadOpen && (
+                <Suspense fallback={null}>
+                    <ThreadDrawerHost />
+                </Suspense>
+            )}
             <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
             <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
             {profile.data && (

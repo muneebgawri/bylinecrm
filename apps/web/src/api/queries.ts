@@ -124,6 +124,11 @@ export const keys = {
     mailboxSync: (workspaceId: string, mailboxId: string) =>
         ['w', workspaceId, 'mailboxes', mailboxId, 'sync'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
+    mailMessage: (workspaceId: string, messageId: string) => ['w', workspaceId, 'mail', 'messages', messageId] as const,
+    mailScheduled: (workspaceId: string) => ['w', workspaceId, 'mail', 'scheduled'] as const,
+    mailThread: (workspaceId: string, threadId: string) => ['w', workspaceId, 'mail', 'threads', threadId] as const,
+    /** The sends made in this tab: held by the client so a send shows before the server has stored it. */
+    mailSession: (workspaceId: string) => ['w', workspaceId, 'mail', 'session'] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */

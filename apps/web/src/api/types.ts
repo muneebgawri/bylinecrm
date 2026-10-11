@@ -151,3 +151,15 @@ export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */
 export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];
 export type CreateBlocklistEntryInput = Loose<Schemas['CreateBlocklistEntryDto']>;
+
+// ---- Sending, scheduling and reading mail on a record (P2-3, P2-5; P2-UI-1) --------------------
+export type SendMailInput = Loose<Schemas['SendMailDto']>;
+export type MailSendAcceptedView = Schemas['MailSendAccepted'];
+/** Where one send stands: its status, its schedule and, when it failed, why. */
+export type MailOutboundView = Schemas['MailOutbound'];
+export type MailOutboundStatus = MailOutboundView['status'];
+export type MailScheduledPage = Schemas['MailScheduledPage'];
+export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
+export type MailThreadView = Schemas['MailThread'];
+export type MailMessageView = Schemas['MailMessage'];
+export type MailParticipantView = MailMessageView['participants'][number];

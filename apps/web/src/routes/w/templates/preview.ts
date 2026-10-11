@@ -53,37 +53,3 @@ export function resolutionLine(
         text: `All ${variableCount} variable${variableCount === 1 ? '' : 's'} resolve${variableCount === 1 ? 's' : ''} for ${recipient}.`,
     };
 }
-
-/** The design tokens the preview reads from the page it sits in, so it follows the theme. */
-const PREVIEW_TOKENS = [
-    '--bc-surface',
-    '--bc-text',
-    '--bc-text-muted',
-    '--bc-border',
-    '--bc-accent',
-    '--bc-danger',
-    '--bc-danger-soft',
-    '--bc-font-sans',
-] as const;
-
-function tokenValues(): string {
-    if (typeof document === 'undefined') return '';
-    const style = getComputedStyle(document.documentElement);
-    return PREVIEW_TOKENS.map((token) => `${token}:${style.getPropertyValue(token).trim()};`).join('');
-}
-
-/**
- * A whole HTML document around the API's rendered body, for `<iframe srcdoc sandbox>`. The body is
- * already safe (the API's allowlist renderer); the iframe's empty `sandbox` runs no script anyway.
- * A missing variable is highlighted with its name — never shown blank (FR-CRMS-3).
- */
-export function previewDocument(html: string): string {
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-:root{${tokenValues()}}
-body{margin:0;padding:16px 18px;background:var(--bc-surface);color:var(--bc-text);font:14px/1.6 var(--bc-font-sans);}
-a{color:var(--bc-accent);}
-hr{border:0;border-top:1px solid var(--bc-border);margin:20px 0 12px;}
-h2{font-size:18px;margin:16px 0 8px;}h3{font-size:15px;margin:14px 0 6px;}
-[data-missing-variable]{background:var(--bc-danger-soft);color:var(--bc-danger);border-radius:4px;padding:0 4px;font-weight:600;}
-</style></head><body>${html}</body></html>`;
-}

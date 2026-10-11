@@ -15,8 +15,8 @@ import {
     cn,
     focusRing,
 } from '@bylinecrm/ui';
-import { ListTodo, StickyNote } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { ListTodo, Mail, StickyNote } from 'lucide-react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useDealHistory, useMoveDeal, usePatchRecord, usePipeline, useRecord } from '../../../api/queries';
 import type { OpportunityView, StageView } from '../../../api/types';
@@ -26,6 +26,7 @@ import { fieldLabel, fieldTitle } from './fields';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
+import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { InlineText, messageFor } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
@@ -64,8 +65,19 @@ export function DealRecord({
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
     const [closing, setClosing] = useState<StageView | null>(null);
+    const compose = useRef<RecordComposeHandle>(null);
     const ownerId = useId();
     const target = { type: 'opportunity' as const, id: deal.id };
+    // A deal's mail goes to its point of contact (doc 50 §A); without one there is no one to write to.
+    const recipient =
+        deal.pointOfContactId && contact.data
+            ? { id: contact.data.id, name: personName(contact.data), email: contact.data.emails.primary }
+            : null;
+    const noRecipient = deal.pointOfContactId
+        ? contact.isError
+            ? 'The point of contact could not be loaded.'
+            : 'Loading the point of contact…'
+        : 'Set a point of contact to email from this deal.';
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
 
     useRecordCommands({
@@ -73,6 +85,8 @@ export function DealRecord({
         onNote: edit.allowed ? () => setNotesOpen(true) : undefined,
         onTask: edit.allowed ? () => setTasksOpen(true) : undefined,
         onOwner: edit.allowed ? () => document.getElementById(ownerId)?.focus() : undefined,
+        onCompose: () => compose.current?.start(),
+        composeTitle: 'Email the point of contact',
         prev: siblings?.prev,
         next: siblings?.next,
     });
@@ -255,6 +269,16 @@ export function DealRecord({
 
     const actions: RecordAction[] = [
         {
+            id: 'email',
+            label: 'Email',
+            short: 'Email',
+            icon: <Mail aria-hidden />,
+            onSelect: () => compose.current?.start(),
+            disabled: !deal.pointOfContactId,
+            reason: deal.pointOfContactId ? undefined : 'Set a point of contact to email from this deal.',
+            hint: 'Email the point of contact (e)',
+        },
+        {
             id: 'note',
             label: 'Add note',
             short: 'Note',
@@ -393,6 +417,13 @@ export function DealRecord({
             }
         >
             {stageBar}
+            <RecordCompose
+                workspaceId={workspaceId}
+                person={recipient}
+                noPerson={noRecipient}
+                dealId={deal.id}
+                handle={compose}
+            />
             <TimelinePanel workspaceId={workspaceId} target={target} stageNames={stageNames} />
             {closing && (
                 <CloseDialog

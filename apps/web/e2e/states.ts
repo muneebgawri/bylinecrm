@@ -63,11 +63,13 @@ function routeStates(): RouteState[] {
     });
 }
 
-/** The states that are not a route of their own: the record drawer over a list, and the ⌘K palette. */
+/** The states that are not a route of their own: the record drawer over a list, a thread, and the ⌘K palette. */
 const EXTRA_STATES: RouteState[] = [
     { name: 'drawer-person', url: `${paths.deals(IDS.workspace)}?open=person:${IDS.person}` },
     { name: 'drawer-deal', url: `${paths.home(IDS.workspace)}?open=opportunity:${IDS.deal}` },
     { name: 'palette', url: paths.home(IDS.workspace), after: 'palette' },
+    // An email thread opened from the person's timeline: a drawer on a desktop, the whole screen on a phone.
+    { name: 'thread', url: `${paths.person(IDS.workspace, IDS.person)}?thread=${IDS.thread}` },
 ];
 
 export const STATES: readonly RouteState[] = [...routeStates(), ...EXTRA_STATES].map((state) => {

@@ -5,7 +5,7 @@ import { EditorContent, Node, useEditor, type AnyExtension, type Editor, type JS
 import StarterKit from '@tiptap/starter-kit';
 import { Bold, Heading2, Heading3, Italic, Link2, List, ListOrdered } from 'lucide-react';
 import { useEffect, useImperativeHandle, useState, type Ref } from 'react';
-import { VARIABLE_TRIGGER_EVENT, Variable } from './variableNode';
+import { MissingVariables, VARIABLE_TRIGGER_EVENT, Variable, missingVariablesKey } from './variableNode';
 
 /**
  * The product's one rich-text editor (Tiptap). Notes, task bodies, template bodies and template
@@ -36,6 +36,11 @@ export interface RichTextEditorProps {
     'aria-label': string;
     /** `{{` was typed: open the variable picker (template and subject profiles). */
     onVariableTrigger?: () => void;
+    /**
+     * Variables with no value for the recipient (template and subject profiles): their chips turn
+     * red. The owner gets them from the API's preview; the editor only shows them.
+     */
+    missingVariables?: readonly string[] | undefined;
     /** Told when the editor gains focus, so a shared "Insert variable" knows where to insert. */
     onFocus?: () => void;
     handle?: Ref<RichTextHandle>;
@@ -73,8 +78,10 @@ export const PROFILES: Record<RichTextProfile, ProfileSpec> = {
 /** A document with exactly one paragraph: the subject line. */
 const SingleLineDocument = Node.create({ name: 'doc', topNode: true, content: 'paragraph' });
 
-function extensionsFor(profile: RichTextProfile): AnyExtension[] {
+/** `trigger`: whether `{{` asks for a variable picker — only when the owner offers one. */
+function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension[] {
     const spec = PROFILES[profile];
+    const variables = [Variable.configure({ trigger }), MissingVariables];
     const link = spec.linkSchemes
         ? [
               Link.configure({
@@ -110,7 +117,7 @@ function extensionsFor(profile: RichTextProfile): AnyExtension[] {
                 link: false,
             }),
             ...link,
-            Variable,
+            ...variables,
         ];
     }
     return [
@@ -134,7 +141,7 @@ function extensionsFor(profile: RichTextProfile): AnyExtension[] {
             trailingNode: false,
         }),
         SingleLineDocument,
-        Variable,
+        ...variables,
     ];
 }
 
@@ -158,6 +165,7 @@ export function RichTextEditor({
     placeholder,
     'aria-label': label,
     onVariableTrigger,
+    missingVariables,
     onFocus,
     handle,
     readOnly = false,
@@ -165,7 +173,7 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
     const spec = PROFILES[profile];
     const editor = useEditor({
-        extensions: extensionsFor(profile),
+        extensions: extensionsFor(profile, onVariableTrigger !== undefined),
         content: (value.content?.length ? value : EMPTY) as JSONContent,
         autofocus: autoFocus ? 'end' : false,
         editable: !readOnly,
@@ -196,6 +204,14 @@ export function RichTextEditor({
             editor.off(VARIABLE_TRIGGER_EVENT, trigger);
         };
     }, [editor, onVariableTrigger]);
+
+    // The marks are plugin state, not content: handed over in a transaction that changes nothing else.
+    const missingKey = (missingVariables ?? []).join('\n');
+    useEffect(() => {
+        if (!editor || editor.isDestroyed) return;
+        const missing = new Set(missingKey ? missingKey.split('\n') : []);
+        editor.view.dispatch(editor.state.tr.setMeta(missingVariablesKey, missing).setMeta('addToHistory', false));
+    }, [editor, missingKey]);
 
     useImperativeHandle(
         handle,

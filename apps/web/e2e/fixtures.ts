@@ -19,6 +19,8 @@ import type {
     InviteView,
     MailboxSyncView,
     MailboxView,
+    MailOutboundView,
+    MailThreadView,
     MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
@@ -77,6 +79,10 @@ export const IDS = {
     mailbox: '0b1e0000-0000-4000-8000-0000000008a1',
     poolMailbox: '0b1e0000-0000-4000-8000-0000000008a2',
     blockedDomain: '0b1e0000-0000-4000-8000-0000000008b1',
+    thread: '0b1e0000-0000-4000-8000-0000000008c1',
+    mailMessage: '0b1e0000-0000-4000-8000-0000000008c2',
+    secondMailMessage: '0b1e0000-0000-4000-8000-0000000008c3',
+    scheduledSend: '0b1e0000-0000-4000-8000-0000000008d1',
 } as const;
 
 const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
@@ -469,6 +475,26 @@ export const attachments: AttachmentView[] = [
 
 export const timeline: TimelineActivityView[] = [
     {
+        id: '0b1e0000-0000-4000-8000-000000000c04',
+        target: { type: 'person', id: IDS.person },
+        kind: 'linked-email.received',
+        happenedAt: at(2),
+        actor: { kind: 'sync', id: null },
+        properties: {
+            linked: { type: 'email', id: IDS.secondMailMessage, name: 'Re: Distribution options' },
+            email: {
+                direction: 'inbound',
+                subject: 'Re: Distribution options',
+                snippet: 'Thanks — the list looks right.',
+                from: 'dana@acme.example',
+                threadId: IDS.thread,
+                mailboxId: IDS.mailbox,
+            },
+        },
+        linked: { type: 'email', id: IDS.secondMailMessage },
+        createdAt: at(2),
+    },
+    {
         id: '0b1e0000-0000-4000-8000-000000000c01',
         target: { type: 'opportunity', id: IDS.deal },
         kind: 'deal.stage_changed',
@@ -664,4 +690,106 @@ export function mailboxSync(mailboxId: string): MailboxSyncView {
 
 export const blocklist: BlocklistEntryView[] = [
     { id: IDS.blockedDomain, value: '@newsletters.example', scope: 'workspace', createdAt: at(30) },
+];
+
+// ---- Mail on a record: a thread and a scheduled send (P2-UI-1) -------------------------------
+
+/** Kate wrote; Dana answered. Kate's own personal mailbox, so the bodies are hers to read. */
+export const thread: MailThreadView = {
+    id: IDS.thread,
+    mailboxId: IDS.mailbox,
+    subject: 'Distribution options',
+    messageCount: 2,
+    lastMessageAt: at(2),
+    bodiesVisible: true,
+    messages: [
+        {
+            id: IDS.mailMessage,
+            direction: 'outbound',
+            from: 'kate.morgan@example.com',
+            subject: 'Distribution options',
+            snippet: 'Attached is the distribution list for Acme.',
+            sentAt: at(26),
+            participants: [
+                {
+                    role: 'from',
+                    address: 'kate.morgan@example.com',
+                    displayName: 'Kate Morgan',
+                    personId: null,
+                    memberId: IDS.member,
+                },
+                {
+                    role: 'to',
+                    address: 'dana@acme.example',
+                    displayName: 'Dana Reyes',
+                    personId: IDS.person,
+                    memberId: null,
+                },
+            ],
+            hasAttachments: false,
+            bodyText: 'Hi Dana, attached is the distribution list for Acme.',
+            bodyHtml: '<p>Hi Dana,</p><p>Attached is the distribution list for Acme.</p>',
+            bodyTruncated: false,
+            rfc822MessageId: 'kate-1@mail.example',
+            inReplyTo: null,
+        },
+        {
+            id: IDS.secondMailMessage,
+            direction: 'inbound',
+            from: 'dana@acme.example',
+            subject: 'Re: Distribution options',
+            snippet: 'Thanks — the list looks right.',
+            sentAt: at(2),
+            participants: [
+                {
+                    role: 'from',
+                    address: 'dana@acme.example',
+                    displayName: 'Dana Reyes',
+                    personId: IDS.person,
+                    memberId: null,
+                },
+                {
+                    role: 'to',
+                    address: 'kate.morgan@example.com',
+                    displayName: 'Kate Morgan',
+                    personId: null,
+                    memberId: IDS.member,
+                },
+            ],
+            hasAttachments: false,
+            bodyText: 'Thanks — the list looks right. Can we start Monday?',
+            bodyHtml: '<p>Thanks — the list looks right. Can we start Monday?</p>',
+            bodyTruncated: false,
+            rfc822MessageId: 'dana-1@mail.example',
+            inReplyTo: 'kate-1@mail.example',
+        },
+    ],
+};
+
+/** A follow-up Kate scheduled for Dana: the person page shows it with Reschedule and Cancel. */
+export const scheduledSends: MailOutboundView[] = [
+    {
+        id: IDS.scheduledSend,
+        mailboxId: IDS.mailbox,
+        status: 'scheduled',
+        subject: 'Checking in on Monday’s start',
+        to: ['dana@acme.example'],
+        cc: [],
+        bcc: [],
+        personId: IDS.person,
+        dealId: null,
+        templateId: null,
+        replyToMessageId: null,
+        rfc822MessageId: `${IDS.scheduledSend}@bylinecrm`,
+        mailMessageId: null,
+        threadId: null,
+        attempts: 0,
+        error: null,
+        sendAt: new Date(FIXED_NOW + 3 * 24 * 3_600_000).toISOString(),
+        senderTimeZone: 'America/Chicago',
+        recipientTimeZone: null,
+        cancelledAt: null,
+        createdAt: at(1),
+        sentAt: null,
+    },
 ];

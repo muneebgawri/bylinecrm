@@ -12,6 +12,23 @@ function Record({ layout }: { layout: 'page' | 'drawer' }) {
 const ids = () => commands.all().map((c) => c.id);
 
 describe('useRecordCommands', () => {
+    it('FR-CRMS-UI-4: registers `e` under the name the record gives it (“Email this person”)', () => {
+        function Person() {
+            useRecordCommands({ layout: 'page', onCompose: () => {}, composeTitle: 'Email this person' });
+            return null;
+        }
+        const view = render(
+            <MemoryRouter initialEntries={['/w/x/people/p']}>
+                <Person />
+            </MemoryRouter>,
+        );
+        expect(commands.all().find((c) => c.id === 'record.compose')).toMatchObject({
+            title: 'Email this person',
+            shortcut: 'e',
+        });
+        view.unmount();
+    });
+
     it('registers the page record when no drawer is open', () => {
         const view = render(
             <MemoryRouter initialEntries={['/w/x/people/p']}>

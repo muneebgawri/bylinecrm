@@ -1,6 +1,6 @@
 import type { Capability } from '@bylinecrm/shared';
 import { ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
@@ -64,11 +64,19 @@ export const membership = (capabilities: Capability[]): MembershipSummary => ({
     capabilities,
 });
 
-/** Renders a settings page inside the providers it needs, at `entry`. */
-export function renderAt(routes: RouteObject[], entry: string, capabilities: Capability[]): ReturnType<typeof render> {
+/**
+ * Renders a page inside the providers it needs, at `entry`. A spec that must put something in the
+ * cache first (what the client holds that the server does not) passes its own `client`.
+ */
+export function renderAt(
+    routes: RouteObject[],
+    entry: string,
+    capabilities: Capability[],
+    client: QueryClient = createQueryClient(),
+): ReturnType<typeof render> {
     const router = createMemoryRouter(routes, { initialEntries: [entry] });
     return render(
-        <QueryClientProvider client={createQueryClient()}>
+        <QueryClientProvider client={client}>
             <ThemeProvider>
                 <TooltipProvider>
                     <CapabilitiesProvider membership={membership(capabilities)}>

@@ -20,6 +20,8 @@ export interface RecordPickerProps {
     label: string;
     /** The choice that clears the field ("No company"); absent when the field is required. */
     clearLabel?: string | undefined;
+    /** What the trigger says while nothing is chosen ("Add a person"); the clear choice's words otherwise. */
+    placeholder?: string | undefined;
     onChange: (id: string | null) => Promise<unknown> | void;
     /** Told the name of a record when it is chosen, for a caller that shows it elsewhere. */
     onResolved?: ((id: string, title: string) => void) | undefined;
@@ -42,6 +44,7 @@ export function RecordPicker({
     valueLabel,
     label,
     clearLabel,
+    placeholder,
     onChange,
     onResolved,
     canEdit = true,
@@ -56,7 +59,7 @@ export function RecordPicker({
     const term = useDebounced(q);
     const results = useSearch(workspaceId, open ? term : '', [object], PICKER_RESULTS);
     const hits = results.data?.[object] ?? [];
-    const shown = value ? (valueLabel ?? '…') : (clearLabel ?? '—');
+    const shown = value ? (valueLabel ?? '…') : (placeholder ?? clearLabel ?? '—');
 
     if (!canEdit) {
         return (
