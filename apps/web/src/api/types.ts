@@ -178,7 +178,7 @@ export type MailSendAcceptedView = Schemas['MailSendAccepted'];
 /** Where one send stands: its status, its schedule and, when it failed, why. */
 export type MailOutboundView = Schemas['MailOutbound'];
 export type MailOutboundStatus = MailOutboundView['status'];
-export type MailScheduledPage = Schemas['MailScheduledPage'];
+export type MailRecordSendsPage = Schemas['MailRecordSendsPage'];
 export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
 export type MailThreadView = Schemas['MailThread'];
 export type MailMessageView = Schemas['MailMessage'];

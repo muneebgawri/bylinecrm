@@ -77,3 +77,6 @@ export type MailOutboundView = z.output<typeof mailOutboundView>;
 
 export const mailScheduledPage = named('MailScheduledPage', page(mailOutboundView));
 export type MailScheduledPage = z.output<typeof mailScheduledPage>;
+
+export const mailRecordSendsPage = named('MailRecordSendsPage', page(mailOutboundView));
+export type MailRecordSendsPage = z.output<typeof mailRecordSendsPage>;

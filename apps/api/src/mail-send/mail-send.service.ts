@@ -6,6 +6,8 @@ import {
     MAIL_SEND_MIN_LEAD_SECONDS,
     type DomainEvent,
     type Emails,
+    type MailOutboundStatus,
+    type RecordTarget,
     type RichText,
 } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
@@ -22,6 +24,7 @@ import { MailSyncService } from '../mail-sync/mail-sync.service';
 import type { RetryOptions } from '../mail-sync/retry';
 import { actorOf } from '../records/actor';
 import { paginate } from '../records/list-query';
+import { readableTargets } from '../records/targets';
 import { recordWhere } from '../records/record-scope';
 import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
@@ -36,7 +39,7 @@ import {
 } from './mail-send.constants';
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
-import type { MailOutboundView, MailScheduledPage, MailSendAccepted } from './responses';
+import type { MailOutboundView, MailRecordSendsPage, MailScheduledPage, MailSendAccepted } from './responses';
 import { RecipientSuppressed } from '../suppression/suppression.service';
 import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
 
@@ -331,6 +334,47 @@ export class MailSendService {
                 }),
             );
             return { items: page.items.map((row) => view(row, null)), nextCursor: page.nextCursor };
+        });
+    }
+
+    /**
+     * The sends about one record (#104), in the statuses asked for, newest first: a person's, a
+     * deal's (the sends written from it), or a company's (its live people's, as its timeline merges
+     * them). Two rules, both already the API's: the record must be one the caller can read
+     * (`readableTargets`, under their role's record scope) — otherwise it is not found, never a hint
+     * that it exists — and a send is its sender's, or an admin's, to see (as `messages/:id` is).
+     */
+    async recordSends(
+        target: RecordTarget,
+        statuses: readonly MailOutboundStatus[],
+        limit: number,
+        cursor: string | undefined,
+    ): Promise<MailRecordSendsPage> {
+        const context = this.current();
+        const mine = !context.capabilities.has('workspace:admin');
+        return this.rls.withWorkspace(async (tx) => {
+            if ((await readableTargets(tx, [target])).length === 0) {
+                throw new ApiException(404, 'not_found', 'target not found');
+            }
+            if (mine && !context.memberId) return { items: [], nextCursor: null };
+            const about = await sendsAbout(tx, target);
+            if (!about) return { items: [], nextCursor: null };
+            const page = await paginate(limit, cursor, (args) =>
+                tx.mailOutbound.findMany({
+                    where: {
+                        status: { in: [...statuses] },
+                        ...about,
+                        ...(mine ? { senderMemberId: context.memberId! } : {}),
+                    },
+                    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                    include: { mailMessage: { select: { threadId: true } } },
+                    ...args,
+                }),
+            );
+            return {
+                items: page.items.map((row) => view(row, row.mailMessage?.threadId ?? null)),
+                nextCursor: page.nextCursor,
+            };
         });
     }
 
@@ -886,6 +930,26 @@ function gmailError(error: GmailApiError): SendErrorRecord {
 
 function internalError(): SendErrorRecord {
     return { code: 'internal', message: 'the send failed; it will be retried', at: new Date().toISOString() };
+}
+
+/**
+ * Which sends a record is about: a person's own, a deal's (written from it), a company's people's.
+ * `null` when there can be none (a company with no live people).
+ */
+async function sendsAbout(tx: WorkspaceClient, target: RecordTarget): Promise<Prisma.MailOutboundWhereInput | null> {
+    switch (target.type) {
+        case 'person':
+            return { personId: target.id };
+        case 'opportunity':
+            return { dealId: target.id };
+        case 'company': {
+            const people = await tx.person.findMany({
+                where: { companyId: target.id, deletedAt: null },
+                select: { id: true },
+            });
+            return people.length > 0 ? { personId: { in: people.map((p) => p.id) } } : null;
+        }
+    }
 }
 
 function view(row: OutboundRow, threadId: string | null): MailOutboundView {

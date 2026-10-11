@@ -216,7 +216,7 @@ export function TimelinePanel({
                             disabled={pending.loadingMore}
                             onClick={pending.more}
                         >
-                            {pending.loadingMore ? 'Loading…' : 'Show more scheduled sends'}
+                            {pending.loadingMore ? 'Loading…' : 'Show more sends'}
                         </Button>
                     </div>
                 )}
