@@ -8,11 +8,18 @@ import {
 } from '@bylinecrm/shared';
 import type { Request, Response } from 'express';
 import { ZodValidationException } from 'nestjs-zod';
+import { foreignKeyViolation } from '../prisma-errors';
 import { ApiException } from './api-errors';
 import { requestIdOf } from './request-id';
 
 /** What a client sees for any failure on our side. The detail is in the log, under the request id. */
 export const INTERNAL_MESSAGE = 'something went wrong on our side; quote the request id if you report it';
+
+/**
+ * What a write naming a missing record is told when the route did not say which field (the backstop
+ * for a foreign-key violation, #119). Constraint names are internal and never sent.
+ */
+export const UNKNOWN_REFERENCE_MESSAGE = 'the request refers to a record that does not exist';
 
 /** What a request that failed DTO validation is told; `fieldErrors` say where. */
 export const INVALID_REQUEST_MESSAGE = 'the request is not valid';
@@ -66,6 +73,9 @@ export function toErrorBody(exception: unknown, requestId: string): ApiErrorBody
     if (exception instanceof HttpException) {
         const status = exception.getStatus();
         return envelope(status, codeForStatus(status), messageOf(exception, status), requestId);
+    }
+    if (foreignKeyViolation(exception)) {
+        return envelope(422, 'unprocessable', UNKNOWN_REFERENCE_MESSAGE, requestId);
     }
     return envelope(500, 'internal', INTERNAL_MESSAGE, requestId);
 }

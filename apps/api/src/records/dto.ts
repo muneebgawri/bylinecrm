@@ -58,6 +58,15 @@ const personFields = {
     phones,
     jobTitle: nullableText(120),
     city: nullableText(120),
+    /** FR-CRMS-11: where the person came from; required to enrol in outreach. */
+    source: nullableText(200),
+    /** FR-CRMS-11: ISO 3166-1 alpha-2; stored upper case. */
+    country: z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z]{2}$/, 'a two-letter ISO country code, e.g. DE')
+        .transform((v) => v.toUpperCase())
+        .nullable(),
     links,
     avatarUrl: url.nullable(),
     position,

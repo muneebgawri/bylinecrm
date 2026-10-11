@@ -5,6 +5,7 @@ import { AnyMember, Requires, TenantController } from '../auth/decorators';
 import { CreateApiKeyDto, CreateInviteDto, CreateRoleDto, SetMemberRoleDto, UpdateRoleDto } from '../auth/dto';
 import { ApiKeyService, type ApiKeyView } from '../auth/api-key.service';
 import { normaliseEmail } from '../auth/auth.service';
+import { UnknownReference } from '../infra/errors/api-errors';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { AccountMail } from '../transactional-mail/account-mail';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -194,6 +195,9 @@ export class InvitesController {
         if (!current?.memberId) throw new Error('invitations are sent by a member, not by a key');
         const { token, tokenHash, expiresAt } = AuthService.newInvite();
         return this.rls.withWorkspace(async (tx) => {
+            // Looked up inside the workspace: the foreign key alone would accept another workspace's role.
+            const role = await tx.role.findUnique({ where: { id: body.roleId }, select: { id: true } });
+            if (!role) throw new UnknownReference('roleId', 'no such role in this workspace');
             const invite = await tx.workspaceInvite.create({
                 data: {
                     workspaceId: current.workspaceId,

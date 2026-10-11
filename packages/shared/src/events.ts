@@ -2,6 +2,7 @@ import type { EmailReply, EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
 import type { EmailBounce, MailboxPause } from './sending-pool.js';
+import type { EmailFailure, EnrolmentEventPayload } from './sequences.js';
 import type { SuppressionEventPayload } from './suppression.js';
 
 /**
@@ -20,6 +21,8 @@ export const EVENT_OBJECTS = [
     'template',
     'mailbox',
     'suppression',
+    'sequence',
+    'enrolment',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
@@ -99,6 +102,10 @@ export const DOMAIN_EVENT_TYPES = [
     // the address that failed and the send. A permanent one suppresses the address and counts
     // towards the mailbox's bounce rate. No timeline entry; webhooks deliver it.
     'email.bounced',
+    // A send failed for good (P3-3): the mailbox's or the recipient's state, Gmail's refusal, a check
+    // at a scheduled send's time. `recordId` is the send, `failure` why. No timeline entry (nothing was
+    // sent); a sequence reads it to reschedule, hold or stop the step; webhooks deliver it.
+    'email.failed',
     'meeting.booked',
     // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
     // writes nothing for these, webhooks deliver them.
@@ -114,6 +121,18 @@ export const DOMAIN_EVENT_TYPES = [
     // a record: the timeline writes nothing for these, webhooks deliver them.
     'suppression.added',
     'suppression.removed',
+    // Sequences (P3-3, FR-CRMS-5): `recordId` is the sequence; `sequence.updated` carries the diff
+    // (its status included). Not records: no timeline entry; webhooks deliver them.
+    'sequence.created',
+    'sequence.updated',
+    'sequence.archived',
+    // A person's enrolment in a sequence (P3-3): `recordId` is the enrolment, `enrolment` the sequence,
+    // the person, the step and — for a stop — the reason; `related` the person.
+    'enrolment.created',
+    'enrolment.step_completed',
+    'enrolment.held',
+    'enrolment.stopped',
+    'enrolment.finished',
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
@@ -176,6 +195,10 @@ interface DomainEventBase {
     bounce?: EmailBounce;
     /** Present on `mailbox.paused` (and `mailbox.resumed`, the pause it ends): why. */
     pause?: MailboxPause;
+    /** Present on `email.failed`: the send and why. */
+    failure?: EmailFailure;
+    /** Present on `enrolment.*`. */
+    enrolment?: EnrolmentEventPayload;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

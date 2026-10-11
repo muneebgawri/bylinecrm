@@ -26,6 +26,8 @@ export interface PersonInput {
     phones?: Phones | undefined;
     jobTitle?: string | null | undefined;
     city?: string | null | undefined;
+    source?: string | null | undefined;
+    country?: string | null | undefined;
     links?: Links | undefined;
     avatarUrl?: string | null | undefined;
     position?: number | undefined;
@@ -53,6 +55,8 @@ const DIFF_FIELDS = [
     'phones',
     'jobTitle',
     'city',
+    'source',
+    'country',
     'links',
     'avatarUrl',
     'position',
@@ -247,6 +251,8 @@ function fields(input: PersonInput) {
         phones: input.phones,
         jobTitle: input.jobTitle,
         city: input.city,
+        source: input.source,
+        country: input.country,
         links: input.links,
         avatarUrl: input.avatarUrl,
         position: input.position,
@@ -302,6 +308,8 @@ export function view(row: PersonRow): PersonView {
         phones: stored<Phones>(row.phones),
         jobTitle: row.jobTitle,
         city: row.city,
+        source: row.source,
+        country: row.country,
         links: stored<Links>(row.links),
         avatarUrl: row.avatarUrl,
         position: row.position,

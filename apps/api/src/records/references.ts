@@ -1,4 +1,4 @@
-import { UnprocessableEntityException } from '@nestjs/common';
+import { UnknownReference } from '../infra/errors/api-errors';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 
 /** What a caller may send for an amount: minor units, and a currency that defaults to the workspace's. */
@@ -34,24 +34,28 @@ export async function moneyColumns(
  * policies, so another workspace's member is simply not found — `422`, never a confirmation
  * that the id exists elsewhere.
  */
-export async function assertOwnerIsMember(tx: WorkspaceClient, ownerId: string | null): Promise<void> {
+export async function assertOwnerIsMember(
+    tx: WorkspaceClient,
+    ownerId: string | null,
+    field: 'ownerId' | 'assigneeId' = 'ownerId',
+): Promise<void> {
     if (ownerId === null) return;
     const member = await tx.workspaceMember.findUnique({ where: { id: ownerId }, select: { id: true } });
-    if (!member) throw new UnprocessableEntityException('owner is not a member of this workspace');
+    if (!member) throw new UnknownReference(field, 'owner is not a member of this workspace');
 }
 
 /** A person's company is a live company the caller can see. */
 export async function assertCompanyExists(tx: WorkspaceClient, companyId: string | null): Promise<void> {
     if (companyId === null) return;
     const company = await tx.company.findFirst({ where: { id: companyId, deletedAt: null }, select: { id: true } });
-    if (!company) throw new UnprocessableEntityException('company not found');
+    if (!company) throw new UnknownReference('companyId', 'company not found');
 }
 
 /** A deal's point of contact is a live person the caller can see. */
 export async function assertPersonExists(tx: WorkspaceClient, personId: string | null): Promise<void> {
     if (personId === null) return;
     const person = await tx.person.findFirst({ where: { id: personId, deletedAt: null }, select: { id: true } });
-    if (!person) throw new UnprocessableEntityException('person not found');
+    if (!person) throw new UnknownReference('pointOfContactId', 'person not found');
 }
 
 /**

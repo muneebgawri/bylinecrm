@@ -90,7 +90,7 @@ export class TasksService {
         const status = input.status ?? 'todo';
         const row = await this.rls.withWorkspace(async (tx) => {
             await assertTargetsReadable(tx, targets);
-            await assertOwnerIsMember(tx, input.assigneeId ?? null);
+            await assertOwnerIsMember(tx, input.assigneeId ?? null, 'assigneeId');
             const created = await tx.task.create({
                 data: {
                     workspaceId: context.workspaceId,
@@ -130,7 +130,7 @@ export class TasksService {
             const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
             if (targets) await assertTargetsReadable(tx, targets);
             if (patch.assigneeId != null && patch.assigneeId !== current.assigneeId) {
-                await assertOwnerIsMember(tx, patch.assigneeId);
+                await assertOwnerIsMember(tx, patch.assigneeId, 'assigneeId');
             }
             const status = patch.status ?? current.status;
             const updated = await tx.task.update({

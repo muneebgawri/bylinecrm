@@ -479,6 +479,8 @@ describe('webhooks', () => {
             return id;
         }
         const later = () => Date.now() + WEBHOOK_SWEEP_GRACE_MS + 1_000;
+        /** A delay no test run reaches: a job held this long only runs when the test promotes it. */
+        const HELD_MS = 60 * 60 * 1_000;
         const hits = (path: string) => received.filter((r) => r.path === path).length;
         const endpointAt = async (path: string) =>
             (
@@ -495,10 +497,12 @@ describe('webhooks', () => {
             const id = await strandedRow(endpoint.id);
             const sweep = app.get(WebhooksSweep);
 
-            // Inside the grace period a fresh row is not stranded: nothing is sent.
+            const queue = app.get<Queue>(getQueueToken(WEBHOOK_QUEUE));
+
+            // Inside the grace period a fresh row is not stranded: the sweep enqueues nothing for it. The
+            // sweep adds jobs before it returns, so the queue's answer is final — no waiting.
             await sweep.run();
-            await new Promise((r) => setTimeout(r, 300));
-            expect(hits(path)).toBe(0);
+            expect(await queue.getJob(id)).toBeUndefined();
 
             const first = await sweep.run(later());
             expect(first.requeued).toBeGreaterThanOrEqual(1);
@@ -508,9 +512,10 @@ describe('webhooks', () => {
             );
             expect(log.items.find((d) => d.id === id)!.attempts).toBe(1);
 
+            // A delivered row is not stranded: later sweeps enqueue nothing, so nothing can send twice.
             await sweep.run(later());
             await sweep.run(later());
-            await new Promise((r) => setTimeout(r, 500));
+            expect(await queue.getJob(id)).toBeUndefined();
             expect(hits(path)).toBe(1);
         });
 
@@ -519,18 +524,25 @@ describe('webhooks', () => {
             const endpoint = await endpointAt(path);
             const id = await strandedRow(endpoint.id);
             const queue = app.get<Queue>(getQueueToken(WEBHOOK_QUEUE));
-            // The job exists (delayed), as it would mid-retry or just after the subscriber added it.
+            // The job exists (delayed), as it would mid-retry or just after the subscriber added it. It is
+            // held far past this test's horizon and released explicitly below, so how fast the machine
+            // runs the sweeps cannot decide whether the job is still there when the assertion reads it.
             await app
                 .get(WebhooksService)
-                .enqueue({ deliveryId: id, workspaceId: workspace, endpointId: endpoint.id }, 1_500);
+                .enqueue({ deliveryId: id, workspaceId: workspace, endpointId: endpoint.id }, HELD_MS);
             await app.get(WebhooksSweep).run(later());
             await app.get(WebhooksSweep).run(later());
-            expect(await queue.getJob(id)).toBeDefined();
+            const held = await queue.getJob(id);
+            expect(await held?.getState()).toBe('delayed');
+            expect(hits(path)).toBe(0);
+
+            await held!.promote();
             await until(
                 () => deliveriesOf(endpoint.id),
                 (page) => page.items.some((d) => d.id === id && d.status === 'succeeded'),
             );
-            await new Promise((r) => setTimeout(r, 500));
+            // The one job ran and was removed; the sweeps added no second job (same id), so one request.
+            expect(await queue.getJob(id)).toBeUndefined();
             expect(hits(path)).toBe(1);
         });
 

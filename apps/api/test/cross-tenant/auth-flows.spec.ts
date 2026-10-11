@@ -193,6 +193,29 @@ describe('auth flows', () => {
             await verifyAddress(app, http, emailM);
         });
 
+        it("#119: an invitation naming a role that is not this workspace's is refused at roleId, never a 500", async () => {
+            const rolesB = await http().get(`/api/w/${workspaceB}/roles`).set('Cookie', b.cookie).expect(200);
+            const foreignRoleId = (rolesB.body as { id: string; name: string }[]).find(
+                (r) => r.name === SYSTEM_ROLES.member,
+            )!.id;
+            // A role that exists nowhere, and one that exists in another workspace: a foreign key would
+            // accept the second (Postgres checks it without row-level security), so the API must refuse it.
+            for (const roleId of [crypto.randomUUID(), foreignRoleId]) {
+                const res = await http()
+                    .post(`/api/w/${workspaceA}/invites`)
+                    .set('Cookie', a.cookie)
+                    .set(CSRF_HEADER, a.csrf)
+                    .send({ email: `nobody-${crypto.randomUUID()}@example.com`, roleId })
+                    .expect(422);
+                expect(res.body).toMatchObject({
+                    code: 'unprocessable',
+                    fieldErrors: [{ path: 'roleId' }],
+                });
+            }
+            const invites = await http().get(`/api/w/${workspaceA}/invites`).set('Cookie', a.cookie).expect(200);
+            expect((invites.body as { roleId: string }[]).some((i) => i.roleId === foreignRoleId)).toBe(false);
+        });
+
         it('a member can read roles but not change them', async () => {
             await http().get(`/api/w/${workspaceA}/roles`).set('Cookie', m.cookie).expect(200);
             const res = await http()
