@@ -18,6 +18,7 @@ import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { TimelineService } from '../../src/timeline/timeline.service';
 import { TimelineSubscriber } from '../../src/timeline/timeline.subscriber';
 import { WebhooksSubscriber } from '../../src/webhooks/webhooks.subscriber';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -87,12 +88,14 @@ describe('P1-6 transactional outbox (#98)', () => {
             .post('/api/auth/signup')
             .send({ email: `outbox-${stamp}@example.test`, password, workspaceName: 'Outbox Co' })
             .expect(201);
+        await verifyAddress(app, http, `outbox-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
         const otherSignup = await http()
             .post('/api/auth/signup')
             .send({ email: `outbox-other-${stamp}@example.test`, password, workspaceName: 'Outbox Elsewhere' })
             .expect(201);
+        await verifyAddress(app, http, `outbox-other-${stamp}@example.test`);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
         // Deliver what sign-up recorded, so each test starts from an empty queue.
         await relay.drain();
