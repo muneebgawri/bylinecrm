@@ -60,6 +60,10 @@ GRANT USAGE ON SEQUENCE "outbox_events_seq_seq" TO bylinecrm_app;
 ALTER TABLE "timeline_activities" ADD COLUMN "event_id" UUID;
 CREATE UNIQUE INDEX "timeline_activities_workspace_id_event_id_target_type_targe_key" ON "timeline_activities"("workspace_id", "event_id", "target_type", "target_id");
 
--- Webhooks: one delivery per (event, endpoint). `event_id` was already the event's; now it is the
--- outbox row's id, so a redelivered event finds its deliveries instead of making new ones.
-CREATE UNIQUE INDEX "webhook_deliveries_event_id_endpoint_id_key" ON "webhook_deliveries"("event_id", "endpoint_id");
+-- Webhooks: one automatic delivery per (event, endpoint). `event_id` was already the event's; now it
+-- is the outbox row's id, so a redelivered event finds its deliveries instead of making new ones. A
+-- person's manual redelivery is a deliberate second delivery of the same event and names the one it
+-- repeats; it is outside the rule (partial index). Not a foreign key: retention removes rows on its
+-- own schedule, and a redelivery outlives neither nor depends on the original.
+ALTER TABLE "webhook_deliveries" ADD COLUMN "redelivery_of_id" UUID;
+CREATE UNIQUE INDEX "webhook_deliveries_event_id_endpoint_id_key" ON "webhook_deliveries"("event_id", "endpoint_id") WHERE "redelivery_of_id" IS NULL;

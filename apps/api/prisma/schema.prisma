@@ -808,8 +808,12 @@ model WebhookDelivery {
   workspaceId      String                @map("workspace_id") @db.Uuid
   endpointId       String                @map("endpoint_id") @db.Uuid
   /// The outbox event's id: one per published event, shared by every endpoint's delivery of it, and
-  /// unique with the endpoint, so a redelivered event finds its deliveries instead of adding more (P1-6).
+  /// unique with the endpoint among automatic deliveries (partial unique index), so a redelivered event
+  /// finds its deliveries instead of adding more (P1-6).
   eventId          String                @map("event_id") @db.Uuid
+  /// A person's manual redelivery: the delivery it repeats. Outside the one-per-event rule; not a
+  /// foreign key, since retention removes rows on its own schedule.
+  redeliveryOfId   String?               @map("redelivery_of_id") @db.Uuid
   eventName        String                @map("event_name")
   payload          Json
   status           WebhookDeliveryStatus @default(pending)
@@ -825,7 +829,6 @@ model WebhookDelivery {
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   endpoint  WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
-  @@unique([eventId, endpointId])
   @@index([workspaceId, endpointId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("webhook_deliveries")

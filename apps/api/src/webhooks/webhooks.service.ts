@@ -247,6 +247,7 @@ export class WebhooksService {
                     workspaceId,
                     endpointId: endpoint.id,
                     eventId: original.eventId,
+                    redeliveryOfId: original.id,
                     eventName: original.eventName,
                     payload: { ...payload, id } as unknown as Prisma.InputJsonValue,
                 },
@@ -261,8 +262,8 @@ export class WebhooksService {
     /**
      * Called by the subscriber for every recorded event: one delivery row and one job per enabled
      * endpoint whose subscription names the event. Runs in the event's workspace with no request
-     * context (the relay is not a request). Idempotent on the outbox event (P1-6): a delivery is
-     * unique per (event, endpoint), so a redelivered event adds no row, and only rows still
+     * context (the relay is not a request). Idempotent on the outbox event (P1-6): an automatic
+     * delivery is unique per (event, endpoint), so a redelivered event adds no row, and only rows still
      * `pending` are enqueued — under their own id, which the queue never holds twice. Returns how
      * many deliveries the event has.
      */
@@ -294,7 +295,7 @@ export class WebhooksService {
                 skipDuplicates: true,
             });
             const rows = await tx.webhookDelivery.findMany({
-                where: { eventId, status: 'pending' },
+                where: { eventId, redeliveryOfId: null, status: 'pending' },
                 select: { id: true, endpointId: true },
             });
             return rows.map((row): DeliveryJob => ({
