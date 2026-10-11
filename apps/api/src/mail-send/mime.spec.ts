@@ -9,6 +9,7 @@ const base: MimeInput = {
     text: 'Hi Dana,\n\nAttached.',
     html: '<p>Hi Dana,</p><p>Attached.</p>',
     messageId: '0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b@bylinecrm',
+    crmId: '0190a1b2-c3d4-7e5f-8a6b-bbbbbbbbbbbb',
     date: new Date('2026-10-10T09:30:00.000Z'),
 };
 
@@ -44,6 +45,13 @@ describe('FR-CRMS-2 the MIME builder', () => {
         expect(h.get('content-type')).toMatch(/^multipart\/alternative; boundary="[^"]+"$/);
         expect(h.has('in-reply-to')).toBe(false);
         expect(h.has('references')).toBe(false);
+    });
+
+    it('stamps our own X-BylineCRM-Id, which Gmail keeps when it rewrites the Message-ID (#87)', () => {
+        const crmId = '0190a1b2-c3d4-7e5f-8a6b-aaaaaaaaaaaa';
+        const h = headersOf(buildMime({ ...base, crmId }));
+        expect(h.get('x-bylinecrm-id')).toBe(crmId);
+        expect(h.get('message-id')).toBe('<0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b@bylinecrm>');
     });
 
     it('uses CRLF line endings and no line over 998 characters', () => {

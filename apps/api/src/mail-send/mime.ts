@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import libmime from 'libmime';
-import { MAIL_MESSAGE_ID_DOMAIN } from './mail-send.constants';
+import { MAIL_CRM_ID_HEADER, MAIL_MESSAGE_ID_DOMAIN } from './mail-send.constants';
 
 /**
  * The one MIME builder (P2-3): what the CRM sends, as RFC 5322 text Gmail accepts as `raw`. Pure —
@@ -28,6 +28,8 @@ export interface MimeInput {
     html: string;
     /** Without angle brackets: `<uuid>@bylinecrm`. */
     messageId: string;
+    /** The send's id, written as `X-BylineCRM-Id` — the header Gmail keeps when it rewrites Message-ID. */
+    crmId: string;
     /** The parent's Message-ID, without angle brackets, when this is a reply. */
     inReplyTo?: string | null | undefined;
     /** The parent's References then the parent, oldest first, without angle brackets. */
@@ -63,6 +65,7 @@ export function buildMime(input: MimeInput): string {
         ['Subject', text(input.subject)],
         ['Date', rfc5322Date(input.date)],
         ['Message-ID', `<${input.messageId}>`],
+        [MAIL_CRM_ID_HEADER, oneLine(input.crmId)],
         ...(input.inReplyTo ? [['In-Reply-To', `<${input.inReplyTo}>`] as [string, string]] : []),
         ...(input.references?.length
             ? [['References', input.references.map((id) => `<${id}>`).join(' ')] as [string, string]]
