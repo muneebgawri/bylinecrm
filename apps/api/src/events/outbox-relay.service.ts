@@ -1,9 +1,9 @@
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
-import { Prisma } from '@prisma/client';
 import type { DomainEvent } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
+import { describe, RelayEngine, type ClaimedBase, type HandleResult, type SettleState } from '../infra/relay-engine';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { OutboxConsumerOf, type OutboxConsumer } from './outbox-consumer';
 import {
@@ -17,7 +17,7 @@ import {
     outboxRetryDelayMs,
 } from './outbox.constants';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+export type { DeliveryOutcome } from '../infra/relay-engine';
 
 /** A consumer and the name its completions are stored under. */
 interface NamedConsumer {
@@ -26,158 +26,104 @@ interface NamedConsumer {
 }
 
 /** An event one scan claimed. */
-interface ClaimedRow {
-    id: string;
+interface ClaimedRow extends ClaimedBase {
     workspaceId: string;
     payload: DomainEvent;
     completedConsumers: string[];
-    /** Including the attempt this claim starts. */
-    attempts: number;
 }
 
-/** How one delivery went, for the relay's own bookkeeping and the tests. */
-export type DeliveryOutcome = 'completed' | 'retrying' | 'failed';
+/** What a delivery writes besides its outcome: the consumers that have finished the event. */
+interface DeliveryExtra {
+    completedConsumers: string[];
+}
 
 /**
- * Delivers recorded domain events to the consumers (P1-6), at least once.
+ * Delivers recorded domain events to the consumers (P1-6), at least once, on the shared relay
+ * engine (`RelayEngine`): claims with `FOR UPDATE SKIP LOCKED` and a lease, retries with a doubling
+ * wait, gives up past `OUTBOX_MAX_ATTEMPTS`, wakes on a local commit and polls every
+ * `OUTBOX_POLL_MS`, keeps rows for `OUTBOX_RETENTION_DAYS`.
  *
- * A scan claims open events — not finished, not failed, due, not held by a live claim — with
- * `FOR UPDATE SKIP LOCKED`, sets a lease on them and counts the attempt, in one short statement.
- * It then hands each event to every consumer that accepts it and has not finished it yet, each in a
- * job scope (the background pool, never a request's), and writes the outcome: finished, a retry
- * after a doubling wait, or — past `OUTBOX_MAX_ATTEMPTS` — failed. A relay that dies mid-delivery
- * leaves its lease to expire; the next scan claims the event again. Consumers are idempotent on the
- * event id, so a second delivery writes nothing twice. Several processes may relay at once: claims
- * never overlap.
- *
- * It runs as the owner because it spans every workspace (like the webhook sweep); the consumers'
- * own writes go through `withWorkspace` in the event's workspace, under the policies.
- *
- * A commit in this process wakes it (`kick`); a timer scans every `OUTBOX_POLL_MS` for everything
- * else. `OUTBOX_RELAY=0` turns both off, for a process that should not deliver (compile-only runs).
+ * What is this relay's own: each claimed event goes to every consumer that accepts it and has not
+ * finished it yet, each in a job scope in the event's workspace (the background pool, never a
+ * request's); the consumers that finished are stored, so a retry runs only the others. Consumers are
+ * idempotent on the event id. It runs as the owner because it spans every workspace; the consumers'
+ * own writes go through `withWorkspace` under the policies. `OUTBOX_RELAY=0` turns the wake-ups and
+ * timers off, for a process that should not deliver (compile-only runs).
  */
 @Injectable()
 export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
-    private readonly logger = new Logger(OutboxRelay.name);
     private consumers: NamedConsumer[] = [];
-    /** The pass loop in flight, if any. */
-    private running: Promise<void> | null = null;
-    /** A kick arrived while a pass loop ran: run another pass before stopping. */
-    private kicked = false;
-    private timers: NodeJS.Timeout[] = [];
-    private stopped = false;
+    private readonly engine: RelayEngine<ClaimedRow, DeliveryExtra>;
 
     constructor(
-        @Inject(ENV) private readonly env: Env,
+        @Inject(ENV) env: Env,
         private readonly ownerPrisma: PrismaService,
         private readonly context: WorkspaceContext,
         private readonly discovery: DiscoveryService,
-    ) {}
+    ) {
+        this.engine = new RelayEngine<ClaimedRow, DeliveryExtra>(
+            {
+                name: 'outbox',
+                table: 'outbox_events',
+                doneColumn: 'completed_at',
+                returning: 'workspace_id AS "workspaceId", payload, completed_consumers AS "completedConsumers"',
+                enabled: env.OUTBOX_RELAY,
+                pollMs: OUTBOX_POLL_MS,
+                batch: OUTBOX_BATCH,
+                concurrency: OUTBOX_CONCURRENCY,
+                leaseMs: OUTBOX_LEASE_MS,
+                maxAttempts: OUTBOX_MAX_ATTEMPTS,
+                retryDelayMs: outboxRetryDelayMs,
+                retention: {
+                    doneDays: OUTBOX_RETENTION_DAYS.completed,
+                    failedDays: OUTBOX_RETENTION_DAYS.failed,
+                    everyMs: OUTBOX_RETENTION_EVERY_MS,
+                },
+                label: (row) => `outbox event ${row.id} (${row.payload.type})`,
+                handle: (row) => this.deliver(row),
+                settle: (id, state, extra) => this.settle(id, state, extra),
+            },
+            ownerPrisma,
+            context,
+            OutboxRelay.name,
+        );
+    }
 
     onApplicationBootstrap(): void {
         this.consumers = this.discover();
-        if (!this.env.OUTBOX_RELAY) return;
-        this.timers.push(
-            setInterval(() => this.kick(), OUTBOX_POLL_MS).unref(),
-            setInterval(() => void this.pruneLogged(), OUTBOX_RETENTION_EVERY_MS).unref(),
-        );
-        // Once now: events committed while no relay ran are delivered at start, not on the first tick.
-        this.kick();
+        this.engine.start();
     }
 
-    async onModuleDestroy(): Promise<void> {
-        this.stopped = true;
-        for (const timer of this.timers) clearInterval(timer);
-        this.timers = [];
-        // Let deliveries in flight finish; an interrupted one would wait out its lease.
-        await this.running;
+    onModuleDestroy(): Promise<void> {
+        return this.engine.stop();
     }
 
-    /**
-     * Wakes the relay: starts a pass loop, or asks the running one for another pass. Never throws
-     * and never waits — it is called from a commit hook. The loop runs detached from the caller's
-     * request, so its work is neither on the request pool nor counted against the request.
-     */
+    /** Wakes the relay; never throws and never waits — it is called from a commit hook. */
     kick(): void {
-        if (!this.env.OUTBOX_RELAY || this.stopped) return;
-        if (this.running) {
-            this.kicked = true;
-            return;
-        }
-        this.running = this.context
-            .detached(() => this.loop())
-            .finally(() => {
-                this.running = null;
-            });
+        this.engine.kick();
     }
 
     /**
      * Delivers until nothing is due, waiting for any pass already in flight. A test calls it after
      * a mutation to observe the consumers' effects (#89); it also works with the relay switched off.
      */
-    async drain(now?: () => Date): Promise<void> {
-        for (;;) {
-            await this.running;
-            const claimed = await this.context.detached(() => this.runOnce(now?.()));
-            if (claimed === 0 && !this.running) return;
-        }
+    drain(now?: () => Date): Promise<void> {
+        return this.engine.drain(now);
     }
 
     /** One scan: claims what is due at `now` and delivers it. Returns how many events it claimed. */
-    async runOnce(now: Date = new Date()): Promise<number> {
-        const claimed = await this.claim(now);
-        for (let i = 0; i < claimed.length; i += OUTBOX_CONCURRENCY) {
-            await Promise.all(claimed.slice(i, i + OUTBOX_CONCURRENCY).map((row) => this.deliver(row, now)));
-        }
-        return claimed.length;
+    runOnce(now?: Date): Promise<number> {
+        return this.engine.runOnce(now);
     }
 
     /** Removes delivered events past their retention, and failed ones past theirs. Owner only: the app role cannot delete. */
     async prune(now = Date.now()): Promise<{ completed: number; failed: number }> {
-        const completed = await this.ownerPrisma.outboxEvent.deleteMany({
-            where: { completedAt: { lt: new Date(now - OUTBOX_RETENTION_DAYS.completed * DAY_MS) } },
-        });
-        const failed = await this.ownerPrisma.outboxEvent.deleteMany({
-            where: { failedAt: { lt: new Date(now - OUTBOX_RETENTION_DAYS.failed * DAY_MS) } },
-        });
-        return { completed: completed.count, failed: failed.count };
+        const { done, failed } = await this.engine.prune(now);
+        return { completed: done, failed };
     }
 
-    private async loop(): Promise<void> {
-        do {
-            this.kicked = false;
-            try {
-                while (!this.stopped && (await this.runOnce()) > 0) {
-                    // A full batch may mean more is due: scan again at once.
-                }
-            } catch (error) {
-                // The scan itself failed (the database is unreachable); the next tick tries again.
-                this.logger.error(`outbox scan failed: ${describe(error)}`);
-                return;
-            }
-        } while (this.kicked && !this.stopped);
-    }
-
-    private async claim(now: Date): Promise<ClaimedRow[]> {
-        const leaseUntil = new Date(now.getTime() + OUTBOX_LEASE_MS);
-        return this.ownerPrisma.$queryRaw<ClaimedRow[]>(Prisma.sql`
-            UPDATE outbox_events
-            SET lease_until = ${leaseUntil}, attempts = attempts + 1
-            WHERE id IN (
-                SELECT id FROM outbox_events
-                WHERE completed_at IS NULL AND failed_at IS NULL
-                  AND (next_attempt_at IS NULL OR next_attempt_at <= ${now})
-                  AND (lease_until IS NULL OR lease_until <= ${now})
-                ORDER BY seq
-                LIMIT ${OUTBOX_BATCH}
-                FOR UPDATE SKIP LOCKED
-            )
-            RETURNING id, workspace_id AS "workspaceId", payload,
-                      completed_consumers AS "completedConsumers", attempts`);
-    }
-
-    /** Hands one claimed event to every consumer still owed it, then records how that went. */
-    private async deliver(row: ClaimedRow, now: Date): Promise<DeliveryOutcome> {
+    /** Hands one claimed event to every consumer still owed it. */
+    private async deliver(row: ClaimedRow): Promise<HandleResult<DeliveryExtra>> {
         const done = new Set(row.completedConsumers);
         const errors: string[] = [];
         for (const { name, consumer } of this.consumers) {
@@ -191,41 +137,22 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
                 errors.push(`${name}: ${describe(error)}`);
             }
         }
-        const completedConsumers = [...done];
-        if (errors.length === 0) {
-            await this.settle(row.id, { completedConsumers, completedAt: new Date(), lastError: null });
-            return 'completed';
-        }
-        const lastError = errors.join('; ');
-        if (row.attempts >= OUTBOX_MAX_ATTEMPTS) {
-            await this.settle(row.id, { completedConsumers, failedAt: new Date(), lastError });
-            this.logger.error(
-                `outbox event ${row.id} (${row.payload.type}) failed after ${row.attempts} attempts: ${lastError}`,
-            );
-            return 'failed';
-        }
-        const nextAttemptAt = new Date(now.getTime() + outboxRetryDelayMs(row.attempts));
-        await this.settle(row.id, { completedConsumers, nextAttemptAt, lastError });
-        this.logger.warn(
-            `outbox event ${row.id} (${row.payload.type}) attempt ${row.attempts} failed, retrying at ${nextAttemptAt.toISOString()}: ${lastError}`,
-        );
-        return 'retrying';
+        const extra = { completedConsumers: [...done] };
+        return errors.length === 0 ? { ok: true, extra } : { ok: false, error: errors.join('; '), extra };
     }
 
-    /** Writes a delivery's outcome and releases the claim. */
-    private async settle(id: string, data: Prisma.OutboxEventUpdateInput): Promise<void> {
-        await this.ownerPrisma.outboxEvent.update({ where: { id }, data: { ...data, leaseUntil: null } });
-    }
-
-    private async pruneLogged(): Promise<void> {
-        try {
-            const pruned = await this.prune();
-            if (pruned.completed + pruned.failed > 0) {
-                this.logger.log(`pruned ${pruned.completed} delivered and ${pruned.failed} failed outbox events`);
-            }
-        } catch (error) {
-            this.logger.error(`outbox retention failed: ${describe(error)}`);
-        }
+    /** Writes a delivery's outcome and the consumers that finished, and releases the claim. */
+    private async settle(id: string, state: SettleState, extra: DeliveryExtra | undefined): Promise<void> {
+        const outcome =
+            state.outcome === 'completed'
+                ? { completedAt: state.at, lastError: null }
+                : state.outcome === 'failed'
+                  ? { failedAt: state.at, lastError: state.lastError }
+                  : { nextAttemptAt: state.nextAttemptAt, lastError: state.lastError };
+        await this.ownerPrisma.outboxEvent.update({
+            where: { id },
+            data: { ...outcome, ...(extra ?? {}), leaseUntil: null },
+        });
     }
 
     /** Every provider marked `@OutboxConsumerOf(name)`; two with one name is a programming error. */
@@ -239,8 +166,4 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
         }
         return found.sort((a, b) => a.name.localeCompare(b.name));
     }
-}
-
-function describe(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

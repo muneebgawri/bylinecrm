@@ -6,13 +6,15 @@ import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinec
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../../src/app.module';
-import { APP_OPTIONS, configureApp } from '../../src/app';
+import { APP_OPTIONS, configureApp, createApp } from '../../src/app';
 import { hashToken } from '../../src/auth/tokens';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { TransactionAcrossNetworkError, transactionOpen } from '../../src/infra/transaction-scope';
 import { memoryOutbox } from '../../src/transactional-mail/memory.transport';
 import { MailOutbox } from '../../src/transactional-mail/mail-outbox';
+import { MailOutboxRelay } from '../../src/transactional-mail/mail-outbox-relay';
+import { MAIL_OUTBOX_LEASE_MS } from '../../src/transactional-mail/transactional-mail.constants';
 import {
     TRANSACTIONAL_MAIL_TRANSPORT,
     type OutgoingMail,
@@ -365,6 +367,109 @@ describe('#93 transactional mail', () => {
         it('#93: the transport is never called inside a tenant transaction', () => {
             expect(transport.calls.length).toBeGreaterThan(0);
             expect(transport.calls.filter((c) => c.insideTransaction)).toEqual([]);
+        });
+    });
+
+    describe('two mail relays on one database (shared relay engine)', () => {
+        let second: INestApplication;
+        let relayA: MailOutboxRelay;
+        let relayB: MailOutboxRelay;
+        /** Which relay's transport was asked to send which mail. */
+        let sends: { relay: 'A' | 'B'; key: string }[];
+
+        const recordMany = async (count: number, tag: string): Promise<string[]> => {
+            await deliverMail(app);
+            const outbox = app.get(MailOutbox);
+            const keys = Array.from({ length: count }, (_, i) => `test-${tag}-${stamp}-${i}`);
+            for (const key of keys) {
+                await outbox.record(owner, {
+                    kind: 'email_verification',
+                    to: `${key}@example.test`,
+                    subject: 'concurrent',
+                    html: '<p>c</p>',
+                    text: 'c',
+                    idempotencyKey: key,
+                });
+            }
+            return keys;
+        };
+
+        beforeAll(async () => {
+            // A second process: its own application, pools and (memory) transport, the same database.
+            second = await createApp();
+            await second.init();
+            relayA = app.get(MailOutboxRelay);
+            relayB = second.get(MailOutboxRelay);
+            const transportB = second.get<TransactionalMailTransport>(TRANSACTIONAL_MAIL_TRANSPORT);
+            const sendB = transportB.send.bind(transportB);
+            vi.spyOn(transportB, 'send').mockImplementation((mail) => {
+                sends.push({ relay: 'B', key: mail.idempotencyKey });
+                return sendB(mail);
+            });
+            const sendA = transport.send.bind(transport);
+            vi.spyOn(transport, 'send').mockImplementation((mail) => {
+                sends.push({ relay: 'A', key: mail.idempotencyKey });
+                return sendA(mail);
+            });
+        });
+
+        afterAll(async () => {
+            vi.restoreAllMocks();
+            await second?.close();
+        });
+
+        it('#93: scanning at the same moment, they send every mail exactly once — no claim is shared', async () => {
+            const keys = await recordMany(60, 'concurrent');
+            sends = [];
+            const now = new Date();
+            for (;;) {
+                const claimed = await Promise.all([
+                    relayA.runOnce(now),
+                    relayB.runOnce(now),
+                    relayA.runOnce(now),
+                    relayB.runOnce(now),
+                ]);
+                if (claimed.every((n) => n === 0)) break;
+            }
+            const mine = sends.filter((s) => keys.includes(s.key));
+            expect(mine).toHaveLength(keys.length);
+            expect(new Set(mine.map((s) => s.key)).size).toBe(keys.length);
+            expect(new Set(mine.map((s) => s.relay))).toEqual(new Set(['A', 'B']));
+            const rows = await owner.mailOutbox.findMany({ where: { idempotencyKey: { in: keys } } });
+            expect(rows.every((r) => r.sentAt !== null && r.attempts === 1 && r.sealed === '')).toBe(true);
+        });
+
+        it('#93: a mail one relay holds is not taken by the other until the lease expires, then the other sends it', async () => {
+            const [key] = await recordMany(1, 'lease');
+            sends = [];
+            let release!: () => void;
+            const stalled = new Promise<void>((resolve) => (release = resolve));
+            let entered!: () => void;
+            const inside = new Promise<void>((resolve) => (entered = resolve));
+            const sendA = vi.mocked(transport.send).getMockImplementation()!;
+            vi.mocked(transport.send).mockImplementationOnce(async (mail) => {
+                entered();
+                await stalled;
+                return sendA(mail);
+            });
+
+            const claimedAt = Date.now();
+            const held = relayA.runOnce(new Date(claimedAt));
+            await inside;
+
+            await relayB.runOnce(new Date(claimedAt + MAIL_OUTBOX_LEASE_MS - 1));
+            expect(sends.filter((s) => s.key === key && s.relay === 'B')).toHaveLength(0);
+
+            await relayB.runOnce(new Date(claimedAt + MAIL_OUTBOX_LEASE_MS));
+            expect(sends.filter((s) => s.key === key && s.relay === 'B')).toHaveLength(1);
+            const handedOver = await owner.mailOutbox.findUniqueOrThrow({ where: { idempotencyKey: key! } });
+            expect(handedOver.sentAt).not.toBeNull();
+            expect(handedOver.attempts).toBe(2);
+
+            // A wakes and sends too, with the same idempotency key: the provider keeps one message.
+            release();
+            await held;
+            expect(mailTo(`${key}@example.test`)).toHaveLength(1);
         });
     });
 });
