@@ -63,6 +63,16 @@ export function stageMovedText(name: string, index: number, total: number): stri
     return `${name} moved to position ${index + 1} of ${total}.`;
 }
 
+/** "1 deal", "6,000 deals" — counts as a person reads them. */
+export function dealCount(n: number): string {
+    return `${n.toLocaleString('en-US')} ${n === 1 ? 'deal' : 'deals'}`;
+}
+
+/** The toast after a stage is deleted by moving its deals: "Moved 3 deals to Replied and deleted Contacted". */
+export function movedDealsText(moved: number, toStage: string, deletedStage: string): string {
+    return `Moved ${dealCount(moved)} to ${toStage} and deleted ${deletedStage}`;
+}
+
 /** The API's key grammar for a custom field: a lower-case letter, then letters, digits or `_`, 64 at most. */
 export const FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 

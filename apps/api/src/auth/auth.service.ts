@@ -54,7 +54,9 @@ export class AuthService {
         const passwordHash = await this.passwords.hash(input.password);
         try {
             return await this.ownerPrisma.$transaction(async (tx) => {
-                const user = await tx.user.create({ data: { email, passwordHash } });
+                const user = await tx.user.create({
+                    data: { email, passwordHash, displayName: displayNameFor(email) },
+                });
                 const workspace = await createWorkspaceWithAdmin(tx, user.id, input.workspaceName);
                 return { user: userView(user), workspace };
             });
@@ -108,7 +110,9 @@ export class AuthService {
             if (known) return userView(known.user);
             const user =
                 (await tx.user.findUnique({ where: { email } })) ??
-                (await tx.user.create({ data: { email, emailVerifiedAt: new Date() } }));
+                (await tx.user.create({
+                    data: { email, emailVerifiedAt: new Date(), displayName: displayNameFor(email) },
+                }));
             if (!user.emailVerifiedAt) {
                 await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
             }
@@ -139,7 +143,14 @@ export class AuthService {
             let userId: string;
             if ('signup' in actor) {
                 const created = await tx.user
-                    .create({ data: { email: invite.email, passwordHash, emailVerifiedAt: new Date() } })
+                    .create({
+                        data: {
+                            email: invite.email,
+                            passwordHash,
+                            emailVerifiedAt: new Date(),
+                            displayName: displayNameFor(invite.email),
+                        },
+                    })
                     .catch((error: unknown) => {
                         throw uniqueViolation(error) ? new UniqueConflict('sign in to accept this invitation') : error;
                     });
@@ -153,12 +164,7 @@ export class AuthService {
             }
             await tx.workspaceMember
                 .create({
-                    data: {
-                        workspaceId: invite.workspaceId,
-                        userId,
-                        roleId: invite.roleId,
-                        displayName: displayNameFor(invite.email),
-                    },
+                    data: { workspaceId: invite.workspaceId, userId, roleId: invite.roleId },
                 })
                 .catch((error: unknown) => {
                     throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
@@ -198,18 +204,15 @@ async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: strin
             },
         },
     });
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
-    await tx.workspaceMember.create({
-        data: { workspaceId: workspace.id, userId, roleId: admin.id, displayName: displayNameFor(user.email) },
-    });
+    await tx.workspaceMember.create({ data: { workspaceId: workspace.id, userId, roleId: admin.id } });
     // The pipeline deals go into (P1-2), from the one stage list; a workspace is not usable without it.
     await seedDefaultPipeline(tx, workspace.id);
     return workspaceView(workspace);
 }
 
 /**
- * The name a new member is shown under until they set one: the local part of their address.
- * Other members see this and never the address itself (`/members/summary`).
+ * The name a new person is shown under until they confirm one (`/api/me/profile`): the local part
+ * of their address. Other members see this and never the address itself (`/members/summary`).
  */
 export function displayNameFor(email: string): string {
     return email.split('@')[0] ?? email;

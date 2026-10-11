@@ -20,6 +20,7 @@ import { ApiError } from '../../../api/client';
 import { useCreateDeal, useRecordList } from '../../../api/queries';
 import type { CompanyView, PipelineView } from '../../../api/types';
 import { parseMoneyInput } from '../../../lib/money';
+import { fieldTitle } from '../records/fields';
 
 export interface NewDealDialogProps {
     workspaceId: string;
@@ -180,7 +181,7 @@ function NewDealForm({
                     <Field label={`Amount (${currency})`} error={errors.amount}>
                         <Input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
                     </Field>
-                    <Field label="Close date" error={errors.closeDate}>
+                    <Field label={fieldTitle('closeDate')} error={errors.closeDate}>
                         <Input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} />
                     </Field>
                 </div>

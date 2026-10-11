@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SYSTEM_ROLES } from '@bylinecrm/shared';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { MEMBER_SUMMARY_SELECT, memberSummaryOf } from '../records/summaries';
 import type { MemberSummaryView, MemberView } from './responses';
 export type { MemberSummaryView, MemberView } from './responses';
 
@@ -15,13 +16,14 @@ export class MembersService {
     list(): Promise<MemberView[]> {
         return this.rls.withWorkspace(async (tx) => {
             const members = await tx.workspaceMember.findMany({
-                include: { user: { select: { email: true } }, role: { select: { name: true } } },
+                include: { user: { select: { email: true, displayName: true } }, role: { select: { name: true } } },
                 orderBy: { createdAt: 'asc' },
             });
             return members.map((m) => ({
                 id: m.id,
                 userId: m.userId,
                 email: m.user.email,
+                displayName: m.user.displayName,
                 roleId: m.roleId,
                 roleName: m.role.name,
                 createdAt: m.createdAt,
@@ -33,10 +35,10 @@ export class MembersService {
     summary(): Promise<MemberSummaryView[]> {
         return this.rls.withWorkspace(async (tx) => {
             const members = await tx.workspaceMember.findMany({
-                select: { id: true, displayName: true },
-                orderBy: [{ displayName: 'asc' }, { createdAt: 'asc' }],
+                select: MEMBER_SUMMARY_SELECT,
+                orderBy: [{ user: { displayName: 'asc' } }, { createdAt: 'asc' }],
             });
-            return members.map((m) => ({ memberId: m.id, name: m.displayName }));
+            return members.map(memberSummaryOf);
         });
     }
 

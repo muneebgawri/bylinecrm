@@ -55,6 +55,7 @@ import type {
     PersonView,
     PipelineView,
     PreviewTemplateInput,
+    ProfileView,
     PutMailSettingsInput,
     PutOAuthClientInput,
     RenderedEmailView,
@@ -141,7 +142,10 @@ export const auth = {
 };
 
 export const me = {
-    profile: (signal?: AbortSignal) => request<UserView>('GET', '/me', { signal }),
+    current: (signal?: AbortSignal) => request<UserView>('GET', '/me', { signal }),
+    /** The person's own profile: the name every workspace shows them under (P1-UI-10). */
+    profile: (signal?: AbortSignal) => request<ProfileView>('GET', '/me/profile', { signal }),
+    updateProfile: (displayName: string) => request<ProfileView>('PATCH', '/me/profile', { body: { displayName } }),
     workspaces: (signal?: AbortSignal) => request<WorkspaceView[]>('GET', '/me/workspaces', { signal }),
     createWorkspace: (name: string) => request<WorkspaceView>('POST', '/workspaces', { body: { name } }),
 };
@@ -278,8 +282,16 @@ export const pipelines = {
             body: input,
         }),
     /** Refused (409) while deals — the trash included — or rules point at the stage. */
-    removeStage: (workspaceId: string, pipelineId: string, stageId: string) =>
-        request<void>('DELETE', workspacePath(workspaceId, `/pipelines/${pipelineId}/stages/${stageId}`)),
+    /**
+     * Deletes a stage. With `moveDealsTo` (an open stage of the same pipeline) the server first moves
+     * every deal in it — the trash included — in the same transaction (P1-2b); without it, a stage
+     * holding deals is refused with `details: { liveDeals, trashedDeals }`.
+     */
+    removeStage: (workspaceId: string, pipelineId: string, stageId: string, moveDealsTo?: string) =>
+        request<void>(
+            'DELETE',
+            workspacePath(workspaceId, `/pipelines/${pipelineId}/stages/${stageId}${query({ moveDealsTo })}`),
+        ),
     /** `stageIds` is every stage of the pipeline, in the new order. */
     orderStages: (workspaceId: string, pipelineId: string, stageIds: readonly string[]) =>
         request<PipelineView>('PUT', workspacePath(workspaceId, `/pipelines/${pipelineId}/stages/order`), {
@@ -326,6 +338,9 @@ export const customFields = {
     /** Archives, never deletes: records keep the value. */
     archive: (workspaceId: string, fieldId: string) =>
         request<void>('DELETE', workspacePath(workspaceId, `/custom-fields/${fieldId}`)),
+    /** Un-archives: the key is accepted on records again (its key stayed reserved while archived). */
+    restore: (workspaceId: string, fieldId: string) =>
+        request<CustomFieldView>('POST', workspacePath(workspaceId, `/custom-fields/${fieldId}/restore`)),
 };
 
 export const notes = {

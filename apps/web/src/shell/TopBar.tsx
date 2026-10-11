@@ -48,11 +48,22 @@ export function TopBar({ workspaceId, onToggleSidebar, sidebarCollapsed, onOpenP
             >
                 <PanelLeft aria-hidden />
             </Button>
-            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 font-medium text-text-muted">
+            {/*
+             * The breadcrumb shrinks before the buttons beside it and truncates instead of running under
+             * them. On a phone only the current page is named — "Settings / Custom fields" does not fit
+             * next to search, notifications and Create at 375px (FR-CRMS-UI-12).
+             */}
+            <nav
+                aria-label="Breadcrumb"
+                className="flex min-w-0 items-center gap-2 overflow-hidden font-medium text-text-muted"
+            >
                 {crumbs.map((crumb, i) => (
-                    <span key={`${crumb}-${i}`} className="flex items-center gap-2">
+                    <span
+                        key={`${crumb}-${i}`}
+                        className={cn('flex min-w-0 items-center gap-2', i < crumbs.length - 1 && 'max-md:hidden')}
+                    >
                         {i > 0 && (
-                            <span aria-hidden className="text-text-faint">
+                            <span aria-hidden className="text-text-faint max-md:hidden">
                                 /
                             </span>
                         )}

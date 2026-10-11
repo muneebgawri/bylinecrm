@@ -93,6 +93,12 @@ importers:
       openid-client:
         specifier: ^6.8.8
         version: 6.8.8
+      pg:
+        specifier: ^8.16.3
+        version: 8.23.1
+      prisma:
+        specifier: ^6.19.3
+        version: 6.19.3(typescript@5.9.3)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -154,9 +160,6 @@ importers:
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
-      prisma:
-        specifier: ^6.19.3
-        version: 6.19.3(typescript@5.9.3)
       supertest:
         specifier: ^7.3.1
         version: 7.3.1

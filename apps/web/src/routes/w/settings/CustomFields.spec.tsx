@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toasts } from '@bylinecrm/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CustomFieldView } from '../../../api/types';
 import { CustomFields } from './CustomFields';
@@ -55,9 +56,12 @@ const page = () =>
     ]);
 
 describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        toasts.clear();
+    });
 
-    it('lists a person field with its type, and the archived ones apart and read-only', async () => {
+    it('lists a person field with its type, and the archived ones apart', async () => {
         api();
         page();
         expect(await screen.findByText('Beat')).toBeInTheDocument();
@@ -65,6 +69,34 @@ describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
         await userEvent.click(screen.getByRole('button', { name: /Archived fields/ }));
         const archived = await screen.findByRole('list', { name: 'Archived fields' });
         expect(within(archived).getByText('Region')).toBeInTheDocument();
+    });
+
+    it('restores an archived field (FR-CRMS-UI-6: admins only)', async () => {
+        const seen = api([
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/custom-fields/f-old/restore')
+                    ? json(field({ id: 'f-old', key: 'region', label: 'Region', type: 'text', options: [] }))
+                    : undefined,
+        ]);
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: /Archived fields/ }));
+        const archived = await screen.findByRole('list', { name: 'Archived fields' });
+        await userEvent.click(within(archived).getByRole('button', { name: 'Restore Region' }));
+        await waitFor(() =>
+            expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/custom-fields/f-old/restore'))).toBe(true),
+        );
+        await waitFor(() => expect(toasts.all().map((t) => t.title)).toContain('Region restored'));
+    });
+
+    it('without workspace:admin the archived list offers no restore', async () => {
+        api();
+        renderAt(
+            [route('/w/:workspaceId/settings/custom-fields', <CustomFields />)],
+            `/w/${WS}/settings/custom-fields`,
+            ['record:read'],
+        );
+        await userEvent.click(await screen.findByRole('button', { name: /Archived fields/ }));
+        const archived = await screen.findByRole('list', { name: 'Archived fields' });
         expect(within(archived).queryByRole('button')).not.toBeInTheDocument();
     });
 
