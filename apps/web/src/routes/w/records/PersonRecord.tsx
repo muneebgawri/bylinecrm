@@ -2,7 +2,7 @@ import { Badge, FactGrid } from '@bylinecrm/ui';
 import { ListTodo, Mail, Send, StickyNote } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { usePatchRecord, useRecord } from '../../../api/queries';
+import { usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';

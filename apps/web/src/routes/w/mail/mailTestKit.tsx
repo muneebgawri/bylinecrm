@@ -68,6 +68,7 @@ export const outbound = (over: Partial<MailOutboundView> = {}): MailOutboundView
     dealId: null,
     templateId: null,
     replyToMessageId: null,
+    senderMemberId: 'm-1',
     rfc822MessageId: 'out-1@bylinecrm',
     mailMessageId: null,
     threadId: null,
@@ -121,11 +122,15 @@ export const mailboxesRoute =
     (r) =>
         r.method === 'GET' && r.url.endsWith('/mailboxes') ? json(list) : undefined;
 
-/** Every request to the scheduled list answers with these rows. */
-export const scheduledRoute =
+/** Whether a request is the record-sends list (`GET /mail/messages?…`), not one send (`messages/:id`). */
+export const isRecordSends = (r: { method: string; url: string }) =>
+    r.method === 'GET' && /\/mail\/messages\?/.test(r.url);
+
+/** Every request for a record's sends (#104) answers with these rows. */
+export const recordSendsRoute =
     (items: MailOutboundView[] = []): FakeRoute =>
     (r) =>
-        r.method === 'GET' && r.url.includes('/mail/scheduled') ? json({ items, nextCursor: null }) : undefined;
+        isRecordSends(r) ? json({ items, nextCursor: null }) : undefined;
 
 /** A timeline with no entries; the record's other reads answered empty. */
 export const quietRecordRoutes: FakeRoute[] = [

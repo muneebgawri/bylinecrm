@@ -61,3 +61,6 @@ export const MAIL_SEND_SWEEP_BATCH = 200;
 /** `GET /mail/scheduled` page size. */
 export const MAIL_SCHEDULED_LIMIT_DEFAULT = 25;
 export const MAIL_SCHEDULED_LIMIT_MAX = 100;
+/** A page of a record's sends (#104, `GET /mail/messages`). */
+export const MAIL_RECORD_SENDS_LIMIT_DEFAULT = 25;
+export const MAIL_RECORD_SENDS_LIMIT_MAX = 100;

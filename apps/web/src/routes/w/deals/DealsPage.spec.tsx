@@ -6,7 +6,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createQueryClient, keys, moveInBoard } from '../../../api/queries';
+import { createQueryClient, keys } from '../../../api/queries';
+import { moveInBoard } from '../../../api/deals';
 import type { BoardView, MembershipSummary, OpportunityView, PipelineView, StageView } from '../../../api/types';
 import { CapabilitiesProvider } from '../../../auth/capabilities';
 import { DealsPage } from './DealsPage';

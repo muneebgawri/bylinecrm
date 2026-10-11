@@ -1,7 +1,7 @@
 import { toast } from '@bylinecrm/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { ApiError } from '../../../api/client';
-import { useMoveDeal, useRules } from '../../../api/queries';
+import { useMoveDeal, useRules } from '../../../api/deals';
 import type { BoardView, OpportunityView, RuleView, StageView } from '../../../api/types';
 import { BackwardMoveDialog, ruleEventLabel, type BackwardRequest } from './BackwardMoveDialog';
 import { CloseDealDialog, type ClosePayload, type CloseRequest } from './CloseDealDialog';

@@ -3775,6 +3775,110 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/mail/messages": {
+            "get": {
+                "operationId": "mailSend_recordSends",
+                "parameters": [
+                    {
+                        "name": "target",
+                        "required": true,
+                        "in": "query",
+                        "description": "`person:<uuid>`, `company:<uuid>` or `opportunity:<uuid>`.",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "required": true,
+                        "in": "query",
+                        "description": "Comma-separated statuses, e.g. `failed,scheduled`.",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 25,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailRecordSendsPage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mail/messages/{messageId}": {
             "get": {
                 "operationId": "mailSend_status",
@@ -21340,6 +21444,13 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "senderMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The member who sent (or scheduled) it."
+                    },
                     "rfc822MessageId": {
                         "type": "string",
                         "description": "Our Message-ID, without angle brackets."
@@ -21444,6 +21555,7 @@
                     "dealId",
                     "templateId",
                     "replyToMessageId",
+                    "senderMemberId",
                     "rfc822MessageId",
                     "mailMessageId",
                     "threadId",
@@ -21458,6 +21570,22 @@
                 ]
             },
             "MailScheduledPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MailOutbound"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
+            },
+            "MailRecordSendsPage": {
                 "type": "object",
                 "properties": {
                     "items": {

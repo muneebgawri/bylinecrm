@@ -14,7 +14,8 @@ import {
     EmptyState,
 } from '@bylinecrm/ui';
 import { useMemo, useState } from 'react';
-import { useMe, useMembers, useRemoveMember, useRoles, useSetMemberRole } from '../../../api/queries';
+import { useMe } from '../../../api/queries';
+import { useMembers, useRemoveMember, useRoles, useSetMemberRole } from '../../../api/team';
 import type { MemberView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
 import { formatDate } from './SettingsLayout';

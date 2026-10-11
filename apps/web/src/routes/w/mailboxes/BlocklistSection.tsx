@@ -18,7 +18,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { fieldErrorAt } from '../../../api/client';
-import { useAddBlocklistEntry, useBlocklist, useRemoveBlocklistEntry } from '../../../api/queries';
+import { useAddBlocklistEntry, useBlocklist, useRemoveBlocklistEntry } from '../../../api/mailAdmin';
 import type { BlocklistEntryCreatedView, BlocklistEntryView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';

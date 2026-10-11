@@ -1,7 +1,7 @@
 import type { RecordTarget, RichText } from '@bylinecrm/shared';
 import { Button, Input, Skeleton } from '@bylinecrm/ui';
 import { lazy, Suspense, useState } from 'react';
-import { useDeleteNote, useMembersSummary, useNotes, useSaveNote } from '../../../api/queries';
+import { useDeleteNote, useMembersSummary, useNotes, useSaveNote } from '../../../api/records';
 import type { NoteView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatWhen } from '../../../lib/format';

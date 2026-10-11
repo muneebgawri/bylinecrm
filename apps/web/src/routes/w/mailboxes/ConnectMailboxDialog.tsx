@@ -11,7 +11,7 @@ import {
     type RadioOption,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
-import { useConnectMailbox } from '../../../api/queries';
+import { useConnectMailbox } from '../../../api/mailAdmin';
 import { failureText } from '../../../lib/errors';
 import { leaveFor } from '../../../lib/leaveFor';
 

@@ -26,12 +26,12 @@ import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import {
     useCreateTemplate,
-    useMailSettings,
     usePreviewTemplate,
     useTemplate,
     useTemplateVariables,
     useUpdateTemplate,
-} from '../../../api/queries';
+} from '../../../api/templates';
+import { useMailSettings } from '../../../api/mailAdmin';
 import type { EmailTemplateView, MailSettingsView } from '../../../api/types';
 import { useCan, usePermission } from '../../../auth/capabilities';
 import { useRegisterCommands } from '../../../commands/registry';

@@ -14,9 +14,11 @@ import { useQueries } from '@tanstack/react-query';
 import { ArrowRightLeft, DollarSign, FileText, Mail, Paperclip, Pencil, SquareCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { people } from '../../../api/endpoints';
-import { keys, useMembersSummary, useTimeline } from '../../../api/queries';
+import { people } from '../../../api/records';
+import { keys } from '../../../api/queries';
+import { useMembersSummary, useTimeline } from '../../../api/records';
 import type { TimelineActivityView } from '../../../api/types';
+import { useMembership } from '../../../auth/capabilities';
 import { formatWhen } from '../../../lib/format';
 import { usePendingSends, type PendingSend } from '../mail/sends';
 import { SendStatus, pendingAction } from '../mail/SendStatus';
@@ -78,8 +80,12 @@ export function TimelinePanel({
     const pending = usePendingSends(workspaceId, target, stored);
     const showPending = filter === 'all' || filter === 'emails';
 
+    const me = useMembership()?.memberId ?? null;
+    const memberNames = useMemo(
+        () => new Map((members.data ?? []).map((m) => [m.memberId, m.name ?? 'Unnamed member'])),
+        [members.data],
+    );
     const items = useMemo<ActivityItem[]>(() => {
-        const memberNames = new Map((members.data ?? []).map((m) => [m.memberId, m.name ?? 'Unnamed member']));
         return entries.map((entry) => {
             const words = wordsFor(entry, {
                 members: memberNames,
@@ -127,10 +133,13 @@ export function TimelinePanel({
                 ...(chips ? { chips } : {}),
             };
         });
-    }, [entries, members.data, names, target, stageNames, location.search]);
+    }, [entries, memberNames, names, target, stageNames, location.search]);
     const shown = useMemo(
-        () => [...(showPending ? pending.sends.map((p) => pendingItem(workspaceId, p)) : []), ...items],
-        [showPending, pending, items, workspaceId],
+        () => [
+            ...(showPending ? pending.sends.map((p) => pendingItem(workspaceId, p, me, memberNames)) : []),
+            ...items,
+        ],
+        [showPending, pending, items, workspaceId, me, memberNames],
     );
 
     return (
@@ -216,7 +225,7 @@ export function TimelinePanel({
                             disabled={pending.loadingMore}
                             onClick={pending.more}
                         >
-                            {pending.loadingMore ? 'Loading…' : 'Show more scheduled sends'}
+                            {pending.loadingMore ? 'Loading…' : 'Show more sends'}
                         </Button>
                     </div>
                 )}
@@ -226,14 +235,27 @@ export function TimelinePanel({
 }
 
 /** A send not yet on the timeline as a stored message: "You emailed …" with where it stands. */
-function pendingItem(workspaceId: string, send: PendingSend): ActivityItem {
+/**
+ * A send not (yet) on the timeline as stored mail. It is "You" for this tab's send and the caller's
+ * own; an admin also sees colleagues' sends (#104), named by their sender. It is dated when it was
+ * made — a scheduled one is "Not sent yet" — and this tab's send is "just now" until the server
+ * has answered.
+ */
+function pendingItem(
+    workspaceId: string,
+    send: PendingSend,
+    me: string | null,
+    memberNames: ReadonlyMap<string, string>,
+): ActivityItem {
+    const mine = send.session !== null || send.senderMemberId === null || send.senderMemberId === me;
     return {
         id: `send-${send.messageId}`,
         icon: <Mail />,
         tone: send.status === 'failed' ? 'danger' : 'accent',
-        actor: 'You',
+        actor: mine ? 'You' : (memberNames.get(send.senderMemberId!) ?? 'A teammate'),
         action: pendingAction(send),
-        time: send.status === 'scheduled' ? 'Not sent yet' : 'Just now',
+        time: send.status === 'scheduled' ? 'Not sent yet' : send.createdAt ? formatWhen(send.createdAt) : 'Just now',
+        ...(send.status !== 'scheduled' && send.createdAt ? { dateTime: send.createdAt } : {}),
         chips: <SendStatus workspaceId={workspaceId} send={send} />,
     };
 }

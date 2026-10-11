@@ -9,7 +9,7 @@ import {
     usePutOAuthClient,
     useRemoveOAuthClient,
     useVerifyOAuthClient,
-} from '../../../api/queries';
+} from '../../../api/mailAdmin';
 import type { GoogleOAuthClientCheckView, GoogleOAuthClientView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';

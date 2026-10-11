@@ -2,7 +2,7 @@ import type { RecordObject } from '@bylinecrm/shared';
 import { EmptyState, Skeleton } from '@bylinecrm/ui';
 import { useParams } from 'react-router';
 import { ApiError } from '../../../api/client';
-import { useMembersById, useRecord } from '../../../api/queries';
+import { useMembersById, useRecord } from '../../../api/records';
 import type { CompanyView, OpportunityView, PersonView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
