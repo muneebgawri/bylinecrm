@@ -17,3 +17,33 @@ export const MAIL_SEND_WORKER_CONCURRENCY = 4;
  */
 export const MAIL_SEND_JOB_ATTEMPTS = 3;
 export const MAIL_SEND_JOB_BACKOFF_MS = 30_000;
+
+/**
+ * Scheduled sends (P2-5). A delayed job is only the trigger; the row decides. A job that fires more
+ * than `MAIL_SEND_EARLY_TOLERANCE_MS` before the row's `sendAt` (the send was moved later after its
+ * job was set) goes back to wait for the rest.
+ */
+export const MAIL_SEND_EARLY_TOLERANCE_MS = 5_000;
+/**
+ * A scheduled send whose time passed this long ago — the workers were down, or Redis lost the job
+ * — is failed as `stale` rather than sent: a message meant for 9:00 arriving the next afternoon is
+ * worse than one that says it did not go. The sender sees why and can send it again.
+ */
+export const MAIL_SEND_STALE_MS = 24 * 60 * 60 * 1000;
+
+/** The maintenance queue the send sweep repeats on, and how often. */
+export const MAIL_SEND_MAINTENANCE_QUEUE = 'mail-send-maintenance';
+export const MAIL_SEND_SWEEP_EVERY_MS = 60_000;
+/**
+ * The sweep re-enqueues sends whose job is gone: `queued` rows older than this grace (their job
+ * should have run long since), and `scheduled` rows due before the next two passes — a send due
+ * later is looked at when it comes due, so one pass never scans every future send.
+ */
+export const MAIL_SEND_SWEEP_GRACE_MS = 60_000;
+export const MAIL_SEND_SWEEP_HORIZON_MS = 2 * MAIL_SEND_SWEEP_EVERY_MS;
+/** Rows one sweep pass handles; the earliest first, so a backlog is worked through over passes. */
+export const MAIL_SEND_SWEEP_BATCH = 200;
+
+/** `GET /mail/scheduled` page size. */
+export const MAIL_SCHEDULED_LIMIT_DEFAULT = 25;
+export const MAIL_SCHEDULED_LIMIT_MAX = 100;
