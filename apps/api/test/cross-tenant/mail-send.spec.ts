@@ -649,6 +649,122 @@ describe('mail send and reply detection', () => {
         });
     });
 
+    describe('FR-CRMS-2 Gmail rewrites our Message-ID (real-Gmail finding, #87)', () => {
+        // Against real Gmail (2026-10-11) a message sent with Message-ID <uuid@bylinecrm> was stored
+        // and delivered as <…@mail.gmail.com>. Our own X-BylineCRM-Id header survives; the send is
+        // found by it after a lost answer, and replies are matched by Gmail's Message-ID too.
+        const rae = `rae-${stamp}@acme.example`;
+        let raeId: string;
+
+        const freeToRae = (subject = 'Rewrite check') => ({
+            mailboxId: adminMailbox,
+            personId: raeId,
+            subject,
+            body: body(para(t('Hello from the CRM.'))),
+        });
+        const sentBy = (email: string) => gmail.sent.filter((s) => s.email === email).length;
+        const repliesTo = (outboundId: string) =>
+            events.filter((e) => e.type === 'email.replied' && e.reply?.inReplyToOutboundId === outboundId);
+
+        beforeAll(async () => {
+            gmail.rewriteSentMessageIds = true;
+            const created = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Rae', nameLast: 'Okafor', emails: { primary: rae, additional: [] } });
+            expect(created.status).toBe(201);
+            raeId = (created.body as { id: string }).id;
+        });
+
+        afterAll(() => {
+            gmail.rewriteSentMessageIds = false;
+        });
+
+        it('stamps X-BylineCRM-Id on every send and records Gmail’s own Message-ID on the send', async () => {
+            const out = await sendAndDeliver(freeToRae());
+            expect(out.status).toBe('sent');
+            const raw = gmail.sent.at(-1)!.raw;
+            expect(header(raw, 'X-BylineCRM-Id')).toBe(out.id);
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: out.id } });
+            const copy = await owner.mailMessage.findFirstOrThrow({
+                where: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! },
+            });
+            expect(copy.rfc822MessageId).toMatch(/@mail\.gmail\.com$/);
+            expect(copy.rfc822MessageId).not.toBe(row.rfc822MessageId);
+            expect((row as unknown as { providerRfc822MessageId: string | null }).providerRfc822MessageId).toBe(
+                copy.rfc822MessageId,
+            );
+        });
+
+        it('does not store the sent copy twice when sync sees it under Gmail’s Message-ID', async () => {
+            const out = await sendAndDeliver(freeToRae('Rewrite, then sync'));
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: out.id } });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(
+                await owner.mailMessage.count({
+                    where: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! },
+                }),
+            ).toBe(1);
+            expect(out.mailMessageId).not.toBeNull();
+        });
+
+        it('finds a send Gmail accepted but never answered by our header, and never sends it twice', async () => {
+            const res = await as(admin).post(w('/mail/send')).send(freeToRae('Lost answer under rewrite'));
+            const id = (res.body as { messageId: string }).messageId;
+            gmail.acceptNextSendThenFail(adminEmail);
+            const before = sentBy(adminEmail);
+            const outcome = await send.deliver(workspace, id, noWait);
+            expect(sentBy(adminEmail)).toBe(before + 1);
+            expect(outcome).toBe('already_sent');
+            const out = (await status(id)).body as Outbound;
+            expect(out.status).toBe('sent');
+            expect(out.mailMessageId).not.toBeNull();
+        });
+
+        it('sends once when the lost attempt never reached Gmail (no sent message carries our header)', async () => {
+            const res = await as(admin).post(w('/mail/send')).send(freeToRae('Never reached Gmail'));
+            const id = (res.body as { messageId: string }).messageId;
+            gmail.failNext(adminEmail, 'send', 500, 1);
+            const before = sentBy(adminEmail);
+            const outcome = await send.deliver(workspace, id, noWait);
+            expect(outcome).toBe('sent');
+            expect(sentBy(adminEmail)).toBe(before + 1);
+            expect(((await status(id)).body as Outbound).status).toBe('sent');
+        });
+
+        it('detects a reply naming Gmail’s rewritten Message-ID exactly once', async () => {
+            const out = await sendAndDeliver(freeToRae('Reply by rewritten id'));
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: out.id } });
+            const copy = await owner.mailMessage.findFirstOrThrow({
+                where: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! },
+            });
+            gmail.deliver(adminEmail, {
+                from: rae,
+                to: [adminEmail],
+                subject: 'Re: Reply by rewritten id',
+                text: 'Got it.',
+                inReplyTo: copy.rfc822MessageId!,
+            });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(repliesTo(out.id)).toHaveLength(1);
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(repliesTo(out.id)).toHaveLength(1);
+        });
+
+        it('detects a reply in the same Gmail thread with no In-Reply-To exactly once', async () => {
+            const out = await sendAndDeliver(freeToRae('Reply in the thread'));
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: out.id } });
+            gmail.deliver(adminEmail, {
+                from: rae,
+                to: [adminEmail],
+                subject: 'about that',
+                text: 'One more thing.',
+                threadId: row.providerThreadId!,
+            });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(repliesTo(out.id)).toHaveLength(1);
+        });
+    });
+
     describe('status visibility and isolation', () => {
         let adminOutbound: string;
 

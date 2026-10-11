@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
@@ -25,7 +26,14 @@ import { recordWhere } from '../records/record-scope';
 import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
 import { RolesService } from '../workspace/roles.service';
-import { MAIL_SEND_EARLY_TOLERANCE_MS, MAIL_SEND_QUEUE, MAIL_SEND_STALE_MS } from './mail-send.constants';
+import {
+    MAIL_CRM_ID_HEADER,
+    MAIL_SEND_DEDUPE_MAX_CANDIDATES,
+    MAIL_SEND_DEDUPE_SKEW_MS,
+    MAIL_SEND_EARLY_TOLERANCE_MS,
+    MAIL_SEND_QUEUE,
+    MAIL_SEND_STALE_MS,
+} from './mail-send.constants';
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
 import type { MailOutboundView, MailScheduledPage, MailSendAccepted } from './responses';
@@ -116,8 +124,9 @@ interface Prepared {
  *
  * `deliver` (the job) sends the stored MIME. Gmail's answer to a `5xx` or a timeout does not say
  * whether the message went, so before every retry — and on a delivery after an attempt that
- * started — it looks for our Message-ID in the mailbox first; a message Gmail already has is
- * recorded, never sent again. A sent message is stored through mail sync's one writer, which
+ * started — it looks in the mailbox's sent mail for our `X-BylineCRM-Id` header first (Gmail
+ * replaces the Message-ID we set, so that cannot be searched for — #87); a message Gmail already
+ * has is recorded, never sent again. A sent message is stored through mail sync's one writer, which
  * announces it once (`email.sent`) and links it to this send.
  */
 @Injectable()
@@ -149,12 +158,15 @@ export class MailSendService {
     async compose(input: SendInput): Promise<MailSendAccepted> {
         const context = this.current();
         const sendAt = input.sendAt === undefined ? null : scheduledTime(input.sendAt);
+        // The send's id is fixed before the message is built: the MIME carries it (X-BylineCRM-Id).
+        const id = randomUUID();
         const rfc822MessageId = newMessageId();
-        const prepared = await this.prepare(input, rfc822MessageId);
+        const prepared = await this.prepare(input, { id, rfc822MessageId });
 
         const row = await this.rls.withWorkspace((tx) =>
             tx.mailOutbound.create({
                 data: {
+                    id,
                     workspaceId: context.workspaceId,
                     mailboxId: prepared.mailboxId,
                     senderMemberId: prepared.memberId,
@@ -197,7 +209,7 @@ export class MailSendService {
      * send at its request, and for that send again at its time. Runs in the caller's workspace scope
      * (a request's, or the one a scheduled send's job opens for its sender).
      */
-    private async prepare(input: StoredRequest, rfc822MessageId: string): Promise<Prepared> {
+    private async prepare(input: StoredRequest, send: { id: string; rfc822MessageId: string }): Promise<Prepared> {
         const context = this.current();
         const memberId = context.memberId;
         if (!memberId) throw new ApiException(403, 'forbidden', "mail is sent from a member's own mailbox");
@@ -289,7 +301,8 @@ export class MailSendService {
             subject,
             text: rendered.text,
             html: rendered.html,
-            messageId: rfc822MessageId,
+            messageId: send.rfc822MessageId,
+            crmId: send.id,
             inReplyTo: parent?.rfc822MessageId ?? null,
             references,
             date: new Date(),
@@ -422,7 +435,6 @@ export class MailSendService {
             }),
         );
         const threadId = await this.parentThread(workspaceId, row);
-        const rfc822MessageId = row.rfc822MessageId;
 
         let sent: { message: GmailSent; found: boolean };
         try {
@@ -431,7 +443,7 @@ export class MailSendService {
                 attempt += 1;
                 // An attempt that may have reached Gmail is looked for before anything is sent again.
                 if (attempt > 1 || startedBefore) {
-                    const found = await this.findSent(token, rfc822MessageId);
+                    const found = await this.findSent(token, mailbox.id, row);
                     if (found) return { message: found, found: true };
                 }
                 const message = await this.gmail.send(token, { raw: mime, ...(threadId ? { threadId } : {}) });
@@ -521,7 +533,10 @@ export class MailSendService {
         let prepared: Prepared;
         try {
             prepared = await this.context.run(sender.context, () =>
-                this.prepare(row.request as unknown as StoredRequest, row.rfc822MessageId),
+                this.prepare(row.request as unknown as StoredRequest, {
+                    id: row.id,
+                    rfc822MessageId: row.rfc822MessageId,
+                }),
             );
         } catch (error) {
             if (!(error instanceof HttpException)) throw error;
@@ -668,11 +683,37 @@ export class MailSendService {
         return parent?.thread.providerThreadId ?? null;
     }
 
-    /** The message in the mailbox with our Message-ID, if Gmail has it. */
-    private async findSent(token: string, rfc822MessageId: string): Promise<GmailSent | null> {
-        const page = await this.gmail.listMessages(token, { query: `rfc822msgid:${rfc822MessageId}` });
-        const first = page.messages[0];
-        return first ? { id: first.id, threadId: first.threadId } : null;
+    /**
+     * The message Gmail already has for this send, if it took one whose answer was lost. Gmail
+     * replaces the Message-ID we set (#87), so the send is recognised by our own `X-BylineCRM-Id`
+     * header: among the mailbox's sent mail to the first recipient since the send was created (less
+     * a skew), newest first, at most `MAIL_SEND_DEDUPE_MAX_CANDIDATES`, each read for that header
+     * only. Every request counts against the mailbox's quota like any other.
+     */
+    private async findSent(token: string, mailboxId: string, row: OutboundRow): Promise<GmailSent | null> {
+        const to = row.toAddresses[0];
+        if (!to) return null;
+        const since = Math.floor((row.createdAt.getTime() - MAIL_SEND_DEDUPE_SKEW_MS) / 1000);
+        const query = `in:sent to:${to} after:${since}`;
+        const wanted = MAIL_CRM_ID_HEADER.toLowerCase();
+        let checked = 0;
+        let pageToken: string | undefined;
+        do {
+            await this.sync.chargeQuota(mailboxId, GMAIL_UNITS.listMessages);
+            const page = await this.gmail.listMessages(token, { query, ...(pageToken ? { pageToken } : {}) });
+            for (const ref of page.messages) {
+                if (checked >= MAIL_SEND_DEDUPE_MAX_CANDIDATES) return null;
+                checked += 1;
+                await this.sync.chargeQuota(mailboxId, GMAIL_UNITS.getMessage);
+                const candidate = await this.gmail.getMessageHeaders(token, ref.id, [MAIL_CRM_ID_HEADER]);
+                const ours = candidate.headers.some(
+                    (h) => h.name.toLowerCase() === wanted && h.value.trim() === row.id,
+                );
+                if (ours) return { id: candidate.id, threadId: candidate.threadId };
+            }
+            pageToken = page.nextPageToken ?? undefined;
+        } while (pageToken && checked < MAIL_SEND_DEDUPE_MAX_CANDIDATES);
+        return null;
     }
 
     private async markFailed(workspaceId: string, id: string, error: SendErrorRecord): Promise<void> {
