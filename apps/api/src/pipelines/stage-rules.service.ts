@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
 import type { DomainEvent, EventActor, StageRuleEvent } from '@bylinecrm/shared';
+import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { storedRuleEvent } from './rule-events';
 import { StageMoveService, type MoveOutcome } from './stage-move.service';
@@ -14,7 +14,8 @@ import { StageMoveService, type MoveOutcome } from './stage-move.service';
  * the policies see only that workspace. Each move is attributed to the rule that made it.
  */
 @Injectable()
-export class StageRulesService {
+@OutboxConsumerOf('stage-rules')
+export class StageRulesService implements OutboxConsumer {
     private readonly log = new Logger(StageRulesService.name);
 
     constructor(
@@ -22,14 +23,16 @@ export class StageRulesService {
         private readonly moves: StageMoveService,
     ) {}
 
-    @OnEvent('email.replied', { async: true, promisify: true })
-    onEmailReplied(event: DomainEvent): Promise<number> {
-        return this.apply(event);
+    accepts(event: DomainEvent): boolean {
+        return event.type === 'email.replied' || event.type === 'meeting.booked';
     }
 
-    @OnEvent('meeting.booked', { async: true, promisify: true })
-    onMeetingBooked(event: DomainEvent): Promise<number> {
-        return this.apply(event);
+    /**
+     * Idempotent without a key of its own: a redelivered event finds its deals already in the
+     * rule's stage, and a deal in or past the stage is left alone.
+     */
+    async consume({ event }: DeliveredEvent): Promise<void> {
+        await this.apply(event);
     }
 
     /** Applies every enabled rule for the event's type in its workspace; returns how many deals moved. */
@@ -68,12 +71,14 @@ export class StageRulesService {
                         reason: 'rule',
                         allowBackward: rule.allowBackward,
                     });
-                    if (outcome.outcome === 'moved') outcomes.push({ dealId: deal.id, actor, outcome });
+                    if (outcome.outcome === 'moved') {
+                        await this.moves.announce(tx, event.workspaceId, deal.id, actor, outcome);
+                        outcomes.push({ dealId: deal.id, actor, outcome });
+                    }
                 }
             }
             return outcomes;
         });
-        for (const { dealId, actor, outcome } of moved) this.moves.announce(event.workspaceId, dealId, actor, outcome);
         if (moved.length) this.log.log(`${event.type}: ${moved.length} deal(s) moved by rule in ${event.workspaceId}`);
         return moved.length;
     }

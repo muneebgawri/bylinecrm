@@ -182,17 +182,18 @@ export class InvitesController {
     }
 
     /**
-     * The invitation is mailed to the invitee after the commit (#93), and the token is also
-     * returned once so the admin can pass the link on by hand; only its hash is stored.
+     * The invitation is mailed to the invitee — recorded in the same transaction, sent after the
+     * commit (#93) — and the token is also returned once so the admin can pass the link on by hand;
+     * only its hash is stored.
      */
     @Requires('workspace:admin')
     @Post()
     @Returns(createdInvite)
-    async create(@Body() body: CreateInviteDto): Promise<{ invite: InviteView; token: string }> {
+    create(@Body() body: CreateInviteDto): Promise<{ invite: InviteView; token: string }> {
         const current = this.context.get();
         if (!current?.memberId) throw new Error('invitations are sent by a member, not by a key');
         const { token, tokenHash, expiresAt } = AuthService.newInvite();
-        const created = await this.rls.withWorkspace(async (tx) => {
+        return this.rls.withWorkspace(async (tx) => {
             const invite = await tx.workspaceInvite.create({
                 data: {
                     workspaceId: current.workspaceId,
@@ -207,16 +208,16 @@ export class InvitesController {
                 where: { id: current.workspaceId },
                 select: { name: true },
             });
-            return { invite, workspaceName: workspace.name };
+            await this.mail.workspaceInvitation(tx, {
+                workspaceId: current.workspaceId,
+                to: invite.email,
+                inviteId: invite.id,
+                token,
+                workspaceName: workspace.name,
+                owner: false,
+            });
+            return { invite: inviteView(invite), token };
         });
-        await this.mail.workspaceInvitation({
-            to: created.invite.email,
-            inviteId: created.invite.id,
-            token,
-            workspaceName: created.workspaceName,
-            owner: false,
-        });
-        return { invite: inviteView(created.invite), token };
     }
 
     @Requires('workspace:admin')

@@ -2,9 +2,11 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/app';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
+import { TimelineService } from '../../src/timeline/timeline.service';
+import { settle } from '../support/outbox';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -35,16 +37,6 @@ interface Activity {
 interface Page<T> {
     items: T[];
     nextCursor: string | null;
-}
-
-/** The subscriber writes after the request answered; a reader waits a bounded moment for it. */
-async function until<T>(read: () => Promise<T>, ok: (value: T) => boolean, tries = 40): Promise<T> {
-    let last = await read();
-    for (let i = 0; i < tries && !ok(last); i++) {
-        await new Promise((r) => setTimeout(r, 50));
-        last = await read();
-    }
-    return last;
 }
 
 /**
@@ -138,8 +130,42 @@ describe('timeline', () => {
         ).id;
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     afterAll(async () => {
         await app.close();
+    });
+
+    it('P0-13 (#89): an entry written after the request answered is on the timeline once events are settled', async () => {
+        // Hold the timeline consumer until the request has answered: the race the old reads lost
+        // (they read before the subscriber wrote, and passed or failed by timing).
+        const service = app.get(TimelineService);
+        const writeFor = service.writeFor.bind(service);
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => (release = resolve));
+        vi.spyOn(service, 'writeFor').mockImplementation(async (delivered) => {
+            await held;
+            return writeFor(delivered);
+        });
+        const heldPerson = (
+            (await as(admin).post(w('/people')).send({ nameFirst: 'Held', nameLast: 'Back' }).expect(201)).body as {
+                id: string;
+            }
+        ).id;
+        await as(admin)
+            .patch(w(`/people/${heldPerson}`))
+            .send({ jobTitle: 'Held' })
+            .expect(200);
+        expect(kinds(await timeline(admin, `person:${heldPerson}`))).toEqual([]);
+
+        const settled = settle(app);
+        release();
+        await settled;
+        const page = await timeline(admin, `person:${heldPerson}`);
+        expect(kinds(page)).toEqual(['person.updated', 'person.created']);
+        expect(page.items[0]!.properties).toMatchObject({ diff: { jobTitle: { to: 'Held' } } });
     });
 
     it('turns a record’s own events into entries, carrying the diff the event carried', async () => {
@@ -147,10 +173,8 @@ describe('timeline', () => {
             .patch(w(`/people/${adminsPerson}`))
             .send({ nameFirst: 'Dan' })
             .expect(200);
-        const page = await until(
-            () => timeline(admin, `person:${adminsPerson}`),
-            (p) => kinds(p).includes('person.updated'),
-        );
+        await settle(app);
+        const page = await timeline(admin, `person:${adminsPerson}`);
         expect(kinds(page)).toEqual(['person.updated', 'person.created']);
         const updated = page.items[0]!;
         expect(updated.target).toEqual({ type: 'person', id: adminsPerson });
@@ -171,10 +195,8 @@ describe('timeline', () => {
             })
             .expect(201);
         const noteId = (note.body as { id: string }).id;
-        const onPerson = await until(
-            () => timeline(admin, `person:${adminsPerson}`, '&kinds=linked-note'),
-            (p) => p.items.length > 0,
-        );
+        await settle(app);
+        const onPerson = await timeline(admin, `person:${adminsPerson}`, '&kinds=linked-note');
         expect(kinds(onPerson)).toEqual(['linked-note.created']);
         expect(onPerson.items[0]!.linked).toEqual({ type: 'note', id: noteId });
         expect(onPerson.items[0]!.properties).toEqual({ linked: { type: 'note', id: noteId, name: 'FinCon' } });
@@ -212,10 +234,8 @@ describe('timeline', () => {
             .get(w(`/timeline?target=person:${adminsPerson}`))
             .expect(404);
         await as(other).get(`/api/w/${otherWorkspace}/timeline?target=person:${adminsPerson}`).expect(404);
-        const own = await until(
-            () => timeline(rep, `person:${repsPerson}`),
-            (p) => p.items.length > 0,
-        );
+        await settle(app);
+        const own = await timeline(rep, `person:${repsPerson}`);
         expect(kinds(own)).toEqual(['person.created']);
     });
 

@@ -1,12 +1,12 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES, type DomainEvent } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { WorkspaceContext } from '../../src/infra/workspace-context';
 import { createApp } from '../../src/app';
+import { eventLog, type EventLog } from '../support/outbox';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -50,7 +50,7 @@ interface Page<T> {
 /**
  * Records end to end against the real application: the owner-scope rule applied by the route
  * and proven at the policy, uniqueness with deleted rows counted, custom-field validation,
- * trash and restore, search, pagination, events after commit, and the two actors.
+ * trash and restore, search, pagination, events recorded with each commit, and the two actors.
  */
 describe('records', () => {
     let app: INestApplication;
@@ -64,7 +64,7 @@ describe('records', () => {
     let otherWorkspace: string;
     let adminMemberId: string;
     let repMemberId: string;
-    const events: DomainEvent[] = [];
+    let events: EventLog;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -78,8 +78,7 @@ describe('records', () => {
         app = await createApp();
         await app.init();
         http = () => request(app.getHttpServer());
-        app.get(EventEmitter2).on('person.*', (event: DomainEvent) => events.push(event));
-        app.get(EventEmitter2).on('company.*', (event: DomainEvent) => events.push(event));
+        events = await eventLog(app, 'person.*', 'company.*');
 
         const signup = await http()
             .post('/api/auth/signup')
@@ -466,8 +465,8 @@ describe('records', () => {
             await as(admin).get(w('/companies?limit=500')).expect(400);
         });
 
-        it('publishes an event after each commit, with the actor and a diff on update', async () => {
-            events.length = 0;
+        it('records an event with each commit, with the actor and a diff on update', async () => {
+            await events.reset();
             const created = await as(admin).post(w('/people')).send({ nameFirst: 'Eve', nameLast: 'Nt' }).expect(201);
             const id = (created.body as Person).id;
             await as(admin)
@@ -480,26 +479,27 @@ describe('records', () => {
             await as(admin)
                 .post(w(`/people/${id}/restore`))
                 .expect(201);
-            expect(events.map((e) => e.type)).toEqual([
+            const recorded = await events.read();
+            expect(recorded.map((e) => e.type)).toEqual([
                 'person.created',
                 'person.updated',
                 'person.deleted',
                 'person.restored',
             ]);
-            expect(events[0]).toMatchObject({
+            expect(recorded[0]).toMatchObject({
                 object: 'person',
                 workspaceId: workspace,
                 recordId: id,
                 actor: { kind: 'member', id: adminMemberId },
             });
-            expect(events[1]?.diff).toEqual({ nameLast: { from: 'Nt', to: 'Nted' } });
+            expect(recorded[1]?.diff).toEqual({ nameLast: { from: 'Nt', to: 'Nted' } });
 
-            events.length = 0;
+            await events.reset();
             await as(admin)
                 .post(w('/people'))
                 .send({ nameFirst: 'Rolled', ownerId: '00000000-0000-4000-8000-000000000000' })
                 .expect(422);
-            expect(events).toEqual([]);
+            expect(await events.read()).toEqual([]);
         });
     });
 });

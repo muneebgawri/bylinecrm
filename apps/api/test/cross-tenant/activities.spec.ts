@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, type DomainEvent } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { eventLog, type EventLog } from '../support/outbox';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -80,7 +80,7 @@ describe('deals, notes, tasks, attachments', () => {
     let adminsPerson: string;
     let repsPerson: string;
     let otherPerson: string;
-    const events: DomainEvent[] = [];
+    let events: EventLog;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -94,9 +94,7 @@ describe('deals, notes, tasks, attachments', () => {
         app = await createApp();
         await app.init();
         http = () => request(app.getHttpServer());
-        for (const channel of ['opportunity.*', 'note.*', 'task.*', 'attachment.*']) {
-            app.get(EventEmitter2).on(channel, (event: DomainEvent) => events.push(event));
-        }
+        events = await eventLog(app, 'opportunity.*', 'note.*', 'task.*', 'attachment.*');
 
         const signup = await http()
             .post('/api/auth/signup')
@@ -236,7 +234,7 @@ describe('deals, notes, tasks, attachments', () => {
             await as(admin)
                 .post(w(`/opportunities/${deal}/restore`))
                 .expect(201);
-            const types = events.filter((e) => e.recordId === deal).map((e) => e.type);
+            const types = (await events.read()).filter((e) => e.recordId === deal).map((e) => e.type);
             expect(types).toEqual([
                 'opportunity.created',
                 'opportunity.updated',
@@ -274,7 +272,7 @@ describe('deals, notes, tasks, attachments', () => {
                 .get(w(`/notes?target=person:${repsPerson}`))
                 .expect(200);
             expect((onReps.body as Page<Note>).items.map((n) => n.id)).toEqual([note]);
-            const event = events.find((e) => e.type === 'note.created' && e.recordId === note)!;
+            const event = (await events.read()).find((e) => e.type === 'note.created' && e.recordId === note)!;
             expect(event.targets).toHaveLength(2);
         });
 
@@ -452,7 +450,7 @@ describe('deals, notes, tasks, attachments', () => {
                 .get(w(`/attachments/${attachment}/content`))
                 .expect(200);
             expect(content.text).toBe('hello attachment');
-            const types = events.filter((e) => e.recordId === attachment).map((e) => e.type);
+            const types = (await events.read()).filter((e) => e.recordId === attachment).map((e) => e.type);
             expect(types).toEqual(['attachment.created', 'attachment.deleted', 'attachment.restored']);
         });
     });

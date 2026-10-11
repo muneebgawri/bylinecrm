@@ -93,6 +93,13 @@ export const envSchema = z
          */
         MAIL_SEND_WORKER: flag('1'),
         /**
+         * Whether this process relays the outbox (P1-6): delivers recorded domain events to the
+         * timeline, webhooks, stage rules and mail re-matching. On by default; any number of processes
+         * may relay at once (claims never overlap), and at least one must. `0` keeps compile-only runs
+         * (the OpenAPI writer) quiet.
+         */
+        OUTBOX_RELAY: flag('1'),
+        /**
          * Whether the tenant client reports each operation, with the request it belongs to, to
          * `observeQueries` (P1-4a). Off in production — an operation observer is a test instrument,
          * not a feature. The unit and cross-tenant suites set it to `1`; their query-budget tests
@@ -145,10 +152,11 @@ export const envSchema = z
         /** The From header of transactional mail. Required in production. */
         MAIL_FROM: z.string().min(3).optional(),
         /**
-         * Whether this process runs the transactional-mail delivery worker (#93). On by default, like
-         * the other workers; the cross-tenant suite sets `0` and delivers queued mail itself.
+         * Whether this process runs the transactional-mail relay (#93): it sends the mail recorded in
+         * `mail_outbox`. On by default, like the outbox relay; the cross-tenant suite sets `0` and
+         * drains it itself.
          */
-        TRANSACTIONAL_MAIL_WORKER: flag('1'),
+        TRANSACTIONAL_MAIL_RELAY: flag('1'),
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),

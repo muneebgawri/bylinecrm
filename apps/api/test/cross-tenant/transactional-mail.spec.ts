@@ -1,10 +1,8 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { getQueueToken } from '@nestjs/bullmq';
 import { Test } from '@nestjs/testing';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
-import type { Queue } from 'bullmq';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../../src/app.module';
@@ -14,14 +12,13 @@ import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { TransactionAcrossNetworkError, transactionOpen } from '../../src/infra/transaction-scope';
 import { memoryOutbox } from '../../src/transactional-mail/memory.transport';
-import { TRANSACTIONAL_MAIL_QUEUE } from '../../src/transactional-mail/transactional-mail.constants';
-import { TransactionalMailer } from '../../src/transactional-mail/transactional-mailer';
+import { MailOutbox } from '../../src/transactional-mail/mail-outbox';
 import {
     TRANSACTIONAL_MAIL_TRANSPORT,
     type OutgoingMail,
     type TransactionalMailTransport,
 } from '../../src/transactional-mail/transport.port';
-import { deliverQueuedMail, lastMailTo, mailTo, tokenIn } from '../support/mail';
+import { deliverMail, lastMailTo, mailTo, tokenIn } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -71,7 +68,7 @@ class LostAnswerTransport implements TransactionalMailTransport {
 /**
  * #93 (D-246, doc 48 §6.1): transactional mail end to end against the real application — the
  * verification link, the unverified gate on tenant routes, password reset, and invitations by
- * mail. Mail goes through the real queue into a transport the test controls; nothing is sent.
+ * mail. Mail goes through the real outbox and relay into a transport the test controls; nothing is sent.
  */
 describe('#93 transactional mail', () => {
     let app: INestApplication;
@@ -97,8 +94,8 @@ describe('#93 transactional mail', () => {
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         withWorkspace = vi.spyOn(app.get(RlsPrismaService), 'withWorkspace');
         owner = app.get(PrismaService);
-        // Jobs another spec left behind are not this spec's mail.
-        await app.get<Queue>(getQueueToken(TRANSACTIONAL_MAIL_QUEUE)).obliterate({ force: true });
+        // Mail another spec left recorded goes out now, so this spec's counts are its own.
+        await deliverMail(app);
 
         const signup = await http()
             .post('/api/auth/signup')
@@ -115,7 +112,7 @@ describe('#93 transactional mail', () => {
 
     describe('verification', () => {
         it('#93: sign-up mails exactly one verification link, from the configured sender, with no tracking', async () => {
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             const sent = mailTo(emailA, 'email_verification');
             expect(sent).toHaveLength(1);
             const mail = sent[0]!;
@@ -162,7 +159,7 @@ describe('#93 transactional mail', () => {
                 .set('Cookie', a.cookie)
                 .set(CSRF_HEADER, a.csrf)
                 .expect(202);
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             const second = tokenIn(lastMailTo(emailA, 'email_verification'));
             expect(second).not.toBe(first);
             const stale = await http().post('/api/auth/email/verify').send({ token: first }).expect(400);
@@ -182,7 +179,7 @@ describe('#93 transactional mail', () => {
         it('#93: an expired link is refused like an unknown one', async () => {
             const email = `mail-exp-${stamp}@example.test`;
             await http().post('/api/auth/signup').send({ email, password, workspaceName: 'Expiry' }).expect(201);
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             const token = tokenIn(lastMailTo(email, 'email_verification'));
             await owner.oneTimeToken.update({
                 where: { tokenHash: hashToken(token) },
@@ -212,7 +209,7 @@ describe('#93 transactional mail', () => {
             }
             expect(answers[1]).toEqual(answers[0]);
             expect(answers[2]).toEqual(answers[0]);
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             expect(mailTo(`nobody-${stamp}@example.test`)).toHaveLength(0);
             expect(mailTo(emailA, 'password_reset')).toHaveLength(1);
             // A provider-only account may set a password by proving the mailbox: it gets the link too.
@@ -247,7 +244,7 @@ describe('#93 transactional mail', () => {
         it('#93: a verification link cannot be used as a reset link', async () => {
             const email = `mail-cross-${stamp}@example.test`;
             await http().post('/api/auth/signup').send({ email, password, workspaceName: 'Cross' }).expect(201);
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             const verifyToken = tokenIn(lastMailTo(email, 'email_verification'));
             const res = await http()
                 .post('/api/auth/password/reset')
@@ -273,36 +270,35 @@ describe('#93 transactional mail', () => {
                 .send({ email: invitee, roleId: memberRoleId })
                 .expect(201);
             const { token } = res.body as { token: string };
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             const mail = lastMailTo(invitee, 'workspace_invitation');
             expect(mail.subject).toContain('Mail Alpha');
             expect(mail.text).toContain(encodeURIComponent(token));
         });
 
-        it('#93: an invitation is mailed once even when the answer is lost and the job is retried', async () => {
+        it('#93: an invitation is mailed once even when the answer is lost and the send is retried', async () => {
             const invitee = `mail-retry-${stamp}@example.test`;
-            await http()
+            const res = await http()
                 .post(`/api/w/${workspaceA}/invites`)
                 .set('Cookie', a.cookie)
                 .set(CSRF_HEADER, a.csrf)
                 .send({ email: invitee, roleId: memberRoleId })
                 .expect(201);
-            const queue = app.get<Queue>(getQueueToken(TRANSACTIONAL_MAIL_QUEUE));
-            const [job] = await queue.getJobs(['waiting']);
-            expect(job).toBeDefined();
-            const mailer = app.get(TransactionalMailer);
+            const key = `invite-${(res.body as { invite: { id: string } }).invite.id}`;
             transport.loseNextAnswer();
-            await expect(mailer.deliver(job!.data)).rejects.toThrow(/socket hang up/);
-            await mailer.deliver(job!.data);
-            await job!.remove();
+            await deliverMail(app);
+            const row = await owner.mailOutbox.findUniqueOrThrow({ where: { idempotencyKey: key } });
+            expect(row).toMatchObject({ sentAt: null, failedAt: null, attempts: 1 });
+            expect(row.nextAttemptAt).not.toBeNull();
+            // The retry comes due; the same idempotency key reaches the transport again.
+            await deliverMail(app, () => new Date(Date.now() + 60 * 60_000));
             expect(mailTo(invitee, 'workspace_invitation')).toHaveLength(1);
-            const keys = transport.calls.filter((c) => c.key === job!.id).map((c) => c.key);
-            expect(keys).toHaveLength(2);
+            expect(transport.calls.filter((c) => c.key === key)).toHaveLength(2);
+            const sent = await owner.mailOutbox.findUniqueOrThrow({ where: { idempotencyKey: key } });
+            expect(sent.sentAt).not.toBeNull();
         });
 
-        it('#93: a mail is enqueued once — a second enqueue with the same key is dropped by the queue', async () => {
-            const queue = app.get<Queue>(getQueueToken(TRANSACTIONAL_MAIL_QUEUE));
-            await deliverQueuedMail(app);
+        it('#93: a mail recorded twice is one row, and its sealed payload is wiped once sent', async () => {
             const mail = {
                 kind: 'workspace_invitation' as const,
                 to: `mail-dup-${stamp}@example.test`,
@@ -311,12 +307,17 @@ describe('#93 transactional mail', () => {
                 text: 'dup',
                 idempotencyKey: `test-dup-${stamp}`,
             };
-            const mailer = app.get(TransactionalMailer);
-            await mailer.enqueue(mail);
-            await mailer.enqueue(mail);
-            expect((await queue.getJobCounts('waiting')).waiting).toBe(1);
-            await deliverQueuedMail(app);
+            const outbox = app.get(MailOutbox);
+            await outbox.record(owner, mail);
+            await outbox.record(owner, mail);
+            const rows = await owner.mailOutbox.findMany({ where: { idempotencyKey: mail.idempotencyKey } });
+            expect(rows).toHaveLength(1);
+            expect(rows[0]!.sealed).not.toContain(mail.to);
+            await deliverMail(app);
             expect(mailTo(mail.to)).toHaveLength(1);
+            const sent = await owner.mailOutbox.findUniqueOrThrow({ where: { idempotencyKey: mail.idempotencyKey } });
+            expect(sent).toMatchObject({ sealed: '', failedAt: null });
+            expect(sent.sentAt).not.toBeNull();
         });
 
         it('#93: an account created from an invitation starts unverified and is mailed a verification link', async () => {
@@ -335,7 +336,7 @@ describe('#93 transactional mail', () => {
             expect(me.body).toMatchObject({ email: invitee, emailVerified: false });
             const refused = await http().get(`/api/w/${workspaceA}/roles`).set('Cookie', joined.cookie).expect(403);
             expect(refused.body).toMatchObject({ code: 'email.unverified' });
-            await deliverQueuedMail(app);
+            await deliverMail(app);
             const verify = tokenIn(lastMailTo(invitee, 'email_verification'));
             await http().post('/api/auth/email/verify').send({ token: verify }).expect(204);
             await http().get(`/api/w/${workspaceA}/roles`).set('Cookie', joined.cookie).expect(200);
@@ -343,9 +344,9 @@ describe('#93 transactional mail', () => {
     });
 
     describe('after commit, never inside a transaction', () => {
-        it('#93: a rolled-back invitation mails nothing', async () => {
-            const queue = app.get<Queue>(getQueueToken(TRANSACTIONAL_MAIL_QUEUE));
-            await deliverQueuedMail(app);
+        it('#93: a rolled-back invitation records no mail', async () => {
+            await deliverMail(app);
+            const before = new Date();
             const invitee = `mail-rollback-${stamp}@example.test`;
             // An unknown role id fails the insert inside the transaction.
             await http()
@@ -354,7 +355,10 @@ describe('#93 transactional mail', () => {
                 .set(CSRF_HEADER, a.csrf)
                 .send({ email: invitee, roleId: '00000000-0000-4000-8000-000000000000' })
                 .expect((r) => expect(r.status).toBeGreaterThanOrEqual(400));
-            expect(await queue.getJobCounts('waiting')).toMatchObject({ waiting: 0 });
+            expect(
+                await owner.mailOutbox.count({ where: { workspaceId: workspaceA, createdAt: { gte: before } } }),
+            ).toBe(0);
+            await deliverMail(app);
             expect(mailTo(invitee)).toHaveLength(0);
         });
 

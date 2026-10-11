@@ -7,7 +7,7 @@ import {
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { invitationUrl, MEMBER_DEFAULT_CAPABILITIES, type PlatformEvent, SYSTEM_ROLES } from '@bylinecrm/shared';
+import { invitationUrl, MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
@@ -27,7 +27,7 @@ import {
     VERIFY_RESEND_MAX,
     VERIFY_RESEND_WINDOW_S,
 } from './auth.constants';
-import { InvalidToken, OneTimeTokenService, type IssuedToken } from './one-time-token.service';
+import { InvalidToken, OneTimeTokenService } from './one-time-token.service';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
 import { revokeAllSessions } from './session.service';
@@ -67,7 +67,7 @@ export class AuthService {
      * Local sign-up: a user, their first workspace, and their admin seat, in one transaction —
      * when `SIGNUP_MODE` allows it (P0-14). `closed` refuses every sign-up; `invite` needs a
      * platform sign-up invitation for this address, spent here; `open` takes anyone. The account
-     * starts unverified and is mailed a verification link after the commit (#93): an invitation
+     * starts unverified and is mailed a verification link, recorded in the same transaction (#93): an invitation
      * link was also shown to whoever created it, so holding it proves nothing about the mailbox.
      */
     async signup(input: {
@@ -81,7 +81,7 @@ export class AuthService {
         if (mode === 'invite' && !input.inviteToken) throw new SignupInvitationRequired();
         const email = normaliseEmail(input.email);
         const passwordHash = await this.passwords.hash(input.password);
-        let created: { user: UserView; workspace: WorkspaceView; link: IssuedToken };
+        let created: { user: UserView; workspace: WorkspaceView };
         try {
             created = await this.ownerPrisma.$transaction(async (tx) => {
                 if (input.inviteToken) await spendSignupInvite(tx, input.inviteToken, email);
@@ -90,14 +90,15 @@ export class AuthService {
                 });
                 const workspace = await createWorkspaceWithAdmin(tx, user.id, input.workspaceName);
                 const link = await this.links.issue(tx, 'email_verification', user.id, email);
-                return { user: userView(user), workspace, link };
+                await this.mail.verification(tx, email, link);
+                return { user: userView(user), workspace };
             });
         } catch (error) {
             // The same message as a bad login: sign-up must not say whether an address is taken.
             throw uniqueViolation(error) ? new UniqueConflict('that sign-up cannot be completed') : error;
         }
-        await this.mail.verification(email, created.link);
-        return { user: created.user, workspace: created.workspace };
+        this.mail.kick();
+        return created;
     }
 
     /**
@@ -138,12 +139,11 @@ export class AuthService {
      * roles and pipeline, no member yet, and an invitation to its admin role for `ownerEmail`. The
      * owner accepts with their account if they have one (signed in, address verified) or signs up
      * through the invitation, which works in every sign-up mode. The audit row is written in the
-     * same transaction; the event is returned for the caller to publish after commit.
+     * same transaction.
      */
     async createWorkspaceForOwner(input: { actorUserId: string; name: string; ownerEmail: string }): Promise<{
         workspace: WorkspaceView;
         invite: CreatedPlatformInvite;
-        event: PlatformEvent;
     }> {
         const email = normaliseEmail(input.ownerEmail);
         const { token, tokenHash, expiresAt } = AuthService.newInvite();
@@ -160,22 +160,24 @@ export class AuthService {
                 },
                 select: { id: true },
             });
-            const event = await recordPlatformAction(tx, 'platform.workspace_created', input.actorUserId, {
+            await recordPlatformAction(tx, 'platform.workspace_created', input.actorUserId, {
                 workspaceId: workspace.id,
                 email,
             });
             const url = invitationUrl(this.env.WEB_URL, 'member', token);
-            return { workspace, inviteId: invite.id, invite: { email, token, url, expiresAt }, event };
+            await this.mail.workspaceInvitation(tx, {
+                workspaceId: workspace.id,
+                to: email,
+                inviteId: invite.id,
+                token,
+                workspaceName: workspace.name,
+                owner: true,
+            });
+            return { workspace, invite: { email, token, url, expiresAt } };
         });
-        // Mailed after commit (#93); the link is also returned once, to pass on by hand.
-        await this.mail.workspaceInvitation({
-            to: email,
-            inviteId: created.inviteId,
-            token,
-            workspaceName: created.workspace.name,
-            owner: true,
-        });
-        return { workspace: created.workspace, invite: created.invite, event: created.event };
+        // Mailed (#93), and the link returned once to pass on by hand.
+        this.mail.kick();
+        return created;
     }
 
     /**
@@ -244,7 +246,7 @@ export class AuthService {
     /**
      * Accepting an invitation, as the signed-in account or by creating one from it. The signed-in
      * account must be the invited address, verified. An account created from the invitation starts
-     * unverified and is mailed a verification link after the commit (#93): the inviter was shown
+     * unverified and is mailed a verification link, recorded in the same transaction (#93): the inviter was shown
      * the same link, so holding it does not prove the holder reads the mailbox.
      */
     async acceptInvite(
@@ -260,7 +262,6 @@ export class AuthService {
             if (invite.expiresAt <= new Date()) throw new GoneException('invitation expired');
 
             let userId: string;
-            let link: IssuedToken | null = null;
             if ('signup' in actor) {
                 const created = await tx.user
                     .create({
@@ -270,7 +271,8 @@ export class AuthService {
                         throw uniqueViolation(error) ? new UniqueConflict('sign in to accept this invitation') : error;
                     });
                 userId = created.id;
-                link = await this.links.issue(tx, 'email_verification', userId, invite.email);
+                const link = await this.links.issue(tx, 'email_verification', userId, invite.email);
+                await this.mail.verification(tx, invite.email, link);
             } else {
                 const user = await tx.user.findUnique({ where: { id: actor.userId } });
                 if (!user || user.email !== invite.email)
@@ -286,10 +288,10 @@ export class AuthService {
                     throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
                 });
             await tx.workspaceInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
-            return { workspace: workspaceView(invite.workspace), userId, email: invite.email, link };
+            return { workspace: workspaceView(invite.workspace), userId };
         });
-        if (accepted.link) await this.mail.verification(accepted.email, accepted.link);
-        return { workspace: accepted.workspace, userId: accepted.userId };
+        this.mail.kick();
+        return accepted;
     }
 
     /**
@@ -301,13 +303,14 @@ export class AuthService {
         if (await this.limiter.hit(`verify-resend:${userId}`, VERIFY_RESEND_MAX, VERIFY_RESEND_WINDOW_S)) {
             throw new TooManyAttempts('too many verification emails; try again later');
         }
-        const issued = await this.ownerPrisma.$transaction(async (tx) => {
+        await this.ownerPrisma.$transaction(async (tx) => {
             const user = await tx.user.findUnique({ where: { id: userId } });
             if (!user) throw new UnauthorizedException();
-            if (user.emailVerifiedAt) return null;
-            return { email: user.email, link: await this.links.issue(tx, 'email_verification', user.id, user.email) };
+            if (user.emailVerifiedAt) return;
+            const link = await this.links.issue(tx, 'email_verification', user.id, user.email);
+            await this.mail.verification(tx, user.email, link);
         });
-        if (issued) await this.mail.verification(issued.email, issued.link);
+        this.mail.kick();
     }
 
     /**
@@ -336,12 +339,13 @@ export class AuthService {
         const overIp = await this.limiter.hit(`reset-ip:${ip}`, RESET_REQUEST_IP_MAX, RESET_REQUEST_WINDOW_S);
         const overAddress = await this.limiter.hit(`reset:${email}:${ip}`, RESET_REQUEST_MAX, RESET_REQUEST_WINDOW_S);
         if (overIp || overAddress) throw new TooManyAttempts('too many requests; try again later');
-        const issued = await this.ownerPrisma.$transaction(async (tx) => {
+        await this.ownerPrisma.$transaction(async (tx) => {
             const user = await tx.user.findUnique({ where: { email } });
-            if (!user) return null;
-            return this.links.issue(tx, 'password_reset', user.id, email);
+            if (!user) return;
+            const link = await this.links.issue(tx, 'password_reset', user.id, email);
+            await this.mail.passwordReset(tx, email, link);
         });
-        if (issued) await this.mail.passwordReset(email, issued);
+        this.mail.kick();
     }
 
     /**

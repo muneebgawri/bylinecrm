@@ -1,27 +1,17 @@
 import type { INestApplication } from '@nestjs/common';
-import { getQueueToken } from '@nestjs/bullmq';
-import type { Queue } from 'bullmq';
 import type request from 'supertest';
+import { MailOutboxRelay } from '../../src/transactional-mail/mail-outbox-relay';
 import { memoryOutbox, type SentMail } from '../../src/transactional-mail/memory.transport';
-import { TRANSACTIONAL_MAIL_QUEUE } from '../../src/transactional-mail/transactional-mail.constants';
-import { TransactionalMailer, type TransactionalMailJob } from '../../src/transactional-mail/transactional-mailer';
 
 /**
- * Transactional mail in the cross-tenant suite (#93). The suite runs no mail worker
- * (`TRANSACTIONAL_MAIL_WORKER=0`); a spec delivers what is queued itself, through the same
- * `deliver` the worker calls, into the in-process memory transport. Nothing is sent anywhere.
+ * Transactional mail in the cross-tenant suite (#93). The suite runs no mail relay
+ * (`TRANSACTIONAL_MAIL_RELAY=0`): a spec sends what was recorded itself, through the relay's own
+ * `drain`, into the in-process memory transport. Nothing is sent anywhere.
  */
 
-/** Delivers every queued transactional mail of this application, oldest first, and removes the jobs. */
-export async function deliverQueuedMail(app: INestApplication): Promise<void> {
-    const queue = app.get<Queue<TransactionalMailJob>>(getQueueToken(TRANSACTIONAL_MAIL_QUEUE));
-    const mailer = app.get(TransactionalMailer);
-    const jobs = await queue.getJobs(['waiting', 'delayed', 'prioritized']);
-    jobs.sort((a, b) => a.timestamp - b.timestamp);
-    for (const job of jobs) {
-        await mailer.deliver(job.data);
-        await job.remove();
-    }
+/** Sends every recorded mail that is due (at `now()`, default the real clock), the way the relay does. */
+export function deliverMail(app: INestApplication, now?: () => Date): Promise<void> {
+    return app.get(MailOutboxRelay).drain(now);
 }
 
 /** Mail delivered to `to` (lower-cased) since the suite started, oldest first. */
@@ -45,12 +35,12 @@ export function tokenIn(mail: SentMail): string {
 }
 
 /**
- * Proves `email` reads its mailbox, the way a person does: deliver the queued mail, take the
+ * Proves `email` reads its mailbox, the way a person does: send the recorded mail, take the
  * verification link, post it. Every spec that signs a tenant up calls this before using tenant
  * routes, which answer `403 email.unverified` until it is done.
  */
 export async function verifyAddress(app: INestApplication, http: () => request.Agent, email: string): Promise<void> {
-    await deliverQueuedMail(app);
+    await deliverMail(app);
     const token = tokenIn(lastMailTo(email, 'email_verification'));
     await http().post('/api/auth/email/verify').send({ token }).expect(204);
 }

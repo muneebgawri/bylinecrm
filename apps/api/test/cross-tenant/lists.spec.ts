@@ -2,10 +2,10 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { BULK_MAX_IDS, CSRF_COOKIE, CSRF_HEADER, type FilterGroup, SESSION_COOKIE } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
+import { eventLog, settle } from '../support/outbox';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -60,15 +60,6 @@ interface Activity {
 const encode = (filter: FilterGroup) => Buffer.from(JSON.stringify(filter)).toString('base64url');
 const byId = (ids: string[]): FilterGroup => ({ and: [{ field: 'id', op: 'in', value: ids }] });
 const NOWHERE = '00000000-0000-4000-8000-00000000dead';
-
-/** The subscriber writes after the request answered; a reader waits a bounded moment for it. */
-async function until<T>(read: () => Promise<T>, ok: (value: T) => boolean, tries = 40): Promise<T> {
-    for (let i = 0; ; i++) {
-        const value = await read();
-        if (ok(value) || i >= tries) return value;
-        await new Promise((r) => setTimeout(r, 50));
-    }
-}
 
 /**
  * P1-4a end to end: list totals, reading by id, related names on rows (without N+1), the export of
@@ -297,15 +288,12 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
                     .expect(201);
             }
             const rls = app.get(RlsPrismaService);
-            const emitter = app.get(EventEmitter2);
-            // A deliberately noisy background listener: it reads `people` while the request under
-            // test runs. Work that is not the request's must not count against the request.
-            const NOISE = 'test.lists.noise';
+            // Deliberately noisy background work: it reads `people` while the request under test
+            // runs. Work that is not the request's must not count against the request.
             const noisy = async (): Promise<void> => {
                 await rls.withWorkspace(workspace, (tx) => tx.person.findMany({ take: 5 }));
                 await rls.withWorkspace(workspace, (tx) => tx.company.findMany({ take: 5 }));
             };
-            emitter.on(NOISE, noisy);
             const LIST_MODELS = new Set(['Person', 'Company', 'WorkspaceMember']);
             const statements = async (limit: number): Promise<number> => {
                 let count = 0;
@@ -329,7 +317,7 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
                             .set('X-Request-Id', requestId)
                             .expect(200),
                         // Noise only in the larger request: if it were counted, fifty would exceed ten.
-                        limit === 50 ? emitter.emitAsync(NOISE) : Promise.resolve([]),
+                        limit === 50 ? noisy() : Promise.resolve(),
                     ]);
                     const listed = page<Person>(res);
                     expect(listed.items).toHaveLength(limit);
@@ -339,14 +327,10 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
                 }
                 return count;
             };
-            try {
-                const ten = await statements(10);
-                const fifty = await statements(50);
-                expect(ten).toBeGreaterThan(0);
-                expect(fifty).toBe(ten);
-            } finally {
-                emitter.off(NOISE, noisy);
-            }
+            const ten = await statements(10);
+            const fifty = await statements(50);
+            expect(ten).toBeGreaterThan(0);
+            expect(fifty).toBe(ten);
         });
     });
 
@@ -391,14 +375,11 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
                     .expect(200)
             ).body as BulkResult;
             expect(res.succeeded).toBe(adminPeople.length);
+            await settle(app);
             for (const id of adminPeople) {
-                const entries = await until(
-                    () =>
-                        as(admin)
-                            .get(w(`/timeline?target=person:${id}&kinds=person.updated`))
-                            .then((r) => (r.body as { items: Activity[] }).items),
-                    (items) => items.length > 0,
-                );
+                const entries = await as(admin)
+                    .get(w(`/timeline?target=person:${id}&kinds=person.updated`))
+                    .then((r) => (r.body as { items: Activity[] }).items);
                 expect(entries).toHaveLength(1);
                 expect(entries[0]!.properties).toEqual({
                     diff: { ownerId: { from: adminMemberId, to: repMemberId } },
@@ -436,44 +417,38 @@ describe('list totals, id-in, embedded names and bulk actions', () => {
         });
 
         it('a no-op writes and announces nothing — by PATCH or in bulk; a real change announces exactly once', async () => {
-            const emitter = app.get(EventEmitter2);
-            const announced: string[] = [];
-            const hear = (event: { recordId: string }) => announced.push(event.recordId);
-            emitter.on('person.updated', hear);
-            try {
-                const target = adminPeople[1]!;
-                const before = (
-                    await as(admin)
-                        .get(w(`/people/${target}`))
-                        .expect(200)
-                ).body as { updatedAt: string };
+            const log = await eventLog(app, 'person.updated');
+            const announced = async () => (await log.read()).map((event) => event.recordId);
+            const target = adminPeople[1]!;
+            const before = (
+                await as(admin)
+                    .get(w(`/people/${target}`))
+                    .expect(200)
+            ).body as { updatedAt: string };
 
-                const patched = await as(admin)
-                    .patch(w(`/people/${target}`))
-                    .send({ ownerId: adminMemberId })
-                    .expect(200);
-                expect((patched.body as { updatedAt: string }).updatedAt).toBe(before.updatedAt);
+            const patched = await as(admin)
+                .patch(w(`/people/${target}`))
+                .send({ ownerId: adminMemberId })
+                .expect(200);
+            expect((patched.body as { updatedAt: string }).updatedAt).toBe(before.updatedAt);
 
-                const same = (
-                    await as(admin)
-                        .post(w('/people/bulk'))
-                        .send({ action: 'assign_owner', ids: [target], ownerId: adminMemberId })
-                        .expect(200)
-                ).body as BulkResult;
-                expect(same.results).toEqual([{ id: target, ok: true, unchanged: true }]);
-                expect(announced).toEqual([]);
+            const same = (
+                await as(admin)
+                    .post(w('/people/bulk'))
+                    .send({ action: 'assign_owner', ids: [target], ownerId: adminMemberId })
+                    .expect(200)
+            ).body as BulkResult;
+            expect(same.results).toEqual([{ id: target, ok: true, unchanged: true }]);
+            expect(await announced()).toEqual([]);
 
-                const moved = (
-                    await as(admin)
-                        .post(w('/people/bulk'))
-                        .send({ action: 'assign_owner', ids: [target], ownerId: repMemberId })
-                        .expect(200)
-                ).body as BulkResult;
-                expect(moved.results).toEqual([{ id: target, ok: true }]);
-                expect(announced).toEqual([target]);
-            } finally {
-                emitter.off('person.updated', hear);
-            }
+            const moved = (
+                await as(admin)
+                    .post(w('/people/bulk'))
+                    .send({ action: 'assign_owner', ids: [target], ownerId: repMemberId })
+                    .expect(200)
+            ).body as BulkResult;
+            expect(moved.results).toEqual([{ id: target, ok: true }]);
+            expect(await announced()).toEqual([target]);
             await as(admin)
                 .post(w('/people/bulk'))
                 .send({ action: 'assign_owner', ids: [adminPeople[1]!], ownerId: adminMemberId })

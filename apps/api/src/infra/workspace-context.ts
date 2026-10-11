@@ -73,6 +73,15 @@ export class WorkspaceContext {
         return this.storage.run({ kind: 'job', workspace: context }, fn);
     }
 
+    /**
+     * Runs `fn` outside every scope: neither the caller's request nor its job. For work a request
+     * starts but does not own — the outbox relay a commit wakes (P1-6) — so it neither runs on the
+     * request pool nor is counted by the request's query observers.
+     */
+    detached<T>(fn: () => T): T {
+        return this.storage.exit(fn);
+    }
+
     /** Records the guard's decision in the current scope. Throws outside any scope. */
     set(context: WorkspaceRunContext): void {
         const scope = this.storage.getStore();

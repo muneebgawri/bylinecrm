@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { Logger, type INestApplication } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import {
@@ -24,6 +23,7 @@ import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { CONNECT_STATE_KEY_PREFIX, MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
 import { MailboxTokens, MailboxUnavailable } from '../../src/mail-accounts/mailbox-tokens.service';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { eventLog, type EventLog } from '../support/outbox';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -99,7 +99,7 @@ describe('mail accounts', () => {
     /** Every response body, every log line and every event, for the leak checks at the end. */
     const bodies: string[] = [];
     const logs: string[] = [];
-    const events: { type: string; workspaceId: string; recordId: string; actor: { kind: string } }[] = [];
+    let events: EventLog;
     const track = (res: Response): Response => {
         bodies.push(res.text ?? '');
         return res;
@@ -162,11 +162,7 @@ describe('mail accounts', () => {
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         owner = app.get(PrismaService);
         tokens = app.get(MailboxTokens);
-        app.get(EventEmitter2).onAny((type: string | string[], payload: unknown) => {
-            if (typeof type === 'string' && type.startsWith('mailbox.')) {
-                events.push(payload as (typeof events)[number]);
-            }
-        });
+        events = await eventLog(app, 'mailbox.*');
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -282,7 +278,7 @@ describe('mail accounts', () => {
 
     describe('connecting', () => {
         it('an admin connects a personal mailbox with exactly the narrow scopes, and the client is proven', async () => {
-            const before = events.length;
+            await events.reset();
             const { result, location, authorizeUrl } = await connect(admin, 'personal', {
                 email: `Admin.${stamp}@Example.com`,
                 scopes: [...GMAIL_SCOPES],
@@ -310,7 +306,7 @@ describe('mail accounts', () => {
             expect(status.body).toMatchObject({ configured: true, verified: true });
             expect(client.liveMailboxes).toBe(1);
 
-            const announced = events.slice(before);
+            const announced = await events.read();
             expect(announced).toHaveLength(1);
             expect(announced[0]).toMatchObject({
                 type: 'mailbox.connected',
@@ -579,13 +575,13 @@ describe('mail accounts', () => {
             const id = await mailboxIdOf(email);
             await expire(id);
             google.revokeGrantFor(email);
-            const before = events.length;
+            await events.reset();
             await expect(tokens.getAccessToken(workspace, id)).rejects.toBeInstanceOf(MailboxUnavailable);
             await expect(tokens.getAccessToken(workspace, id)).rejects.toBeInstanceOf(MailboxUnavailable);
             const after = (await list(admin)).find((m) => m.id === id)!;
             expect(after.status).toBe('reconnect_needed');
             expect(after.lastError?.code).toBe('invalid_grant');
-            const announced = events.slice(before);
+            const announced = await events.read();
             expect(announced).toHaveLength(1);
             expect(announced[0]).toMatchObject({
                 type: 'mailbox.reconnect_needed',
@@ -634,7 +630,7 @@ describe('mail accounts', () => {
         });
 
         it('revokes the grant at Google, wipes the tokens, keeps the row; then the client can go', async () => {
-            const before = events.length;
+            await events.reset();
             const revokes = google.revokeCalls;
             const live = (await list(admin)).filter((m) => m.status !== 'disconnected');
             for (const mailbox of live) {
@@ -643,7 +639,7 @@ describe('mail accounts', () => {
                 expect(res.body).toMatchObject({ revoked: true, mailbox: { status: 'disconnected' } });
             }
             expect(google.revokeCalls - revokes).toBe(live.length);
-            expect(events.slice(before).filter((e) => e.type === 'mailbox.disconnected')).toHaveLength(live.length);
+            expect((await events.read()).filter((e) => e.type === 'mailbox.disconnected')).toHaveLength(live.length);
             const stored = await owner.$queryRaw<{ n: number }[]>`
                 SELECT count(*)::int AS n FROM mailboxes
                 WHERE workspace_id = ${workspace}::uuid

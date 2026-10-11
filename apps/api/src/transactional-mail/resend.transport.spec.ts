@@ -79,7 +79,7 @@ describe('#93 ResendTransport', () => {
     it('never calls out inside a tenant transaction', async () => {
         const fetchImpl = vi.fn(() => answer(200, { id: 'x' }));
         await expect(
-            insideTransaction(() => new ResendTransport('re_k', fetchImpl as unknown as typeof fetch).send(mail)),
+            insideTransaction([], () => new ResendTransport('re_k', fetchImpl as unknown as typeof fetch).send(mail)),
         ).rejects.toBeInstanceOf(TransactionAcrossNetworkError);
         expect(fetchImpl).not.toHaveBeenCalled();
     });

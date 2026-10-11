@@ -48,7 +48,7 @@ describe('#93 (D-246): transactional mail configuration', () => {
         expect(env.NODE_ENV).toBe('development');
         expect(env.RESEND_API_KEY).toBeUndefined();
         expect(env.MAIL_FROM).toBe('BylineCRM <no-reply@localhost>');
-        expect(env.TRANSACTIONAL_MAIL_WORKER).toBe(true);
+        expect(env.TRANSACTIONAL_MAIL_RELAY).toBe(true);
     });
 
     it('in production, refuses to boot without a Resend key and an explicit From', () => {

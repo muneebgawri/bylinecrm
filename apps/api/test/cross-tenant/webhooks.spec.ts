@@ -17,6 +17,7 @@ import type { Queue } from 'bullmq';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { settle } from '../support/outbox';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { hmacHex } from '../../src/webhooks/signature';
 import { WebhooksSweep } from '../../src/webhooks/sweep';
@@ -211,6 +212,7 @@ describe('webhooks', () => {
             });
         expect(person.status).toBe(201);
         const personId = (person.body as { id: string }).id;
+        await settle(app);
 
         const hit = await until(
             async () => received.find((r) => r.path === path && r.headers[WEBHOOK_EVENT_HEADER] === 'person.created'),
@@ -250,7 +252,9 @@ describe('webhooks', () => {
             .post(w('/companies'))
             .send({ name: `Acme ${stamp}` });
         expect(company.status).toBe(201);
-        await new Promise((r) => setTimeout(r, 300));
+        // Delivered to every consumer: had the endpoint been owed it, its delivery row would exist now.
+        await settle(app);
+        expect((await deliveriesOf(endpoint.id)).items.some((d) => d.eventName === 'company.created')).toBe(false);
         expect(received.some((r) => r.path === path && r.headers[WEBHOOK_EVENT_HEADER] === 'company.created')).toBe(
             false,
         );
@@ -283,6 +287,14 @@ describe('webhooks', () => {
         await move(stage('Won'), { wonAmount: { amountMinor: 500 } }); // open → won
         await move(stage('Replied')); // won → open (reopen)
         await move(stage('Lost'), { lostReason: 'budget' }); // open → lost
+        await settle(app);
+        // One delivery row per move, whatever the relay did: no second row, so no second send.
+        const rows = (await deliveriesOf((created.body as { endpoint: Endpoint }).endpoint.id)).items.filter((d) =>
+            d.eventName.startsWith('deal.'),
+        );
+        expect(rows.map((d) => d.eventName).sort()).toEqual(
+            ['deal.lost', 'deal.stage_changed', 'deal.stage_changed', 'deal.won'].sort(),
+        );
 
         const dealEvents = () =>
             received
@@ -295,8 +307,6 @@ describe('webhooks', () => {
             async () => dealEvents(),
             (seen) => seen.length >= 4,
         );
-        // Give a stray second delivery time to arrive before asserting there is none.
-        await new Promise((r) => setTimeout(r, 500));
         const seen = dealEvents();
         expect(seen.map((s) => s.event).sort()).toEqual(
             ['deal.lost', 'deal.stage_changed', 'deal.stage_changed', 'deal.won'].sort(),
@@ -430,7 +440,7 @@ describe('webhooks', () => {
         await as(admin)
             .post(w('/companies'))
             .send({ name: `Private ${stamp}` });
-        await new Promise((r) => setTimeout(r, 500));
+        await settle(app);
         expect(received.filter((r) => r.path === path).length).toBe(before);
         const theirLog = await deliveriesOf(theirEndpoint.id, other, otherWorkspace);
         expect(theirLog.items.filter((d) => d.eventName !== 'ping')).toHaveLength(0);
@@ -459,10 +469,11 @@ describe('webhooks', () => {
         await as(admin)
             .post(w('/companies'))
             .send({ name: `Retired ${stamp}` });
-        await new Promise((r) => setTimeout(r, 500));
+        await settle(app);
         expect(received.filter((r) => r.path === path).length).toBe(before);
         const log = await deliveriesOf(endpoint.id);
         expect(log.items.some((d) => d.eventName === 'ping')).toBe(true);
+        expect(log.items.some((d) => d.eventName === 'company.created')).toBe(false);
     });
 
     describe('the stranded-delivery sweep', () => {
