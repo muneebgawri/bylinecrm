@@ -7,6 +7,7 @@ import {
     type OAuthClientCredentials,
     type TokenGrant,
 } from '../../src/mail-accounts/google-oauth.port';
+import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
 
 /** A client registered in the fake's "Google Cloud". */
 interface FakeClient {
@@ -106,6 +107,7 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
         client: OAuthClientCredentials,
         input: { code: string; codeVerifier: string; redirectUri: string },
     ): Promise<TokenGrant> {
+        assertNoOpenTransaction('Google exchangeCode');
         if (this.failExchangeWith) {
             const error = this.failExchangeWith;
             this.failExchangeWith = null;
@@ -133,6 +135,7 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
     }
 
     async refresh(client: OAuthClientCredentials, refreshToken: string): Promise<TokenGrant> {
+        assertNoOpenTransaction('Google refresh');
         this.refreshCalls++;
         if (this.refreshDelayMs > 0) await new Promise((r) => setTimeout(r, this.refreshDelayMs));
         this.authenticate(client);
@@ -144,6 +147,7 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
     }
 
     mailboxAddress(accessToken: string): Promise<string> {
+        assertNoOpenTransaction('Google mailboxAddress');
         const access = this.accessTokens.get(accessToken);
         const grant = access ? this.grants.get(access.grantKey) : undefined;
         if (!grant || grant.revoked)
@@ -152,6 +156,7 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
     }
 
     grantedScopes(accessToken: string): Promise<string[]> {
+        assertNoOpenTransaction('Google grantedScopes');
         const access = this.accessTokens.get(accessToken);
         if (!access)
             return Promise.reject(new GoogleOAuthError('invalid_token', 400, 'token information read failed (400)'));
@@ -159,6 +164,7 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
     }
 
     revoke(token: string): Promise<void> {
+        assertNoOpenTransaction('Google revoke');
         this.revokeCalls++;
         const grantKey = this.refreshTokens.get(token) ?? this.accessTokens.get(token)?.grantKey;
         const grant = grantKey ? this.grants.get(grantKey) : undefined;
@@ -167,6 +173,7 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
     }
 
     probeClient(client: OAuthClientCredentials, redirectUri: string): Promise<ClientProbe> {
+        assertNoOpenTransaction('Google probeClient');
         const known = this.clients.get(client.clientId);
         if (!known || known.secret !== client.clientSecret) return Promise.resolve(probeFromError('invalid_client'));
         if (!known.redirectUris.includes(redirectUri)) return Promise.resolve(probeFromError('redirect_uri_mismatch'));
