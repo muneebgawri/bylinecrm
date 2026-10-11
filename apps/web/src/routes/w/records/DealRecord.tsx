@@ -18,7 +18,8 @@ import {
 import { ListTodo, Mail, StickyNote } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { useDealHistory, useMoveDeal, usePatchRecord, usePipeline, useRecord } from '../../../api/queries';
+import { useDealHistory, useMoveDeal, usePipeline } from '../../../api/deals';
+import { usePatchRecord, useRecord } from '../../../api/records';
 import type { OpportunityView, StageView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatDate, formatDay } from '../../../lib/format';

@@ -19,10 +19,7 @@ import { useCommandShortcuts } from '../commands/shortcuts';
 import { useWorkspaceId } from '../routes/params';
 import { paths, withCreate } from '../routes/paths';
 import { RouteSkeleton } from '../routes/states';
-import { CommandPalette } from './CommandPalette';
 import { OfflineBanner } from './OfflineBanner';
-import { ProfileDialog } from './ProfileDialog';
-import { ShortcutsSheet } from './ShortcutsSheet';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { NAV_ITEMS } from './nav';
@@ -30,6 +27,21 @@ import { NAV_ITEMS } from './nav';
 /** The toast renderer loads after first paint; the store (`toast()`) is tiny and always there. */
 const Toaster = lazy(() => import('@bylinecrm/ui/toaster').then((m) => ({ default: m.Toaster })));
 import { SIDEBAR_COLLAPSED_KEY } from './storage';
+
+/**
+ * Overlays the person opens, not the first frame: the palette (cmdk), the shortcuts sheet and the
+ * profile dialog load on first open and stay mounted after, so closing still animates (#131).
+ */
+const CommandPalette = lazy(() => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })));
+const ShortcutsSheet = lazy(() => import('./ShortcutsSheet').then((m) => ({ default: m.ShortcutsSheet })));
+const ProfileDialog = lazy(() => import('./ProfileDialog').then((m) => ({ default: m.ProfileDialog })));
+
+/** True from the first render where `open` is true, and from then on (state adjusted during render). */
+function useOpenedOnce(open: boolean): boolean {
+    const [opened, setOpened] = useState(open);
+    if (open && !opened) setOpened(true);
+    return opened || open;
+}
 
 /** The record drawer (`?open=<object>:<id>`) lives in the records chunk; nothing loads until it is asked for. */
 const RecordDrawerHost = lazy(() =>
@@ -64,6 +76,9 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
     // Asked once: a person who has not confirmed their name sees the prompt until they save or
     // dismiss it (either confirms it server-side), on whichever device they sign in from first.
     const needsName = profile.data?.completed === false;
+    const paletteLoaded = useOpenedOnce(paletteOpen);
+    const shortcutsLoaded = useOpenedOnce(shortcutsOpen);
+    const profileLoaded = useOpenedOnce(profileOpen || needsName);
 
     const toggleSidebar = useCallback(() => {
         if (narrow) setDrawerOpen((open) => !open);
@@ -123,16 +138,18 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
             <Suspense fallback={null}>
                 <RecordDrawerHost />
             </Suspense>
-            <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-            <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-            {profile.data && (
-                <ProfileDialog
-                    profile={profile.data}
-                    mode={needsName ? 'prompt' : 'edit'}
-                    open={profileOpen || needsName}
-                    onOpenChange={setProfileOpen}
-                />
-            )}
+            <Suspense fallback={null}>
+                {paletteLoaded && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}
+                {shortcutsLoaded && <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />}
+                {profileLoaded && profile.data && (
+                    <ProfileDialog
+                        profile={profile.data}
+                        mode={needsName ? 'prompt' : 'edit'}
+                        open={profileOpen || needsName}
+                        onOpenChange={setProfileOpen}
+                    />
+                )}
+            </Suspense>
             <Suspense fallback={null}>
                 <Toaster />
             </Suspense>

@@ -7,8 +7,10 @@ import {
     useQueryClient,
     type QueryClient,
 } from '@tanstack/react-query';
-import { search, type ListParams } from './endpoints';
-import { keys, recordEndpoints, type RecordInputOf, type RecordPageOf, type RecordViewOf } from './queries';
+import { search } from './records';
+import type { ListParams } from './endpoints';
+import { keys } from './queries';
+import { recordEndpoints, type RecordInputOf, type RecordPageOf, type RecordViewOf } from './records';
 import type { BulkInput, BulkResultView } from './types';
 
 /**

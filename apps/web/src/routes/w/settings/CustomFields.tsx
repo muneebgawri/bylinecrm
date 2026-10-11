@@ -19,7 +19,7 @@ import {
 } from '@bylinecrm/ui';
 import { ArrowDown, ArrowUp, ChevronRight, X } from 'lucide-react';
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
-import { useCustomFields } from '../../../api/queries';
+import { useCustomFields } from '../../../api/records';
 import {
     useArchiveCustomField,
     useArchivedCustomFields,

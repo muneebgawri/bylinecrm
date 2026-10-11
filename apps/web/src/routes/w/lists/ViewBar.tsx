@@ -12,7 +12,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState } from 'react';
 import type { ListCount } from '../../../api/lists';
-import { useCreateView, useDeleteView, useUpdateView } from '../../../api/queries';
+import { useCreateView, useDeleteView, useUpdateView } from '../../../api/records';
 import { LIST_COPY } from './listConfig';
 import { ConfirmDialog, failureText, SaveViewDialog } from './ListDialogs';
 

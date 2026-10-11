@@ -3,7 +3,7 @@ import { Button, Skeleton } from '@bylinecrm/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@bylinecrm/ui/popover';
 import { Columns3, Download, Filter, ListFilter } from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { useCustomFields } from '../../../api/queries';
+import { useCustomFields } from '../../../api/records';
 import { useMembership } from '../../../auth/capabilities';
 import { ResponsivePanel } from '../../../components/ResponsivePanel';
 import {

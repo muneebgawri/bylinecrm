@@ -21,7 +21,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
-import { useCreateRole, useRemoveRole, useRoles, useUpdateRole } from '../../../api/queries';
+import { useCreateRole, useRemoveRole, useRoles, useUpdateRole } from '../../../api/team';
 import type { RoleView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
 import { CAPABILITY_AREA_LABEL, CAPABILITY_LABEL } from './settingsText';
