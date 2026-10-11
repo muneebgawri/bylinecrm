@@ -10,6 +10,8 @@ import {
     MAIL_SEND_SWEEP_EVERY_MS,
     MAIL_SEND_WORKER_CONCURRENCY,
 } from './mail-send.constants';
+import { SendingDomainsService } from '../sending-pool/sending-domains.service';
+import { SENDING_DOMAIN_CHECK_EVERY_MS, SENDING_DOMAIN_CHECK_JOB } from '../sending-pool/sending-pool.constants';
 import { MailSendService, SendNotDue } from './mail-send.service';
 import { MailSendSweep } from './sweep';
 
@@ -19,7 +21,7 @@ export interface MailSendJob {
     messageId: string;
 }
 
-/** The maintenance queue's one repeating job. */
+/** The maintenance queue's repeating jobs: the send sweep, and the sending pool's domain re-check (P3-2). */
 const SWEEP_JOB = 'sweep';
 
 /**
@@ -39,6 +41,7 @@ export class MailSendWorkers implements OnApplicationBootstrap, OnModuleDestroy 
         @Inject(ENV) private readonly env: Env,
         private readonly send: MailSendService,
         private readonly sweep: MailSendSweep,
+        private readonly domains: SendingDomainsService,
         @InjectQueue(MAIL_SEND_MAINTENANCE_QUEUE) private readonly maintenance: Queue,
     ) {}
 
@@ -68,6 +71,11 @@ export class MailSendWorkers implements OnApplicationBootstrap, OnModuleDestroy 
             this.watch(new Worker(MAIL_SEND_MAINTENANCE_QUEUE, (job) => this.maintain(job.name), { connection })),
         );
         await this.maintenance.upsertJobScheduler(SWEEP_JOB, { every: MAIL_SEND_SWEEP_EVERY_MS }, { name: SWEEP_JOB });
+        await this.maintenance.upsertJobScheduler(
+            SENDING_DOMAIN_CHECK_JOB,
+            { every: SENDING_DOMAIN_CHECK_EVERY_MS },
+            { name: SENDING_DOMAIN_CHECK_JOB },
+        );
         // Once now, so sends stranded while no worker ran are picked up at start, not on the next tick.
         await this.sweep.run().catch((error: unknown) => {
             this.logger.error(`startup send sweep failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -91,6 +99,7 @@ export class MailSendWorkers implements OnApplicationBootstrap, OnModuleDestroy 
 
     private async maintain(name: string): Promise<void> {
         if (name === SWEEP_JOB) await this.sweep.run();
+        else if (name === SENDING_DOMAIN_CHECK_JOB) await this.domains.checkDue();
         else this.logger.warn(`maintenance job ${name} is not one this worker knows`);
     }
 

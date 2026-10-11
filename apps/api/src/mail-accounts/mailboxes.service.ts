@@ -1,3 +1,4 @@
+import { enrolPoolMailbox } from '../sending-pool/pool-mailbox';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { MAILBOX_PURPOSES, type MailboxConnectResult, type MailboxPurpose } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
@@ -310,6 +311,7 @@ export class MailboxesService {
                           purpose: pending.purpose,
                       },
                   });
+            if (row.purpose === 'pool') await enrolPoolMailbox(tx, row);
             await this.clients.markVerifiedIn(tx, client.rowId);
             await this.events.record(tx, {
                 type: 'mailbox.connected',

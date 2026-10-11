@@ -1,3 +1,4 @@
+import { recordBounces } from '../sending-pool/bounces';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { DomainEvent, MailSyncStatus } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
@@ -404,7 +405,12 @@ export class MailSyncService {
             email,
             fromPeople,
         );
-        await this.events.recordAll(tx, replied ? [event, replied] : [event]);
+        // A bounce report a pool mailbox received is recorded with it (P3-2).
+        const bounced =
+            mailbox.purpose === 'pool' && parsed.bounce
+                ? await recordBounces(tx, mailbox, { id: row.id, sentAt: row.sentAt }, parsed.bounce)
+                : [];
+        await this.events.recordAll(tx, [event, ...(replied ? [replied] : []), ...bounced]);
         return true;
     }
 

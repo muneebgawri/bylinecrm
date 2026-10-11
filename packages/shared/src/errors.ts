@@ -41,6 +41,12 @@ export const ERROR_CODES = [
      * one at its field (`to`, `cc`, `bcc`) with the reason. Nothing was sent.
      */
     'recipient.suppressed',
+    /** `422`: a pool mailbox is paused for its bounce or complaint rate (P3-2, FR-CRMS-6, -13). Nothing was sent. */
+    'mailbox.paused',
+    /** `422`: a pool mailbox's sending domain has not passed its SPF, DKIM and DMARC check (FR-CRMS-13). Nothing was sent. */
+    'mailbox.domain_unverified',
+    /** `422`: a pool mailbox has used its allowance for the rolling 24 hours (cap or warm-up limit, FR-CRMS-6). */
+    'mailbox.cap_reached',
     /** Too many attempts; try again later. */
     'rate_limited',
     /** Any other refusal of the request (a 4xx with no more specific code). */

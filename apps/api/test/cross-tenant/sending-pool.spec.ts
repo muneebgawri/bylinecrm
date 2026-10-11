@@ -171,7 +171,14 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             const at = new Date(Date.now() - hoursAgo * 3600_000);
             await owner.mailOutbound.update({
                 where: { id },
-                data: { status: 'sent', sentAt: at, lastAttemptAt: at, attempts: 1 },
+                data: {
+                    status: 'sent',
+                    sentAt: at,
+                    lastAttemptAt: at,
+                    attempts: 1,
+                    providerMessageId: `hist-${id}`,
+                    providerThreadId: `hist-thr-${id}`,
+                },
             });
             ids.push(id);
         }
@@ -253,7 +260,14 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
     beforeEach(async () => {
         await reset();
         // Out of warm-up, cap 10, a judged rate needs 3 sends — each test narrows what it needs.
-        await settings({ dailyCap: 10, warmupDays: 1, rateMinSample: 3, bouncePauseBps: 2000, complaintPauseBps: 20 });
+        await settings({
+            dailyCap: 10,
+            warmupStartPerDay: 1,
+            warmupDays: 1,
+            rateMinSample: 3,
+            bouncePauseBps: 2000,
+            complaintPauseBps: 20,
+        });
     });
 
     describe('FR-CRMS-6 the allowance', () => {
@@ -263,9 +277,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             const first = await queuePoolSend(a, `r1-${stamp}@acme.example`);
             // Gmail fails the first attempt transiently: the send stays `sending` and counts.
             gmail.failNext(poolAddresses[0]!, 'send', 503, 99);
-            await expect(
-                send.deliver(workspace, first, { attempts: 1, sleep: () => Promise.resolve() }),
-            ).rejects.toThrow();
+            await expect(send.deliver(workspace, first, noWait)).rejects.toThrow();
             gmail.clearFailures();
             expect((await outcome(first)).status).toBe('sending');
 
