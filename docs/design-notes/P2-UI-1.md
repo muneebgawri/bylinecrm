@@ -16,7 +16,9 @@ On a phone (FR-CRMS-UI-12) the inline box gives way to a **full-screen sheet** r
 **Email** (`RecordCompose`); the template and schedule pickers are sheets (`ResponsivePanel`). The person
 page's primary action is now **Email** (Enrol stays, disabled, "Sequences arrive in Phase 3"); the deal
 page adds Email beside Note and Task, disabled with its reason when there is no point of contact. `e` and
-the palette: "Email this person" / "Email the point of contact".
+the palette: "Email this person" / "Email the point of contact". The palette (and the `?` sheet) now list the record's own
+groups ("This record", "This panel") — they had none, so no record action appeared there; a palette
+command runs after the palette has closed (`CommandDialog` `onCloseAutoFocus`), so focus it moves stays.
 
 ## The compose box (`routes/w/mail/Composer.tsx`, rules in `compose.ts`)
 
