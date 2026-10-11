@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GmailPart, GmailRawMessage } from './gmail.port';
+import { dsnPayload } from '../../test/support/dsn';
 import { parseGmailMessage } from './parse-message';
 
 const b64 = (value: string | Buffer) => Buffer.from(value).toString('base64url');
@@ -119,5 +120,51 @@ describe('parseGmailMessage', () => {
         );
         expect(parseGmailMessage(message({ From: 'a@b.example', 'X-BylineCRM-Id': 'not-an-id' })).crmId).toBeNull();
         expect(parseGmailMessage(message({ From: 'a@b.example' })).crmId).toBeNull();
+    });
+});
+
+describe('FR-CRMS-6 bounce reports (P3-2)', () => {
+    const crmId = '0b6f2f0e-6d1c-4c43-9a7f-0f3a4f1f2a11';
+    const report = (fixture: Parameters<typeof dsnPayload>[0]): GmailRawMessage => ({
+        id: 'b1',
+        threadId: 't9',
+        labelIds: ['INBOX'],
+        snippet: 'Address not found',
+        internalDate: '1760000000000',
+        payload: dsnPayload(fixture).payload,
+    });
+
+    it('reads a permanent bounce: the failed address, its 5.x.x status and the send it answers', () => {
+        const parsed = parseGmailMessage(
+            report({ recipient: 'Gone@Acme.example', status: '5.1.1', crmId, to: 'pool@out.example' }),
+        );
+        expect(parsed.bounce).toEqual({
+            recipients: [{ address: 'gone@acme.example', permanent: true, status: '5.1.1' }],
+            crmId,
+        });
+    });
+
+    it('reads a transient 4.x.x bounce as not permanent', () => {
+        const parsed = parseGmailMessage(
+            report({ recipient: 'busy@acme.example', status: '4.2.2', to: 'p@o.example' }),
+        );
+        expect(parsed.bounce?.recipients).toEqual([
+            { address: 'busy@acme.example', permanent: false, status: '4.2.2' },
+        ]);
+        expect(parsed.bounce?.crmId).toBeNull();
+    });
+
+    it('reads the failed address from the delivery-status part when there is no X-Failed-Recipients header', () => {
+        const parsed = parseGmailMessage(
+            report({ recipient: 'x@acme.example', status: '5.7.1', failedRecipientsHeader: false, to: 'p@o.example' }),
+        );
+        expect(parsed.bounce?.recipients).toEqual([{ address: 'x@acme.example', permanent: true, status: '5.7.1' }]);
+    });
+
+    it('is null on an ordinary message, even one that mentions a delivery failure', () => {
+        expect(
+            parseGmailMessage(message({ From: 'a@b.example', Subject: 'Delivery Status Notification (Failure)' }))
+                .bounce,
+        ).toBeNull();
     });
 });
