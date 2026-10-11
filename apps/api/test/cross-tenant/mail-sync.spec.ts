@@ -18,6 +18,7 @@ import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sy
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, settle, type EventLog } from '../support/outbox';
+import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
     cookie: string;
@@ -159,7 +160,11 @@ describe('mail sync', () => {
         return as(who).get(w(`/mail/threads?target=${target}`, ws));
     }
 
+    /** A receiver that answers 200, so the worker never disables the endpoint this spec counts on (#110). */
+    let hooks: WebhookReceiver;
+
     beforeAll(async () => {
+        hooks = await new WebhookReceiver().start();
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
             .overrideProvider(GOOGLE_OAUTH_PORT)
             .useValue(google)
@@ -239,7 +244,7 @@ describe('mail sync', () => {
 
         const endpoint = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: 'http://127.0.0.1:9/mail-sync-hook', events: ['*'] });
+            .send({ url: hooks.url('/mail-sync-hook'), events: ['*'] });
         expect(endpoint.status).toBe(201);
         webhookEndpoint =
             (endpoint.body as { endpoint?: { id: string }; id?: string }).endpoint?.id ??
@@ -262,6 +267,7 @@ describe('mail sync', () => {
         // would run in later specs' workers, inside their requests' timing.
         if (webhookEndpoint) await as(admin).delete(w(`/webhooks/${webhookEndpoint}`));
         await app?.close();
+        await hooks?.close();
     });
 
     describe('the first import', () => {
