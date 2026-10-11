@@ -8,6 +8,7 @@ import {
 } from '@bylinecrm/shared';
 import { type Dispatcher, request } from 'undici';
 import { ENV, type Env } from '../config/env';
+import { assertNoOpenTransaction } from '../infra/transaction-scope';
 import { signatureHeader } from './signature';
 import { createWebhookDispatcher } from './url-guard';
 import { WEBHOOK_ERROR_MAX_CHARS, WEBHOOK_MAX_RESPONSE_BYTES, WEBHOOK_USER_AGENT } from './webhooks.constants';
@@ -45,6 +46,8 @@ export class WebhookSender implements OnModuleDestroy {
     }
 
     async send(input: SendInput): Promise<SendOutcome> {
+        // Never inside a tenant transaction (#86): a slow receiver would hold a pooled connection.
+        assertNoOpenTransaction('webhook delivery');
         const body = JSON.stringify(input.envelope);
         const timestamp = Math.floor(Date.now() / 1000);
         try {

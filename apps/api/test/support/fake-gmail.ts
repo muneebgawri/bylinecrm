@@ -8,6 +8,7 @@ import {
     type GmailRawMessage,
     type GmailSent,
 } from '../../src/mail-sync/gmail.port';
+import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
 import type { FakeGoogleOAuth } from './fake-google-oauth';
 
 /** A message to put in a fixture mailbox. Defaults make a plain inbound message from `from`. */
@@ -223,6 +224,9 @@ export class FakeGmail implements GmailPort {
 
     /** Resolves the token to its mailbox (as Google would), records the call, applies a queued failure. */
     private async enter(method: Method, accessToken: string, id?: string): Promise<string> {
+        // A Gmail call holds no tenant transaction open (#86): it would pin a pooled connection
+        // for a network round trip. Every test that reaches Gmail checks the rule here.
+        assertNoOpenTransaction(`Gmail ${method}`);
         let email: string;
         try {
             email = await this.oauth.mailboxAddress(accessToken);
