@@ -93,6 +93,12 @@ export const envSchema = z
          */
         MAIL_SEND_WORKER: flag('1'),
         /**
+         * Whether this process runs sequence steps (P3-3) and their sweep. On by default; a separate
+         * worker process sets `1` there and `0` on the API. The cross-tenant suite sets `0` and runs
+         * steps itself.
+         */
+        SEQUENCE_WORKER: flag('1'),
+        /**
          * Whether this process relays the outbox (P1-6): delivers recorded domain events to the
          * timeline, webhooks, stage rules and mail re-matching. On by default; any number of processes
          * may relay at once (claims never overlap), and at least one must. `0` keeps compile-only runs
