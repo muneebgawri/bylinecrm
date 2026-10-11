@@ -56,15 +56,18 @@ export class FakeGmail implements GmailPort {
     private readonly failures: { email: string; method: Method; status: number; remaining: number }[] = [];
     /** Mailboxes whose next send is stored by Gmail and then answered with a 500 (accepted, unreported). */
     private readonly acceptThenFail = new Set<string>();
-    /** Every message a mailbox sent through `send`: the raw MIME as Gmail received it, and where it went. */
-    readonly sent: { email: string; raw: string; threadId: string | null; id: string }[] = [];
+    /**
+     * Every message a mailbox sent through `send`: the raw MIME as Gmail received it, where it went, and
+     * the Message-ID Gmail stored and delivered it with — which is Gmail's own, not ours (below).
+     */
+    readonly sent: { email: string; raw: string; threadId: string | null; id: string; messageId: string }[] = [];
     /** Every call made, for assertions: method, mailbox, and the message id for getMessage. */
     readonly calls: { method: Method; email: string; id?: string }[] = [];
     /**
      * Real Gmail replaces the Message-ID a sender sets with one of its own (`<…@mail.gmail.com>`) —
-     * seen against real mailboxes on 2026-10-11. Off by default so a test opts into it knowingly.
+     * seen against real mailboxes on 2026-10-11 (#87). The fake always does the same: a fake that keeps
+     * our Message-ID hides exactly the bug real Gmail exposed.
      */
-    rewriteSentMessageIds = false;
     private nextRewrittenId = 1;
     /** Page sizes small enough that the tests exercise paging. */
     listPageSize = 3;
@@ -225,12 +228,11 @@ export class FakeGmail implements GmailPort {
         const id = `msg-${email}-${box.nextMessage++}`;
         const threadId = input.threadId ?? `thr-${email}-${box.nextThread++}`;
         const parsed = parseRaw(input.raw);
-        if (this.rewriteSentMessageIds) {
-            const rewritten = `<CAfake${this.nextRewrittenId++}-${box.nextMessage}@mail.gmail.com>`;
-            parsed.payload.headers = (parsed.payload.headers ?? []).map((h) =>
-                h.name.toLowerCase() === 'message-id' ? { name: h.name, value: rewritten } : h,
-            );
-        }
+        const messageId = `CAfake${this.nextRewrittenId++}-${box.nextMessage}@mail.gmail.com`;
+        parsed.payload.headers = [
+            ...(parsed.payload.headers ?? []).filter((h) => h.name.toLowerCase() !== 'message-id'),
+            { name: 'Message-ID', value: `<${messageId}>` },
+        ];
         box.messages.set(id, {
             id,
             threadId,
@@ -242,7 +244,7 @@ export class FakeGmail implements GmailPort {
         box.order.push(id);
         box.historyId += 1;
         box.history.push({ historyId: box.historyId, messageId: id });
-        this.sent.push({ email, raw: input.raw, threadId: input.threadId ?? null, id });
+        this.sent.push({ email, raw: input.raw, threadId: input.threadId ?? null, id, messageId });
         if (this.acceptThenFail.delete(email)) {
             throw new GmailApiError(500, 'backendError', 'Gmail answered 500');
         }

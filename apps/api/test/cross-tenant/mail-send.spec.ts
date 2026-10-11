@@ -525,7 +525,8 @@ describe('mail send and reply detection', () => {
 
     describe('FR-CRMS-2 replies thread, and FR-CRMS-9 a reply moves the deal', () => {
         let ours: Outbound;
-        let ourMessageId: string;
+        /** The Message-ID Dana's copy carries: Gmail's, not the one we set (#87). */
+        let deliveredMessageId: string;
 
         beforeAll(async () => {
             // Dana writes first; Kate replies from the CRM.
@@ -547,7 +548,7 @@ describe('mail send and reply detection', () => {
                 replyToMessageId: parent.id,
                 body: body(para(t('Pricing attached.'))),
             });
-            ourMessageId = header(gmail.sent.at(-1)!.raw, 'Message-ID')!.slice(1, -1);
+            deliveredMessageId = gmail.sent.at(-1)!.messageId;
         });
 
         it('sends the reply in the parent’s Gmail thread with In-Reply-To and References', async () => {
@@ -563,13 +564,13 @@ describe('mail send and reply detection', () => {
             expect(ours.threadId).toBe(parent.threadId);
         });
 
-        it('announces a reply that names our Message-ID exactly once, and the rule moves the deal', async () => {
+        it('announces a reply that names the Message-ID Gmail delivered exactly once, and the rule moves the deal', async () => {
             gmail.deliver(adminEmail, {
                 from: dana,
                 to: [adminEmail],
                 subject: 'Re: Can you send pricing?',
                 text: 'Thanks — let us talk.',
-                inReplyTo: ourMessageId,
+                inReplyTo: deliveredMessageId,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             const replied = ofType('email.replied');
@@ -657,7 +658,8 @@ describe('mail send and reply detection', () => {
     describe('FR-CRMS-2 Gmail rewrites our Message-ID (real-Gmail finding, #87)', () => {
         // Against real Gmail (2026-10-11) a message sent with Message-ID <uuid@bylinecrm> was stored
         // and delivered as <…@mail.gmail.com>. Our own X-BylineCRM-Id header survives; the send is
-        // found by it after a lost answer, and replies are matched by Gmail's Message-ID too.
+        // found by it after a lost answer, and replies are matched by Gmail's Message-ID too. The fake
+        // Gmail rewrites every send the same way, so every test in this file runs against that.
         const rae = `rae-${stamp}@acme.example`;
         let raeId: string;
 
@@ -672,16 +674,11 @@ describe('mail send and reply detection', () => {
             events.filter((e) => e.type === 'email.replied' && e.reply?.inReplyToOutboundId === outboundId);
 
         beforeAll(async () => {
-            gmail.rewriteSentMessageIds = true;
             const created = await as(admin)
                 .post(w('/people'))
                 .send({ nameFirst: 'Rae', nameLast: 'Okafor', emails: { primary: rae, additional: [] } });
             expect(created.status).toBe(201);
             raeId = (created.body as { id: string }).id;
-        });
-
-        afterAll(() => {
-            gmail.rewriteSentMessageIds = false;
         });
 
         it('stamps X-BylineCRM-Id on every send and records Gmail’s own Message-ID on the send', async () => {
