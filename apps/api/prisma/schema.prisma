@@ -66,6 +66,12 @@ model Workspace {
   sendingDomains      SendingDomain[]
   mailBounces         MailBounce[]
 
+  regionPolicies     RegionPolicy[]
+  outreachExclusions OutreachExclusion[]
+  sequences          Sequence[]
+  sequenceSteps      SequenceStep[]
+  sequenceEnrolments SequenceEnrolment[]
+
   @@map("workspaces")
 }
 
@@ -224,6 +230,8 @@ model WorkspaceMember {
 
   createdSuppressions Suppression[] @relation("SuppressionCreator")
   removedSuppressions Suppression[] @relation("SuppressionRemover")
+
+  updatedRegionPolicies RegionPolicy[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -406,6 +414,10 @@ model Person {
   /// `Phones` from @bylinecrm/shared.
   phones       Json                     @default("{\"primary\":null,\"additional\":[]}")
   jobTitle     String?                  @map("job_title")
+  /// FR-CRMS-11: where the person came from (a list, an import, a form). Required to enrol in outreach.
+  source       String?
+  /// FR-CRMS-11: ISO 3166-1 alpha-2, upper case (the database checks), when known.
+  country      String?                  @db.Char(2)
   city         String?
   /// `Links` from @bylinecrm/shared.
   links        Json                     @default("{\"linkedin\":null,\"x\":null}")
@@ -431,8 +443,9 @@ model Person {
 
   mailOutbound MailOutbound[]
 
-  suppressions      Suppression[]
-  unsubscribeTokens UnsubscribeToken[]
+  suppressions       Suppression[]
+  unsubscribeTokens  UnsubscribeToken[]
+  sequenceEnrolments SequenceEnrolment[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -517,7 +530,8 @@ model Opportunity {
   stage          PipelineStage             @relation(fields: [stageId], references: [id], onDelete: Restrict)
   stageHistory   OpportunityStageHistory[]
 
-  mailOutbound MailOutbound[]
+  mailOutbound       MailOutbound[]
+  sequenceEnrolments SequenceEnrolment[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -572,6 +586,7 @@ model Pipeline {
   stages        PipelineStage[]
   opportunities Opportunity[]
   rules         StageRule[]
+  sequences     Sequence[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -1033,7 +1048,8 @@ model EmailTemplate {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  mailOutbound MailOutbound[]
+  mailOutbound  MailOutbound[]
+  sequenceSteps SequenceStep[]
 
   @@index([workspaceId, deletedAt, updatedAt(sort: Desc)])
   @@map("email_templates")
@@ -1140,6 +1156,9 @@ model MailOutbound {
   /// `{ code, message, at }` while the last attempt failed; null after a clean one.
   lastError               Json?              @map("last_error")
   sentAt                  DateTime?          @map("sent_at") @db.Timestamptz
+  /// The sequence step this send is (P3-3); null for 1:1 mail.
+  sequenceEnrolmentId     String?            @map("sequence_enrolment_id") @db.Uuid
+  sequenceStepId          String?            @map("sequence_step_id") @db.Uuid
   createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamptz
   updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1156,11 +1175,16 @@ model MailOutbound {
   unsubscribeTokens UnsubscribeToken[]
   bounces           MailBounce[]
 
+  sequenceEnrolment SequenceEnrolment? @relation("EnrolmentSends", fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
+  sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
+  waitingEnrolment  SequenceEnrolment? @relation("EnrolmentWaitingSend")
+
   @@index([workspaceId, senderMemberId, createdAt(sort: Desc)])
   @@index([mailboxId, providerThreadId])
   @@index([workspaceId, mailMessageId])
   @@index([status, sendAt])
   @@index([providerRfc822MessageId])
+  @@index([sequenceEnrolmentId])
   @@map("mail_outbound")
 }
 
@@ -1547,4 +1571,194 @@ model MailBounce {
   @@unique([mailboxId, messageId, address])
   @@index([mailboxId, occurredAt])
   @@map("mail_bounces")
+}
+
+// ── Sequences (P3-3, FR-CRMS-5, -10, -11, -12) — docs/design-notes/P3-3.md ─────────────────────
+
+enum RegionCode {
+  eu
+  uk
+  ca
+  us
+  other
+  unknown
+
+  @@map("region_code")
+}
+
+/// A workspace's outreach policy for one region (FR-CRMS-12): an override of `DEFAULT_REGION_POLICY`.
+/// Allowing a region blocked by default needs a lawful basis (the database checks).
+model RegionPolicy {
+  workspaceId       String     @map("workspace_id") @db.Uuid
+  region            RegionCode
+  allowed           Boolean
+  lawfulBasis       String?    @map("lawful_basis")
+  updatedByMemberId String?    @map("updated_by_member_id") @db.Uuid
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedBy WorkspaceMember? @relation(fields: [updatedByMemberId], references: [id], onDelete: SetNull)
+
+  @@id([workspaceId, region])
+  @@map("region_policies")
+}
+
+enum ExclusionReason {
+  customer
+  account_managed
+
+  @@map("exclusion_reason")
+}
+
+/// Someone outreach must never reach (FR-CRMS-10): a customer, or a contact an account manager works.
+/// By address or by domain (exactly one; lower case). Removing keeps the row. One live entry per
+/// address and per domain (partial unique indexes, in the migration).
+model OutreachExclusion {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String          @map("workspace_id") @db.Uuid
+  address            String?
+  domain             String?
+  reason             ExclusionReason
+  accountManagerName String?         @map("account_manager_name")
+  /// An integration's key (`newswireos`), or `manual`.
+  source             String
+  externalRef        String?         @map("external_ref")
+  note               String?
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  removedAt          DateTime?       @map("removed_at") @db.Timestamptz
+  removedNote        String?         @map("removed_note")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("outreach_exclusions")
+}
+
+enum SequenceStatus {
+  draft
+  active
+  paused
+  archived
+
+  @@map("sequence_status")
+}
+
+enum SequenceStepKind {
+  email
+  wait
+
+  @@map("sequence_step_kind")
+}
+
+enum EnrolmentStatus {
+  active
+  held
+  finished
+  stopped
+
+  @@map("enrolment_status")
+}
+
+enum EnrolmentStopReason {
+  reply
+  bounce
+  unsubscribe
+  complaint
+  suppressed
+  manual
+  pipeline_exit
+  excluded
+  sequence_archived
+  person_deleted
+
+  @@map("enrolment_stop_reason")
+}
+
+/// A drip (FR-CRMS-5): ordered steps run per enrolled person, inside a send window in the recipient's
+/// local time. Workspace-wide, not a member's.
+model Sequence {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String         @map("workspace_id") @db.Uuid
+  name               String
+  status             SequenceStatus @default(draft)
+  /// A deal leaving this pipeline (or closing) stops its enrolment, when `stopOnPipelineExit`.
+  pipelineId         String?        @map("pipeline_id") @db.Uuid
+  stopOnPipelineExit Boolean        @default(true) @map("stop_on_pipeline_exit")
+  /// The zone used when a recipient's cannot be inferred.
+  timeZone           String         @map("time_zone")
+  windowStartMinute  Int            @default(540) @map("window_start_minute")
+  windowEndMinute    Int            @default(1020) @map("window_end_minute")
+  /// Monday-first bitmask (bit 0 Monday … bit 6 Sunday).
+  windowDays         Int            @default(31) @map("window_days")
+  createdBy          Json           @map("created_by")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt         DateTime?      @map("archived_at") @db.Timestamptz
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline   Pipeline?           @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  steps      SequenceStep[]
+  enrolments SequenceEnrolment[]
+
+  @@index([workspaceId, status])
+  @@map("sequences")
+}
+
+/// One step: an email from an outreach template, or a wait. Positions are 0..n-1.
+model SequenceStep {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String           @map("workspace_id") @db.Uuid
+  sequenceId    String           @map("sequence_id") @db.Uuid
+  position      Int
+  kind          SequenceStepKind
+  templateId    String?          @map("template_id") @db.Uuid
+  /// Sent as a reply in the previous email step's thread, from the same mailbox.
+  replyInThread Boolean          @default(false) @map("reply_in_thread")
+  waitDays      Int?             @map("wait_days")
+  businessDays  Boolean          @default(true) @map("business_days")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sequence  Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template  EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  sends     MailOutbound[]
+
+  @@unique([sequenceId, position])
+  @@map("sequence_steps")
+}
+
+/// A person in a sequence: the truth the runner reads (FR-CRMS-5). One per (sequence, person).
+model SequenceEnrolment {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String               @map("workspace_id") @db.Uuid
+  sequenceId        String               @map("sequence_id") @db.Uuid
+  personId          String               @map("person_id") @db.Uuid
+  dealId            String?              @map("deal_id") @db.Uuid
+  status            EnrolmentStatus      @default(active)
+  stepIndex         Int                  @default(0) @map("step_index")
+  /// When the next step runs; null while a step's send is out (`waitingOutboundId`) or once ended.
+  nextRunAt         DateTime?            @map("next_run_at") @db.Timestamptz
+  waitingOutboundId String?              @unique @map("waiting_outbound_id") @db.Uuid
+  heldReason        String?              @map("held_reason")
+  stopReason        EnrolmentStopReason? @map("stop_reason")
+  stopDetail        String?              @map("stop_detail")
+  enrolledBy        Json                 @map("enrolled_by")
+  enrolledAt        DateTime             @default(now()) @map("enrolled_at") @db.Timestamptz
+  finishedAt        DateTime?            @map("finished_at") @db.Timestamptz
+  stoppedAt         DateTime?            @map("stopped_at") @db.Timestamptz
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sequence    Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  person      Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
+  deal        Opportunity?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  waitingSend MailOutbound?  @relation("EnrolmentWaitingSend", fields: [waitingOutboundId], references: [id], onDelete: SetNull)
+  sends       MailOutbound[] @relation("EnrolmentSends")
+
+  @@unique([sequenceId, personId])
+  @@index([status, nextRunAt])
+  @@index([workspaceId, personId])
+  @@map("sequence_enrolments")
 }

@@ -48,6 +48,8 @@ export const personView = named(
         phones,
         jobTitle: z.string().nullable(),
         city: z.string().nullable(),
+        source: z.string().nullable(),
+        country: z.string().nullable(),
         links,
         avatarUrl: z.string().nullable(),
         position: z.number(),
