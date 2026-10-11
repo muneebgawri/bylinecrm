@@ -46,8 +46,17 @@ Run on the server unless marked **Mac**. Do these outside NewswireOS's busy hour
 that no NewswireOS deploy is running: `ls /opt/newswireos-runtime/deploy.lock` must say "No such
 file".
 
-1. **DNS (Cloudflare, `pinionnewswire.com`):** A record `staging.crm` → `169.58.194.188`, Proxied —
-   like the zone's other hosts; the edge's real-visitor-address handling expects Cloudflare in front.
+1. **DNS (Cloudflare, `pinionnewswire.com`):** A record `staging.crm` → `169.58.194.188`, **DNS only
+   (grey cloud) — never Proxied.** Cloudflare's Universal SSL certificate covers one subdomain level
+   (`*.pinionnewswire.com`), not `staging.crm.pinionnewswire.com`, so with the record proxied Cloudflare
+   has no certificate to present and **every visitor gets a TLS handshake failure** (this happened on
+   2026-10-11 when the record was flipped to Proxied). The origin edge terminates TLS itself with its
+   own Let's Encrypt certificate for the host (`/etc/letsencrypt/live/staging.crm.pinionnewswire.com/`,
+   expires 2027-01-09, renewed by certbot on the server). Unproxied, the edge sees the visitor's address
+   directly; its Cloudflare real-address handling only rewrites requests that come from Cloudflare.
+   Check: `dig +short staging.crm.pinionnewswire.com` must print `169.58.194.188`, not Cloudflare
+   addresses. Putting Cloudflare in front would need a certificate that covers the name (Advanced
+   Certificate Manager) or a one-level hostname — a decision, not a toggle.
 2. **Images (GitHub):** after the first push to `main` with `images.yml`, check the server can pull:
    `docker pull ghcr.io/muneebgawri/bylinecrm-web:main`. The box already holds a GHCR login for
    NewswireOS's images; if that login cannot read these packages, set both packages
