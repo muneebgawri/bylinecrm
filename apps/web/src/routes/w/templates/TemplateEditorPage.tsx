@@ -168,6 +168,8 @@ function TemplateEditor({
     const bodyRef = useRef<RichTextHandle>(null);
     const target = useRef<'subject' | 'body'>('body');
     const [pickerOpen, setPickerOpen] = useState(false);
+    // Whether `{{` opened the picker (rather than its button): then a dismissal returns to the editor.
+    const openedByTyping = useRef(false);
     const variables = useTemplateVariables(workspaceId);
     const insert = (path: string) =>
         (target.current === 'subject' ? subjectRef : bodyRef).current?.insertVariable(path);
@@ -261,14 +263,24 @@ function TemplateEditor({
             onFocus={(field) => (target.current = field)}
             onTrigger={(field) => {
                 target.current = field;
+                openedByTyping.current = true;
                 setPickerOpen(true);
             }}
             picker={
                 <VariablePicker
                     variables={variables.data}
                     open={pickerOpen}
-                    onOpenChange={setPickerOpen}
+                    onOpenChange={(next) => {
+                        // Only the button opens it through here; `{{` opens it directly.
+                        if (next) openedByTyping.current = false;
+                        setPickerOpen(next);
+                    }}
                     onPick={insert}
+                    restoreFocus={() => {
+                        if (!openedByTyping.current) return false;
+                        (target.current === 'subject' ? subjectRef : bodyRef).current?.focus();
+                        return true;
+                    }}
                     disabled={!canEdit}
                 />
             }
