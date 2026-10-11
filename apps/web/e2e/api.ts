@@ -118,10 +118,11 @@ export interface ApiOptions {
 
 export async function installApi(page: Page, options: ApiOptions = {}): Promise<Unanswered[]> {
     const unanswered: Unanswered[] = [];
+    await page.route('**/api/**', (route) => answer(route, unanswered));
+    // Registered after the table on purpose: Playwright tries the most recently added route first.
     if (options.unverified) {
         await page.route('**/api/me', (route) => route.fulfill({ json: { ...data.user, emailVerified: false } }));
     }
-    await page.route('**/api/**', (route) => answer(route, unanswered));
     // The status page reads `/health`; it is served outside `/api` (vite.config.ts proxy).
     await page.route('**/health', (route) =>
         route.fulfill({ json: { status: 'ok', db: 'ok', redis: 'ok', rls: 'ok', version: 'gate' } }),
