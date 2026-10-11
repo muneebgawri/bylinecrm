@@ -40,6 +40,13 @@ const DAY = 24 * 60 * 60 * 1000;
 const MAILBOXES = 4;
 const MESSAGES_PER_MAILBOX = 150;
 const CONCURRENT_GETS = 50;
+/**
+ * The import is judged by progress, not by a wall-clock budget sized for a fast machine (#113): it
+ * fails when no message has been imported for this long — stuck, not slow.
+ */
+const IMPORT_STALL_MS = 60_000;
+/** Only a backstop for a hung run; a stall fails the test long before this. */
+const IMPORT_BACKSTOP_MS = 20 * 60_000;
 const PEOPLE = 12;
 
 /**
@@ -192,40 +199,57 @@ describe('background work and request handling (#86, FR-CRMS-2)', () => {
         }
         await app?.close();
         await hooks?.close();
-    });
+    }, IMPORT_BACKSTOP_MS);
 
-    it('answers every request while four mailboxes import 600 messages', async () => {
-        let importsDone = false;
-        imports = Promise.all(
-            mailboxes.map((mailbox) => sync.syncMailbox(workspace, mailbox, { sleep: () => Promise.resolve() })),
-        ).finally(() => {
-            importsDone = true;
-        });
+    it(
+        'answers every request while four mailboxes import 600 messages',
+        async () => {
+            let importsDone = false;
+            imports = Promise.all(
+                mailboxes.map((mailbox) => sync.syncMailbox(workspace, mailbox, { sleep: () => Promise.resolve() })),
+            ).finally(() => {
+                importsDone = true;
+            });
 
-        const paths = [w('/me'), w('/mailboxes'), w('/mail/oauth-client/status'), w('/people?limit=25')];
-        const failures: { path: string; status: number; code: unknown }[] = [];
-        let answered = 0;
-        while (!importsDone) {
-            const round = await Promise.all(
-                Array.from({ length: CONCURRENT_GETS }, (_, i) => {
-                    const path = paths[i % paths.length]!;
-                    return as(admin)
-                        .get(path)
-                        .then((res) => ({ path, res }));
-                }),
-            );
-            for (const { path, res } of round) {
-                answered += 1;
-                if (res.status !== 200) {
-                    failures.push({ path, status: res.status, code: (res.body as { code?: unknown }).code });
+            const paths = [w('/me'), w('/mailboxes'), w('/mail/oauth-client/status'), w('/people?limit=25')];
+            const failures: { path: string; status: number; code: unknown }[] = [];
+            let answered = 0;
+            const owner = app.get(PrismaService);
+            const expected = MAILBOXES * MESSAGES_PER_MAILBOX;
+            let imported = 0;
+            let lastProgressAt = Date.now();
+            while (!importsDone) {
+                const now = await owner.mailMessageCopy.count({ where: { mailboxId: { in: mailboxes } } });
+                if (now > imported) {
+                    imported = now;
+                    lastProgressAt = Date.now();
+                } else if (Date.now() - lastProgressAt > IMPORT_STALL_MS) {
+                    throw new Error(
+                        `the import made no progress for ${IMPORT_STALL_MS / 1000}s (stuck at ${imported} of ${expected} messages)`,
+                    );
+                }
+                const round = await Promise.all(
+                    Array.from({ length: CONCURRENT_GETS }, (_, i) => {
+                        const path = paths[i % paths.length]!;
+                        return as(admin)
+                            .get(path)
+                            .then((res) => ({ path, res }));
+                    }),
+                );
+                for (const { path, res } of round) {
+                    answered += 1;
+                    if (res.status !== 200) {
+                        failures.push({ path, status: res.status, code: (res.body as { code?: unknown }).code });
+                    }
                 }
             }
-        }
-        const results: SyncRunResult[] = await imports;
+            const results: SyncRunResult[] = await imports;
 
-        expect(failures).toEqual([]);
-        expect(answered).toBeGreaterThanOrEqual(CONCURRENT_GETS);
-        expect(results.map((r) => r.mode)).toEqual(Array(MAILBOXES).fill('initial'));
-        expect(results.reduce((sum, r) => sum + r.imported, 0)).toBe(MAILBOXES * MESSAGES_PER_MAILBOX);
-    }, 180_000);
+            expect(failures).toEqual([]);
+            expect(answered).toBeGreaterThanOrEqual(CONCURRENT_GETS);
+            expect(results.map((r) => r.mode)).toEqual(Array(MAILBOXES).fill('initial'));
+            expect(results.reduce((sum, r) => sum + r.imported, 0)).toBe(expected);
+        },
+        IMPORT_BACKSTOP_MS,
+    );
 });
