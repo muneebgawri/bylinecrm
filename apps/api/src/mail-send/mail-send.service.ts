@@ -1,9 +1,16 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
-import type { Emails, RichText } from '@bylinecrm/shared';
+import {
+    MAIL_SEND_HORIZON_DAYS,
+    MAIL_SEND_MIN_LEAD_SECONDS,
+    type DomainEvent,
+    type Emails,
+    type RichText,
+} from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import type { Queue } from 'bullmq';
-import { ApiException, ValidationFailed } from '../infra/errors/api-errors';
+import { DomainEvents } from '../events/domain-events.service';
+import { ApiException, StateConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
@@ -12,13 +19,16 @@ import { GMAIL_PORT, GmailApiError, type GmailPort, type GmailSent } from '../ma
 import { GMAIL_UNITS } from '../mail-sync/mail-sync.constants';
 import { MailSyncService } from '../mail-sync/mail-sync.service';
 import type { RetryOptions } from '../mail-sync/retry';
+import { actorOf } from '../records/actor';
+import { paginate } from '../records/list-query';
 import { recordWhere } from '../records/record-scope';
 import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
-import { MAIL_SEND_QUEUE } from './mail-send.constants';
+import { RolesService } from '../workspace/roles.service';
+import { MAIL_SEND_EARLY_TOLERANCE_MS, MAIL_SEND_QUEUE, MAIL_SEND_STALE_MS } from './mail-send.constants';
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
-import type { MailOutboundView, MailSendQueued } from './responses';
+import type { MailOutboundView, MailScheduledPage, MailSendAccepted } from './responses';
 import { SendPolicy, type SendRecipient } from './send-policy';
 
 type OutboundRow = Prisma.MailOutboundGetPayload<object>;
@@ -37,17 +47,62 @@ export interface SendInput {
     subject?: string | undefined;
     body?: RichText | undefined;
     replyToMessageId?: string | undefined;
+    /** Send later (P2-5): ISO 8601 with an offset. Absent: send now. */
+    sendAt?: string | undefined;
+    /** The sender's IANA zone, echoed back; never used to compute `sendAt`. */
+    timeZone?: string | undefined;
 }
+
+/** What a scheduled send was asked to be: the request without its timing, kept to build it again later. */
+type StoredRequest = Omit<SendInput, 'sendAt' | 'timeZone'>;
 
 /** Why the last attempt failed, as kept on the row. Never a token or a raw Google body. */
 interface SendErrorRecord {
     code: string;
     message: string;
     at: string;
+    /** For `unsendable`: the variables that had no value. */
+    fields?: string[];
 }
 
-/** How a delivery ended: sent (now, or found already sent), failed for good, or nothing to do. */
-export type DeliveryOutcome = 'sent' | 'already_sent' | 'failed' | 'skipped';
+/** How a delivery ended: sent (now, or found already sent), failed for good, cancelled, or nothing to do. */
+export type DeliveryOutcome = 'sent' | 'already_sent' | 'failed' | 'cancelled' | 'skipped';
+
+/**
+ * A scheduled send's job fired before the row's `sendAt` (the send was moved later after its job
+ * was set). The worker puts the job back to wait `dueInMs`; nothing was sent or changed.
+ */
+export class SendNotDue extends Error {
+    constructor(readonly dueInMs: number) {
+        super(`the send is due in ${dueInMs} ms`);
+        this.name = 'SendNotDue';
+    }
+}
+
+/**
+ * A render with a variable that has no value. `422` at the request; at a scheduled send's time it
+ * fails the send as `unsendable`, naming the variables — never a partial send.
+ */
+class Unsendable extends ApiException {
+    constructor(readonly missing: readonly string[]) {
+        super(
+            422,
+            'unprocessable',
+            `these variables have no value for this person: ${missing.join(', ')}`,
+            missing.map((path) => ({ path, message: 'has no value' })),
+        );
+    }
+}
+
+/** A message built and checked, ready to store: the outcome of `prepare`. */
+interface Prepared {
+    mailboxId: string;
+    memberId: string;
+    recipients: { to: SendRecipient[]; cc: SendRecipient[]; bcc: SendRecipient[] };
+    parentId: string | null;
+    subject: string;
+    mime: string;
+}
 
 /**
  * Sending (P2-3, FR-CRMS-2/3): a member sends from their own connected personal mailbox, through
@@ -77,13 +132,72 @@ export class MailSendService {
         private readonly renderer: RenderService,
         private readonly policy: SendPolicy,
         private readonly sync: MailSyncService,
+        private readonly roles: RolesService,
+        private readonly events: DomainEvents,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
         @InjectQueue(MAIL_SEND_QUEUE) private readonly queue: Queue,
     ) {}
 
-    // ── The request: decide, build, store, queue ─────────────────────────────────────────────
+    // ── The request: decide, build, store, queue (or schedule) ─────────────────────────────
 
-    async compose(input: SendInput): Promise<MailSendQueued> {
+    /**
+     * A send now builds the message and queues it. A send later (`sendAt`, P2-5) runs the same checks
+     * now — so a sender learns at once what would refuse it — but stores what was asked, not what was
+     * built: at `sendAt` the job builds and checks it again, as the sender's role, the mailbox and
+     * the person stand then.
+     */
+    async compose(input: SendInput): Promise<MailSendAccepted> {
+        const context = this.current();
+        const sendAt = input.sendAt === undefined ? null : scheduledTime(input.sendAt);
+        const rfc822MessageId = newMessageId();
+        const prepared = await this.prepare(input, rfc822MessageId);
+
+        const row = await this.rls.withWorkspace((tx) =>
+            tx.mailOutbound.create({
+                data: {
+                    workspaceId: context.workspaceId,
+                    mailboxId: prepared.mailboxId,
+                    senderMemberId: prepared.memberId,
+                    personId: input.personId,
+                    dealId: input.dealId ?? null,
+                    templateId: input.templateId ?? null,
+                    replyToMessageId: prepared.parentId,
+                    rfc822MessageId,
+                    ...addressesOf(prepared),
+                    subject: prepared.subject,
+                    ...(sendAt
+                        ? {
+                              status: 'scheduled' as const,
+                              mime: null,
+                              sendAt,
+                              senderTimeZone: input.timeZone ?? null,
+                              request: storedRequest(input) as unknown as Prisma.InputJsonValue,
+                          }
+                        : { mime: prepared.mime }),
+                },
+            }),
+        );
+        const job: MailSendJob = { workspaceId: context.workspaceId, messageId: row.id };
+        await this.queue.add('send', job, {
+            jobId: row.id,
+            ...(sendAt ? { delay: Math.max(0, sendAt.getTime() - Date.now()) } : {}),
+        });
+        if (sendAt) this.announce('email.scheduled', context, row.id);
+        return {
+            messageId: row.id,
+            status: sendAt ? 'scheduled' : 'queued',
+            sendAt,
+            senderTimeZone: row.senderTimeZone,
+            recipientTimeZone: null,
+        };
+    }
+
+    /**
+     * Every check a send passes, and the message built — one path for a send now, for a scheduled
+     * send at its request, and for that send again at its time. Runs in the caller's workspace scope
+     * (a request's, or the one a scheduled send's job opens for its sender).
+     */
+    private async prepare(input: StoredRequest, rfc822MessageId: string): Promise<Prepared> {
         const context = this.current();
         const memberId = context.memberId;
         if (!memberId) throw new ApiException(403, 'forbidden', "mail is sent from a member's own mailbox");
@@ -155,14 +269,7 @@ export class MailSendService {
             dealId: input.dealId,
             senderMemberId: memberId,
         });
-        if (!rendered.sendable) {
-            throw new ApiException(
-                422,
-                'unprocessable',
-                `these variables have no value for this person: ${rendered.missing.join(', ')}`,
-                rendered.missing.map((path) => ({ path, message: 'has no value' })),
-            );
-        }
+        if (!rendered.sendable) throw new Unsendable(rendered.missing);
         // A reply with no subject of its own takes the parent's, as written — never rendered, so
         // braces in someone else's subject are not variables.
         const subject =
@@ -170,10 +277,8 @@ export class MailSendService {
                 ? replySubject(parent.subject)
                 : rendered.subject;
 
-        const all: SendRecipient[] = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-        await this.policy.assertSendable(all);
+        await this.policy.assertSendable([...recipients.to, ...recipients.cc, ...recipients.bcc]);
 
-        const rfc822MessageId = newMessageId();
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
             : [];
@@ -190,29 +295,73 @@ export class MailSendService {
             references,
             date: new Date(),
         });
+        return { mailboxId: mailbox.id, memberId, recipients, parentId: parent?.id ?? null, subject, mime };
+    }
 
-        const row = await this.rls.withWorkspace((tx) =>
-            tx.mailOutbound.create({
-                data: {
-                    workspaceId: context.workspaceId,
-                    mailboxId: mailbox.id,
-                    senderMemberId: memberId,
-                    personId: input.personId,
-                    dealId: input.dealId ?? null,
-                    templateId: input.templateId ?? null,
-                    replyToMessageId: parent?.id ?? null,
-                    rfc822MessageId,
-                    toAddresses: recipients.to.map((r) => r.address),
-                    ccAddresses: recipients.cc.map((r) => r.address),
-                    bccAddresses: recipients.bcc.map((r) => r.address),
-                    subject,
-                    mime,
-                },
+    // ── Scheduled sends: list, cancel, move ──────────────────────────────────────────────────
+
+    /** The caller's scheduled sends (an admin's: everyone's), soonest first. */
+    async scheduled(limit: number, cursor: string | undefined): Promise<MailScheduledPage> {
+        const context = this.current();
+        const mine = !context.capabilities.has('workspace:admin');
+        if (mine && !context.memberId) return { items: [], nextCursor: null };
+        return this.rls.withWorkspace(async (tx) => {
+            const page = await paginate(limit, cursor, (args) =>
+                tx.mailOutbound.findMany({
+                    where: { status: 'scheduled', ...(mine ? { senderMemberId: context.memberId! } : {}) },
+                    orderBy: [{ sendAt: 'asc' }, { id: 'asc' }],
+                    ...args,
+                }),
+            );
+            return { items: page.items.map((row) => view(row, null)), nextCursor: page.nextCursor };
+        });
+    }
+
+    /**
+     * Calls a scheduled send off: its sender or an admin, while it is `scheduled`. Cancelling one
+     * already cancelled answers as it stands; one that has started (or gone) is a `409`. The row is
+     * changed first and the job removed after — a job that fires in between finds the row cancelled
+     * and sends nothing.
+     */
+    async cancel(id: string): Promise<MailOutboundView> {
+        const context = this.current();
+        const row = await this.ownSend(id);
+        if (row.status === 'cancelled') return view(row, null);
+        if (row.status !== 'scheduled') throw notScheduled(row.status);
+        const changed = await this.rls.withWorkspace((tx) =>
+            tx.mailOutbound.updateMany({
+                where: { id, status: 'scheduled' },
+                data: { status: 'cancelled', cancelledAt: new Date() },
             }),
         );
-        const job: MailSendJob = { workspaceId: context.workspaceId, messageId: row.id };
-        await this.queue.add('send', job, { jobId: row.id });
-        return { messageId: row.id, status: 'queued' };
+        if (changed.count === 0) {
+            const now = await this.ownSend(id);
+            if (now.status === 'cancelled') return view(now, null);
+            throw notScheduled(now.status);
+        }
+        await this.dropJob(id);
+        this.announce('email.cancelled', context, id);
+        return view(await this.ownSend(id), null);
+    }
+
+    /**
+     * Moves a scheduled send to another time (its sender or an admin, while `scheduled`). The row
+     * is the truth and the job only the trigger: the delay is changed when the job waits, the job is
+     * set again when it is gone, and a job already firing finds the new `sendAt` and waits again.
+     */
+    async reschedule(id: string, input: { sendAt: string; timeZone?: string | undefined }): Promise<MailOutboundView> {
+        const sendAt = scheduledTime(input.sendAt);
+        const row = await this.ownSend(id);
+        if (row.status !== 'scheduled') throw notScheduled(row.status);
+        const changed = await this.rls.withWorkspace((tx) =>
+            tx.mailOutbound.updateMany({
+                where: { id, status: 'scheduled' },
+                data: { sendAt, ...(input.timeZone !== undefined ? { senderTimeZone: input.timeZone } : {}) },
+            }),
+        );
+        if (changed.count === 0) throw notScheduled((await this.ownSend(id)).status);
+        await this.setJob(row.workspaceId, id, sendAt);
+        return view(await this.ownSend(id), null);
     }
 
     /** A send as its sender (or an admin) sees it; `404` for anyone else, never a hint that it exists. */
@@ -239,9 +388,24 @@ export class MailSendService {
      * a failure that will not change (the mailbox stopped working, Gmail refused the message) marks
      * the send failed and returns.
      */
-    async deliver(workspaceId: string, id: string, retry: RetryOptions = {}): Promise<DeliveryOutcome> {
-        const row = await this.rls.withWorkspace(workspaceId, (tx) => tx.mailOutbound.findUnique({ where: { id } }));
+    async deliver(
+        workspaceId: string,
+        id: string,
+        retry: RetryOptions = {},
+        now = Date.now(),
+    ): Promise<DeliveryOutcome> {
+        const read = () => this.rls.withWorkspace(workspaceId, (tx) => tx.mailOutbound.findUnique({ where: { id } }));
+        let row = await read();
         if (!row || row.status === 'sent' || row.status === 'failed') return 'skipped';
+        if (row.status === 'cancelled') return 'cancelled';
+        if (row.status === 'scheduled') {
+            const activated = await this.activate(workspaceId, row, now);
+            if (activated !== 'ready') return activated;
+            row = await read();
+            if (!row || row.status !== 'queued') return row?.status === 'cancelled' ? 'cancelled' : 'skipped';
+        }
+        if (row.mime === null) return 'skipped';
+        const mime = row.mime;
         const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: row.mailboxId } }),
         );
@@ -259,6 +423,7 @@ export class MailSendService {
             }),
         );
         const threadId = await this.parentThread(workspaceId, row);
+        const rfc822MessageId = row.rfc822MessageId;
 
         let sent: { message: GmailSent; found: boolean };
         try {
@@ -267,10 +432,10 @@ export class MailSendService {
                 attempt += 1;
                 // An attempt that may have reached Gmail is looked for before anything is sent again.
                 if (attempt > 1 || startedBefore) {
-                    const found = await this.findSent(token, row.rfc822MessageId);
+                    const found = await this.findSent(token, rfc822MessageId);
                     if (found) return { message: found, found: true };
                 }
-                const message = await this.gmail.send(token, { raw: row.mime, ...(threadId ? { threadId } : {}) });
+                const message = await this.gmail.send(token, { raw: mime, ...(threadId ? { threadId } : {}) });
                 return { message, found: false };
             });
         } catch (error) {
@@ -325,6 +490,173 @@ export class MailSendService {
 
     // ── Internals ────────────────────────────────────────────────────────────────────────────
 
+    /**
+     * A scheduled send's time has come: build and check it again, as its sender's role, the mailbox
+     * and the person stand now. Any refusal fails it — `unsendable` (naming the variables),
+     * `forbidden`, the mailbox's state, `not_found` — never a partial send. A send whose time passed
+     * long ago is failed as `stale`. The row moves `scheduled` → `queued` only if nobody cancelled it
+     * meanwhile.
+     */
+    private async activate(
+        workspaceId: string,
+        row: OutboundRow,
+        now: number,
+    ): Promise<'ready' | 'failed' | 'cancelled' | 'skipped'> {
+        const dueAt = row.sendAt!.getTime();
+        if (dueAt - now > MAIL_SEND_EARLY_TOLERANCE_MS) throw new SendNotDue(dueAt - now);
+        if (now - dueAt > MAIL_SEND_STALE_MS) {
+            return this.failScheduled(workspaceId, row.id, {
+                code: 'stale',
+                message: `its time (${new Date(dueAt).toISOString()}) passed more than a day ago while nothing could send it; it was not sent`,
+                at: new Date(now).toISOString(),
+            });
+        }
+        const sender = await this.senderContext(workspaceId, row.senderMemberId);
+        if ('refusal' in sender) {
+            return this.failScheduled(workspaceId, row.id, {
+                code: 'forbidden',
+                message: sender.refusal,
+                at: new Date(now).toISOString(),
+            });
+        }
+        let prepared: Prepared;
+        try {
+            prepared = await this.context.run(sender.context, () =>
+                this.prepare(row.request as unknown as StoredRequest, row.rfc822MessageId),
+            );
+        } catch (error) {
+            if (!(error instanceof HttpException)) throw error;
+            return this.failScheduled(workspaceId, row.id, refusalRecord(error, now));
+        }
+        const changed = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailOutbound.updateMany({
+                where: { id: row.id, status: 'scheduled' },
+                data: {
+                    status: 'queued',
+                    mime: prepared.mime,
+                    subject: prepared.subject,
+                    replyToMessageId: prepared.parentId,
+                    ...addressesOf(prepared),
+                },
+            }),
+        );
+        return changed.count === 1 ? 'ready' : this.lostTo(workspaceId, row.id);
+    }
+
+    /**
+     * Another hand moved a `scheduled` row first: a cancel (the send stands cancelled), or a second
+     * delivery of the same send (it is sending it — this one does nothing).
+     */
+    private async lostTo(workspaceId: string, id: string): Promise<'cancelled' | 'skipped'> {
+        const row = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailOutbound.findUnique({ where: { id }, select: { status: true } }),
+        );
+        return row?.status === 'cancelled' ? 'cancelled' : 'skipped';
+    }
+
+    /** Fails a send still `scheduled` (a cancel, or another delivery, that got there first wins). */
+    private async failScheduled(
+        workspaceId: string,
+        id: string,
+        error: SendErrorRecord,
+    ): Promise<'failed' | 'cancelled' | 'skipped'> {
+        const changed = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailOutbound.updateMany({
+                where: { id, status: 'scheduled' },
+                data: { status: 'failed', lastError: error as unknown as Prisma.InputJsonValue },
+            }),
+        );
+        return changed.count === 1 ? 'failed' : this.lostTo(workspaceId, id);
+    }
+
+    /**
+     * The workspace scope a scheduled send is built in: its sender as they are now — still a member,
+     * still allowed to send mail, with their role's record scope. Who they were when they scheduled
+     * it does not count.
+     */
+    private async senderContext(
+        workspaceId: string,
+        memberId: string,
+    ): Promise<{ context: WorkspaceRunContext } | { refusal: string }> {
+        const member = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.workspaceMember.findUnique({ where: { id: memberId }, select: { userId: true, roleId: true } }),
+        );
+        if (!member) return { refusal: 'the sender is no longer a member of this workspace; it was not sent' };
+        const access = await this.roles.access(workspaceId, member.roleId);
+        if (!access || !access.capabilities.has('email:send')) {
+            return { refusal: 'the sender may no longer send mail; it was not sent' };
+        }
+        return {
+            context: {
+                workspaceId,
+                userId: member.userId,
+                memberId,
+                roleId: access.roleId,
+                roleName: access.roleName,
+                capabilities: access.capabilities,
+                ...(access.recordScope === 'own' ? { ownerScopeMemberId: memberId } : {}),
+            },
+        };
+    }
+
+    /** A send as its sender (or an admin) may change it; `404` for anyone else. */
+    private ownSend(id: string): Promise<OutboundRow> {
+        const context = this.current();
+        return this.rls.withWorkspace(async (tx) => {
+            const row = await tx.mailOutbound.findUnique({ where: { id } });
+            if (!row || (!context.capabilities.has('workspace:admin') && row.senderMemberId !== context.memberId)) {
+                throw new NotFoundException('message not found');
+            }
+            return row;
+        });
+    }
+
+    /** Points the send's one job at `sendAt`: the delay changed while it waits, or the job set again. */
+    private async setJob(workspaceId: string, id: string, sendAt: Date): Promise<void> {
+        const delay = Math.max(0, sendAt.getTime() - Date.now());
+        const job = await this.queue.getJob(id);
+        if (job) {
+            const state = await job.getState();
+            if (state === 'delayed') {
+                await job.changeDelay(delay);
+                return;
+            }
+            // A job already running reads the new `sendAt` and waits again (`SendNotDue`).
+            if (state === 'active') return;
+            await job.remove();
+        }
+        const data: MailSendJob = { workspaceId, messageId: id };
+        await this.queue.add('send', data, { jobId: id, delay });
+    }
+
+    /** Removes the send's job; one already running finds the row changed and sends nothing. */
+    private async dropJob(id: string): Promise<void> {
+        const job = await this.queue.getJob(id);
+        if (!job) return;
+        try {
+            await job.remove();
+        } catch (error) {
+            this.logger.debug(
+                `send ${id}: job not removed (${error instanceof Error ? error.message : String(error)})`,
+            );
+        }
+    }
+
+    private announce(
+        type: 'email.scheduled' | 'email.cancelled',
+        context: WorkspaceRunContext,
+        recordId: string,
+    ): void {
+        this.events.publish({
+            type,
+            object: 'email',
+            workspaceId: context.workspaceId,
+            actor: actorOf(context),
+            occurredAt: new Date().toISOString(),
+            recordId,
+        } as DomainEvent);
+    }
+
     /** The Gmail thread a reply goes into: the parent's. */
     private async parentThread(workspaceId: string, row: OutboundRow): Promise<string | null> {
         if (!row.replyToMessageId) return null;
@@ -347,7 +679,7 @@ export class MailSendService {
     private async markFailed(workspaceId: string, id: string, error: SendErrorRecord): Promise<void> {
         await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailOutbound.updateMany({
-                where: { id, status: { not: 'sent' } },
+                where: { id, status: { in: ['queued', 'sending', 'failed'] } },
                 data: { status: 'failed', lastError: error as unknown as Prisma.InputJsonValue },
             }),
         );
@@ -364,6 +696,70 @@ export class MailSendService {
         if (!context) throw new Error('MailSendService is used inside a workspace scope');
         return context;
     }
+}
+
+/**
+ * A scheduled send's time, checked against the clock: at least `MAIL_SEND_MIN_LEAD_SECONDS` away
+ * (sooner is a send now) and at most `MAIL_SEND_HORIZON_DAYS` ahead.
+ */
+function scheduledTime(iso: string, now = Date.now()): Date {
+    const at = new Date(iso);
+    if (at.getTime() < now + MAIL_SEND_MIN_LEAD_SECONDS * 1000) {
+        throw new ValidationFailed('a scheduled send is for later', [
+            {
+                path: 'sendAt',
+                message: `at least ${MAIL_SEND_MIN_LEAD_SECONDS} seconds from now; leave it out to send now`,
+            },
+        ]);
+    }
+    if (at.getTime() > now + MAIL_SEND_HORIZON_DAYS * 24 * 60 * 60 * 1000) {
+        throw new ValidationFailed('a scheduled send is too far ahead', [
+            { path: 'sendAt', message: `at most ${MAIL_SEND_HORIZON_DAYS} days ahead` },
+        ]);
+    }
+    return at;
+}
+
+/** What a scheduled send keeps of its request: everything but its timing. */
+function storedRequest(input: SendInput): StoredRequest {
+    const { sendAt: _sendAt, timeZone: _timeZone, ...rest } = input;
+    return rest;
+}
+
+function addressesOf(prepared: Prepared): { toAddresses: string[]; ccAddresses: string[]; bccAddresses: string[] } {
+    return {
+        toAddresses: prepared.recipients.to.map((r) => r.address),
+        ccAddresses: prepared.recipients.cc.map((r) => r.address),
+        bccAddresses: prepared.recipients.bcc.map((r) => r.address),
+    };
+}
+
+function notScheduled(status: string): StateConflict {
+    return new StateConflict(`this send is ${status}; only a scheduled send can be moved or cancelled`, { status });
+}
+
+/** A refusal at a scheduled send's time, as kept on the row. */
+function refusalRecord(error: HttpException, now: number): SendErrorRecord {
+    const at = new Date(now).toISOString();
+    if (error instanceof Unsendable) {
+        return {
+            code: 'unsendable',
+            message: `these variables had no value when it was due: ${error.missing.join(', ')}; it was not sent`,
+            at,
+            fields: [...error.missing],
+        };
+    }
+    if (error instanceof MailboxUnavailable) return unavailableError(error.mailboxStatus);
+    if (error instanceof ApiException) {
+        return {
+            code: error.code,
+            message: `${error.message}; it was not sent`,
+            at,
+            ...(error.fieldErrors?.length ? { fields: error.fieldErrors.map((f) => f.path) } : {}),
+        };
+    }
+    const code = error.getStatus() === 404 ? 'not_found' : error.getStatus() === 403 ? 'forbidden' : 'refused';
+    return { code, message: `${error.message}; it was not sent`, at };
 }
 
 /** The person's primary address as a recipient; `422` when they have none. */
@@ -447,7 +843,18 @@ function view(row: OutboundRow, threadId: string | null): MailOutboundView {
         mailMessageId: row.mailMessageId,
         threadId,
         attempts: row.attempts,
-        error: error ? { code: error.code, message: error.message, at: new Date(error.at) } : null,
+        error: error
+            ? {
+                  code: error.code,
+                  message: error.message,
+                  at: new Date(error.at),
+                  ...(error.fields ? { fields: error.fields } : {}),
+              }
+            : null,
+        sendAt: row.sendAt,
+        senderTimeZone: row.senderTimeZone,
+        recipientTimeZone: null,
+        cancelledAt: row.cancelledAt,
         createdAt: row.createdAt,
         sentAt: row.sentAt,
     };

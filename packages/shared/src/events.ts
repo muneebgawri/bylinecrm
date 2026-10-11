@@ -87,6 +87,11 @@ export const DOMAIN_EVENT_TYPES = [
     // the same Gmail thread — once per reply; `email` describes the reply and `reply` what it answers.
     // It writes no timeline entry of its own: the reply is on the timeline as the `email.received`.
     'email.replied',
+    // A send scheduled for later, and one called off before it went (P2-5); `recordId` is the send
+    // (the outbound message). No `targets`: nothing is on a record's timeline until it is sent, as
+    // `email.sent`. Webhooks deliver them.
+    'email.scheduled',
+    'email.cancelled',
     'meeting.booked',
     // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
     // writes nothing for these, webhooks deliver them.

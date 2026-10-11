@@ -979,10 +979,12 @@ enum MailSyncStatus {
 }
 
 enum MailOutboundStatus {
+  scheduled
   queued
   sending
   sent
   failed
+  cancelled
 
   @@map("mail_outbound_status")
 }
@@ -1008,7 +1010,17 @@ model MailOutbound {
   ccAddresses       String[]           @default([]) @map("cc_addresses")
   bccAddresses      String[]           @default([]) @map("bcc_addresses")
   subject           String
-  mime              String
+  /// Exactly what goes to Gmail. Null while `scheduled` (it is built when the send's time comes), and
+  /// on a scheduled send cancelled, or failed by a check at its time, before it was built.
+  mime              String?
+  /// When a scheduled send goes (UTC); null for a send made at once.
+  sendAt            DateTime?          @map("send_at") @db.Timestamptz
+  /// The sender's IANA time zone as they scheduled it — echoed back, never used to compute `sendAt`.
+  senderTimeZone    String?            @map("sender_time_zone")
+  /// What a scheduled send was asked to be (`SendInput` without `sendAt`): built and checked again at
+  /// `sendAt`, as its sender's role and the person stand then.
+  request           Json?
+  cancelledAt       DateTime?          @map("cancelled_at") @db.Timestamptz
   providerMessageId String?            @map("provider_message_id")
   providerThreadId  String?            @map("provider_thread_id")
   mailMessageId     String?            @map("mail_message_id") @db.Uuid
@@ -1032,6 +1044,7 @@ model MailOutbound {
   @@index([workspaceId, senderMemberId, createdAt(sort: Desc)])
   @@index([mailboxId, providerThreadId])
   @@index([workspaceId, mailMessageId])
+  @@index([status, sendAt])
   @@map("mail_outbound")
 }
 
