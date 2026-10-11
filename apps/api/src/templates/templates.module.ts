@@ -7,12 +7,13 @@ import { TemplatesService } from './templates.service';
 
 /**
  * Email templates and the workspace's mail settings (P2-4). `RenderService` is exported: the send
- * path (P2-3) and sequences (P3) render through it and nowhere else.
+ * path (P2-3) and sequences (P3) render through it and nowhere else. `TemplatesService` is exported
+ * so the send path reads a template, and checks a free-form message, by the templates' own rules.
  */
 @Module({
     imports: [CustomFieldsModule],
     controllers: [TemplatesController, MailSettingsController],
     providers: [TemplatesService, MailSettingsService, RenderService],
-    exports: [RenderService],
+    exports: [RenderService, TemplatesService],
 })
 export class TemplatesModule {}
