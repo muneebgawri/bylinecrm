@@ -149,19 +149,20 @@ export class StageMoveService {
     }
 
     /**
-     * Publishes a committed move as exactly one event (`moveEventType`): `deal.won` or `deal.lost`
+     * Records a move as exactly one event (`moveEventType`), in the transaction that made it: `deal.won` or `deal.lost`
      * for a close, `deal.stage_changed` for every other move. All three are about the opportunity
      * and carry the same shape — the move as `diff.stageId`, the shape every `updated` event uses,
      * so the timeline writes it on the deal like any change, and `stage` for the pipeline and the
      * reason — so the timeline and webhooks need no case of their own.
      */
     announce(
+        tx: WorkspaceClient,
         workspaceId: string,
         dealId: string,
         actor: EventActor,
         moved: Extract<MoveOutcome, { outcome: 'moved' }>,
-    ): void {
-        this.events.publish({
+    ): Promise<void> {
+        return this.events.record(tx, {
             type: moveEventType(moved.toKind),
             object: 'opportunity',
             workspaceId,

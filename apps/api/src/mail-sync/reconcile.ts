@@ -13,7 +13,7 @@ import { emailSummaryOf } from './summary';
  *   person's records not already carrying the message — the timeline writes the same entries an
  *   import would, exactly once per record.
  *
- * Runs in the caller's transaction; returns the events to publish once it commits.
+ * Runs in the caller's transaction; returns the events for the caller to record in it.
  */
 export async function reconcileMessageTargets(
     tx: WorkspaceClient,

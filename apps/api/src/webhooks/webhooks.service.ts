@@ -5,7 +5,6 @@ import {
     DOMAIN_EVENT_TYPES,
     WEBHOOK_EVENT_WILDCARD,
     WEBHOOK_PING_EVENT,
-    type DomainEvent,
     type WebhookDeliveryStatus,
     type WebhookEnvelope,
     objectOfEvent,
@@ -13,6 +12,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { ENV, type Env } from '../config/env';
+import type { DeliveredEvent } from '../events/outbox-consumer';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext } from '../infra/workspace-context';
@@ -259,22 +259,24 @@ export class WebhooksService {
     // ── The two moments ──────────────────────────────────────────────────────────────────────
 
     /**
-     * Called by the subscriber for every catalogue event: one delivery row and one job per enabled
+     * Called by the subscriber for every recorded event: one delivery row and one job per enabled
      * endpoint whose subscription names the event. Runs in the event's workspace with no request
-     * context (the subscriber is not a request). Returns how many deliveries were made.
+     * context (the relay is not a request). Idempotent on the outbox event (P1-6): a delivery is
+     * unique per (event, endpoint), so a redelivered event adds no row, and only rows still
+     * `pending` are enqueued — under their own id, which the queue never holds twice. Returns how
+     * many deliveries the event has.
      */
-    async enqueueForEvent(event: DomainEvent): Promise<number> {
-        const eventId = randomUUID();
+    async enqueueForEvent({ id: eventId, event }: DeliveredEvent): Promise<number> {
         const jobs = await this.rls.withWorkspace(event.workspaceId, async (tx) => {
             const endpoints = await tx.webhookEndpoint.findMany({
                 where: { deletedAt: null, enabled: true, events: { hasSome: [WEBHOOK_EVENT_WILDCARD, event.type] } },
                 select: { id: true },
             });
-            const made: DeliveryJob[] = [];
-            for (const endpoint of endpoints) {
-                const id = randomUUID();
-                await tx.webhookDelivery.create({
-                    data: {
+            if (endpoints.length === 0) return [];
+            await tx.webhookDelivery.createMany({
+                data: endpoints.map((endpoint) => {
+                    const id = randomUUID();
+                    return {
                         id,
                         workspaceId: event.workspaceId,
                         endpointId: endpoint.id,
@@ -287,11 +289,19 @@ export class WebhooksService {
                             event.workspaceId,
                             event,
                         ) as unknown as Prisma.InputJsonValue,
-                    },
-                });
-                made.push({ deliveryId: id, workspaceId: event.workspaceId, endpointId: endpoint.id });
-            }
-            return made;
+                    };
+                }),
+                skipDuplicates: true,
+            });
+            const rows = await tx.webhookDelivery.findMany({
+                where: { eventId, status: 'pending' },
+                select: { id: true, endpointId: true },
+            });
+            return rows.map((row): DeliveryJob => ({
+                deliveryId: row.id,
+                workspaceId: event.workspaceId,
+                endpointId: row.endpointId,
+            }));
         });
         for (const job of jobs) await this.enqueue(job);
         return jobs.length;

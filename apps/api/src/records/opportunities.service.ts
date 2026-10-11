@@ -147,35 +147,43 @@ export class OpportunitiesService implements BulkRecords {
                 },
             });
             await this.moves.place(tx, created, actor, 'manual');
+            await this.events.record(tx, event(context, 'opportunity.created', created.id));
             return find(tx, context, created.id);
         });
-        this.events.publish(event(context, 'opportunity.created', row.id));
         return view(row);
     }
 
     /** Partial. `amount: null` clears the amount and keeps the currency; `custom` is merged key by key. */
     async update(id: string, patch: OpportunityInput): Promise<OpportunityView> {
         const context = this.current();
-        const { after, event } = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch));
-        if (event) this.events.publish(event);
+        const { after } = await this.rls.withWorkspace(async (tx) => {
+            const result = await this.updateIn(tx, context, id, patch);
+            if (result.event) await this.events.record(tx, result.event);
+            return result;
+        });
         return view(after);
     }
 
     async remove(id: string): Promise<void> {
         const context = this.current();
-        const { event } = await this.rls.withWorkspace((tx) => this.removeIn(tx, context, id));
-        this.events.publish(event);
+        await this.rls.withWorkspace(async (tx) => {
+            const { event } = await this.removeIn(tx, context, id);
+            await this.events.record(tx, event);
+        });
     }
 
     async restore(id: string): Promise<OpportunityView> {
         const context = this.current();
-        const { row, event } = await this.rls.withWorkspace((tx) => this.restoreIn(tx, context, id));
-        this.events.publish(event);
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const restored = await this.restoreIn(tx, context, id);
+            await this.events.record(tx, restored.event);
+            return restored.row;
+        });
         return view(row);
     }
 
     // The writes inside a caller's transaction — the single routes and the bulk service (P1-4a)
-    // both run these; each returns the event for the caller to publish after commit.
+    // both run these; each returns the event for the caller to record in the same transaction (P1-6).
 
     async updateIn(
         tx: WorkspaceClient,

@@ -92,6 +92,13 @@ export const envSchema = z
          */
         MAIL_SEND_WORKER: flag('1'),
         /**
+         * Whether this process relays the outbox (P1-6): delivers recorded domain events to the
+         * timeline, webhooks, stage rules and mail re-matching. On by default; any number of processes
+         * may relay at once (claims never overlap), and at least one must. `0` keeps compile-only runs
+         * (the OpenAPI writer) quiet.
+         */
+        OUTBOX_RELAY: flag('1'),
+        /**
          * Whether the tenant client reports each operation, with the request it belongs to, to
          * `observeQueries` (P1-4a). Off in production — an operation observer is a test instrument,
          * not a feature. The unit and cross-tenant suites set it to `1`; their query-budget tests

@@ -74,7 +74,7 @@ export class NotesService {
         const body = input.body ?? EMPTY_RICH_TEXT;
         const row = await this.rls.withWorkspace(async (tx) => {
             await assertTargetsReadable(tx, targets);
-            return tx.note.create({
+            const created = await tx.note.create({
                 data: {
                     workspaceId: context.workspaceId,
                     title: input.title ?? '',
@@ -88,15 +88,16 @@ export class NotesService {
                 },
                 include: { targets: true },
             });
-        });
-        this.events.publish({
-            type: 'note.created',
-            object: 'note',
-            workspaceId: context.workspaceId,
-            actor,
-            occurredAt: new Date().toISOString(),
-            recordId: row.id,
-            targets,
+            await this.events.record(tx, {
+                type: 'note.created',
+                object: 'note',
+                workspaceId: context.workspaceId,
+                actor,
+                occurredAt: new Date().toISOString(),
+                recordId: created.id,
+                targets,
+            });
+            return created;
         });
         return view(row);
     }
@@ -104,7 +105,7 @@ export class NotesService {
     /** Partial; `targets`, when given, replaces the whole set. */
     async update(id: string, patch: NoteInput): Promise<NoteView> {
         const context = this.current();
-        const { before, after } = await this.rls.withWorkspace(async (tx) => {
+        const after = await this.rls.withWorkspace(async (tx) => {
             const current = await find(tx, id, false);
             const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
             if (targets) await assertTargetsReadable(tx, targets);
@@ -126,37 +127,36 @@ export class NotesService {
                 },
                 include: { targets: true },
             });
-            return { before: current, after: updated };
+            const updatedView = view(updated);
+            await this.events.record(tx, {
+                type: 'note.updated',
+                object: 'note',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                diff: diffOf(view(current), updatedView, DIFF_FIELDS),
+                targets: updatedView.targets,
+            });
+            return updatedView;
         });
-        const afterView = view(after);
-        this.events.publish({
-            type: 'note.updated',
-            object: 'note',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            diff: diffOf(view(before), afterView, DIFF_FIELDS),
-            targets: afterView.targets,
-        });
-        return afterView;
+        return after;
     }
 
     async remove(id: string): Promise<void> {
         const context = this.current();
-        const row = await this.rls.withWorkspace(async (tx) => {
+        await this.rls.withWorkspace(async (tx) => {
             const current = await find(tx, id, false);
             await tx.note.update({ where: { id }, data: { deletedAt: new Date() } });
-            return current;
-        });
-        this.events.publish({
-            type: 'note.deleted',
-            object: 'note',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            targets: targetsOf(row),
+            await this.events.record(tx, {
+                type: 'note.deleted',
+                object: 'note',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                targets: targetsOf(current),
+            });
         });
     }
 
@@ -164,16 +164,21 @@ export class NotesService {
         const context = this.current();
         const row = await this.rls.withWorkspace(async (tx) => {
             await find(tx, id, true);
-            return tx.note.update({ where: { id }, data: { deletedAt: null }, include: { targets: true } });
-        });
-        this.events.publish({
-            type: 'note.restored',
-            object: 'note',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            targets: targetsOf(row),
+            const restored = await tx.note.update({
+                where: { id },
+                data: { deletedAt: null },
+                include: { targets: true },
+            });
+            await this.events.record(tx, {
+                type: 'note.restored',
+                object: 'note',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                targets: targetsOf(restored),
+            });
+            return restored;
         });
         return view(row);
     }

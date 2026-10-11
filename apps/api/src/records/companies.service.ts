@@ -95,7 +95,7 @@ export class CompaniesService implements BulkRecords {
             const custom = await this.customFields.validated(tx, 'company', input.custom ?? {}, 'create');
             const arr = await moneyColumns(tx, context.workspaceId, input.arr);
             try {
-                return await tx.company.create({
+                const row = await tx.company.create({
                     data: {
                         ...compact(fields(input)),
                         ...arrColumns(arr),
@@ -107,37 +107,46 @@ export class CompaniesService implements BulkRecords {
                     },
                     include: companyInclude,
                 });
+                await this.events.record(tx, event(context, 'company.created', row.id));
+                return row;
             } catch (error) {
                 throw uniqueViolation(error) ? conflict() : error;
             }
         });
-        this.events.publish(event(context, 'company.created', row.id));
         return view(row);
     }
 
     async update(id: string, patch: CompanyInput): Promise<CompanyView> {
         const context = this.current();
-        const { after, event } = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch));
-        if (event) this.events.publish(event);
+        const { after } = await this.rls.withWorkspace(async (tx) => {
+            const result = await this.updateIn(tx, context, id, patch);
+            if (result.event) await this.events.record(tx, result.event);
+            return result;
+        });
         return view(after);
     }
 
     /** Soft. People keep their `companyId`; the company is simply in the trash (PAR-079). */
     async remove(id: string): Promise<void> {
         const context = this.current();
-        const { event } = await this.rls.withWorkspace((tx) => this.removeIn(tx, context, id));
-        this.events.publish(event);
+        await this.rls.withWorkspace(async (tx) => {
+            const { event } = await this.removeIn(tx, context, id);
+            await this.events.record(tx, event);
+        });
     }
 
     async restore(id: string): Promise<CompanyView> {
         const context = this.current();
-        const { row, event } = await this.rls.withWorkspace((tx) => this.restoreIn(tx, context, id));
-        this.events.publish(event);
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const restored = await this.restoreIn(tx, context, id);
+            await this.events.record(tx, restored.event);
+            return restored.row;
+        });
         return view(row);
     }
 
     // The writes inside a caller's transaction — the single routes and the bulk service (P1-4a)
-    // both run these; each returns the event for the caller to publish after commit.
+    // both run these; each returns the event for the caller to record in the same transaction (P1-6).
 
     async updateIn(
         tx: WorkspaceClient,

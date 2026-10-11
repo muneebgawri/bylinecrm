@@ -91,7 +91,7 @@ export class TasksService {
         const row = await this.rls.withWorkspace(async (tx) => {
             await assertTargetsReadable(tx, targets);
             await assertOwnerIsMember(tx, input.assigneeId ?? null);
-            return tx.task.create({
+            const created = await tx.task.create({
                 data: {
                     workspaceId: context.workspaceId,
                     title: input.title,
@@ -108,15 +108,16 @@ export class TasksService {
                 },
                 include: { targets: true },
             });
-        });
-        this.events.publish({
-            type: 'task.created',
-            object: 'task',
-            workspaceId: context.workspaceId,
-            actor,
-            occurredAt: new Date().toISOString(),
-            recordId: row.id,
-            targets,
+            await this.events.record(tx, {
+                type: 'task.created',
+                object: 'task',
+                workspaceId: context.workspaceId,
+                actor,
+                occurredAt: new Date().toISOString(),
+                recordId: created.id,
+                targets,
+            });
+            return created;
         });
         return view(row);
     }
@@ -124,7 +125,7 @@ export class TasksService {
     /** Partial; `targets` replaces the set; `completedAt` follows `status` by the one rule. */
     async update(id: string, patch: TaskInput): Promise<TaskView> {
         const context = this.current();
-        const { before, after } = await this.rls.withWorkspace(async (tx) => {
+        const after = await this.rls.withWorkspace(async (tx) => {
             const current = await find(tx, context, id, false);
             const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
             if (targets) await assertTargetsReadable(tx, targets);
@@ -155,37 +156,36 @@ export class TasksService {
                 },
                 include: { targets: true },
             });
-            return { before: current, after: updated };
+            const updatedView = view(updated);
+            await this.events.record(tx, {
+                type: 'task.updated',
+                object: 'task',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                diff: diffOf(view(current), updatedView, DIFF_FIELDS),
+                targets: updatedView.targets,
+            });
+            return updatedView;
         });
-        const afterView = view(after);
-        this.events.publish({
-            type: 'task.updated',
-            object: 'task',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            diff: diffOf(view(before), afterView, DIFF_FIELDS),
-            targets: afterView.targets,
-        });
-        return afterView;
+        return after;
     }
 
     async remove(id: string): Promise<void> {
         const context = this.current();
-        const row = await this.rls.withWorkspace(async (tx) => {
+        await this.rls.withWorkspace(async (tx) => {
             const current = await find(tx, context, id, false);
             await tx.task.update({ where: { id }, data: { deletedAt: new Date() } });
-            return current;
-        });
-        this.events.publish({
-            type: 'task.deleted',
-            object: 'task',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            targets: targetsOf(row),
+            await this.events.record(tx, {
+                type: 'task.deleted',
+                object: 'task',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                targets: targetsOf(current),
+            });
         });
     }
 
@@ -193,16 +193,21 @@ export class TasksService {
         const context = this.current();
         const row = await this.rls.withWorkspace(async (tx) => {
             await find(tx, context, id, true);
-            return tx.task.update({ where: { id }, data: { deletedAt: null }, include: { targets: true } });
-        });
-        this.events.publish({
-            type: 'task.restored',
-            object: 'task',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            targets: targetsOf(row),
+            const restored = await tx.task.update({
+                where: { id },
+                data: { deletedAt: null },
+                include: { targets: true },
+            });
+            await this.events.record(tx, {
+                type: 'task.restored',
+                object: 'task',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                targets: targetsOf(restored),
+            });
+            return restored;
         });
         return view(row);
     }

@@ -14,6 +14,7 @@ import {
 } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { uniqueViolation } from '../infra/prisma-errors';
+import type { DeliveredEvent } from '../events/outbox-consumer';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
@@ -45,7 +46,7 @@ export interface ExternalActivityInput {
 type ActivityRow = Prisma.TimelineActivityGetPayload<object>;
 
 /** The row a write produces, before the client's id is known. */
-type NewRow = Omit<Prisma.TimelineActivityCreateManyInput, 'id' | 'workspaceId' | 'createdAt'>;
+type NewRow = Omit<Prisma.TimelineActivityCreateManyInput, 'id' | 'workspaceId' | 'createdAt' | 'eventId'>;
 
 /**
  * Reading the timeline, and the two ways an entry gets onto it: a domain event (through
@@ -90,14 +91,16 @@ export class TimelineService {
      * Writes the entries a domain event leaves: one on the record itself, or — for a note, task
      * or attachment — one on each record it is on (PAR-014). The linked thing's current name is
      * read once so the entry can be rendered without a lookup; an `updated` event's diff is
-     * taken from the event, never recomputed. Returns how many rows were written.
+     * taken from the event, never recomputed. Each entry carries the outbox event's id, unique per
+     * record, so a redelivered event writes nothing new (P1-6). Returns how many rows were written.
      */
-    writeFor(event: DomainEvent): Promise<number> {
+    writeFor({ id: eventId, event }: DeliveredEvent): Promise<number> {
         return this.rls.withWorkspace(event.workspaceId, async (tx) => {
             const rows = await rowsFor(tx, event);
             if (rows.length === 0) return 0;
             const result = await tx.timelineActivity.createMany({
-                data: rows.map((row) => ({ ...row, workspaceId: event.workspaceId })),
+                data: rows.map((row) => ({ ...row, workspaceId: event.workspaceId, eventId })),
+                skipDuplicates: true,
             });
             return result.count;
         });

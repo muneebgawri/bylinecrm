@@ -94,7 +94,7 @@ export class MailboxTokens {
         reason: { code: string; message: string },
         actor: EventActor,
     ): Promise<boolean> {
-        const changed = await this.rls.withWorkspace(workspaceId, async (tx) => {
+        return this.rls.withWorkspace(workspaceId, async (tx) => {
             const result = await tx.mailbox.updateMany({
                 where: { id: mailboxId, status: 'connected' },
                 data: {
@@ -102,10 +102,8 @@ export class MailboxTokens {
                     lastError: errorRecord(reason),
                 },
             });
-            return result.count > 0;
-        });
-        if (changed) {
-            this.events.publish({
+            if (result.count === 0) return false;
+            await this.events.record(tx, {
                 type: 'mailbox.reconnect_needed',
                 object: 'mailbox',
                 workspaceId,
@@ -113,8 +111,8 @@ export class MailboxTokens {
                 occurredAt: new Date().toISOString(),
                 recordId: mailboxId,
             });
-        }
-        return changed;
+            return true;
+        });
     }
 
     private async refreshUnderLock(workspaceId: string, mailboxId: string): Promise<string> {

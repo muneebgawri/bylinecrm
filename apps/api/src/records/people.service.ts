@@ -114,7 +114,7 @@ export class PeopleService implements BulkRecords {
             const custom = await this.customFields.validated(tx, 'person', input.custom ?? {}, 'create');
             assertIdentifiable(input.nameFirst ?? '', input.nameLast ?? '', input.emails?.primary ?? null);
             try {
-                return await tx.person.create({
+                const row = await tx.person.create({
                     data: {
                         ...compact(fields(input)),
                         workspaceId: context.workspaceId,
@@ -124,40 +124,49 @@ export class PeopleService implements BulkRecords {
                     },
                     include: personInclude,
                 });
+                await this.events.record(tx, event(context, 'person.created', row.id));
+                return row;
             } catch (error) {
                 throw uniqueViolation(error) ? conflict() : error;
             }
         });
-        this.events.publish(event(context, 'person.created', row.id));
         return view(row);
     }
 
     /** Partial: a composite (`emails`, `phones`, `links`) is replaced whole; `custom` is merged key by key. */
     async update(id: string, patch: PersonInput): Promise<PersonView> {
         const context = this.current();
-        const { after, event } = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch));
-        if (event) this.events.publish(event);
+        const { after } = await this.rls.withWorkspace(async (tx) => {
+            const result = await this.updateIn(tx, context, id, patch);
+            if (result.event) await this.events.record(tx, result.event);
+            return result;
+        });
         return view(after);
     }
 
     /** Soft: the row keeps its data and its place in the uniqueness index (PAR-079). */
     async remove(id: string): Promise<void> {
         const context = this.current();
-        const { event } = await this.rls.withWorkspace((tx) => this.removeIn(tx, context, id));
-        this.events.publish(event);
+        await this.rls.withWorkspace(async (tx) => {
+            const { event } = await this.removeIn(tx, context, id);
+            await this.events.record(tx, event);
+        });
     }
 
     async restore(id: string): Promise<PersonView> {
         const context = this.current();
-        const { row, event } = await this.rls.withWorkspace((tx) => this.restoreIn(tx, context, id));
-        this.events.publish(event);
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const restored = await this.restoreIn(tx, context, id);
+            await this.events.record(tx, restored.event);
+            return restored.row;
+        });
         return view(row);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // The writes, inside a caller's transaction: the single routes above and the bulk service
     // (P1-4a) both run these, so one record changed by either is changed — and announced — alike.
-    // The event is returned for the caller to publish after its transaction commits.
+    // The event is returned for the caller to record in the same transaction (P1-6).
     // ─────────────────────────────────────────────────────────────────────────
 
     async updateIn(
