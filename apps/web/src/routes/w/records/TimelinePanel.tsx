@@ -13,10 +13,14 @@ import {
 import { useQueries } from '@tanstack/react-query';
 import { ArrowRightLeft, DollarSign, FileText, Mail, Paperclip, Pencil, SquareCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router';
 import { people } from '../../../api/endpoints';
 import { keys, useMembersSummary, useTimeline } from '../../../api/queries';
 import type { TimelineActivityView } from '../../../api/types';
 import { formatWhen } from '../../../lib/format';
+import { usePendingSends, type PendingSend } from '../mail/sends';
+import { SendStatus, pendingAction } from '../mail/SendStatus';
+import { withThread } from '../mail/thread';
 import { wordsFor, type TimelineWords } from './timeline-items';
 
 /** The kind chips over the timeline; each is a `kinds` prefix list the API filters by. */
@@ -26,6 +30,7 @@ const FILTERS = [
     { id: 'tasks', label: 'Tasks', kinds: 'linked-task' },
     { id: 'stages', label: 'Stages', kinds: 'deal.,opportunity.' },
     { id: 'external', label: 'External', kinds: 'external.' },
+    { id: 'emails', label: 'Emails', kinds: 'linked-email' },
 ] as const;
 
 const ICON: Record<TimelineWords['family'], { icon: React.ReactNode; tone: Tone }> = {
@@ -43,6 +48,10 @@ const ICON: Record<TimelineWords['family'], { icon: React.ReactNode; tone: Tone 
  * "Load older". A company's list carries its people's entries, tagged with their origin. A
  * failed load leaves the record page usable: the panel says so and offers retry (partial state,
  * FR-CRMS-UI-7).
+ *
+ * Mail is part of the one list: a stored email's line opens its thread (`?thread=`), and a send
+ * made here shows at the top at once — "Sending…", then "Sent" until the stored copy replaces it;
+ * "Failed" with Retry; "Scheduled for …" with Reschedule and Cancel.
  */
 export function TimelinePanel({
     workspaceId,
@@ -61,6 +70,13 @@ export function TimelinePanel({
 
     const entries = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
     const names = useOriginNames(workspaceId, target, entries);
+    const location = useLocation();
+    const stored = useMemo(
+        () => new Set(entries.flatMap((e) => (e.linked?.type === 'email' ? [e.linked.id] : []))),
+        [entries],
+    );
+    const pending = usePendingSends(workspaceId, target, stored);
+    const showPending = filter === 'all' || filter === 'emails';
 
     const items = useMemo<ActivityItem[]>(() => {
         const memberNames = new Map((members.data ?? []).map((m) => [m.memberId, m.name ?? 'Unnamed member']));
@@ -86,24 +102,42 @@ export function TimelinePanel({
                         ))}
                     </>
                 ) : undefined;
+            const threadId = words.threadId;
             return {
                 id: entry.id,
                 icon: look.icon,
                 tone: look.tone,
                 actor: words.actor,
-                action: words.action,
+                action: threadId ? (
+                    <Link
+                        to={{ search: withThread(location.search, threadId) }}
+                        className={cn(
+                            // A phone's finger target: the line is a 44px-tall link there (FR-CRMS-UI-12).
+                            'text-text underline decoration-border-strong underline-offset-2 hover:decoration-current max-md:inline-flex max-md:min-h-touch max-md:items-center',
+                            focusRing,
+                        )}
+                    >
+                        {words.action}
+                    </Link>
+                ) : (
+                    words.action
+                ),
                 time: formatWhen(entry.happenedAt),
                 dateTime: entry.happenedAt,
                 ...(chips ? { chips } : {}),
             };
         });
-    }, [entries, members.data, names, target, stageNames]);
+    }, [entries, members.data, names, target, stageNames, location.search]);
+    const shown = useMemo(
+        () => [...(showPending ? pending.sends.map((p) => pendingItem(workspaceId, p)) : []), ...items],
+        [showPending, pending, items, workspaceId],
+    );
 
     return (
         <section className="rounded-lg border border-border bg-surface shadow-sm">
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
                 <h3 className="m-0 text-[13px] font-medium text-text-muted">Activity</h3>
-                <div role="group" aria-label="Show" className="ml-auto flex gap-1">
+                <div role="group" aria-label="Show" className="ml-auto flex flex-wrap gap-1">
                     {FILTERS.map((f) => (
                         <button
                             key={f.id}
@@ -140,7 +174,7 @@ export function TimelinePanel({
                             Retry
                         </Button>
                     </div>
-                ) : items.length === 0 ? (
+                ) : shown.length === 0 ? (
                     <EmptyState
                         className="my-2 py-8"
                         title={
@@ -156,7 +190,7 @@ export function TimelinePanel({
                     />
                 ) : (
                     <>
-                        <ActivityTimeline items={items} />
+                        <ActivityTimeline items={shown} />
                         {query.hasNextPage && (
                             <div className="flex justify-center py-2">
                                 <Button
@@ -172,9 +206,36 @@ export function TimelinePanel({
                         )}
                     </>
                 )}
+                {/* Scheduled sends are read a page at a time; this record's may be further on. */}
+                {showPending && pending.hasMore && (
+                    <div className="flex justify-center py-1">
+                        <Button
+                            size="sm"
+                            shape="square"
+                            variant="ghost"
+                            disabled={pending.loadingMore}
+                            onClick={pending.more}
+                        >
+                            {pending.loadingMore ? 'Loading…' : 'Show more scheduled sends'}
+                        </Button>
+                    </div>
+                )}
             </div>
         </section>
     );
+}
+
+/** A send not yet on the timeline as a stored message: "You emailed …" with where it stands. */
+function pendingItem(workspaceId: string, send: PendingSend): ActivityItem {
+    return {
+        id: `send-${send.messageId}`,
+        icon: <Mail />,
+        tone: send.status === 'failed' ? 'danger' : 'accent',
+        actor: 'You',
+        action: pendingAction(send),
+        time: send.status === 'scheduled' ? 'Not sent yet' : 'Just now',
+        chips: <SendStatus workspaceId={workspaceId} send={send} />,
+    };
 }
 
 /**

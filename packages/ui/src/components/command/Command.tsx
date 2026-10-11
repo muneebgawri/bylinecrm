@@ -25,17 +25,26 @@ export interface CommandDialogProps extends ComponentPropsWithoutRef<typeof Dial
     /** Spoken name of the palette; visually hidden. */
     title?: string;
     description?: string;
+    /**
+     * Where focus goes when the palette closes; by default back to what had it. A command that
+     * moves focus itself (into a composer, onto a field) runs here and prevents the default.
+     */
+    onCloseAutoFocus?: ComponentPropsWithoutRef<typeof DialogContent>['onCloseAutoFocus'];
 }
 
 export function CommandDialog({
     children,
     title = 'Command palette',
     description = 'Search for a record, a page or an action.',
+    onCloseAutoFocus,
     ...props
 }: CommandDialogProps) {
     return (
         <Dialog {...props}>
-            <DialogContent className="overflow-hidden p-0 [&>button]:hidden">
+            <DialogContent
+                className="overflow-hidden p-0 [&>button]:hidden"
+                {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
+            >
                 <DialogTitle className="sr-only">{title}</DialogTitle>
                 <DialogDescription className="sr-only">{description}</DialogDescription>
                 <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-text-muted">

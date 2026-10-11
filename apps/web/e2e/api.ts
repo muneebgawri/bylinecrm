@@ -71,6 +71,9 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/mail/blocklist$`), () => data.blocklist],
     [new RegExp(`^${W}/mailboxes/${ID}/sync$`), (m) => data.mailboxSync(m[1] ?? '')],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
+    [new RegExp(`^${W}/mail/scheduled$`), () => data.page(data.scheduledSends)],
+    [new RegExp(`^${W}/mail/messages/${ID}$`), (m) => byId(data.scheduledSends, m[1])],
+    [new RegExp(`^${W}/mail/threads/${ID}$`), (m) => byId([data.thread], m[1])],
     [
         new RegExp(`^${W}/search$`),
         () => ({ people: data.people, companies: data.companies, opportunities: data.deals }),

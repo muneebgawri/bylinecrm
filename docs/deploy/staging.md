@@ -79,18 +79,21 @@ file".
 
 ## Sign-up and platform admins (P0-14)
 
-Staging takes no sign-ups: `SIGNUP_MODE` is unset, so it runs as `closed`, the default. Workspaces
+Staging takes no sign-ups: `bootstrap-secrets.sh` writes `SIGNUP_MODE=closed` into `staging.env`. Workspaces
 are created by platform admins at `/platform/workspaces`, and each owner joins through the
 invitation link the page shows.
 
-- **Who is a platform admin:** the addresses in `PLATFORM_ADMIN_EMAILS`, set in
+- **Who is a platform admin:** the addresses in `PLATFORM_ADMIN_EMAILS` in
   `/opt/bylinecrm-runtime/staging.env` (currently `matt@pinionpartners.co`). The account's email
-  must be verified.
+  must be verified. Change the list through the script, never by editing the file (a re-run
+  rewrites it), then restart the api:
+  `BYLINECRM_PLATFORM_ADMIN_EMAILS=a@x.com,b@y.com bash deploy/staging/bootstrap-secrets.sh`.
+  A run without the variable keeps the stored list.
 - **Verifying an existing password account,** once per address, on the server:
   `docker compose -p bylinecrm-staging exec api node dist/cli/platform-verify-email.js <address>`.
   The command refuses any address that is not on the list. A Google sign-in verifies the address
   too, and creates the account if none exists yet.
-- **Removing an admin:** delete the address from `staging.env` and restart the api. Access ends
+- **Removing an admin:** re-run the script without the address and restart the api. Access ends
   from the first request after the restart. That delay is accepted; there is no runtime switch.
 - **Do not set `SIGNUP_MODE=open` on staging.** The URL is public.
 

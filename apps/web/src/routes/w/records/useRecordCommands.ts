@@ -5,7 +5,8 @@ import { OPEN_PARAM } from './targets';
 
 /**
  * The record's keyboard (FR-CRMS-UI-4): registered in the palette so `?` lists them and the same
- * key means the same thing on every record. `e` is honest about mail not existing yet. Prev/next
+ * key means the same thing on every record. `e` writes an email (the palette names whom: "Email
+ * this person"); a record with no compose box registers no `e`. Prev/next
  * bind only while a list is known; `alt+[`/`alt+]` because the shell already owns `[` for the
  * sidebar.
  *
@@ -19,6 +20,8 @@ export function useRecordCommands(input: {
     onTask?: (() => void) | undefined;
     onOwner?: (() => void) | undefined;
     onCompose?: (() => void) | undefined;
+    /** The compose command's palette title ("Email this person"). */
+    composeTitle?: string | undefined;
     prev?: string | null | undefined;
     next?: string | null | undefined;
 }) {
@@ -33,7 +36,7 @@ export function useRecordCommands(input: {
         const list: Command[] = [];
         const add = (id: string, title: string, shortcut: string, run: () => void) =>
             list.push({ id: `${ns}.${id}`, title, group, shortcut, run });
-        if (input.onCompose) add('compose', 'Write an email', 'e', input.onCompose);
+        if (input.onCompose) add('compose', input.composeTitle ?? 'Write an email', 'e', input.onCompose);
         if (input.onNote) add('note', 'Add a note', 'n', input.onNote);
         if (input.onTask) add('task', 'Add a task', 't', input.onTask);
         if (input.onOwner) add('owner', 'Change owner', 'o', input.onOwner);
@@ -47,6 +50,7 @@ export function useRecordCommands(input: {
         ns,
         input.layout,
         input.onCompose,
+        input.composeTitle,
         input.onNote,
         input.onTask,
         input.onOwner,
