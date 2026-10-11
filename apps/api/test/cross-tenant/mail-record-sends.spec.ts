@@ -39,6 +39,8 @@ interface Outbound {
     subject: string;
     personId: string | null;
     dealId: string | null;
+    senderMemberId: string;
+    createdAt: string;
     error: { code: string; message: string; fields?: string[] } | null;
 }
 interface SendsPage {
@@ -308,6 +310,10 @@ describe('#104 a record’s sends', () => {
         expect((res.body as SendsPage).items).toEqual([]);
         const repSends = ((await list(admin, `target=person:${wrenId}&status=scheduled`)).body as SendsPage).items;
         expect(repSends.length).toBeGreaterThan(0);
+        // An admin sees a colleague's send, and whose it is.
+        const members = (await as(admin).get(w('/members'))).body as { id: string; email: string }[];
+        const repMember = members.find((m) => m.email === repEmail)!.id;
+        expect(repSends.every((s) => s.senderMemberId === repMember)).toBe(true);
     });
 
     it('#104 a record outside the caller’s scope is not found; their own record lists their sends', async () => {

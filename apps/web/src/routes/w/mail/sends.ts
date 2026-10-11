@@ -16,6 +16,10 @@ export interface PendingSend {
     sendAt: string | null;
     senderTimeZone: string | null;
     error: MailOutboundView['error'];
+    /** Who sent it; null for this tab's own send before the server has answered. */
+    senderMemberId: string | null;
+    /** When it was made; null for this tab's own send before the server has answered (it is now). */
+    createdAt: string | null;
     /** The stored copy once sent; the timeline's own entry for it replaces this one. */
     mailMessageId: string | null;
     threadId: string | null;
@@ -82,6 +86,8 @@ export function usePendingSends(
                 sendAt: view?.sendAt ?? own?.accepted.sendAt ?? null,
                 senderTimeZone: view?.senderTimeZone ?? own?.accepted.senderTimeZone ?? null,
                 error: view?.error ?? null,
+                senderMemberId: view?.senderMemberId ?? null,
+                createdAt: view?.createdAt ?? null,
                 mailMessageId,
                 threadId: view?.threadId ?? null,
                 session: own,

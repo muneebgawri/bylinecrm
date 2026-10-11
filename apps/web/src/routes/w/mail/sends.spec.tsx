@@ -218,6 +218,36 @@ describe('#104: a record’s sends come from the server, a page at a time', () =
         expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     });
 
+    it('names a colleague’s send by its sender and dates it when it was made', async () => {
+        const theirs = outbound({
+            ...failed,
+            id: 'out-6',
+            subject: 'From a colleague',
+            senderMemberId: 'm-2',
+            createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+        });
+        stubApi([
+            recordSendsRoute([theirs]),
+            statusRoute('out-6', [theirs]),
+            (r) =>
+                r.url.endsWith('/members/summary')
+                    ? json([
+                          { memberId: 'm-1', name: 'Kate Morgan' },
+                          { memberId: 'm-2', name: 'Sam Lee' },
+                      ])
+                    : undefined,
+            ...quietRecordRoutes,
+        ]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByText('emailed “From a colleague”')).toBeInTheDocument();
+        expect(await screen.findByText('Sam Lee')).toBeInTheDocument();
+        expect(screen.getByText('3 hours ago')).toBeInTheDocument();
+    });
+
     it('lists a company’s sends too', async () => {
         const company = { type: 'company' as const, id: '0b1e0000-0000-4000-8000-0000000000c1' };
         const seen = stubApi([recordSendsRoute([failed]), statusRoute('out-7', [failed]), ...quietRecordRoutes]);

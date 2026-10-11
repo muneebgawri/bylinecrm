@@ -68,6 +68,7 @@ export const outbound = (over: Partial<MailOutboundView> = {}): MailOutboundView
     dealId: null,
     templateId: null,
     replyToMessageId: null,
+    senderMemberId: 'm-1',
     rfc822MessageId: 'out-1@bylinecrm',
     mailMessageId: null,
     threadId: null,

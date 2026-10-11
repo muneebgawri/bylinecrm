@@ -18644,6 +18644,13 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "senderMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The member who sent (or scheduled) it."
+                    },
                     "rfc822MessageId": {
                         "type": "string",
                         "description": "Our Message-ID, without angle brackets."
@@ -18748,6 +18755,7 @@
                     "dealId",
                     "templateId",
                     "replyToMessageId",
+                    "senderMemberId",
                     "rfc822MessageId",
                     "mailMessageId",
                     "threadId",

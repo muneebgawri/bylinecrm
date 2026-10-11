@@ -966,6 +966,7 @@ function view(row: OutboundRow, threadId: string | null): MailOutboundView {
         dealId: row.dealId,
         templateId: row.templateId,
         replyToMessageId: row.replyToMessageId,
+        senderMemberId: row.senderMemberId,
         rfc822MessageId: row.rfc822MessageId,
         mailMessageId: row.mailMessageId,
         threadId,
