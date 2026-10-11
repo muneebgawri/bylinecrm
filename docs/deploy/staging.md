@@ -12,6 +12,22 @@ changing any of it.
 Files: `deploy/docker/` (images), `deploy/staging/` (compose, edge configs, scripts),
 `.github/workflows/images.yml` (publishing).
 
+## Shared with NewswireOS — read first
+
+Three things on this box belong to both products. Treat them as shared infrastructure:
+
+- **The `bylinecrm-edge` docker network.** NewswireOS's edge container (`newswireos-web-1`) is attached
+  to it, NewswireOS's compose declares it as external, and NewswireOS's deploy creates it if it is
+  missing. **Never remove it** (`docker network rm bylinecrm-edge`) — that would detach the NewswireOS
+  edge. BylineCRM's compose also declares it `external: true`, so no BylineCRM `compose` command can
+  create or remove it, and `teardown.sh` only reports who is attached.
+- **The edge include file** `/opt/newswireos-runtime/nginx-dynamic/bylinecrm-staging.conf`. NewswireOS
+  releases gate their reloads on `nginx -t`, which reads this file. Only `install-edge.sh` and
+  `teardown.sh` change it, both by testing `nginx -t` and restoring on failure.
+- **The deploy-lock courtesy.** `install-edge.sh` and `teardown.sh` refuse while
+  `/opt/newswireos-runtime/deploy.lock` exists (a NewswireOS deploy may be testing and reloading the same
+  edge). BylineCRM's own deploys use `/opt/bylinecrm-runtime/deploy.lock`.
+
 ## Layout on the server
 
 | Path                                                           | What                                              | Survives                                                 |
@@ -82,6 +98,25 @@ or file.
 forward, so rolling back images does not roll back the schema. A migration that the previous code
 cannot run against needs a forward fix, not a rollback.
 
+## Teardown (on the server)
+
+`deploy/staging/teardown.sh` (in any release directory) removes staging and nothing shared:
+
+```
+bash /opt/bylinecrm/releases/<sha>/deploy/staging/teardown.sh --yes
+```
+
+1. removes the edge include file, reloading the edge only after `nginx -t` passes without it (on failure
+   it puts the file back, shows the error and re-tests);
+2. removes the `bylinecrm-staging` project's containers and its own `internal` network;
+3. keeps `/opt/bylinecrm-runtime/data`, the secrets and the release files — add
+   `--purge-data --i-understand-this-deletes-staging-data` to delete the data for good;
+4. **keeps the `bylinecrm-edge` network** and prints which containers are still attached.
+
+It refuses without `--yes` and while either deploy lock is held. To bring staging back after a
+teardown, run the routine deploy (the network and secrets are still there; install the edge file again
+with `install-edge.sh https`).
+
 ## Memory caps and how to check them
 
 | Service            | Cap                                                                          |
@@ -106,13 +141,14 @@ BYLINECRM_SHA=$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA) docker compose -p bylin
 
 ## What this can break on the shared box, and how it is prevented
 
-| Risk                                                                                   | Prevention                                                                                                                                                     |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A BylineCRM edge file makes `nginx -t` fail, so the next NewswireOS release rolls back | `install-edge.sh` tests before and after, restores on failure, and refuses while NewswireOS's deploy lock is held. The file names no upstream that must exist. |
-| nginx refuses to start because BylineCRM is down                                       | The upstream is resolved per request (Docker resolver, variable `proxy_pass`, as for Slotline). Down means 502 on this host only.                              |
-| BylineCRM exhausts memory                                                              | Hard `mem_limit` on every service (above).                                                                                                                     |
-| A BylineCRM deploy restarts NewswireOS                                                 | The scripts address only the `bylinecrm-staging` project, by name, with `--no-deps`. No `docker compose` command here runs in NewswireOS's project.            |
-| Builds starve production                                                               | Nothing is built on the server; images come from GHCR.                                                                                                         |
-| A NewswireOS deploy deletes BylineCRM state                                            | All BylineCRM state is under `/opt/bylinecrm*`, outside NewswireOS's rsync'd trees. NewswireOS writes only `api-upstream.conf` in `nginx-dynamic`.             |
-| Exposed ports                                                                          | No BylineCRM service publishes a port; the edge reaches `web` over `bylinecrm-edge`, and only `web` is on it.                                                  |
-| Secrets leak                                                                           | Generated on the server, 0600, never printed, never in the repository (which is public).                                                                       |
+| Risk                                                                                   | Prevention                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A BylineCRM edge file makes `nginx -t` fail, so the next NewswireOS release rolls back | `install-edge.sh` tests before and after, restores on failure, and refuses while NewswireOS's deploy lock is held. The file names no upstream that must exist.                                                                      |
+| nginx refuses to start because BylineCRM is down                                       | The upstream is resolved per request (Docker resolver, variable `proxy_pass`, as for Slotline). Down means 502 on this host only.                                                                                                   |
+| BylineCRM exhausts memory                                                              | Hard `mem_limit` on every service (above).                                                                                                                                                                                          |
+| A BylineCRM deploy restarts NewswireOS                                                 | The scripts address only the `bylinecrm-staging` project, by name, with `--no-deps`. No `docker compose` command here runs in NewswireOS's project.                                                                                 |
+| Builds starve production                                                               | Nothing is built on the server; images come from GHCR.                                                                                                                                                                              |
+| A NewswireOS deploy deletes BylineCRM state                                            | All BylineCRM state is under `/opt/bylinecrm*`, outside NewswireOS's rsync'd trees. NewswireOS writes only `api-upstream.conf` in `nginx-dynamic`.                                                                                  |
+| Exposed ports                                                                          | No BylineCRM service publishes a port; the edge reaches `web` over `bylinecrm-edge`, and only `web` is on it.                                                                                                                       |
+| The shared `bylinecrm-edge` network is removed, detaching NewswireOS's edge            | It is `external: true` in BylineCRM's compose (no `compose` command creates or removes it), no script runs `docker network rm`, and `teardown.sh` only reports its members. NewswireOS's deploy recreates it if it is ever missing. |
+| Secrets leak                                                                           | Generated on the server, 0600, never printed, never in the repository (which is public).                                                                                                                                            |
