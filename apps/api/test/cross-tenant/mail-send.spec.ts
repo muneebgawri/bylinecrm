@@ -821,4 +821,95 @@ describe('mail send and reply detection', () => {
             expect((await status(adminOutbound, otherAdmin, otherWorkspace)).status).toBe(404);
         });
     });
+
+    describe('#107 a reply between two connected mailboxes is one message and one reply', () => {
+        // Kate sends from her personal mailbox to the workspace's pool mailbox; the pool answers. Both
+        // mailboxes hold both messages. The reply is announced once, whichever copy is stored first —
+        // here the pool's own sent copy, before Kate's inbox copy.
+        let poolPersonId: string;
+        let ours: Outbound;
+        let delivered: string;
+
+        beforeAll(async () => {
+            const created = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Pool', nameLast: 'Inbox', emails: { primary: poolEmail, additional: [] } });
+            expect(created.status).toBe(201);
+            poolPersonId = (created.body as { id: string }).id;
+            ours = await sendAndDeliver({
+                mailboxId: adminMailbox,
+                personId: poolPersonId,
+                subject: `Internal handoff ${stamp}`,
+                body: body(para(t('Over to you.'))),
+            });
+            delivered = gmail.sent.at(-1)!.messageId;
+            gmail.deliver(poolEmail, {
+                from: adminEmail,
+                to: [poolEmail],
+                subject: `Internal handoff ${stamp}`,
+                text: 'Over to you.',
+                messageIdHeader: delivered,
+            });
+            await sync.syncMailbox(workspace, poolMailbox, noWait);
+        });
+
+        it('FR-CRMS-2: the pool’s copy of our send is the same message, announced once', async () => {
+            expect(
+                await owner.mailMessage.count({ where: { workspaceId: workspace, rfc822MessageId: delivered } }),
+            ).toBe(1);
+            expect((await ofType('email.sent', ours.mailMessageId!)).length).toBe(1);
+            expect((await ofType('email.received', ours.mailMessageId!)).length).toBe(0);
+        });
+
+        it('FR-CRMS-9: the pool’s answer is announced as one email.replied, though both mailboxes hold it', async () => {
+            const before = (await ofType('email.replied')).length;
+            const poolThread = (
+                await owner.mailMessageCopy.findFirstOrThrow({
+                    where: { mailboxId: poolMailbox, message: { rfc822MessageId: delivered } },
+                    include: { mailboxThread: true },
+                })
+            ).mailboxThread.providerThreadId;
+            const adminThread = (await owner.mailOutbound.findUniqueOrThrow({ where: { id: ours.id } }))
+                .providerThreadId!;
+            const answerId = `handoff-answer-${stamp}@example.com`;
+            const answer = {
+                subject: `Re: Internal handoff ${stamp}`,
+                text: 'On it.',
+                messageIdHeader: answerId,
+                inReplyTo: delivered,
+            };
+            gmail.deliver(poolEmail, {
+                from: poolEmail,
+                to: [adminEmail],
+                ...answer,
+                threadId: poolThread,
+                labels: ['SENT'],
+            });
+            gmail.deliver(adminEmail, { from: poolEmail, to: [adminEmail], ...answer, threadId: adminThread });
+            await sync.syncMailbox(workspace, poolMailbox, noWait);
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            const replies = (await ofType('email.replied')).slice(before);
+            expect(replies).toHaveLength(1);
+            expect(replies[0]).toMatchObject({ reply: { inReplyToOutboundId: ours.id } });
+            expect(
+                await owner.mailMessage.count({ where: { workspaceId: workspace, rfc822MessageId: answerId } }),
+            ).toBe(1);
+        });
+
+        it('FR-CRMS-2: replying from the CRM goes into the sending mailbox’s own Gmail thread', async () => {
+            const answer = await owner.mailMessage.findFirstOrThrow({
+                where: { workspaceId: workspace, rfc822MessageId: `handoff-answer-${stamp}@example.com` },
+            });
+            const followUp = await sendAndDeliver({
+                mailboxId: adminMailbox,
+                personId: poolPersonId,
+                replyToMessageId: answer.id,
+                body: body(para(t('Thanks.'))),
+            });
+            expect(followUp.status).toBe('sent');
+            const adminThread = (await owner.mailOutbound.findUniqueOrThrow({ where: { id: ours.id } }))
+                .providerThreadId;
+            expect(gmail.sent.at(-1)!.threadId).toBe(adminThread);
+        });
+    });
 });
