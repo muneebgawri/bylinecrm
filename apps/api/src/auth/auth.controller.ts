@@ -13,11 +13,12 @@ import {
     Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { SESSION_COOKIE } from '@bylinecrm/shared';
+import { SESSION_COOKIE, SIGN_IN_ERROR_PARAM, SIGN_IN_PAGE } from '@bylinecrm/shared';
 import type { Request, Response } from 'express';
 import { ENV, type Env } from '../config/env';
 import { MembershipService } from '../workspace/membership.service';
-import { AuthService, type UserView, type WorkspaceView } from './auth.service';
+import { PlatformAccess, PlatformForbidden } from '../platform/platform-access.service';
+import { AuthService, SignupClosed, type UserView, type WorkspaceView } from './auth.service';
 import { AuthCookies } from './cookies';
 import { CurrentPrincipal, Public } from './decorators';
 import { AcceptInviteSignupDto, CreateWorkspaceDto, LoginDto, SignupDto, UpdateProfileDto } from './dto';
@@ -27,7 +28,17 @@ import type { Principal } from './principal';
 import { SessionService } from './session.service';
 import { randomToken } from './tokens';
 import { NotImplementedYet, Redirects, Returns } from '../openapi/responses';
-import { authProviders, profileView, signedIn, signedUp, userView, workspaceView } from '../workspace/responses';
+import {
+    authProviders,
+    invitePreview,
+    profileView,
+    signedIn,
+    signedUp,
+    userView,
+    workspaceView,
+    type AuthProvidersView,
+    type InvitePreviewView,
+} from '../workspace/responses';
 import type { ProfileView } from '../workspace/responses';
 
 /** Sign-up, sign-in and sign-out, for people. Machines use API keys and never come here. */
@@ -79,12 +90,15 @@ export class AuthController {
         this.cookies.clear(res);
     }
 
-    /** Which identity providers this deployment offers. */
+    /**
+     * Which identity providers this deployment offers, and who may sign up (P0-14) — so the
+     * sign-in page offers "Create a workspace" only where that can work.
+     */
     @Public()
     @Get('providers')
     @Returns(authProviders)
-    providers(): { providers: string[] } {
-        return { providers: this.oidc.available() };
+    providers(): AuthProvidersView {
+        return { providers: this.oidc.available(), signup: this.env.SIGNUP_MODE };
     }
 
     /** Google is the OIDC issuer `google`; the route exists so the web app has a stable name. */
@@ -114,6 +128,14 @@ export class AuthController {
     @Redirects()
     oidcCallback(@Param('issuer') issuer: string, @Req() req: Request, @Res() res: Response): Promise<void> {
         return this.finishOidc(issuer, req, res);
+    }
+
+    /** What an invitation is for — the address and the workspace — for the page that accepts it. */
+    @Public()
+    @Get('invites/:token')
+    @Returns(invitePreview)
+    previewInvite(@Param('token') token: string): Promise<InvitePreviewView> {
+        return this.auth.previewInvite(token);
     }
 
     /** Joining a workspace with an invitation while signed in. */
@@ -165,7 +187,18 @@ export class AuthController {
     private async finishOidc(issuer: string, req: Request, res: Response): Promise<void> {
         const callbackUrl = new URL(req.originalUrl, this.env.APP_URL);
         const identity = await this.oidc.finish(issuer, callbackUrl);
-        const user = await this.auth.signInWithIdentity(identity);
+        let user: UserView;
+        try {
+            user = await this.auth.signInWithIdentity(identity);
+        } catch (error) {
+            // The browser is mid-redirect, so the closed-sign-up answer goes back to the sign-in
+            // page as its code — no account, no session (P0-14).
+            if (!(error instanceof SignupClosed)) throw error;
+            const signIn = new URL(SIGN_IN_PAGE, this.env.WEB_URL);
+            signIn.searchParams.set(SIGN_IN_ERROR_PARAM, error.code);
+            res.redirect(signIn.toString());
+            return;
+        }
         await this.startSession(req, res, user.id);
         res.redirect(this.env.WEB_URL);
     }
@@ -176,8 +209,10 @@ export class AuthController {
 @Controller()
 export class MeController {
     constructor(
+        @Inject(ENV) private readonly env: Env,
         private readonly auth: AuthService,
         private readonly memberships: MembershipService,
+        private readonly platformAccess: PlatformAccess,
         private readonly profiles: ProfileService,
     ) {}
 
@@ -209,13 +244,21 @@ export class MeController {
         return this.memberships.workspacesOf(principal.userId);
     }
 
+    /**
+     * A further workspace of the caller's own. Anyone signed in may when sign-up is `open`;
+     * otherwise only a platform admin (P0-14) — a closed deployment must not let any account mint
+     * workspaces. A platform admin creating one for someone else uses `POST /platform/workspaces`.
+     */
     @Post('workspaces')
     @Returns(workspaceView)
-    createWorkspace(
+    async createWorkspace(
         @Body() body: CreateWorkspaceDto,
         @CurrentPrincipal() principal: Principal,
     ): Promise<WorkspaceView> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key cannot create workspaces');
+        if (this.env.SIGNUP_MODE !== 'open' && !(await this.platformAccess.isPlatformAdmin(principal))) {
+            throw new PlatformForbidden('creating a workspace is for platform admins on this server');
+        }
         return this.auth.createWorkspace(principal.userId, body.name);
     }
 }

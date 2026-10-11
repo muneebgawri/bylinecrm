@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
+import { PlatformAccess } from '../platform/platform-access.service';
 import { MembersService } from '../workspace/members.service';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
@@ -48,13 +49,14 @@ import { SessionService } from './session.service';
         ProfileService,
         RolesService,
         MembersService,
+        PlatformAccess,
         { provide: APP_PIPE, useClass: ZodValidationPipe },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_GUARD, useClass: CsrfGuard },
         { provide: APP_GUARD, useClass: WorkspaceGuard },
         { provide: APP_GUARD, useClass: RequiresGuard },
     ],
-    exports: [AuthService, SessionService, ApiKeyService, MembershipService, RolesService],
+    exports: [AuthService, SessionService, ApiKeyService, MembershipService, RolesService, PlatformAccess],
 })
 export class AuthModule implements NestModule {
     configure(consumer: MiddlewareConsumer): void {

@@ -26,6 +26,7 @@
         "@tanstack/react-table": "^8",
         "@tanstack/react-virtual": "^3",
         "@tiptap/extension-link": "^3",
+        "@tiptap/pm": "^3",
         "@tiptap/react": "^3",
         "@tiptap/starter-kit": "^3",
         "lucide-react": "^1.53.0",

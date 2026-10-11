@@ -57,6 +57,7 @@ describe('route manifest', () => {
     it('puts every signed-in route behind a sign-in guard', () => {
         // Outside a workspace the guard is RequireAuth, a pathless layout route ("(layout)").
         expect(matched(paths.workspaces)[0]).toBe('(layout)');
+        expect(matched(paths.platformWorkspaces)[0]).toBe('(layout)');
         // Inside one it is the shell itself (useAuthGate): it draws its frame at once and holds the
         // content area until the person is known (P1-UI-10, FR-CRMS-UI-7).
         for (const path of [paths.home(ws), paths.settingsRoles(ws), paths.person(ws, ws)]) {
@@ -65,5 +66,15 @@ describe('route manifest', () => {
             expect((chain[0]?.route.element as { type?: unknown } | undefined)?.type, path).toBe(AppShell);
         }
         expect(matched(paths.signIn)[0]).toBe(paths.signIn);
+    });
+
+    it('#102: loads the signed-out pages on first visit, outside the first load', () => {
+        // A static `element` is in the entry chunk; a `lazy` route is its own chunk.
+        for (const path of [paths.signIn, paths.signUp, paths.authCallback]) {
+            const route = (matchRoutes(routes, path) ?? []).at(-1)?.route;
+            expect(route?.element, path).toBeUndefined();
+            expect(typeof route?.lazy, path).toBe('function');
+            expect(route?.hydrateFallbackElement, path).toBeDefined();
+        }
     });
 });

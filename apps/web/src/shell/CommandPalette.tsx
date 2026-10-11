@@ -9,13 +9,17 @@ import {
     isStringArray,
     usePersistedState,
 } from '@bylinecrm/ui';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useCommands, type Command } from '../commands/registry';
 import { formatShortcut } from '../commands/shortcuts';
 import { PALETTE_RECENTS_KEY, PALETTE_RECENTS_LIMIT } from './storage';
 
-/** The palette's groups in display order (mockup v3); a command's `group` must be one of these. */
-export const PALETTE_GROUPS = ['Suggested', 'Go to', 'Create', 'Account'] as const;
+/**
+ * The palette's groups in display order (mockup v3); a command's `group` must be one of these. The
+ * record in front (a drawer, else the page) lists its own actions first — "Email this person",
+ * "Add a note" — under `useRecordCommands`' groups.
+ */
+export const PALETTE_GROUPS = ['Suggested', 'This panel', 'This record', 'Go to', 'Create', 'Account'] as const;
 export type PaletteGroup = (typeof PALETTE_GROUPS)[number];
 
 export interface CommandPaletteProps {
@@ -24,7 +28,7 @@ export interface CommandPaletteProps {
 }
 
 /**
- * ⌘K. Lists every available registered command grouped Suggested / Go to / Create / Account;
+ * ⌘K. Lists every available registered command grouped as `PALETTE_GROUPS` orders them;
  * "Suggested" is the commands run most recently (persisted per viewer). Enter runs, Esc closes.
  */
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
@@ -39,16 +43,29 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         commands: available.filter((c) => c.group === group),
     }));
 
+    // A command runs once the palette has closed and let go of focus, so one that moves focus (into
+    // the composer, onto the owner field) keeps it instead of having it handed back to the trigger.
+    const chosen = useRef<Command | null>(null);
     const run = (command: Command) => {
-        onOpenChange(false);
+        chosen.current = command;
         setRecents((current) =>
             [command.id, ...current.filter((id) => id !== command.id)].slice(0, PALETTE_RECENTS_LIMIT),
         );
-        command.run();
+        onOpenChange(false);
     };
 
     return (
-        <CommandDialog open={open} onOpenChange={onOpenChange}>
+        <CommandDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            onCloseAutoFocus={(event) => {
+                const command = chosen.current;
+                if (!command) return;
+                chosen.current = null;
+                event.preventDefault();
+                command.run();
+            }}
+        >
             <CommandInput placeholder="Search for a page, a record or an action…" />
             <CommandList>
                 <CommandEmpty>Nothing matches.</CommandEmpty>

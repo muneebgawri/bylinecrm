@@ -1,3 +1,4 @@
+import { DEFAULT_SIGNUP_MODE, SIGNUP_MODES } from '@bylinecrm/shared';
 import { z } from 'zod';
 
 /** One OIDC issuer the operator trusts for sign-in (NewswireOS, a customer's provider, …). */
@@ -105,6 +106,35 @@ export const envSchema = z
          * (no N+1) need it.
          */
         DB_QUERY_EVENTS: flag('0'),
+        /**
+         * Who may sign up and create a workspace (P0-14): `closed` (the default — nobody; platform
+         * admins create workspaces and invite their owners), `invite` (sign-up needs a platform
+         * sign-up invitation) or `open` (anyone). Any other value stops boot. Member invitations work
+         * in every mode.
+         */
+        SIGNUP_MODE: z.enum(SIGNUP_MODES).default(DEFAULT_SIGNUP_MODE),
+        /**
+         * The platform admins: comma-separated addresses, compared lower-cased against a signed-in
+         * user's **verified** email on every request (no stored flag — removing an address takes
+         * effect on the next request). Absent or empty means no platform admins, a valid and safe
+         * state: in `closed` mode nobody can then create a workspace through the API.
+         */
+        PLATFORM_ADMIN_EMAILS: z
+            .string()
+            .optional()
+            .transform((raw, ctx) => {
+                const emails = (raw ?? '')
+                    .split(',')
+                    .map((part) => part.trim().toLowerCase())
+                    .filter(Boolean);
+                for (const email of emails) {
+                    if (!z.email().safeParse(email).success) {
+                        ctx.addIssue({ code: 'custom', message: `not an email address: ${email}` });
+                        return z.NEVER;
+                    }
+                }
+                return Object.freeze([...new Set(emails)]);
+            }),
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
