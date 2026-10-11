@@ -67,4 +67,14 @@ describe('route manifest', () => {
         }
         expect(matched(paths.signIn)[0]).toBe(paths.signIn);
     });
+
+    it('#102: loads the signed-out pages on first visit, outside the first load', () => {
+        // A static `element` is in the entry chunk; a `lazy` route is its own chunk.
+        for (const path of [paths.signIn, paths.signUp, paths.authCallback]) {
+            const route = (matchRoutes(routes, path) ?? []).at(-1)?.route;
+            expect(route?.element, path).toBeUndefined();
+            expect(typeof route?.lazy, path).toBe('function');
+            expect(route?.hydrateFallbackElement, path).toBeDefined();
+        }
+    });
 });
