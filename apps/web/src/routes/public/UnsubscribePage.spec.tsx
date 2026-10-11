@@ -42,6 +42,7 @@ describe('FR-CRMS-7 the unsubscribe page', { timeout: 20_000 }, () => {
         open();
         expect(await screen.findByText('d•••@acme.example')).toBeInTheDocument();
         expect(seen.filter((r) => r.method === 'POST')).toHaveLength(0);
+        expect(document.title).toBe('Unsubscribe');
         await userEvent.click(screen.getByRole('button', { name: 'Unsubscribe' }));
         expect(await screen.findByRole('heading', { name: 'You’re unsubscribed' })).toBeInTheDocument();
         await waitFor(() => expect(seen.filter((r) => r.method === 'POST')).toHaveLength(1));

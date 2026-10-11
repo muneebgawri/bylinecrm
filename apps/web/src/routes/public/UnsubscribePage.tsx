@@ -1,6 +1,6 @@
 import { Button, Skeleton } from '@bylinecrm/ui';
 import { CircleCheck } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { ApiError } from '../../api/client';
 import { useConfirmUnsubscribe, useUnsubscribeStatus } from '../../api/queries';
 import { failureText } from '../../lib/errors';
@@ -16,6 +16,10 @@ export function UnsubscribePage() {
     const token = useUnsubscribeToken();
     const status = useUnsubscribeStatus(token);
     const confirm = useConfirmUnsubscribe(token);
+    // The tab names the page, not the product: the reader received someone else's mail.
+    useEffect(() => {
+        document.title = 'Unsubscribe';
+    }, []);
 
     if (status.isPending) {
         return (
