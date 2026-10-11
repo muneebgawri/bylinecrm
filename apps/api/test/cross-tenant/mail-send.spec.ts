@@ -613,14 +613,19 @@ describe('mail send and reply detection', () => {
         });
 
         it('recognises a reply in the same Gmail thread without In-Reply-To', async () => {
-            const { providerThreadId } = await owner.mailOutbound.findUniqueOrThrow({ where: { id: ours.id } });
+            const { providerThreadId, createdAt } = await owner.mailOutbound.findUniqueOrThrow({
+                where: { id: ours.id },
+            });
             expect(providerThreadId).not.toBeNull();
+            // Answered within the same second as the send: the Date header carries whole seconds only.
+            const sameSecond = new Date(Math.floor(createdAt.getTime() / 1000) * 1000);
             gmail.deliver(adminEmail, {
                 from: dana,
                 to: [adminEmail],
                 subject: 'one more thing',
                 text: 'Also, the deck.',
                 threadId: providerThreadId!,
+                date: sameSecond,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(ofType('email.replied')).toHaveLength(2);

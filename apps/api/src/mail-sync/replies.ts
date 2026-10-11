@@ -92,7 +92,8 @@ export async function replyEventFor(
                OR (o.mailbox_id = ${mailbox.id}::uuid
                    AND o.provider_thread_id = ${inbound.providerThreadId}
                    -- In the thread is not enough: mail sync stores late may predate our send.
-                   AND ${inbound.sentAt} >= o.created_at))
+                   -- A Date header has whole seconds (RFC 5322), so compare at that precision.
+                   AND ${inbound.sentAt} >= date_trunc('second', o.created_at)))
         ORDER BY (${byHeader}) DESC, o.sent_at DESC NULLS LAST, o.id
         LIMIT 1`;
     if (!send) return null;
