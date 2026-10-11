@@ -40,6 +40,7 @@ import {
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
 import type { MailOutboundView, MailRecordSendsPage, MailScheduledPage, MailSendAccepted } from './responses';
+import { PoolRefusal, SendingPoolService } from '../sending-pool/sending-pool.service';
 import { RecipientSuppressed } from '../suppression/suppression.service';
 import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
 
@@ -148,6 +149,7 @@ export class MailSendService {
         private readonly sync: MailSyncService,
         private readonly roles: RolesService,
         private readonly events: DomainEvents,
+        private readonly pool: SendingPoolService,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
         @InjectQueue(MAIL_SEND_QUEUE) private readonly queue: Queue,
     ) {}
@@ -478,12 +480,21 @@ export class MailSendService {
         }
 
         const startedBefore = row.status === 'sending';
-        await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailOutbound.update({
-                where: { id },
-                data: { status: 'sending', attempts: { increment: 1 }, lastAttemptAt: new Date() },
-            }),
-        );
+        // The pool's gate (P3-2) and the move to `sending` are one step, with the mailbox locked: a
+        // pool send is counted against its mailbox's allowance as it is claimed. A refusal fails it.
+        try {
+            await this.rls.withWorkspace(workspaceId, async (tx) => {
+                await this.pool.claim(tx, mailbox.id, id, startedBefore);
+                await tx.mailOutbound.update({
+                    where: { id },
+                    data: { status: 'sending', attempts: { increment: 1 }, lastAttemptAt: new Date() },
+                });
+            });
+        } catch (error) {
+            if (!(error instanceof PoolRefusal)) throw error;
+            await this.markFailed(workspaceId, id, refusalRecord(error, Date.now()));
+            return 'failed';
+        }
         const threadId = await this.parentThread(workspaceId, row);
 
         let sent: { message: GmailSent; found: boolean };

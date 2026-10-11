@@ -135,6 +135,7 @@ export const keys = {
         ['w', workspaceId, 'mailboxes', mailboxId, 'sync'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
     suppressions: (workspaceId: string) => ['w', workspaceId, 'suppressions'] as const,
+    sendingPool: (workspaceId: string) => ['w', workspaceId, 'sending-pool'] as const,
     suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,

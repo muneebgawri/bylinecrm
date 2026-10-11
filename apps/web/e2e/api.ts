@@ -70,6 +70,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/mail/oauth-client$`), () => data.oauthClient],
     [new RegExp(`^${W}/mail/blocklist$`), () => data.blocklist],
     [new RegExp(`^${W}/suppressions$`), () => data.page(data.suppressions)],
+    [new RegExp(`^${W}/sending-pool$`), () => data.sendingPool],
     [new RegExp(`^/api/unsubscribe/${ID}/status$`), () => data.unsubscribeStatus],
     [new RegExp(`^${W}/mailboxes/${ID}/sync$`), (m) => data.mailboxSync(m[1] ?? '')],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],

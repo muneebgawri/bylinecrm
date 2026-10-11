@@ -80,6 +80,14 @@ import type {
     SuppressionListQuery,
     SuppressionPage,
     SuppressionView,
+    SendingPoolView,
+    SendingPoolSettingsView,
+    PoolMailboxHealthView,
+    SendingDomainView,
+    UpdateSendingPoolSettingsInput,
+    SetMailboxPoolInput,
+    ResumeMailboxInput,
+    UpdateSendingDomainInput,
     CreateSuppressionInput,
     RemoveSuppressionInput,
     UnsubscribeStatusView,
@@ -570,6 +578,26 @@ export const suppressions = {
         request<SuppressionView>('POST', workspacePath(workspaceId, '/suppressions'), { body: input }),
     remove: (workspaceId: string, suppressionId: string, input: RemoveSuppressionInput) =>
         request<void>('POST', workspacePath(workspaceId, `/suppressions/${suppressionId}/remove`), { body: input }),
+};
+
+/** The sending pool (P3-2): health, settings, a mailbox's cap and resume, sending domains. */
+export const sendingPool = {
+    view: (workspaceId: string, signal?: AbortSignal) =>
+        request<SendingPoolView>('GET', workspacePath(workspaceId, '/sending-pool'), { signal }),
+    updateSettings: (workspaceId: string, input: UpdateSendingPoolSettingsInput) =>
+        request<SendingPoolSettingsView>('PUT', workspacePath(workspaceId, '/sending-pool/settings'), { body: input }),
+    setMailboxCap: (workspaceId: string, mailboxId: string, input: SetMailboxPoolInput) =>
+        request<PoolMailboxHealthView>('PUT', workspacePath(workspaceId, `/mailboxes/${mailboxId}/pool`), {
+            body: input,
+        }),
+    resume: (workspaceId: string, mailboxId: string, input: ResumeMailboxInput) =>
+        request<PoolMailboxHealthView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/resume`), {
+            body: input,
+        }),
+    updateDomain: (workspaceId: string, domainId: string, input: UpdateSendingDomainInput) =>
+        request<SendingDomainView>('PUT', workspacePath(workspaceId, `/sending-domains/${domainId}`), { body: input }),
+    checkDomain: (workspaceId: string, domainId: string) =>
+        request<SendingDomainView>('POST', workspacePath(workspaceId, `/sending-domains/${domainId}/check`)),
 };
 
 /** A recipient's unsubscribe link (P3-1): public, no session — the token is the proof. */

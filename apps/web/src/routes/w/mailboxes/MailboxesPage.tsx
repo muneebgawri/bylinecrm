@@ -31,6 +31,7 @@ import { leaveFor } from '../../../lib/leaveFor';
 import { useWorkspaceId } from '../../params';
 import { CREATE_PARAM } from '../../paths';
 import { BlocklistSection } from './BlocklistSection';
+import { PoolHealthSection } from './PoolHealthSection';
 import { ConnectMailboxDialog, PURPOSE_LABEL } from './ConnectMailboxDialog';
 import { CONNECT_RESULT_MESSAGES, MAILBOX_CONNECT_RESULT_PARAM, connectResultFrom } from './connectResults';
 
@@ -42,8 +43,8 @@ const CHECK_PROBLEM: Record<NonNullable<MailboxCheckView['problem']>, string> = 
 
 /**
  * The workspace's Google mailboxes (doc 50 §E, FR-CRMS-1, FR-CRMS-2): where each stands, its sync,
- * and the actions its owner (or an admin) may take. Sending health — limits, bounces, warm-up — is
- * outreach's (Phase 3) and is not drawn here, not even as placeholders.
+ * the actions its owner (or an admin) may take, and — for people who run outreach — the sending
+ * pool's health (P3-2): allowance, warm-up, sending domain and pauses.
  */
 export function MailboxesPage() {
     const workspaceId = useWorkspaceId();
@@ -106,9 +107,7 @@ export function MailboxesPage() {
                 mailboxes={list.data}
                 justConnected={result === 'connected' ? newestConnected(list.data ?? []) : null}
             />
-            <p className="mt-3 mb-0 text-[13px] text-text-muted">
-                Sending health arrives with outreach: per-mailbox limits, bounce and complaint rates, and warm-up.
-            </p>
+            <PoolHealthSection workspaceId={workspaceId} />
             <BlocklistSection workspaceId={workspaceId} />
             {manage && (
                 <ConnectMailboxDialog workspaceId={workspaceId} open={connecting} onOpenChange={setConnecting} />

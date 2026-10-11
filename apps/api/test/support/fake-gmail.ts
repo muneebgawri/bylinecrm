@@ -10,6 +10,7 @@ import {
     type GmailSent,
 } from '../../src/mail-sync/gmail.port';
 import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
+import { dsnPayload, type DsnFixture } from './dsn';
 import type { FakeGoogleOAuth } from './fake-google-oauth';
 
 /** A message to put in a fixture mailbox. Defaults make a plain inbound message from `from`. */
@@ -113,6 +114,30 @@ export class FakeGmail implements GmailPort {
             snippet: (fixture.text ?? fixture.html ?? '').slice(0, SNIPPET_CHARS),
             internalDate: String(date.getTime()),
             payload,
+        });
+        box.order.push(id);
+        box.historyId += 1;
+        box.history.push({ historyId: box.historyId, messageId: id });
+        return { id, threadId };
+    }
+
+    /**
+     * Puts a bounce report (a delivery status notification, `dsn.ts`) in a mailbox, as Gmail returns
+     * one to the mailbox a message went from (P3-2).
+     */
+    deliverBounce(email: string, fixture: Omit<DsnFixture, 'to'>, date = new Date()): { id: string; threadId: string } {
+        const box = this.box(email);
+        const id = `msg-${email}-${box.nextMessage++}`;
+        const threadId = `thr-${email}-${box.nextThread++}`;
+        const { headers, payload } = dsnPayload({ ...fixture, to: email }, date);
+        headers.push({ name: 'Message-ID', value: `<${id}@mx.google.com>` });
+        box.messages.set(id, {
+            id,
+            threadId,
+            labelIds: ['INBOX'],
+            snippet: 'Address not found',
+            internalDate: String(date.getTime()),
+            payload: { ...payload, headers },
         });
         box.order.push(id);
         box.historyId += 1;

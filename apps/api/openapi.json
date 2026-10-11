@@ -4106,6 +4106,536 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/sending-pool": {
+            "get": {
+                "operationId": "sendingPool_view",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SendingPool"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/sending-pool/settings": {
+            "put": {
+                "operationId": "sendingPool_updateSettings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateSendingPoolSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SendingPoolSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/mailboxes/{mailboxId}/pool": {
+            "put": {
+                "operationId": "poolMailboxes_setCap",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetMailboxPoolDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PoolMailboxHealth"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/mailboxes/{mailboxId}/resume": {
+            "post": {
+                "operationId": "poolMailboxes_resume",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResumeMailboxDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PoolMailboxHealth"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/sending-domains": {
+            "get": {
+                "operationId": "sendingDomains_list",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/SendingDomain"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/sending-domains/{domainId}": {
+            "put": {
+                "operationId": "sendingDomains_update",
+                "parameters": [
+                    {
+                        "name": "domainId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateSendingDomainDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SendingDomain"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/sending-domains/{domainId}/check": {
+            "post": {
+                "operationId": "sendingDomains_check",
+                "parameters": [
+                    {
+                        "name": "domainId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SendingDomain"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
         "/api/w/{workspaceId}/suppressions": {
             "get": {
                 "operationId": "suppressions_list",
@@ -14281,6 +14811,100 @@
                 "required": ["sendAt"],
                 "additionalProperties": false
             },
+            "UpdateSendingPoolSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "dailyCap": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    },
+                    "warmupStartPerDay": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    },
+                    "warmupDays": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90
+                    },
+                    "jitterMinSeconds": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3600
+                    },
+                    "jitterMaxSeconds": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3600
+                    },
+                    "bouncePauseBps": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                    },
+                    "complaintPauseBps": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                    },
+                    "rateMinSample": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                    },
+                    "rateWindowDays": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90
+                    }
+                },
+                "required": [
+                    "dailyCap",
+                    "warmupStartPerDay",
+                    "warmupDays",
+                    "jitterMinSeconds",
+                    "jitterMaxSeconds",
+                    "bouncePauseBps",
+                    "complaintPauseBps",
+                    "rateMinSample",
+                    "rateWindowDays"
+                ]
+            },
+            "SetMailboxPoolDto": {
+                "type": "object",
+                "properties": {
+                    "dailyCap": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500,
+                        "nullable": true
+                    }
+                },
+                "required": ["dailyCap"]
+            },
+            "ResumeMailboxDto": {
+                "type": "object",
+                "properties": {
+                    "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    }
+                },
+                "required": ["note"]
+            },
+            "UpdateSendingDomainDto": {
+                "type": "object",
+                "properties": {
+                    "dkimSelector": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9](?:[a-z0-9_-]{0,62})(?:\\.[a-z0-9](?:[a-z0-9_-]{0,62}))*$"
+                    }
+                },
+                "required": ["dkimSelector"]
+            },
             "CreateSuppressionDto": {
                 "type": "object",
                 "properties": {
@@ -16676,7 +17300,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 43,
+                        "maxItems": 46,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -16718,10 +17342,13 @@
                                 "email.replied",
                                 "email.scheduled",
                                 "email.cancelled",
+                                "email.bounced",
                                 "meeting.booked",
                                 "mailbox.connected",
                                 "mailbox.disconnected",
                                 "mailbox.reconnect_needed",
+                                "mailbox.paused",
+                                "mailbox.resumed",
                                 "suppression.added",
                                 "suppression.removed"
                             ]
@@ -16748,7 +17375,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 43,
+                        "maxItems": 46,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -16790,10 +17417,13 @@
                                 "email.replied",
                                 "email.scheduled",
                                 "email.cancelled",
+                                "email.bounced",
                                 "meeting.booked",
                                 "mailbox.connected",
                                 "mailbox.disconnected",
                                 "mailbox.reconnect_needed",
+                                "mailbox.paused",
+                                "mailbox.resumed",
                                 "suppression.added",
                                 "suppression.removed"
                             ]
@@ -17043,6 +17673,9 @@
                             "unsupported_media_type",
                             "unprocessable",
                             "recipient.suppressed",
+                            "mailbox.paused",
+                            "mailbox.domain_unverified",
+                            "mailbox.cap_reached",
                             "rate_limited",
                             "bad_request",
                             "not_implemented",
@@ -18307,6 +18940,290 @@
                     }
                 },
                 "required": ["recipient", "unsubscribed"]
+            },
+            "SendingDomain": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "description": "Lower case: what follows the @ of a pool mailbox."
+                    },
+                    "dkimSelector": {
+                        "type": "string",
+                        "description": "Checked at `<selector>._domainkey.<domain>`.",
+                        "example": "google"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["unchecked", "pass", "fail"],
+                        "description": "A pool mailbox sends only while its domain is `pass` (FR-CRMS-13)."
+                    },
+                    "lastCheck": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                            "spf": {
+                                "type": "object",
+                                "properties": {
+                                    "outcome": {
+                                        "type": "string",
+                                        "enum": ["pass", "fail"]
+                                    },
+                                    "message": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["outcome", "message"]
+                            },
+                            "dkim": {
+                                "type": "object",
+                                "properties": {
+                                    "outcome": {
+                                        "type": "string",
+                                        "enum": ["pass", "fail"]
+                                    },
+                                    "message": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["outcome", "message"]
+                            },
+                            "dmarc": {
+                                "type": "object",
+                                "properties": {
+                                    "outcome": {
+                                        "type": "string",
+                                        "enum": ["pass", "fail"]
+                                    },
+                                    "message": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["outcome", "message"]
+                            }
+                        },
+                        "required": ["spf", "dkim", "dmarc"]
+                    },
+                    "checkedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "nextCheckAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["id", "domain", "dkimSelector", "status", "lastCheck", "checkedAt", "nextCheckAt"]
+            },
+            "MailboxPause": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "enum": ["bounce_rate", "complaint_rate"]
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "rateBps": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Basis points (1/100 of a percent) when the pause was decided."
+                    },
+                    "thresholdBps": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "sends": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["code", "message", "rateBps", "thresholdBps", "sends", "at"]
+            },
+            "SendingPoolSettings": {
+                "type": "object",
+                "properties": {
+                    "dailyCap": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "warmupStartPerDay": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "warmupDays": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "jitterMinSeconds": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "jitterMaxSeconds": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "bouncePauseBps": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "complaintPauseBps": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "rateMinSample": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "rateWindowDays": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    }
+                },
+                "required": [
+                    "dailyCap",
+                    "warmupStartPerDay",
+                    "warmupDays",
+                    "jitterMinSeconds",
+                    "jitterMaxSeconds",
+                    "bouncePauseBps",
+                    "complaintPauseBps",
+                    "rateMinSample",
+                    "rateWindowDays"
+                ]
+            },
+            "PoolMailboxHealth": {
+                "type": "object",
+                "properties": {
+                    "mailboxId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["connected", "reconnect_needed", "disconnected"]
+                    },
+                    "dailyCapOverride": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "dailyCap": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "warmupDay": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "warmupLimit": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "allowance": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "min(cap, warm-up limit) for the rolling 24 hours."
+                    },
+                    "used": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Sends that went or are going in the last 24 hours."
+                    },
+                    "paused": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MailboxPause"
+                            }
+                        ]
+                    },
+                    "domain": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SendingDomain"
+                            }
+                        ]
+                    },
+                    "canSend": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "mailboxId",
+                    "email",
+                    "status",
+                    "dailyCapOverride",
+                    "dailyCap",
+                    "warmupDay",
+                    "warmupLimit",
+                    "allowance",
+                    "used",
+                    "paused",
+                    "domain",
+                    "canSend"
+                ]
+            },
+            "SendingPool": {
+                "type": "object",
+                "properties": {
+                    "settings": {
+                        "$ref": "#/components/schemas/SendingPoolSettings"
+                    },
+                    "mailboxes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PoolMailboxHealth"
+                        }
+                    },
+                    "domains": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SendingDomain"
+                        }
+                    }
+                },
+                "required": ["settings", "mailboxes", "domains"]
             },
             "EmailTemplate": {
                 "type": "object",

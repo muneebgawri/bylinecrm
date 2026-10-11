@@ -172,6 +172,16 @@ export type UnsubscribeStatusView = Schemas['UnsubscribeStatus'];
 export type SuppressionListQuery = Loose<
     NonNullable<paths['/api/w/{workspaceId}/suppressions']['get']['parameters']['query']>
 >;
+// ---- The sending pool (P3-2) -----------------------------------------------------------------
+export type SendingPoolView = Schemas['SendingPool'];
+export type SendingPoolSettingsView = Schemas['SendingPoolSettings'];
+export type PoolMailboxHealthView = Schemas['PoolMailboxHealth'];
+export type MailboxPauseView = Schemas['MailboxPause'];
+export type SendingDomainView = Schemas['SendingDomain'];
+export type UpdateSendingPoolSettingsInput = Loose<Schemas['UpdateSendingPoolSettingsDto']>;
+export type ResumeMailboxInput = Loose<Schemas['ResumeMailboxDto']>;
+export type SetMailboxPoolInput = Loose<Schemas['SetMailboxPoolDto']>;
+export type UpdateSendingDomainInput = Loose<Schemas['UpdateSendingDomainDto']>;
 // ---- Sending, scheduling and reading mail on a record (P2-3, P2-5; P2-UI-1) --------------------
 export type SendMailInput = Loose<Schemas['SendMailDto']>;
 export type MailSendAcceptedView = Schemas['MailSendAccepted'];
