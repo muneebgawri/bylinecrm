@@ -167,6 +167,16 @@ export async function phoneTargets(page: Page, scope?: string): Promise<Finding[
 export const PRIMARY_DIALOG_TRIGGER = '[data-primary-dialog]';
 /** The open dialog or sheet: every one in the design system is a Radix dialog. */
 export const OPEN_DIALOG = '[role="dialog"]';
+/**
+ * Popups a page offers on a phone, opened and checked like the dialog: the first menu trigger in the
+ * page's main content (row actions — the phone's way to reorder or delete, since drag handles are
+ * hidden there), and the first picker inside the open dialog. Their items are touch targets too.
+ */
+export const MENU_TRIGGER = 'main [aria-haspopup="menu"]';
+export const OPEN_MENU = '[role="menu"]';
+/** A select's trigger is a button; a search-as-you-type picker (an input) opens only after typing. */
+export const PICKER_TRIGGER = '[role="dialog"] button[role="combobox"]';
+export const OPEN_LISTBOX = '[role="listbox"]';
 
 /**
  * On a phone, records are stacked cards, never a table (FR-CRMS-UI-12): a table that scrolls

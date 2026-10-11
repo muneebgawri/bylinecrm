@@ -4,11 +4,15 @@ import { installApi } from './api';
 import {
     aboveFold,
     axe,
+    MENU_TRIGGER,
     OPEN_DIALOG,
+    OPEN_LISTBOX,
+    OPEN_MENU,
     phoneBottomBar,
     phoneTables,
     phoneTopBarSpill,
     phoneTargets,
+    PICKER_TRIGGER,
     PRIMARY_DIALOG_TRIGGER,
     primaryAction,
     sidewaysScroll,
@@ -71,6 +75,7 @@ for (const state of STATES) {
         if (phone) {
             const theme = testInfo.project.use.colorScheme ?? 'light';
             await expect(page).toHaveScreenshot(`${state.name}-${theme}.png`);
+            findings.push(...(await menuFindings(page, inFlight)));
             findings.push(...(await primaryDialogFindings(page, inFlight)));
         }
         testInfo.annotations.push({
@@ -105,8 +110,37 @@ async function primaryDialogFindings(page: Page, inFlight: () => number): Promis
     }
     await settle(page, inFlight);
     const findings = await phoneTargets(page, OPEN_DIALOG);
+    findings.push(...(await popupFindings(page, PICKER_TRIGGER, OPEN_LISTBOX)));
     await page.keyboard.press('Escape');
     await expect(page.locator(OPEN_DIALOG)).toHaveCount(0);
+    return findings;
+}
+
+/** Opens the first menu in the page's main content (row actions), checks its items, closes it. */
+async function menuFindings(page: Page, inFlight: () => number): Promise<Finding[]> {
+    if ((await page.locator(OPEN_DIALOG).count()) > 0) return [];
+    const findings = await popupFindings(page, MENU_TRIGGER, OPEN_MENU);
+    await settle(page, inFlight);
+    return findings;
+}
+
+/**
+ * Opens the first visible `trigger`, runs the phone touch rules inside the `popup` it opens, and
+ * closes it with Escape (which leaves an enclosing dialog open). No trigger, nothing to check; a
+ * trigger that opens nothing is a finding.
+ */
+async function popupFindings(page: Page, trigger: string, popup: string): Promise<Finding[]> {
+    const first = page.locator(trigger).first();
+    if ((await first.count()) === 0 || !(await first.isVisible()) || (await first.isDisabled())) return [];
+    await first.click();
+    try {
+        await expect(page.locator(popup).last()).toBeVisible();
+    } catch {
+        return [{ check: 'touch-target', detail: `${trigger} opened no ${popup}` }];
+    }
+    const findings = await phoneTargets(page, popup);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(popup)).toHaveCount(0);
     return findings;
 }
 
