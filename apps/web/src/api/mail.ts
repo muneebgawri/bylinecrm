@@ -1,13 +1,47 @@
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { mail } from './endpoints';
+import { request } from './client';
+import { query, workspacePath } from './endpoints';
 import { keys } from './queries';
-import type { MailOutboundView, MailSendAcceptedView, RescheduleMailInput, SendMailInput } from './types';
+import type {
+    MailOutboundView,
+    MailScheduledPage,
+    MailSendAcceptedView,
+    MailThreadView,
+    RescheduleMailInput,
+    SendMailInput,
+} from './types';
 
 /**
  * Mail on a record (P2-UI-1): sending, following a send, scheduling, and reading a thread. They
  * live apart from `queries.ts` so they load with the record pages, not with every page
- * (FR-CRMS-UI-10); their cache keys are in `keys` with every other.
+ * (FR-CRMS-UI-10); their cache keys are in `keys` with every other. The endpoints are here too, for
+ * the same reason (the first-load budget, FR-CRMS-UI-10).
  */
+
+/**
+ * Mail from a record (P2-3, P2-5): a send is accepted (`202`) and happens in a job, so its progress
+ * is read back at `messages/:id`; a scheduled one can be moved or called off until it goes. Threads
+ * are what sync stored (P2-2): bodies only for the owner of a personal mailbox, metadata otherwise.
+ */
+export const mail = {
+    send: (workspaceId: string, input: SendMailInput) =>
+        request<MailSendAcceptedView>('POST', workspacePath(workspaceId, '/mail/send'), { body: input }),
+    message: (workspaceId: string, messageId: string, signal?: AbortSignal) =>
+        request<MailOutboundView>('GET', workspacePath(workspaceId, `/mail/messages/${messageId}`), { signal }),
+    reschedule: (workspaceId: string, messageId: string, input: RescheduleMailInput) =>
+        request<MailOutboundView>('PATCH', workspacePath(workspaceId, `/mail/messages/${messageId}`), { body: input }),
+    cancel: (workspaceId: string, messageId: string) =>
+        request<MailOutboundView>('POST', workspacePath(workspaceId, `/mail/messages/${messageId}/cancel`)),
+    /** The caller's scheduled sends (an admin's: everyone's), soonest first, a page at a time. */
+    scheduled: (workspaceId: string, params: { limit: number; cursor?: string | undefined }, signal?: AbortSignal) =>
+        request<MailScheduledPage>(
+            'GET',
+            workspacePath(workspaceId, `/mail/scheduled${query({ limit: params.limit, cursor: params.cursor })}`),
+            { signal },
+        ),
+    thread: (workspaceId: string, threadId: string, signal?: AbortSignal) =>
+        request<MailThreadView>('GET', workspacePath(workspaceId, `/mail/threads/${threadId}`), { signal }),
+};
 
 /** How many scheduled sends one page holds: the API's largest page, soonest first. */
 export const MAIL_SCHEDULED_PAGE = 100;

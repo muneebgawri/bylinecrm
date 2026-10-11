@@ -44,10 +44,6 @@ import type {
     MailboxSyncTriggeredView,
     MailboxSyncView,
     MailboxView,
-    MailOutboundView,
-    MailScheduledPage,
-    MailSendAcceptedView,
-    MailThreadView,
     MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
@@ -71,12 +67,10 @@ import type {
     PutMailSettingsInput,
     PutOAuthClientInput,
     RenderedEmailView,
-    RescheduleMailInput,
     RoleView,
     RuleView,
     SavedView,
     SearchResults,
-    SendMailInput,
     SignupInput,
     StageHistoryEntry,
     TaskCreateInput,
@@ -103,7 +97,7 @@ export function targetParam(target: RecordTarget): string {
 }
 
 /** Builds `?a=b&c=d` from the defined values only. */
-function query(params: Record<string, string | number | undefined>): string {
+export function query(params: Record<string, string | number | undefined>): string {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, String(value));
     const text = search.toString();
@@ -139,7 +133,7 @@ export type ExportBody = {
  * and nowhere else; a component never spells `/w/` itself.
  */
 
-const workspacePath = (workspaceId: string, rest: string) => `/w/${workspaceId}${rest}`;
+export const workspacePath = (workspaceId: string, rest: string) => `/w/${workspaceId}${rest}`;
 
 export const auth = {
     signup: (input: SignupInput) =>
@@ -553,29 +547,4 @@ export const blocklist = {
         request<BlocklistEntryCreatedView>('POST', workspacePath(workspaceId, '/mail/blocklist'), { body: input }),
     remove: (workspaceId: string, entryId: string) =>
         request<void>('DELETE', workspacePath(workspaceId, `/mail/blocklist/${entryId}`)),
-};
-
-/**
- * Mail from a record (P2-3, P2-5): a send is accepted (`202`) and happens in a job, so its progress
- * is read back at `messages/:id`; a scheduled one can be moved or called off until it goes. Threads
- * are what sync stored (P2-2): bodies only for the owner of a personal mailbox, metadata otherwise.
- */
-export const mail = {
-    send: (workspaceId: string, input: SendMailInput) =>
-        request<MailSendAcceptedView>('POST', workspacePath(workspaceId, '/mail/send'), { body: input }),
-    message: (workspaceId: string, messageId: string, signal?: AbortSignal) =>
-        request<MailOutboundView>('GET', workspacePath(workspaceId, `/mail/messages/${messageId}`), { signal }),
-    reschedule: (workspaceId: string, messageId: string, input: RescheduleMailInput) =>
-        request<MailOutboundView>('PATCH', workspacePath(workspaceId, `/mail/messages/${messageId}`), { body: input }),
-    cancel: (workspaceId: string, messageId: string) =>
-        request<MailOutboundView>('POST', workspacePath(workspaceId, `/mail/messages/${messageId}/cancel`)),
-    /** The caller's scheduled sends (an admin's: everyone's), soonest first, a page at a time. */
-    scheduled: (workspaceId: string, params: { limit: number; cursor?: string | undefined }, signal?: AbortSignal) =>
-        request<MailScheduledPage>(
-            'GET',
-            workspacePath(workspaceId, `/mail/scheduled${query({ limit: params.limit, cursor: params.cursor })}`),
-            { signal },
-        ),
-    thread: (workspaceId: string, threadId: string, signal?: AbortSignal) =>
-        request<MailThreadView>('GET', workspacePath(workspaceId, `/mail/threads/${threadId}`), { signal }),
 };

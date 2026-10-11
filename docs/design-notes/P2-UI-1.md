@@ -107,8 +107,10 @@ them; Esc closes the top one) — so a refresh or a shared link lands on the sam
 ## One of each
 
 `EmailFrame` (template preview + threads), `RichTextEditor` (+ `missingVariables`), `RecordPicker`,
-`ResponsivePanel`, `ConfirmDialog`, `fieldErrorAt`/`failureText`. Mail hooks live in `api/mail.ts` (loaded
-with the record chunk, not every page — initial JS stays under its budget); their keys are in `keys`.
+`ResponsivePanel`, `ConfirmDialog`, `fieldErrorAt`/`failureText`. Mail endpoints and hooks live in `api/mail.ts`
+(loaded with the record chunk, not every page), and the thread host is mounted by the record drawer's
+host (a chunk every workspace page loads after first paint) — so the shell's first load carries
+nothing for mail and initial JS stays under its 190 kB budget; their keys are in `keys`.
 `@tiptap/pm` became a direct dependency of `web` (it was already in the tree via Tiptap) for the
 decoration plugin.
 
