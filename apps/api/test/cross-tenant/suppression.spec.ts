@@ -213,7 +213,8 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
             .put(w('/settings/mail'))
             .send({
                 postalAddress: {
-                    street: '123 Main St',
+                    line1: '123 Main St',
+                    line2: null,
                     city: 'Austin',
                     region: 'TX',
                     postalCode: '78701',
@@ -315,6 +316,33 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
                 expect(res.status).toBe(409);
                 expect(err(res).code).toBe('conflict');
             }
+        });
+
+        it('lets the person’s own unsubscribe replace a liftable entry, so lifting a bounce cannot undo it', async () => {
+            const address = `bounced-then-unsubscribed-${stamp}@example.com`;
+            const bounce = await suppressions.suppress(workspace, {
+                address,
+                reason: 'hard_bounce',
+                source: 'provider',
+            });
+            const unsub = await suppressions.suppress(workspace, {
+                address,
+                reason: 'unsubscribe',
+                source: 'recipient',
+            });
+            expect(unsub.id).not.toBe(bounce.id);
+            expect(unsub).toMatchObject({ reason: 'unsubscribe', liftable: false });
+            const old = await owner.suppression.findUniqueOrThrow({ where: { id: bounce.id } });
+            expect(old.removedAt).not.toBeNull();
+            expect(old.removalNote).toBe('replaced by the person unsubscribing');
+            expect((await suppressions.check(workspace, [address])).get(address)?.reason).toBe('unsubscribe');
+            // A weaker reason after it changes nothing.
+            const again = await suppressions.suppress(workspace, {
+                address,
+                reason: 'hard_bounce',
+                source: 'provider',
+            });
+            expect(again.id).toBe(unsub.id);
         });
 
         it('lets a member without outreach rights neither read nor change the list; lifting needs an admin', async () => {

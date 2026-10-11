@@ -69,6 +69,12 @@ import type {
     TaskInput,
     TaskPage,
     TaskView,
+    SuppressionListQuery,
+    SuppressionPage,
+    SuppressionView,
+    CreateSuppressionInput,
+    RemoveSuppressionInput,
+    UnsubscribeStatusView,
     TemplateListQuery,
     TemplateVariablesView,
     TimelinePage,
@@ -518,6 +524,30 @@ export const mailboxes = {
 };
 
 /** Addresses and domains whose mail is never imported, and removed when added (P2-2). */
+/** The workspace's suppression list (P3-1, FR-CRMS-7). */
+export const suppressions = {
+    list: (workspaceId: string, params: SuppressionListQuery, signal?: AbortSignal) =>
+        request<SuppressionPage>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/suppressions${query({ q: params.q, reason: params.reason, cursor: params.cursor, limit: params.limit })}`,
+            ),
+            { signal },
+        ),
+    create: (workspaceId: string, input: CreateSuppressionInput) =>
+        request<SuppressionView>('POST', workspacePath(workspaceId, '/suppressions'), { body: input }),
+    remove: (workspaceId: string, suppressionId: string, input: RemoveSuppressionInput) =>
+        request<void>('POST', workspacePath(workspaceId, `/suppressions/${suppressionId}/remove`), { body: input }),
+};
+
+/** A recipient's unsubscribe link (P3-1): public, no session — the token is the proof. */
+export const unsubscribe = {
+    status: (token: string, signal?: AbortSignal) =>
+        request<UnsubscribeStatusView>('GET', `/unsubscribe/${encodeURIComponent(token)}/status`, { signal }),
+    confirm: (token: string) => request<UnsubscribeStatusView>('POST', `/unsubscribe/${encodeURIComponent(token)}`),
+};
+
 export const blocklist = {
     list: (workspaceId: string, signal?: AbortSignal) =>
         request<BlocklistEntryView[]>('GET', workspacePath(workspaceId, '/mail/blocklist'), { signal }),

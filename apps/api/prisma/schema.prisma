@@ -55,6 +55,9 @@ model Workspace {
 
   mailOutbound MailOutbound[]
 
+  suppressions      Suppression[]
+  unsubscribeTokens UnsubscribeToken[]
+
   @@map("workspaces")
 }
 
@@ -62,16 +65,16 @@ model Workspace {
 /// `email` is stored lower-cased by the application and unique as stored. `passwordHash` is null
 /// for a user who only ever signed in through an identity provider.
 model User {
-  id              String    @id @default(uuid()) @db.Uuid
-  email           String    @unique
-  passwordHash    String?   @map("password_hash")
-  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique
+  passwordHash       String?   @map("password_hash")
+  emailVerifiedAt    DateTime? @map("email_verified_at") @db.Timestamptz
   /// How the person is shown to other members, in every workspace; pickers read it, never the email.
   displayName        String?   @map("display_name")
   /// When the person confirmed their name (saved, or kept the suggestion); `null` asks once.
   profileCompletedAt DateTime? @map("profile_completed_at") @db.Timestamptz
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   memberships WorkspaceMember[]
   sessions    Session[]
@@ -148,6 +151,9 @@ model WorkspaceMember {
   createdBlocklist       BlocklistEntry[]    @relation("BlocklistCreator")
 
   mailOutbound MailOutbound[] @relation("MailOutboundSender")
+
+  createdSuppressions Suppression[] @relation("SuppressionCreator")
+  removedSuppressions Suppression[] @relation("SuppressionRemover")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -350,6 +356,9 @@ model Person {
   mailParticipations MailParticipant[]
 
   mailOutbound MailOutbound[]
+
+  suppressions      Suppression[]
+  unsubscribeTokens UnsubscribeToken[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -1046,6 +1055,9 @@ model MailOutbound {
   replyTo     MailMessage?    @relation("MailOutboundReplyTo", fields: [replyToMessageId], references: [id], onDelete: SetNull)
   mailMessage MailMessage?    @relation("MailOutboundStored", fields: [mailMessageId], references: [id], onDelete: SetNull)
 
+  suppressions      Suppression[]
+  unsubscribeTokens UnsubscribeToken[]
+
   @@index([workspaceId, senderMemberId, createdAt(sort: Desc)])
   @@index([mailboxId, providerThreadId])
   @@index([workspaceId, mailMessageId])
@@ -1170,4 +1182,78 @@ model BlocklistEntry {
 
   @@index([workspaceId, memberId])
   @@map("blocklist_entries")
+}
+
+/// Why an address is suppressed (P3-1, FR-CRMS-7). `unsubscribe` and `complaint` are never lifted in the CRM.
+enum SuppressionReason {
+  unsubscribe
+  hard_bounce
+  complaint
+  manual
+
+  @@map("suppression_reason")
+}
+
+/// What put an address on the list: the person (the unsubscribe link), a member, or a provider's report (P3-2).
+enum SuppressionSource {
+  recipient
+  member
+  provider
+
+  @@map("suppression_source")
+}
+
+/// An address the workspace never mails (P3-1, FR-CRMS-7): every send and every enrolment checks the
+/// live entries. One live entry per address; lifting one records who, when and why (`removed_*`) and
+/// keeps the row, so the history of an address stays on record.
+model Suppression {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String            @map("workspace_id") @db.Uuid
+  /// Lower case (the database checks).
+  address           String
+  reason            SuppressionReason
+  source            SuppressionSource
+  /// The person the address belonged to when it was suppressed, when known.
+  personId          String?           @map("person_id") @db.Uuid
+  /// The message that led to it (the one whose link was used, or that bounced), when known.
+  outboundId        String?           @map("outbound_id") @db.Uuid
+  note              String?
+  createdByMemberId String?           @map("created_by_member_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  removedAt         DateTime?         @map("removed_at") @db.Timestamptz
+  removedByMemberId String?           @map("removed_by_member_id") @db.Uuid
+  removalNote       String?           @map("removal_note")
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  outbound  MailOutbound?    @relation(fields: [outboundId], references: [id], onDelete: SetNull)
+  createdBy WorkspaceMember? @relation("SuppressionCreator", fields: [createdByMemberId], references: [id], onDelete: SetNull)
+  removedBy WorkspaceMember? @relation("SuppressionRemover", fields: [removedByMemberId], references: [id], onDelete: SetNull)
+
+  // One live entry per address — the partial unique index `suppressions_live_address_key` in the
+  // migration (`removed_at IS NULL`), which is also what every check reads.
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@map("suppressions")
+}
+
+/// The secret behind one unsubscribe link (P3-1): one per (workspace, recipient, message). Only its
+/// SHA-256 is stored; the token names nothing. It does not expire — an unsubscribe link keeps working.
+model UnsubscribeToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  /// Lower case (the database checks).
+  address     String
+  personId    String?   @map("person_id") @db.Uuid
+  outboundId  String?   @map("outbound_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  /// The last time it unsubscribed its address; a used token keeps working.
+  usedAt      DateTime? @map("used_at") @db.Timestamptz
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person?       @relation(fields: [personId], references: [id], onDelete: SetNull)
+  outbound  MailOutbound? @relation(fields: [outboundId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, address])
+  @@map("unsubscribe_tokens")
 }

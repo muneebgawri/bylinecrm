@@ -137,3 +137,24 @@ describe('FR-CRMS-2 message ids and reply subjects', () => {
         expect(replySubject('')).toBe('Re:');
     });
 });
+
+describe('FR-CRMS-7 one-click unsubscribe headers', () => {
+    const url = 'https://crm.example/api/unsubscribe/Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx5';
+
+    it('writes List-Unsubscribe and List-Unsubscribe-Post (RFC 8058) on an outreach message', () => {
+        const h = headersOf(buildMime({ ...base, listUnsubscribe: { url } }));
+        expect(h.get('list-unsubscribe')).toBe(`<${url}>`);
+        expect(h.get('list-unsubscribe-post')).toBe('List-Unsubscribe=One-Click');
+    });
+
+    it('writes neither on personal mail', () => {
+        const h = headersOf(buildMime(base));
+        expect(h.has('list-unsubscribe')).toBe(false);
+        expect(h.has('list-unsubscribe-post')).toBe(false);
+    });
+
+    it('cannot be used to start a header of its own', () => {
+        const mime = buildMime({ ...base, listUnsubscribe: { url: `${url}\r\nBcc: someone@evil.example` } });
+        expect(headersOf(mime).has('bcc')).toBe(false);
+    });
+});

@@ -151,3 +151,13 @@ export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */
 export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];
 export type CreateBlocklistEntryInput = Loose<Schemas['CreateBlocklistEntryDto']>;
+
+// ---- Suppression and unsubscribe (P3-1) ------------------------------------------------------
+export type SuppressionView = Schemas['Suppression'];
+export type SuppressionPage = Schemas['SuppressionPage'];
+export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
+export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;
+export type UnsubscribeStatusView = Schemas['UnsubscribeStatus'];
+export type SuppressionListQuery = Loose<
+    NonNullable<paths['/api/w/{workspaceId}/suppressions']['get']['parameters']['query']>
+>;

@@ -14,6 +14,8 @@ import {
     attachments,
     auth,
     blocklist,
+    suppressions,
+    unsubscribe,
     companies,
     customFields,
     invites,
@@ -43,6 +45,8 @@ import type {
     ConnectMailboxInput,
     CreateApiKeyInput,
     CreateBlocklistEntryInput,
+    CreateSuppressionInput,
+    SuppressionListQuery,
     CreateInviteInput,
     CreateRoleInput,
     CreateTemplateInput,
@@ -124,6 +128,10 @@ export const keys = {
     mailboxSync: (workspaceId: string, mailboxId: string) =>
         ['w', workspaceId, 'mailboxes', mailboxId, 'sync'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
+    suppressions: (workspaceId: string) => ['w', workspaceId, 'suppressions'] as const,
+    suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
+        ['w', workspaceId, 'suppressions', params] as const,
+    unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */
@@ -807,6 +815,51 @@ export function useSyncMailbox(workspaceId: string) {
     return useMutation({
         mutationFn: (mailboxId: string) => mailboxes.sync(workspaceId, mailboxId),
         onSuccess: (result, mailboxId) => client.setQueryData(keys.mailboxSync(workspaceId, mailboxId), result.sync),
+    });
+}
+
+export const SUPPRESSION_PAGE_SIZE = 50;
+
+/** The suppression list, newest first, searched and filtered by reason; pages on demand. */
+export function useSuppressions(workspaceId: string, params: SuppressionListQuery) {
+    return useInfiniteQuery({
+        queryKey: keys.suppressionList(workspaceId, params),
+        queryFn: ({ pageParam, signal }) =>
+            suppressions.list(workspaceId, { ...params, cursor: pageParam, limit: SUPPRESSION_PAGE_SIZE }, signal),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (last) => last.nextCursor ?? undefined,
+    });
+}
+
+export function useAddSuppression(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: CreateSuppressionInput) => suppressions.create(workspaceId, input),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.suppressions(workspaceId) }),
+    });
+}
+
+export function useLiftSuppression(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, note }: { id: string; note: string }) => suppressions.remove(workspaceId, id, { note }),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.suppressions(workspaceId) }),
+    });
+}
+
+/** What an unsubscribe link's page shows; public, no session. */
+export const useUnsubscribeStatus = (token: string) =>
+    useQuery({
+        queryKey: keys.unsubscribeStatus(token),
+        queryFn: ({ signal }) => unsubscribe.status(token, signal),
+        retry: false,
+    });
+
+export function useConfirmUnsubscribe(token: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => unsubscribe.confirm(token),
+        onSuccess: (status) => client.setQueryData(keys.unsubscribeStatus(token), status),
     });
 }
 

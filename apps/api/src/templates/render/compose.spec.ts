@@ -6,7 +6,7 @@ import {
     type RichText,
 } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
-import { composeEmail, formatPostalAddress, renderSubject } from './compose';
+import { composeEmail, formatPostalAddress, withUnsubscribeUrl, renderSubject } from './compose';
 
 const body: RichText = {
     type: 'doc',
@@ -116,5 +116,32 @@ describe('formatPostalAddress', () => {
         expect(formatPostalAddress({ ...address, region: null, line2: 'Suite 4' })).toBe(
             '123 Main St, Suite 4, Austin, 78701, US',
         );
+    });
+});
+
+describe('FR-CRMS-7 the unsubscribe link, resolved per recipient', () => {
+    const url = 'https://crm.example/unsubscribe/abc_DEF-123';
+
+    it('replaces the footer placeholder in the HTML and the text', () => {
+        const email = withUnsubscribeUrl(
+            composeEmail({ kind: 'outreach', subject: 'Hi', body: { type: 'doc', content: [] } }, resolve, settings),
+            url,
+        );
+        expect(email.html).toContain(`<a href="${url}">Unsubscribe</a>`);
+        expect(email.text).toContain(`Unsubscribe: ${url}`);
+        expect(email.html).not.toContain(UNSUBSCRIBE_URL_PLACEHOLDER);
+        expect(email.text).not.toContain(UNSUBSCRIBE_URL_PLACEHOLDER);
+    });
+
+    it('escapes the URL in the HTML', () => {
+        const email = withUnsubscribeUrl(
+            { html: `<a href="${UNSUBSCRIBE_URL_PLACEHOLDER}">x</a>`, text: '' },
+            'https://crm.example/u?a=1&b=2',
+        );
+        expect(email.html).toBe('<a href="https://crm.example/u?a=1&amp;b=2">x</a>');
+    });
+
+    it('refuses anything but an absolute http(s) URL', () => {
+        expect(() => withUnsubscribeUrl({ html: '', text: '' }, 'javascript:alert(1)')).toThrow();
     });
 });

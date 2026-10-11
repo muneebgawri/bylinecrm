@@ -34,6 +34,7 @@ function documentsItsSuccess(operation: Operation): boolean {
         ([code, response]) =>
             (/^2\d\d$/.test(code) && (code === '204' || response.content !== undefined)) ||
             code === '302' ||
+            code === '303' ||
             code === '501',
     );
 }
