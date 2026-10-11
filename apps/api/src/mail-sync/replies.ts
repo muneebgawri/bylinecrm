@@ -11,9 +11,11 @@ import { recordTargetsForPeople } from './matching';
  *   and the send records Gmail's own Message-ID (`provider_rfc822_message_id`): Gmail replaces the one
  *   we set (#87), so the copy is recognised by our `X-BylineCRM-Id` header, by Gmail's message id, or
  *   — where Gmail kept it — by our Message-ID.
- * - An **inbound** message that answers one of our sends is a **reply**: it names our Message-ID or
- *   Gmail's (both on the send row — one source) in `In-Reply-To` / `References`, or it arrived in the
- *   same mailbox's Gmail thread as the send, after it. One reply, one `email.replied`.
+ * - A message that answers one of our sends is a **reply**: it names our Message-ID or Gmail's (both
+ *   on the send row — one source) in `In-Reply-To` / `References`, or it is in the send's conversation
+ *   (the send's mailbox maps the send's Gmail thread to the message's thread), after it. It is judged
+ *   once, when the message is first stored — never for another mailbox's later copy (#107) — and a
+ *   message from the send's own mailbox never answers it. One reply, one `email.replied`.
  */
 
 type MailboxRef = { id: string; workspaceId: string };
@@ -28,7 +30,10 @@ export interface StoredOutbound {
     crmId: string | null;
 }
 
-/** Links a stored outbound message to the send it is a copy of, and records Gmail's ids on the send. */
+/**
+ * Links a stored message to the send it is a copy of — called for this mailbox's outbound copy,
+ * whether or not another mailbox stored the message first (#107) — and records Gmail's ids on the send.
+ */
 export async function linkOutbound(tx: WorkspaceClient, mailbox: MailboxRef, message: StoredOutbound): Promise<void> {
     const send = await tx.mailOutbound.findFirst({
         where: {
@@ -63,7 +68,7 @@ interface AnsweredSend {
 }
 
 /**
- * The `email.replied` an inbound message causes, or `null` when it answers none of our sends.
+ * The `email.replied` a newly stored message causes, or `null` when it answers none of our sends.
  * `fromPeople` are the people the reply is from (its `From`, matched).
  */
 export async function replyEventFor(
@@ -72,7 +77,8 @@ export async function replyEventFor(
     inbound: {
         id: string;
         threadId: string;
-        providerThreadId: string;
+        /** Its `From`: a message the send's own mailbox sent is never a reply to the send. */
+        from: string;
         inReplyTo: string | null;
         references: string[];
         sentAt: Date;
@@ -87,10 +93,15 @@ export async function replyEventFor(
     const [send] = await tx.$queryRaw<AnsweredSend[]>`
         SELECT o.id, o.mail_message_id, o.deal_id
         FROM mail_outbound o
+        JOIN mailboxes b ON b.id = o.mailbox_id
         WHERE o.status IN ('sending', 'sent')
+          AND b.email <> ${inbound.from}
           AND ((${byHeader})
-               OR (o.mailbox_id = ${mailbox.id}::uuid
-                   AND o.provider_thread_id = ${inbound.providerThreadId}
+               OR (EXISTS (
+                       SELECT 1 FROM mailbox_threads mt
+                       WHERE mt.mailbox_id = o.mailbox_id
+                         AND mt.provider_thread_id = o.provider_thread_id
+                         AND mt.thread_id = ${inbound.threadId}::uuid)
                    -- In the thread is not enough: mail sync stores late may predate our send.
                    -- A Date header has whole seconds (RFC 5322), so compare at that precision.
                    AND ${inbound.sentAt} >= date_trunc('second', o.created_at)))

@@ -238,15 +238,16 @@ export class MailSendService {
                 // The person's display name (P1-UI-10): one per person, read wherever a member is named.
                 select: { user: { select: { displayName: true } } },
             });
-            let parentRow: Prisma.MailMessageGetPayload<{ include: { thread: true } }> | null = null;
+            let parentRow: Prisma.MailMessageGetPayload<object> | null = null;
             if (input.replyToMessageId) {
-                parentRow = await tx.mailMessage.findUnique({
-                    where: { id: input.replyToMessageId },
-                    include: { thread: true },
-                });
+                parentRow = await tx.mailMessage.findUnique({ where: { id: input.replyToMessageId } });
                 if (!parentRow) throw new NotFoundException('message not found');
-                if (parentRow.mailboxId !== mailbox.id) {
-                    throw new ValidationFailed('a reply goes from the mailbox the message is in', [
+                // A message is the workspace's; the sending mailbox must hold a copy of it (#107).
+                const held = await tx.mailMessageCopy.count({
+                    where: { messageId: parentRow.id, mailboxId: mailbox.id },
+                });
+                if (held === 0) {
+                    throw new ValidationFailed('a reply goes from a mailbox the message is in', [
                         { path: 'replyToMessageId', message: 'not a message in the sending mailbox' },
                     ]);
                 }
@@ -686,16 +687,16 @@ export class MailSendService {
         } as DomainEvent);
     }
 
-    /** The Gmail thread a reply goes into: the parent's. */
+    /** The Gmail thread a reply goes into: the one the sending mailbox's copy of the parent is in (#107). */
     private async parentThread(workspaceId: string, row: OutboundRow): Promise<string | null> {
         if (!row.replyToMessageId) return null;
-        const parent = await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailMessage.findUnique({
-                where: { id: row.replyToMessageId! },
-                select: { thread: { select: { providerThreadId: true } } },
+        const copy = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailMessageCopy.findFirst({
+                where: { messageId: row.replyToMessageId!, mailboxId: row.mailboxId },
+                select: { mailboxThread: { select: { providerThreadId: true } } },
             }),
         );
-        return parent?.thread.providerThreadId ?? null;
+        return copy?.mailboxThread.providerThreadId ?? null;
     }
 
     /**

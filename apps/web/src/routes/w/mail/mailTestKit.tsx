@@ -84,6 +84,8 @@ export const outbound = (over: Partial<MailOutboundView> = {}): MailOutboundView
 
 export const message = (over: Partial<MailMessageView> = {}): MailMessageView => ({
     id: 'msg-1',
+    mailboxIds: ['mb-1'],
+    bodiesVisible: true,
     direction: 'inbound',
     from: PERSON.email,
     subject: 'Intro',
@@ -104,7 +106,7 @@ export const message = (over: Partial<MailMessageView> = {}): MailMessageView =>
 
 export const thread = (over: Partial<MailThreadView> = {}): MailThreadView => ({
     id: 'th-1',
-    mailboxId: 'mb-1',
+    mailboxIds: ['mb-1'],
     subject: 'Intro',
     messageCount: 1,
     lastMessageAt: AT,

@@ -24,7 +24,11 @@ export async function reconcileMessageTargets(
     const ids = [...new Set(messageIds)];
     const messages = await tx.mailMessage.findMany({
         where: { id: { in: ids } },
-        include: { participants: { select: { personId: true } } },
+        include: {
+            participants: { select: { personId: true } },
+            // The mailbox whose copy first stored it, as the summary names it (#107).
+            copies: { select: { mailboxId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1 },
+        },
         orderBy: { id: 'asc' },
     });
     const existing = await tx.timelineActivity.findMany({
@@ -59,15 +63,17 @@ export async function reconcileMessageTargets(
             const targets = (await recordTargetsForPeople(tx, [personId])).filter((t) => !present.has(key(t)));
             if (targets.length === 0) continue;
             for (const t of targets) present.add(key(t));
+            const mailboxId = message.copies[0]?.mailboxId;
+            if (!mailboxId) continue;
             events.push({
                 type: 'email.linked',
                 object: 'email',
                 workspaceId,
-                actor: { kind: 'sync', id: message.mailboxId },
+                actor: { kind: 'sync', id: mailboxId },
                 occurredAt: new Date().toISOString(),
                 recordId: message.id,
                 targets,
-                email: emailSummaryOf(message),
+                email: emailSummaryOf(message, mailboxId),
                 link: { personId },
             });
         }

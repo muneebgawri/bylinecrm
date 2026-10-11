@@ -15,6 +15,7 @@ import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MAIL_SYNC_QUEUE } from '../../src/mail-sync/mail-sync.constants';
 import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sync.service';
+import { recountThread } from '../../src/mail-sync/threads';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, settle, type EventLog } from '../support/outbox';
@@ -39,7 +40,7 @@ function browserFrom(res: Response): Browser {
 
 interface ThreadSummary {
     id: string;
-    mailboxId: string;
+    mailboxIds: string[];
     subject: string;
     messageCount: number;
     lastMessage: { direction: string; from: string; snippet: string };
@@ -316,7 +317,7 @@ describe('mail sync', () => {
             const items = (list.body as { items: ThreadSummary[] }).items;
             expect(items).toHaveLength(1);
             expect(items[0]).toMatchObject({
-                mailboxId: adminMailbox,
+                mailboxIds: [adminMailbox],
                 subject: 'Pricing for the Series B',
                 messageCount: 2,
                 lastMessage: { direction: 'outbound', from: adminEmail },
@@ -405,7 +406,9 @@ describe('mail sync', () => {
             gmail.repeatInHistory(adminEmail, id);
             const run = await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(run.imported).toBe(1);
-            const rows = await owner.mailMessage.count({ where: { mailboxId: adminMailbox, providerMessageId: id } });
+            const rows = await owner.mailMessage.count({
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: id } } },
+            });
             expect(rows).toBe(1);
         });
 
@@ -676,10 +679,10 @@ describe('mail sync', () => {
             gmail.deliver(adminEmail, { from: dana, to: [adminEmail], cc: [promo], subject: 'Mixed purge', text: 'm' });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             blockedMessage = (await owner.mailMessage.findFirst({
-                where: { mailboxId: adminMailbox, providerMessageId: blocked.id },
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: blocked.id } } },
             }))!.id;
             mixedMessage = (await owner.mailMessage.findFirst({
-                where: { mailboxId: adminMailbox, subject: 'Mixed purge' },
+                where: { copies: { some: { mailboxId: adminMailbox } }, subject: 'Mixed purge' },
             }))!.id;
             const blockedThread = (await owner.mailMessage.findUnique({ where: { id: blockedMessage } }))!.threadId;
             expect(await settled(() => owner.timelineActivity.count({ where: { linkedId: blockedMessage } }))).toBe(1);
@@ -710,8 +713,16 @@ describe('mail sync', () => {
             const res = await as(member).post(w('/mail/blocklist')).send({ value: news });
             expect(res.status).toBe(201);
             expect(res.body).toMatchObject({ purged: { messages: 1, threads: 1 } });
-            expect(await owner.mailMessage.count({ where: { mailboxId: memberMailbox, fromAddress: news } })).toBe(0);
-            expect(await owner.mailMessage.count({ where: { mailboxId: adminMailbox, fromAddress: news } })).toBe(1);
+            expect(
+                await owner.mailMessage.count({
+                    where: { copies: { some: { mailboxId: memberMailbox } }, fromAddress: news },
+                }),
+            ).toBe(0);
+            expect(
+                await owner.mailMessage.count({
+                    where: { copies: { some: { mailboxId: adminMailbox } }, fromAddress: news },
+                }),
+            ).toBe(1);
         });
 
         it('removing the entry does not bring the mail back', async () => {
@@ -728,12 +739,12 @@ describe('mail sync', () => {
 
         beforeAll(async () => {
             personalThread = ((await threads(`person:${danaId}`)).body as { items: ThreadSummary[] }).items.find(
-                (t) => t.mailboxId === adminMailbox && t.subject === 'Pricing for the Series B',
+                (t) => t.mailboxIds.includes(adminMailbox) && t.subject === 'Pricing for the Series B',
             )!.id;
             gmail.deliver(poolEmail, { from: dana, to: [poolEmail], subject: 'Pool reply', text: 'Pool body' });
             await sync.syncMailbox(workspace, poolMailbox, noWait);
-            poolThread = ((await threads(`person:${danaId}`)).body as { items: ThreadSummary[] }).items.find(
-                (t) => t.mailboxId === poolMailbox,
+            poolThread = ((await threads(`person:${danaId}`)).body as { items: ThreadSummary[] }).items.find((t) =>
+                t.mailboxIds.includes(poolMailbox),
             )!.id;
         });
 
@@ -785,6 +796,227 @@ describe('mail sync', () => {
                 (e) => e.workspaceId === otherWorkspace && e.email.subject === 'Elsewhere',
             );
             expect(event?.targets).toEqual([]);
+        });
+    });
+
+    describe('#107 one message per workspace, however many mailboxes hold it', () => {
+        // Mail between two connected mailboxes of one workspace is ONE email: on staging (2026-10-11)
+        // matt@ → outreach@ was stored per mailbox and showed twice on the person's timeline.
+        const subject = `Internal intro ${stamp}`;
+        const rootId = `intro-${stamp}@example.com`;
+        const replyId = `intro-reply-${stamp}@example.com`;
+        let adminThread: string;
+        let poolThread: string;
+
+        const timelineFor = async (messageSubject: string) =>
+            (await timeline(`person:${danaId}`)).filter((a) => a.properties.email?.subject === messageSubject);
+        const eventsFor = async (messageSubject: string) =>
+            (await settled(emailEvents)).filter(
+                (e) => e.workspaceId === workspace && e.email.subject === messageSubject,
+            );
+
+        beforeAll(async () => {
+            // Kate (admin) writes to the pool mailbox, Dana copied: Gmail holds one copy in each mailbox.
+            ({ threadId: adminThread } = gmail.deliver(adminEmail, {
+                from: adminEmail,
+                to: [poolEmail],
+                cc: [dana],
+                subject,
+                text: 'Meet Dana.',
+                messageIdHeader: rootId,
+                labels: ['SENT'],
+            }));
+            ({ threadId: poolThread } = gmail.deliver(poolEmail, {
+                from: adminEmail,
+                to: [poolEmail],
+                cc: [dana],
+                subject,
+                text: 'Meet Dana.',
+                messageIdHeader: rootId,
+            }));
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            await sync.syncMailbox(workspace, poolMailbox, noWait);
+        });
+
+        it('FR-CRMS-2: stores it once, with one copy per mailbox', async () => {
+            const messages = await owner.mailMessage.findMany({
+                where: { workspaceId: workspace, rfc822MessageId: rootId },
+            });
+            expect(messages).toHaveLength(1);
+            const copies = await owner.mailMessageCopy.findMany({ where: { messageId: messages[0]!.id } });
+            expect(copies.map((c) => c.mailboxId).sort()).toEqual([adminMailbox, poolMailbox].sort());
+            expect(copies.find((c) => c.mailboxId === adminMailbox)?.direction).toBe('outbound');
+            expect(copies.find((c) => c.mailboxId === poolMailbox)?.direction).toBe('inbound');
+        });
+
+        it('FR-CRMS-2: announces it once and puts it on each record once', async () => {
+            expect(await eventsFor(subject)).toHaveLength(1);
+            const entries = await timelineFor(subject);
+            expect(entries).toHaveLength(1);
+            expect(entries[0]!.properties.email?.direction).toBe('outbound');
+        });
+
+        it('FR-CRMS-2: lists one thread holding one message, in both mailboxes', async () => {
+            const list = (await threads(`person:${danaId}`)).body as {
+                items: ThreadSummary[];
+            };
+            const ours = list.items.filter((t) => t.subject === subject);
+            expect(ours).toHaveLength(1);
+            expect(ours[0]).toMatchObject({ messageCount: 1 });
+            expect([...ours[0]!.mailboxIds].sort()).toEqual([adminMailbox, poolMailbox].sort());
+        });
+
+        it('FR-CRMS-2: a reply seen by both mailboxes joins the thread once', async () => {
+            // The pool answers in its Gmail thread; Kate's mailbox receives it in hers.
+            gmail.deliver(poolEmail, {
+                from: poolEmail,
+                to: [adminEmail],
+                cc: [dana],
+                subject: `Re: ${subject}`,
+                text: 'Hello Dana.',
+                messageIdHeader: replyId,
+                inReplyTo: rootId,
+                threadId: poolThread,
+                labels: ['SENT'],
+            });
+            gmail.deliver(adminEmail, {
+                from: poolEmail,
+                to: [adminEmail],
+                cc: [dana],
+                subject: `Re: ${subject}`,
+                text: 'Hello Dana.',
+                messageIdHeader: replyId,
+                inReplyTo: rootId,
+                threadId: adminThread,
+            });
+            await sync.syncMailbox(workspace, poolMailbox, noWait);
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(await owner.mailMessage.count({ where: { workspaceId: workspace, rfc822MessageId: replyId } })).toBe(
+                1,
+            );
+            expect(await eventsFor(`Re: ${subject}`)).toHaveLength(1);
+            expect(await timelineFor(`Re: ${subject}`)).toHaveLength(1);
+            const list = (await threads(`person:${danaId}`)).body as { items: ThreadSummary[] };
+            const ours = list.items.filter((t) => t.subject === subject);
+            expect(ours).toHaveLength(1);
+            expect(ours[0]!.messageCount).toBe(2);
+            const thread = (await as(admin).get(w(`/mail/threads/${ours[0]!.id}`))).body as Thread;
+            expect(thread.messages.map((m) => m.snippet)).toEqual(['Meet Dana.', 'Hello Dana.']);
+        });
+
+        it('FR-CRMS-2: messages of one second keep the order they were stored in (a Date header has whole seconds)', async () => {
+            // Seen as a flaky subject while building #107: a reply in its parent's second, with a smaller
+            // random id, became the thread's "first" message. The ids' leading digits are fixed so the old
+            // order (by id) picks the reply every time.
+            const second = new Date(Math.floor(Date.now() / 1000) * 1000);
+            const suffix = stamp
+                .replace(/[^0-9]/g, '')
+                .padStart(12, '0')
+                .slice(-12);
+            const thread = await owner.mailThread.create({
+                data: { workspaceId: workspace, subject: '', lastMessageAt: second },
+            });
+            const base = {
+                workspaceId: workspace,
+                threadId: thread.id,
+                direction: 'inbound' as const,
+                fromAddress: dana,
+                sentAt: second,
+            };
+            try {
+                await owner.mailMessage.create({
+                    data: {
+                        ...base,
+                        id: `ffffffff-ffff-4fff-bfff-${suffix}`,
+                        identityKey: `same-second-1-${stamp}`,
+                        subject: 'The question',
+                        createdAt: new Date(second.getTime() + 10),
+                    },
+                });
+                await owner.mailMessage.create({
+                    data: {
+                        ...base,
+                        id: `00000000-0000-4000-8000-${suffix}`,
+                        identityKey: `same-second-2-${stamp}`,
+                        subject: 'Re: The question',
+                        createdAt: new Date(second.getTime() + 20),
+                    },
+                });
+                await recountThread(owner as unknown as Parameters<typeof recountThread>[0], thread.id);
+                expect((await owner.mailThread.findUniqueOrThrow({ where: { id: thread.id } })).subject).toBe(
+                    'The question',
+                );
+            } finally {
+                await owner.mailMessage.deleteMany({ where: { threadId: thread.id } });
+                await owner.mailThread.delete({ where: { id: thread.id } });
+            }
+        });
+
+        it('FR-CRMS-2: storing a copy again changes nothing', async () => {
+            const before = (await settled(emailEvents)).length;
+            const run = await sync.syncMailbox(workspace, poolMailbox, noWait);
+            expect(run.imported).toBe(0);
+            const copy = await owner.mailMessageCopy.findFirstOrThrow({
+                where: { mailboxId: poolMailbox, message: { rfc822MessageId: rootId } },
+            });
+            expect(await sync.importMessage(workspace, poolMailbox, copy.providerMessageId, noWait)).toBe(
+                copy.messageId,
+            );
+            expect(await settled(emailEvents)).toHaveLength(before);
+            expect(await timelineFor(subject)).toHaveLength(1);
+        });
+
+        it('FR-CRMS-1: the same Message-ID in another workspace is that workspace’s own message', async () => {
+            gmail.deliver(otherEmail, {
+                from: adminEmail,
+                to: [otherEmail],
+                subject,
+                text: 'Meet Dana.',
+                messageIdHeader: rootId,
+            });
+            const run = await sync.syncMailbox(otherWorkspace, otherMailbox, noWait);
+            expect(run.imported).toBe(1);
+            expect(await owner.mailMessage.count({ where: { rfc822MessageId: rootId } })).toBe(2);
+            expect(await owner.mailMessage.count({ where: { workspaceId: workspace, rfc822MessageId: rootId } })).toBe(
+                1,
+            );
+            const copies = await owner.mailMessageCopy.findMany({
+                where: { message: { workspaceId: workspace, rfc822MessageId: rootId } },
+            });
+            expect(copies.map((c) => c.mailboxId)).not.toContain(otherMailbox);
+        });
+
+        it('FR-CRMS-2: a colleague reads the bodies through the pool copy even though one copy is personal', async () => {
+            const list = (await threads(`person:${danaId}`, member)).body as { items: ThreadSummary[] };
+            const ours = list.items.find((t) => t.subject === subject)!;
+            const thread = (await as(member).get(w(`/mail/threads/${ours.id}`))).body as Thread;
+            expect(thread.bodiesVisible).toBe(true);
+            expect(thread.messages[0]!.bodyText).toContain('Meet Dana.');
+        });
+
+        it('FR-CRMS-2: a message stays readable through the other copy when one mailbox is disconnected', async () => {
+            // The member's personal mailbox and the pool both hold Dana's note; the member disconnects.
+            const note = `Disconnect check ${stamp}`;
+            const noteId = `disc-${stamp}@acme.example`;
+            for (const box of [memberEmail, poolEmail]) {
+                gmail.deliver(box, {
+                    from: dana,
+                    to: [memberEmail, poolEmail],
+                    subject: note,
+                    text: 'Still here.',
+                    messageIdHeader: noteId,
+                });
+            }
+            await sync.syncMailbox(workspace, memberMailbox, noWait);
+            await sync.syncMailbox(workspace, poolMailbox, noWait);
+            expect(await timelineFor(note)).toHaveLength(1);
+            expect((await as(admin).delete(w(`/mailboxes/${memberMailbox}`))).status).toBe(200);
+            const list = (await threads(`person:${danaId}`)).body as { items: ThreadSummary[] };
+            const ours = list.items.filter((t) => t.subject === note);
+            expect(ours).toHaveLength(1);
+            const thread = (await as(admin).get(w(`/mail/threads/${ours[0]!.id}`))).body as Thread;
+            expect(thread.messages[0]!.bodyText).toContain('Still here.');
+            expect(await timelineFor(note)).toHaveLength(1);
         });
     });
 });

@@ -9,7 +9,12 @@ import { type Page, paginate } from '../records/list-query';
 import { readableTargets } from '../records/targets';
 import type { MailMessageView, MailThreadSummary, MailThreadView, MailboxSyncView } from './responses';
 
-type MessageWithParticipants = Prisma.MailMessageGetPayload<{ include: { participants: true } }>;
+type MessageForView = Prisma.MailMessageGetPayload<{
+    include: {
+        participants: true;
+        copies: { select: { mailboxId: true; mailbox: { select: { ownerMemberId: true; purpose: true } } } };
+    };
+}>;
 
 /**
  * Reading synced mail (P2-2). Who sees what:
@@ -17,10 +22,11 @@ type MessageWithParticipants = Prisma.MailMessageGetPayload<{ include: { partici
  * - A thread is listed on a record (`?target=`) the caller can read — the record's own visibility,
  *   `readableTargets`, under the caller's policies — when one of its participants is that person,
  *   one of that company's people, or that deal's point of contact.
- * - Opening a thread: the mailbox's owner sees everything. Anyone else needs to read a person the
- *   thread concerns; then they see the bodies of a **pool** mailbox's mail, and only the subject,
- *   snippet and participants of another member's **personal** mailbox (`bodiesVisible: false`).
- *   A thread they cannot reach that way does not exist for them (`404`).
+ * - A message is the workspace's, held by one or more mailboxes (#107). Opening a thread: the owner
+ *   of a mailbox holding any of its messages may open it; anyone else needs to read a person the
+ *   thread concerns. A message's bodies show when the caller owns a mailbox holding it or any copy
+ *   is in a **pool** mailbox; otherwise only its subject, snippet and participants
+ *   (`bodiesVisible: false`). A thread they cannot reach does not exist for them (`404`).
  */
 @Injectable()
 export class MailReadService {
@@ -42,16 +48,22 @@ export class MailReadService {
                 tx.mailThread.findMany({
                     where: { messages: { some: { participants: { some: { personId: { in: people } } } } } },
                     orderBy: [{ lastMessageAt: 'desc' }, { id: 'asc' }],
-                    include: { messages: { orderBy: [{ sentAt: 'desc' }, { id: 'asc' }], take: 1 } },
+                    include: {
+                        messages: { orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }], take: 1 },
+                    },
                     ...args,
                 }),
+            );
+            const holders = await mailboxesHolding(
+                tx,
+                result.items.map((t) => t.id),
             );
             return {
                 items: result.items.map((t) => {
                     const last = t.messages[0]!;
                     return {
                         id: t.id,
-                        mailboxId: t.mailboxId,
+                        mailboxIds: holders.get(t.id) ?? [],
                         subject: t.subject,
                         messageCount: t.messageCount,
                         lastMessageAt: t.lastMessageAt,
@@ -74,12 +86,26 @@ export class MailReadService {
             const thread = await tx.mailThread.findUnique({
                 where: { id: threadId },
                 include: {
-                    mailbox: { select: { ownerMemberId: true, purpose: true } },
-                    messages: { orderBy: [{ sentAt: 'asc' }, { id: 'asc' }], include: { participants: true } },
+                    messages: {
+                        // A Date header has whole seconds: one second's messages in the order stored.
+                        orderBy: [{ sentAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+                        include: {
+                            participants: true,
+                            copies: {
+                                select: {
+                                    mailboxId: true,
+                                    mailbox: { select: { ownerMemberId: true, purpose: true } },
+                                },
+                                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                            },
+                        },
+                    },
                 },
             });
             if (!thread) throw new ApiException(404, 'not_found', 'thread not found');
-            const isOwner = context.memberId !== undefined && thread.mailbox.ownerMemberId === context.memberId;
+            const owns = (m: MessageForView) =>
+                context.memberId !== undefined && m.copies.some((c) => c.mailbox.ownerMemberId === context.memberId);
+            const isOwner = thread.messages.some(owns);
             if (!isOwner) {
                 const personIds = [
                     ...new Set(thread.messages.flatMap((m) => m.participants.map((p) => p.personId))),
@@ -90,15 +116,17 @@ export class MailReadService {
                 );
                 if (readable.length === 0) throw new ApiException(404, 'not_found', 'thread not found');
             }
-            const bodiesVisible = isOwner || thread.mailbox.purpose === 'pool';
+            const messages = thread.messages.map((m) =>
+                messageView(m, owns(m) || m.copies.some((c) => c.mailbox.purpose === 'pool')),
+            );
             return {
                 id: thread.id,
-                mailboxId: thread.mailboxId,
+                mailboxIds: [...new Set(thread.messages.flatMap((m) => m.copies.map((c) => c.mailboxId)))],
                 subject: thread.subject,
                 messageCount: thread.messageCount,
                 lastMessageAt: thread.lastMessageAt,
-                bodiesVisible,
-                messages: thread.messages.map((m) => messageView(m, bodiesVisible)),
+                bodiesVisible: messages.every((m) => m.bodiesVisible),
+                messages,
             };
         });
     }
@@ -139,9 +167,28 @@ async function peopleOf(tx: WorkspaceClient, target: RecordTarget): Promise<stri
     }
 }
 
-function messageView(m: MessageWithParticipants, bodiesVisible: boolean): MailMessageView {
+/** The mailboxes holding a copy of any message of each thread (#107). */
+async function mailboxesHolding(tx: WorkspaceClient, threadIds: readonly string[]): Promise<Map<string, string[]>> {
+    if (threadIds.length === 0) return new Map();
+    const rows = await tx.mailMessageCopy.findMany({
+        where: { message: { threadId: { in: [...threadIds] } } },
+        select: { mailboxId: true, message: { select: { threadId: true } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const held = new Map<string, string[]>();
+    for (const row of rows) {
+        const list = held.get(row.message.threadId) ?? [];
+        if (!list.includes(row.mailboxId)) list.push(row.mailboxId);
+        held.set(row.message.threadId, list);
+    }
+    return held;
+}
+
+function messageView(m: MessageForView, bodiesVisible: boolean): MailMessageView {
     return {
         id: m.id,
+        mailboxIds: [...new Set(m.copies.map((c) => c.mailboxId))],
+        bodiesVisible,
         direction: m.direction,
         from: m.fromAddress,
         subject: m.subject,

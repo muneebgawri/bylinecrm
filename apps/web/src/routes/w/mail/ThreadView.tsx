@@ -56,7 +56,7 @@ export function ThreadView({ workspaceId, threadId }: { workspaceId: string; thr
             <ol className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Messages, oldest first">
                 {messages.map((message) => (
                     <li key={message.id}>
-                        <Message thread={thread.data} message={message} />
+                        <Message message={message} />
                     </li>
                 ))}
             </ol>
@@ -65,8 +65,8 @@ export function ThreadView({ workspaceId, threadId }: { workspaceId: string; thr
     );
 }
 
-function Message({ thread, message }: { thread: MailThreadView; message: MailMessageView }) {
-    const visible = thread.bodiesVisible;
+function Message({ message }: { message: MailMessageView }) {
+    const visible = message.bodiesVisible;
     return (
         <article
             aria-label={`${senderName(message)}, ${formatDate(message.sentAt)}`}
@@ -136,10 +136,10 @@ function ReplyArea({
     const [open, setOpen] = useState(false);
     const personId = newest ? replyPersonId(newest) : null;
     if (!newest) return null;
-    if (!thread.bodiesVisible) {
+    if (!newest.bodiesVisible) {
         return (
             <p className="m-0 text-xs text-text-muted">
-                Replies go from the mailbox a thread is in; this one is another member’s.
+                Replies go from a mailbox the message is in; this one is only in another member’s.
             </p>
         );
     }
@@ -164,7 +164,7 @@ function ReplyArea({
         <ReplyComposer
             workspaceId={workspaceId}
             personId={personId}
-            reply={{ messageId: newest.id, mailboxId: thread.mailboxId, subject: thread.subject }}
+            reply={{ messageId: newest.id, mailboxIds: newest.mailboxIds, subject: thread.subject }}
             onClose={() => setOpen(false)}
         />
     );

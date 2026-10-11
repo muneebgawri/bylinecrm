@@ -3,7 +3,7 @@ import type { DomainEvent, MailSyncStatus } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
-import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { MailboxTokens, MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
 import { GMAIL_PORT, GmailApiError, type GmailPort, type GmailRawMessage } from './gmail.port';
 import {
@@ -14,12 +14,13 @@ import {
     MAIL_RESYNC_MARGIN_MS,
     SENT_LABEL,
     SKIPPED_LABELS,
+    STORE_ATTEMPTS,
 } from './mail-sync.constants';
 import { membersByAddress, personsByAddress, recordTargetsForPeople } from './matching';
 import { parseGmailMessage, type ParsedMessage } from './parse-message';
 import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
 import { GmailQuota } from './quota';
-import { recountThread } from './threads';
+import { identityKeyOf, recountThread, threadOfReferenced } from './threads';
 import { emailSummaryOf } from './summary';
 import { linkOutbound, replyEventFor } from './replies';
 import { withGmailRetry, type RetryOptions } from './retry';
@@ -60,9 +61,10 @@ interface Incoming {
  * The first run imports the last `MAIL_INITIAL_SYNC_DAYS` days; later runs follow Gmail's history
  * from the stored cursor; a cursor Gmail has forgotten (`404`) is recovered by re-listing from the
  * last good sync. Every Gmail request takes from the mailbox's quota window and retries a
- * transient failure with backoff. A message is stored once (unique per mailbox), its participants
- * matched to people and members, and announced as `email.received` / `email.sent` on the records
- * it concerns — which is what puts it on their timelines, exactly once.
+ * transient failure with backoff. A message is stored once per workspace however many of its
+ * mailboxes hold it (#107) — each mailbox's copy recorded beside it — its participants matched to
+ * people and members, and announced as `email.received` / `email.sent` on the records it concerns
+ * when it first arrives — which is what puts it on their timelines, exactly once.
  *
  * Runs outside any request (a worker job): the workspace is passed explicitly and no owner scope
  * applies — sync sees every person in the workspace, as matching must.
@@ -144,13 +146,13 @@ export class MailSyncService {
         );
         if (!mailbox) return null;
         await this.importIds(new Run(this, mailbox, retry), [providerMessageId]);
-        const row = await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailMessage.findUnique({
+        const copy = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailMessageCopy.findUnique({
                 where: { mailboxId_providerMessageId: { mailboxId, providerMessageId } },
-                select: { id: true },
+                select: { messageId: true },
             }),
         );
-        return row?.id ?? null;
+        return copy?.messageId ?? null;
     }
 
     // ── The three ways a run proceeds ────────────────────────────────────────────────────────
@@ -250,124 +252,185 @@ export class MailSyncService {
     // ── Storing one message ──────────────────────────────────────────────────────────────────
 
     /**
-     * Stores the message, its thread and participants, and records its events in the same
-     * transaction (P1-6) — its `email.received` / `email.sent`, then an `email.replied` when it
-     * answers one of our sends (P2-3). Returns false when it was already stored (nothing written,
-     * nothing recorded). An outbound message that is one of our sends is linked to it here. One
-     * writer: the send job's import and a later sync both come through here.
+     * Stores one mailbox's copy of a message (#107). The message itself is stored once per
+     * workspace, keyed by its RFC 822 Message-ID: the first copy of it writes the message, its
+     * thread, its participants and its events in one transaction (P1-6) — its `email.received` /
+     * `email.sent`, then an `email.replied` when it answers one of our sends (P2-3). A later copy, in
+     * another mailbox, records only that the mailbox holds it: nothing is announced again. An
+     * outbound copy that is one of our sends is linked to it, whichever copy came first. Returns
+     * false when this copy was already stored. One writer: the send job's import and every sync come
+     * through here.
      */
     private async store(mailbox: MailboxRow, message: Incoming): Promise<boolean> {
-        const { parsed, direction } = message;
-        try {
-            return await this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
-                const thread = await tx.mailThread.upsert({
-                    where: {
-                        mailboxId_providerThreadId: {
-                            mailboxId: mailbox.id,
-                            providerThreadId: parsed.providerThreadId,
-                        },
-                    },
-                    create: {
-                        workspaceId: mailbox.workspaceId,
-                        mailboxId: mailbox.id,
-                        providerThreadId: parsed.providerThreadId,
-                        subject: parsed.subject,
-                        lastMessageAt: parsed.sentAt,
-                    },
-                    update: {},
-                });
-                const addresses = parsed.participants.map((p) => p.address);
-                const [people, members] = await Promise.all([
-                    personsByAddress(tx, addresses),
-                    membersByAddress(tx, addresses),
-                ]);
-                const row = await tx.mailMessage.create({
-                    data: {
-                        workspaceId: mailbox.workspaceId,
-                        mailboxId: mailbox.id,
-                        threadId: thread.id,
-                        providerMessageId: parsed.providerMessageId,
-                        rfc822MessageId: parsed.rfc822MessageId,
-                        inReplyTo: parsed.inReplyTo,
-                        references: parsed.references,
-                        direction,
-                        fromAddress: parsed.from,
-                        sentAt: parsed.sentAt,
-                        snippet: parsed.snippet,
-                        subject: parsed.subject,
-                        bodyText: parsed.bodyText,
-                        bodyHtmlSanitized: parsed.bodyHtml,
-                        bodyTruncated: parsed.bodyTruncated,
-                        hasAttachments: parsed.hasAttachments,
-                        labelIds: parsed.labelIds,
-                        participants: {
-                            create: parsed.participants.map((p) => ({
-                                workspaceId: mailbox.workspaceId,
-                                role: p.role,
-                                address: p.address,
-                                displayName: p.displayName,
-                                personId: people.get(p.address) ?? null,
-                                memberId: members.get(p.address) ?? null,
-                            })),
-                        },
-                    },
-                });
-                await recountThread(tx, thread.id);
-                const targets = await recordTargetsForPeople(tx, [...people.values()]);
-                const email = emailSummaryOf(row);
-                const event: DomainEvent = {
-                    type: direction === 'inbound' ? 'email.received' : 'email.sent',
-                    object: 'email',
-                    workspaceId: mailbox.workspaceId,
-                    actor: { kind: 'sync', id: mailbox.id },
-                    occurredAt: email.sentAt,
-                    recordId: row.id,
-                    targets,
-                    email,
-                };
-                if (direction === 'outbound') {
-                    await linkOutbound(tx, mailbox, {
-                        id: row.id,
-                        rfc822MessageId: row.rfc822MessageId,
-                        providerMessageId: row.providerMessageId,
-                        providerThreadId: parsed.providerThreadId,
-                        crmId: parsed.crmId,
-                    });
-                    await this.events.record(tx, event);
-                    return true;
-                }
-                const fromPeople = parsed.participants
-                    .filter((p) => p.role === 'from')
-                    .map((p) => people.get(p.address))
-                    .filter((id): id is string => id !== undefined);
-                const replied = await replyEventFor(
-                    tx,
-                    mailbox,
-                    {
-                        id: row.id,
-                        threadId: thread.id,
-                        providerThreadId: parsed.providerThreadId,
-                        inReplyTo: row.inReplyTo,
-                        references: row.references,
-                        sentAt: row.sentAt,
-                    },
-                    email,
-                    fromPeople,
-                );
-                await this.events.recordAll(tx, replied ? [event, replied] : [event]);
-                return true;
-            });
-        } catch (error) {
-            // Another run stored it between our check and our write: it is stored, once.
-            if (uniqueViolation(error)) return false;
-            throw error;
+        // Two mailboxes' runs may store the first copy of one message at once: the loser of the race
+        // finds the message on its second attempt and stores its copy.
+        for (let attempt = 1; ; attempt += 1) {
+            try {
+                return await this.rls.withWorkspace(mailbox.workspaceId, (tx) => this.write(tx, mailbox, message));
+            } catch (error) {
+                if (!uniqueViolation(error)) throw error;
+                if (attempt === STORE_ATTEMPTS) return false;
+            }
         }
+    }
+
+    private async write(tx: WorkspaceClient, mailbox: MailboxRow, message: Incoming): Promise<boolean> {
+        const { parsed, direction } = message;
+        const copied = await tx.mailMessageCopy.findUnique({
+            where: {
+                mailboxId_providerMessageId: { mailboxId: mailbox.id, providerMessageId: parsed.providerMessageId },
+            },
+            select: { id: true },
+        });
+        if (copied) return false;
+        const identityKey = identityKeyOf(mailbox.id, parsed);
+        const [existing, mapped] = await Promise.all([
+            tx.mailMessage.findUnique({
+                where: { workspaceId_identityKey: { workspaceId: mailbox.workspaceId, identityKey } },
+                select: { id: true, threadId: true, rfc822MessageId: true },
+            }),
+            tx.mailboxThread.findUnique({
+                where: {
+                    mailboxId_providerThreadId: { mailboxId: mailbox.id, providerThreadId: parsed.providerThreadId },
+                },
+                select: { id: true, threadId: true },
+            }),
+        ]);
+        const copy = (messageId: string, mailboxThreadId: string) => ({
+            workspaceId: mailbox.workspaceId,
+            messageId,
+            mailboxId: mailbox.id,
+            mailboxThreadId,
+            providerMessageId: parsed.providerMessageId,
+            direction,
+            labelIds: parsed.labelIds,
+        });
+        const linkSend = (messageId: string, rfc822MessageId: string | null) =>
+            linkOutbound(tx, mailbox, {
+                id: messageId,
+                rfc822MessageId,
+                providerMessageId: parsed.providerMessageId,
+                providerThreadId: parsed.providerThreadId,
+                crmId: parsed.crmId,
+            });
+
+        if (existing) {
+            // Another mailbox stored it first: this mailbox holds a copy, and its Gmail thread is
+            // the message's conversation unless the mailbox already threads it elsewhere.
+            const mailboxThreadId = mapped?.id ?? (await this.mapThread(tx, mailbox, parsed, existing.threadId));
+            await tx.mailMessageCopy.create({ data: copy(existing.id, mailboxThreadId) });
+            if (direction === 'outbound') await linkSend(existing.id, existing.rfc822MessageId);
+            return true;
+        }
+
+        const threadId =
+            mapped?.threadId ??
+            (await threadOfReferenced(tx, parsed)) ??
+            (
+                await tx.mailThread.create({
+                    data: { workspaceId: mailbox.workspaceId, subject: parsed.subject, lastMessageAt: parsed.sentAt },
+                    select: { id: true },
+                })
+            ).id;
+        const mailboxThreadId = mapped?.id ?? (await this.mapThread(tx, mailbox, parsed, threadId));
+        const addresses = parsed.participants.map((p) => p.address);
+        const [people, members, sentFromWorkspace] = await Promise.all([
+            personsByAddress(tx, addresses),
+            membersByAddress(tx, addresses),
+            direction === 'outbound'
+                ? Promise.resolve(true)
+                : tx.mailbox.count({ where: { email: parsed.from } }).then((n) => n > 0),
+        ]);
+        const row = await tx.mailMessage.create({
+            data: {
+                workspaceId: mailbox.workspaceId,
+                threadId,
+                identityKey,
+                rfc822MessageId: parsed.rfc822MessageId,
+                inReplyTo: parsed.inReplyTo,
+                references: parsed.references,
+                // The workspace's view: sent when it left one of the workspace's own mailboxes.
+                direction: sentFromWorkspace ? 'outbound' : 'inbound',
+                fromAddress: parsed.from,
+                sentAt: parsed.sentAt,
+                snippet: parsed.snippet,
+                subject: parsed.subject,
+                bodyText: parsed.bodyText,
+                bodyHtmlSanitized: parsed.bodyHtml,
+                bodyTruncated: parsed.bodyTruncated,
+                hasAttachments: parsed.hasAttachments,
+                participants: {
+                    create: parsed.participants.map((p) => ({
+                        workspaceId: mailbox.workspaceId,
+                        role: p.role,
+                        address: p.address,
+                        displayName: p.displayName,
+                        personId: people.get(p.address) ?? null,
+                        memberId: members.get(p.address) ?? null,
+                    })),
+                },
+            },
+        });
+        await tx.mailMessageCopy.create({ data: copy(row.id, mailboxThreadId) });
+        await recountThread(tx, threadId);
+        const targets = await recordTargetsForPeople(tx, [...people.values()]);
+        const email = emailSummaryOf(row, mailbox.id);
+        const event: DomainEvent = {
+            type: row.direction === 'inbound' ? 'email.received' : 'email.sent',
+            object: 'email',
+            workspaceId: mailbox.workspaceId,
+            actor: { kind: 'sync', id: mailbox.id },
+            occurredAt: email.sentAt,
+            recordId: row.id,
+            targets,
+            email,
+        };
+        if (direction === 'outbound') await linkSend(row.id, row.rfc822MessageId);
+        const fromPeople = parsed.participants
+            .filter((p) => p.role === 'from')
+            .map((p) => people.get(p.address))
+            .filter((id): id is string => id !== undefined);
+        const replied = await replyEventFor(
+            tx,
+            mailbox,
+            {
+                id: row.id,
+                threadId,
+                from: row.fromAddress,
+                inReplyTo: row.inReplyTo,
+                references: row.references,
+                sentAt: row.sentAt,
+            },
+            email,
+            fromPeople,
+        );
+        await this.events.recordAll(tx, replied ? [event, replied] : [event]);
+        return true;
+    }
+
+    /** Records that the mailbox's Gmail thread is part of `threadId`; returns the mapping's id. */
+    private async mapThread(
+        tx: WorkspaceClient,
+        mailbox: MailboxRow,
+        parsed: ParsedMessage,
+        threadId: string,
+    ): Promise<string> {
+        const row = await tx.mailboxThread.create({
+            data: {
+                workspaceId: mailbox.workspaceId,
+                mailboxId: mailbox.id,
+                providerThreadId: parsed.providerThreadId,
+                threadId,
+            },
+            select: { id: true },
+        });
+        return row.id;
     }
 
     private async knownIds(mailbox: MailboxRow, ids: readonly string[]): Promise<Set<string>> {
         if (ids.length === 0) return new Set();
         const rows = await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
-            tx.mailMessage.findMany({
+            tx.mailMessageCopy.findMany({
                 where: { mailboxId: mailbox.id, providerMessageId: { in: [...ids] } },
                 select: { providerMessageId: true },
             }),

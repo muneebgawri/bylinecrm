@@ -46,10 +46,13 @@ export interface ComposerPerson {
     email: string | null;
 }
 
-/** A reply: the stored message it answers, and the mailbox it must go from (the API's rule). */
+/**
+ * A reply: the stored message it answers, and the mailboxes holding it — a reply goes from one of them
+ * (the API's rule; one email may be in several of the workspace's mailboxes, #107).
+ */
 export interface ComposerReply {
     messageId: string;
-    mailboxId: string;
+    mailboxIds: readonly string[];
     subject: string;
 }
 
@@ -158,14 +161,12 @@ function MailboxGate(props: ComposerProps & { person: ComposerPerson; formHandle
         );
     }
     const own = ownSendingMailboxes(mailboxes.data, membership?.memberId).filter(
-        (m) => !reply || m.id === reply.mailboxId,
+        (m) => !reply || reply.mailboxIds.includes(m.id),
     );
     if (own.length === 0) {
         if (reply) {
             return (
-                <Notice>
-                    This thread is in a mailbox that is not one of your connected ones, so a reply cannot go from here.
-                </Notice>
+                <Notice>This message is in no mailbox of yours that can send, so a reply cannot go from here.</Notice>
             );
         }
         return (

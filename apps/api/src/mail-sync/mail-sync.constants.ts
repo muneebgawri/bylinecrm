@@ -69,3 +69,9 @@ export const MAIL_SYNC_JOB_BACKOFF_MS = 30_000;
 /** Page sizes for the thread list. */
 export const MAIL_THREADS_LIMIT_DEFAULT = 30;
 export const MAIL_THREADS_LIMIT_MAX = 100;
+
+/**
+ * Attempts at storing one copy (#107). Two mailboxes may store the first copy of one message at
+ * once; the second attempt of the run that lost finds the message and stores its copy beside it.
+ */
+export const STORE_ATTEMPTS = 2;

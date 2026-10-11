@@ -16,7 +16,9 @@ export const mailThreadSummary = named(
     'MailThreadSummary',
     z.object({
         id,
-        mailboxId: id,
+        mailboxIds: z.array(id).meta({
+            description: 'Every mailbox holding a copy of a message in the thread (#107): one email, many mailboxes.',
+        }),
         subject: z.string().meta({ description: "The thread's first message's subject." }),
         messageCount: z.number().int(),
         lastMessageAt: dateTime,
@@ -35,7 +37,14 @@ export const mailMessageView = named(
     'MailMessage',
     z.object({
         id,
-        direction: z.enum(MAIL_DIRECTIONS),
+        mailboxIds: z.array(id).meta({ description: 'The mailboxes holding a copy of this message (#107).' }),
+        bodiesVisible: z.boolean().meta({
+            description:
+                'False when the caller holds no copy and every copy is in another member’s personal mailbox: subject, snippet and participants only.',
+        }),
+        direction: z.enum(MAIL_DIRECTIONS).meta({
+            description: "The workspace's view: outbound when one of the workspace's mailboxes sent it.",
+        }),
         from: z.string(),
         subject: z.string(),
         snippet: z.string(),
@@ -59,13 +68,14 @@ export const mailThreadView = named(
     'MailThread',
     z.object({
         id,
-        mailboxId: id,
+        mailboxIds: z
+            .array(id)
+            .meta({ description: 'Every mailbox holding a copy of a message in the thread (#107).' }),
         subject: z.string(),
         messageCount: z.number().int(),
         lastMessageAt: dateTime,
         bodiesVisible: z.boolean().meta({
-            description:
-                "False when the thread is in another member's personal mailbox: subject, snippet and participants only.",
+            description: "True when every message's bodies are visible to the caller (each message says for itself).",
         }),
         messages: z.array(mailMessageView),
     }),

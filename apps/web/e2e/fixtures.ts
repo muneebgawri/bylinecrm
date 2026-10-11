@@ -781,7 +781,7 @@ export const unsubscribeStatus: UnsubscribeStatusView = { recipient: 'j•••
 /** Kate wrote; Dana answered. Kate's own personal mailbox, so the bodies are hers to read. */
 export const thread: MailThreadView = {
     id: IDS.thread,
-    mailboxId: IDS.mailbox,
+    mailboxIds: [IDS.mailbox],
     subject: 'Distribution options',
     messageCount: 2,
     lastMessageAt: at(2),
@@ -789,6 +789,8 @@ export const thread: MailThreadView = {
     messages: [
         {
             id: IDS.mailMessage,
+            mailboxIds: [IDS.mailbox],
+            bodiesVisible: true,
             direction: 'outbound',
             from: 'kate.morgan@example.com',
             subject: 'Distribution options',
@@ -819,6 +821,8 @@ export const thread: MailThreadView = {
         },
         {
             id: IDS.secondMailMessage,
+            mailboxIds: [IDS.mailbox],
+            bodiesVisible: true,
             direction: 'inbound',
             from: 'dana@acme.example',
             subject: 'Re: Distribution options',
