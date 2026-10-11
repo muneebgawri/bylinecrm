@@ -16,7 +16,7 @@ import { ERROR_CODES, type ApiErrorBody } from '@bylinecrm/shared';
 import { ZodValidationException } from 'nestjs-zod';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { RateLimited, UniqueConflict, ValidationFailed } from './api-errors';
+import { RateLimited, StateConflict, TooLarge, UniqueConflict, ValidationFailed } from './api-errors';
 import { INTERNAL_MESSAGE, INVALID_REQUEST_MESSAGE, toErrorBody } from './error.filter';
 
 const RID = 'req-0123456789';
@@ -53,6 +53,29 @@ describe('toErrorBody — the one envelope, golden per kind', () => {
             fieldErrors: [{ path: 'custom.beat', message: 'bad' }],
             requestId: RID,
         });
+    });
+
+    it('a state conflict carries its details so a client never parses the message (P1-2b)', () => {
+        const body = toErrorBody(
+            new StateConflict('3 deal(s) are in this stage', { liveDeals: 2, trashedDeals: 1 }),
+            RID,
+        );
+        expect(body).toEqual({
+            statusCode: 409,
+            code: 'conflict',
+            message: '3 deal(s) are in this stage',
+            details: { liveDeals: 2, trashedDeals: 1 },
+            requestId: RID,
+        });
+    });
+
+    it('too much work for one request: 413 payload_too_large with the limit; no details key when there are none', () => {
+        expect(toErrorBody(new TooLarge('too many', { deals: 6000, limit: 5000 }), RID)).toMatchObject({
+            statusCode: 413,
+            code: 'payload_too_large',
+            details: { deals: 6000, limit: 5000 },
+        });
+        expect('details' in toErrorBody(new TooLarge('too many'), RID)).toBe(false);
     });
 
     it('a unique violation: 409 conflict.unique naming the field', () => {

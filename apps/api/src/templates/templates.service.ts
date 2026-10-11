@@ -239,6 +239,14 @@ export class TemplatesService {
         return this.renderer.render(template, { ...target, senderMemberId: context.memberId });
     }
 
+    /**
+     * A subject and body that are not a stored template — the send path's free-form message (P2-3) —
+     * checked by the same rule a template is: inside the subset, naming only variables that exist.
+     */
+    validateDraft(draft: Pick<TemplateInput, 'subject' | 'body'>): Promise<void> {
+        return this.rls.withWorkspace((tx) => this.assertValid(tx, draft));
+    }
+
     /** A template's subject and body: inside the subset, naming only variables that exist. */
     private async assertValid(tx: WorkspaceClient, template: Pick<TemplateInput, 'subject' | 'body'>): Promise<void> {
         const custom = {} as Record<CustomVariableSource, Set<string>>;

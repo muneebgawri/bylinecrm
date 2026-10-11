@@ -6,11 +6,12 @@ import {
     type GmailPort,
     type GmailProfile,
     type GmailRawMessage,
+    type GmailSent,
 } from './gmail.port';
 import { GMAIL_API_BASE, GMAIL_HTTP_TIMEOUT_MS, GMAIL_LIST_PAGE_SIZE } from './mail-sync.constants';
 
 /**
- * Gmail's REST API (P2-2): the only code in the product that reads mail from Google. The bearer
+ * Gmail's REST API (P2-2, P2-3): the only code in the product that reads or sends mail through Google. The bearer
  * token comes from `MailboxTokens`; nothing here stores it, and no error message carries it.
  */
 @Injectable()
@@ -59,11 +60,44 @@ export class GmailHttp implements GmailPort {
         return body as unknown as GmailRawMessage;
     }
 
-    private async get(accessToken: string, path: string): Promise<Record<string, unknown>> {
+    async send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {
+        const payload = {
+            raw: Buffer.from(input.raw, 'utf8').toString('base64url'),
+            ...(input.threadId ? { threadId: input.threadId } : {}),
+        };
+        const body = await this.request(accessToken, '/messages/send', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+        if (typeof body['id'] !== 'string' || typeof body['threadId'] !== 'string') {
+            throw new GmailApiError(
+                null,
+                'unexpected_response',
+                'Gmail returned a sent message without an id or thread',
+            );
+        }
+        return { id: body['id'], threadId: body['threadId'] };
+    }
+
+    private get(accessToken: string, path: string): Promise<Record<string, unknown>> {
+        return this.request(accessToken, path, { method: 'GET' });
+    }
+
+    private async request(
+        accessToken: string,
+        path: string,
+        init: { method: 'GET' | 'POST'; body?: string },
+    ): Promise<Record<string, unknown>> {
         let response: Response;
         try {
             response = await fetch(`${GMAIL_API_BASE}${path}`, {
-                headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+                method: init.method,
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                    accept: 'application/json',
+                    ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+                },
+                ...(init.body !== undefined ? { body: init.body } : {}),
                 signal: AbortSignal.timeout(GMAIL_HTTP_TIMEOUT_MS),
             });
         } catch (error) {

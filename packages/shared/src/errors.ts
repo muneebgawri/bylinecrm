@@ -68,6 +68,9 @@ export interface FieldError {
     message: string;
 }
 
+/** Machine-readable facts about an error: flat, scalar values only. */
+export type ErrorDetails = Record<string, string | number | boolean>;
+
 /** Every error body the API sends. */
 export interface ApiErrorBody {
     statusCode: number;
@@ -75,6 +78,11 @@ export interface ApiErrorBody {
     /** Human, safe to show. Never an internal detail. */
     message: string;
     fieldErrors?: FieldError[];
+    /**
+     * Facts a client can act on without parsing `message` — counts, limits — present only when the
+     * code that raised the error has some (e.g. a stage delete refused for `{ liveDeals, trashedDeals }`).
+     */
+    details?: ErrorDetails;
     /** Echoed in the `X-Request-Id` header too; quote it when reporting a problem. */
     requestId: string;
 }

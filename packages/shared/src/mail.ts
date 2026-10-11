@@ -118,6 +118,38 @@ export type EmailSummary = {
 };
 
 /**
+ * Mail the CRM sends (P2-3) and where it stands. `queued`: accepted, waiting for the send job;
+ * `sending`: an attempt has started (Gmail may or may not have it — the next attempt checks first);
+ * `sent`: Gmail accepted it; `failed`: it will not be sent (the mailbox stopped working, Gmail refused
+ * it, or the queue's attempts ran out). A message is sent from its sender's own personal mailbox.
+ */
+export const MAIL_OUTBOUND_STATUSES = ['queued', 'sending', 'sent', 'failed'] as const;
+export type MailOutboundStatus = (typeof MAIL_OUTBOUND_STATUSES)[number];
+
+/** At most this many recipients (to, cc and bcc together) on one message. */
+export const MAIL_SEND_RECIPIENTS_MAX = 50;
+
+/**
+ * What `email.replied` says about the reply (P2-3): the inbound message, the CRM message it answers,
+ * its thread, the people who wrote it and the deals it concerns. The stage rules read `related`;
+ * this is for webhooks and the timeline's readers.
+ */
+export type EmailReply = {
+    /** The reply: the CRM's id of the inbound message (`recordId` of the event). */
+    messageId: string;
+    /** The CRM's send it answers (`GET /mail/messages/:id`). */
+    inReplyToOutboundId: string;
+    /** The stored copy of that send, as sync's writer made it; `null` only in the moment before it is stored. */
+    inReplyToMessageId: string | null;
+    /** The CRM thread the reply is in. */
+    threadId: string;
+    /** People the reply is from. */
+    personIds: string[];
+    /** Open deals those people are the point of contact for, and the deal the sent message was about. */
+    dealIds: string[];
+};
+
+/**
  * A blocklist entry is a full address (`someone@example.com`) or a whole domain (`@example.com`),
  * lower case. A message whose every outside participant is blocklisted is not imported.
  */
