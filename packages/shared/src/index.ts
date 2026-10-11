@@ -44,6 +44,7 @@ export * from './pipelines.js';
 export * from './platform.js';
 export * from './records.js';
 export * from './sending-pool.js';
+export * from './sequences.js';
 export * from './suppression.js';
 export * from './templates.js';
 export * from './views.js';
