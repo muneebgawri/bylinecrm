@@ -50,5 +50,6 @@ import { MailSendSweep } from './sweep';
     ],
     controllers: [MailSendController],
     providers: [MailSendService, MailSendWorkers, MailSendSweep, SendPolicy],
+    exports: [MailSendService],
 })
 export class MailSendModule {}

@@ -13,6 +13,8 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
     phones: 'phones',
     jobTitle: 'job title',
     city: 'city',
+    source: 'source',
+    country: 'country',
     links: 'links',
     avatarUrl: 'avatar',
     companyId: 'company',
