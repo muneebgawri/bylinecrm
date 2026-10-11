@@ -69,7 +69,12 @@ export class AuthService {
             return await this.ownerPrisma.$transaction(async (tx) => {
                 const verified = input.inviteToken ? await spendSignupInvite(tx, input.inviteToken, email) : false;
                 const user = await tx.user.create({
-                    data: { email, passwordHash, emailVerifiedAt: verified ? new Date() : null },
+                    data: {
+                        email,
+                        passwordHash,
+                        displayName: displayNameFor(email),
+                        emailVerifiedAt: verified ? new Date() : null,
+                    },
                 });
                 const workspace = await createWorkspaceWithAdmin(tx, user.id, input.workspaceName);
                 return { user: userView(user), workspace };
@@ -175,7 +180,9 @@ export class AuthService {
             if (known) return userView(known.user);
             const user =
                 (await tx.user.findUnique({ where: { email } })) ??
-                (await tx.user.create({ data: { email, emailVerifiedAt: new Date() } }));
+                (await tx.user.create({
+                    data: { email, emailVerifiedAt: new Date(), displayName: displayNameFor(email) },
+                }));
             if (!user.emailVerifiedAt) {
                 await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
             }
@@ -206,7 +213,14 @@ export class AuthService {
             let userId: string;
             if ('signup' in actor) {
                 const created = await tx.user
-                    .create({ data: { email: invite.email, passwordHash, emailVerifiedAt: new Date() } })
+                    .create({
+                        data: {
+                            email: invite.email,
+                            passwordHash,
+                            emailVerifiedAt: new Date(),
+                            displayName: displayNameFor(invite.email),
+                        },
+                    })
                     .catch((error: unknown) => {
                         throw uniqueViolation(error) ? new UniqueConflict('sign in to accept this invitation') : error;
                     });
@@ -220,12 +234,7 @@ export class AuthService {
             }
             await tx.workspaceMember
                 .create({
-                    data: {
-                        workspaceId: invite.workspaceId,
-                        userId,
-                        roleId: invite.roleId,
-                        displayName: displayNameFor(invite.email),
-                    },
+                    data: { workspaceId: invite.workspaceId, userId, roleId: invite.roleId },
                 })
                 .catch((error: unknown) => {
                     throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
@@ -344,16 +353,13 @@ async function createWorkspaceShell(
 
 async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: string): Promise<WorkspaceView> {
     const { workspace, adminRoleId } = await createWorkspaceShell(tx, name);
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
-    await tx.workspaceMember.create({
-        data: { workspaceId: workspace.id, userId, roleId: adminRoleId, displayName: displayNameFor(user.email) },
-    });
+    await tx.workspaceMember.create({ data: { workspaceId: workspace.id, userId, roleId: adminRoleId } });
     return workspace;
 }
 
 /**
- * The name a new member is shown under until they set one: the local part of their address.
- * Other members see this and never the address itself (`/members/summary`).
+ * The name a new person is shown under until they confirm one (`/api/me/profile`): the local part
+ * of their address. Other members see this and never the address itself (`/members/summary`).
  */
 export function displayNameFor(email: string): string {
     return email.split('@')[0] ?? email;

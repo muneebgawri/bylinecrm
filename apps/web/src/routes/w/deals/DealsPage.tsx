@@ -332,6 +332,7 @@ export function DealsPage() {
     const newDealButton = canEdit ? (
         <Button
             data-primary-action
+            data-primary-dialog
             variant="primary"
             shape="square"
             onClick={() => setParam(DEALS_PARAMS.create, '1')}

@@ -26,6 +26,12 @@ export interface WorkspaceRunContext {
 
 /** The store for one request or job: empty until a guard fills it. */
 interface Scope {
+    /**
+     * Whose scope this is: a request's (opened by `begin`) or a job's (opened by `run`). Decides the
+     * tenant pool `withWorkspace` uses (#86): request work on the request pool, everything else —
+     * jobs, sweeps, the listeners they trigger, code outside any scope — on the background pool.
+     */
+    kind: 'request' | 'job';
     workspace?: WorkspaceRunContext;
     /** The request's id (P1-1d), when the scope is a request's: what a query observer is tied to. */
     requestId?: string;
@@ -49,7 +55,12 @@ export class WorkspaceContext {
 
     /** Opens an empty scope for the chain started by `fn` (one per request), carrying the request's id. */
     begin<T>(fn: () => T, requestId?: string): T {
-        return this.storage.run(requestId ? { requestId } : {}, fn);
+        return this.storage.run(requestId ? { kind: 'request', requestId } : { kind: 'request' }, fn);
+    }
+
+    /** True inside a request's scope; false in a job, a sweep, or outside any scope. */
+    inRequest(): boolean {
+        return this.storage.getStore()?.kind === 'request';
     }
 
     /** The id of the request this async chain belongs to; `undefined` outside a request. */
@@ -59,7 +70,7 @@ export class WorkspaceContext {
 
     /** Opens a scope already filled — for jobs and other non-request work. */
     run<T>(context: WorkspaceRunContext, fn: () => T): T {
-        return this.storage.run({ workspace: context }, fn);
+        return this.storage.run({ kind: 'job', workspace: context }, fn);
     }
 
     /** Records the guard's decision in the current scope. Throws outside any scope. */

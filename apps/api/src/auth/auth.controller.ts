@@ -7,6 +7,7 @@ import {
     Inject,
     NotImplementedException,
     Param,
+    Patch,
     Post,
     Req,
     Res,
@@ -20,7 +21,8 @@ import { PlatformAccess, PlatformForbidden } from '../platform/platform-access.s
 import { AuthService, type UserView, type WorkspaceView } from './auth.service';
 import { AuthCookies } from './cookies';
 import { CurrentPrincipal, Public } from './decorators';
-import { AcceptInviteSignupDto, CreateWorkspaceDto, LoginDto, SignupDto } from './dto';
+import { AcceptInviteSignupDto, CreateWorkspaceDto, LoginDto, SignupDto, UpdateProfileDto } from './dto';
+import { ProfileService } from './profile.service';
 import { OidcService } from './oidc.service';
 import type { Principal } from './principal';
 import { SessionService } from './session.service';
@@ -29,6 +31,7 @@ import { NotImplementedYet, Redirects, Returns } from '../openapi/responses';
 import {
     authProviders,
     invitePreview,
+    profileView,
     signedIn,
     signedUp,
     userView,
@@ -36,6 +39,7 @@ import {
     type AuthProvidersView,
     type InvitePreviewView,
 } from '../workspace/responses';
+import type { ProfileView } from '../workspace/responses';
 
 /** Sign-up, sign-in and sign-out, for people. Machines use API keys and never come here. */
 @ApiTags('auth')
@@ -198,6 +202,7 @@ export class MeController {
         private readonly auth: AuthService,
         private readonly memberships: MembershipService,
         private readonly platformAccess: PlatformAccess,
+        private readonly profiles: ProfileService,
     ) {}
 
     @Get('me')
@@ -205,6 +210,20 @@ export class MeController {
     me(@CurrentPrincipal() principal: Principal): Promise<UserView> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key has no profile');
         return this.auth.me(principal.userId);
+    }
+
+    @Get('me/profile')
+    @Returns(profileView)
+    profile(@CurrentPrincipal() principal: Principal): Promise<ProfileView> {
+        if (principal.kind !== 'user') throw new ForbiddenException('an API key has no profile');
+        return this.profiles.get(principal.userId);
+    }
+
+    @Patch('me/profile')
+    @Returns(profileView)
+    updateProfile(@Body() body: UpdateProfileDto, @CurrentPrincipal() principal: Principal): Promise<ProfileView> {
+        if (principal.kind !== 'user') throw new ForbiddenException('an API key has no profile');
+        return this.profiles.setDisplayName(principal.userId, body.displayName);
     }
 
     @Get('me/workspaces')

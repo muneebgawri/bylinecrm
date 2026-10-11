@@ -15,6 +15,7 @@ import {
     Input,
     cn,
     focusRing,
+    toast,
 } from '@bylinecrm/ui';
 import { ArrowDown, ArrowUp, ChevronRight, X } from 'lucide-react';
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
@@ -23,6 +24,7 @@ import {
     useArchiveCustomField,
     useArchivedCustomFields,
     useCreateCustomField,
+    useRestoreCustomField,
     useUpdateCustomField,
 } from '../../../api/settings';
 import type { CustomFieldView } from '../../../api/types';
@@ -91,6 +93,7 @@ export function CustomFields() {
                         extra: (
                             <Button
                                 data-primary-action
+                                data-primary-dialog
                                 variant="primary"
                                 shape="square"
                                 size="sm"
@@ -149,7 +152,7 @@ export function CustomFields() {
                     }),
                 }}
             />
-            <ArchivedFields workspaceId={workspaceId} object={object} />
+            <ArchivedFields workspaceId={workspaceId} object={object} canRestore={canEdit} />
             {editing !== null && (
                 <CustomFieldEditor
                     workspaceId={workspaceId}
@@ -168,7 +171,7 @@ export function CustomFields() {
                     }
                 }}
                 title={`Archive ${archiving?.label ?? 'field'}?`}
-                body="Records keep their values; the field leaves forms, filters and templates, and can't be restored from here."
+                body="Records keep their values; the field leaves forms, filters and templates until it is restored from Archived fields."
                 confirm="Archive field"
                 pending={archive.isPending}
                 error={archive.error ? failureText(archive.error) : undefined}
@@ -178,10 +181,22 @@ export function CustomFields() {
     );
 }
 
-/** The archived fields of one record kind, collapsed by default and read-only. */
-function ArchivedFields({ workspaceId, object }: { workspaceId: string; object: RecordObject }) {
+/**
+ * The archived fields of one record kind, collapsed by default. An admin restores one from its row
+ * (the key stayed reserved while archived, so a restore cannot collide); others read only.
+ */
+function ArchivedFields({
+    workspaceId,
+    object,
+    canRestore,
+}: {
+    workspaceId: string;
+    object: RecordObject;
+    canRestore: boolean;
+}) {
     const [open, setOpen] = useState(false);
     const archived = useArchivedCustomFields(workspaceId, object);
+    const restore = useRestoreCustomField(workspaceId);
     const rows = archived.data ?? [];
     if (archived.isPending || rows.length === 0) return null;
     return (
@@ -199,20 +214,42 @@ function ArchivedFields({ workspaceId, object }: { workspaceId: string; object: 
                 Archived fields ({rows.length})
             </button>
             {open && (
-                <ul aria-label="Archived fields" className="m-0 list-none border-t border-border p-0">
-                    {rows.map((f) => (
-                        <li
-                            key={f.id}
-                            className="flex items-center gap-3 border-b border-border px-4 py-2.5 last:border-b-0"
-                        >
-                            <span className="flex-1 text-sm">{f.label}</span>
-                            <span className="text-xs text-text-muted">
-                                {typeSummary(f)}
-                                {f.archivedAt && ` · archived ${formatDate(f.archivedAt)}`}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
+                <>
+                    <ul aria-label="Archived fields" className="m-0 list-none border-t border-border p-0">
+                        {rows.map((f) => (
+                            <li
+                                key={f.id}
+                                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2.5 last:border-b-0"
+                            >
+                                <span className="min-w-0 flex-1 text-sm">{f.label}</span>
+                                <span className="text-xs text-text-muted">
+                                    {typeSummary(f)}
+                                    {f.archivedAt && ` · archived ${formatDate(f.archivedAt)}`}
+                                </span>
+                                {canRestore && (
+                                    <Button
+                                        shape="square"
+                                        size="sm"
+                                        aria-label={`Restore ${f.label}`}
+                                        loading={restore.isPending && restore.variables === f.id}
+                                        onClick={() =>
+                                            restore.mutate(f.id, {
+                                                onSuccess: () => toast({ title: `${f.label} restored` }),
+                                            })
+                                        }
+                                    >
+                                        Restore
+                                    </Button>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                    {restore.error && (
+                        <p role="alert" className="m-0 border-t border-border px-4 py-2 text-sm text-danger">
+                            {failureText(restore.error)}
+                        </p>
+                    )}
+                </>
             )}
         </section>
     );

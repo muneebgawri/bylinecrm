@@ -14,6 +14,7 @@ import {
 } from '../workspace/workspace.controllers';
 import { ApiKeyService } from './api-key.service';
 import { AuthController, MeController } from './auth.controller';
+import { ProfileService } from './profile.service';
 import { AuthService } from './auth.service';
 import { AuthGuard, CsrfGuard, RequestScopeMiddleware, RequiresGuard, WorkspaceGuard } from './guards';
 import { OidcService } from './oidc.service';
@@ -45,6 +46,7 @@ import { SessionService } from './session.service';
         OidcService,
         ApiKeyService,
         MembershipService,
+        ProfileService,
         RolesService,
         MembersService,
         PlatformAccess,

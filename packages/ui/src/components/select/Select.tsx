@@ -2,6 +2,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown } from 'lucide-react';
 import { forwardRef, type ComponentPropsWithoutRef, type ComponentRef } from 'react';
 import { cn } from '../../lib/cn';
+import { phoneTouchArea } from '../../lib/touch';
 import { focusRing } from '../../lib/focus';
 import { popoverSurface } from '../../lib/surfaces';
 
@@ -77,6 +78,7 @@ export const SelectItem = forwardRef<
             ref={ref}
             className={cn(
                 'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-text outline-none',
+                phoneTouchArea.row,
                 'data-[highlighted]:bg-surface data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
                 className,
             )}

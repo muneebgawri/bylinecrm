@@ -80,6 +80,7 @@ import type {
  */
 export const keys = {
     me: ['me'] as const,
+    profile: ['me', 'profile'] as const,
     workspaces: ['me', 'workspaces'] as const,
     membership: (workspaceId: string) => ['w', workspaceId, 'me'] as const,
     members: (workspaceId: string) => ['w', workspaceId, 'members'] as const,
@@ -147,7 +148,25 @@ export function createQueryClient(): QueryClient {
 
 /** Who is signed in. `enabled: false` where asking would send a signed-out person to sign-in (a 401 does). */
 export const useMe = (enabled = true) =>
-    useQuery({ queryKey: keys.me, queryFn: ({ signal }) => me.profile(signal), enabled });
+    useQuery({ queryKey: keys.me, queryFn: ({ signal }) => me.current(signal), enabled });
+export const useProfile = () => useQuery({ queryKey: keys.profile, queryFn: ({ signal }) => me.profile(signal) });
+
+/**
+ * Saves the display name. Every list, row and picker that names a member reads it, in every
+ * workspace, so everything cached is refreshed — a rename is rare, and a stale name is wrong.
+ */
+export function useUpdateProfile() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (displayName: string) => me.updateProfile(displayName),
+        onSuccess: (profile) => {
+            client.setQueryData(keys.profile, profile);
+            void client.invalidateQueries({
+                predicate: (query) => query.queryKey[0] !== 'me' || query.queryKey[1] !== 'profile',
+            });
+        },
+    });
+}
 export const useWorkspaces = () =>
     useQuery({ queryKey: keys.workspaces, queryFn: ({ signal }) => me.workspaces(signal) });
 export const useProviders = () =>

@@ -264,6 +264,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                         {write.allowed && (
                             <Button
                                 data-primary-action
+                                data-primary-dialog
                                 shape="square"
                                 variant="primary"
                                 onClick={() => setCreating(true)}

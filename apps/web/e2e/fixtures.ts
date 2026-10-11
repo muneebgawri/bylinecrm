@@ -41,6 +41,7 @@ import type {
     TaskView,
     TemplateVariablesView,
     TimelineActivityView,
+    ProfileView,
     UserView,
     WorkspaceView,
 } from '../src/api/types';
@@ -86,6 +87,8 @@ const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(i
 const member = { kind: 'member' as const, id: IDS.member };
 
 export const user: UserView = { id: IDS.user, email: 'kate.morgan@example.com', emailVerified: true };
+/** A confirmed name, so the gate's pages are not covered by the first-sign-up prompt. */
+export const profile: ProfileView = { email: user.email, displayName: 'Kate Morgan', completed: true };
 
 /** Two workspaces, so `/workspaces` shows its picker instead of redirecting to the only one. */
 export const workspaces: WorkspaceView[] = [
@@ -161,6 +164,7 @@ export const members: MemberView[] = [
         id: IDS.member,
         userId: IDS.user,
         email: user.email,
+        displayName: 'Kate Morgan',
         roleId: IDS.adminRole,
         roleName: SYSTEM_ROLES.admin,
         createdAt: at(24 * 30),
@@ -169,6 +173,7 @@ export const members: MemberView[] = [
         id: IDS.secondMember,
         userId: '0b1e0000-0000-4000-8000-0000000000a2',
         email: 'sam.okafor@example.com',
+        displayName: 'Sam Okafor',
         roleId: IDS.memberRole,
         roleName: SYSTEM_ROLES.member,
         createdAt: at(24 * 12),

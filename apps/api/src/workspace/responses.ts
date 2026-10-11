@@ -6,6 +6,18 @@ import { dateTime, id, named } from '../openapi/responses';
 
 export const userView = named('User', z.object({ id, email: z.email(), emailVerified: z.boolean() }));
 
+/** The person's own profile (`/api/me/profile`): the name every workspace shows them under. */
+export const profileView = named(
+    'Profile',
+    z.object({
+        email: z.email(),
+        displayName: z.string().nullable(),
+        completed: z.boolean().meta({
+            description: 'The person has confirmed their name; until then the app asks once, after sign-up.',
+        }),
+    }),
+);
+
 export const workspaceView = named('Workspace', z.object({ id, slug: z.string(), name: z.string() }));
 
 export const signedUp = named('SignedUp', z.object({ user: userView, workspace: workspaceView }));
@@ -48,6 +60,7 @@ export const memberView = named(
         id,
         userId: id,
         email: z.email(),
+        displayName: z.string().nullable(),
         roleId: id,
         roleName: z.string(),
         createdAt: dateTime,
@@ -94,6 +107,7 @@ export const createdInvite = named(
 );
 
 export type UserView = z.output<typeof userView>;
+export type ProfileView = z.output<typeof profileView>;
 export type WorkspaceView = z.output<typeof workspaceView>;
 export type AuthProvidersView = z.output<typeof authProviders>;
 export type InvitePreviewView = z.output<typeof invitePreview>;

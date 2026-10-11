@@ -24,3 +24,6 @@ export const API_KEY_ID_LENGTH = 8;
  * `WORKSPACE_SETTING`.
  */
 export const USER_SETTING = 'app.user_id';
+
+/** The longest display name a person may set (`PATCH /api/me/profile`); the web form reads the same limit. */
+export const DISPLAY_NAME_MAX_LENGTH = 80;

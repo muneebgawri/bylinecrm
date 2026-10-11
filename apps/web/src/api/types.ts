@@ -27,6 +27,7 @@ export type Loose<T> = T extends (infer U)[]
 
 // ---- Account, workspaces, membership (P0-3) ------------------------------------------------
 export type UserView = Schemas['User'];
+export type ProfileView = Schemas['Profile'];
 export type WorkspaceView = Schemas['Workspace'];
 export type RoleView = Schemas['Role'];
 export type MemberView = Schemas['Member'];

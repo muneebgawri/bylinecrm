@@ -72,7 +72,12 @@ export function PlatformWorkspaces() {
                                     Invite to sign up
                                 </Button>
                             )}
-                            <Button data-primary-action variant="primary" onClick={() => setCreating(true)}>
+                            <Button
+                                data-primary-action
+                                data-primary-dialog
+                                variant="primary"
+                                onClick={() => setCreating(true)}
+                            >
                                 <Plus aria-hidden /> New workspace
                             </Button>
                         </>

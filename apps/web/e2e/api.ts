@@ -27,6 +27,7 @@ const ID = String.raw`([^/]+)`;
 /** GET routes, most specific first. Writes are answered by `WRITES` below. */
 const GETS: [RegExp, Handler][] = [
     [/^\/api\/me$/, () => data.user],
+    [/^\/api\/me\/profile$/, () => data.profile],
     [/^\/api\/me\/workspaces$/, () => data.workspaces],
     [/^\/api\/auth\/providers$/, () => data.providers],
     [/^\/api\/auth\/invites\/([^/]+)$/, (m) => invitePreview(m[1])],

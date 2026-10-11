@@ -45,6 +45,7 @@ export function ApiKeys() {
                     extra: (
                         <Button
                             data-primary-action
+                            data-primary-dialog
                             variant="primary"
                             shape="square"
                             size="sm"
