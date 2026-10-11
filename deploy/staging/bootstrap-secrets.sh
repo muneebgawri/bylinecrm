@@ -59,6 +59,17 @@ PG_PASSWORD=$(keep_or_generate "$PG_ENV" POSTGRES_PASSWORD hex24)
 APP_DB_PASSWORD=$(keep_or_generate "$APP_ENV" APP_DB_PASSWORD hex24)
 SECRETS_KEY=$(keep_or_generate "$APP_ENV" SECRETS_KEY key32)
 
+# Operator-set (not secret, not derived): the platform admins (P0-14). Pass
+# BYLINECRM_PLATFORM_ADMIN_EMAILS to change the list; otherwise the stored list is kept, so a re-run
+# never drops it. Empty is valid and means nobody can create a workspace.
+if [ -n "${BYLINECRM_PLATFORM_ADMIN_EMAILS+set}" ]; then
+    PLATFORM_ADMIN_EMAILS=$BYLINECRM_PLATFORM_ADMIN_EMAILS
+    echo "bootstrap-secrets: set PLATFORM_ADMIN_EMAILS from BYLINECRM_PLATFORM_ADMIN_EMAILS" >&2
+else
+    PLATFORM_ADMIN_EMAILS=$(existing "$APP_ENV" PLATFORM_ADMIN_EMAILS)
+    echo "bootstrap-secrets: kept existing PLATFORM_ADMIN_EMAILS" >&2
+fi
+
 write_atomically() {
     local target=$1 tmp
     tmp=$(mktemp "${target}.XXXXXX")
@@ -92,6 +103,9 @@ WEBHOOK_ALLOW_PRIVATE_TARGETS=0
 MAIL_SYNC_WORKER=1
 MAIL_SEND_WORKER=1
 DB_QUERY_EVENTS=0
+# Staging's URL is public: sign-up stays closed (docs/deploy/staging.md). Never open.
+SIGNUP_MODE=closed
+PLATFORM_ADMIN_EMAILS=${PLATFORM_ADMIN_EMAILS}
 EOF
 
 echo "bootstrap-secrets: wrote ${PG_ENV} and ${APP_ENV} (0600); no secret was printed" >&2

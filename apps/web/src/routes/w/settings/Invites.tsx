@@ -1,3 +1,4 @@
+import { invitationUrl } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -122,7 +123,7 @@ function InviteDialog({ workspaceId, open, onClose }: { workspaceId: string; ope
             : create.isError
               ? 'Could not create the invitation.'
               : undefined;
-    const link = token ? `${window.location.origin}/sign-up?invite=${encodeURIComponent(token)}` : '';
+    const link = token ? invitationUrl(window.location.origin, 'member', token) : '';
 
     return (
         <Dialog open={open} onOpenChange={(o) => !o && close()}>

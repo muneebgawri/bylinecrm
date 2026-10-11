@@ -37,6 +37,17 @@ export type InviteView = Schemas['Invite'];
 export type MembershipSummary = Schemas['Standing'];
 export type MemberSummaryView = Schemas['MemberSummary'];
 
+export type AuthProvidersView = Schemas['AuthProviders'];
+export type InvitePreviewView = Schemas['InvitePreview'];
+
+// ---- Platform (P0-14) -------------------------------------------------------------------------
+export type PlatformAccessView = Schemas['PlatformAccess'];
+export type PlatformWorkspaceView = Schemas['PlatformWorkspace'];
+export type PlatformInviteView = Schemas['PlatformInvite'];
+export type CreatedPlatformWorkspaceView = Schemas['CreatedPlatformWorkspace'];
+export type CreatePlatformWorkspaceInput = Loose<Schemas['CreatePlatformWorkspaceDto']>;
+export type CreateSignupInviteInput = Loose<Schemas['CreateSignupInviteDto']>;
+
 export type SignupInput = Loose<Schemas['SignupDto']>;
 export type LoginInput = Loose<Schemas['LoginDto']>;
 export type CreateRoleInput = Loose<Schemas['CreateRoleDto']>;
@@ -161,3 +172,14 @@ export type UnsubscribeStatusView = Schemas['UnsubscribeStatus'];
 export type SuppressionListQuery = Loose<
     NonNullable<paths['/api/w/{workspaceId}/suppressions']['get']['parameters']['query']>
 >;
+// ---- Sending, scheduling and reading mail on a record (P2-3, P2-5; P2-UI-1) --------------------
+export type SendMailInput = Loose<Schemas['SendMailDto']>;
+export type MailSendAcceptedView = Schemas['MailSendAccepted'];
+/** Where one send stands: its status, its schedule and, when it failed, why. */
+export type MailOutboundView = Schemas['MailOutbound'];
+export type MailOutboundStatus = MailOutboundView['status'];
+export type MailScheduledPage = Schemas['MailScheduledPage'];
+export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
+export type MailThreadView = Schemas['MailThread'];
+export type MailMessageView = Schemas['MailMessage'];
+export type MailParticipantView = MailMessageView['participants'][number];

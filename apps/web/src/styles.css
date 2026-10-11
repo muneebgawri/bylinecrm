@@ -23,6 +23,11 @@
     white-space: nowrap;
     user-select: all;
 }
+/* A variable with no value for the recipient (the API's preview says which): never sent blank. */
+.variable-chip.variable-chip-missing {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+}
 .variable-chip.ProseMirror-selectednode {
     outline: 2px solid var(--color-ring);
     outline-offset: 1px;

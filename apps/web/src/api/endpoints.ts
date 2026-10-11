@@ -1,6 +1,14 @@
 import type { FilterGroup, RecordObject, RecordTarget, TaskStatus } from '@bylinecrm/shared';
 import { API_BASE, request, requestFile } from './client';
 import type {
+    AuthProvidersView,
+    CreatedPlatformWorkspaceView,
+    CreatePlatformWorkspaceInput,
+    CreateSignupInviteInput,
+    InvitePreviewView,
+    PlatformAccessView,
+    PlatformInviteView,
+    PlatformWorkspaceView,
     ApiKeyView,
     AttachmentView,
     BlocklistEntryCreatedView,
@@ -95,7 +103,7 @@ export function targetParam(target: RecordTarget): string {
 }
 
 /** Builds `?a=b&c=d` from the defined values only. */
-function query(params: Record<string, string | number | undefined>): string {
+export function query(params: Record<string, string | number | undefined>): string {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, String(value));
     const text = search.toString();
@@ -131,14 +139,18 @@ export type ExportBody = {
  * and nowhere else; a component never spells `/w/` itself.
  */
 
-const workspacePath = (workspaceId: string, rest: string) => `/w/${workspaceId}${rest}`;
+export const workspacePath = (workspaceId: string, rest: string) => `/w/${workspaceId}${rest}`;
 
 export const auth = {
     signup: (input: SignupInput) =>
         request<{ user: UserView; workspace: WorkspaceView }>('POST', '/auth/signup', { body: input }),
     login: (input: LoginInput) => request<{ user: UserView }>('POST', '/auth/login', { body: input }),
     logout: () => request<void>('POST', '/auth/logout'),
-    providers: () => request<{ providers: string[] }>('GET', '/auth/providers'),
+    /** The providers, and who may sign up (P0-14): the sign-in and sign-up pages read both. */
+    providers: () => request<AuthProvidersView>('GET', '/auth/providers'),
+    /** What a workspace invitation is for; anyone holding the token may ask. */
+    previewInvite: (token: string, signal?: AbortSignal) =>
+        request<InvitePreviewView>('GET', `/auth/invites/${encodeURIComponent(token)}`, { signal }),
     /** Where the browser is sent to start a provider sign-in; a full-page navigation, not a fetch. */
     providerStartUrl: (issuer: string) => `/api/auth/oidc/${encodeURIComponent(issuer)}`,
     acceptInvite: (token: string) =>
@@ -154,6 +166,16 @@ export const me = {
     updateProfile: (displayName: string) => request<ProfileView>('PATCH', '/me/profile', { body: { displayName } }),
     workspaces: (signal?: AbortSignal) => request<WorkspaceView[]>('GET', '/me/workspaces', { signal }),
     createWorkspace: (name: string) => request<WorkspaceView>('POST', '/workspaces', { body: { name } }),
+};
+
+/** The operator's routes (P0-14): platform admins only, except `access`. */
+export const platform = {
+    access: (signal?: AbortSignal) => request<PlatformAccessView>('GET', '/platform/access', { signal }),
+    workspaces: (signal?: AbortSignal) => request<PlatformWorkspaceView[]>('GET', '/platform/workspaces', { signal }),
+    createWorkspace: (input: CreatePlatformWorkspaceInput) =>
+        request<CreatedPlatformWorkspaceView>('POST', '/platform/workspaces', { body: input }),
+    createSignupInvite: (input: CreateSignupInviteInput) =>
+        request<PlatformInviteView>('POST', '/platform/signup-invites', { body: input }),
 };
 
 export const membership = {

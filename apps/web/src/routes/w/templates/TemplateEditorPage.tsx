@@ -19,8 +19,6 @@ import {
     cn,
     toast,
     useIsMobile,
-    useMediaQuery,
-    useTheme,
 } from '@bylinecrm/ui';
 import { ArrowLeft, Lock, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -37,6 +35,7 @@ import {
 import type { EmailTemplateView, MailSettingsView } from '../../../api/types';
 import { useCan, usePermission } from '../../../auth/capabilities';
 import { useRegisterCommands } from '../../../commands/registry';
+import { EmailFrame } from '../../../components/EmailFrame';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { RichTextEditor, type RichTextHandle } from '../../../components/rich-text/RichTextEditor';
 import { countryName } from '../../../lib/countries';
@@ -44,7 +43,7 @@ import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { KindMenu, OUTREACH_REASON } from './kind';
-import { previewDocument, resolutionLine, templateVariablePaths } from './preview';
+import { resolutionLine, templateVariablePaths } from './preview';
 import { docToSubject, subjectToDoc } from './subject';
 import { VariablePicker } from './VariablePicker';
 
@@ -638,9 +637,10 @@ function PreviewPane({
                             <RefreshCw aria-hidden />
                         </Button>
                     </div>
-                    <PreviewFrame
+                    <EmailFrame
                         html={rendered.html}
                         title={`Email preview for ${personName ?? 'the chosen person'}`}
+                        className="h-96 max-md:h-[55vh]"
                     />
                     {line && (
                         <p
@@ -670,28 +670,5 @@ function PreviewPane({
                 </Tooltip>
             </div>
         </section>
-    );
-}
-
-/**
- * The rendered email in a sandbox that runs no script (`sandbox=""`). Its document carries the
- * page's design tokens, so it is (re)written after the theme has been applied — a passive effect
- * runs after the theme provider's layout effect — and again whenever the theme or the OS
- * preference changes, so the preview never shows the previous theme.
- */
-function PreviewFrame({ html, title }: { html: string; title: string }) {
-    const frame = useRef<HTMLIFrameElement>(null);
-    const { theme } = useTheme();
-    const systemDark = useMediaQuery('(prefers-color-scheme: dark)');
-    useEffect(() => {
-        if (frame.current) frame.current.srcdoc = previewDocument(html);
-    }, [html, theme, systemDark]);
-    return (
-        <iframe
-            ref={frame}
-            title={title}
-            sandbox=""
-            className="h-96 w-full rounded-md border border-border bg-surface max-md:h-[55vh]"
-        />
     );
 }

@@ -1,6 +1,7 @@
 import { Button, EmptyState, Skeleton } from '@bylinecrm/ui';
 import { isRouteErrorResponse, Link, useNavigate, useRouteError } from 'react-router';
 import { ApiError } from '../api/client';
+import { LogoMark } from '../shell/LogoMark';
 import { paths } from './paths';
 
 /** What a route shows while its data loads: the page's shape, no layout shift (FR-CRMS-UI-7). */
@@ -17,6 +18,35 @@ export function RouteSkeleton() {
             </div>
             <Skeleton className="mt-4 h-80" />
         </div>
+    );
+}
+
+/**
+ * What a signed-out page shows while its code loads: the auth card's shape (`AuthLayout`) — logo,
+ * title, a form — so the page does not jump when it arrives (FR-CRMS-UI-7, #102).
+ */
+export function AuthSkeleton() {
+    return (
+        <main
+            className="grid min-h-dvh place-items-center bg-background px-4 py-10 text-text"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading"
+        >
+            <div className="w-full max-w-100">
+                <div className="mb-6 flex flex-col items-center gap-3">
+                    <LogoMark size="lg" />
+                    <Skeleton className="h-7 w-48" />
+                </div>
+                <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
+                    <Skeleton className="mb-2 h-4 w-16" />
+                    <Skeleton className="mb-4 h-10" />
+                    <Skeleton className="mb-2 h-4 w-20" />
+                    <Skeleton className="mb-6 h-10" />
+                    <Skeleton className="h-10" />
+                </div>
+            </div>
+        </main>
     );
 }
 

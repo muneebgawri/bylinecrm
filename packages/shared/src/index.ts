@@ -41,6 +41,7 @@ export * from './events.js';
 export * from './mail.js';
 export * from './money.js';
 export * from './pipelines.js';
+export * from './platform.js';
 export * from './records.js';
 export * from './suppression.js';
 export * from './templates.js';

@@ -8,6 +8,10 @@ import {
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
+    AuthProvidersView,
+    InvitePreviewView,
+    PlatformAccessView,
+    PlatformWorkspaceView,
     BlocklistEntryView,
     SuppressionView,
     UnsubscribeStatusView,
@@ -21,6 +25,8 @@ import type {
     InviteView,
     MailboxSyncView,
     MailboxView,
+    MailOutboundView,
+    MailThreadView,
     MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
@@ -82,6 +88,10 @@ export const IDS = {
     suppressedUnsubscribe: '0b1e0000-0000-4000-8000-0000000009a1',
     suppressedBounce: '0b1e0000-0000-4000-8000-0000000009a2',
     suppressedManual: '0b1e0000-0000-4000-8000-0000000009a3',
+    thread: '0b1e0000-0000-4000-8000-0000000008c1',
+    mailMessage: '0b1e0000-0000-4000-8000-0000000008c2',
+    secondMailMessage: '0b1e0000-0000-4000-8000-0000000008c3',
+    scheduledSend: '0b1e0000-0000-4000-8000-0000000008d1',
 } as const;
 
 const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
@@ -96,6 +106,40 @@ export const workspaces: WorkspaceView[] = [
     { id: IDS.workspace, slug: 'pinion', name: 'Pinion Partners' },
     { id: IDS.secondWorkspace, slug: 'demo', name: 'Demo workspace' },
 ];
+
+/**
+ * Sign-up as a locked-down server has it (P0-14): closed, so the sign-in page offers no "Create a
+ * workspace" and `/sign-up` explains how to get in. The person is a platform admin, so the picker
+ * links to the platform page and that page renders its list.
+ */
+export const providers: AuthProvidersView = { providers: ['google'], signup: 'closed' };
+export const platformAccess: PlatformAccessView = { platformAdmin: true, signupMode: 'closed' };
+export const platformWorkspaces: PlatformWorkspaceView[] = [
+    {
+        id: IDS.workspace,
+        slug: 'pinion',
+        name: 'Pinion Partners',
+        createdAt: at(24 * 30),
+        memberCount: 4,
+        pendingInvites: [],
+    },
+    {
+        id: IDS.secondWorkspace,
+        slug: 'demo',
+        name: 'Demo workspace',
+        createdAt: at(26),
+        memberCount: 0,
+        pendingInvites: [{ email: 'owner@client.example', expiresAt: at(-24 * 6) }],
+    },
+];
+
+/** The token the invitation-accept state opens `/sign-up?invite=` with, and what it is for. */
+export const INVITE_TOKEN = 'gate-invite-token';
+export const invitePreview: InvitePreviewView = {
+    email: 'owner@client.example',
+    workspaceName: 'Demo workspace',
+    expiresAt: at(-24 * 6),
+};
 
 /** An admin: every capability, so every permission-gated control renders and is checked. */
 export const membership: MembershipSummary = {
@@ -474,6 +518,26 @@ export const attachments: AttachmentView[] = [
 
 export const timeline: TimelineActivityView[] = [
     {
+        id: '0b1e0000-0000-4000-8000-000000000c04',
+        target: { type: 'person', id: IDS.person },
+        kind: 'linked-email.received',
+        happenedAt: at(2),
+        actor: { kind: 'sync', id: null },
+        properties: {
+            linked: { type: 'email', id: IDS.secondMailMessage, name: 'Re: Distribution options' },
+            email: {
+                direction: 'inbound',
+                subject: 'Re: Distribution options',
+                snippet: 'Thanks — the list looks right.',
+                from: 'dana@acme.example',
+                threadId: IDS.thread,
+                mailboxId: IDS.mailbox,
+            },
+        },
+        linked: { type: 'email', id: IDS.secondMailMessage },
+        createdAt: at(2),
+    },
+    {
         id: '0b1e0000-0000-4000-8000-000000000c01',
         target: { type: 'opportunity', id: IDS.deal },
         kind: 'deal.stage_changed',
@@ -710,3 +774,104 @@ export const suppressions: SuppressionView[] = [
 
 /** What a recipient's unsubscribe page reads before they press the button. */
 export const unsubscribeStatus: UnsubscribeStatusView = { recipient: 'j•••@northwind.example', unsubscribed: false };
+// ---- Mail on a record: a thread and a scheduled send (P2-UI-1) -------------------------------
+
+/** Kate wrote; Dana answered. Kate's own personal mailbox, so the bodies are hers to read. */
+export const thread: MailThreadView = {
+    id: IDS.thread,
+    mailboxId: IDS.mailbox,
+    subject: 'Distribution options',
+    messageCount: 2,
+    lastMessageAt: at(2),
+    bodiesVisible: true,
+    messages: [
+        {
+            id: IDS.mailMessage,
+            direction: 'outbound',
+            from: 'kate.morgan@example.com',
+            subject: 'Distribution options',
+            snippet: 'Attached is the distribution list for Acme.',
+            sentAt: at(26),
+            participants: [
+                {
+                    role: 'from',
+                    address: 'kate.morgan@example.com',
+                    displayName: 'Kate Morgan',
+                    personId: null,
+                    memberId: IDS.member,
+                },
+                {
+                    role: 'to',
+                    address: 'dana@acme.example',
+                    displayName: 'Dana Reyes',
+                    personId: IDS.person,
+                    memberId: null,
+                },
+            ],
+            hasAttachments: false,
+            bodyText: 'Hi Dana, attached is the distribution list for Acme.',
+            bodyHtml: '<p>Hi Dana,</p><p>Attached is the distribution list for Acme.</p>',
+            bodyTruncated: false,
+            rfc822MessageId: 'kate-1@mail.example',
+            inReplyTo: null,
+        },
+        {
+            id: IDS.secondMailMessage,
+            direction: 'inbound',
+            from: 'dana@acme.example',
+            subject: 'Re: Distribution options',
+            snippet: 'Thanks — the list looks right.',
+            sentAt: at(2),
+            participants: [
+                {
+                    role: 'from',
+                    address: 'dana@acme.example',
+                    displayName: 'Dana Reyes',
+                    personId: IDS.person,
+                    memberId: null,
+                },
+                {
+                    role: 'to',
+                    address: 'kate.morgan@example.com',
+                    displayName: 'Kate Morgan',
+                    personId: null,
+                    memberId: IDS.member,
+                },
+            ],
+            hasAttachments: false,
+            bodyText: 'Thanks — the list looks right. Can we start Monday?',
+            bodyHtml: '<p>Thanks — the list looks right. Can we start Monday?</p>',
+            bodyTruncated: false,
+            rfc822MessageId: 'dana-1@mail.example',
+            inReplyTo: 'kate-1@mail.example',
+        },
+    ],
+};
+
+/** A follow-up Kate scheduled for Dana: the person page shows it with Reschedule and Cancel. */
+export const scheduledSends: MailOutboundView[] = [
+    {
+        id: IDS.scheduledSend,
+        mailboxId: IDS.mailbox,
+        status: 'scheduled',
+        subject: 'Checking in on Monday’s start',
+        to: ['dana@acme.example'],
+        cc: [],
+        bcc: [],
+        personId: IDS.person,
+        dealId: null,
+        templateId: null,
+        replyToMessageId: null,
+        rfc822MessageId: `${IDS.scheduledSend}@bylinecrm`,
+        mailMessageId: null,
+        threadId: null,
+        attempts: 0,
+        error: null,
+        sendAt: new Date(FIXED_NOW + 3 * 24 * 3_600_000).toISOString(),
+        senderTimeZone: 'America/Chicago',
+        recipientTimeZone: null,
+        cancelledAt: null,
+        createdAt: at(1),
+        sentAt: null,
+    },
+];

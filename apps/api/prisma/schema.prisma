@@ -80,6 +80,9 @@ model User {
   sessions    Session[]
   identities  ExternalIdentity[]
 
+  platformWorkspaceInvites WorkspaceInvite[]      @relation("PlatformWorkspaceInvites")
+  platformSignupInvites    PlatformSignupInvite[]
+
   @@map("users")
 }
 
@@ -222,19 +225,23 @@ model ApiKey {
 /// An invitation to join a workspace, sent to an email address with a role. The token is shown
 /// once; only its hash is stored. Accepting it requires signing in as that email.
 model WorkspaceInvite {
-  id          String    @id @default(uuid()) @db.Uuid
-  workspaceId String    @map("workspace_id") @db.Uuid
-  email       String
-  roleId      String    @map("role_id") @db.Uuid
-  tokenHash   String    @unique @map("token_hash")
-  invitedById String    @map("invited_by_id") @db.Uuid
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
-  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  email           String
+  roleId          String    @map("role_id") @db.Uuid
+  tokenHash       String    @unique @map("token_hash")
+  /// The member who invited — or, for a workspace a platform admin created (P0-14), null with
+  /// `invitedByUserId` set instead. Exactly one of the two (a CHECK constraint in the migration).
+  invitedById     String?   @map("invited_by_id") @db.Uuid
+  invitedByUserId String?   @map("invited_by_user_id") @db.Uuid
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz
+  acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  role      Role            @relation(fields: [roleId], references: [id])
-  invitedBy WorkspaceMember @relation(fields: [invitedById], references: [id])
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role          Role             @relation(fields: [roleId], references: [id])
+  invitedBy     WorkspaceMember? @relation(fields: [invitedById], references: [id], onDelete: Restrict)
+  invitedByUser User?            @relation("PlatformWorkspaceInvites", fields: [invitedByUserId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId, email])
   @@map("workspace_invites")
@@ -1182,6 +1189,37 @@ model BlocklistEntry {
 
   @@index([workspaceId, memberId])
   @@map("blocklist_entries")
+}
+
+/// A platform sign-up invitation (P0-14): in `invite` sign-up mode, the only way to create an account
+/// with a workspace of one's own. Global, operator-level: the app role has no grant on it; the
+/// platform service writes it through the owner client. Only the token's hash is stored.
+model PlatformSignupInvite {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String
+  tokenHash       String    @unique @map("token_hash")
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz
+  usedAt          DateTime? @map("used_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  createdBy User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@map("platform_signup_invites")
+}
+
+/// Every platform action, appended in the transaction that made it (P0-14). Append-only: a trigger
+/// refuses UPDATE and DELETE for every role, the owner included; the app role has no grant at all.
+model PlatformAudit {
+  id          String   @id @default(uuid()) @db.Uuid
+  action      String
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  subject     Json     @default("{}")
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+
+  @@index([occurredAt])
+  @@map("platform_audit")
 }
 
 /// Why an address is suppressed (P3-1, FR-CRMS-7). `unsubscribe` and `complaint` are never lifted in the CRM.

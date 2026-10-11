@@ -16,6 +16,8 @@ if (typeof window !== 'undefined') {
     Range.prototype.getClientRects ??= noRects;
     Range.prototype.getBoundingClientRect ??= () => new DOMRect();
     Element.prototype.getClientRects ??= noRects;
+    // …and asks which node is under a click (`posAtCoords`); jsdom does no layout, so nothing is.
+    document.elementFromPoint ??= () => null;
     Element.prototype.hasPointerCapture ??= () => false;
     // Media queries answer "no" unless a spec says otherwise (`setMedia` in a spec): desktop, fine pointer.
     window.matchMedia ??= (query: string) =>

@@ -1,0 +1,132 @@
+import type {
+    EmailTemplateView,
+    MailboxView,
+    MailMessageView,
+    MailOutboundView,
+    MailThreadView,
+} from '../../../api/types';
+import { json, type FakeRoute } from '../settings/settingsTestKit';
+
+/** The mail specs' shared rows: one member (`m-1`, the test kit's membership) writing to Dana. */
+export const WS = 'ws-1';
+export const PERSON = { id: '0b1e0000-0000-4000-8000-0000000000d1', name: 'Dana Reyes', email: 'dana@acme.com' };
+const AT = '2026-10-09T08:00:00.000Z';
+
+export const mailbox = (over: Partial<MailboxView> = {}): MailboxView => ({
+    id: 'mb-1',
+    ownerMemberId: 'm-1',
+    email: 'kate@example.com',
+    label: null,
+    purpose: 'personal',
+    status: 'connected',
+    grantedScopes: [],
+    lastError: null,
+    connectedAt: AT,
+    createdAt: AT,
+    updatedAt: AT,
+    ...over,
+});
+
+const member = { kind: 'member' as const, id: 'm-1' };
+export const template = (over: Partial<EmailTemplateView> = {}): EmailTemplateView => ({
+    id: 't-1',
+    name: 'Follow-up after a reply',
+    kind: 'personal',
+    subject: 'About {{company.name}}',
+    body: {
+        type: 'doc',
+        content: [
+            {
+                type: 'paragraph',
+                content: [
+                    { type: 'text', text: 'Hi ' },
+                    { type: 'variable', attrs: { path: 'person.firstName' } },
+                    { type: 'text', text: ', lead with ' },
+                    { type: 'variable', attrs: { path: 'custom.lastOutlet' } },
+                ],
+            },
+        ],
+    },
+    version: 1,
+    createdBy: member,
+    updatedBy: member,
+    createdAt: AT,
+    updatedAt: AT,
+    deletedAt: null,
+    ...over,
+});
+
+export const outbound = (over: Partial<MailOutboundView> = {}): MailOutboundView => ({
+    id: 'out-1',
+    mailboxId: 'mb-1',
+    status: 'queued',
+    subject: 'Hello',
+    to: [PERSON.email],
+    cc: [],
+    bcc: [],
+    personId: PERSON.id,
+    dealId: null,
+    templateId: null,
+    replyToMessageId: null,
+    rfc822MessageId: 'out-1@bylinecrm',
+    mailMessageId: null,
+    threadId: null,
+    attempts: 0,
+    error: null,
+    sendAt: null,
+    senderTimeZone: null,
+    recipientTimeZone: null,
+    cancelledAt: null,
+    createdAt: AT,
+    sentAt: null,
+    ...over,
+});
+
+export const message = (over: Partial<MailMessageView> = {}): MailMessageView => ({
+    id: 'msg-1',
+    direction: 'inbound',
+    from: PERSON.email,
+    subject: 'Intro',
+    snippet: 'Thanks for reaching out',
+    sentAt: AT,
+    participants: [
+        { role: 'from', address: PERSON.email, displayName: PERSON.name, personId: PERSON.id, memberId: null },
+        { role: 'to', address: 'kate@example.com', displayName: 'Kate Morgan', personId: null, memberId: 'm-1' },
+    ],
+    hasAttachments: false,
+    bodyText: 'Thanks for reaching out',
+    bodyHtml: '<p>Thanks for reaching out</p>',
+    bodyTruncated: false,
+    rfc822MessageId: 'a@mail',
+    inReplyTo: null,
+    ...over,
+});
+
+export const thread = (over: Partial<MailThreadView> = {}): MailThreadView => ({
+    id: 'th-1',
+    mailboxId: 'mb-1',
+    subject: 'Intro',
+    messageCount: 1,
+    lastMessageAt: AT,
+    bodiesVisible: true,
+    messages: [message()],
+    ...over,
+});
+
+/** The mailbox list the composer reads, answered with `list`. */
+export const mailboxesRoute =
+    (list: MailboxView[]): FakeRoute =>
+    (r) =>
+        r.method === 'GET' && r.url.endsWith('/mailboxes') ? json(list) : undefined;
+
+/** Every request to the scheduled list answers with these rows. */
+export const scheduledRoute =
+    (items: MailOutboundView[] = []): FakeRoute =>
+    (r) =>
+        r.method === 'GET' && r.url.includes('/mail/scheduled') ? json({ items, nextCursor: null }) : undefined;
+
+/** A timeline with no entries; the record's other reads answered empty. */
+export const quietRecordRoutes: FakeRoute[] = [
+    (r) => (r.url.includes('/timeline') ? json({ items: [], nextCursor: null }) : undefined),
+    (r) => (r.url.endsWith('/members/summary') ? json([{ memberId: 'm-1', name: 'Kate Morgan' }]) : undefined),
+];

@@ -12,6 +12,12 @@ export const ERROR_CODES = [
     'unauthorized',
     /** Signed in, but this caller may not do this. */
     'forbidden',
+    /** `403`: this deployment does not take sign-ups (`SIGNUP_MODE=closed`); join by a workspace invitation (P0-14). */
+    'signup.closed',
+    /** `403`: sign-up needs a valid platform sign-up invitation for this address (`SIGNUP_MODE=invite`). */
+    'signup.invitation_required',
+    /** `403`: the route is for platform admins (a verified address in `PLATFORM_ADMIN_EMAILS`). */
+    'platform.forbidden',
     /** No such record, or not one this caller can see — the two are never told apart. */
     'not_found',
     /** The change conflicts with the record's current state (e.g. a stage that still has deals). */

@@ -30,6 +30,7 @@ import {
     opportunities,
     people,
     pipelines,
+    platform,
     roles,
     tasks,
     templates,
@@ -44,6 +45,8 @@ import type {
     CompanyView,
     ConnectMailboxInput,
     CreateApiKeyInput,
+    CreatePlatformWorkspaceInput,
+    CreateSignupInviteInput,
     CreateBlocklistEntryInput,
     CreateSuppressionInput,
     SuppressionListQuery,
@@ -89,6 +92,9 @@ export const keys = {
     apiKeys: (workspaceId: string) => ['w', workspaceId, 'api-keys'] as const,
     invites: (workspaceId: string) => ['w', workspaceId, 'invites'] as const,
     providers: ['auth', 'providers'] as const,
+    invitePreview: (token: string) => ['auth', 'invites', token] as const,
+    platformAccess: ['platform', 'access'] as const,
+    platformWorkspaces: ['platform', 'workspaces'] as const,
     membersSummary: (workspaceId: string) => ['w', workspaceId, 'members-summary'] as const,
     record: (workspaceId: string, object: RecordObject, id: string) => ['w', workspaceId, object, id] as const,
     records: (workspaceId: string, object: RecordObject) => ['w', workspaceId, object] as const,
@@ -132,6 +138,11 @@ export const keys = {
     suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,
+    mailMessage: (workspaceId: string, messageId: string) => ['w', workspaceId, 'mail', 'messages', messageId] as const,
+    mailScheduled: (workspaceId: string) => ['w', workspaceId, 'mail', 'scheduled'] as const,
+    mailThread: (workspaceId: string, threadId: string) => ['w', workspaceId, 'mail', 'threads', threadId] as const,
+    /** The sends made in this tab: held by the client so a send shows before the server has stored it. */
+    mailSession: (workspaceId: string) => ['w', workspaceId, 'mail', 'session'] as const,
 };
 
 /** The app's one QueryClient. A 4xx is the API's answer, so it is not retried. */
@@ -148,7 +159,9 @@ export function createQueryClient(): QueryClient {
     });
 }
 
-export const useMe = () => useQuery({ queryKey: keys.me, queryFn: ({ signal }) => me.current(signal) });
+/** Who is signed in. `enabled: false` where asking would send a signed-out person to sign-in (a 401 does). */
+export const useMe = (enabled = true) =>
+    useQuery({ queryKey: keys.me, queryFn: ({ signal }) => me.current(signal), enabled });
 export const useProfile = () => useQuery({ queryKey: keys.profile, queryFn: ({ signal }) => me.profile(signal) });
 
 /**
@@ -171,6 +184,49 @@ export const useWorkspaces = () =>
     useQuery({ queryKey: keys.workspaces, queryFn: ({ signal }) => me.workspaces(signal) });
 export const useProviders = () =>
     useQuery({ queryKey: keys.providers, queryFn: () => auth.providers(), staleTime: Infinity });
+
+/** What a workspace invitation is for (the accept page); a spent or unknown token is a 410/404 answer. */
+export const useInvitePreview = (token: string | null) =>
+    useQuery({
+        queryKey: keys.invitePreview(token ?? ''),
+        queryFn: ({ signal }) => auth.previewInvite(token ?? '', signal),
+        enabled: Boolean(token),
+    });
+
+export function useAcceptInvite() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (token: string) => auth.acceptInvite(token),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.workspaces }),
+    });
+}
+
+export function useAcceptInviteSignup() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: { token: string; password: string }) =>
+            auth.acceptInviteSignup(input.token, input.password),
+        onSuccess: () => client.clear(),
+    });
+}
+
+/** Whether the signed-in person is a platform admin, and the sign-up mode (P0-14). */
+export const usePlatformAccess = () =>
+    useQuery({ queryKey: keys.platformAccess, queryFn: ({ signal }) => platform.access(signal) });
+export const usePlatformWorkspaces = (enabled = true) =>
+    useQuery({ queryKey: keys.platformWorkspaces, queryFn: ({ signal }) => platform.workspaces(signal), enabled });
+
+export function useCreatePlatformWorkspace() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: CreatePlatformWorkspaceInput) => platform.createWorkspace(input),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.platformWorkspaces }),
+    });
+}
+
+export function useCreateSignupInvite() {
+    return useMutation({ mutationFn: (input: CreateSignupInviteInput) => platform.createSignupInvite(input) });
+}
 
 /** The caller's standing in the workspace; `CapabilitiesProvider` is fed from this. */
 export const useMembershipQuery = (workspaceId: string) =>

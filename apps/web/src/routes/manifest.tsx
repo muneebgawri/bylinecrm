@@ -2,17 +2,31 @@ import { UNSUBSCRIBE_PAGE_PATH } from '@bylinecrm/shared';
 import { Navigate, type LazyRouteFunction, type RouteObject } from 'react-router';
 import { RequireAuth } from '../auth/RequireAuth';
 import { AppShell } from '../shell/AppShell';
-import { AuthCallback } from './auth/AuthCallback';
-import { SignIn } from './auth/SignIn';
-import { SignUp } from './auth/SignUp';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
 import { PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
-import { Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
+import { AuthSkeleton, Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
 import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
 
-/** Settings is its own chunk: admins only, loaded on first visit (FR-CRMS-UI-10). */
+/** The signed-out pages are one chunk, out of the first load: a signed-in person never needs them (#102). */
+const auth = {
+    signIn: () => import('./auth/AuthPages').then((m) => ({ Component: m.SignIn })),
+    signUp: () => import('./auth/AuthPages').then((m) => ({ Component: m.SignUp })),
+    callback: () => import('./auth/AuthPages').then((m) => ({ Component: m.AuthCallback })),
+};
+
+/**
+ * A signed-out page whose code loads on first visit. Its fallback is the auth card's shape, so the
+ * page does not jump when the code arrives (FR-CRMS-UI-7).
+ */
+const authPage = (path: string, lazy: LazyRouteFunction<RouteObject>): RouteObject => ({
+    path,
+    lazy,
+    errorElement: <RouteError />,
+    hydrateFallbackElement: <AuthSkeleton />,
+});
+
 /** Record pages are one chunk: the three records share their panels (FR-CRMS-UI-10). */
 const records = {
     person: () => import('./w/records/RecordPages').then((m) => ({ Component: m.PersonPage })),
@@ -26,6 +40,7 @@ const lists = {
     companies: () => import('./w/lists/ListPage').then((m) => ({ Component: m.CompaniesListPage })),
 };
 
+/** Settings is its own chunk: admins only, loaded on first visit (FR-CRMS-UI-10). */
 const settings = {
     layout: () => import('./w/settings/SettingsLayout').then((m) => ({ Component: m.SettingsLayout })),
     members: () => import('./w/settings/Members').then((m) => ({ Component: m.Members })),
@@ -51,6 +66,10 @@ const templates = {
 
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
+
+/** The platform page is its own chunk: only platform admins ever load it (P0-14). */
+const platformWorkspacesPage = () =>
+    import('./platform/PlatformWorkspaces').then((m) => ({ Component: m.PlatformWorkspaces }));
 
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
 const dealsPage = () => import('./w/deals/DealsPage').then((m) => ({ Component: m.DealsPage }));
@@ -124,21 +143,24 @@ const workspaceRoutes: RouteObject = {
 
 export const routes: RouteObject[] = [
     { path: paths.root, element: <Navigate to={paths.workspaces} replace /> },
-    { path: paths.signIn, element: <SignIn />, errorElement: <RouteError /> },
-    { path: paths.signUp, element: <SignUp />, errorElement: <RouteError /> },
-    { path: paths.authCallback, element: <AuthCallback />, errorElement: <RouteError /> },
+    authPage(paths.signIn, auth.signIn),
+    authPage(paths.signUp, auth.signUp),
+    authPage(paths.authCallback, auth.callback),
     { path: paths.status, element: <ServiceStatus /> },
     { path: paths.forbidden, element: <Forbidden /> },
-    {
-        path: `${UNSUBSCRIBE_PAGE_PATH}/:${UNSUBSCRIBE_TOKEN_PARAM}`,
-        lazy: unsubscribePage,
-        errorElement: <RouteError />,
-        hydrateFallbackElement: <RouteSkeleton />,
-    },
+    authPage(`${UNSUBSCRIBE_PAGE_PATH}/:${UNSUBSCRIBE_TOKEN_PARAM}`, unsubscribePage),
     {
         element: <RequireAuth pending={<RouteSkeleton />} />,
         errorElement: <RouteError />,
-        children: [{ path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> }],
+        children: [
+            { path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> },
+            {
+                path: paths.platformWorkspaces,
+                lazy: platformWorkspacesPage,
+                hydrateFallbackElement: <RouteSkeleton />,
+                errorElement: <RouteError />,
+            },
+        ],
     },
     workspaceRoutes,
     { path: '*', element: <NotFound /> },
