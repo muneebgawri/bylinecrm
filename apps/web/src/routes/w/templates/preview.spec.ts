@@ -1,6 +1,7 @@
 import { MISSING_POSTAL_ADDRESS } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
-import { previewDocument, resolutionLine, templateVariablePaths } from './preview';
+import { emailDocument } from '../../../components/EmailFrame';
+import { resolutionLine, templateVariablePaths } from './preview';
 
 const body = {
     type: 'doc' as const,
@@ -69,10 +70,11 @@ describe('template preview', () => {
     });
 
     it('wraps the rendered HTML in a complete document and adds no script', () => {
-        const doc = previewDocument('<p>Hi <span data-missing-variable="person.city">{{person.city}}</span></p>');
+        const doc = emailDocument('<p>Hi <span data-missing-variable="person.city">{{person.city}}</span></p>');
         expect(doc.startsWith('<!doctype html>')).toBe(true);
         expect(doc).toContain('<p>Hi <span data-missing-variable="person.city">{{person.city}}</span></p>');
         expect(doc).not.toMatch(/<script/i);
         expect(doc).toContain('[data-missing-variable]');
+        expect(doc).toContain("default-src 'none'");
     });
 });

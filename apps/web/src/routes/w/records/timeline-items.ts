@@ -22,6 +22,8 @@ export interface TimelineWords {
     origin?: string;
     /** Supporting chips: a field diff, a stage move, an amount. */
     detail?: readonly { label: string; tone?: 'neutral' | 'accent' | 'success' }[];
+    /** An email entry's thread: the line opens it (doc 50 §A). */
+    threadId?: string;
 }
 
 export interface NameSources {
@@ -61,6 +63,10 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         return { ...base, action: title, family: 'external', ...(detail ? { detail } : {}) };
     }
 
+    if (entry.kind.startsWith('linked-email.')) {
+        return { ...base, ...emailWords(entry, names), family: 'mail' };
+    }
+
     if (entry.kind.startsWith('linked-')) {
         const [thing = '', action = ''] = entry.kind.slice(7).split('.');
         const name = typeof entry.properties['name'] === 'string' ? entry.properties['name'] : undefined;
@@ -88,6 +94,26 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         family: 'record',
         ...(detail && detail.length ? { detail } : {}),
     };
+}
+
+/**
+ * A stored email on the record (P2-2): `properties.email` says which way it went, its subject and
+ * its thread — never its body. Mail that came in is told by its sender's address; mail a member
+ * sent, by the member when the entry names one.
+ */
+function emailWords(
+    entry: TimelineActivityView,
+    names: NameSources,
+): Pick<TimelineWords, 'actor' | 'action' | 'threadId'> {
+    const email = isRecord(entry.properties['email']) ? entry.properties['email'] : {};
+    const subject = typeof email['subject'] === 'string' && email['subject'] !== '' ? email['subject'] : null;
+    const from = typeof email['from'] === 'string' && email['from'] !== '' ? email['from'] : null;
+    const threadId = typeof email['threadId'] === 'string' ? email['threadId'] : undefined;
+    const sent = entry.kind === 'linked-email.sent';
+    const member = entry.actor.kind === 'member' && entry.actor.id ? names.members.get(entry.actor.id) : undefined;
+    const actor = (sent ? member : undefined) ?? from ?? actorName(entry, names);
+    const what = subject ? `“${subject}”` : 'an email with no subject';
+    return { actor, action: `${sent ? 'sent' : 'wrote'} ${what}`, ...(threadId ? { threadId } : {}) };
 }
 
 /**

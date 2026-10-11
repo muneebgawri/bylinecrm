@@ -20,6 +20,31 @@ function entry(partial: Partial<TimelineActivityView>): TimelineActivityView {
 }
 
 describe('wordsFor', () => {
+    it('FR-CRMS-4: reads stored mail by its sender and subject, and points at its thread', () => {
+        const email = (direction: string) => ({
+            email: {
+                direction,
+                subject: 'Intro',
+                snippet: 'Hi',
+                from: 'dana@acme.com',
+                threadId: 'th-1',
+                mailboxId: 'mb-1',
+            },
+        });
+        const received = wordsFor(
+            entry({ kind: 'linked-email.received', actor: { kind: 'sync', id: null }, properties: email('inbound') }),
+            names,
+        );
+        expect(received).toMatchObject({
+            actor: 'dana@acme.com',
+            action: 'wrote “Intro”',
+            family: 'mail',
+            threadId: 'th-1',
+        });
+        const sent = wordsFor(entry({ kind: 'linked-email.sent', properties: email('outbound') }), names);
+        expect(sent).toMatchObject({ actor: 'Kate Morgan', action: 'sent “Intro”', family: 'mail' });
+    });
+
     it('names the member and lists the changed fields of an update', () => {
         const words = wordsFor(entry({ properties: { diff: { nameFirst: {}, city: {} } } }), names);
         expect(words.actor).toBe('Kate Morgan');

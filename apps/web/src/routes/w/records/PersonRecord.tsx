@@ -1,14 +1,14 @@
 import { Badge, FactGrid } from '@bylinecrm/ui';
-import { ListTodo, Send, StickyNote } from 'lucide-react';
-import { useId, useState } from 'react';
+import { ListTodo, Mail, Send, StickyNote } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { usePatchRecord, useRecord } from '../../../api/queries';
 import type { PersonView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
+import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
-import { ComposePlaceholder } from './ComposePlaceholder';
 import { InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
@@ -45,7 +45,7 @@ export function PersonRecord({
     const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
-    const [notice, setNotice] = useState<string | null>(null);
+    const compose = useRef<RecordComposeHandle>(null);
     const ownerId = useId();
     const target = { type: 'person' as const, id: person.id };
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
@@ -55,7 +55,8 @@ export function PersonRecord({
         onNote: write.allowed ? () => setNotesOpen(true) : undefined,
         onTask: write.allowed ? () => setTasksOpen(true) : undefined,
         onOwner: write.allowed ? () => document.getElementById(ownerId)?.focus() : undefined,
-        onCompose: () => setNotice('Email from a record arrives with Phase 2 (connect a mailbox first).'),
+        onCompose: () => compose.current?.start(),
+        composeTitle: 'Email this person',
         prev: siblings?.prev,
         next: siblings?.next,
     });
@@ -204,6 +205,15 @@ export function PersonRecord({
 
     const actions: RecordAction[] = [
         {
+            id: 'email',
+            label: 'Email',
+            short: 'Email',
+            icon: <Mail aria-hidden />,
+            primary: true,
+            onSelect: () => compose.current?.start(),
+            hint: 'Write an email (e)',
+        },
+        {
             id: 'note',
             label: 'Add note',
             short: 'Note',
@@ -228,7 +238,6 @@ export function PersonRecord({
             label: 'Enrol in sequence',
             short: 'Enrol',
             icon: <Send aria-hidden />,
-            primary: true,
             disabled: true,
             reason: 'Sequences arrive in Phase 3',
         },
@@ -338,7 +347,11 @@ export function PersonRecord({
                 </>
             }
         >
-            <ComposePlaceholder notice={notice} />
+            <RecordCompose
+                workspaceId={workspaceId}
+                person={{ id: person.id, name: personName(person), email: person.emails.primary }}
+                handle={compose}
+            />
             <TimelinePanel workspaceId={workspaceId} target={target} />
         </RecordLayout>
     );

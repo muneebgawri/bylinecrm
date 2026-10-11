@@ -97,7 +97,7 @@ export function targetParam(target: RecordTarget): string {
 }
 
 /** Builds `?a=b&c=d` from the defined values only. */
-function query(params: Record<string, string | number | undefined>): string {
+export function query(params: Record<string, string | number | undefined>): string {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, String(value));
     const text = search.toString();
@@ -133,7 +133,7 @@ export type ExportBody = {
  * and nowhere else; a component never spells `/w/` itself.
  */
 
-const workspacePath = (workspaceId: string, rest: string) => `/w/${workspaceId}${rest}`;
+export const workspacePath = (workspaceId: string, rest: string) => `/w/${workspaceId}${rest}`;
 
 export const auth = {
     signup: (input: SignupInput) =>
