@@ -71,9 +71,16 @@ export async function sidewaysScroll(page: Page): Promise<Finding[]> {
  *   sentence.
  * - An element 1px or smaller in either direction: the visually-hidden pattern (`sr-only`), which
  *   is not a touch target at all.
+ * - An element nobody can touch: `aria-hidden="true"` with `pointer-events: none`. Radix renders one
+ *   beside every checkbox and switch — a native input that mirrors the control for form submission —
+ *   so it is neither seen by assistive technology nor hit by a finger; the control beside it is the
+ *   target, and is checked.
+ *
+ * `scope` narrows the check to one element (the open dialog, PRIMARY_DIALOG below); the findings
+ * then say where they were found.
  */
-export async function phoneTargets(page: Page): Promise<Finding[]> {
-    return page.evaluate(() => {
+export async function phoneTargets(page: Page, scope?: string): Promise<Finding[]> {
+    const findings = await page.evaluate((scopeSelector) => {
         const root = getComputedStyle(document.documentElement);
         const target = parseFloat(root.getPropertyValue('--bc-touch-target'));
         const text = parseFloat(root.getPropertyValue('--bc-touch-text'));
@@ -109,13 +116,20 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
             );
         };
 
-        const interactive = document.querySelectorAll(
+        const scopeEl = scopeSelector ? [...document.querySelectorAll(scopeSelector)].pop() : document;
+        if (!scopeEl) {
+            findings.push({ check: 'touch-target', detail: `nothing matches ${scopeSelector} to check inside` });
+            return findings;
+        }
+        const interactive = scopeEl.querySelectorAll(
             'a[href], button, input:not([type="hidden"]), select, textarea, summary, [contenteditable="true"], ' +
                 '[role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="checkbox"], ' +
                 '[role="switch"], [role="radio"], [role="combobox"], [tabindex]:not([tabindex="-1"])',
         );
+        const untouchable = (el: Element) =>
+            el.getAttribute('aria-hidden') === 'true' && getComputedStyle(el).pointerEvents === 'none';
         for (const el of interactive) {
-            if (!visible(el) || inlineInText(el)) continue;
+            if (!visible(el) || inlineInText(el) || untouchable(el)) continue;
             const rect = el.getBoundingClientRect();
             if (rect.width + 0.5 < target || rect.height + 0.5 < target) {
                 findings.push({
@@ -126,10 +140,10 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
         }
 
         const NOT_TEXT = new Set(['checkbox', 'radio', 'range', 'color', 'file', 'submit', 'button', 'reset', 'image']);
-        const fields = document.querySelectorAll('input, select, textarea, [contenteditable="true"]');
+        const fields = scopeEl.querySelectorAll('input, select, textarea, [contenteditable="true"]');
         for (const el of fields) {
             if (el instanceof HTMLInputElement && NOT_TEXT.has(el.type)) continue;
-            if (!visible(el)) continue;
+            if (!visible(el) || untouchable(el)) continue;
             const size = parseFloat(getComputedStyle(el).fontSize);
             if (size + 0.01 < text) {
                 findings.push({
@@ -139,8 +153,19 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
             }
         }
         return findings;
-    });
+    }, scope);
+    return scope ? findings.map((f) => ({ ...f, detail: `in ${scope}: ${f.detail}` })) : findings;
 }
+
+/**
+ * The element a page marks as opening its main dialog or sheet (`data-primary-dialog`, on the
+ * trigger — usually the page's primary action). On a phone the gate opens it and checks the
+ * controls inside (touch targets, field text size), so a form in a dialog is held to the same
+ * rules as the page (FR-CRMS-UI-12).
+ */
+export const PRIMARY_DIALOG_TRIGGER = '[data-primary-dialog]';
+/** The open dialog or sheet: every one in the design system is a Radix dialog. */
+export const OPEN_DIALOG = '[role="dialog"]';
 
 /**
  * On a phone, records are stacked cards, never a table (FR-CRMS-UI-12): a table that scrolls

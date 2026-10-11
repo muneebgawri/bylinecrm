@@ -4,9 +4,11 @@ import { installApi } from './api';
 import {
     aboveFold,
     axe,
+    OPEN_DIALOG,
     phoneBottomBar,
     phoneTables,
     phoneTargets,
+    PRIMARY_DIALOG_TRIGGER,
     primaryAction,
     sidewaysScroll,
     type Finding,
@@ -22,7 +24,10 @@ import { STATES } from './states';
  * page renders real content the same way every run. Then: axe at WCAG 2.1 AA, no sideways page
  * scroll, the primary action on screen, and — below the phone breakpoint — touch targets, field
  * text sizes and no tables (records are cards on a phone), plus each state's own phone promises
- * (states.ts: a record's bottom action bar, the deals board's first card above the fold). Findings go to the report table (reporter.ts); any finding fails the state.
+ * (states.ts: a record's bottom action bar, the deals board's first card above the fold). On a
+ * phone, a page that marks its main dialog's trigger (`data-primary-dialog`) has that dialog opened
+ * and the controls inside checked too. Findings go to the report table (reporter.ts); any finding
+ * fails the state.
  * On phone widths the state is also compared with its committed screenshot.
  */
 const PALETTE_SHORTCUT = 'ControlOrMeta+k';
@@ -61,6 +66,11 @@ for (const state of STATES) {
             })),
         ];
 
+        if (phone) {
+            const theme = testInfo.project.use.colorScheme ?? 'light';
+            await expect(page).toHaveScreenshot(`${state.name}-${theme}.png`);
+            findings.push(...(await primaryDialogFindings(page, inFlight)));
+        }
         testInfo.annotations.push({
             type: 'route-gate',
             description: JSON.stringify({
@@ -70,13 +80,32 @@ for (const state of STATES) {
             }),
         });
 
-        if (phone) {
-            const theme = testInfo.project.use.colorScheme ?? 'light';
-            await expect(page).toHaveScreenshot(`${state.name}-${theme}.png`);
-        }
         expect(unanswered, 'every API call the page makes is answered by a fixture').toEqual([]);
         expect(findings, `${state.name} at ${viewport?.width ?? '?'}px`).toEqual([]);
     });
+}
+
+/**
+ * Opens the page's main dialog (its `data-primary-dialog` trigger), checks the controls inside on
+ * the phone rules, then closes it. A page without the marker has nothing to check here; a marked
+ * trigger that does not open a dialog is a finding, not a silent pass.
+ */
+async function primaryDialogFindings(page: Page, inFlight: () => number): Promise<Finding[]> {
+    // A state that already shows a dialog (the palette, a record drawer) is checked as it stands.
+    if ((await page.locator(OPEN_DIALOG).count()) > 0) return [];
+    const trigger = page.locator(PRIMARY_DIALOG_TRIGGER).first();
+    if ((await trigger.count()) === 0 || !(await trigger.isVisible()) || (await trigger.isDisabled())) return [];
+    await trigger.click();
+    try {
+        await expect(page.locator(OPEN_DIALOG).last()).toBeVisible();
+    } catch {
+        return [{ check: 'touch-target', detail: `${PRIMARY_DIALOG_TRIGGER} opened no ${OPEN_DIALOG}` }];
+    }
+    await settle(page, inFlight);
+    const findings = await phoneTargets(page, OPEN_DIALOG);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(OPEN_DIALOG)).toHaveCount(0);
+    return findings;
 }
 
 /** Counts the page's requests still in flight (route-intercepted ones included). */
