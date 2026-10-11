@@ -63,6 +63,14 @@ describe('FR-CRMS-UI-2: a send shows on the timeline at once and follows its sta
         expect(await screen.findByText('Sent', {}, { timeout: 4_000 })).toBeInTheDocument();
     });
 
+    it('reads a subject the server has not built yet with its variables as names', async () => {
+        timeline(
+            [statusRoute('out-1', [outbound({ status: 'sending', subject: '' })])],
+            [{ ...session('out-1'), subject: 'About {{company.name}}' }],
+        );
+        expect(await screen.findByText('emailed “About company.name”')).toBeInTheDocument();
+    });
+
     it('shows a failure’s reason and sends the same message again on Retry', async () => {
         const seen = timeline(
             [

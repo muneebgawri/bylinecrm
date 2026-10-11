@@ -36,7 +36,8 @@ export function EmailFrame({
     const onLoad = useCallback(() => {
         const doc = fit ? frame.current?.contentDocument : null;
         if (!frame.current || !doc) return;
-        frame.current.style.height = `${doc.documentElement.scrollHeight}px`;
+        // The content's own height: `scrollHeight` is never less than the frame's, so it could not shrink.
+        frame.current.style.height = `${Math.ceil(doc.documentElement.getBoundingClientRect().height)}px`;
         doc.addEventListener('click', (event) => {
             const link = (event.target as Element | null)?.closest?.('a[href]');
             if (!link) return;

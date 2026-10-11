@@ -65,7 +65,7 @@ export function usePendingSends(
             if (status === 'sent' && mailMessageId && onTimeline.has(mailMessageId)) return;
             list.push({
                 messageId: id,
-                subject: view?.subject ?? own?.subject ?? '',
+                subject: view?.subject || own?.subject || '',
                 status,
                 sendAt: view?.sendAt ?? own?.accepted.sendAt ?? null,
                 senderTimeZone: view?.senderTimeZone ?? own?.accepted.senderTimeZone ?? null,

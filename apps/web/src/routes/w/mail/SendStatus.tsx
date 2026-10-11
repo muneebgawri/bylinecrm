@@ -9,7 +9,9 @@ import type { PendingSend } from './sends';
 
 /** The words a pending send's line starts with. */
 export function pendingAction(send: PendingSend): string {
-    const subject = send.subject ? `“${send.subject}”` : 'an email';
+    // Until the server has built it, a subject is as written: its variables read as their names.
+    const text = send.subject.replace(/\{\{\s*([^}]+?)\s*\}\}/g, '$1');
+    const subject = text ? `“${text}”` : 'an email';
     return send.status === 'scheduled' ? `scheduled ${subject}` : `emailed ${subject}`;
 }
 

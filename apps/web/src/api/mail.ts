@@ -68,6 +68,9 @@ export function useOutboundMessages(workspaceId: string, messageIds: readonly st
             queryFn: ({ signal }: { signal: AbortSignal }) => mail.message(workspaceId, id, signal),
             refetchInterval: (query: { state: { data: MailOutboundView | undefined; dataUpdateCount: number } }) =>
                 outboundPollMs(query.state.data, query.state.dataUpdateCount, Date.now()),
+            // A send's outcome matters when the person comes back to the tab, not only while they watch it;
+            // the backoff and the final states bound the reads either way.
+            refetchIntervalInBackground: true,
         })),
     });
 }
