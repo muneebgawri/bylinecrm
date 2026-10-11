@@ -25,9 +25,12 @@ export interface SequenceStepJob {
     at: string;
 }
 
-/** One job per (enrolment, time): a rescheduled step gets a new job; the old one finds its time changed. */
+/**
+ * One job per (enrolment, time): a rescheduled step gets a new job; the old one finds its time changed.
+ * (BullMQ reserves `:` in job ids.)
+ */
 export function stepJobId(enrolmentId: string, at: Date): string {
-    return `${enrolmentId}:${at.getTime()}`;
+    return `${enrolmentId}.${at.getTime()}`;
 }
 
 export type RunOutcome =

@@ -312,7 +312,8 @@ describe('FR-CRMS-5 sequences', () => {
 
         it('opens a region blocked by default only with a lawful basis stated', async () => {
             const missing = await as(admin).put(w('/outreach/region-policy')).send({ region: 'eu', allowed: true });
-            expect(missing.status).toBe(422);
+            expect(missing.status).toBe(400);
+            expect(missing.body).toMatchObject({ code: 'validation.failed' });
             const opened = await as(admin)
                 .put(w('/outreach/region-policy'))
                 .send({ region: 'eu', allowed: true, lawfulBasis: 'Legitimate interest assessment LIA-7, on file.' });
@@ -347,7 +348,8 @@ describe('FR-CRMS-5 sequences', () => {
             expect(out).toMatchObject({ mailboxId: poolMailbox, status: 'scheduled', sequenceEnrolmentId: waiting.id });
 
             expect(await send.deliver(workspace, outboundId, noWait, Date.now() + 1000)).toBe('sent');
-            const raw = gmail.sent.at(-1)!.raw;
+            // Headers as a reader sees them: folded lines joined (RFC 5322 §2.2.3).
+            const raw = gmail.sent.at(-1)!.raw.replace(/\r?\n[ \t]+/g, ' ');
             expect(raw).toMatch(/List-Unsubscribe: <https?:\/\/[^>]+>/);
             expect(raw).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
             expect(raw).toContain('Hello Dana');
@@ -370,7 +372,7 @@ describe('FR-CRMS-5 sequences', () => {
                 subject: 'Re: Hello Dana',
                 text: 'Not interested, thanks.',
                 inReplyTo: sent.messageId,
-                threadId: sent.threadId ?? undefined,
+                ...(sent.threadId ? { threadId: sent.threadId } : {}),
             });
             await sync.syncMailbox(workspace, poolMailbox, noWait);
             await settle(app);
@@ -443,6 +445,10 @@ describe('FR-CRMS-5 sequences', () => {
                     rfc822MessageId: `filler-${stamp}@x.example`,
                     toAddresses: ['x@x.example'],
                     subject: 'x',
+                    mime: 'x',
+                    providerMessageId: `filler-${stamp}`,
+                    providerThreadId: `filler-thr-${stamp}`,
+                    attempts: 1,
                     sentAt: new Date(),
                     lastAttemptAt: new Date(),
                 },
