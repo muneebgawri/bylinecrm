@@ -65,7 +65,7 @@ describe('FR-CRMS-4: the thread view', () => {
             threadRoute(
                 thread({
                     bodiesVisible: false,
-                    messages: [message({ subject: 'Pricing', bodyHtml: null, bodyText: null })],
+                    messages: [message({ subject: 'Pricing', bodiesVisible: false, bodyHtml: null, bodyText: null })],
                 }),
             ),
         ]);

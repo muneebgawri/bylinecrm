@@ -17753,11 +17753,15 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
-                    "mailboxId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    "mailboxIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                        },
+                        "description": "Every mailbox holding a copy of a message in the thread (#107): one email, many mailboxes."
                     },
                     "subject": {
                         "type": "string",
@@ -17797,7 +17801,7 @@
                         "required": ["direction", "from", "snippet", "sentAt"]
                     }
                 },
-                "required": ["id", "mailboxId", "subject", "messageCount", "lastMessageAt", "lastMessage"]
+                "required": ["id", "mailboxIds", "subject", "messageCount", "lastMessageAt", "lastMessage"]
             },
             "MailThreadPage": {
                 "type": "object",
@@ -17824,9 +17828,24 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "mailboxIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                        },
+                        "description": "The mailboxes holding a copy of this message (#107)."
+                    },
+                    "bodiesVisible": {
+                        "type": "boolean",
+                        "description": "False when the caller holds no copy and every copy is in another member’s personal mailbox: subject, snippet and participants only."
+                    },
                     "direction": {
                         "type": "string",
-                        "enum": ["inbound", "outbound"]
+                        "enum": ["inbound", "outbound"],
+                        "description": "The workspace's view: outbound when one of the workspace's mailboxes sent it."
                     },
                     "from": {
                         "type": "string"
@@ -17905,6 +17924,8 @@
                 },
                 "required": [
                     "id",
+                    "mailboxIds",
+                    "bodiesVisible",
                     "direction",
                     "from",
                     "subject",
@@ -17928,11 +17949,15 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
-                    "mailboxId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    "mailboxIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                        },
+                        "description": "Every mailbox holding a copy of a message in the thread (#107)."
                     },
                     "subject": {
                         "type": "string"
@@ -17950,7 +17975,7 @@
                     },
                     "bodiesVisible": {
                         "type": "boolean",
-                        "description": "False when the thread is in another member's personal mailbox: subject, snippet and participants only."
+                        "description": "True when every message's bodies are visible to the caller (each message says for itself)."
                     },
                     "messages": {
                         "type": "array",
@@ -17959,7 +17984,15 @@
                         }
                     }
                 },
-                "required": ["id", "mailboxId", "subject", "messageCount", "lastMessageAt", "bodiesVisible", "messages"]
+                "required": [
+                    "id",
+                    "mailboxIds",
+                    "subject",
+                    "messageCount",
+                    "lastMessageAt",
+                    "bodiesVisible",
+                    "messages"
+                ]
             },
             "MailboxSync": {
                 "type": "object",

@@ -90,9 +90,10 @@ export class BlocklistService {
 
 /**
  * Deletes stored mail the new entry now fully covers, in the mailboxes it applies to: the
- * workspace's entry everywhere; a personal entry in its member's personal mailboxes. Only messages
- * with a participant the entry covers are candidates; each is then judged with every entry that
- * applies to its mailbox — the importer's rule — so mixed mail stays.
+ * workspace's entry everywhere; a personal entry in its member's personal mailboxes. Each mailbox's
+ * **copy** is judged with every entry that applies to that mailbox — the importer's rule — so mixed
+ * mail stays. A message goes (with its participants and timeline entries) only when no mailbox holds
+ * a copy of it any more (#107); a thread goes when it has no message left.
  */
 async function purgeCovered(
     tx: WorkspaceClient,
@@ -104,29 +105,49 @@ async function purgeCovered(
     });
     if (mailboxes.length === 0) return { messages: 0, threads: 0 };
     const covered = entry.value.startsWith('@') ? { endsWith: entry.value } : { equals: entry.value };
-    const candidates = await tx.mailMessage.findMany({
-        where: { mailboxId: { in: mailboxes.map((m) => m.id) }, participants: { some: { address: covered } } },
-        select: { id: true, mailboxId: true, threadId: true, participants: { select: { address: true } } },
+    const candidates = await tx.mailMessageCopy.findMany({
+        where: {
+            mailboxId: { in: mailboxes.map((m) => m.id) },
+            message: { participants: { some: { address: covered } } },
+        },
+        select: {
+            id: true,
+            mailboxId: true,
+            message: { select: { id: true, threadId: true, participants: { select: { address: true } } } },
+        },
     });
     if (candidates.length === 0) return { messages: 0, threads: 0 };
     const entries = await tx.blocklistEntry.findMany({ select: { value: true, memberId: true } });
     const byId = new Map(mailboxes.map((m) => [m.id, m]));
-    const doomed = candidates.filter((m) => {
-        const mailbox = byId.get(m.mailboxId)!;
+    const doomed = candidates.filter((c) => {
+        const mailbox = byId.get(c.mailboxId)!;
         return everyOutsideBlocked(
             mailbox.email,
-            m.participants.map((p) => p.address),
+            c.message.participants.map((p) => p.address),
             entriesFor(mailbox, entries),
         );
     });
     if (doomed.length === 0) return { messages: 0, threads: 0 };
-    const ids = doomed.map((m) => m.id);
-    await tx.$queryRaw`SELECT delete_email_timeline_entries(${ids}::uuid[], NULL)`;
-    await tx.mailMessage.deleteMany({ where: { id: { in: ids } } });
-    const threadIds = [...new Set(doomed.map((m) => m.threadId))];
-    const emptied = await tx.mailThread.deleteMany({ where: { id: { in: threadIds }, messages: { none: {} } } });
+    await tx.mailMessageCopy.deleteMany({ where: { id: { in: doomed.map((c) => c.id) } } });
+    const touched = [...new Set(doomed.map((c) => c.message.id))];
+    const orphaned = (
+        await tx.mailMessage.findMany({ where: { id: { in: touched }, copies: { none: {} } }, select: { id: true } })
+    ).map((m) => m.id);
+    if (orphaned.length === 0) return { messages: 0, threads: 0 };
+    await tx.$queryRaw`SELECT delete_email_timeline_entries(${orphaned}::uuid[], NULL)`;
+    await tx.mailMessage.deleteMany({ where: { id: { in: orphaned } } });
+    const threadIds = [
+        ...new Set(doomed.filter((c) => orphaned.includes(c.message.id)).map((c) => c.message.threadId)),
+    ];
+    // A thread left with no message goes, with its mailbox mappings — those holding no copy.
+    await tx.mailboxThread.deleteMany({
+        where: { threadId: { in: threadIds }, copies: { none: {} }, thread: { messages: { none: {} } } },
+    });
+    const emptied = await tx.mailThread.deleteMany({
+        where: { id: { in: threadIds }, messages: { none: {} }, mailboxThreads: { none: {} } },
+    });
     for (const threadId of threadIds) await recountThread(tx, threadId);
-    return { messages: ids.length, threads: emptied.count };
+    return { messages: orphaned.length, threads: emptied.count };
 }
 
 function isAdmin(context: WorkspaceRunContext): boolean {

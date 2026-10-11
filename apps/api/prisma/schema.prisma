@@ -50,6 +50,8 @@ model Workspace {
   mailSettings           WorkspaceMailSettings?
   mailThreads            MailThread[]
   mailMessages           MailMessage[]
+  mailboxThreads         MailboxThread[]
+  mailMessageCopies      MailMessageCopy[]
   mailParticipants       MailParticipant[]
   mailboxSyncStates      MailboxSyncState[]
   blocklistEntries       BlocklistEntry[]
@@ -972,8 +974,8 @@ model Mailbox {
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner     WorkspaceMember   @relation(fields: [ownerMemberId], references: [id])
-  threads   MailThread[]
-  messages  MailMessage[]
+  threads   MailboxThread[]
+  copies    MailMessageCopy[]
   syncState MailboxSyncState?
 
   outbound MailOutbound[]
@@ -1142,34 +1144,57 @@ model MailOutbound {
   @@map("mail_outbound")
 }
 
-/// A Gmail conversation in one mailbox. `subject` is its first message's; the counts follow imports.
+/// A conversation, once per workspace however many mailboxes hold it (#107). `subject` is its first
+/// message's; the count and last message follow the messages (one writer, `recountThread`). Each
+/// mailbox's Gmail thread maps to it through `MailboxThread`.
 model MailThread {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId      String   @map("workspace_id") @db.Uuid
-  mailboxId        String   @map("mailbox_id") @db.Uuid
-  providerThreadId String   @map("provider_thread_id")
-  subject          String   @default("")
-  lastMessageAt    DateTime @map("last_message_at") @db.Timestamptz
-  messageCount     Int      @default(0) @map("message_count")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String   @map("workspace_id") @db.Uuid
+  subject       String   @default("")
+  lastMessageAt DateTime @map("last_message_at") @db.Timestamptz
+  messageCount  Int      @default(0) @map("message_count")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  mailbox   Mailbox       @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
-  messages  MailMessage[]
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages       MailMessage[]
+  mailboxThreads MailboxThread[]
 
-  @@unique([mailboxId, providerThreadId])
   @@index([workspaceId, lastMessageAt(sort: Desc)])
   @@map("mail_threads")
 }
 
-/// One synced message. The body is kept sanitised (HTML) and as text; `snippet` is Gmail's.
+/// A mailbox's Gmail thread, and the conversation it is part of (#107). A reply sent from a mailbox goes
+/// into that mailbox's Gmail thread.
+model MailboxThread {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  mailboxId        String   @map("mailbox_id") @db.Uuid
+  providerThreadId String   @map("provider_thread_id")
+  threadId         String   @map("thread_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mailbox   Mailbox           @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  // Restrict: a thread goes only once no mailbox maps a Gmail thread to it (a mapping may hold copies of
+  // messages another thread has, when Gmail threads them differently).
+  thread    MailThread        @relation(fields: [threadId], references: [id], onDelete: Restrict)
+  copies    MailMessageCopy[]
+
+  @@unique([mailboxId, providerThreadId])
+  @@index([threadId])
+  @@map("mailbox_threads")
+}
+
+/// An email, once per workspace however many of its mailboxes hold it (#107): keyed by `identityKey` — its
+/// RFC 822 Message-ID (Gmail's own, which replaces ours, #87), or `gmail:<mailbox>:<gmail id>` for a message
+/// with none. Each mailbox holding it is a `MailMessageCopy`. The body is kept sanitised (HTML) and as text;
+/// `snippet` is Gmail's. `direction` is the workspace's view: outbound when sent from one of its mailboxes.
 model MailMessage {
   id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId       String        @map("workspace_id") @db.Uuid
-  mailboxId         String        @map("mailbox_id") @db.Uuid
   threadId          String        @map("thread_id") @db.Uuid
-  providerMessageId String        @map("provider_message_id")
+  identityKey       String        @map("identity_key")
   rfc822MessageId   String?       @map("rfc822_message_id")
   inReplyTo         String?       @map("in_reply_to")
   references        String[]      @default([])
@@ -1182,21 +1207,44 @@ model MailMessage {
   bodyHtmlSanitized String?       @map("body_html_sanitized")
   bodyTruncated     Boolean       @default(false) @map("body_truncated")
   hasAttachments    Boolean       @default(false) @map("has_attachments")
-  labelIds          String[]      @default([]) @map("label_ids")
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  mailbox      Mailbox           @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
   thread       MailThread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
   participants MailParticipant[]
+  copies       MailMessageCopy[]
 
   repliedFrom MailOutbound[] @relation("MailOutboundReplyTo")
   outboundOf  MailOutbound[] @relation("MailOutboundStored")
 
-  @@unique([mailboxId, providerMessageId])
+  @@unique([workspaceId, identityKey])
   @@index([workspaceId, threadId, sentAt])
   @@index([workspaceId, rfc822MessageId])
   @@map("mail_messages")
+}
+
+/// One mailbox's copy of a message (#107): Gmail's id for it there, the Gmail thread it is in there, its
+/// labels, and its direction from that mailbox's view. Unique per mailbox and Gmail id — sync's dedupe key.
+model MailMessageCopy {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String        @map("workspace_id") @db.Uuid
+  messageId         String        @map("message_id") @db.Uuid
+  mailboxId         String        @map("mailbox_id") @db.Uuid
+  mailboxThreadId   String        @map("mailbox_thread_id") @db.Uuid
+  providerMessageId String        @map("provider_message_id")
+  direction         MailDirection
+  labelIds          String[]      @default([]) @map("label_ids")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  message       MailMessage   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  mailbox       Mailbox       @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  mailboxThread MailboxThread @relation(fields: [mailboxThreadId], references: [id], onDelete: Cascade)
+
+  @@unique([mailboxId, providerMessageId])
+  @@index([messageId])
+  @@index([mailboxThreadId])
+  @@map("mail_message_copies")
 }
 
 /// One address on one message, matched to a person and/or a member of the workspace when it can be.

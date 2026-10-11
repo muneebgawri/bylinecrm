@@ -15,6 +15,7 @@ import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MAIL_SYNC_QUEUE } from '../../src/mail-sync/mail-sync.constants';
 import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sync.service';
+import { recountThread } from '../../src/mail-sync/threads';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, settle, type EventLog } from '../support/outbox';
@@ -39,7 +40,7 @@ function browserFrom(res: Response): Browser {
 
 interface ThreadSummary {
     id: string;
-    mailboxId: string;
+    mailboxIds: string[];
     subject: string;
     messageCount: number;
     lastMessage: { direction: string; from: string; snippet: string };
@@ -316,7 +317,7 @@ describe('mail sync', () => {
             const items = (list.body as { items: ThreadSummary[] }).items;
             expect(items).toHaveLength(1);
             expect(items[0]).toMatchObject({
-                mailboxId: adminMailbox,
+                mailboxIds: [adminMailbox],
                 subject: 'Pricing for the Series B',
                 messageCount: 2,
                 lastMessage: { direction: 'outbound', from: adminEmail },
@@ -405,7 +406,9 @@ describe('mail sync', () => {
             gmail.repeatInHistory(adminEmail, id);
             const run = await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(run.imported).toBe(1);
-            const rows = await owner.mailMessage.count({ where: { mailboxId: adminMailbox, providerMessageId: id } });
+            const rows = await owner.mailMessage.count({
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: id } } },
+            });
             expect(rows).toBe(1);
         });
 
@@ -676,10 +679,10 @@ describe('mail sync', () => {
             gmail.deliver(adminEmail, { from: dana, to: [adminEmail], cc: [promo], subject: 'Mixed purge', text: 'm' });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             blockedMessage = (await owner.mailMessage.findFirst({
-                where: { mailboxId: adminMailbox, providerMessageId: blocked.id },
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: blocked.id } } },
             }))!.id;
             mixedMessage = (await owner.mailMessage.findFirst({
-                where: { mailboxId: adminMailbox, subject: 'Mixed purge' },
+                where: { copies: { some: { mailboxId: adminMailbox } }, subject: 'Mixed purge' },
             }))!.id;
             const blockedThread = (await owner.mailMessage.findUnique({ where: { id: blockedMessage } }))!.threadId;
             expect(await settled(() => owner.timelineActivity.count({ where: { linkedId: blockedMessage } }))).toBe(1);
@@ -710,8 +713,16 @@ describe('mail sync', () => {
             const res = await as(member).post(w('/mail/blocklist')).send({ value: news });
             expect(res.status).toBe(201);
             expect(res.body).toMatchObject({ purged: { messages: 1, threads: 1 } });
-            expect(await owner.mailMessage.count({ where: { mailboxId: memberMailbox, fromAddress: news } })).toBe(0);
-            expect(await owner.mailMessage.count({ where: { mailboxId: adminMailbox, fromAddress: news } })).toBe(1);
+            expect(
+                await owner.mailMessage.count({
+                    where: { copies: { some: { mailboxId: memberMailbox } }, fromAddress: news },
+                }),
+            ).toBe(0);
+            expect(
+                await owner.mailMessage.count({
+                    where: { copies: { some: { mailboxId: adminMailbox } }, fromAddress: news },
+                }),
+            ).toBe(1);
         });
 
         it('removing the entry does not bring the mail back', async () => {
@@ -728,12 +739,12 @@ describe('mail sync', () => {
 
         beforeAll(async () => {
             personalThread = ((await threads(`person:${danaId}`)).body as { items: ThreadSummary[] }).items.find(
-                (t) => t.mailboxId === adminMailbox && t.subject === 'Pricing for the Series B',
+                (t) => t.mailboxIds.includes(adminMailbox) && t.subject === 'Pricing for the Series B',
             )!.id;
             gmail.deliver(poolEmail, { from: dana, to: [poolEmail], subject: 'Pool reply', text: 'Pool body' });
             await sync.syncMailbox(workspace, poolMailbox, noWait);
-            poolThread = ((await threads(`person:${danaId}`)).body as { items: ThreadSummary[] }).items.find(
-                (t) => t.mailboxId === poolMailbox,
+            poolThread = ((await threads(`person:${danaId}`)).body as { items: ThreadSummary[] }).items.find((t) =>
+                t.mailboxIds.includes(poolMailbox),
             )!.id;
         });
 
@@ -847,7 +858,7 @@ describe('mail sync', () => {
 
         it('FR-CRMS-2: lists one thread holding one message, in both mailboxes', async () => {
             const list = (await threads(`person:${danaId}`)).body as {
-                items: (ThreadSummary & { mailboxIds: string[] })[];
+                items: ThreadSummary[];
             };
             const ours = list.items.filter((t) => t.subject === subject);
             expect(ours).toHaveLength(1);
@@ -891,6 +902,54 @@ describe('mail sync', () => {
             expect(ours[0]!.messageCount).toBe(2);
             const thread = (await as(admin).get(w(`/mail/threads/${ours[0]!.id}`))).body as Thread;
             expect(thread.messages.map((m) => m.snippet)).toEqual(['Meet Dana.', 'Hello Dana.']);
+        });
+
+        it('FR-CRMS-2: messages of one second keep the order they were stored in (a Date header has whole seconds)', async () => {
+            // Seen as a flaky subject while building #107: a reply in its parent's second, with a smaller
+            // random id, became the thread's "first" message. The ids' leading digits are fixed so the old
+            // order (by id) picks the reply every time.
+            const second = new Date(Math.floor(Date.now() / 1000) * 1000);
+            const suffix = stamp
+                .replace(/[^0-9]/g, '')
+                .padStart(12, '0')
+                .slice(-12);
+            const thread = await owner.mailThread.create({
+                data: { workspaceId: workspace, subject: '', lastMessageAt: second },
+            });
+            const base = {
+                workspaceId: workspace,
+                threadId: thread.id,
+                direction: 'inbound' as const,
+                fromAddress: dana,
+                sentAt: second,
+            };
+            try {
+                await owner.mailMessage.create({
+                    data: {
+                        ...base,
+                        id: `ffffffff-ffff-4fff-bfff-${suffix}`,
+                        identityKey: `same-second-1-${stamp}`,
+                        subject: 'The question',
+                        createdAt: new Date(second.getTime() + 10),
+                    },
+                });
+                await owner.mailMessage.create({
+                    data: {
+                        ...base,
+                        id: `00000000-0000-4000-8000-${suffix}`,
+                        identityKey: `same-second-2-${stamp}`,
+                        subject: 'Re: The question',
+                        createdAt: new Date(second.getTime() + 20),
+                    },
+                });
+                await recountThread(owner as unknown as Parameters<typeof recountThread>[0], thread.id);
+                expect((await owner.mailThread.findUniqueOrThrow({ where: { id: thread.id } })).subject).toBe(
+                    'The question',
+                );
+            } finally {
+                await owner.mailMessage.deleteMany({ where: { threadId: thread.id } });
+                await owner.mailThread.delete({ where: { id: thread.id } });
+            }
         });
 
         it('FR-CRMS-2: storing a copy again changes nothing', async () => {

@@ -356,7 +356,7 @@ describe('mail send and reply detection', () => {
             const result = await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(result.imported).toBe(0);
             const rows = await owner.mailMessage.count({
-                where: { mailboxId: adminMailbox, providerMessageId: gmail.sent.at(-1)!.id },
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: gmail.sent.at(-1)!.id } } },
             });
             expect(rows).toBe(1);
             expect(await ofType('email.sent', sent.mailMessageId!)).toHaveLength(1);
@@ -549,7 +549,7 @@ describe('mail send and reply detection', () => {
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             const parent = await owner.mailMessage.findFirstOrThrow({
-                where: { mailboxId: adminMailbox, rfc822MessageId: `ask-${stamp}@acme.example` },
+                where: { copies: { some: { mailboxId: adminMailbox } }, rfc822MessageId: `ask-${stamp}@acme.example` },
             });
             ours = await sendAndDeliver({
                 mailboxId: adminMailbox,
@@ -564,10 +564,10 @@ describe('mail send and reply detection', () => {
         it('sends the reply in the parent’s Gmail thread with In-Reply-To and References', async () => {
             const last = gmail.sent.at(-1)!;
             const parent = await owner.mailMessage.findFirstOrThrow({
-                where: { mailboxId: adminMailbox, rfc822MessageId: `ask-${stamp}@acme.example` },
-                include: { thread: true },
+                where: { workspaceId: workspace, rfc822MessageId: `ask-${stamp}@acme.example` },
+                include: { copies: { where: { mailboxId: adminMailbox }, include: { mailboxThread: true } } },
             });
-            expect(last.threadId).toBe(parent.thread.providerThreadId);
+            expect(last.threadId).toBe(parent.copies[0]!.mailboxThread.providerThreadId);
             expect(header(last.raw, 'In-Reply-To')).toBe(`<ask-${stamp}@acme.example>`);
             expect(header(last.raw, 'References')).toBe(`<ask-${stamp}@acme.example>`);
             expect(header(last.raw, 'Subject')).toBe('Re: Can you send pricing?');
@@ -644,7 +644,9 @@ describe('mail send and reply detection', () => {
         it('refuses a reply to a message that is not in the sending mailbox', async () => {
             gmail.deliver(memberEmail, { from: dana, to: [memberEmail], subject: 'To the member', text: 'hi' });
             await sync.syncMailbox(workspace, memberMailbox, noWait);
-            const foreign = await owner.mailMessage.findFirstOrThrow({ where: { mailboxId: memberMailbox } });
+            const foreign = await owner.mailMessage.findFirstOrThrow({
+                where: { copies: { some: { mailboxId: memberMailbox } } },
+            });
             const res = await as(admin)
                 .post(w('/mail/send'))
                 .send({
@@ -691,7 +693,7 @@ describe('mail send and reply detection', () => {
             expect(header(raw, 'X-BylineCRM-Id')).toBe(out.id);
             const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: out.id } });
             const copy = await owner.mailMessage.findFirstOrThrow({
-                where: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! },
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! } } },
             });
             expect(copy.rfc822MessageId).toMatch(/@mail\.gmail\.com$/);
             expect(copy.rfc822MessageId).not.toBe(row.rfc822MessageId);
@@ -706,7 +708,7 @@ describe('mail send and reply detection', () => {
             await sync.syncMailbox(workspace, adminMailbox, noWait);
             expect(
                 await owner.mailMessage.count({
-                    where: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! },
+                    where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! } } },
                 }),
             ).toBe(1);
             expect(out.mailMessageId).not.toBeNull();
@@ -740,7 +742,7 @@ describe('mail send and reply detection', () => {
             const out = await sendAndDeliver(freeToRae('Reply by rewritten id'));
             const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: out.id } });
             const copy = await owner.mailMessage.findFirstOrThrow({
-                where: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! },
+                where: { copies: { some: { mailboxId: adminMailbox, providerMessageId: row.providerMessageId! } } },
             });
             gmail.deliver(adminEmail, {
                 from: rae,
@@ -802,7 +804,9 @@ describe('mail send and reply detection', () => {
                         })
                 ).body as { id: string }
             ).id;
-            const aMessage = await owner.mailMessage.findFirstOrThrow({ where: { mailboxId: adminMailbox } });
+            const aMessage = await owner.mailMessage.findFirstOrThrow({
+                where: { copies: { some: { mailboxId: adminMailbox } } },
+            });
             const replyToA = await as(otherAdmin)
                 .post(w('/mail/send', otherWorkspace))
                 .send({

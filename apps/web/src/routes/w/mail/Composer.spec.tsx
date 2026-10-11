@@ -234,7 +234,7 @@ describe('FR-CRMS-4: a reply', () => {
                 mailboxesRoute(MAILBOXES),
                 (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined),
             ],
-            { reply: { messageId: 'msg-7', mailboxId: 'mb-mine', subject: 'Intro' } },
+            { reply: { messageId: 'msg-7', mailboxIds: ['mb-mine'], subject: 'Intro' } },
         );
         await userEvent.type(await screen.findByRole('textbox', { name: 'Message' }), 'Sounds good');
         await userEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -245,7 +245,9 @@ describe('FR-CRMS-4: a reply', () => {
     });
 
     it('cannot reply from a mailbox that is not one of the member’s', async () => {
-        composer([mailboxesRoute(MAILBOXES)], { reply: { messageId: 'msg-7', mailboxId: 'mb-sam', subject: 'Intro' } });
-        expect(await screen.findByText(/not one of your connected ones/)).toBeInTheDocument();
+        composer([mailboxesRoute(MAILBOXES)], {
+            reply: { messageId: 'msg-7', mailboxIds: ['mb-sam'], subject: 'Intro' },
+        });
+        expect(await screen.findByText(/in no mailbox of yours that can send/)).toBeInTheDocument();
     });
 });
