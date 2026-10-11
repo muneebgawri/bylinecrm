@@ -1,6 +1,7 @@
 import type { EmailReply, EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
+import type { EmailBounce, MailboxPause } from './sending-pool.js';
 import type { SuppressionEventPayload } from './suppression.js';
 
 /**
@@ -94,12 +95,20 @@ export const DOMAIN_EVENT_TYPES = [
     // `email.sent`. Webhooks deliver them.
     'email.scheduled',
     'email.cancelled',
+    // A pool mailbox received a bounce report (P3-2); `recordId` is the report as stored, `bounce`
+    // the address that failed and the send. A permanent one suppresses the address and counts
+    // towards the mailbox's bounce rate. No timeline entry; webhooks deliver it.
+    'email.bounced',
     'meeting.booked',
     // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
     // writes nothing for these, webhooks deliver them.
     'mailbox.connected',
     'mailbox.disconnected',
     'mailbox.reconnect_needed',
+    // A pool mailbox paused for its bounce or complaint rate, and resumed by an admin (P3-2,
+    // FR-CRMS-6, -13); `recordId` is the mailbox, `pause` why.
+    'mailbox.paused',
+    'mailbox.resumed',
     // An address put on, or lifted from, the workspace's suppression list (P3-1); `recordId` is the
     // entry, `suppression` what it says, `related` the person the address belongs to when known. Not
     // a record: the timeline writes nothing for these, webhooks deliver them.
@@ -163,6 +172,10 @@ interface DomainEventBase {
     link?: { personId: string };
     /** Present on `suppression.*`: the entry's address, why it is there and who it belongs to. */
     suppression?: SuppressionEventPayload;
+    /** Present on `email.bounced`: the address that failed, how, and the send. */
+    bounce?: EmailBounce;
+    /** Present on `mailbox.paused` (and `mailbox.resumed`, the pause it ends): why. */
+    pause?: MailboxPause;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

@@ -171,8 +171,8 @@ describe('FR-CRMS-1, FR-CRMS-2: each mailbox shows where it stands and its sync'
         expect(screen.getByText('Sam Okafor')).toBeInTheDocument();
         expect(screen.getByText('Shared outreach')).toBeInTheDocument();
         expect(await screen.findAllByText(/^Synced /)).not.toHaveLength(0);
-        expect(screen.getByText(/arrives with outreach/)).toBeInTheDocument();
-        expect(screen.queryByText(/Daily cap/i)).not.toBeInTheDocument();
+        // The sending pool is outreach's: without `outreach:write` it is not drawn (P3-2).
+        expect(screen.queryByRole('heading', { name: 'Sending pool' })).not.toBeInTheDocument();
     });
 
     it('disconnects only after the page’s own confirmation', async () => {

@@ -10,6 +10,7 @@ import { MailAccountsModule } from './mail-accounts/mail-accounts.module';
 import { MailSendModule } from './mail-send/mail-send.module';
 import { MailSyncModule } from './mail-sync/mail-sync.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
+import { SendingPoolModule } from './sending-pool/sending-pool.module';
 import { SuppressionModule } from './suppression/suppression.module';
 import { PlatformModule } from './platform/platform.module';
 import { RecordsModule } from './records/records.module';
@@ -32,6 +33,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         PlatformModule,
         RecordsModule,
         SuppressionModule,
+        SendingPoolModule,
         TemplatesModule,
         TimelineModule,
         ViewsModule,

@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
 import { MailSyncModule } from '../mail-sync/mail-sync.module';
+import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { SuppressionModule } from '../suppression/suppression.module';
 import { TemplatesModule } from '../templates/templates.module';
 import {
@@ -30,6 +31,7 @@ import { MailSendSweep } from './sweep';
         AuthModule,
         MailAccountsModule,
         MailSyncModule,
+        SendingPoolModule,
         SuppressionModule,
         TemplatesModule,
         BullModule.registerQueue({

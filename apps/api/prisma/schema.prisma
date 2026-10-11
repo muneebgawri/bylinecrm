@@ -62,6 +62,10 @@ model Workspace {
   suppressions      Suppression[]
   unsubscribeTokens UnsubscribeToken[]
 
+  sendingPoolSettings SendingPoolSettings?
+  sendingDomains      SendingDomain[]
+  mailBounces         MailBounce[]
+
   @@map("workspaces")
 }
 
@@ -209,6 +213,7 @@ model WorkspaceMember {
   assignedTasks          Task[]
   authoredAttachments    Attachment[]
   savedViews             SavedView[]
+  resumedMailboxes       Mailbox[]           @relation("MailboxResumedBy")
   configuredOAuthClients GoogleOAuthClient[]
   mailboxes              Mailbox[]
   mailParticipations     MailParticipant[]
@@ -969,11 +974,25 @@ model Mailbox {
   /// Why the mailbox last stopped working: `{ code, message, at }`; null while it works.
   lastError              Json?          @map("last_error")
   connectedAt            DateTime?      @map("connected_at") @db.Timestamptz
+  /// A pool mailbox's own daily cap (P3-2); null takes the workspace's.
+  poolDailyCap           Int?           @map("pool_daily_cap")
+  /// Day 1 of a pool mailbox's warm-up: when it first connected as a pool mailbox (P3-2).
+  warmupStartedAt        DateTime?      @map("warmup_started_at") @db.Timestamptz
+  /// Set while the mailbox is paused for its bounce or complaint rate (FR-CRMS-6, -13).
+  pausedAt               DateTime?      @map("paused_at") @db.Timestamptz
+  /// Why it was paused: `{ code, message, rate, threshold, at }`; null while it is not.
+  pauseReason            Json?          @map("pause_reason")
+  /// The last time an admin resumed it, who and why (P3-2).
+  resumedAt              DateTime?      @map("resumed_at") @db.Timestamptz
+  resumedByMemberId      String?        @map("resumed_by_member_id") @db.Uuid
+  resumeNote             String?        @map("resume_note")
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner     WorkspaceMember   @relation(fields: [ownerMemberId], references: [id])
+  resumedBy WorkspaceMember?  @relation("MailboxResumedBy", fields: [resumedByMemberId], references: [id], onDelete: SetNull)
+  bounces   MailBounce[]
   threads   MailboxThread[]
   copies    MailMessageCopy[]
   syncState MailboxSyncState?
@@ -1135,6 +1154,7 @@ model MailOutbound {
 
   suppressions      Suppression[]
   unsubscribeTokens UnsubscribeToken[]
+  bounces           MailBounce[]
 
   @@index([workspaceId, senderMemberId, createdAt(sort: Desc)])
   @@index([mailboxId, providerThreadId])
@@ -1216,6 +1236,7 @@ model MailMessage {
 
   repliedFrom MailOutbound[] @relation("MailOutboundReplyTo")
   outboundOf  MailOutbound[] @relation("MailOutboundStored")
+  bounces     MailBounce[]
 
   @@unique([workspaceId, identityKey])
   @@index([workspaceId, threadId, sentAt])
@@ -1447,4 +1468,83 @@ model UnsubscribeToken {
 
   @@index([workspaceId, address])
   @@map("unsubscribe_tokens")
+}
+
+/// A workspace's sending-pool settings (P3-2, FR-CRMS-6, -13); defaults in docs/design-notes/P3-2.md.
+/// Rates are in basis points (1/100 of a percent): 500 = 5%.
+model SendingPoolSettings {
+  workspaceId       String   @id @map("workspace_id") @db.Uuid
+  dailyCap          Int      @default(40) @map("daily_cap")
+  warmupStartPerDay Int      @default(5) @map("warmup_start_per_day")
+  warmupDays        Int      @default(21) @map("warmup_days")
+  jitterMinSeconds  Int      @default(60) @map("jitter_min_seconds")
+  jitterMaxSeconds  Int      @default(300) @map("jitter_max_seconds")
+  bouncePauseBps    Int      @default(500) @map("bounce_pause_bps")
+  complaintPauseBps Int      @default(20) @map("complaint_pause_bps")
+  rateMinSample     Int      @default(20) @map("rate_min_sample")
+  rateWindowDays    Int      @default(7) @map("rate_window_days")
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("sending_pool_settings")
+}
+
+enum SendingDomainStatus {
+  unchecked
+  pass
+  fail
+
+  @@map("sending_domain_status")
+}
+
+/// A pool mailbox's sending domain and its last DNS check (FR-CRMS-13). One row per domain per workspace.
+model SendingDomain {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String              @map("workspace_id") @db.Uuid
+  /// Lower case.
+  domain       String
+  /// The DKIM selector checked: `<selector>._domainkey.<domain>`.
+  dkimSelector String              @default("google") @map("dkim_selector")
+  status       SendingDomainStatus @default(unchecked)
+  /// The last check's per-step results: `{ spf, dkim, dmarc }`, each `{ outcome, message }`.
+  lastCheck    Json?               @map("last_check")
+  checkedAt    DateTime?           @map("checked_at") @db.Timestamptz
+  nextCheckAt  DateTime            @default(now()) @map("next_check_at") @db.Timestamptz
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, domain])
+  @@index([nextCheckAt])
+  @@map("sending_domains")
+}
+
+/// A delivery failure a pool mailbox was told about (P3-2): one row per bounce report and failed address.
+model MailBounce {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  mailboxId   String   @map("mailbox_id") @db.Uuid
+  /// The bounce report as stored (the message the mailbox received).
+  messageId   String   @map("message_id") @db.Uuid
+  /// The address that failed; lower case.
+  address     String
+  /// A 5.x.x status: the address will never take mail. A 4.x.x one is recorded, never counted.
+  permanent   Boolean
+  /// The enhanced status code the report gave (`5.1.1`), when it gave one.
+  status      String?
+  /// The send that bounced, when the report names it.
+  outboundId  String?  @map("outbound_id") @db.Uuid
+  occurredAt  DateTime @map("occurred_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mailbox   Mailbox       @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  message   MailMessage   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  outbound  MailOutbound? @relation(fields: [outboundId], references: [id], onDelete: SetNull)
+
+  @@unique([mailboxId, messageId, address])
+  @@index([mailboxId, occurredAt])
+  @@map("mail_bounces")
 }

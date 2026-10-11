@@ -14,6 +14,7 @@ import type {
     PlatformWorkspaceView,
     BlocklistEntryView,
     SuppressionView,
+    SendingPoolView,
     UnsubscribeStatusView,
     AttachmentView,
     BoardView,
@@ -84,6 +85,7 @@ export const IDS = {
     outreachTemplate: '0b1e0000-0000-4000-8000-0000000007a2',
     mailbox: '0b1e0000-0000-4000-8000-0000000008a1',
     poolMailbox: '0b1e0000-0000-4000-8000-0000000008a2',
+    sendingDomain: '0b1e0000-0000-4000-8000-0000000008a3',
     blockedDomain: '0b1e0000-0000-4000-8000-0000000008b1',
     suppressedUnsubscribe: '0b1e0000-0000-4000-8000-0000000009a1',
     suppressedBounce: '0b1e0000-0000-4000-8000-0000000009a2',
@@ -736,6 +738,55 @@ export function mailboxSync(mailboxId: string): MailboxSyncView {
 export const blocklist: BlocklistEntryView[] = [
     { id: IDS.blockedDomain, value: '@newsletters.example', scope: 'workspace', createdAt: at(30) },
 ];
+
+/**
+ * The sending pool (P3-2): the one pool mailbox, on warm-up day 11 with a verified domain — not
+ * sending while it needs reconnecting.
+ */
+export const sendingPool: SendingPoolView = {
+    settings: {
+        dailyCap: 40,
+        warmupStartPerDay: 5,
+        warmupDays: 21,
+        jitterMinSeconds: 60,
+        jitterMaxSeconds: 300,
+        bouncePauseBps: 500,
+        complaintPauseBps: 20,
+        rateMinSample: 20,
+        rateWindowDays: 7,
+    },
+    mailboxes: [
+        {
+            mailboxId: IDS.poolMailbox,
+            email: 'outreach@example.com',
+            // As the mailbox list has it: Google revoked its access, so it is not sending.
+            status: 'reconnect_needed',
+            dailyCapOverride: null,
+            dailyCap: 40,
+            warmupDay: 11,
+            warmupLimit: 22,
+            allowance: 22,
+            used: 7,
+            paused: null,
+            domain: {
+                id: IDS.sendingDomain,
+                domain: 'example.com',
+                dkimSelector: 'google',
+                status: 'pass',
+                lastCheck: {
+                    spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },
+                    dkim: { outcome: 'pass', message: 'DKIM key found at google._domainkey.example.com' },
+                    dmarc: { outcome: 'pass', message: 'DMARC policy none' },
+                },
+                checkedAt: at(1),
+                nextCheckAt: at(-5),
+            },
+            canSend: false,
+        },
+    ],
+    domains: [],
+};
+sendingPool.domains = sendingPool.mailboxes.map((m) => m.domain!);
 
 /** The suppression list (P3-1): one of each kind of entry — a permanent one and two an admin may lift. */
 export const suppressions: SuppressionView[] = [

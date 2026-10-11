@@ -39,6 +39,15 @@ export interface ParsedMessage {
     bodyHtml: string | null;
     bodyTruncated: boolean;
     hasAttachments: boolean;
+    /** A delivery status notification's content (RFC 3464, P3-2); null on any other message. */
+    bounce: ParsedBounce | null;
+}
+
+/** What a bounce report says: each failed address with its status, and the send it answers when it names one. */
+export interface ParsedBounce {
+    recipients: { address: string; permanent: boolean; status: string | null }[];
+    /** The original message's `X-BylineCRM-Id`, from the report's copy of its headers. */
+    crmId: string | null;
 }
 
 const ADDRESS_HEADERS: readonly [string, MailParticipantRole][] = [
@@ -73,7 +82,71 @@ export function parseGmailMessage(raw: GmailRawMessage): ParsedMessage {
         bodyHtml: html?.value ?? null,
         bodyTruncated: text.truncated || (html?.truncated ?? false),
         hasAttachments: bodies.hasAttachments,
+        bounce: bounceOf(raw.payload, headers),
     };
+}
+
+/**
+ * A bounce report's content, or null when the message is not one. A report is recognised by its
+ * structure — `multipart/report; report-type=delivery-status` (RFC 3464) — or by Gmail's own
+ * `X-Failed-Recipients` header, never by its subject or wording. Each `Final-Recipient` block of the
+ * `message/delivery-status` part gives an address and its `Status` (`5.x.x` permanent, `4.x.x`
+ * transient); with no such part, `X-Failed-Recipients` names the addresses and the report's text its
+ * status. The original's `X-BylineCRM-Id` is read from the returned headers when they are included.
+ */
+function bounceOf(root: GmailPart, headers: GmailHeader[]): ParsedBounce | null {
+    const contentType = (headerValue(headers, 'content-type') ?? root.mimeType).toLowerCase();
+    const isReport = /multipart\/report/.test(contentType) && /report-type\s*=\s*"?delivery-status/.test(contentType);
+    const failedHeader = headerValues(headers, 'x-failed-recipients')
+        .flatMap((v) => v.split(','))
+        .map((a) => a.trim().toLowerCase())
+        .filter((a) => a.includes('@'));
+    if (!isReport && failedHeader.length === 0) return null;
+
+    const parts: GmailPart[] = [];
+    const walk = (part: GmailPart): void => {
+        parts.push(part);
+        part.parts?.forEach(walk);
+    };
+    walk(root);
+    const textOf = (part: GmailPart) =>
+        part.body?.data ? Buffer.from(part.body.data, 'base64url').toString('utf8') : '';
+
+    const recipients: ParsedBounce['recipients'] = [];
+    const status = parts.find((p) => p.mimeType.toLowerCase() === 'message/delivery-status');
+    if (status) {
+        for (const block of textOf(status).split(/\r?\n\s*\r?\n/)) {
+            const recipient = /^final-recipient:\s*[^;]*;\s*(\S+@\S+)\s*$/im.exec(block)?.[1];
+            if (!recipient) continue;
+            const code = /^status:\s*([245]\.\d{1,3}\.\d{1,3})/im.exec(block)?.[1] ?? null;
+            recipients.push({
+                address: recipient.toLowerCase(),
+                permanent: code?.startsWith('5.') ?? true,
+                status: code,
+            });
+        }
+    }
+    if (recipients.length === 0) {
+        const text = parts.map(textOf).join('\n');
+        const code = /\b([45]\.\d{1,3}\.\d{1,3})\b/.exec(text)?.[1] ?? null;
+        for (const address of failedHeader) {
+            recipients.push({ address, permanent: code ? code.startsWith('5.') : true, status: code });
+        }
+    }
+    if (recipients.length === 0) return null;
+
+    // The report's own headers never carry the original's id; only a returned copy of them does.
+    let crmId: string | null = null;
+    for (const part of parts.slice(1)) {
+        const type = part.mimeType.toLowerCase();
+        const returned =
+            type === 'text/rfc822-headers' || type === 'message/rfc822'
+                ? (/^x-bylinecrm-id:\s*(\S+)/im.exec(textOf(part))?.[1] ?? null)
+                : headerValue(part.headers ?? [], 'x-bylinecrm-id');
+        crmId = crmIdOf(returned);
+        if (crmId) break;
+    }
+    return { recipients, crmId };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
