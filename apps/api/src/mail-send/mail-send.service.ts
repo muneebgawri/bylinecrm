@@ -37,7 +37,8 @@ import {
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
 import type { MailOutboundView, MailScheduledPage, MailSendAccepted } from './responses';
-import { SendPolicy, type SendRecipient } from './send-policy';
+import { RecipientSuppressed } from '../suppression/suppression.service';
+import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
 
 type OutboundRow = Prisma.MailOutboundGetPayload<object>;
 
@@ -120,7 +121,8 @@ interface Prepared {
  * from and to, what it says (a template, or a subject and body, rendered through the template
  * renderer — one path; a render with an empty variable is refused, never sent blank), and how it
  * threads (a reply carries `In-Reply-To` / `References` and goes into the parent's Gmail thread).
- * Every send passes `SendPolicy` (Phase 3's suppression goes there).
+ * Every send passes `SendPolicy` — at the request, at a scheduled send's time, and before every
+ * delivery attempt, so a recipient suppressed meanwhile (P3-1) is never sent to.
  *
  * `deliver` (the job) sends the stored MIME. Gmail's answer to a `5xx` or a timeout does not say
  * whether the message went, so before every retry — and on a delivery after an attempt that
@@ -228,9 +230,9 @@ export class MailSendService {
             const scope = recordWhere(context, false);
             const person = await tx.person.findFirst({ where: { id: input.personId, ...scope } });
             if (!person) throw new NotFoundException('person not found');
-            const resolve = (list: RecipientInput[] | undefined, path: string) =>
-                resolveRecipients(tx, context, list ?? [], path);
-            const to = input.to ? await resolve(input.to, 'to') : [primaryOf(person, 'personId')];
+            const resolve = (list: RecipientInput[] | undefined, field: RecipientField) =>
+                resolveRecipients(tx, context, list ?? [], field);
+            const to = input.to ? await resolve(input.to, 'to') : [primaryOf(person, 'personId', 'to')];
             const member = await tx.workspaceMember.findUniqueOrThrow({
                 where: { id: memberId },
                 // The person's display name (P1-UI-10): one per person, read wherever a member is named.
@@ -290,7 +292,7 @@ export class MailSendService {
                 ? replySubject(parent.subject)
                 : rendered.subject;
 
-        await this.policy.assertSendable([...recipients.to, ...recipients.cc, ...recipients.bcc]);
+        await this.policy.assertSendable(context.workspaceId, [...recipients.to, ...recipients.cc, ...recipients.bcc]);
 
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
@@ -449,12 +451,20 @@ export class MailSendService {
                     const found = await this.findSent(token, mailbox.id, row);
                     if (found) return { message: found, found: true };
                 }
+                // Checked before every attempt: an address suppressed while the send waited, or
+                // between two attempts, is not sent to (P3-1). A message Gmail already has was
+                // found above and is recorded as sent, because it was.
+                await this.policy.assertSendable(workspaceId, storedRecipients(row));
                 const message = await this.gmail.send(token, { raw: mime, ...(threadId ? { threadId } : {}) });
                 return { message, found: false };
             });
         } catch (error) {
             if (error instanceof MailboxUnavailable) {
                 await this.markFailed(workspaceId, id, unavailableError(error.mailboxStatus));
+                return 'failed';
+            }
+            if (error instanceof RecipientSuppressed) {
+                await this.markFailed(workspaceId, id, refusalRecord(error, Date.now()));
                 return 'failed';
             }
             if (error instanceof GmailApiError && !error.transient) {
@@ -808,14 +818,14 @@ function refusalRecord(error: HttpException, now: number): SendErrorRecord {
 }
 
 /** The person's primary address as a recipient; `422` when they have none. */
-function primaryOf(person: { id: string; emails: unknown }, path: string): SendRecipient {
+function primaryOf(person: { id: string; emails: unknown }, path: string, field: RecipientField): SendRecipient {
     const primary = (person.emails as Emails | null)?.primary;
     if (!primary) {
         throw new ApiException(422, 'unprocessable', 'this person has no email address', [
             { path, message: 'has no primary email address' },
         ]);
     }
-    return { address: primary.toLowerCase(), personId: person.id };
+    return { address: primary.toLowerCase(), personId: person.id, field };
 }
 
 /** Each recipient as an address: a person by their primary (read under the caller's scope), an address as given. */
@@ -823,7 +833,7 @@ async function resolveRecipients(
     tx: Prisma.TransactionClient,
     context: WorkspaceRunContext,
     list: RecipientInput[],
-    path: string,
+    field: RecipientField,
 ): Promise<SendRecipient[]> {
     const out: SendRecipient[] = [];
     const seen = new Set<string>();
@@ -832,15 +842,22 @@ async function resolveRecipients(
         if ('personId' in entry) {
             const person = await tx.person.findFirst({ where: { id: entry.personId, ...recordWhere(context, false) } });
             if (!person) throw new NotFoundException('person not found');
-            recipient = primaryOf(person, `${path}.${index}.personId`);
+            recipient = primaryOf(person, `${field}.${index}.personId`, field);
         } else {
-            recipient = { address: entry.address.toLowerCase(), personId: null };
+            recipient = { address: entry.address.toLowerCase(), personId: null, field };
         }
         if (seen.has(recipient.address)) continue;
         seen.add(recipient.address);
         out.push(recipient);
     }
     return out;
+}
+
+/** A built send's recipients as stored on its row, each at its field. */
+function storedRecipients(row: OutboundRow): SendRecipient[] {
+    const at = (field: RecipientField, addresses: string[]) =>
+        addresses.map((address) => ({ address, personId: null, field }));
+    return [...at('to', row.toAddresses), ...at('cc', row.ccAddresses), ...at('bcc', row.bccAddresses)];
 }
 
 function toMime(recipient: SendRecipient): MimeAddress {

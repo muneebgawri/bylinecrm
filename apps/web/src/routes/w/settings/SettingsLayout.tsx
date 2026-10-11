@@ -19,6 +19,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'mail', label: 'Mail', to: paths.settingsMail, requires: 'record:read' },
     // The workspace's own Google OAuth client (D-237); a member who is not an admin reads its status on Mailboxes.
     { id: 'google', label: 'Google', to: paths.settingsGoogle, requires: 'workspace:admin' },
+    // Addresses the workspace never mails (P3-1): the other half of outreach, so outreach's capability.
+    { id: 'suppression', label: 'Suppression', to: paths.settingsSuppression, requires: 'outreach:write' },
 ];
 
 /** Workspace settings: a section row, then the section's table. The server is still the gate on every write. */
@@ -48,7 +50,7 @@ export function SettingsLayout() {
         <div className="p-7">
             <PageHeader
                 title="Settings"
-                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, and the Google client its mailboxes connect through."
+                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, and the addresses it never mails."
             />
             <nav ref={nav} aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
                 {sections.map((section) => (

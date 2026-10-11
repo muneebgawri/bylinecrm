@@ -1,6 +1,7 @@
 import type { EmailReply, EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
+import type { SuppressionEventPayload } from './suppression.js';
 
 /**
  * The objects an event can be about: the record objects, the things attached to them, and the
@@ -17,6 +18,7 @@ export const EVENT_OBJECTS = [
     'meeting',
     'template',
     'mailbox',
+    'suppression',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
@@ -98,6 +100,11 @@ export const DOMAIN_EVENT_TYPES = [
     'mailbox.connected',
     'mailbox.disconnected',
     'mailbox.reconnect_needed',
+    // An address put on, or lifted from, the workspace's suppression list (P3-1); `recordId` is the
+    // entry, `suppression` what it says, `related` the person the address belongs to when known. Not
+    // a record: the timeline writes nothing for these, webhooks deliver them.
+    'suppression.added',
+    'suppression.removed',
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
@@ -154,6 +161,8 @@ interface DomainEventBase {
     reply?: EmailReply;
     /** Present on `email.linked`: the person the message is now linked to. */
     link?: { personId: string };
+    /** Present on `suppression.*`: the entry's address, why it is there and who it belongs to. */
+    suppression?: SuppressionEventPayload;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

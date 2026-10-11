@@ -1,4 +1,4 @@
-import { FORGOT_PASSWORD_PAGE, RESET_PASSWORD_PAGE, VERIFY_EMAIL_PAGE } from '@bylinecrm/shared';
+import { FORGOT_PASSWORD_PAGE, RESET_PASSWORD_PAGE, UNSUBSCRIBE_PAGE_PATH, VERIFY_EMAIL_PAGE } from '@bylinecrm/shared';
 
 /**
  * Every path the app has, once. Navigation, commands, redirects and tests build URLs through
@@ -44,6 +44,9 @@ export const paths = {
     settingsCustomFields: (workspaceId: string) => `/w/${workspaceId}/settings/custom-fields`,
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
+    settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
+    /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */
+    unsubscribe: (token: string) => `${UNSUBSCRIBE_PAGE_PATH}/${token}`,
 } as const;
 
 /** `?create=1` on a list page opens its "new" dialog (the ⌘K and "+ Create" commands land there). */

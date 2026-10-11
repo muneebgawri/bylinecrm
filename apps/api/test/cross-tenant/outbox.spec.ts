@@ -19,6 +19,7 @@ import { TimelineService } from '../../src/timeline/timeline.service';
 import { TimelineSubscriber } from '../../src/timeline/timeline.subscriber';
 import { WebhooksSubscriber } from '../../src/webhooks/webhooks.subscriber';
 import { verifyAddress } from '../support/mail';
+import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
     cookie: string;
@@ -76,7 +77,11 @@ describe('P1-6 transactional outbox (#98)', () => {
     const entriesFor = (recordId: string, kind = 'person.created') =>
         owner.timelineActivity.count({ where: { workspaceId: workspace, targetId: recordId, kind } });
 
+    /** A receiver that answers 200, so the worker never disables the endpoint this spec counts on (#110). */
+    let hooks: WebhookReceiver;
+
     beforeAll(async () => {
+        hooks = await new WebhookReceiver().start();
         process.env['OUTBOX_RELAY'] = '0';
         app = await createApp();
         await app.init();
@@ -107,6 +112,7 @@ describe('P1-6 transactional outbox (#98)', () => {
 
     afterAll(async () => {
         await app?.close();
+        await hooks?.close();
         if (relayFlag === undefined) delete process.env['OUTBOX_RELAY'];
         else process.env['OUTBOX_RELAY'] = relayFlag;
     });
@@ -211,7 +217,7 @@ describe('P1-6 transactional outbox (#98)', () => {
     it('P1-6: an event whose relay died mid-delivery is delivered again after its lease — no entry and no webhook delivery twice', async () => {
         const endpoint = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: 'http://127.0.0.1:9/outbox-redelivery', events: ['person.created'] })
+            .send({ url: hooks.url('/outbox-redelivery'), events: ['person.created'] })
             .expect(201);
         const endpointId = (endpoint.body as { endpoint: { id: string } }).endpoint.id;
         const person = await createPerson('Redelivered');
@@ -307,5 +313,140 @@ describe('P1-6 transactional outbox (#98)', () => {
         );
         await denied(() => rls.withWorkspace(workspace, (tx) => tx.outboxEvent.delete({ where: { id: event.id } })));
         await relay.drain();
+    });
+    describe('two relays on one database (#110)', () => {
+        let second: INestApplication;
+        let relayB: OutboxRelay;
+        /** Which consumer received which event, from either process. */
+        let calls: { consumer: string; relay: 'A' | 'B'; id: string }[];
+
+        const watch = (target: INestApplication, relayName: 'A' | 'B') => {
+            for (const [consumer, type] of [
+                ['timeline', TimelineSubscriber],
+                ['webhooks', WebhooksSubscriber],
+            ] as const) {
+                const instance = target.get(type);
+                const consume = instance.consume.bind(instance);
+                vi.spyOn(instance, 'consume').mockImplementation(async (delivered) => {
+                    calls.push({ consumer, relay: relayName, id: delivered.id });
+                    return consume(delivered);
+                });
+            }
+        };
+        /** Records `count` events about one person in one transaction; returns their outbox ids. */
+        const recordMany = async (count: number): Promise<string[]> => {
+            const person = await createPerson('Concurrent');
+            await relay.drain();
+            const mark = (await owner.outboxEvent.aggregate({ _max: { seq: true } }))._max.seq ?? 0n;
+            await app.get(RlsPrismaService).withWorkspace(workspace, (tx) =>
+                app.get(DomainEvents).recordAll(
+                    tx,
+                    Array.from({ length: count }, (_, i): DomainEvent => ({
+                        type: 'person.updated',
+                        object: 'person',
+                        workspaceId: workspace,
+                        actor: { kind: 'system', id: null },
+                        occurredAt: new Date().toISOString(),
+                        recordId: person,
+                        diff: { jobTitle: { from: null, to: `Title ${i}` } },
+                    })),
+                ),
+            );
+            const rows = await owner.outboxEvent.findMany({ where: { seq: { gt: mark } }, select: { id: true } });
+            expect(rows).toHaveLength(count);
+            return rows.map((r) => r.id);
+        };
+        const consumedBy = (consumer: string, ids: readonly string[]) => {
+            const mine = new Set(ids);
+            return calls.filter((c) => c.consumer === consumer && mine.has(c.id));
+        };
+
+        beforeAll(async () => {
+            // A second process: its own application, its own connection pools, the same database.
+            second = await createApp();
+            await second.init();
+            relayB = second.get(OutboxRelay);
+        });
+
+        afterAll(async () => {
+            await second?.close();
+        });
+
+        it('P1-6a: scanning at the same moment, they deliver every event exactly once per consumer — no claim is shared', async () => {
+            calls = [];
+            watch(app, 'A');
+            watch(second, 'B');
+            const ids = await recordMany(120);
+            const now = new Date();
+            // Both relays scan over and over, at once, until neither finds anything due.
+            for (;;) {
+                const claimed = await Promise.all([
+                    relay.runOnce(now),
+                    relayB.runOnce(now),
+                    relay.runOnce(now),
+                    relayB.runOnce(now),
+                ]);
+                if (claimed.every((n) => n === 0)) break;
+            }
+
+            for (const consumer of ['timeline', 'webhooks']) {
+                const got = consumedBy(consumer, ids);
+                expect(got).toHaveLength(ids.length);
+                expect(new Set(got.map((c) => c.id)).size).toBe(ids.length);
+            }
+            // The work really was shared between the two processes.
+            const byRelay = new Set(consumedBy('timeline', ids).map((c) => c.relay));
+            expect(byRelay).toEqual(new Set(['A', 'B']));
+            const open = await owner.outboxEvent.count({ where: { id: { in: ids }, completedAt: null } });
+            expect(open).toBe(0);
+            const attempts = await owner.outboxEvent.findMany({
+                where: { id: { in: ids } },
+                select: { attempts: true },
+            });
+            expect(attempts.every((r) => r.attempts === 1)).toBe(true);
+        });
+
+        it('P1-6a: an event a relay holds is not taken by the other until the lease expires, then the other delivers it', async () => {
+            calls = [];
+            const [id] = await recordMany(1);
+            // Relay A's timeline consumer stalls (a process that hangs mid-delivery).
+            const timeline = app.get(TimelineSubscriber);
+            let release!: () => void;
+            const stalled = new Promise<void>((resolve) => (release = resolve));
+            let entered!: () => void;
+            const inside = new Promise<void>((resolve) => (entered = resolve));
+            const consume = timeline.consume.bind(timeline);
+            vi.spyOn(timeline, 'consume').mockImplementation(async (delivered) => {
+                calls.push({ consumer: 'timeline', relay: 'A', id: delivered.id });
+                entered();
+                await stalled;
+                return consume(delivered);
+            });
+            watch(second, 'B');
+
+            const claimedAt = Date.now();
+            const held = relay.runOnce(new Date(claimedAt));
+            // A is inside the consumer, holding the claim.
+            await inside;
+
+            // While A's lease holds, B's scans leave the event alone.
+            await relayB.runOnce(new Date(claimedAt + OUTBOX_LEASE_MS - 1));
+            expect(consumedBy('timeline', [id!]).filter((c) => c.relay === 'B')).toHaveLength(0);
+
+            // Once it expires, B claims and delivers it.
+            await relayB.runOnce(new Date(claimedAt + OUTBOX_LEASE_MS));
+            expect(consumedBy('timeline', [id!]).filter((c) => c.relay === 'B')).toHaveLength(1);
+            const handedOver = await owner.outboxEvent.findUniqueOrThrow({ where: { id: id! } });
+            expect(handedOver.completedAt).not.toBeNull();
+            expect(handedOver.attempts).toBe(2);
+
+            // A wakes up and finishes too: a second delivery, which the consumers make harmless.
+            release();
+            await held;
+            const event = await owner.outboxEvent.findUniqueOrThrow({ where: { id: id! } });
+            const entries = await owner.timelineActivity.count({ where: { eventId: id! } });
+            expect(event.completedAt).not.toBeNull();
+            expect(entries).toBe(1);
+        });
     });
 });

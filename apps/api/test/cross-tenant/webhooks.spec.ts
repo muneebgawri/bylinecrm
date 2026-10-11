@@ -1,6 +1,4 @@
 import 'reflect-metadata';
-import { createServer, type IncomingMessage, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import type { INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import {
@@ -18,6 +16,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
 import { settle } from '../support/outbox';
+import { WebhookReceiver, type Received } from '../support/webhook-receiver';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { hmacHex } from '../../src/webhooks/signature';
 import { WebhooksSweep } from '../../src/webhooks/sweep';
@@ -45,13 +44,6 @@ function browserFrom(res: Response): Browser {
         ?.split('=')[1];
     if (!session || !csrf) throw new Error('login did not set both cookies');
     return { cookie: `${session}; ${CSRF_COOKIE}=${csrf}`, csrf };
-}
-
-/** One request the receiver saw: headers and the raw body, exactly as sent. */
-interface Received {
-    path: string;
-    headers: IncomingMessage['headers'];
-    body: string;
 }
 
 interface Endpoint {
@@ -97,11 +89,8 @@ async function until<T>(read: () => Promise<T>, ok: (value: T) => boolean, tries
 describe('webhooks', () => {
     let app: INestApplication;
     let http: () => request.Agent;
-    let receiver: Server;
-    let receiverBase: string;
-    const received: Received[] = [];
-    /** Per path: how many requests should still fail with 500 before succeeding; `Infinity` never succeeds. */
-    const failuresLeft = new Map<string, number>();
+    let receiver: WebhookReceiver;
+    let received: Received[];
 
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
@@ -123,23 +112,8 @@ describe('webhooks', () => {
             .then((res) => res.body as Page<Delivery>);
 
     beforeAll(async () => {
-        receiver = createServer((req, res) => {
-            const chunks: Buffer[] = [];
-            req.on('data', (c: Buffer) => chunks.push(c));
-            req.on('end', () => {
-                const path = req.url ?? '/';
-                received.push({ path, headers: req.headers, body: Buffer.concat(chunks).toString('utf8') });
-                const left = failuresLeft.get(path) ?? 0;
-                if (left > 0) {
-                    failuresLeft.set(path, left - 1);
-                    res.writeHead(500).end('still broken');
-                    return;
-                }
-                res.writeHead(200).end('ok');
-            });
-        });
-        await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
-        receiverBase = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
+        receiver = await new WebhookReceiver().start();
+        received = receiver.received;
 
         app = await createApp();
         await app.init();
@@ -162,7 +136,7 @@ describe('webhooks', () => {
 
     afterAll(async () => {
         await app?.close();
-        await new Promise<void>((resolve) => receiver.close(() => resolve()));
+        await receiver.close();
     });
 
     it('lists the catalogue an endpoint may subscribe to', async () => {
@@ -185,7 +159,7 @@ describe('webhooks', () => {
         expect(ftp.status).toBe(400);
         const unknown = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}/x`, events: ['no.such_event'] });
+            .send({ url: receiver.url('/x'), events: ['no.such_event'] });
         expect(unknown.status).toBe(400);
     });
 
@@ -194,7 +168,7 @@ describe('webhooks', () => {
         const created = await as(admin)
             .post(w('/webhooks'))
             .send({
-                url: `${receiverBase}${path}`,
+                url: receiver.url(path),
                 description: 'all events',
                 events: ['person.created', 'person.updated'],
             });
@@ -264,7 +238,7 @@ describe('webhooks', () => {
         const path = `/moves-${stamp}`;
         const created = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+            .send({ url: receiver.url(path), events: ['*'] });
         expect(created.status).toBe(201);
 
         const pipeline = (
@@ -322,7 +296,7 @@ describe('webhooks', () => {
         const path = `/ping-${stamp}`;
         const created = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+            .send({ url: receiver.url(path), events: ['*'] });
         const { endpoint, secret } = created.body as { endpoint: Endpoint; secret: string };
         const res = await as(admin).post(w(`/webhooks/${endpoint.id}/test`));
         expect(res.status).toBe(200);
@@ -339,10 +313,10 @@ describe('webhooks', () => {
 
     it('a receiver that fails is retried on the schedule and succeeds once it recovers', async () => {
         const path = `/flaky-${stamp}`;
-        failuresLeft.set(path, 2);
+        receiver.failNext(path, 2);
         const created = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}${path}`, events: ['company.created'] });
+            .send({ url: receiver.url(path), events: ['company.created'] });
         const { endpoint } = created.body as { endpoint: Endpoint };
         await as(admin)
             .post(w('/companies'))
@@ -361,10 +335,10 @@ describe('webhooks', () => {
 
     it('a receiver that never recovers sees the delivery die, and enough deaths switch the endpoint off', async () => {
         const path = `/dead-${stamp}`;
-        failuresLeft.set(path, Number.POSITIVE_INFINITY);
+        receiver.failNext(path, Number.POSITIVE_INFINITY);
         const created = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}${path}`, events: ['company.created'] });
+            .send({ url: receiver.url(path), events: ['company.created'] });
         const { endpoint } = created.body as { endpoint: Endpoint };
         // One event per needed death; each runs its whole retry schedule in parallel with the others.
         for (let i = 0; i < WEBHOOK_AUTO_DISABLE_AFTER_DEAD; i++) {
@@ -399,7 +373,7 @@ describe('webhooks', () => {
         expect((on.body as Endpoint).disabledReason).toBeNull();
 
         // A dead delivery can be queued again as a new one.
-        failuresLeft.delete(path);
+        receiver.recover(path);
         const redo = await as(admin).post(w(`/webhooks/${endpoint.id}/deliveries/${log.items[0]!.id}/redeliver`));
         expect(redo.status).toBe(201);
         const redone = await until(
@@ -413,7 +387,7 @@ describe('webhooks', () => {
         const path = `/rotate-${stamp}`;
         const created = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+            .send({ url: receiver.url(path), events: ['*'] });
         const { endpoint, secret: oldSecret } = created.body as { endpoint: Endpoint; secret: string };
         const rotated = await as(admin).post(w(`/webhooks/${endpoint.id}/rotate`));
         expect(rotated.status).toBe(201);
@@ -433,7 +407,7 @@ describe('webhooks', () => {
         const path = `/other-${stamp}`;
         const theirs = await as(other)
             .post(w('/webhooks', otherWorkspace))
-            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+            .send({ url: receiver.url(path), events: ['*'] });
         expect(theirs.status).toBe(201);
         const theirEndpoint = (theirs.body as { endpoint: Endpoint }).endpoint;
         const before = received.filter((r) => r.path === path).length;
@@ -459,7 +433,7 @@ describe('webhooks', () => {
         const path = `/retired-${stamp}`;
         const created = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: `${receiverBase}${path}`, events: ['*'] });
+            .send({ url: receiver.url(path), events: ['*'] });
         const { endpoint } = created.body as { endpoint: Endpoint };
         await as(admin).post(w(`/webhooks/${endpoint.id}/test`));
         const gone = await as(admin).delete(w(`/webhooks/${endpoint.id}`));
@@ -511,7 +485,7 @@ describe('webhooks', () => {
                 (
                     await as(admin)
                         .post(w('/webhooks'))
-                        .send({ url: `${receiverBase}${path}`, events: ['company.created'] })
+                        .send({ url: receiver.url(path), events: ['company.created'] })
                 ).body as { endpoint: Endpoint }
             ).endpoint;
 

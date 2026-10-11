@@ -1,9 +1,10 @@
+import { UNSUBSCRIBE_PAGE_PATH } from '@bylinecrm/shared';
 import { Navigate, type LazyRouteFunction, type RouteObject } from 'react-router';
 import { RequireAuth } from '../auth/RequireAuth';
 import { AppShell } from '../shell/AppShell';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
-import { PIPELINE_PARAM, WORKSPACE_PARAM } from './params';
+import { PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
 import { AuthSkeleton, Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
 import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
@@ -54,7 +55,11 @@ const settings = {
     customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
     mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
     google: () => import('./w/settings/GoogleSetup').then((m) => ({ Component: m.GoogleSetup })),
+    suppression: () => import('./w/settings/Suppression').then((m) => ({ Component: m.Suppression })),
 };
+
+/** A recipient's unsubscribe page is its own chunk: public, outside the app, never in the first load (P3-1). */
+const unsubscribePage = () => import('./public/UnsubscribePage').then((m) => ({ Component: m.UnsubscribePage }));
 
 /** Templates are one chunk: the list and the editor, which brings the rich-text editor (FR-CRMS-UI-10). */
 const templates = {
@@ -134,6 +139,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('custom-fields', settings.customFields, 'Custom fields'),
             lazyPage('mail', settings.mail, 'Mail'),
             lazyPage('google', settings.google, 'Google'),
+            lazyPage('suppression', settings.suppression, 'Suppression'),
         ]),
     ],
 };
@@ -148,6 +154,7 @@ export const routes: RouteObject[] = [
     authPage(paths.resetPassword, auth.resetPassword),
     { path: paths.status, element: <ServiceStatus /> },
     { path: paths.forbidden, element: <Forbidden /> },
+    authPage(`${UNSUBSCRIBE_PAGE_PATH}/:${UNSUBSCRIBE_TOKEN_PARAM}`, unsubscribePage),
     {
         element: <RequireAuth pending={<RouteSkeleton />} />,
         errorElement: <RouteError />,

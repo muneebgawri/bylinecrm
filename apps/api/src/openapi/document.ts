@@ -102,7 +102,7 @@ function withBody(
     const success = Object.keys(responses).find((code) => /^2\d\d$/.test(code));
     if (spec.kind === 'redirect') {
         const { [success ?? '']: _dropped, ...rest } = responses;
-        return { ...rest, '302': { description: 'A redirect; the `Location` header says where.' } };
+        return { ...rest, [String(spec.status)]: { description: 'A redirect; the `Location` header says where.' } };
     }
     if (spec.kind === 'not-implemented') {
         const { [success ?? '']: _dropped, ...rest } = responses;

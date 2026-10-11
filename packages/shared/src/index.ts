@@ -43,6 +43,7 @@ export * from './money.js';
 export * from './pipelines.js';
 export * from './platform.js';
 export * from './records.js';
+export * from './suppression.js';
 export * from './templates.js';
 export * from './views.js';
 export * from './timeline.js';

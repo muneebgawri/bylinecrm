@@ -18,6 +18,7 @@ import { WEBHOOK_QUEUE } from '../../src/webhooks/webhooks.constants';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { verifyAddress } from '../support/mail';
+import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
     cookie: string;
@@ -77,7 +78,11 @@ describe('background work and request handling (#86, FR-CRMS-2)', () => {
     });
     const w = (path: string) => `/api/w/${workspace}${path}`;
 
+    /** A receiver that answers 200, so the worker never disables the endpoint this spec counts on (#110). */
+    let hooks: WebhookReceiver;
+
     beforeAll(async () => {
+        hooks = await new WebhookReceiver().start();
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
             .overrideProvider(GOOGLE_OAUTH_PORT)
             .useValue(google)
@@ -148,7 +153,7 @@ describe('background work and request handling (#86, FR-CRMS-2)', () => {
         }
         const endpoint = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: 'http://127.0.0.1:9/pools-hook', events: ['*'] });
+            .send({ url: hooks.url('/pools-hook'), events: ['*'] });
         expect(endpoint.status).toBe(201);
         webhookEndpoint =
             (endpoint.body as { endpoint?: { id: string }; id?: string }).endpoint?.id ??
@@ -186,6 +191,7 @@ describe('background work and request handling (#86, FR-CRMS-2)', () => {
             await owner.webhookDelivery.deleteMany({ where: { endpointId: webhookEndpoint } });
         }
         await app?.close();
+        await hooks?.close();
     });
 
     it('answers every request while four mailboxes import 600 messages', async () => {

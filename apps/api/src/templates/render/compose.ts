@@ -80,3 +80,18 @@ export function composeEmail(
     const unique = [...new Set(missing)];
     return { subject: subject.subject, html, text, missing: unique, sendable: unique.length === 0 };
 }
+
+/**
+ * An outreach email with its unsubscribe link resolved for one recipient (P3-1): every
+ * `UNSUBSCRIBE_URL_PLACEHOLDER` the footer left becomes that recipient's link — escaped in the HTML,
+ * as is in the text. The send path calls this once per recipient, with `UnsubscribeService.issue`'s
+ * `pageUrl`, before building the MIME.
+ */
+export function withUnsubscribeUrl<E extends { html: string; text: string }>(email: E, url: string): E {
+    if (!/^https?:\/\/\S+$/.test(url)) throw new Error('withUnsubscribeUrl: an absolute http(s) URL is required');
+    return {
+        ...email,
+        html: email.html.replaceAll(escapeHtml(UNSUBSCRIBE_URL_PLACEHOLDER), escapeHtml(url)),
+        text: email.text.replaceAll(UNSUBSCRIBE_URL_PLACEHOLDER, url),
+    };
+}

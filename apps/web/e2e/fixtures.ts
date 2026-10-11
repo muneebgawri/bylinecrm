@@ -13,6 +13,8 @@ import type {
     PlatformAccessView,
     PlatformWorkspaceView,
     BlocklistEntryView,
+    SuppressionView,
+    UnsubscribeStatusView,
     AttachmentView,
     BoardView,
     CompanyView,
@@ -83,6 +85,9 @@ export const IDS = {
     mailbox: '0b1e0000-0000-4000-8000-0000000008a1',
     poolMailbox: '0b1e0000-0000-4000-8000-0000000008a2',
     blockedDomain: '0b1e0000-0000-4000-8000-0000000008b1',
+    suppressedUnsubscribe: '0b1e0000-0000-4000-8000-0000000009a1',
+    suppressedBounce: '0b1e0000-0000-4000-8000-0000000009a2',
+    suppressedManual: '0b1e0000-0000-4000-8000-0000000009a3',
     thread: '0b1e0000-0000-4000-8000-0000000008c1',
     mailMessage: '0b1e0000-0000-4000-8000-0000000008c2',
     secondMailMessage: '0b1e0000-0000-4000-8000-0000000008c3',
@@ -732,6 +737,45 @@ export const blocklist: BlocklistEntryView[] = [
     { id: IDS.blockedDomain, value: '@newsletters.example', scope: 'workspace', createdAt: at(30) },
 ];
 
+/** The suppression list (P3-1): one of each kind of entry — a permanent one and two an admin may lift. */
+export const suppressions: SuppressionView[] = [
+    {
+        id: IDS.suppressedUnsubscribe,
+        address: 'jordan.lee@northwind.example',
+        reason: 'unsubscribe',
+        source: 'recipient',
+        personId: null,
+        note: null,
+        createdByMemberId: null,
+        createdAt: at(2),
+        liftable: false,
+    },
+    {
+        id: IDS.suppressedBounce,
+        address: 'old.inbox@contoso.example',
+        reason: 'hard_bounce',
+        source: 'provider',
+        personId: null,
+        note: null,
+        createdByMemberId: null,
+        createdAt: at(9),
+        liftable: true,
+    },
+    {
+        id: IDS.suppressedManual,
+        address: 'press@fabrikam.example',
+        reason: 'manual',
+        source: 'member',
+        personId: null,
+        note: 'Asked on a call not to be emailed.',
+        createdByMemberId: IDS.member,
+        createdAt: at(21),
+        liftable: true,
+    },
+];
+
+/** What a recipient's unsubscribe page reads before they press the button. */
+export const unsubscribeStatus: UnsubscribeStatusView = { recipient: 'j•••@northwind.example', unsubscribed: false };
 // ---- Mail on a record: a thread and a scheduled send (P2-UI-1) -------------------------------
 
 /** Kate wrote; Dana answered. Kate's own personal mailbox, so the bodies are hers to read. */

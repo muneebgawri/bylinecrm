@@ -197,7 +197,7 @@ export const RETURNS_EXTENSION = 'x-byline-returns';
 export type ReturnsSpec =
     | { kind: 'json'; schema: string; array: boolean }
     | { kind: 'file'; contentType: string }
-    | { kind: 'redirect' }
+    | { kind: 'redirect'; status: RedirectStatus }
     | { kind: 'not-implemented' };
 
 type Handler<T> = Pick<TypedPropertyDescriptor<(...args: never[]) => T | Promise<T>>, 'value'>;
@@ -220,9 +220,12 @@ export function ReturnsFile(contentType: string): MethodDecorator {
     return returnsSpec({ kind: 'file', contentType });
 }
 
-/** The route answers with a redirect (`302` and a `Location`), never a body. */
-export function Redirects(): MethodDecorator {
-    return returnsSpec({ kind: 'redirect' });
+/** The redirect statuses a route may answer with: `302`, or `303` where a GET must lead to a page. */
+export type RedirectStatus = 302 | 303;
+
+/** The route answers with a redirect (`302` unless said, and a `Location`), never a body. */
+export function Redirects(status: RedirectStatus = 302): MethodDecorator {
+    return returnsSpec({ kind: 'redirect', status });
 }
 
 /** The route exists and answers `501` until the package that implements it lands. */

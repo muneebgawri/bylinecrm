@@ -20,6 +20,7 @@ import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, settle, type EventLog } from '../support/outbox';
 import { verifyAddress } from '../support/mail';
+import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
     cookie: string;
@@ -177,7 +178,11 @@ describe('mail send and reply detection', () => {
         return owner.webhookDelivery.count({ where: { endpointId: webhookEndpoint, eventName } });
     }
 
+    /** A receiver that answers 200, so the worker never disables the endpoint this spec counts on (#110). */
+    let hooks: WebhookReceiver;
+
     beforeAll(async () => {
+        hooks = await new WebhookReceiver().start();
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
             .overrideProvider(GOOGLE_OAUTH_PORT)
             .useValue(google)
@@ -275,7 +280,7 @@ describe('mail send and reply detection', () => {
 
         const endpoint = await as(admin)
             .post(w('/webhooks'))
-            .send({ url: 'http://127.0.0.1:9/mail-send-hook', events: ['*'] });
+            .send({ url: hooks.url('/mail-send-hook'), events: ['*'] });
         expect(endpoint.status).toBe(201);
         webhookEndpoint =
             (endpoint.body as { endpoint?: { id: string }; id?: string }).endpoint?.id ??
@@ -285,6 +290,7 @@ describe('mail send and reply detection', () => {
     afterAll(async () => {
         if (webhookEndpoint) await as(admin).delete(w(`/webhooks/${webhookEndpoint}`));
         await app?.close();
+        await hooks?.close();
     });
 
     describe('FR-CRMS-2 sending from the caller’s personal mailbox', () => {
