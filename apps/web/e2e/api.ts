@@ -74,7 +74,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^/api/unsubscribe/${ID}/status$`), () => data.unsubscribeStatus],
     [new RegExp(`^${W}/mailboxes/${ID}/sync$`), (m) => data.mailboxSync(m[1] ?? '')],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
-    [new RegExp(`^${W}/mail/scheduled$`), () => data.page(data.scheduledSends)],
+    [new RegExp(`^${W}/mail/messages$`), (_m, url) => data.page(recordSends(url))],
     [new RegExp(`^${W}/mail/messages/${ID}$`), (m) => byId(data.scheduledSends, m[1])],
     [new RegExp(`^${W}/mail/threads/${ID}$`), (m) => byId([data.thread], m[1])],
     [
@@ -82,6 +82,17 @@ const GETS: [RegExp, Handler][] = [
         () => ({ people: data.people, companies: data.companies, opportunities: data.deals }),
     ],
 ];
+
+/** `GET /mail/messages?target=&status=` (#104): the fixture sends about that record, in those statuses. */
+function recordSends(url: URL) {
+    const [type, id] = (url.searchParams.get('target') ?? '').split(':');
+    const statuses = (url.searchParams.get('status') ?? '').split(',');
+    return data.scheduledSends.filter(
+        (s) =>
+            statuses.includes(s.status) &&
+            ((type === 'person' && s.personId === id) || (type === 'opportunity' && s.dealId === id)),
+    );
+}
 
 function byId<T extends { id: string }>(rows: readonly T[], id: string | undefined): T {
     const row = rows.find((r) => r.id === id);

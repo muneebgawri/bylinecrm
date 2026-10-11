@@ -1,8 +1,13 @@
-import { MAIL_SEND_RECIPIENTS_MAX } from '@bylinecrm/shared';
+import { MAIL_OUTBOUND_STATUSES, MAIL_SEND_RECIPIENTS_MAX } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { templateBody, templateSubject } from '../templates/dto';
-import { MAIL_SCHEDULED_LIMIT_DEFAULT, MAIL_SCHEDULED_LIMIT_MAX } from './mail-send.constants';
+import {
+    MAIL_RECORD_SENDS_LIMIT_DEFAULT,
+    MAIL_RECORD_SENDS_LIMIT_MAX,
+    MAIL_SCHEDULED_LIMIT_DEFAULT,
+    MAIL_SCHEDULED_LIMIT_MAX,
+} from './mail-send.constants';
 
 /** A recipient: a person in the CRM (their primary address), or an address. */
 const recipient = z.union([
@@ -87,5 +92,23 @@ export class ListScheduledQueryDto extends createZodDto(
     z.object({
         cursor: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(MAIL_SCHEDULED_LIMIT_MAX).default(MAIL_SCHEDULED_LIMIT_DEFAULT),
+    }),
+) {}
+
+/**
+ * `GET /mail/messages?target=&status=` (#104) — the sends about one record, in the statuses asked
+ * for (`failed,scheduled` for a record page), newest first.
+ */
+export class ListRecordSendsQueryDto extends createZodDto(
+    z.object({
+        target: z.string().min(1).meta({ description: '`person:<uuid>`, `company:<uuid>` or `opportunity:<uuid>`.' }),
+        status: z
+            .string()
+            .min(1)
+            .transform((raw) => [...new Set(raw.split(',').map((part) => part.trim()))])
+            .pipe(z.array(z.enum(MAIL_OUTBOUND_STATUSES)).min(1))
+            .meta({ description: 'Comma-separated statuses, e.g. `failed,scheduled`.' }),
+        cursor: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(MAIL_RECORD_SENDS_LIMIT_MAX).default(MAIL_RECORD_SENDS_LIMIT_DEFAULT),
     }),
 ) {}

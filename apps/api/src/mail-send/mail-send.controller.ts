@@ -2,13 +2,16 @@ import { Body, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@
 import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
-import { ListScheduledQueryDto, RescheduleMailDto, SendMailDto } from './dto';
+import { parseTarget } from '../records/targets';
+import { ListRecordSendsQueryDto, ListScheduledQueryDto, RescheduleMailDto, SendMailDto } from './dto';
 import { MailSendService } from './mail-send.service';
 import {
     mailOutboundView,
+    mailRecordSendsPage,
     mailScheduledPage,
     mailSendAccepted,
     type MailOutboundView,
+    type MailRecordSendsPage,
     type MailScheduledPage,
     type MailSendAccepted,
 } from './responses';
@@ -39,6 +42,19 @@ export class MailSendController {
     @Returns(mailScheduledPage)
     scheduled(@Query() query: ListScheduledQueryDto): Promise<MailScheduledPage> {
         return this.send.scheduled(query.limit, query.cursor);
+    }
+
+    /**
+     * The sends about one record (#104) — a person's, a deal's, or a company's people's — in the
+     * statuses asked for, newest first: what a record page shows besides its stored mail (a failed
+     * send with its reason, a scheduled one). Only on a record the caller can read (`404`
+     * otherwise), and only the sends the caller may see: their own, or every one for an admin.
+     */
+    @Requires('email:send')
+    @Get('messages')
+    @Returns(mailRecordSendsPage)
+    recordSends(@Query() query: ListRecordSendsQueryDto): Promise<MailRecordSendsPage> {
+        return this.send.recordSends(parseTarget(query.target), query.status, query.limit, query.cursor);
     }
 
     /** Where a send stands: its sender's, or an admin's to read. */

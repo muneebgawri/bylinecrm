@@ -919,6 +919,7 @@ export const scheduledSends: MailOutboundView[] = [
         dealId: null,
         templateId: null,
         replyToMessageId: null,
+        senderMemberId: IDS.member,
         rfc822MessageId: `${IDS.scheduledSend}@bylinecrm`,
         mailMessageId: null,
         threadId: null,
