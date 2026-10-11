@@ -1,7 +1,13 @@
 import { Prisma } from '@prisma/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '../config/env';
-import { BACKGROUND_POOL_SIZE, POOL_TIMEOUT_S, REQUEST_POOL_SIZE } from './rls-pool.constants';
+import {
+    BACKGROUND_POOL_SIZE,
+    POOL_TIMEOUT_S,
+    REQUEST_POOL_SIZE,
+    TRANSACTION_MAX_WAIT_MS,
+    TRANSACTION_TIMEOUT_MS,
+} from './rls-pool.constants';
 import { RlsPrismaService, withPoolDefaults } from './rls-prisma.service';
 import { assertNoOpenTransaction, TransactionAcrossNetworkError } from './transaction-scope';
 import { WorkspaceContext } from './workspace-context';
@@ -93,6 +99,15 @@ describe('withWorkspace pools (#86, FR-CRMS-2)', () => {
         );
         expect(onBackground).toHaveBeenCalledTimes(2);
         expect(onRequest).not.toHaveBeenCalled();
+    });
+
+    it("gives every transaction an explicit start wait and run timeout, not Prisma's defaults", async () => {
+        const { context, client, onRequest, onBackground } = setup();
+        const options = { maxWait: TRANSACTION_MAX_WAIT_MS, timeout: TRANSACTION_TIMEOUT_MS };
+        await context.begin(() => client.withWorkspace(ws, () => Promise.resolve()), 'req-2');
+        await client.withWorkspace(ws, () => Promise.resolve());
+        expect(onRequest).toHaveBeenCalledWith(expect.any(Function), options);
+        expect(onBackground).toHaveBeenCalledWith(expect.any(Function), options);
     });
 
     it('retries a transaction that could not start (P2028) and then succeeds', async () => {

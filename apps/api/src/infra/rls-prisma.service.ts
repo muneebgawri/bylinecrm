@@ -3,12 +3,17 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { OWNER_SETTING, USER_SETTING, WORKSPACE_SETTING } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
 import {
+    BACKGROUND_POOL_SIZE,
     POOL_EXHAUSTED_CODE,
     POOL_RETRY_ATTEMPTS,
     POOL_RETRY_BASE_MS,
-    RLS_POOL_SIZE,
-    RLS_POOL_TIMEOUT_S,
+    POOL_TIMEOUT_S,
+    REQUEST_POOL_SIZE,
+    TRANSACTION_API_ERROR_CODE,
+    TRANSACTION_MAX_WAIT_MS,
+    TRANSACTION_TIMEOUT_MS,
 } from './rls-pool.constants';
+import { insideTransaction } from './transaction-scope';
 import { WorkspaceContext } from './workspace-context';
 
 /** The client handed to a `withWorkspace` callback: the transaction, already scoped. */
@@ -27,6 +32,12 @@ export class NoWorkspaceError extends Error {
  * policies allow. Tenant queries go through `withWorkspace`, which opens a transaction and sets
  * the workspace for it before the callback runs. The owner client (`PrismaService`) is for
  * migrations and administration and never touches tenant rows on a request's behalf.
+ *
+ * Two pools behind one `withWorkspace` (#86): this client is the request pool; `backgroundClient`
+ * — same role, same URL, its own connections — serves jobs, sweeps, the event listeners they
+ * trigger, and anything else outside a request's scope. Which one a call uses is decided by the
+ * `WorkspaceContext` it runs in, so no service chooses and none can pick wrong; background work
+ * can wait for its pool but never take a request's connection.
  */
 @Injectable()
 export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -39,12 +50,17 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
      * Prisma statement event does not (its callback runs in no request's context). Null otherwise.
      */
     private readonly observed: Pick<PrismaClient, '$transaction'> | null;
+    /** The background pool: same role and URL, its own connections (#86). */
+    private readonly backgroundClient: PrismaClient;
 
     constructor(
         @Inject(ENV) env: Env,
         private readonly context: WorkspaceContext,
     ) {
-        super({ datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL) });
+        super({ datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL, REQUEST_POOL_SIZE) });
+        this.backgroundClient = new PrismaClient({
+            datasourceUrl: withPoolDefaults(env.RLS_DATABASE_URL, BACKGROUND_POOL_SIZE),
+        });
         this.queryEvents = env.DB_QUERY_EVENTS;
         this.observed = this.queryEvents
             ? (this.$extends({
@@ -89,11 +105,11 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
     }
 
     async onModuleInit(): Promise<void> {
-        await this.$connect();
+        await Promise.all([this.$connect(), this.backgroundClient.$connect()]);
     }
 
     async onModuleDestroy(): Promise<void> {
-        await this.$disconnect();
+        await Promise.all([this.$disconnect(), this.backgroundClient.$disconnect()]);
     }
 
     /**
@@ -131,24 +147,35 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
 
     /**
      * One transaction, its transaction-local settings (`set_config(..., true)`), each bound as a
-     * parameter so it can neither outlive the transaction nor be string-built. A pool-exhausted
-     * error is retried with a bounded, doubling delay; any other error propagates.
+     * parameter so it can neither outlive the transaction nor be string-built. It runs on the
+     * request pool inside a request's scope and on the background pool everywhere else, and its
+     * callback runs marked as inside a transaction, so a network call made there is refused
+     * (`assertNoOpenTransaction`). It may run for `TRANSACTION_TIMEOUT_MS` before Prisma expires it.
+     * A transaction that could not get a connection — the pool
+     * exhausted (P2024), or no connection within `TRANSACTION_MAX_WAIT_MS` (P2028 before the
+     * callback ran) — is retried with a bounded, doubling delay; any other error propagates.
      */
     private async scoped<T>(
         settings: readonly (readonly [string, string])[],
         fn: (tx: WorkspaceClient) => Promise<T>,
     ): Promise<T> {
+        const pool = this.context.inRequest() ? (this.observed ?? this) : this.backgroundClient;
         for (let attempt = 1; ; attempt++) {
+            let started = false;
             try {
-                return await (this.observed ?? this).$transaction(async (tx) => {
-                    const client = tx as WorkspaceClient;
-                    for (const [setting, value] of settings) {
-                        await client.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
-                    }
-                    return fn(client);
-                });
+                return await pool.$transaction(
+                    async (tx) => {
+                        started = true;
+                        const client = tx as WorkspaceClient;
+                        for (const [setting, value] of settings) {
+                            await client.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
+                        }
+                        return insideTransaction(() => fn(client));
+                    },
+                    { maxWait: TRANSACTION_MAX_WAIT_MS, timeout: TRANSACTION_TIMEOUT_MS },
+                );
             } catch (error) {
-                if (!isPoolExhausted(error) || attempt >= POOL_RETRY_ATTEMPTS) throw error;
+                if (!couldNotStart(error, started) || attempt >= POOL_RETRY_ATTEMPTS) throw error;
                 await sleep(POOL_RETRY_BASE_MS * 2 ** (attempt - 1));
             }
         }
@@ -172,20 +199,26 @@ function sqlOf(args: unknown): string | null {
     return typeof sql === 'string' ? sql : null;
 }
 
-/** Applies the pool constants unless the URL sets its own; an operator's explicit value wins. */
-export function withPoolDefaults(url: string): string {
+/** Applies a pool size and the pool timeout unless the URL sets its own; an operator's explicit value wins. */
+export function withPoolDefaults(url: string, poolSize: number): string {
     const parsed = new URL(url);
     if (!parsed.searchParams.has('connection_limit')) {
-        parsed.searchParams.set('connection_limit', String(RLS_POOL_SIZE));
+        parsed.searchParams.set('connection_limit', String(poolSize));
     }
     if (!parsed.searchParams.has('pool_timeout')) {
-        parsed.searchParams.set('pool_timeout', String(RLS_POOL_TIMEOUT_S));
+        parsed.searchParams.set('pool_timeout', String(POOL_TIMEOUT_S));
     }
     return parsed.toString();
 }
 
-function isPoolExhausted(error: unknown): boolean {
-    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === POOL_EXHAUSTED_CODE;
+/**
+ * The transaction never got a connection: the pool was exhausted (P2024), or the transaction
+ * could not start in time (P2028 while the callback had not run). P2028 after the callback ran is
+ * a transaction that expired or closed mid-work, and is not retried.
+ */
+function couldNotStart(error: unknown, started: boolean): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+    return error.code === POOL_EXHAUSTED_CODE || (error.code === TRANSACTION_API_ERROR_CODE && !started);
 }
 
 function sleep(ms: number): Promise<void> {
