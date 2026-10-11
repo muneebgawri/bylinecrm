@@ -60,6 +60,17 @@ describe('GmailHttp', () => {
         expect(body.threadId).toBe('thr-9');
     });
 
+    it('FR-CRMS-2 reads only the named headers of a message (format=metadata)', async () => {
+        const spy = respond(200, {
+            id: 'm9',
+            threadId: 't9',
+            payload: { headers: [{ name: 'X-BylineCRM-Id', value: 'abc' }, { name: 7 }] },
+        });
+        const found = await new GmailHttp().getMessageHeaders('tok', 'm9', ['X-BylineCRM-Id']);
+        expect(found).toEqual({ id: 'm9', threadId: 't9', headers: [{ name: 'X-BylineCRM-Id', value: 'abc' }] });
+        expect(String(spy.mock.calls[0]![0])).toContain('/messages/m9?format=metadata&metadataHeaders=X-BylineCRM-Id');
+    });
+
     it('FR-CRMS-2 sends a new message without a thread', async () => {
         const spy = respond(200, { id: 'sent-2', threadId: 'thr-new' });
         await new GmailHttp().send('tok', { raw: 'x' });

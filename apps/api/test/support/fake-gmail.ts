@@ -3,6 +3,7 @@ import {
     type GmailHistoryPage,
     type GmailMessagePage,
     type GmailPart,
+    type GmailMessageHeaders,
     type GmailPort,
     type GmailProfile,
     type GmailRawMessage,
@@ -42,7 +43,7 @@ interface FakeMailbox {
     nextThread: number;
 }
 
-type Method = 'getProfile' | 'listMessages' | 'listHistory' | 'getMessage' | 'send';
+type Method = 'getProfile' | 'listMessages' | 'listHistory' | 'getMessage' | 'getMessageHeaders' | 'send';
 
 /**
  * An in-memory Gmail for the tests: no network, ever. Access tokens are the fake OAuth's — a token
@@ -55,10 +56,19 @@ export class FakeGmail implements GmailPort {
     private readonly failures: { email: string; method: Method; status: number; remaining: number }[] = [];
     /** Mailboxes whose next send is stored by Gmail and then answered with a 500 (accepted, unreported). */
     private readonly acceptThenFail = new Set<string>();
-    /** Every message a mailbox sent through `send`: the raw MIME as Gmail received it, and where it went. */
-    readonly sent: { email: string; raw: string; threadId: string | null; id: string }[] = [];
+    /**
+     * Every message a mailbox sent through `send`: the raw MIME as Gmail received it, where it went, and
+     * the Message-ID Gmail stored and delivered it with — which is Gmail's own, not ours (below).
+     */
+    readonly sent: { email: string; raw: string; threadId: string | null; id: string; messageId: string }[] = [];
     /** Every call made, for assertions: method, mailbox, and the message id for getMessage. */
     readonly calls: { method: Method; email: string; id?: string }[] = [];
+    /**
+     * Real Gmail replaces the Message-ID a sender sets with one of its own (`<…@mail.gmail.com>`) —
+     * seen against real mailboxes on 2026-10-11 (#87). The fake always does the same: a fake that keeps
+     * our Message-ID hides exactly the bug real Gmail exposed.
+     */
+    private nextRewrittenId = 1;
     /** Page sizes small enough that the tests exercise paging. */
     listPageSize = 3;
     historyPageSize = 2;
@@ -156,6 +166,8 @@ export class FakeGmail implements GmailPort {
         const after = /after:(\d+)/.exec(input.query);
         const since = after ? Number(after[1]) * 1000 : 0;
         const byMessageId = /rfc822msgid:(\S+)/.exec(input.query)?.[1];
+        const sentOnly = /(?:^|\s)in:sent(?:\s|$)/.test(input.query);
+        const to = /(?:^|\s)to:(\S+)/.exec(input.query)?.[1]?.toLowerCase();
         const matching = [...box.order]
             .reverse()
             .map((id) => box.messages.get(id)!)
@@ -163,7 +175,9 @@ export class FakeGmail implements GmailPort {
                 (m) =>
                     Number(m.internalDate) >= since && !(m.labelIds ?? []).some((l) => l === 'SPAM' || l === 'TRASH'),
             )
-            .filter((m) => byMessageId === undefined || headerOf(m.payload, 'message-id') === `<${byMessageId}>`);
+            .filter((m) => byMessageId === undefined || headerOf(m.payload, 'message-id') === `<${byMessageId}>`)
+            .filter((m) => !sentOnly || (m.labelIds ?? []).includes('SENT'))
+            .filter((m) => to === undefined || (headerOf(m.payload, 'to') ?? '').toLowerCase().includes(to));
         const start = input.pageToken ? Number(input.pageToken) : 0;
         const slice = matching.slice(start, start + this.listPageSize);
         const next = start + this.listPageSize < matching.length ? String(start + this.listPageSize) : null;
@@ -196,12 +210,29 @@ export class FakeGmail implements GmailPort {
         return structuredClone(message);
     }
 
+    async getMessageHeaders(accessToken: string, id: string, names: readonly string[]): Promise<GmailMessageHeaders> {
+        const email = await this.enter('getMessageHeaders', accessToken, id);
+        const message = this.box(email).messages.get(id);
+        if (!message) throw new GmailApiError(404, 'notFound', 'Gmail answered 404 (notFound)');
+        const wanted = new Set(names.map((n) => n.toLowerCase()));
+        return {
+            id: message.id,
+            threadId: message.threadId,
+            headers: (message.payload.headers ?? []).filter((h) => wanted.has(h.name.toLowerCase())),
+        };
+    }
+
     async send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {
         const email = await this.enter('send', accessToken);
         const box = this.box(email);
         const id = `msg-${email}-${box.nextMessage++}`;
         const threadId = input.threadId ?? `thr-${email}-${box.nextThread++}`;
         const parsed = parseRaw(input.raw);
+        const messageId = `CAfake${this.nextRewrittenId++}-${box.nextMessage}@mail.gmail.com`;
+        parsed.payload.headers = [
+            ...(parsed.payload.headers ?? []).filter((h) => h.name.toLowerCase() !== 'message-id'),
+            { name: 'Message-ID', value: `<${messageId}>` },
+        ];
         box.messages.set(id, {
             id,
             threadId,
@@ -213,7 +244,7 @@ export class FakeGmail implements GmailPort {
         box.order.push(id);
         box.historyId += 1;
         box.history.push({ historyId: box.historyId, messageId: id });
-        this.sent.push({ email, raw: input.raw, threadId: input.threadId ?? null, id });
+        this.sent.push({ email, raw: input.raw, threadId: input.threadId ?? null, id, messageId });
         if (this.acceptThenFail.delete(email)) {
             throw new GmailApiError(500, 'backendError', 'Gmail answered 500');
         }

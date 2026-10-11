@@ -57,6 +57,13 @@ export interface GmailRawMessage {
     payload: GmailPart;
 }
 
+/** Some headers of one message (`format=metadata`): enough to recognise it without fetching it whole. */
+export interface GmailMessageHeaders {
+    id: string;
+    threadId: string;
+    headers: GmailHeader[];
+}
+
 /** What Gmail returns for a sent message: its id, and the thread it went into. */
 export interface GmailSent {
     id: string;
@@ -99,10 +106,14 @@ export interface GmailPort {
     /** One message in full: headers, MIME parts, labels. */
     getMessage(accessToken: string, id: string): Promise<GmailRawMessage>;
 
+    /** Only the named headers of one message (`format=metadata`, `metadataHeaders`). */
+    getMessageHeaders(accessToken: string, id: string, names: readonly string[]): Promise<GmailMessageHeaders>;
+
     /**
      * Sends a raw RFC 5322 message as the mailbox (P2-3), in `threadId` when it is a reply. The
      * outcome of a `5xx` or of no answer is unknown — Gmail may have the message — so a caller that
-     * retries looks for it first (a `rfc822msgid:` search through `listMessages`).
+     * retries looks for it first: by our `X-BylineCRM-Id` header among the mailbox's sent messages.
+     * Gmail replaces the Message-ID a sender sets, so that cannot be searched for.
      */
     send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent>;
 }
