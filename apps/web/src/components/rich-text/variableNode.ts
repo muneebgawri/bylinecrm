@@ -25,7 +25,11 @@ declare module '@tiptap/react' {
     }
     interface Commands<ReturnType> {
         variable: {
-            /** Inserts a variable chip at the selection, replacing it. */
+            /**
+             * Inserts a variable chip at the selection, replacing it, and leaves the caret right after
+             * it. No space is added: what follows is the writer's (a comma, a full stop, a space), so
+             * "Hi {{first name}}," never goes out as "Hi Dana ," (#108).
+             */
             insertVariable: (path: string) => ReturnType;
         };
     }
@@ -86,12 +90,7 @@ export const Variable = Node.create<VariableOptions>({
             insertVariable:
                 (path: string) =>
                 ({ chain }) =>
-                    chain()
-                        .insertContent([
-                            { type: VARIABLE_NODE, attrs: { path } },
-                            { type: 'text', text: ' ' },
-                        ])
-                        .run(),
+                    chain().insertContent({ type: VARIABLE_NODE, attrs: { path } }).run(),
         };
     },
 
