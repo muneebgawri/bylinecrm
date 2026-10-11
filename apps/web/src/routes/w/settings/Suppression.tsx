@@ -1,7 +1,6 @@
 import {
     SUPPRESSION_NOTE_MAX,
     SUPPRESSION_REASONS,
-    SUPPRESSION_REASON_LABELS,
     normaliseSuppressionAddress,
     type SuppressionReason,
     type SuppressionSource,
@@ -36,11 +35,17 @@ import { useWorkspaceId } from '../../params';
 
 type Tab = 'all' | SuppressionReason;
 
-/** The reason as a tab and a badge: the reason's own word, capitalised. */
+/** The reason as a tab, and — short enough for a phone card — as a row's badge. */
 const REASON_TAB: Record<SuppressionReason, string> = {
     unsubscribe: 'Unsubscribed',
     hard_bounce: 'Hard bounces',
     complaint: 'Complaints',
+    manual: 'Manual',
+};
+const REASON_BADGE: Record<SuppressionReason, string> = {
+    unsubscribe: 'Unsubscribed',
+    hard_bounce: 'Hard bounce',
+    complaint: 'Spam complaint',
     manual: 'Manual',
 };
 
@@ -52,12 +57,10 @@ const REASON_TONE: Record<SuppressionReason, 'danger' | 'warning' | 'neutral'> =
 };
 
 const SOURCE_LABEL: Record<SuppressionSource, string> = {
-    recipient: 'The person, by the unsubscribe link',
+    recipient: 'Unsubscribe link',
     member: 'A member',
-    provider: 'A bounce or complaint report',
+    provider: 'Delivery report',
 };
-
-const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * The suppression list (P3-1, FR-CRMS-7): addresses the workspace never mails. Every send and every
@@ -93,7 +96,7 @@ export function Suppression() {
                 ]}
                 activeTab={tab}
                 onTabChange={setTab}
-                search={{ value: q, onChange: setQ, placeholder: 'Search addresses…' }}
+                search={{ value: q, onChange: setQ, placeholder: 'Search…' }}
                 toolbar={{
                     extra: (
                         <Button
@@ -150,13 +153,24 @@ export function Suppression() {
                             id: 'reason',
                             header: 'Reason',
                             cell: (entry) => (
-                                <Badge status={REASON_TONE[entry.reason]}>
-                                    {capitalise(SUPPRESSION_REASON_LABELS[entry.reason])}
-                                </Badge>
+                                <Badge status={REASON_TONE[entry.reason]}>{REASON_BADGE[entry.reason]}</Badge>
                             ),
                         },
-                        { id: 'source', header: 'Added by', muted: true, cell: (entry) => SOURCE_LABEL[entry.source] },
-                        { id: 'note', header: 'Note', muted: true, cell: (entry) => entry.note ?? '—' },
+                        // On a phone the card keeps what decides a send — the address, why, and when.
+                        {
+                            id: 'source',
+                            header: 'Added by',
+                            muted: true,
+                            phone: 'hidden',
+                            cell: (entry) => SOURCE_LABEL[entry.source],
+                        },
+                        {
+                            id: 'note',
+                            header: 'Note',
+                            muted: true,
+                            phone: 'hidden',
+                            cell: (entry) => entry.note ?? '—',
+                        },
                         {
                             id: 'added',
                             header: 'Added',

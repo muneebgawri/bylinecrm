@@ -40,7 +40,7 @@ describe('FR-CRMS-7 Settings → Suppression', { timeout: 20_000 }, () => {
         stubApi([listed]);
         open(['outreach:write', 'workspace:admin']);
         expect(await screen.findByText('jordan@northwind.example')).toBeInTheDocument();
-        expect(screen.getByText('Unsubscribed', { selector: 'span' })).toBeInTheDocument();
+        expect(screen.getAllByText('Unsubscribed').length).toBeGreaterThan(1);
         expect(screen.getByText('Hard bounce')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Actions for jordan@northwind.example' })).toBeNull();
         expect(screen.getByRole('button', { name: 'Actions for old@contoso.example' })).toBeInTheDocument();
