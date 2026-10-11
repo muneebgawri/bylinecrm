@@ -7,7 +7,7 @@ import { createQueryClient, keys } from '../../../api/queries';
 import type { MailOutboundView, TimelineActivityView } from '../../../api/types';
 import { TimelinePanel } from '../records/TimelinePanel';
 import { json, renderAt, route, stubApi, type FakeRoute } from '../settings/settingsTestKit';
-import { PERSON, WS, outbound, quietRecordRoutes, scheduledRoute } from './mailTestKit';
+import { PERSON, WS, isRecordSends, outbound, quietRecordRoutes, recordSendsRoute } from './mailTestKit';
 
 const CAN_SEND: Capability[] = ['email:send', 'mailbox:read', 'record:read'];
 const target = { type: 'person' as const, id: PERSON.id };
@@ -33,7 +33,7 @@ function statusRoute(id: string, views: MailOutboundView[]): FakeRoute {
 }
 
 function timeline(routes: FakeRoute[], sends: SessionSend[] = []) {
-    const seen = stubApi([...routes, scheduledRoute(), ...quietRecordRoutes]);
+    const seen = stubApi([...routes, recordSendsRoute(), ...quietRecordRoutes]);
     const client = createQueryClient();
     client.setQueryData(keys.mailSession(WS), sends);
     renderAt(
@@ -143,7 +143,7 @@ describe('FR-CRMS-UI-2 / P2-5: a scheduled send on the timeline', () => {
 
     it('says when it goes, in the zone it was scheduled in, and can be called off', async () => {
         const seen = stubApi([
-            scheduledRoute([scheduled]),
+            recordSendsRoute([scheduled]),
             statusRoute('out-9', [scheduled]),
             (r) =>
                 r.method === 'POST' && r.url.endsWith('/mail/messages/out-9/cancel')
@@ -166,7 +166,7 @@ describe('FR-CRMS-UI-2 / P2-5: a scheduled send on the timeline', () => {
 
     it('moves to another time with the sender’s zone', async () => {
         const seen = stubApi([
-            scheduledRoute([scheduled]),
+            recordSendsRoute([scheduled]),
             statusRoute('out-9', [scheduled]),
             (r) =>
                 r.method === 'PATCH' && r.url.endsWith('/mail/messages/out-9')
@@ -189,8 +189,49 @@ describe('FR-CRMS-UI-2 / P2-5: a scheduled send on the timeline', () => {
     });
 });
 
-describe('FR-CRMS-UI-2: scheduled sends are read a page at a time', () => {
-    it('offers “Show more scheduled sends” while the API has a next page, and reads it with the cursor', async () => {
+describe('#104: a record’s sends come from the server, a page at a time', () => {
+    const failed = outbound({
+        id: 'out-7',
+        status: 'failed',
+        subject: 'Sent last week',
+        error: { code: 'recipient.suppressed', message: 'dana@acme.com unsubscribed.', at: '2026-10-09T08:01:00.000Z' },
+    });
+
+    it('asks for this record’s failed and scheduled sends', async () => {
+        const seen = timeline([]);
+        await waitFor(() => expect(seen.some(isRecordSends)).toBe(true));
+        const url = new URL(seen.find(isRecordSends)!.url, 'http://x');
+        expect(url.searchParams.get('target')).toBe(`person:${PERSON.id}`);
+        expect(url.searchParams.get('status')).toBe('failed,scheduled');
+    });
+
+    it('shows a failed send after a reload, with its reason — and no Retry, since what was written is not kept', async () => {
+        stubApi([recordSendsRoute([failed]), statusRoute('out-7', [failed]), ...quietRecordRoutes]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByText('emailed “Sent last week”')).toBeInTheDocument();
+        expect(screen.getByText('Failed')).toBeInTheDocument();
+        expect(screen.getByText('dana@acme.com unsubscribed.')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    });
+
+    it('lists a company’s sends too', async () => {
+        const company = { type: 'company' as const, id: '0b1e0000-0000-4000-8000-0000000000c1' };
+        const seen = stubApi([recordSendsRoute([failed]), statusRoute('out-7', [failed]), ...quietRecordRoutes]);
+        renderAt(
+            [route('/w/:workspaceId/companies/:id', <TimelinePanel workspaceId={WS} target={company} />)],
+            `/w/${WS}/companies/${company.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByText('emailed “Sent last week”')).toBeInTheDocument();
+        const url = new URL(seen.find(isRecordSends)!.url, 'http://x');
+        expect(url.searchParams.get('target')).toBe(`company:${company.id}`);
+    });
+
+    it('offers “Show more sends” while the API has a next page, and reads it with the cursor', async () => {
         const later = outbound({
             id: 'out-8',
             status: 'scheduled',
@@ -200,11 +241,12 @@ describe('FR-CRMS-UI-2: scheduled sends are read a page at a time', () => {
         });
         const seen = stubApi([
             (r) =>
-                r.method === 'GET' && r.url.includes('/mail/scheduled')
+                isRecordSends(r)
                     ? r.url.includes('cursor=c2')
                         ? json({ items: [later], nextCursor: null })
-                        : json({ items: [], nextCursor: 'c2' })
+                        : json({ items: [failed], nextCursor: 'c2' })
                     : undefined,
+            statusRoute('out-7', [failed]),
             statusRoute('out-8', [later]),
             ...quietRecordRoutes,
         ]);
@@ -213,10 +255,10 @@ describe('FR-CRMS-UI-2: scheduled sends are read a page at a time', () => {
             `/w/${WS}/people/${PERSON.id}`,
             CAN_SEND,
         );
-        await userEvent.click(await screen.findByRole('button', { name: 'Show more scheduled sends' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Show more sends' }));
         expect(await screen.findByText('scheduled “Far ahead”')).toBeInTheDocument();
         expect(seen.some((r) => r.url.includes('cursor=c2'))).toBe(true);
-        expect(screen.queryByRole('button', { name: 'Show more scheduled sends' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Show more sends' })).not.toBeInTheDocument();
     });
 });
 
@@ -246,7 +288,7 @@ describe('FR-CRMS-4: stored mail on the timeline opens its thread', () => {
         stubApi([
             statusRoute('out-1', [outbound({ status: 'sent', mailMessageId: 'mm-1', threadId: 'th-1' })]),
             (r) => (r.url.includes('/timeline') ? json({ items: [entry], nextCursor: null }) : undefined),
-            scheduledRoute(),
+            recordSendsRoute(),
             ...quietRecordRoutes,
         ]);
         const client = createQueryClient();
