@@ -5,7 +5,7 @@
 # already exists and never prints one.
 #
 # Touches only:
-#   $BYLINECRM_RUNTIME (default /opt/bylinecrm-runtime): the directory, data/{postgres,redis,
+#   $BYLINECRM_RUNTIME (default /opt/bylinecrm-runtime): the directory, data/{postgres,valkey,
 #   attachments}, postgres.env (0600) and staging.env (0600).
 # Nothing of NewswireOS.
 #
@@ -28,7 +28,7 @@ APP_ENV="$RUNTIME/staging.env"
 PG_ENV="$RUNTIME/postgres.env"
 
 umask 077
-mkdir -p "$RUNTIME/data/postgres" "$RUNTIME/data/redis" "$RUNTIME/data/attachments"
+mkdir -p "$RUNTIME/data/postgres" "$RUNTIME/data/valkey" "$RUNTIME/data/attachments"
 chmod 700 "$RUNTIME"
 chown "$API_UID:$API_GID" "$RUNTIME/data/attachments"
 
@@ -102,7 +102,7 @@ NODE_ENV=production
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
 DATABASE_URL=postgresql://bylinecrm:${PG_PASSWORD}@postgres:5432/bylinecrm
 RLS_DATABASE_URL=postgresql://bylinecrm_app:${APP_DB_PASSWORD}@postgres:5432/bylinecrm
-REDIS_URL=redis://redis:6379
+REDIS_URL=redis://valkey:6379
 PORT=3000
 APP_URL=${PUBLIC_URL}
 WEB_URL=${PUBLIC_URL}

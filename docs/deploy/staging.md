@@ -2,7 +2,7 @@
 
 **Where:** `https://staging.crm.pinionnewswire.com`, on the NewswireOS production VPS
 (`ssh newswireos-vps`, 169.58.194.188). **What runs:** the `bylinecrm-staging` compose project —
-postgres, redis, api, web — from images CI builds for each commit on `main`
+postgres, valkey, api, web — from images CI builds for each commit on `main`
 (`ghcr.io/muneebgawri/bylinecrm-{api,web}:<sha>`). Nothing is built on the server.
 
 This box serves NewswireOS production, and other sessions deploy NewswireOS to it. Everything below
@@ -34,7 +34,7 @@ Three things on this box belong to both products. Treat them as shared infrastru
 | -------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- |
 | `/opt/bylinecrm/releases/<sha>/deploy/staging/`                | the deploy files for each release (newest 5 kept) | replaced per deploy                                      |
 | `/opt/bylinecrm-runtime/staging.env`, `postgres.env`           | environment, incl. secrets (0600)                 | everything                                               |
-| `/opt/bylinecrm-runtime/data/{postgres,redis,attachments}`     | data                                              | everything                                               |
+| `/opt/bylinecrm-runtime/data/{postgres,valkey,attachments}`    | data                                              | everything                                               |
 | `/opt/bylinecrm-runtime/DEPLOYED_SHA`, `PREVIOUS_SHA`          | what runs, what ran before                        | everything                                               |
 | `/opt/bylinecrm-runtime/deploy.lock/`                          | held during a deploy                              | removed on exit                                          |
 | `/opt/newswireos-runtime/nginx-dynamic/bylinecrm-staging.conf` | this host's server blocks on the NewswireOS edge  | NewswireOS deploys (they only write `api-upstream.conf`) |
@@ -169,7 +169,7 @@ with `install-edge.sh https`).
 | Service            | Cap                                                                          |
 | ------------------ | ---------------------------------------------------------------------------- |
 | postgres           | 512 MiB                                                                      |
-| redis              | 128 MiB (`maxmemory 96mb`, `noeviction` — BullMQ jobs must never be evicted) |
+| valkey             | 128 MiB (`maxmemory 96mb`, `noeviction` — BullMQ jobs must never be evicted) |
 | api                | 768 MiB                                                                      |
 | migrate (one-shot) | 384 MiB                                                                      |
 | web                | 64 MiB                                                                       |

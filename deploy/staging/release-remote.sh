@@ -9,7 +9,7 @@
 #
 # Order, chosen so a failure leaves the running stack untouched for as long as possible:
 #   lock → preflight (env files, the Resend key, the edge network) → pull every image (a missing image aborts here, nothing changed) → start
-#   postgres/redis (no-op when running) → migrate → api, wait healthy → web, wait serving →
+#   postgres/valkey (no-op when running) → migrate → api, wait healthy → web, wait serving →
 #   record DEPLOYED_SHA (previous kept for rollback.sh) → prune old release directories.
 
 set -euo pipefail
@@ -56,8 +56,8 @@ docker network inspect bylinecrm-edge >/dev/null 2>&1 || {
 log "pulling images for $SHA"
 compose --profile tools pull --quiet
 
-log "starting postgres and redis"
-compose up -d --wait postgres redis
+log "starting postgres and valkey"
+compose up -d --wait postgres valkey
 
 log "migrating"
 compose run --rm migrate

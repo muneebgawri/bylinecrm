@@ -31,17 +31,18 @@ services:
             retries: 20
         networks: [internal]
 
-    redis:
-        image: public.ecr.aws/docker/library/redis:7
-        # noeviction: BullMQ keeps jobs (sends, syncs, webhook deliveries) in Redis; an evicting policy
-        # would silently drop them. Past the cap Redis refuses writes, which the API reports.
-        command: ['redis-server', '--maxmemory', '96mb', '--maxmemory-policy', 'noeviction', '--appendonly', 'yes']
+    valkey:
+        # Valkey, not Redis (D-250): BSD-licensed, wire-compatible; the same 9.1 runs locally and in CI.
+        image: public.ecr.aws/valkey/valkey:9.1
+        # noeviction: BullMQ keeps jobs (sends, syncs, webhook deliveries) here; an evicting policy
+        # would silently drop them. Past the cap Valkey refuses writes, which the API reports.
+        command: ['valkey-server', '--maxmemory', '96mb', '--maxmemory-policy', 'noeviction', '--appendonly', 'yes']
         volumes:
-            - ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/data/redis:/data
+            - ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/data/valkey:/data
         mem_limit: 128m
         restart: unless-stopped
         healthcheck:
-            test: ['CMD', 'redis-cli', 'ping']
+            test: ['CMD', 'valkey-cli', 'ping']
             interval: 5s
             timeout: 3s
             retries: 20
@@ -69,7 +70,7 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
-            redis:
+            valkey:
                 condition: service_healthy
         mem_limit: 768m
         restart: unless-stopped
