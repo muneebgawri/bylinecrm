@@ -131,3 +131,22 @@ export type PutMailSettingsInput = Loose<Schemas['PutMailSettingsDto']>;
 export type TemplateListQuery = Loose<
     NonNullable<paths['/api/w/{workspaceId}/templates']['get']['parameters']['query']>
 >;
+
+// ---- Google OAuth client, mailboxes, sync and blocklist (P2-1, P2-2) ---------------------------
+/** The workspace's own client (an admin's view): the secret is only ever its last four characters. */
+export type GoogleOAuthClientView = Schemas['GoogleOAuthClient'];
+/** What every member may know: whether Google is set up, and nothing about the client itself. */
+export type GoogleOAuthClientStatusView = Schemas['GoogleOAuthClientStatus'];
+export type GoogleOAuthClientCheckView = Schemas['GoogleOAuthClientCheck'];
+export type PutOAuthClientInput = Loose<Schemas['PutOAuthClientDto']>;
+export type MailboxView = Schemas['Mailbox'];
+export type MailboxConnectStartView = Schemas['MailboxConnectStart'];
+export type ConnectMailboxInput = Loose<Schemas['ConnectMailboxDto']>;
+export type MailboxDisconnectedView = Schemas['MailboxDisconnected'];
+export type MailboxCheckView = Schemas['MailboxCheck'];
+export type MailboxSyncView = Schemas['MailboxSync'];
+export type MailboxSyncTriggeredView = Schemas['MailboxSyncTriggered'];
+export type BlocklistEntryView = Schemas['BlocklistEntry'];
+/** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */
+export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];
+export type CreateBlocklistEntryInput = Loose<Schemas['CreateBlocklistEntryDto']>;

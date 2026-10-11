@@ -21,8 +21,8 @@ import {
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useCreateInvite, useInvites, useRevokeInvite, useRoles } from '../../../api/queries';
+import { CopyValue } from '../../../components/CopyValue';
 import { useWorkspaceId } from '../../params';
-import { SecretOnce } from './ApiKeys';
 import { formatDate } from './SettingsLayout';
 
 export function Invites() {
@@ -135,7 +135,7 @@ function InviteDialog({ workspaceId, open, onClose }: { workspaceId: string; ope
                 {token ? (
                     <>
                         <DialogBody>
-                            <SecretOnce value={link} />
+                            <CopyValue value={link} />
                         </DialogBody>
                         <DialogFooter>
                             <Button variant="primary" onClick={close}>
