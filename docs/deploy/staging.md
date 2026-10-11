@@ -3,7 +3,8 @@
 **Where:** `https://staging.crm.pinionnewswire.com`, on the NewswireOS production VPS
 (`ssh newswireos-vps`, 169.58.194.188). **What runs:** the `bylinecrm-staging` compose project —
 postgres, valkey, api, web — from images CI builds for each commit on `main`
-(`ghcr.io/muneebgawri/bylinecrm-{api,web}:<sha>`). Nothing is built on the server.
+(`ghcr.io/muneebgawri/bylinecrm-{api,web}:<sha>`). Nothing is built on the server. Postgres and Valkey come from our GHCR
+mirror, pinned by digest ([`images.md`](images.md), #123).
 
 This box serves NewswireOS production, and other sessions deploy NewswireOS to it. Everything below
 is written so that BylineCRM cannot take NewswireOS down: read "What this can break" before

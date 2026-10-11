@@ -2,7 +2,7 @@
     "name": "bylinecrm",
     "version": "0.0.0",
     "private": true,
-    "description": "BylineCRM \u2014 a decoupled, multi-tenant CRM service.",
+    "description": "BylineCRM — a decoupled, multi-tenant CRM service.",
     "packageManager": "pnpm@9.15.0",
     "engines": {
         "node": ">=22.12"
@@ -23,7 +23,9 @@
         "build-storybook": "turbo build-storybook",
         "test:a11y": "turbo test:a11y",
         "test:visual": "turbo test:visual",
-        "test:deploy": "bash deploy/staging/test/release-preflight.test.sh"
+        "test:deploy": "bash deploy/staging/test/release-preflight.test.sh",
+        "images:check": "node scripts/check-image-refs.mjs",
+        "test:images": "node --test scripts/check-image-refs.test.mjs"
     },
     "devDependencies": {
         "@bylinecrm/eslint-config": "workspace:*",
