@@ -105,4 +105,12 @@ describe('SignIn', () => {
             paths.signUp,
         );
     });
+
+    it('says sign-ups are closed when a provider sign-in was refused for that reason (P0-14)', async () => {
+        stubApi({ status: 200, body: {} }, 'closed');
+        renderSignIn(`${paths.signIn}?error=signup.closed`);
+        expect(await screen.findByRole('alert', {}, { timeout: 5000 })).toHaveTextContent(
+            'This server does not take new accounts. Ask your administrator for an invitation.',
+        );
+    });
 });

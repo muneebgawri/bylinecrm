@@ -8,7 +8,8 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
-import { verifyPlatformAdminEmail } from '../../src/auth/auth.service';
+import { verifyPlatformAdminEmail, type VerifiedIdentity } from '../../src/auth/auth.service';
+import { OidcService } from '../../src/auth/oidc.service';
 import { ENV, parseEnv, type Env } from '../../src/config/env';
 import { PrismaService } from '../../src/infra/prisma.service';
 
@@ -48,6 +49,16 @@ describe('sign-up modes and platform admins (P0-14)', () => {
     let admin: Browser;
     let outsider: Browser;
     let outsiderWorkspace: string;
+    /** What the stand-in identity provider says the next person to call back is. */
+    let nextIdentity: VerifiedIdentity | null = null;
+    const fakeOidc = {
+        available: () => ['fake'],
+        start: () => Promise.resolve(new URL('https://idp.example/authorize')),
+        finish: () => {
+            if (!nextIdentity) throw new Error('no identity queued for the fake provider');
+            return Promise.resolve(nextIdentity);
+        },
+    };
 
     const signup = (body: Record<string, unknown>) => http().post('/api/auth/signup').send(body);
     const post = (who: Browser, path: string, body: Record<string, unknown>) =>
@@ -58,6 +69,8 @@ describe('sign-up modes and platform admins (P0-14)', () => {
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
             .overrideProvider(ENV)
             .useValue(env)
+            .overrideProvider(OidcService)
+            .useValue(fakeOidc)
             .compile();
         app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
         await app.init();
@@ -304,6 +317,90 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             await post(outsider, '/api/workspaces', { name: 'Second' }).expect(201);
             const providers = await http().get('/api/auth/providers').expect(200);
             expect(providers.body).toMatchObject({ signup: 'open' });
+        });
+    });
+
+    describe('provider sign-in outside open mode', () => {
+        /** Calls back from the fake provider as `email`; the response is the API's redirect. */
+        const providerSignIn = (email: string) => {
+            nextIdentity = { provider: 'fake', subject: `sub-${email}`, email };
+            return http().get('/api/auth/oidc/fake/callback?code=c&state=s');
+        };
+        const sessionCookie = (res: Response) =>
+            ((res.headers['set-cookie'] as string[] | undefined) ?? []).some((c) => c.startsWith(`${SESSION_COOKIE}=`));
+        const signInPage = () => `${env.WEB_URL.replace(/\/+$/, '')}/sign-in?error=signup.closed`;
+
+        it('closed: an unknown address gets no account and no session, only the closed-sign-up answer', async () => {
+            env.SIGNUP_MODE = 'closed';
+            const email = `stranger-${stamp}@example.test`;
+            const res = await providerSignIn(email).expect(302);
+            expect(res.headers.location).toBe(signInPage());
+            expect(sessionCookie(res)).toBe(false);
+            expect(await owner.user.count({ where: { email } })).toBe(0);
+            expect(await owner.externalIdentity.count({ where: { email } })).toBe(0);
+        });
+
+        it('closed: an address with a pending invitation gets its account, in any letter case', async () => {
+            env.SIGNUP_MODE = 'closed';
+            const email = `invitee-${stamp}@example.test`;
+            await post(admin, '/api/platform/workspaces', { name: 'Invitee Co', ownerEmail: email }).expect(201);
+            const res = await providerSignIn(email.toUpperCase()).expect(302);
+            expect(res.headers.location).toBe(env.WEB_URL);
+            expect(sessionCookie(res)).toBe(true);
+            expect(await owner.user.count({ where: { email } })).toBe(1);
+        });
+
+        it('closed: an expired invitation is no invitation', async () => {
+            env.SIGNUP_MODE = 'closed';
+            const email = `expired-${stamp}@example.test`;
+            const created = await post(admin, '/api/platform/workspaces', { name: 'Late Co', ownerEmail: email });
+            const workspaceId = (created.body as { workspace: { id: string } }).workspace.id;
+            await owner.workspaceInvite.updateMany({
+                where: { workspaceId },
+                data: { expiresAt: new Date(Date.now() - 1000) },
+            });
+            const res = await providerSignIn(email).expect(302);
+            expect(res.headers.location).toBe(signInPage());
+            expect(await owner.user.count({ where: { email } })).toBe(0);
+        });
+
+        it('closed: a listed platform admin with no account yet gets one, verified', async () => {
+            env.SIGNUP_MODE = 'closed';
+            const email = `second-admin-${stamp}@example.test`;
+            env.PLATFORM_ADMIN_EMAILS = [adminEmail, email];
+            try {
+                const res = await providerSignIn(email).expect(302);
+                expect(sessionCookie(res)).toBe(true);
+                const user = await owner.user.findUnique({ where: { email } });
+                expect(user?.emailVerifiedAt).not.toBeNull();
+            } finally {
+                env.PLATFORM_ADMIN_EMAILS = [adminEmail];
+            }
+        });
+
+        it('closed: an existing account signs in as before', async () => {
+            env.SIGNUP_MODE = 'closed';
+            const res = await providerSignIn(outsiderEmail).expect(302);
+            expect(res.headers.location).toBe(env.WEB_URL);
+            expect(sessionCookie(res)).toBe(true);
+        });
+
+        it('invite: a platform sign-up invitation lets the address in', async () => {
+            env.SIGNUP_MODE = 'invite';
+            const email = `idp-invited-${stamp}@example.test`;
+            await post(admin, '/api/platform/signup-invites', { email }).expect(201);
+            const res = await providerSignIn(email).expect(302);
+            expect(sessionCookie(res)).toBe(true);
+            const refused = await providerSignIn(`idp-nobody-${stamp}@example.test`).expect(302);
+            expect(refused.headers.location).toBe(signInPage());
+        });
+
+        it('open: unchanged — any verified address gets an account', async () => {
+            env.SIGNUP_MODE = 'open';
+            const email = `idp-open-${stamp}@example.test`;
+            const res = await providerSignIn(email).expect(302);
+            expect(sessionCookie(res)).toBe(true);
+            expect(await owner.user.count({ where: { email } })).toBe(1);
         });
     });
 

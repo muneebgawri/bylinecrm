@@ -1,3 +1,4 @@
+import { SIGN_IN_ERROR_PARAM } from '@bylinecrm/shared';
 import { Button, Field, Input } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -24,6 +25,8 @@ export function SignIn() {
         );
     };
 
+    // A provider sign-in the API refused comes back here with its code (P0-14).
+    const refused = new URLSearchParams(location.search).get(SIGN_IN_ERROR_PARAM);
     const failure = login.error instanceof ApiError ? login.error : null;
     const message =
         failure?.status === 401 || failure?.status === 400
@@ -36,6 +39,11 @@ export function SignIn() {
 
     return (
         <AuthLayout title="Sign in to BylineCRM" subtitle="Your pipeline, outreach and mail in one place.">
+            {refused === 'signup.closed' && (
+                <p role="alert" className="m-0 mb-4 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+                    This server does not take new accounts. Ask your administrator for an invitation.
+                </p>
+            )}
             <ProviderButtons />
             <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
                 <Field label="Email" required>

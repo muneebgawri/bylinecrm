@@ -36,6 +36,14 @@ export function invitationUrl(base: string, kind: InvitationKind, token: string)
 }
 
 /**
+ * Where the API sends a browser whose provider sign-in it refused, and the query parameter that
+ * carries the error code (P0-14): `/sign-in?error=signup.closed` when sign-up is not open and the
+ * address has no account, no pending invitation and is not a platform admin's.
+ */
+export const SIGN_IN_PAGE = '/sign-in';
+export const SIGN_IN_ERROR_PARAM = 'error';
+
+/**
  * Operator-level events. They are not workspace domain events (`DOMAIN_EVENT_TYPES`): nothing on a
  * record's timeline and no workspace webhook concerns them, and the timeline and webhook
  * subscribers ignore any type outside that catalogue. Each one is also written to the

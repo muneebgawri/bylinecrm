@@ -168,7 +168,9 @@ export class AuthService {
     /**
      * Sign-in through an identity provider. The provider's subject is the identity; the email
      * is how a first-time subject is matched to an existing account — and only a **verified**
-     * email is, so a provider that vouches for nothing cannot claim someone else's address.
+     * email is, so a provider that vouches for nothing cannot claim someone else's address. An
+     * address with no account gets one only when sign-up is open or it was let in (P0-14); otherwise
+     * `403 signup.closed`, and nothing is written.
      */
     signInWithIdentity(identity: VerifiedIdentity): Promise<UserView> {
         const email = normaliseEmail(identity.email);
@@ -178,11 +180,17 @@ export class AuthService {
                 include: { user: true },
             });
             if (known) return userView(known.user);
-            const user =
-                (await tx.user.findUnique({ where: { email } })) ??
-                (await tx.user.create({
+            let user = await tx.user.findUnique({ where: { email } });
+            if (!user) {
+                // Outside open mode a provider sign-in is not a back door to sign-up (P0-14): only an
+                // address someone has let in gets an account. Same answer as the password path.
+                if (this.env.SIGNUP_MODE !== 'open' && !(await this.mayCreateAccount(tx, email))) {
+                    throw new SignupClosed();
+                }
+                user = await tx.user.create({
                     data: { email, emailVerifiedAt: new Date(), displayName: displayNameFor(email) },
-                }));
+                });
+            }
             if (!user.emailVerifiedAt) {
                 await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
             }
@@ -191,6 +199,17 @@ export class AuthService {
             });
             return userView({ ...user, emailVerifiedAt: user.emailVerifiedAt ?? new Date() });
         });
+    }
+
+    /**
+     * Whether an address with no account may get one when sign-up is not open: it is a platform
+     * admin's, or a pending, unexpired invitation names it — to a workspace, or to sign up.
+     */
+    private async mayCreateAccount(tx: OwnerTx, email: string): Promise<boolean> {
+        if (this.env.PLATFORM_ADMIN_EMAILS.includes(email)) return true;
+        const pending = { email, expiresAt: { gt: new Date() } };
+        if ((await tx.workspaceInvite.count({ where: { ...pending, acceptedAt: null } })) > 0) return true;
+        return (await tx.platformSignupInvite.count({ where: { ...pending, usedAt: null } })) > 0;
     }
 
     /**

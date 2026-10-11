@@ -77,6 +77,23 @@ file".
 8. **First deploy (Mac):** `deploy/staging/deploy.sh origin/main`. Before step 7 is done, use
    `SKIP_EDGE_PROBE=1`. `DRY=1` prints the plan.
 
+## Sign-up and platform admins (P0-14)
+
+Staging takes no sign-ups: `SIGNUP_MODE` is unset, so it runs as `closed`, the default. Workspaces
+are created by platform admins at `/platform/workspaces`, and each owner joins through the
+invitation link the page shows.
+
+- **Who is a platform admin:** the addresses in `PLATFORM_ADMIN_EMAILS`, set in
+  `/opt/bylinecrm-runtime/staging.env` (currently `matt@pinionpartners.co`). The account's email
+  must be verified.
+- **Verifying an existing password account,** once per address, on the server:
+  `docker compose -p bylinecrm-staging exec api node dist/cli/platform-verify-email.js <address>`.
+  The command refuses any address that is not on the list. A Google sign-in verifies the address
+  too, and creates the account if none exists yet.
+- **Removing an admin:** delete the address from `staging.env` and restart the api. Access ends
+  from the first request after the restart. That delay is accepted; there is no runtime switch.
+- **Do not set `SIGNUP_MODE=open` on staging.** The URL is public.
+
 ## Routine deploy (Mac)
 
 ```sh

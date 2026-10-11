@@ -13,12 +13,12 @@ import {
     Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { SESSION_COOKIE } from '@bylinecrm/shared';
+import { SESSION_COOKIE, SIGN_IN_ERROR_PARAM, SIGN_IN_PAGE } from '@bylinecrm/shared';
 import type { Request, Response } from 'express';
 import { ENV, type Env } from '../config/env';
 import { MembershipService } from '../workspace/membership.service';
 import { PlatformAccess, PlatformForbidden } from '../platform/platform-access.service';
-import { AuthService, type UserView, type WorkspaceView } from './auth.service';
+import { AuthService, SignupClosed, type UserView, type WorkspaceView } from './auth.service';
 import { AuthCookies } from './cookies';
 import { CurrentPrincipal, Public } from './decorators';
 import { AcceptInviteSignupDto, CreateWorkspaceDto, LoginDto, SignupDto, UpdateProfileDto } from './dto';
@@ -187,7 +187,18 @@ export class AuthController {
     private async finishOidc(issuer: string, req: Request, res: Response): Promise<void> {
         const callbackUrl = new URL(req.originalUrl, this.env.APP_URL);
         const identity = await this.oidc.finish(issuer, callbackUrl);
-        const user = await this.auth.signInWithIdentity(identity);
+        let user: UserView;
+        try {
+            user = await this.auth.signInWithIdentity(identity);
+        } catch (error) {
+            // The browser is mid-redirect, so the closed-sign-up answer goes back to the sign-in
+            // page as its code — no account, no session (P0-14).
+            if (!(error instanceof SignupClosed)) throw error;
+            const signIn = new URL(SIGN_IN_PAGE, this.env.WEB_URL);
+            signIn.searchParams.set(SIGN_IN_ERROR_PARAM, error.code);
+            res.redirect(signIn.toString());
+            return;
+        }
         await this.startSession(req, res, user.id);
         res.redirect(this.env.WEB_URL);
     }
