@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../api/queries';
 import type { MembershipSummary } from '../api/types';
 import { CapabilitiesProvider } from '../auth/capabilities';
-import { Sidebar, displayName } from './Sidebar';
+import { Sidebar } from './Sidebar';
 
 const member: MembershipSummary = {
     memberId: 'm',
@@ -26,9 +26,11 @@ function renderSidebar(membership: MembershipSummary | null, collapsed = false) 
             Promise.resolve(
                 new Response(
                     JSON.stringify(
-                        url.endsWith('/me')
-                            ? { id: 'u', email: 'kate.morgan@pinionpartners.co', emailVerified: true }
-                            : [{ id: 'ws-1', slug: 'pinion', name: 'Pinion Partners' }],
+                        url.endsWith('/me/profile')
+                            ? { email: 'kate.morgan@pinionpartners.co', displayName: 'Kathryn Morgan', completed: true }
+                            : url.endsWith('/me')
+                              ? { id: 'u', email: 'kate.morgan@pinionpartners.co', emailVerified: true }
+                              : [{ id: 'ws-1', slug: 'pinion', name: 'Pinion Partners' }],
                     ),
                     { status: 200 },
                 ),
@@ -41,7 +43,12 @@ function renderSidebar(membership: MembershipSummary | null, collapsed = false) 
                 path: '/w/:workspaceId/*',
                 element: (
                     <CapabilitiesProvider membership={membership}>
-                        <Sidebar workspaceId="ws-1" collapsed={collapsed} onOpenShortcuts={() => undefined} />
+                        <Sidebar
+                            workspaceId="ws-1"
+                            collapsed={collapsed}
+                            onOpenShortcuts={() => undefined}
+                            onOpenProfile={() => undefined}
+                        />
                     </CapabilitiesProvider>
                 ),
             },
@@ -79,15 +86,30 @@ describe('Sidebar', () => {
         expect(screen.queryByRole('link', { name: 'People' })).not.toBeInTheDocument();
     });
 
+    it('names the person by their profile name, not by their address', async () => {
+        renderSidebar(member);
+        expect(await screen.findByText('Kathryn Morgan')).toBeInTheDocument();
+    });
+
+    it('while the membership is unknown, every group shows loading rows — never a heading with nothing under it', async () => {
+        renderSidebar(null);
+        await screen.findByRole('link', { name: 'Dashboard' });
+        for (const label of ['Overview', 'CRM', 'Outreach', 'Workspace']) {
+            const group = screen.getByText(label).parentElement as HTMLElement;
+            expect(group.querySelectorAll('a, [data-nav-skeleton]').length, label).toBeGreaterThan(0);
+        }
+    });
+
+    it('once known, a group the member can use nothing in is not shown at all', async () => {
+        renderSidebar(member);
+        await screen.findByRole('link', { name: 'People' });
+        expect(screen.queryByText('Outreach')).not.toBeInTheDocument();
+        expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
+        expect(screen.getByText('CRM')).toBeInTheDocument();
+    });
+
     it('keeps every link when collapsed, named for assistive tech', async () => {
         renderSidebar(member, true);
         expect(await screen.findByRole('link', { name: 'People' })).toBeInTheDocument();
-    });
-});
-
-describe('displayName', () => {
-    it('reads a name out of an email until profiles exist', () => {
-        expect(displayName('kate.morgan@pinionpartners.co')).toBe('Kate Morgan');
-        expect(displayName('ops@x.io')).toBe('Ops');
     });
 });

@@ -22,12 +22,16 @@ const url = z.url().max(2048);
 const HOSTNAME = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const domain = z.string().trim().toLowerCase().regex(HOSTNAME, 'domain must be a host name like example.com');
 
-const emails = z.object({ primary: emailAddress.nullable(), additional: z.array(emailAddress).max(20) });
+/**
+ * Composite fields: `additional` may be left out and means none (P1-UI-10). The whole object is
+ * still replaced on update (P1-1a), so leaving it out of a PATCH clears it, as it always did.
+ */
+const emails = z.object({ primary: emailAddress.nullable(), additional: z.array(emailAddress).max(20).default([]) });
 const phone = z.object({
     number: z.string().regex(/^[0-9]{3,15}$/, 'digits only, without the country code'),
     countryCode: z.string().regex(/^[A-Z]{2}$/, 'ISO 3166-1 alpha-2, upper case'),
 });
-const phones = z.object({ primary: phone.nullable(), additional: z.array(phone).max(20) });
+const phones = z.object({ primary: phone.nullable(), additional: z.array(phone).max(20).default([]) });
 const link = z.object({ url, label: nullableText(120) });
 const links = z.object({ linkedin: link.nullable(), x: link.nullable() });
 const address = z.object({

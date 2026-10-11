@@ -72,6 +72,8 @@ const deal = (id: string, name: string, stageId: string, days = 2): OpportunityV
     updatedAt: '2026-10-01T00:00:00Z',
 });
 const SERIES_B = deal('d-1', 'Series B PR', 's-new');
+/** Deals a test adds to the Won lane (closed); empty unless a test fills it. */
+let wonDeals: OpportunityView[] = [];
 const board = (): BoardView => ({
     pipeline,
     columns: STAGES.map((s) => {
@@ -80,7 +82,9 @@ const board = (): BoardView => ({
                 ? [SERIES_B]
                 : s.id === 's-contacted'
                   ? [deal('d-2', 'Product PR', 's-contacted', 21)]
-                  : [];
+                  : s.id === 's-won'
+                    ? wonDeals
+                    : [];
         return {
             stage: s,
             count: deals.length,
@@ -287,6 +291,7 @@ describe('DealsPage', { timeout: 20_000 }, () => {
     beforeEach(() => {
         toasts.clear();
         localStorage.clear();
+        wonDeals = [];
     });
     afterEach(() => {
         vi.unstubAllGlobals();
@@ -574,6 +579,26 @@ describe('DealsPage', { timeout: 20_000 }, () => {
             expect(text).toMatch(/31/);
             expect(text).not.toMatch(/\d{1,2}:\d{2}/);
         }
+    });
+
+    it('FR-CRMS-UI-3: a closed card says "Closed" with the day it closed; the expected date is "Expected close"', async () => {
+        wonDeals = [{ ...deal('d-3', 'Annual plan', 's-won'), closedAt: '2026-10-09T15:00:00Z' }];
+        stubApi(() => new Response('{}', { status: 200 }));
+        renderPage();
+        const closed = await card('Annual plan');
+        expect(within(closed).getByText('Closed Oct 9, 2026')).toBeInTheDocument();
+        const open = await card('Series B PR');
+        expect(within(open).getByText(/Expected close Oct 31, 2026/)).toBeInTheDocument();
+        expect(within(open).queryByText(/^Close /)).not.toBeInTheDocument();
+    });
+
+    it('FR-CRMS-UI-1: the list names the expected close date "Expected close"', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        expect(
+            await screen.findByRole('columnheader', { name: /Expected close/ }, { timeout: FIRST_RENDER_MS }),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: /^Close date/ })).not.toBeInTheDocument();
     });
 
     it('names owners from the deal itself, not from a member lookup', async () => {

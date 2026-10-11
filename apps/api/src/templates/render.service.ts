@@ -63,7 +63,10 @@ async function loadSubjects(
     // The person's company, if the caller can see it; one they cannot is simply not there.
     const company = person.companyId ? await tx.company.findFirst({ where: { id: person.companyId, ...scope } }) : null;
     const sender = target.senderMemberId
-        ? await tx.workspaceMember.findFirst({ where: { id: target.senderMemberId }, select: { displayName: true } })
+        ? await tx.workspaceMember.findFirst({
+              where: { id: target.senderMemberId },
+              select: { user: { select: { displayName: true } } },
+          })
         : null;
     return {
         person: {
@@ -83,6 +86,6 @@ async function loadSubjects(
                   custom: customOf(deal.custom),
               }
             : null,
-        sender: sender ? { displayName: sender.displayName } : null,
+        sender: sender ? { displayName: sender.user.displayName } : null,
     };
 }

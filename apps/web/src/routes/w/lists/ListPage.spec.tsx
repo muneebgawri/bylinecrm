@@ -9,7 +9,7 @@ import { createQueryClient } from '../../../api/queries';
 import type { MembershipSummary } from '../../../api/types';
 import { CapabilitiesProvider } from '../../../auth/capabilities';
 import { encodeFilter } from '../../../lib/filterParam';
-import { PeopleListPage } from './ListPage';
+import { CompaniesListPage, PeopleListPage } from './ListPage';
 
 const WS = '11111111-2222-4333-8444-555555555555';
 const ME = 'aaaaaaaa-0000-4000-8000-000000000001';
@@ -129,6 +129,52 @@ function renderAt(search: string) {
         </ThemeProvider>,
     );
     return router;
+}
+
+const COMPANY = {
+    id: 'c1',
+    name: 'Acme Corp',
+    domain: 'acme.example',
+    employeeCount: 120,
+    arr: null,
+    address: { street: null, city: null, state: null, country: null, postalCode: null },
+    links: { linkedin: null, x: null },
+    icp: false,
+    position: 0,
+    ownerId: ME,
+    owner: { memberId: ME, name: 'Kate Morgan' },
+    createdBy: { kind: 'member', id: ME },
+    custom: {},
+    deletedAt: null,
+    createdAt: '2026-10-01T10:00:00.000Z',
+    updatedAt: '2026-10-08T10:00:00.000Z',
+};
+
+function renderCompanies() {
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) => {
+            const path = String(input).split('?')[0] ?? '';
+            if (path.endsWith('/companies')) return json(page([COMPANY]));
+            if (path.endsWith('/views') || path.endsWith('/custom-fields')) return json([]);
+            if (path.endsWith('/members/summary')) return json([{ memberId: ME, name: 'Kate Morgan' }]);
+            return json({});
+        }),
+    );
+    const router = createMemoryRouter([{ path: '/w/:workspaceId/companies', element: <CompaniesListPage /> }], {
+        initialEntries: [`/w/${WS}/companies`],
+    });
+    render(
+        <ThemeProvider>
+            <TooltipProvider>
+                <QueryClientProvider client={createQueryClient()}>
+                    <CapabilitiesProvider membership={membership}>
+                        <RouterProvider router={router} />
+                    </CapabilitiesProvider>
+                </QueryClientProvider>
+            </TooltipProvider>
+        </ThemeProvider>,
+    );
 }
 
 /**
@@ -292,6 +338,26 @@ describe('People list', () => {
         expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
     });
 
+    it('FR-CRMS-UI-1: the columns fill the card — the last column takes the spare width', async () => {
+        const calls: Call[] = [];
+        vi.stubGlobal('fetch', api(calls));
+        renderAt('');
+        await screen.findByRole('table');
+        const table = screen.getByRole('table');
+        // The scroll container measures 1280px here (beforeEach); the default columns add up to less.
+        expect(table.style.width).toBe('1280px');
+        const headers = within(table).getAllByRole('columnheader');
+        const lastData = headers[headers.length - 2] as HTMLElement;
+        expect(parseInt(lastData.style.width, 10)).toBeGreaterThan(130);
+    });
+
+    it('FR-CRMS-UI-12: the view tabs scroll sideways without a visible scrollbar', async () => {
+        const calls: Call[] = [];
+        vi.stubGlobal('fetch', api(calls));
+        renderAt('');
+        expect(await screen.findByRole('tablist', { name: 'Views' })).toHaveClass('scrollbar-hidden');
+    });
+
     it('exports a selection with one request whose filter names the ids', async () => {
         const user = userEvent.setup();
         const calls: Call[] = [];
@@ -307,5 +373,25 @@ describe('People list', () => {
         expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/people/export.csv'))?.body).toMatchObject({
             filter: { and: [{ field: 'id', op: 'in', value: ['p2'] }] },
         });
+    });
+});
+
+describe('Companies list', () => {
+    beforeEach(() => {
+        Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 1280 });
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 800 });
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+        if (layout.offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', layout.offsetWidth);
+        if (layout.offsetHeight) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', layout.offsetHeight);
+        vi.unstubAllGlobals();
+    });
+
+    it("FR-CRMS-UI-1: shows a company's domain once — in the Domain column, not again under the name", async () => {
+        renderCompanies();
+        const table = await screen.findByRole('table');
+        await within(table).findByText('Acme Corp');
+        expect(within(table).getAllByText('acme.example')).toHaveLength(1);
     });
 });

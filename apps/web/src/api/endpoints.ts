@@ -55,6 +55,7 @@ import type {
     PersonView,
     PipelineView,
     PreviewTemplateInput,
+    ProfileView,
     PutMailSettingsInput,
     PutOAuthClientInput,
     RenderedEmailView,
@@ -141,7 +142,10 @@ export const auth = {
 };
 
 export const me = {
-    profile: (signal?: AbortSignal) => request<UserView>('GET', '/me', { signal }),
+    current: (signal?: AbortSignal) => request<UserView>('GET', '/me', { signal }),
+    /** The person's own profile: the name every workspace shows them under (P1-UI-10). */
+    profile: (signal?: AbortSignal) => request<ProfileView>('GET', '/me/profile', { signal }),
+    updateProfile: (displayName: string) => request<ProfileView>('PATCH', '/me/profile', { body: { displayName } }),
     workspaces: (signal?: AbortSignal) => request<WorkspaceView[]>('GET', '/me/workspaces', { signal }),
     createWorkspace: (name: string) => request<WorkspaceView>('POST', '/workspaces', { body: { name } }),
 };

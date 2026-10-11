@@ -1,7 +1,10 @@
+import { STANDARD_FIELDS } from '@bylinecrm/shared';
+
 /**
  * How a standard field is named for a reader, once: the properties column, the timeline's
- * "changed" chips and any form read this map. A field not listed here is spelled from its API
- * name (`closeDate` → "close date"); a custom field is named by its definition's label.
+ * "changed" chips and any form read `fieldLabel`. A field the shared descriptors name (the list
+ * columns, filters and exports read those) takes that label; this map holds only the fields they
+ * don't describe. Anything else is spelled from its API name; a custom field is named by its label.
  */
 export const FIELD_LABELS: Readonly<Record<string, string>> = {
     nameFirst: 'first name',
@@ -22,17 +25,24 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
     address: 'address',
     icp: 'ideal customer',
     amount: 'amount',
-    closeDate: 'close date',
+    closedAt: 'closed',
     probability: 'probability',
     stageId: 'stage',
     pipelineId: 'pipeline',
 };
 
-/** `nameFirst` → "first name"; `custom.lastOutlet` → "last outlet". */
+const DESCRIBED: ReadonlyMap<string, string> = new Map(
+    Object.values(STANDARD_FIELDS)
+        .flat()
+        .map((f) => [f.name, f.label.toLowerCase()] as const),
+);
+
+/** `nameFirst` → "first name"; `closeDate` → "expected close"; `custom.lastOutlet` → "last outlet". */
 export function fieldLabel(field: string): string {
     const last = field.split('.').pop() ?? field;
     return (
         FIELD_LABELS[last] ??
+        DESCRIBED.get(last) ??
         last
             .replace(/([A-Z])/g, ' $1')
             .toLowerCase()
