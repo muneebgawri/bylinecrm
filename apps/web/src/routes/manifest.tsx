@@ -35,6 +35,7 @@ const settings = {
     pipeline: () => import('./w/settings/PipelineDetail').then((m) => ({ Component: m.PipelineDetail })),
     customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
     mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
+    google: () => import('./w/settings/GoogleSetup').then((m) => ({ Component: m.GoogleSetup })),
 };
 
 /** Templates are one chunk: the list and the editor, which brings the rich-text editor (FR-CRMS-UI-10). */
@@ -42,6 +43,9 @@ const templates = {
     list: () => import('./w/templates/TemplatesPage').then((m) => ({ Component: m.TemplatesPage })),
     editor: () => import('./w/templates/TemplateEditorPage').then((m) => ({ Component: m.TemplateEditorPage })),
 };
+
+/** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
+const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
 
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
 const dealsPage = () => import('./w/deals/DealsPage').then((m) => ({ Component: m.DealsPage }));
@@ -85,7 +89,7 @@ const workspaceRoutes: RouteObject = {
             handle: { crumb: 'Template' },
             errorElement: <RouteError />,
         },
-        page('mailboxes', 'mailboxes', 'Mailboxes'),
+        { path: 'mailboxes', lazy: mailboxesPage, handle: { crumb: 'Mailboxes' }, errorElement: <RouteError /> },
         page('team', 'team', 'Team'),
         {
             path: 'settings',
@@ -102,6 +106,7 @@ const workspaceRoutes: RouteObject = {
                 { path: `pipelines/:${PIPELINE_PARAM}`, lazy: settings.pipeline, handle: { crumb: 'Pipeline' } },
                 { path: 'custom-fields', lazy: settings.customFields, handle: { crumb: 'Custom fields' } },
                 { path: 'mail', lazy: settings.mail, handle: { crumb: 'Mail' } },
+                { path: 'google', lazy: settings.google, handle: { crumb: 'Google' } },
             ],
         },
     ],
