@@ -14,10 +14,11 @@ import {
 } from '@nestjs/common';
 import { ERROR_CODES, type ApiErrorBody } from '@bylinecrm/shared';
 import { ZodValidationException } from 'nestjs-zod';
+import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { RateLimited, StateConflict, TooLarge, UniqueConflict, ValidationFailed } from './api-errors';
-import { INTERNAL_MESSAGE, INVALID_REQUEST_MESSAGE, toErrorBody } from './error.filter';
+import { INTERNAL_MESSAGE, INVALID_REQUEST_MESSAGE, UNKNOWN_REFERENCE_MESSAGE, toErrorBody } from './error.filter';
 
 const RID = 'req-0123456789';
 
@@ -123,6 +124,28 @@ describe('toErrorBody — the one envelope, golden per kind', () => {
     it('a Nest exception carrying a list of messages joins them', () => {
         const exception = new BadRequestException({ message: ['a is required', 'b is required'] });
         expect(body(exception).message).toBe('a is required; b is required');
+    });
+});
+
+describe('toErrorBody — a write naming a record that does not exist (#119)', () => {
+    it('a foreign-key violation from any route is a 422, never a 500, and names no constraint', () => {
+        const fk = new Prisma.PrismaClientKnownRequestError(
+            'Foreign key constraint violated on the constraint: `workspace_invites_role_id_fkey`',
+            { code: 'P2003', clientVersion: 'test', meta: { field_name: 'workspace_invites_role_id_fkey (index)' } },
+        );
+        const result = body(fk);
+        expect(result).toEqual({
+            statusCode: 422,
+            code: 'unprocessable',
+            message: UNKNOWN_REFERENCE_MESSAGE,
+            requestId: RID,
+        });
+        expect(JSON.stringify(result)).not.toContain('fkey');
+    });
+
+    it('other Prisma errors stay internal', () => {
+        const other = new Prisma.PrismaClientKnownRequestError('boom', { code: 'P2034', clientVersion: 'test' });
+        expect(body(other)).toMatchObject({ statusCode: 500, code: 'internal', message: INTERNAL_MESSAGE });
     });
 });
 

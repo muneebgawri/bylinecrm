@@ -37,6 +37,17 @@ export class UniqueConflict extends ApiException {
     }
 }
 
+/**
+ * `422`: the body names a record (a role, a stage, …) that does not exist in this workspace. `field`
+ * is the body path. Thrown after looking the reference up inside the workspace — a foreign key alone
+ * cannot refuse another workspace's row (see `foreignKeyViolation`).
+ */
+export class UnknownReference extends ApiException {
+    constructor(field: string, message: string) {
+        super(422, 'unprocessable', message, [{ path: field, message }]);
+    }
+}
+
 /** `429`: too many attempts. */
 export class RateLimited extends ApiException {
     constructor(message = 'too many attempts; try again later') {
