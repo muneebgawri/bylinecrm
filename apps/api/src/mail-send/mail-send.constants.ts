@@ -7,6 +7,20 @@
 /** The right-hand side of every Message-ID the CRM writes: `<uuid>@bylinecrm`. Not a real domain, on purpose. */
 export const MAIL_MESSAGE_ID_DOMAIN = 'bylinecrm';
 
+/**
+ * Our own header on every send: `X-BylineCRM-Id: <send id>`. Gmail replaces the Message-ID we set
+ * with its own (seen against real Gmail, 2026-10-11) but keeps custom `X-` headers, so this is how a
+ * send is recognised in the mailbox after an answer was lost (#87).
+ */
+export const MAIL_CRM_ID_HEADER = 'X-BylineCRM-Id';
+/**
+ * Before re-sending after an attempt whose answer was lost, the mailbox's sent messages to the first
+ * recipient since the send was created (less this skew, for clock drift) are checked for our header,
+ * at most this many — newest first. A send is looked for, never assumed.
+ */
+export const MAIL_SEND_DEDUPE_SKEW_MS = 10 * 60 * 1000;
+export const MAIL_SEND_DEDUPE_MAX_CANDIDATES = 25;
+
 /** The queue sends run on; a job's id is its message's, so one message has at most one job. */
 export const MAIL_SEND_QUEUE = 'mail-send';
 /** Sends at once in one worker process. */
