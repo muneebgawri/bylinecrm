@@ -14,6 +14,12 @@ export interface ResponsivePanelProps {
     footer?: ReactNode;
     /** The popover's width class on desktop; a sheet is always full width. */
     widthClass?: string;
+    /**
+     * Called as the panel closes, where it would hand focus back to its trigger; `preventDefault()`
+     * keeps it from doing so, for a panel whose result lands somewhere else (the variable picker's
+     * chip goes into an editor, and the caret with it).
+     */
+    onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -29,6 +35,7 @@ export function ResponsivePanel({
     children,
     footer,
     widthClass = 'w-[min(36rem,calc(100vw-2rem))]',
+    onCloseAutoFocus,
 }: ResponsivePanelProps) {
     const phone = useIsMobile();
     if (phone) {
@@ -37,7 +44,7 @@ export function ResponsivePanel({
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogTrigger asChild>{trigger}</DialogTrigger>
-                <DialogContent>
+                <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription className="sr-only">{title}</DialogDescription>
                     <div className="flex flex-col gap-3">{children}</div>
@@ -49,7 +56,11 @@ export function ResponsivePanel({
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-            <PopoverContent aria-label={title} className={cn('flex flex-col gap-3', widthClass)}>
+            <PopoverContent
+                aria-label={title}
+                className={cn('flex flex-col gap-3', widthClass)}
+                onCloseAutoFocus={onCloseAutoFocus}
+            >
                 <h2 className="m-0 text-sm font-semibold">{title}</h2>
                 {children}
                 {footer && <div className="flex justify-end gap-2 border-t border-border pt-3">{footer}</div>}
