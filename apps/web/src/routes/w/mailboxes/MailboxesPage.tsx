@@ -199,15 +199,19 @@ function MailboxTable({
                             id: 'mailbox',
                             header: 'Mailbox',
                             phone: 'primary',
+                            // Inline, so a phone card's one-line name truncates with an ellipsis rather than clipping.
                             cell: (m) => (
-                                <span className="flex flex-wrap items-center gap-2">
-                                    <span className="font-medium break-all">{m.email}</span>
+                                <span title={m.email}>
+                                    <span className="font-medium">{m.email}</span>
                                     {m.id === justConnected && (
-                                        <Badge status="accent" shape="pill">
-                                            Just connected
-                                        </Badge>
+                                        <>
+                                            {' '}
+                                            <Badge status="accent" shape="pill">
+                                                Just connected
+                                            </Badge>
+                                        </>
                                     )}
-                                    {m.label && <span className="text-text-muted">{m.label}</span>}
+                                    {m.label && <span className="text-text-muted max-md:hidden"> · {m.label}</span>}
                                 </span>
                             ),
                         },
@@ -224,8 +228,13 @@ function MailboxTable({
                             muted: true,
                             cell: (m) => <SyncState mailbox={m} sync={syncs.get(m.id)} />,
                         },
-                        { id: 'purpose', header: 'Purpose', phone: 'meta', cell: (m) => PURPOSE_LABEL[m.purpose] },
-                        { id: 'owner', header: 'Owner', phone: 'meta', cell: ownerName },
+                        {
+                            id: 'purpose',
+                            header: 'Purpose',
+                            phone: 'secondary',
+                            cell: (m) => PURPOSE_LABEL[m.purpose],
+                        },
+                        { id: 'owner', header: 'Owner', phone: 'secondary', muted: true, cell: ownerName },
                     ],
                     rowActions: {
                         label: (m) => m.email,
@@ -299,20 +308,24 @@ function MailboxStatus({ mailbox }: { mailbox: MailboxView }) {
     }
     if (mailbox.status === 'disconnected') return <Badge status="neutral">Disconnected</Badge>;
     return (
-        <span className="flex flex-col gap-1">
-            <span>
-                <Badge status="warning" dot>
-                    Reconnect needed
-                </Badge>
-            </span>
-            {mailbox.lastError && <span className="text-xs text-text-muted">{mailbox.lastError.message}</span>}
-        </span>
+        <Badge status="warning" dot>
+            Reconnect needed
+        </Badge>
     );
 }
 
 function SyncState({ mailbox, sync }: { mailbox: MailboxView; sync: MailboxSyncView | undefined }) {
     if (mailbox.status === 'disconnected') return <span>—</span>;
-    if (mailbox.status === 'reconnect_needed') return <span>Paused until it is reconnected</span>;
+    // Sync stops while Google refuses the stored access; the reason is what the owner acts on.
+    if (mailbox.status === 'reconnect_needed') {
+        // On a phone the "Reconnect needed" badge beside it already says sync is paused; the line keeps the reason.
+        return (
+            <span>
+                <span className="max-md:hidden">Paused — </span>
+                {mailbox.lastError?.message ?? 'Reconnect the mailbox to resume.'}
+            </span>
+        );
+    }
     if (!sync) return <span>Checking…</span>;
     if (sync.status === 'syncing') return <span>Syncing now</span>;
     if (sync.status === 'failed') {
