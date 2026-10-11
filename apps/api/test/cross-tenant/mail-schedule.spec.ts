@@ -531,7 +531,7 @@ describe('FR-CRMS-4 scheduled send', () => {
     });
 
     describe('FR-CRMS-4 the scheduled list', () => {
-        it('shows a member their own scheduled sends, soonest first, and an admin everyone’s', async () => {
+        it('shows each caller the scheduled sends on records they can read (#133), soonest first', async () => {
             const later = await schedule(5 * HOUR, {}, member);
             const sooner = await schedule(4 * HOUR, {}, member);
             const mine = await schedule(4.5 * HOUR);
@@ -539,7 +539,8 @@ describe('FR-CRMS-4 scheduled send', () => {
             const memberIds = memberList.items.map((i) => i.id);
             expect(memberIds).toContain(later.messageId);
             expect(memberIds).toContain(sooner.messageId);
-            expect(memberIds).not.toContain(mine.messageId);
+            // A colleague's send on a record the member can read is on their list too (#133).
+            expect(memberIds).toContain(mine.messageId);
             expect(memberIds.indexOf(sooner.messageId)).toBeLessThan(memberIds.indexOf(later.messageId));
             const adminList = (await as(admin).get(w('/mail/scheduled?limit=100'))).body as { items: Outbound[] };
             const adminIds = adminList.items.map((i) => i.id);
@@ -614,16 +615,17 @@ describe('FR-CRMS-4 scheduled send', () => {
             expect((await status(accepted.messageId)).status).toBe('scheduled');
         });
 
-        it('a member cannot cancel or move another member’s scheduled send', async () => {
+        it('a member who can see another member’s scheduled send may not cancel or move it: 403 (#133)', async () => {
             const accepted = await schedule(HOUR);
-            expect((await as(member).post(w(`/mail/messages/${accepted.messageId}/cancel`))).status).toBe(404);
+            expect((await as(member).post(w(`/mail/messages/${accepted.messageId}/cancel`))).status).toBe(403);
             expect(
                 (
                     await as(member)
                         .patch(w(`/mail/messages/${accepted.messageId}`))
                         .send({ sendAt: inMs(2 * HOUR) })
                 ).status,
-            ).toBe(404);
+            ).toBe(403);
+            expect((await status(accepted.messageId)).status).toBe('scheduled');
         });
     });
 });

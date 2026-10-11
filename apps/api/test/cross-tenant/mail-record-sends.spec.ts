@@ -40,6 +40,7 @@ interface Outbound {
     personId: string | null;
     dealId: string | null;
     senderMemberId: string;
+    canChange: boolean;
     createdAt: string;
     error: { code: string; message: string; fields?: string[] } | null;
 }
@@ -57,8 +58,10 @@ const HOUR = 60 * 60 * 1000;
 /**
  * A record's sends (#104): `GET /mail/messages?target=&status=` lists the sends about one record —
  * failed ones with their reason, scheduled ones — newest first, a page at a time, so a record page
- * shows them after a reload. Who sees a send is unchanged (its sender, or an admin), and only on a
- * record the caller can read: a record outside their scope, or another workspace's, is not found.
+ * shows them after a reload. Who sees a send (#133): anyone who can read its record — so colleagues
+ * see that a person is already being written to — and its sender always; who changes one: its
+ * sender or an admin, a reader who may not change it is refused (403), never told it is missing.
+ * A record outside the caller's scope, or another workspace's, is not found.
  */
 describe('#104 a record’s sends', () => {
     let app: INestApplication;
@@ -92,6 +95,8 @@ describe('#104 a record’s sends', () => {
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const noWait = { sleep: () => Promise.resolve() };
@@ -304,16 +309,102 @@ describe('#104 a record’s sends', () => {
         expect(dana.some((s) => s.id === forWren)).toBe(false);
     });
 
-    it('#104 a send is its sender’s or an admin’s to see: a member sees none of the admin’s sends', async () => {
-        const res = await list(member, `target=person:${danaId}&status=failed,scheduled`);
-        expect(res.status).toBe(200);
-        expect((res.body as SendsPage).items).toEqual([]);
-        const repSends = ((await list(admin, `target=person:${wrenId}&status=scheduled`)).body as SendsPage).items;
-        expect(repSends.length).toBeGreaterThan(0);
-        // An admin sees a colleague's send, and whose it is.
+    it('#133 a member who can read the record sees a colleague’s sends on it, and whose they are', async () => {
+        const id = await schedule('Seen by colleagues', danaId);
+        const listed = await list(member, `target=person:${danaId}&status=failed,scheduled`);
+        expect(listed.status).toBe(200);
+        const items = (listed.body as SendsPage).items;
+        expect(items.some((s) => s.id === id)).toBe(true);
         const members = (await as(admin).get(w('/members'))).body as { id: string; email: string }[];
-        const repMember = members.find((m) => m.email === repEmail)!.id;
-        expect(repSends.every((s) => s.senderMemberId === repMember)).toBe(true);
+        const adminMember = members.find((m) => m.email === adminEmail)!.id;
+        expect(items.find((s) => s.id === id)!.senderMemberId).toBe(adminMember);
+        const detail = await as(member).get(w(`/mail/messages/${id}`));
+        expect(detail.status, JSON.stringify(detail.body)).toBe(200);
+        expect((detail.body as Outbound).senderMemberId).toBe(adminMember);
+        // The page offers Reschedule and Cancel only where the API will take them.
+        expect((detail.body as Outbound).canChange).toBe(false);
+        expect(items.find((s) => s.id === id)!.canChange).toBe(false);
+        expect(((await as(admin).get(w(`/mail/messages/${id}`))).body as Outbound).canChange).toBe(true);
+    });
+
+    it('#133 the scheduled list shows every scheduled send on records the caller can read', async () => {
+        const id = await schedule('On the shared schedule', danaId);
+        const forWren = await schedule('Rep’s own', wrenId, { who: rep });
+        const asMember = ((await as(member).get(w('/mail/scheduled?limit=100'))).body as SendsPage).items;
+        expect(asMember.some((s) => s.id === id)).toBe(true);
+        const asRep = ((await as(rep).get(w('/mail/scheduled?limit=100'))).body as SendsPage).items;
+        expect(asRep.some((s) => s.id === forWren)).toBe(true);
+        expect(asRep.some((s) => s.id === id)).toBe(false);
+    });
+
+    it('#133 a reader who is not the sender may not reschedule or cancel: 403, and the send stands', async () => {
+        const id = await schedule('Not the member’s to move', danaId);
+        const move = await as(member)
+            .patch(w(`/mail/messages/${id}`))
+            .send({ sendAt: inMs(3 * HOUR) });
+        expect(move.status, JSON.stringify(move.body)).toBe(403);
+        expect((move.body as { code: string }).code).toBe('forbidden');
+        const cancel = await as(member)
+            .post(w(`/mail/messages/${id}/cancel`))
+            .send({});
+        expect(cancel.status, JSON.stringify(cancel.body)).toBe(403);
+        const after = (await as(admin).get(w(`/mail/messages/${id}`))).body as Outbound;
+        expect(after.status).toBe('scheduled');
+    });
+
+    it('#133 an admin may reschedule and cancel a colleague’s send', async () => {
+        const id = await schedule('The rep’s, moved by an admin', wrenId, { who: rep });
+        const move = await as(admin)
+            .patch(w(`/mail/messages/${id}`))
+            .send({ sendAt: inMs(4 * HOUR) });
+        expect(move.status, JSON.stringify(move.body)).toBe(200);
+        const cancel = await as(admin)
+            .post(w(`/mail/messages/${id}/cancel`))
+            .send({});
+        expect(cancel.status, JSON.stringify(cancel.body)).toBe(200);
+        expect((cancel.body as Outbound).status).toBe('cancelled');
+    });
+
+    it('#133 a send on a record outside the caller’s scope is not found, by list or by id', async () => {
+        const id = await schedule('Outside the rep’s records', danaId);
+        expect((await list(rep, `target=person:${danaId}&status=scheduled`)).status).toBe(404);
+        expect((await as(rep).get(w(`/mail/messages/${id}`))).status).toBe(404);
+        expect(
+            (
+                await as(rep)
+                    .post(w(`/mail/messages/${id}/cancel`))
+                    .send({})
+            ).status,
+        ).toBe(404);
+    });
+
+    it('#133 once its record is gone a send is its sender’s (and an admin’s) alone', async () => {
+        const kim = (
+            (
+                await as(rep)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Kim', emails: { primary: `kim-${stamp}@kim.example`, additional: [] } })
+                    .expect(201)
+            ).body as { id: string }
+        ).id;
+        const id = await schedule('About someone since deleted', kim, { who: rep });
+        expect((await as(member).get(w(`/mail/messages/${id}`))).status).toBe(200);
+        await as(admin)
+            .delete(w(`/people/${kim}`))
+            .expect((r) => expect([200, 204]).toContain(r.status));
+        expect((await as(member).get(w(`/mail/messages/${id}`))).status).toBe(404);
+        expect((await as(rep).get(w(`/mail/messages/${id}`))).status).toBe(200);
+        expect((await as(admin).get(w(`/mail/messages/${id}`))).status).toBe(200);
+    });
+
+    it('#133 another workspace cannot read or change a send by id', async () => {
+        const id = await schedule('Not across workspaces', danaId);
+        expect([403, 404]).toContain((await as(otherAdmin).get(w(`/mail/messages/${id}`))).status);
+        expect([403, 404]).toContain((await as(otherAdmin).get(w(`/mail/messages/${id}`, otherWorkspace))).status);
+        const cancel = await as(otherAdmin)
+            .post(w(`/mail/messages/${id}/cancel`, otherWorkspace))
+            .send({});
+        expect(cancel.status).toBe(404);
     });
 
     it('#104 a record outside the caller’s scope is not found; their own record lists their sends', async () => {

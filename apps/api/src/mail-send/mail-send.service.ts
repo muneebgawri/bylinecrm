@@ -25,6 +25,7 @@ import type { RetryOptions } from '../mail-sync/retry';
 import { actorOf } from '../records/actor';
 import { paginate } from '../records/list-query';
 import { readableTargets } from '../records/targets';
+import { assertCanChangeSend, canChangeSend, readableSends, type SendAccessCaller } from './send-access';
 import { recordWhere } from '../records/record-scope';
 import { RenderService } from '../templates/render.service';
 import { withUnsubscribeUrl } from '../templates/render/compose';
@@ -530,29 +531,27 @@ export class MailSendService {
 
     // ── Scheduled sends: list, cancel, move ──────────────────────────────────────────────────
 
-    /** The caller's scheduled sends (an admin's: everyone's), soonest first. */
+    /** The scheduled sends the caller can see (#133: on records they can read, and their own), soonest first. */
     async scheduled(limit: number, cursor: string | undefined): Promise<MailScheduledPage> {
         const context = this.current();
-        const mine = !context.capabilities.has('workspace:admin');
-        if (mine && !context.memberId) return { items: [], nextCursor: null };
         return this.rls.withWorkspace(async (tx) => {
             const page = await paginate(limit, cursor, (args) =>
                 tx.mailOutbound.findMany({
-                    where: { status: 'scheduled', ...(mine ? { senderMemberId: context.memberId! } : {}) },
+                    where: { status: 'scheduled', ...readableSends(context) },
                     orderBy: [{ sendAt: 'asc' }, { id: 'asc' }],
                     ...args,
                 }),
             );
-            return { items: page.items.map((row) => view(row, null)), nextCursor: page.nextCursor };
+            return { items: page.items.map((row) => view(row, null, context)), nextCursor: page.nextCursor };
         });
     }
 
     /**
      * The sends about one record (#104), in the statuses asked for, newest first: a person's, a
      * deal's (the sends written from it), or a company's (its live people's, as its timeline merges
-     * them). Two rules, both already the API's: the record must be one the caller can read
-     * (`readableTargets`, under their role's record scope) — otherwise it is not found, never a hint
-     * that it exists — and a send is its sender's, or an admin's, to see (as `messages/:id` is).
+     * them). The record must be one the caller can read (`readableTargets`, under their role's
+     * record scope) — otherwise it is not found, never a hint that it exists — and the sends listed
+     * are the ones the send rule lets them see (`readableSends`, #133).
      */
     async recordSends(
         target: RecordTarget,
@@ -561,20 +560,17 @@ export class MailSendService {
         cursor: string | undefined,
     ): Promise<MailRecordSendsPage> {
         const context = this.current();
-        const mine = !context.capabilities.has('workspace:admin');
         return this.rls.withWorkspace(async (tx) => {
             if ((await readableTargets(tx, [target])).length === 0) {
                 throw new ApiException(404, 'not_found', 'target not found');
             }
-            if (mine && !context.memberId) return { items: [], nextCursor: null };
             const about = await sendsAbout(tx, target);
             if (!about) return { items: [], nextCursor: null };
             const page = await paginate(limit, cursor, (args) =>
                 tx.mailOutbound.findMany({
                     where: {
                         status: { in: [...statuses] },
-                        ...about,
-                        ...(mine ? { senderMemberId: context.memberId! } : {}),
+                        AND: [about, readableSends(context)],
                     },
                     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
                     include: { mailMessage: { select: { threadId: true } } },
@@ -582,22 +578,22 @@ export class MailSendService {
                 }),
             );
             return {
-                items: page.items.map((row) => view(row, row.mailMessage?.threadId ?? null)),
+                items: page.items.map((row) => view(row, row.mailMessage?.threadId ?? null, context)),
                 nextCursor: page.nextCursor,
             };
         });
     }
 
     /**
-     * Calls a scheduled send off: its sender or an admin, while it is `scheduled`. Cancelling one
+     * Calls a scheduled send off: its sender or an admin (#133), while it is `scheduled`. Cancelling one
      * already cancelled answers as it stands; one that has started (or gone) is a `409`. The row is
      * changed first and the job removed after — a job that fires in between finds the row cancelled
      * and sends nothing.
      */
     async cancel(id: string): Promise<MailOutboundView> {
         const context = this.current();
-        const row = await this.ownSend(id);
-        if (row.status === 'cancelled') return view(row, null);
+        const row = await this.changeableSend(id);
+        if (row.status === 'cancelled') return view(row, null, context);
         if (row.status !== 'scheduled') throw notScheduled(row.status);
         const changed = await this.rls.withWorkspace(async (tx) => {
             const result = await tx.mailOutbound.updateMany({
@@ -608,22 +604,22 @@ export class MailSendService {
             return result;
         });
         if (changed.count === 0) {
-            const now = await this.ownSend(id);
-            if (now.status === 'cancelled') return view(now, null);
+            const now = await this.changeableSend(id);
+            if (now.status === 'cancelled') return view(now, null, context);
             throw notScheduled(now.status);
         }
         await this.dropJob(id);
-        return view(await this.ownSend(id), null);
+        return view(await this.changeableSend(id), null, this.current());
     }
 
     /**
-     * Moves a scheduled send to another time (its sender or an admin, while `scheduled`). The row
+     * Moves a scheduled send to another time (its sender or an admin, #133, while `scheduled`). The row
      * is the truth and the job only the trigger: the delay is changed when the job waits, the job is
      * set again when it is gone, and a job already firing finds the new `sendAt` and waits again.
      */
     async reschedule(id: string, input: { sendAt: string; timeZone?: string | undefined }): Promise<MailOutboundView> {
         const sendAt = scheduledTime(input.sendAt);
-        const row = await this.ownSend(id);
+        const row = await this.changeableSend(id);
         if (row.status !== 'scheduled') throw notScheduled(row.status);
         const changed = await this.rls.withWorkspace((tx) =>
             tx.mailOutbound.updateMany({
@@ -631,24 +627,21 @@ export class MailSendService {
                 data: { sendAt, ...(input.timeZone !== undefined ? { senderTimeZone: input.timeZone } : {}) },
             }),
         );
-        if (changed.count === 0) throw notScheduled((await this.ownSend(id)).status);
+        if (changed.count === 0) throw notScheduled((await this.changeableSend(id)).status);
         await this.setJob(row.workspaceId, id, sendAt);
-        return view(await this.ownSend(id), null);
+        return view(await this.changeableSend(id), null, this.current());
     }
 
-    /** A send as its sender (or an admin) sees it; `404` for anyone else, never a hint that it exists. */
+    /** A send as the send rule lets the caller see it (#133); `404` otherwise, never a hint that it exists. */
     async status(id: string): Promise<MailOutboundView> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const row = await tx.mailOutbound.findUnique({
-                where: { id },
+            const row = await tx.mailOutbound.findFirst({
+                where: { id, ...readableSends(context) },
                 include: { mailMessage: { select: { threadId: true } } },
             });
-            const isAdmin = context.capabilities.has('workspace:admin');
-            if (!row || (!isAdmin && row.senderMemberId !== context.memberId)) {
-                throw new NotFoundException('message not found');
-            }
-            return view(row, row.mailMessage?.threadId ?? null);
+            if (!row) throw new NotFoundException('message not found');
+            return view(row, row.mailMessage?.threadId ?? null, context);
         });
     }
 
@@ -923,14 +916,16 @@ export class MailSendService {
         };
     }
 
-    /** A send as its sender (or an admin) may change it; `404` for anyone else. */
-    private ownSend(id: string): Promise<OutboundRow> {
+    /**
+     * A send the caller may change (#133): `404` when they cannot see it, `403` when they can see
+     * it but are neither its sender nor an admin.
+     */
+    private changeableSend(id: string): Promise<OutboundRow> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const row = await tx.mailOutbound.findUnique({ where: { id } });
-            if (!row || (!context.capabilities.has('workspace:admin') && row.senderMemberId !== context.memberId)) {
-                throw new NotFoundException('message not found');
-            }
+            const row = await tx.mailOutbound.findFirst({ where: { id, ...readableSends(context) } });
+            if (!row) throw new NotFoundException('message not found');
+            assertCanChangeSend(context, row);
             return row;
         });
     }
@@ -1226,7 +1221,7 @@ async function sendsAbout(tx: WorkspaceClient, target: RecordTarget): Promise<Pr
     }
 }
 
-function view(row: OutboundRow, threadId: string | null): MailOutboundView {
+function view(row: OutboundRow, threadId: string | null, caller: SendAccessCaller): MailOutboundView {
     const error = row.lastError as SendErrorRecord | null;
     return {
         id: row.id,
@@ -1241,6 +1236,7 @@ function view(row: OutboundRow, threadId: string | null): MailOutboundView {
         templateId: row.templateId,
         replyToMessageId: row.replyToMessageId,
         senderMemberId: row.senderMemberId,
+        canChange: canChangeSend(caller, row),
         rfc822MessageId: row.rfc822MessageId,
         mailMessageId: row.mailMessageId,
         threadId,

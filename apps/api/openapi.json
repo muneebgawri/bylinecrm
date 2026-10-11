@@ -21451,6 +21451,10 @@
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
                         "description": "The member who sent (or scheduled) it."
                     },
+                    "canChange": {
+                        "type": "boolean",
+                        "description": "Whether the caller may reschedule or cancel it: its sender or an admin (#133)."
+                    },
                     "rfc822MessageId": {
                         "type": "string",
                         "description": "Our Message-ID, without angle brackets."
@@ -21556,6 +21560,7 @@
                     "templateId",
                     "replyToMessageId",
                     "senderMemberId",
+                    "canChange",
                     "rfc822MessageId",
                     "mailMessageId",
                     "threadId",

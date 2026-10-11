@@ -234,10 +234,10 @@ export function TimelinePanel({
     );
 }
 
-/** A send not yet on the timeline as a stored message: "You emailed …" with where it stands. */
 /**
  * A send not (yet) on the timeline as stored mail. It is "You" for this tab's send and the caller's
- * own; an admin also sees colleagues' sends (#104), named by their sender. It is dated when it was
+ * own; a colleague's send on a record the caller can read (#133) is named by its sender, and shown
+ * read-only unless the caller is an admin. It is dated when it was
  * made — a scheduled one is "Not sent yet" — and this tab's send is "just now" until the server
  * has answered.
  */

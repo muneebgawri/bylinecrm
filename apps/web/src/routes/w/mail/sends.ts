@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { useOutboundMessages, useRecordSends, useSessionSends, type SessionSend } from '../../../api/mail';
 import type { MailOutboundView } from '../../../api/types';
-import { useCan } from '../../../auth/capabilities';
 
 /**
  * A send on a record's timeline before (or instead of) the stored message: going now ("Sending…"
@@ -18,6 +17,11 @@ export interface PendingSend {
     error: MailOutboundView['error'];
     /** Who sent it; null for this tab's own send before the server has answered. */
     senderMemberId: string | null;
+    /**
+     * Whether the caller may reschedule or cancel it — the API's answer (#133: its sender or an
+     * admin); this tab's own send is its sender's. A colleague's send is shown read-only.
+     */
+    canChange: boolean;
     /** When it was made; null for this tab's own send before the server has answered (it is now). */
     createdAt: string | null;
     /** The stored copy once sent; the timeline's own entry for it replaces this one. */
@@ -58,9 +62,8 @@ export function usePendingSends(
     target: RecordTarget,
     onTimeline: ReadonlySet<string>,
 ): PendingSends {
-    const canSend = useCan('email:send');
     const session = useSessionSends(workspaceId);
-    const server = useRecordSends(workspaceId, target, canSend);
+    const server = useRecordSends(workspaceId, target);
 
     const mine = useMemo(() => (session.data ?? []).filter((s) => concerns(target, s)), [session.data, target]);
     const held = useMemo(
@@ -87,6 +90,7 @@ export function usePendingSends(
                 senderTimeZone: view?.senderTimeZone ?? own?.accepted.senderTimeZone ?? null,
                 error: view?.error ?? null,
                 senderMemberId: view?.senderMemberId ?? null,
+                canChange: view?.canChange ?? own !== null,
                 createdAt: view?.createdAt ?? null,
                 mailMessageId,
                 threadId: view?.threadId ?? null,
