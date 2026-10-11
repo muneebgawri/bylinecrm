@@ -15,7 +15,8 @@ x-api-image: &api-image ${BYLINECRM_IMAGES:-ghcr.io/muneebgawri}/bylinecrm-api:$
 
 services:
     postgres:
-        image: public.ecr.aws/docker/library/postgres:16
+        # postgres:16, mirrored by digest (deploy/images/mirror.json, #123).
+        image: ghcr.io/muneebgawri/mirror/postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
         env_file: ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/postgres.env
         volumes:
             - ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/data/postgres:/var/lib/postgresql/data
@@ -33,7 +34,7 @@ services:
 
     valkey:
         # Valkey, not Redis (D-250): BSD-licensed, wire-compatible; the same 9.1 runs locally and in CI.
-        image: public.ecr.aws/valkey/valkey:9.1
+        image: ghcr.io/muneebgawri/mirror/valkey@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
         # noeviction: BullMQ keeps jobs (sends, syncs, webhook deliveries) here; an evicting policy
         # would silently drop them. Past the cap Valkey refuses writes, which the API reports.
         command: ['valkey-server', '--maxmemory', '96mb', '--maxmemory-policy', 'noeviction', '--appendonly', 'yes']

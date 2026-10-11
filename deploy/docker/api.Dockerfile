@@ -6,7 +6,8 @@
 # Base images come from the ECR Public mirror of Docker's official library: Docker Hub's anonymous
 # pull limit has blocked CI here before (#79).
 
-ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22-bookworm-slim
+# node:22-bookworm-slim, mirrored by digest (deploy/images/mirror.json, #123).
+ARG NODE_IMAGE=ghcr.io/muneebgawri/mirror/node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
 
 FROM ${NODE_IMAGE} AS base
 # Prisma's engines link against OpenSSL; the slim image ships without it.

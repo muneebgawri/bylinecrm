@@ -3,7 +3,8 @@
 **Where:** `https://staging.crm.pinionnewswire.com`, on the NewswireOS production VPS
 (`ssh newswireos-vps`, 169.58.194.188). **What runs:** the `bylinecrm-staging` compose project —
 postgres, valkey, api, web — from images CI builds for each commit on `main`
-(`ghcr.io/muneebgawri/bylinecrm-{api,web}:<sha>`). Nothing is built on the server.
+(`ghcr.io/muneebgawri/bylinecrm-{api,web}:<sha>`). Nothing is built on the server. Postgres and Valkey come from our GHCR
+mirror, pinned by digest ([`images.md`](images.md), #123).
 
 This box serves NewswireOS production, and other sessions deploy NewswireOS to it. Everything below
 is written so that BylineCRM cannot take NewswireOS down: read "What this can break" before
@@ -45,8 +46,17 @@ Run on the server unless marked **Mac**. Do these outside NewswireOS's busy hour
 that no NewswireOS deploy is running: `ls /opt/newswireos-runtime/deploy.lock` must say "No such
 file".
 
-1. **DNS (Cloudflare, `pinionnewswire.com`):** A record `staging.crm` → `169.58.194.188`, Proxied —
-   like the zone's other hosts; the edge's real-visitor-address handling expects Cloudflare in front.
+1. **DNS (Cloudflare, `pinionnewswire.com`):** A record `staging.crm` → `169.58.194.188`, **DNS only
+   (grey cloud) — never Proxied.** Cloudflare's Universal SSL certificate covers one subdomain level
+   (`*.pinionnewswire.com`), not `staging.crm.pinionnewswire.com`, so with the record proxied Cloudflare
+   has no certificate to present and **every visitor gets a TLS handshake failure** (this happened on
+   2026-10-11 when the record was flipped to Proxied). The origin edge terminates TLS itself with its
+   own Let's Encrypt certificate for the host (`/etc/letsencrypt/live/staging.crm.pinionnewswire.com/`,
+   expires 2027-01-09, renewed by certbot on the server). Unproxied, the edge sees the visitor's address
+   directly; its Cloudflare real-address handling only rewrites requests that come from Cloudflare.
+   Check: `dig +short staging.crm.pinionnewswire.com` must print `169.58.194.188`, not Cloudflare
+   addresses. Putting Cloudflare in front would need a certificate that covers the name (Advanced
+   Certificate Manager) or a one-level hostname — a decision, not a toggle.
 2. **Images (GitHub):** after the first push to `main` with `images.yml`, check the server can pull:
    `docker pull ghcr.io/muneebgawri/bylinecrm-web:main`. The box already holds a GHCR login for
    NewswireOS's images; if that login cannot read these packages, set both packages
@@ -117,10 +127,10 @@ BylineCRM sending-only key on NewswireOS's account, from `no-reply@pinionnewswir
     characters), and the file stays 0600. Then `docker compose -p bylinecrm-staging restart api`,
     or deploy.
 
-- **The deploy checks first.** `release-remote.sh` refuses, before pulling or restarting anything,
-  when `staging.env` has no key, and prints the install command for that release. The first
-  deploy of a release with P0-15 therefore goes: deploy (refused, with the command) → install the
-  key → deploy again.
+- **The deploy checks first.** A release whose environment lacks the key is refused by the
+  environment check (below, #120) before anything is migrated or restarted; the refusal names
+  `RESEND_API_KEY` and prints the install command for that release. On a server without a key the
+  first deploy therefore goes: deploy (refused, with the command) → install the key → deploy again.
 - **Checking delivery:** sign up or reset from a test address, then look in the Resend dashboard
   (Emails) or at the received message's headers (SPF, DKIM and DMARC pass for pinionnewswire.com).
 
@@ -131,10 +141,21 @@ deploy/staging/deploy.sh origin/main     # or any commit on origin whose images 
 DRY=1 deploy/staging/deploy.sh <commit>  # print the plan only
 ```
 
-The deploy takes its own lock (two BylineCRM deploys cannot overlap), pulls both images before
-touching anything (a missing image aborts with the old release still running), migrates, starts
-the api and waits for `/health` to report `ok`, starts web and waits until it serves the app and
-reaches the api through itself, records `DEPLOYED_SHA`, then probes the public URL once.
+The deploy takes its own lock (two BylineCRM deploys cannot overlap), then:
+
+1. **Writes this release's environment** by running the release's own `bootstrap-secrets.sh`. A
+   value the release newly derives (a new variable such as `MAIL_FROM`, a renamed service's
+   `REDIS_URL`) is written before anything reads it; secrets, `PLATFORM_ADMIN_EMAILS` and the
+   installed Resend key are kept. There is no manual "run bootstrap-secrets before the deploy" step.
+2. **Pulls both images** before touching anything (a missing image aborts with the old release
+   still running).
+3. **Checks the environment against the new image** (#120): `node dist/cli/check-env.js` runs in
+   the new api image with `staging.env` and the api's own schema. Every variable the new build
+   would refuse to boot without is listed by name (never by value) and the deploy stops: nothing
+   migrated, the old api still serving. Fix what it names, then deploy again.
+4. Migrates, starts the api and waits for `/health` to report `ok`, starts web and waits until it
+   serves the app and reaches the api through itself, records `DEPLOYED_SHA`, then probes the
+   public URL once.
 
 It does not take NewswireOS's lock and does not need to: it never touches a NewswireOS container
 or file.

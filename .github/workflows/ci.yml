@@ -14,6 +14,11 @@ on:
                 type: boolean
                 default: false
 
+# packages: read lets the jobs pull the mirrored third-party images from GHCR with this token (#123).
+permissions:
+    contents: read
+    packages: read
+
 concurrency:
     group: ci-${{ github.ref }}
     cancel-in-progress: true
@@ -36,6 +41,8 @@ jobs:
             - uses: ./.github/actions/setup
             - run: pnpm lint
             - run: pnpm format:check
+            # Every image comes from our GHCR mirror by a listed digest (#123).
+            - run: pnpm images:check
 
     test:
         runs-on: ubuntu-latest
@@ -53,6 +60,9 @@ jobs:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
             - run: pnpm test
+            # The staging release refuses an environment the new image would not boot (#120).
+            - run: pnpm test:deploy
+            - run: pnpm test:images
             # The client contract (P1-1c): a typed client generated from openapi.json must type-check.
             - run: pnpm --filter api contract:check
 
@@ -70,7 +80,11 @@ jobs:
             WEBHOOK_ALLOW_PRIVATE_TARGETS: '1'
         services:
             postgres:
-                image: public.ecr.aws/docker/library/postgres:16
+                # postgres:16, mirrored by digest (deploy/images/mirror.json, #123).
+                image: ghcr.io/muneebgawri/mirror/postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+                credentials:
+                    username: ${{ github.actor }}
+                    password: ${{ secrets.GITHUB_TOKEN }}
                 env:
                     POSTGRES_USER: bylinecrm
                     POSTGRES_PASSWORD: bylinecrm
@@ -78,7 +92,11 @@ jobs:
                 ports: ['5432:5432']
                 options: --health-cmd "pg_isready -U bylinecrm" --health-interval 5s --health-timeout 3s --health-retries 10
             redis:
-                image: public.ecr.aws/valkey/valkey:9.1
+                # valkey:9.1, mirrored by digest (deploy/images/mirror.json, #123).
+                image: ghcr.io/muneebgawri/mirror/valkey@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+                credentials:
+                    username: ${{ github.actor }}
+                    password: ${{ secrets.GITHUB_TOKEN }}
                 ports: ['6379:6379']
                 options: --health-cmd "valkey-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
         steps:

@@ -1,6 +1,6 @@
 import { Button, Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@bylinecrm/ui';
 import { Braces } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ResponsivePanel } from '../../../components/ResponsivePanel';
 import type { TemplateVariablesView, TemplateVariableView } from '../../../api/types';
 
@@ -27,7 +27,18 @@ export interface VariablePickerProps {
     variables: TemplateVariablesView | undefined;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /**
+     * The chosen variable. Called once the picker has closed and would otherwise hand focus back to
+     * its button, so the owner's insert — which focuses the editor — is the last word on focus (#108).
+     */
     onPick: (path: string) => void;
+    /**
+     * Asked where focus goes when the picker closes without a pick (Escape, a click outside). The
+     * owner moves it and answers `true` — back to the editor when `{{` opened the picker, so the writer
+     * is where they were typing — or answers `false` and it returns to the "Insert variable" button,
+     * which is right when that button opened it.
+     */
+    restoreFocus?: () => boolean;
     disabled?: boolean;
 }
 
@@ -41,17 +52,30 @@ export function matchesVariable(query: string, variable: TemplateVariableView, l
         .every((word) => haystack.includes(word));
 }
 
-export function VariablePicker({ variables, open, onOpenChange, onPick, disabled }: VariablePickerProps) {
+export function VariablePicker({ variables, open, onOpenChange, onPick, restoreFocus, disabled }: VariablePickerProps) {
     const [q, setQ] = useState('');
     const shown = (variable: TemplateVariableView, label: string) => matchesVariable(q, variable, label);
     const customLabel = (v: TemplateVariableView) => `${SOURCE_LABEL[v.source]} · ${v.label}`;
     const anyShown =
         variables !== undefined &&
         (variables.standard.some((v) => shown(v, v.label)) || variables.custom.some((v) => shown(v, customLabel(v))));
+    // The pick waits for the close: inserting first would focus the editor, then lose it to the
+    // panel handing focus back to its button.
+    const picked = useRef<string | null>(null);
     const pick = (path: string) => {
+        picked.current = path;
         onOpenChange(false);
         setQ('');
-        onPick(path);
+    };
+    const onCloseAutoFocus = (event: Event) => {
+        const path = picked.current;
+        picked.current = null;
+        if (path !== null) {
+            event.preventDefault();
+            onPick(path);
+        } else if (restoreFocus?.()) {
+            event.preventDefault();
+        }
     };
     const item = (variable: TemplateVariableView, label: string) => (
         <CommandItem key={variable.path} value={variable.path} onSelect={() => pick(variable.path)}>
@@ -71,6 +95,7 @@ export function VariablePicker({ variables, open, onOpenChange, onPick, disabled
                 if (!next) setQ('');
             }}
             widthClass="w-[min(24rem,calc(100vw-2rem))]"
+            onCloseAutoFocus={onCloseAutoFocus}
             trigger={
                 <Button variant="secondary" shape="square" size="sm" disabled={disabled}>
                     <Braces aria-hidden />

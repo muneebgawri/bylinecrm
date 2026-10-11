@@ -39,9 +39,11 @@ jobs:
                   context: .
                   file: deploy/docker/${{ matrix.image }}.Dockerfile
                   push: true
+                  # :main only for main: a manual run on a branch (e.g. to prove a Dockerfile change
+                  # builds) publishes that commit's :<sha> and never moves :main.
                   tags: |
                       ghcr.io/${{ github.repository_owner }}/bylinecrm-${{ matrix.image }}:${{ github.sha }}
-                      ghcr.io/${{ github.repository_owner }}/bylinecrm-${{ matrix.image }}:main
+                      ${{ github.ref == 'refs/heads/main' && format('ghcr.io/{0}/bylinecrm-{1}:main', github.repository_owner, matrix.image) || '' }}
                   labels: |
                       org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
                       org.opencontainers.image.revision=${{ github.sha }}
