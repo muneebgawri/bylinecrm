@@ -1,6 +1,7 @@
 import type { RecordObject } from '@bylinecrm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFields, pipelines } from './endpoints';
+import { customFields } from './records';
+import { pipelines } from './deals';
 import { keys } from './queries';
 import type {
     CreateCustomFieldInput,

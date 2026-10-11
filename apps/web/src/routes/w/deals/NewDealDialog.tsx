@@ -17,7 +17,8 @@ import {
 } from '@bylinecrm/ui';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
-import { useCreateDeal, useRecordList } from '../../../api/queries';
+import { useCreateDeal } from '../../../api/deals';
+import { useRecordList } from '../../../api/records';
 import type { CompanyView, PipelineView } from '../../../api/types';
 import { parseMoneyInput } from '../../../lib/money';
 import { fieldTitle } from '../records/fields';

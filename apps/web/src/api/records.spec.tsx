@@ -2,7 +2,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createQueryClient, keys, usePatchRecord, useRecord } from './queries';
+import { createQueryClient, keys } from './queries';
+import { usePatchRecord, useRecord } from './records';
 
 const WS = '11111111-2222-4333-8444-555555555555';
 const ID = '0f1c7b1e-2a2b-4c3d-8e4f-5a6b7c8d9e0f';

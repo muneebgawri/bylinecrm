@@ -21,7 +21,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
-import { useCreateInvite, useInvites, useRevokeInvite, useRoles } from '../../../api/queries';
+import { useCreateInvite, useInvites, useRevokeInvite, useRoles } from '../../../api/team';
 import { CopyValue } from '../../../components/CopyValue';
 import { useWorkspaceId } from '../../params';
 import { formatDate } from './SettingsLayout';

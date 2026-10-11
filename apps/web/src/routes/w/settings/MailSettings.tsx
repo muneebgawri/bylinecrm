@@ -14,7 +14,7 @@ import {
 } from '@bylinecrm/ui';
 import { useMemo, useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
-import { useMailSettings, usePutMailSettings } from '../../../api/queries';
+import { useMailSettings, usePutMailSettings } from '../../../api/mailAdmin';
 import type { MailSettingsView, PutMailSettingsInput } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { countries } from '../../../lib/countries';

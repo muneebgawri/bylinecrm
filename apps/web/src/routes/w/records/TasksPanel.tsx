@@ -18,7 +18,7 @@ import {
     type BadgeProps,
 } from '@bylinecrm/ui';
 import { useState } from 'react';
-import { useDeleteTask, useMembersSummary, useSaveTask, useTasks } from '../../../api/queries';
+import { useDeleteTask, useMembersSummary, useSaveTask, useTasks } from '../../../api/records';
 import type { TaskView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatDate, formatWhen } from '../../../lib/format';

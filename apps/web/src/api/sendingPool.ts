@@ -1,18 +1,44 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { sendingPool } from './endpoints';
+import { request } from './client';
+import { workspacePath } from './endpoints';
 import { keys } from './queries';
 import type {
+    PoolMailboxHealthView,
     ResumeMailboxInput,
+    SendingDomainView,
+    SendingPoolSettingsView,
+    SendingPoolView,
     SetMailboxPoolInput,
     UpdateSendingDomainInput,
     UpdateSendingPoolSettingsInput,
 } from './types';
 
 /**
- * The sending pool's reads and writes (P3-2). They live apart from `queries.ts` so they load with
- * the Mailboxes chunk. Every write invalidates the one view, which holds settings, mailboxes and
- * domains together.
+ * The sending pool's reads and writes (P3-2), and its endpoints. They live apart from `queries.ts`
+ * so they load with the Mailboxes chunk. Every write invalidates the one view, which holds settings,
+ * mailboxes and domains together.
  */
+
+/** The sending pool (P3-2): health, settings, a mailbox's cap and resume, sending domains. */
+export const sendingPool = {
+    view: (workspaceId: string, signal?: AbortSignal) =>
+        request<SendingPoolView>('GET', workspacePath(workspaceId, '/sending-pool'), { signal }),
+    updateSettings: (workspaceId: string, input: UpdateSendingPoolSettingsInput) =>
+        request<SendingPoolSettingsView>('PUT', workspacePath(workspaceId, '/sending-pool/settings'), { body: input }),
+    setMailboxCap: (workspaceId: string, mailboxId: string, input: SetMailboxPoolInput) =>
+        request<PoolMailboxHealthView>('PUT', workspacePath(workspaceId, `/mailboxes/${mailboxId}/pool`), {
+            body: input,
+        }),
+    resume: (workspaceId: string, mailboxId: string, input: ResumeMailboxInput) =>
+        request<PoolMailboxHealthView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/resume`), {
+            body: input,
+        }),
+    updateDomain: (workspaceId: string, domainId: string, input: UpdateSendingDomainInput) =>
+        request<SendingDomainView>('PUT', workspacePath(workspaceId, `/sending-domains/${domainId}`), { body: input }),
+    checkDomain: (workspaceId: string, domainId: string) =>
+        request<SendingDomainView>('POST', workspacePath(workspaceId, `/sending-domains/${domainId}/check`)),
+};
+
 const poolKey = keys.sendingPool;
 
 export function useSendingPool(workspaceId: string, enabled = true) {

@@ -1,7 +1,7 @@
 import type { CustomFieldType, RecordObject } from '@bylinecrm/shared';
 import { Skeleton } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
-import { useCustomFields, useMembersSummary } from '../../../api/queries';
+import { useCustomFields, useMembersSummary } from '../../../api/records';
 import type { CustomFieldView } from '../../../api/types';
 import { useMembership, usePermission } from '../../../auth/capabilities';
 import { formatDate } from '../../../lib/format';

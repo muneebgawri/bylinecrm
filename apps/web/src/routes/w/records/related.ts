@@ -1,5 +1,5 @@
 import { LIST_LIMIT_MAX, type RecordObject } from '@bylinecrm/shared';
-import { useRecordList } from '../../../api/queries';
+import { useRecordList } from '../../../api/records';
 import { encodeFilter } from '../../../lib/filterParam';
 
 /**

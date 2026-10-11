@@ -2,7 +2,7 @@ import { Badge, Button, cn, focusRing, Input, Skeleton } from '@bylinecrm/ui';
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { usePipeline, useRules } from '../../../api/queries';
+import { usePipeline, useRules } from '../../../api/deals';
 import { useOrderStages, useUpdatePipeline, useUpdateStage } from '../../../api/settings';
 import type { StageView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';

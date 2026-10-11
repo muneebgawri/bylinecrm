@@ -24,7 +24,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { fieldErrorAt } from '../../../api/client';
-import { useAddSuppression, useLiftSuppression, useSuppressions } from '../../../api/queries';
+import { useAddSuppression, useLiftSuppression, useSuppressions } from '../../../api/mailAdmin';
 import type { SuppressionView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';

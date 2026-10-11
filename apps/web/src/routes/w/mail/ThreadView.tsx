@@ -2,7 +2,7 @@ import { Button, Skeleton } from '@bylinecrm/ui';
 import { EyeOff, Paperclip, Reply } from 'lucide-react';
 import { useState } from 'react';
 import { useMailThread } from '../../../api/mail';
-import { useRecord } from '../../../api/queries';
+import { useRecord } from '../../../api/records';
 import type { MailMessageView, MailThreadView } from '../../../api/types';
 import { EmailFrame } from '../../../components/EmailFrame';
 import { failureText } from '../../../lib/errors';

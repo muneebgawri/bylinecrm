@@ -2,7 +2,7 @@ import { DEFAULT_CURRENCY } from '@bylinecrm/shared';
 import { Badge, FactGrid } from '@bylinecrm/ui';
 import { ListTodo, StickyNote } from 'lucide-react';
 import { useId, useState } from 'react';
-import { usePatchRecord } from '../../../api/queries';
+import { usePatchRecord } from '../../../api/records';
 import type { CompanyView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
