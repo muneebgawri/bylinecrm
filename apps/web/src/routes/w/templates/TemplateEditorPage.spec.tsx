@@ -1,7 +1,7 @@
 import { CAPABILITIES, type Capability } from '@bylinecrm/shared';
 import { MOBILE_QUERY, ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -130,6 +130,24 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
+/**
+ * What a keystroke does in ProseMirror: the text is offered to `handleTextInput` (where input rules
+ * live) and inserted by the editor itself only when no plugin took it — at the editor's selection.
+ */
+function typeInto(editor: Editor, text: string) {
+    for (const ch of text) {
+        const { from, to } = editor.state.selection;
+        const insert = () => editor.state.tr.insertText(ch, from, to);
+        const handled = editor.view.someProp('handleTextInput', (f) => f(editor.view, from, to, ch, insert));
+        if (!handled) editor.view.dispatch(insert());
+    }
+}
+
+/** The Tiptap editor behind a rendered editor's textbox (Tiptap keeps it on its DOM node). */
+function editorOf(textbox: HTMLElement): Editor {
+    return (textbox as HTMLElement & { editor: Editor }).editor;
+}
+
 describe('the variable node', () => {
     it('turns a typed {{ into a request for the picker, leaving no braces behind', () => {
         const editor = new Editor({
@@ -156,6 +174,19 @@ describe('the variable node', () => {
         expect(json).toContain('"type":"variable","attrs":{"path":"person.firstName"}');
         editor.destroy();
     });
+    it('#108: puts the caret right after the chip, with no space of its own before what is typed next', () => {
+        const editor = new Editor({
+            extensions: [StarterKit.configure({ link: false }), Variable],
+            // JSON, not HTML: the HTML parser would drop the trailing space this test depends on.
+            content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hi ' }] }] },
+        });
+        editor.commands.focus('end');
+        editor.commands.insertVariable('person.firstName');
+        typeInto(editor, ', thanks');
+        // renderText shows the chip as {{path}}: the comma follows it directly.
+        expect(editor.getText()).toBe('Hi {{person.firstName}}, thanks');
+        editor.destroy();
+    });
 });
 
 describe('Template editor', () => {
@@ -179,6 +210,61 @@ describe('Template editor', () => {
         await waitFor(() => expect(body.querySelectorAll('[data-variable="company.name"]')).toHaveLength(1));
         expect(body.textContent).not.toContain('{{');
         expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    });
+
+    it('#108: picking a variable with the mouse puts the caret back in the body, right after the chip', async () => {
+        stubApi();
+        const user = userEvent.setup();
+        renderEditor();
+        const body = await screen.findByRole('textbox', { name: 'Body' });
+        const editor = editorOf(body);
+        editor.commands.focus('end');
+        await user.click(screen.getByRole('button', { name: 'Insert variable' }));
+        await user.click(await screen.findByRole('option', { name: /Company name/ }));
+        await waitFor(() => expect(screen.queryByPlaceholderText('Search variables…')).toBeNull());
+        // The popover hands focus back (to its trigger, by default) in a task queued as it unmounts;
+        // let that task run, so this asserts where focus ends up, not where it was for a moment.
+        await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+        expect(body.contains(document.activeElement)).toBe(true);
+        typeInto(editor, '!');
+        expect(editor.getText()).toBe('Hi {{person.firstName}}{{company.name}}!');
+    });
+
+    it('#108: {{ then Enter on a variable inserts it and keeps typing in the body', async () => {
+        stubApi();
+        const user = userEvent.setup();
+        renderEditor();
+        const body = await screen.findByRole('textbox', { name: 'Body' });
+        const editor = editorOf(body);
+        editor.commands.focus('end');
+        // Tiptap applies focus a frame later; type only once the body really has it, as a person would.
+        await waitFor(() => expect(body).toHaveFocus());
+        typeInto(editor, ' at {{');
+        const search = await screen.findByPlaceholderText('Search variables…');
+        await waitFor(() => expect(search).toHaveFocus());
+        await user.keyboard('company name');
+        await user.keyboard('{Enter}');
+        await waitFor(() => expect(body.querySelectorAll('[data-variable="company.name"]')).toHaveLength(1));
+        await waitFor(() => expect(body.contains(document.activeElement)).toBe(true));
+        typeInto(editor, '.');
+        expect(editor.getText()).toContain('at {{company.name}}.');
+    });
+
+    it('#108: {{ then Escape returns the caret to the body, where the braces were', async () => {
+        stubApi();
+        const user = userEvent.setup();
+        renderEditor();
+        const body = await screen.findByRole('textbox', { name: 'Body' });
+        const editor = editorOf(body);
+        editor.commands.focus('end');
+        // Tiptap applies focus a frame later; type only once the body really has it, as a person would.
+        await waitFor(() => expect(body).toHaveFocus());
+        typeInto(editor, ' {{');
+        await waitFor(() => expect(screen.getByPlaceholderText('Search variables…')).toHaveFocus());
+        await user.keyboard('{Escape}');
+        await waitFor(() => expect(body.contains(document.activeElement)).toBe(true));
+        typeInto(editor, 'x');
+        expect(editor.getText().endsWith(' x')).toBe(true);
     });
 
     it('saves with the version it loaded, and offers reload or copy when someone saved first', async () => {
