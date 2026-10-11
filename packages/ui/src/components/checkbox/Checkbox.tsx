@@ -11,9 +11,10 @@ export type CheckboxProps = ComponentPropsWithoutRef<typeof CheckboxPrimitive.Ro
  * A checkbox. What it shows is a 16px box; on a phone the button grows to the touch target around
  * it without taking more room (`phoneTouchArea`, FR-CRMS-UI-12). The focus ring stays on the box.
  *
- * `align-top`: inline in a table cell or a line of text, a baseline-aligned box sits wherever its
- * content puts the baseline — 1px apart between checked and unchecked, and taller than the line.
- * Top alignment places it the same way in every state.
+ * `align-middle`: inline in a table cell or a line of text, a baseline-aligned box sits wherever its
+ * content puts the baseline — apart between checked and unchecked, off-centre in the cell, and in a
+ * table header 1px taller than the line. Centred on the text it sits within 1px of the cell's
+ * middle in every state and density.
  */
 export const Checkbox = forwardRef<ComponentRef<typeof CheckboxPrimitive.Root>, CheckboxProps>(function Checkbox(
     { className, ...props },
@@ -23,7 +24,7 @@ export const Checkbox = forwardRef<ComponentRef<typeof CheckboxPrimitive.Root>, 
         <CheckboxPrimitive.Root
             ref={ref}
             className={cn(
-                'peer group inline-flex shrink-0 items-center justify-center align-top outline-none',
+                'peer group inline-flex shrink-0 items-center justify-center align-middle outline-none',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 phoneTouchArea.box,
                 className,
