@@ -53,6 +53,8 @@ jobs:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
             - run: pnpm test
+            # The staging release refuses an environment the new image would not boot (#120).
+            - run: pnpm test:deploy
             # The client contract (P1-1c): a typed client generated from openapi.json must type-check.
             - run: pnpm --filter api contract:check
 

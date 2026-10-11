@@ -22,7 +22,8 @@
         "storybook": "pnpm --filter @bylinecrm/ui storybook",
         "build-storybook": "turbo build-storybook",
         "test:a11y": "turbo test:a11y",
-        "test:visual": "turbo test:visual"
+        "test:visual": "turbo test:visual",
+        "test:deploy": "bash deploy/staging/test/release-preflight.test.sh"
     },
     "devDependencies": {
         "@bylinecrm/eslint-config": "workspace:*",

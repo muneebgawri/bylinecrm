@@ -198,11 +198,25 @@ export type Env = z.infer<typeof envSchema>;
 /** Injection token for the parsed, typed environment. */
 export const ENV = Symbol('ENV');
 
+/** One `VARIABLE: message` line per problem — the wording both the api's boot and the deploy print. */
+function describeIssues(error: z.ZodError): string[] {
+    return error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+}
+
+/**
+ * Every problem with an environment, or none when it boots. The api's boot ({@link parseEnv}) and the
+ * deploy's preflight (`dist/cli/check-env.js`, #120) share the schema and the wording, so a release is
+ * refused for exactly the reasons the api would refuse to start.
+ */
+export function envIssues(source: NodeJS.ProcessEnv): string[] {
+    const result = envSchema.safeParse(source);
+    return result.success ? [] : describeIssues(result.error);
+}
+
 export function parseEnv(source: NodeJS.ProcessEnv): Env {
     const result = envSchema.safeParse(source);
     if (!result.success) {
-        const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n  ');
-        throw new Error(`Invalid environment:\n  ${issues}`);
+        throw new Error(`Invalid environment:\n  ${describeIssues(result.error).join('\n  ')}`);
     }
     return result.data;
 }

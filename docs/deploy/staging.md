@@ -117,10 +117,10 @@ BylineCRM sending-only key on NewswireOS's account, from `no-reply@pinionnewswir
     characters), and the file stays 0600. Then `docker compose -p bylinecrm-staging restart api`,
     or deploy.
 
-- **The deploy checks first.** `release-remote.sh` refuses, before pulling or restarting anything,
-  when `staging.env` has no key, and prints the install command for that release. The first
-  deploy of a release with P0-15 therefore goes: deploy (refused, with the command) → install the
-  key → deploy again.
+- **The deploy checks first.** A release whose environment lacks the key is refused by the
+  environment check (below, #120) before anything is migrated or restarted; the refusal names
+  `RESEND_API_KEY` and prints the install command for that release. On a server without a key the
+  first deploy therefore goes: deploy (refused, with the command) → install the key → deploy again.
 - **Checking delivery:** sign up or reset from a test address, then look in the Resend dashboard
   (Emails) or at the received message's headers (SPF, DKIM and DMARC pass for pinionnewswire.com).
 
@@ -131,10 +131,21 @@ deploy/staging/deploy.sh origin/main     # or any commit on origin whose images 
 DRY=1 deploy/staging/deploy.sh <commit>  # print the plan only
 ```
 
-The deploy takes its own lock (two BylineCRM deploys cannot overlap), pulls both images before
-touching anything (a missing image aborts with the old release still running), migrates, starts
-the api and waits for `/health` to report `ok`, starts web and waits until it serves the app and
-reaches the api through itself, records `DEPLOYED_SHA`, then probes the public URL once.
+The deploy takes its own lock (two BylineCRM deploys cannot overlap), then:
+
+1. **Writes this release's environment** by running the release's own `bootstrap-secrets.sh`. A
+   value the release newly derives (a new variable such as `MAIL_FROM`, a renamed service's
+   `REDIS_URL`) is written before anything reads it; secrets, `PLATFORM_ADMIN_EMAILS` and the
+   installed Resend key are kept. There is no manual "run bootstrap-secrets before the deploy" step.
+2. **Pulls both images** before touching anything (a missing image aborts with the old release
+   still running).
+3. **Checks the environment against the new image** (#120): `node dist/cli/check-env.js` runs in
+   the new api image with `staging.env` and the api's own schema. Every variable the new build
+   would refuse to boot without is listed by name (never by value) and the deploy stops: nothing
+   migrated, the old api still serving. Fix what it names, then deploy again.
+4. Migrates, starts the api and waits for `/health` to report `ok`, starts web and waits until it
+   serves the app and reaches the api through itself, records `DEPLOYED_SHA`, then probes the
+   public URL once.
 
 It does not take NewswireOS's lock and does not need to: it never touches a NewswireOS container
 or file.

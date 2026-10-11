@@ -8,7 +8,10 @@
 # It never runs a command against a NewswireOS container.
 #
 # Order, chosen so a failure leaves the running stack untouched for as long as possible:
-#   lock → preflight (env files, the Resend key, the edge network) → pull every image (a missing image aborts here, nothing changed) → start
+#   lock → this release's bootstrap-secrets.sh (writes any value the release newly derives; keeps
+#   secrets, operator-set values and the installed Resend key) → the edge network → pull every image
+#   (a missing image aborts here, nothing changed) → check-env: staging.env against the NEW api image's
+#   schema (a variable the release newly requires aborts here, nothing changed; #120) → start
 #   postgres/valkey (no-op when running) → migrate → api, wait healthy → web, wait serving →
 #   record DEPLOYED_SHA (previous kept for rollback.sh) → prune old release directories.
 
@@ -35,19 +38,11 @@ fi
 trap 'rm -rf "$LOCK"' EXIT
 echo "$SHA $(date -u +%FT%TZ) pid $$" >"$LOCK/holder"
 
-for f in staging.env postgres.env; do
-    [ -f "$RUNTIME/$f" ] || {
-        log "$RUNTIME/$f missing — run bootstrap-secrets.sh first"
-        exit 1
-    }
-done
-# Production mode boots only with transactional mail configured (#93): refuse here, before anything
-# is pulled or restarted, rather than leave an api that will not start.
-grep -q '^RESEND_API_KEY=re_' "$RUNTIME/staging.env" || {
-    log "RESEND_API_KEY missing from $RUNTIME/staging.env — install it from the Mac, then deploy again:"
-    log "  pbpaste | ssh newswireos-vps 'bash $HERE/install-resend-key.sh'"
-    exit 1
-}
+# This release's own derivation of staging.env and postgres.env: a value it newly derives (a new
+# variable, a renamed service's URL) is written before anything reads it. Idempotent; never prints a
+# secret.
+log "writing this release's environment"
+BYLINECRM_RUNTIME="$RUNTIME" bash "$HERE/bootstrap-secrets.sh"
 docker network inspect bylinecrm-edge >/dev/null 2>&1 || {
     log "network bylinecrm-edge missing — see docs/deploy/staging.md, one-time steps"
     exit 1
@@ -55,6 +50,31 @@ docker network inspect bylinecrm-edge >/dev/null 2>&1 || {
 
 log "pulling images for $SHA"
 compose --profile tools pull --quiet
+
+# Does staging.env boot THIS build of the api? Asked of the new image, with the api's own schema
+# (dist/cli/check-env.js), before migrating or touching the running stack: a variable this release
+# newly requires is refused here and the api already serving keeps serving (#120).
+log "checking the environment against this release"
+check_err=$(mktemp)
+if ! problems=$(compose run --rm --no-deps -T api node dist/cli/check-env.js 2>"$check_err"); then
+    if [ -z "$problems" ]; then
+        log "the environment check could not run:"
+        cat "$check_err" >&2
+    else
+        log "$RUNTIME/staging.env does not boot this release — nothing was changed:"
+        while IFS= read -r line; do
+            log "  $line"
+            case $line in
+                RESEND_API_KEY:*)
+                    log "    install it from the Mac: pbpaste | ssh newswireos-vps 'bash $HERE/install-resend-key.sh'"
+                    ;;
+            esac
+        done <<<"$problems"
+    fi
+    rm -f "$check_err"
+    exit 1
+fi
+rm -f "$check_err"
 
 log "starting postgres and valkey"
 compose up -d --wait postgres valkey
