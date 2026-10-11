@@ -1,7 +1,7 @@
 import { CAPABILITIES, type Capability } from '@bylinecrm/shared';
 import { MOBILE_QUERY, ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -222,10 +222,8 @@ describe('Template editor', () => {
         await user.click(screen.getByRole('button', { name: 'Insert variable' }));
         await user.click(await screen.findByRole('option', { name: /Company name/ }));
         await waitFor(() => expect(screen.queryByPlaceholderText('Search variables…')).toBeNull());
-        // The popover hands focus back (to its trigger, by default) in a task queued as it unmounts;
-        // let that task run, so this asserts where focus ends up, not where it was for a moment.
-        await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-        expect(body.contains(document.activeElement)).toBe(true);
+        // Tiptap focuses on the next animation frame; wait for it rather than for a fixed time.
+        await waitFor(() => expect(body.contains(document.activeElement)).toBe(true));
         typeInto(editor, '!');
         expect(editor.getText()).toBe('Hi {{person.firstName}}{{company.name}}!');
     });
@@ -279,8 +277,7 @@ describe('Template editor', () => {
         const sheet = await screen.findByRole('dialog', { name: 'Insert variable' });
         await user.click(within(sheet).getByRole('option', { name: /Company name/ }));
         await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Insert variable' })).toBeNull());
-        await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-        expect(body.contains(document.activeElement)).toBe(true);
+        await waitFor(() => expect(body.contains(document.activeElement)).toBe(true));
         typeInto(editor, ',');
         expect(editor.getText()).toBe('Hi {{person.firstName}}{{company.name}},');
     });
