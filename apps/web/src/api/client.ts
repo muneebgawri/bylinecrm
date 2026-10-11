@@ -4,6 +4,7 @@ import {
     codeForStatus,
     type ApiErrorBody,
     type ErrorCode,
+    type ErrorDetails,
     type FieldError,
 } from '@bylinecrm/shared';
 
@@ -27,7 +28,9 @@ export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /**
  * Every failed request, in one shape — the API's one error envelope (`ApiErrorBody`). `code` is
  * the stable machine name to branch on, `fieldErrors` carry failures by body path so a form can
- * place them, and `requestId` is what a person quotes when reporting a problem.
+ * place them, `details` the flat facts a page acts on without parsing `message` (a refused stage
+ * delete's `{ liveDeals, trashedDeals }`), and `requestId` is what a person quotes when reporting a
+ * problem.
  */
 export class ApiError extends Error {
     constructor(
@@ -36,6 +39,7 @@ export class ApiError extends Error {
         message: string,
         readonly fieldErrors: readonly FieldError[] = [],
         readonly requestId: string | null = null,
+        readonly details: Readonly<ErrorDetails> = {},
     ) {
         super(message);
         this.name = 'ApiError';
@@ -164,6 +168,7 @@ function normaliseError(response: Response, payload: unknown): ApiError {
             payload.message,
             payload.fieldErrors ?? [],
             payload.requestId,
+            payload.details ?? {},
         );
     }
     return new ApiError(
@@ -185,4 +190,11 @@ function isEnvelope(payload: unknown): payload is ApiErrorBody {
  */
 export function fieldErrorAt(error: unknown, path: string): string | undefined {
     return error instanceof ApiError ? error.fieldErrors.find((f) => f.path === path)?.message : undefined;
+}
+
+/** One numeric fact from an error's `details` (a count, a limit); `undefined` when absent or not a number. */
+export function detailNumber(error: unknown, key: string): number | undefined {
+    if (!(error instanceof ApiError)) return undefined;
+    const value = error.details[key];
+    return typeof value === 'number' ? value : undefined;
 }

@@ -1,5 +1,5 @@
 export { cn } from './lib/cn';
-export { focusRing, focusWithinRing } from './lib/focus';
+export { focusRing, focusWithinRing, groupFocusRing } from './lib/focus';
 export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
 export {

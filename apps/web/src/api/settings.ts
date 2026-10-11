@@ -70,11 +70,21 @@ export function useUpdateStage(workspaceId: string, pipelineId: string) {
     );
 }
 
+/**
+ * Deletes a stage, optionally moving its deals to `moveDealsTo` first (one request, one transaction
+ * on the server). Moved deals change stage, so the deal lists refetch along with the pipelines
+ * (whose prefix holds the boards).
+ */
 export function useRemoveStage(workspaceId: string, pipelineId: string) {
+    const client = useQueryClient();
     const invalidate = usePipelinesInvalidation(workspaceId);
     return useMutation({
-        mutationFn: (stageId: string) => pipelines.removeStage(workspaceId, pipelineId, stageId),
-        onSuccess: invalidate,
+        mutationFn: ({ stageId, moveDealsTo }: { stageId: string; moveDealsTo?: string }) =>
+            pipelines.removeStage(workspaceId, pipelineId, stageId, moveDealsTo),
+        onSuccess: async (_result, { moveDealsTo }) => {
+            await invalidate();
+            if (moveDealsTo) await client.invalidateQueries({ queryKey: keys.records(workspaceId, 'opportunity') });
+        },
     });
 }
 
@@ -159,6 +169,14 @@ export function useUpdateCustomField(workspaceId: string) {
     return useMutation({
         mutationFn: ({ fieldId, ...input }: { fieldId: string } & UpdateCustomFieldInput) =>
             customFields.update(workspaceId, fieldId, input),
+        onSuccess: invalidate,
+    });
+}
+
+export function useRestoreCustomField(workspaceId: string) {
+    const invalidate = useCustomFieldsInvalidation(workspaceId);
+    return useMutation({
+        mutationFn: (fieldId: string) => customFields.restore(workspaceId, fieldId),
         onSuccess: invalidate,
     });
 }

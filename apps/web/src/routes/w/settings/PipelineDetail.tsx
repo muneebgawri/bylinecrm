@@ -3,15 +3,14 @@ import { ChevronLeft } from 'lucide-react';
 import { useCallback, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
 import { usePipeline, useRules } from '../../../api/queries';
-import { useOrderStages, useRemoveStage, useUpdatePipeline, useUpdateStage } from '../../../api/settings';
+import { useOrderStages, useUpdatePipeline, useUpdateStage } from '../../../api/settings';
 import type { StageView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
-import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
-import { DEALS_PARAMS } from '../deals/dealsView';
 import { usePipelineId, useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { RulesSection } from './RulesSection';
+import { StageDeleteDialog } from './StageDeleteDialog';
 import { StageEditor } from './StageEditor';
 import { StageList } from './StageList';
 
@@ -28,17 +27,11 @@ export function PipelineDetail() {
     const canConfigure = useCan('pipeline:configure');
     const order = useOrderStages(workspaceId, pipelineId);
     const updateStage = useUpdateStage(workspaceId, pipelineId);
-    const removeStage = useRemoveStage(workspaceId, pipelineId);
     const [editing, setEditing] = useState<StageView | 'new' | null>(null);
     const [deleting, setDeleting] = useState<StageView | null>(null);
     const [announcement, setAnnouncement] = useState('');
     const announce = useCallback((text: string) => setAnnouncement(text), []);
     if (pipeline.isError) throw pipeline.error;
-
-    const closeDelete = () => {
-        setDeleting(null);
-        removeStage.reset();
-    };
 
     return (
         <div className="grid gap-4">
@@ -79,6 +72,7 @@ export function PipelineDetail() {
                             {canConfigure && (
                                 <Button
                                     data-primary-action
+                                    data-primary-dialog
                                     className="ml-auto"
                                     shape="square"
                                     size="sm"
@@ -125,25 +119,15 @@ export function PipelineDetail() {
             <div aria-live="polite" aria-atomic="true" className="sr-only">
                 {announcement}
             </div>
-            <ConfirmDialog
-                open={deleting !== null}
-                onOpenChange={(open) => !open && closeDelete()}
-                title={`Delete ${deleting?.name ?? 'stage'}?`}
-                body="A stage can go only when no deal is in it — the trash included — and no rule moves deals into it."
-                confirm="Delete stage"
-                pending={removeStage.isPending}
-                error={removeStage.error ? failureText(removeStage.error) : undefined}
-                onConfirm={() => deleting && removeStage.mutate(deleting.id, { onSuccess: () => setDeleting(null) })}
-            >
-                {removeStage.error && (
-                    <Link
-                        to={`${paths.deals(workspaceId)}?${DEALS_PARAMS.pipeline}=${pipelineId}`}
-                        className={cn('w-fit text-sm text-accent underline-offset-4 hover:underline', focusRing)}
-                    >
-                        Open this pipeline’s deals
-                    </Link>
-                )}
-            </ConfirmDialog>
+            {pipeline.data && (
+                <StageDeleteDialog
+                    workspaceId={workspaceId}
+                    pipelineId={pipelineId}
+                    stage={deleting}
+                    stages={pipeline.data.stages}
+                    onClose={() => setDeleting(null)}
+                />
+            )}
         </div>
     );
 }

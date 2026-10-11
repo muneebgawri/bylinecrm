@@ -10,6 +10,7 @@ export type Check =
     | 'axe'
     | 'sideways-scroll'
     | 'touch-target'
+    | 'top-bar-spill'
     | 'input-text-size'
     | 'primary-action'
     | 'phone-table'
@@ -71,9 +72,16 @@ export async function sidewaysScroll(page: Page): Promise<Finding[]> {
  *   sentence.
  * - An element 1px or smaller in either direction: the visually-hidden pattern (`sr-only`), which
  *   is not a touch target at all.
+ * - An element nobody can touch: `aria-hidden="true"` with `pointer-events: none`. Radix renders one
+ *   beside every checkbox and switch — a native input that mirrors the control for form submission —
+ *   so it is neither seen by assistive technology nor hit by a finger; the control beside it is the
+ *   target, and is checked.
+ *
+ * `scope` narrows the check to one element (the open dialog, PRIMARY_DIALOG below); the findings
+ * then say where they were found.
  */
-export async function phoneTargets(page: Page): Promise<Finding[]> {
-    return page.evaluate(() => {
+export async function phoneTargets(page: Page, scope?: string): Promise<Finding[]> {
+    const findings = await page.evaluate((scopeSelector) => {
         const root = getComputedStyle(document.documentElement);
         const target = parseFloat(root.getPropertyValue('--bc-touch-target'));
         const text = parseFloat(root.getPropertyValue('--bc-touch-text'));
@@ -109,13 +117,20 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
             );
         };
 
-        const interactive = document.querySelectorAll(
+        const scopeEl = scopeSelector ? [...document.querySelectorAll(scopeSelector)].pop() : document;
+        if (!scopeEl) {
+            findings.push({ check: 'touch-target', detail: `nothing matches ${scopeSelector} to check inside` });
+            return findings;
+        }
+        const interactive = scopeEl.querySelectorAll(
             'a[href], button, input:not([type="hidden"]), select, textarea, summary, [contenteditable="true"], ' +
                 '[role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="checkbox"], ' +
                 '[role="switch"], [role="radio"], [role="combobox"], [tabindex]:not([tabindex="-1"])',
         );
+        const untouchable = (el: Element) =>
+            el.getAttribute('aria-hidden') === 'true' && getComputedStyle(el).pointerEvents === 'none';
         for (const el of interactive) {
-            if (!visible(el) || inlineInText(el)) continue;
+            if (!visible(el) || inlineInText(el) || untouchable(el)) continue;
             const rect = el.getBoundingClientRect();
             if (rect.width + 0.5 < target || rect.height + 0.5 < target) {
                 findings.push({
@@ -126,10 +141,10 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
         }
 
         const NOT_TEXT = new Set(['checkbox', 'radio', 'range', 'color', 'file', 'submit', 'button', 'reset', 'image']);
-        const fields = document.querySelectorAll('input, select, textarea, [contenteditable="true"]');
+        const fields = scopeEl.querySelectorAll('input, select, textarea, [contenteditable="true"]');
         for (const el of fields) {
             if (el instanceof HTMLInputElement && NOT_TEXT.has(el.type)) continue;
-            if (!visible(el)) continue;
+            if (!visible(el) || untouchable(el)) continue;
             const size = parseFloat(getComputedStyle(el).fontSize);
             if (size + 0.01 < text) {
                 findings.push({
@@ -139,8 +154,29 @@ export async function phoneTargets(page: Page): Promise<Finding[]> {
             }
         }
         return findings;
-    });
+    }, scope);
+    return scope ? findings.map((f) => ({ ...f, detail: `in ${scope}: ${f.detail}` })) : findings;
 }
+
+/**
+ * The element a page marks as opening its main dialog or sheet (`data-primary-dialog`, on the
+ * trigger — usually the page's primary action). On a phone the gate opens it and checks the
+ * controls inside (touch targets, field text size), so a form in a dialog is held to the same
+ * rules as the page (FR-CRMS-UI-12).
+ */
+export const PRIMARY_DIALOG_TRIGGER = '[data-primary-dialog]';
+/** The open dialog or sheet: every one in the design system is a Radix dialog. */
+export const OPEN_DIALOG = '[role="dialog"]';
+/**
+ * Popups a page offers on a phone, opened and checked like the dialog: the first menu trigger in the
+ * page's main content (row actions — the phone's way to reorder or delete, since drag handles are
+ * hidden there), and the first picker inside the open dialog. Their items are touch targets too.
+ */
+export const MENU_TRIGGER = 'main [aria-haspopup="menu"]';
+export const OPEN_MENU = '[role="menu"]';
+/** A select's trigger is a button; a search-as-you-type picker (an input) opens only after typing. */
+export const PICKER_TRIGGER = '[role="dialog"] button[role="combobox"]';
+export const OPEN_LISTBOX = '[role="listbox"]';
 
 /**
  * On a phone, records are stacked cards, never a table (FR-CRMS-UI-12): a table that scrolls
@@ -269,4 +305,34 @@ export async function aboveFold(page: Page, selector: string): Promise<Finding[]
         [selector, PHONE_FOLD_PX] as const,
     );
     return result ? [{ check: 'above-fold', detail: result }] : [];
+}
+
+/**
+ * On a phone, nothing in the app's top bar lets its content spill past its own box: a breadcrumb
+ * that does not truncate runs underneath the search and notification buttons beside it (found
+ * walking P1-UI-11 at 375px: "Settings / Cu[search]elds"). The page-scroll and touch-target checks
+ * cannot see this — nothing scrolls and every control is still 44px. A box that clips its overflow
+ * (`overflow` not visible) is fine; that is what truncation is.
+ */
+export async function phoneTopBarSpill(page: Page): Promise<Finding[]> {
+    return page.evaluate(() => {
+        const bar = document.querySelector('header');
+        if (!bar) return [];
+        const findings: { check: 'top-bar-spill'; detail: string }[] = [];
+        for (const el of bar.querySelectorAll('*')) {
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') continue;
+            if (style.overflowX !== 'visible') continue;
+            if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth === 0) continue;
+            const label = (el.getAttribute('aria-label') ?? el.textContent ?? '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .slice(0, 40);
+            findings.push({
+                check: 'top-bar-spill',
+                detail: `${el.tagName.toLowerCase()} "${label}" holds ${el.scrollWidth}px of content in ${el.clientWidth}px`,
+            });
+        }
+        return findings;
+    });
 }
