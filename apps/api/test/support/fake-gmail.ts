@@ -6,6 +6,7 @@ import {
     type GmailPort,
     type GmailProfile,
     type GmailRawMessage,
+    type GmailSent,
 } from '../../src/mail-sync/gmail.port';
 import type { FakeGoogleOAuth } from './fake-google-oauth';
 
@@ -40,7 +41,7 @@ interface FakeMailbox {
     nextThread: number;
 }
 
-type Method = 'getProfile' | 'listMessages' | 'listHistory' | 'getMessage';
+type Method = 'getProfile' | 'listMessages' | 'listHistory' | 'getMessage' | 'send';
 
 /**
  * An in-memory Gmail for the tests: no network, ever. Access tokens are the fake OAuth's — a token
@@ -51,6 +52,10 @@ type Method = 'getProfile' | 'listMessages' | 'listHistory' | 'getMessage';
 export class FakeGmail implements GmailPort {
     private readonly mailboxes = new Map<string, FakeMailbox>();
     private readonly failures: { email: string; method: Method; status: number; remaining: number }[] = [];
+    /** Mailboxes whose next send is stored by Gmail and then answered with a 500 (accepted, unreported). */
+    private readonly acceptThenFail = new Set<string>();
+    /** Every message a mailbox sent through `send`: the raw MIME as Gmail received it, and where it went. */
+    readonly sent: { email: string; raw: string; threadId: string | null; id: string }[] = [];
     /** Every call made, for assertions: method, mailbox, and the message id for getMessage. */
     readonly calls: { method: Method; email: string; id?: string }[] = [];
     /** Page sizes small enough that the tests exercise paging. */
@@ -128,6 +133,11 @@ export class FakeGmail implements GmailPort {
         this.failures.length = 0;
     }
 
+    /** The next send from the mailbox is stored by Gmail, but the answer is a 500 — as if the reply was lost. */
+    acceptNextSendThenFail(email: string): void {
+        this.acceptThenFail.add(email);
+    }
+
     callsOf(method: Method, email: string): number {
         return this.calls.filter((c) => c.method === method && c.email === email).length;
     }
@@ -144,13 +154,15 @@ export class FakeGmail implements GmailPort {
         const box = this.box(email);
         const after = /after:(\d+)/.exec(input.query);
         const since = after ? Number(after[1]) * 1000 : 0;
+        const byMessageId = /rfc822msgid:(\S+)/.exec(input.query)?.[1];
         const matching = [...box.order]
             .reverse()
             .map((id) => box.messages.get(id)!)
             .filter(
                 (m) =>
                     Number(m.internalDate) >= since && !(m.labelIds ?? []).some((l) => l === 'SPAM' || l === 'TRASH'),
-            );
+            )
+            .filter((m) => byMessageId === undefined || headerOf(m.payload, 'message-id') === `<${byMessageId}>`);
         const start = input.pageToken ? Number(input.pageToken) : 0;
         const slice = matching.slice(start, start + this.listPageSize);
         const next = start + this.listPageSize < matching.length ? String(start + this.listPageSize) : null;
@@ -181,6 +193,30 @@ export class FakeGmail implements GmailPort {
         const message = this.box(email).messages.get(id);
         if (!message) throw new GmailApiError(404, 'notFound', 'Gmail answered 404 (notFound)');
         return structuredClone(message);
+    }
+
+    async send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {
+        const email = await this.enter('send', accessToken);
+        const box = this.box(email);
+        const id = `msg-${email}-${box.nextMessage++}`;
+        const threadId = input.threadId ?? `thr-${email}-${box.nextThread++}`;
+        const parsed = parseRaw(input.raw);
+        box.messages.set(id, {
+            id,
+            threadId,
+            labelIds: ['SENT'],
+            snippet: parsed.text.slice(0, SNIPPET_CHARS),
+            internalDate: String(Date.now()),
+            payload: parsed.payload,
+        });
+        box.order.push(id);
+        box.historyId += 1;
+        box.history.push({ historyId: box.historyId, messageId: id });
+        this.sent.push({ email, raw: input.raw, threadId: input.threadId ?? null, id });
+        if (this.acceptThenFail.delete(email)) {
+            throw new GmailApiError(500, 'backendError', 'Gmail answered 500');
+        }
+        return { id, threadId };
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────
@@ -229,4 +265,42 @@ const SNIPPET_CHARS = 20;
 
 function b64(value: string): string {
     return Buffer.from(value).toString('base64url');
+}
+
+function headerOf(part: GmailPart, name: string): string | undefined {
+    return part.headers?.find((h) => h.name.toLowerCase() === name)?.value;
+}
+
+/**
+ * The raw MIME the send path builds → Gmail's `format=full` shape, so sync reads a sent message as
+ * Gmail would return it. Reads exactly what the builder writes: a header block, then either one
+ * part or a `multipart/alternative` of base64 parts.
+ */
+function parseRaw(raw: string): { payload: GmailPart; text: string } {
+    const [head, ...rest] = raw.split('\r\n\r\n');
+    const headers = head!
+        .replace(/\r\n[ \t]+/g, ' ')
+        .split('\r\n')
+        .map((line) => {
+            const at = line.indexOf(':');
+            return { name: line.slice(0, at), value: line.slice(at + 1).trim() };
+        });
+    const contentType = headers.find((h) => h.name.toLowerCase() === 'content-type')?.value ?? 'text/plain';
+    const boundary = /boundary="([^"]+)"/.exec(contentType)?.[1];
+    const body = rest.join('\r\n\r\n');
+    if (!boundary) {
+        return { payload: { mimeType: 'text/plain', headers, body: { data: b64(body) } }, text: body };
+    }
+    let text = '';
+    const parts: GmailPart[] = body
+        .split(`--${boundary}`)
+        .slice(1, -1)
+        .map((chunk) => {
+            const [partHead, ...partBody] = chunk.replace(/^\r\n/, '').split('\r\n\r\n');
+            const type = /content-type:\s*([^;\r\n]+)/i.exec(partHead!)?.[1]?.trim() ?? 'text/plain';
+            const decoded = Buffer.from(partBody.join('').replace(/\r\n/g, ''), 'base64').toString('utf8');
+            if (type === 'text/plain') text = decoded;
+            return { mimeType: type, body: { data: b64(decoded) } };
+        });
+    return { payload: { mimeType: 'multipart/alternative', headers, parts }, text };
 }

@@ -31,22 +31,22 @@ const node: z.ZodType<RichTextNode> = z.lazy(() =>
         })
         .passthrough(),
 );
-const body = z
+export const templateBody = z
     .object({ type: z.literal('doc'), content: z.array(node).optional() })
     .refine((doc) => JSON.stringify(doc).length <= TEMPLATE_BODY_MAX_CHARS, {
         message: `a template body is at most ${TEMPLATE_BODY_MAX_CHARS} characters of JSON`,
     });
 
 const name = z.string().trim().min(1).max(TEMPLATE_NAME_MAX);
-const subject = z.string().trim().max(TEMPLATE_SUBJECT_MAX);
+export const templateSubject = z.string().trim().max(TEMPLATE_SUBJECT_MAX);
 const kind = z.enum(TEMPLATE_KINDS);
 
 export class CreateTemplateDto extends createZodDto(
     z.object({
         name,
         kind,
-        subject: subject.default(''),
-        body: body.default({ type: 'doc', content: [] }),
+        subject: templateSubject.default(''),
+        body: templateBody.default({ type: 'doc', content: [] }),
     }),
 ) {}
 
@@ -59,8 +59,8 @@ export class UpdateTemplateDto extends createZodDto(
         .object({
             name,
             kind,
-            subject,
-            body,
+            subject: templateSubject,
+            body: templateBody,
             version: z.number().int().min(1),
         })
         .partial()

@@ -1,6 +1,6 @@
 /**
  * Declarations for two small MIT libraries from the nodemailer project that ship no types. Only
- * what mail sync calls is declared.
+ * what mail sync and sending call is declared.
  */
 declare module 'addressparser' {
     function addressparser(value: string): addressparser.ParsedAddress[];
@@ -19,6 +19,11 @@ declare module 'libmime' {
     const libmime: {
         /** Decodes RFC 2047 encoded-words in a header value (`=?UTF-8?B?…?=`). */
         decodeWords(value: string): string;
+        /**
+         * Encodes the non-ASCII runs of a header value as RFC 2047 encoded-words (`B` = base64),
+         * each word at most `maxLength` characters; ASCII text is left as written.
+         */
+        encodeWords(value: string, mimeWordEncoding: 'B' | 'Q', maxLength?: number): string;
     };
     export = libmime;
 }

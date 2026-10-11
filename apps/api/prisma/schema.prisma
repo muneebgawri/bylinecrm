@@ -53,6 +53,8 @@ model Workspace {
   mailboxSyncStates      MailboxSyncState[]
   blocklistEntries       BlocklistEntry[]
 
+  mailOutbound MailOutbound[]
+
   @@map("workspaces")
 }
 
@@ -142,6 +144,8 @@ model WorkspaceMember {
   mailParticipations     MailParticipant[]
   blocklistEntries       BlocklistEntry[]    @relation("BlocklistOwner")
   createdBlocklist       BlocklistEntry[]    @relation("BlocklistCreator")
+
+  mailOutbound MailOutbound[] @relation("MailOutboundSender")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -343,6 +347,8 @@ model Person {
   contactFor         Opportunity[]
   mailParticipations MailParticipant[]
 
+  mailOutbound MailOutbound[]
+
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
   @@index([workspaceId, companyId])
@@ -425,6 +431,8 @@ model Opportunity {
   pipeline       Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
   stage          PipelineStage             @relation(fields: [stageId], references: [id], onDelete: Restrict)
   stageHistory   OpportunityStageHistory[]
+
+  mailOutbound MailOutbound[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -881,6 +889,8 @@ model Mailbox {
   messages  MailMessage[]
   syncState MailboxSyncState?
 
+  outbound MailOutbound[]
+
   @@unique([workspaceId, email])
   @@index([workspaceId, ownerMemberId])
   @@map("mailboxes")
@@ -914,6 +924,8 @@ model EmailTemplate {
   deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  mailOutbound MailOutbound[]
 
   @@index([workspaceId, deletedAt, updatedAt(sort: Desc)])
   @@map("email_templates")
@@ -964,6 +976,63 @@ enum MailSyncStatus {
   @@map("mail_sync_status")
 }
 
+enum MailOutboundStatus {
+  queued
+  sending
+  sent
+  failed
+
+  @@map("mail_outbound_status")
+}
+
+/// A message the CRM sends (P2-3), from its sender's own personal mailbox. Built once — `mime` is
+/// exactly what goes to Gmail — then sent by a queued job. `rfc822MessageId` is ours (`<uuid>@bylinecrm`);
+/// once sent, `providerMessageId` / `providerThreadId` are Gmail's and `mailMessageId` the stored copy
+/// sync's writer made of it. Replies are recognised against these.
+model MailOutbound {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String             @map("workspace_id") @db.Uuid
+  mailboxId         String             @map("mailbox_id") @db.Uuid
+  senderMemberId    String             @map("sender_member_id") @db.Uuid
+  /// The person the message is to and about (the template's context).
+  personId          String?            @map("person_id") @db.Uuid
+  dealId            String?            @map("deal_id") @db.Uuid
+  templateId        String?            @map("template_id") @db.Uuid
+  /// The stored message this one answers.
+  replyToMessageId  String?            @map("reply_to_message_id") @db.Uuid
+  status            MailOutboundStatus @default(queued)
+  rfc822MessageId   String             @unique @map("rfc822_message_id")
+  toAddresses       String[]           @map("to_addresses")
+  ccAddresses       String[]           @default([]) @map("cc_addresses")
+  bccAddresses      String[]           @default([]) @map("bcc_addresses")
+  subject           String
+  mime              String
+  providerMessageId String?            @map("provider_message_id")
+  providerThreadId  String?            @map("provider_thread_id")
+  mailMessageId     String?            @map("mail_message_id") @db.Uuid
+  attempts          Int                @default(0)
+  lastAttemptAt     DateTime?          @map("last_attempt_at") @db.Timestamptz
+  /// `{ code, message, at }` while the last attempt failed; null after a clean one.
+  lastError         Json?              @map("last_error")
+  sentAt            DateTime?          @map("sent_at") @db.Timestamptz
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mailbox     Mailbox         @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  sender      WorkspaceMember @relation("MailOutboundSender", fields: [senderMemberId], references: [id])
+  person      Person?         @relation(fields: [personId], references: [id], onDelete: SetNull)
+  deal        Opportunity?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  template    EmailTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  replyTo     MailMessage?    @relation("MailOutboundReplyTo", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  mailMessage MailMessage?    @relation("MailOutboundStored", fields: [mailMessageId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, senderMemberId, createdAt(sort: Desc)])
+  @@index([mailboxId, providerThreadId])
+  @@index([workspaceId, mailMessageId])
+  @@map("mail_outbound")
+}
+
 /// A Gmail conversation in one mailbox. `subject` is its first message's; the counts follow imports.
 model MailThread {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -1011,6 +1080,9 @@ model MailMessage {
   mailbox      Mailbox           @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
   thread       MailThread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
   participants MailParticipant[]
+
+  repliedFrom MailOutbound[] @relation("MailOutboundReplyTo")
+  outboundOf  MailOutbound[] @relation("MailOutboundStored")
 
   @@unique([mailboxId, providerMessageId])
   @@index([workspaceId, threadId, sentAt])

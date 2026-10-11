@@ -86,6 +86,12 @@ export const envSchema = z
          */
         MAIL_SYNC_WORKER: flag('1'),
         /**
+         * Whether this process runs the mail-send worker (P2-3): the job that sends a queued message
+         * through Gmail. On by default; a separate worker process sets `1` there and `0` on the API.
+         * The cross-tenant suite sets `0` and delivers sends itself against a fake Gmail.
+         */
+        MAIL_SEND_WORKER: flag('1'),
+        /**
          * Whether the tenant client reports each operation, with the request it belongs to, to
          * `observeQueries` (P1-4a). Off in production — an operation observer is a test instrument,
          * not a feature. The unit and cross-tenant suites set it to `1`; their query-budget tests

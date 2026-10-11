@@ -42,6 +42,8 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
 - **`MAIL_SYNC_WORKER`** — `1` (default) runs Gmail sync in this process (a sync of every connected mailbox every
   two minutes, and a first import when one connects); `0` on an API when a separate worker process runs it. The
   cross-tenant suite sets `0`.
+- **`MAIL_SEND_WORKER`** — `1` (default) runs the send job in this process (a queued message goes out through Gmail);
+  `0` on an API when a separate worker process runs it. The cross-tenant suite sets `0`.
 - **`WEBHOOK_ALLOW_PRIVATE_TARGETS`** — `0` in every deployed environment (it admits private/loopback webhook
   targets, for local receivers only).
 
