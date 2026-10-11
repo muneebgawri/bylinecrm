@@ -751,7 +751,7 @@
                 "operationId": "auth_resendVerification",
                 "parameters": [],
                 "responses": {
-                    "202": {
+                    "204": {
                         "description": "",
                         "headers": {
                             "x-request-id": {
@@ -808,7 +808,7 @@
                     }
                 },
                 "responses": {
-                    "202": {
+                    "204": {
                         "description": "",
                         "headers": {
                             "x-request-id": {

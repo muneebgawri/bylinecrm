@@ -87,7 +87,7 @@ describe('#93 verify-email page', () => {
         const user = userEvent.setup();
         const fetchMock = stubApi({
             'GET /api/me': { status: 200, body: { id: 'u', email: 'kate@example.com', emailVerified: false } },
-            'POST /api/auth/email/verification': { status: 202 },
+            'POST /api/auth/email/verification': { status: 204 },
         });
         renderAt(paths.verifyEmail);
         expect(await screen.findByText('kate@example.com')).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('#93 forgot-password page', () => {
 
     it('posts the address and answers with "if", whatever the server knows', async () => {
         const user = userEvent.setup();
-        const fetchMock = stubApi({ 'POST /api/auth/password/forgot': { status: 202 } });
+        const fetchMock = stubApi({ 'POST /api/auth/password/forgot': { status: 204 } });
         renderAt(paths.forgotPassword);
         await user.type(await screen.findByLabelText(/Email/), 'someone@example.com');
         await user.click(screen.getByRole('button', { name: 'Send reset link' }));

@@ -188,16 +188,16 @@ export class AuthController {
     }
 
     /** Mails a fresh verification link to the signed-in person (#93); nothing when already verified. */
-    @HttpCode(202)
+    @HttpCode(204)
     @Post('email/verification')
     async resendVerification(@CurrentPrincipal() principal: Principal): Promise<void> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key has no address to verify');
         await this.auth.requestVerification(principal.userId);
     }
 
-    /** "Forgot password": always `202`, whether or not the address has an account (#93). */
+    /** "Forgot password": always `204`, whether or not the address has an account (#93). */
     @Public()
-    @HttpCode(202)
+    @HttpCode(204)
     @Post('password/forgot')
     async forgotPassword(@Body() body: ForgotPasswordDto, @Req() req: Request): Promise<void> {
         await this.auth.requestPasswordReset(body.email, req.ip ?? '');

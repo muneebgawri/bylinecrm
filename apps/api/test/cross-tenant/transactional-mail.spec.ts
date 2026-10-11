@@ -158,7 +158,7 @@ describe('#93 transactional mail', () => {
                 .post('/api/auth/email/verification')
                 .set('Cookie', a.cookie)
                 .set(CSRF_HEADER, a.csrf)
-                .expect(202);
+                .expect(204);
             await deliverMail(app);
             const second = tokenIn(lastMailTo(emailA, 'email_verification'));
             expect(second).not.toBe(first);
@@ -203,7 +203,7 @@ describe('#93 transactional mail', () => {
             await owner.user.create({ data: { email: providerOnly, emailVerifiedAt: new Date() } });
             const answers: unknown[] = [];
             for (const email of [`nobody-${stamp}@example.test`, providerOnly, emailA]) {
-                const res = await http().post('/api/auth/password/forgot').send({ email }).expect(202);
+                const res = await http().post('/api/auth/password/forgot').send({ email }).expect(204);
                 const { requestId: _ignored, ...body } = (res.body ?? {}) as Record<string, unknown>;
                 answers.push(body);
             }
