@@ -59,6 +59,16 @@ PG_PASSWORD=$(keep_or_generate "$PG_ENV" POSTGRES_PASSWORD hex24)
 APP_DB_PASSWORD=$(keep_or_generate "$APP_ENV" APP_DB_PASSWORD hex24)
 SECRETS_KEY=$(keep_or_generate "$APP_ENV" SECRETS_KEY key32)
 
+# Operator-installed secret: the Resend API key transactional mail is sent with (#93). It is never
+# generated or passed here — install-resend-key.sh writes it from stdin — so a re-run keeps whatever
+# is stored, and writes no line at all until one is installed (an empty value would stop the api).
+RESEND_API_KEY=$(existing "$APP_ENV" RESEND_API_KEY)
+if [ -n "$RESEND_API_KEY" ]; then
+    echo "bootstrap-secrets: kept existing RESEND_API_KEY" >&2
+else
+    echo "bootstrap-secrets: no RESEND_API_KEY yet — install it with install-resend-key.sh" >&2
+fi
+
 # Operator-set (not secret, not derived): the platform admins (P0-14). Pass
 # BYLINECRM_PLATFORM_ADMIN_EMAILS to change the list; otherwise the stored list is kept, so a re-run
 # never drops it. Empty is valid and means nobody can create a workspace.
@@ -106,6 +116,9 @@ DB_QUERY_EVENTS=0
 # Staging's URL is public: sign-up stays closed (docs/deploy/staging.md). Never open.
 SIGNUP_MODE=closed
 PLATFORM_ADMIN_EMAILS=${PLATFORM_ADMIN_EMAILS}
+# Transactional mail (#93, D-246): Resend, from Pinion Newswire's verified domain.
+MAIL_FROM=BylineCRM <no-reply@pinionnewswire.com>
+${RESEND_API_KEY:+RESEND_API_KEY=${RESEND_API_KEY}}
 EOF
 
 echo "bootstrap-secrets: wrote ${PG_ENV} and ${APP_ENV} (0600); no secret was printed" >&2

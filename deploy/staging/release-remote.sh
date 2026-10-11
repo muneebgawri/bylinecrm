@@ -8,7 +8,7 @@
 # It never runs a command against a NewswireOS container.
 #
 # Order, chosen so a failure leaves the running stack untouched for as long as possible:
-#   lock → preflight → pull every image (a missing image aborts here, nothing changed) → start
+#   lock → preflight (env files, the Resend key, the edge network) → pull every image (a missing image aborts here, nothing changed) → start
 #   postgres/redis (no-op when running) → migrate → api, wait healthy → web, wait serving →
 #   record DEPLOYED_SHA (previous kept for rollback.sh) → prune old release directories.
 
@@ -41,6 +41,13 @@ for f in staging.env postgres.env; do
         exit 1
     }
 done
+# Production mode boots only with transactional mail configured (#93): refuse here, before anything
+# is pulled or restarted, rather than leave an api that will not start.
+grep -q '^RESEND_API_KEY=re_' "$RUNTIME/staging.env" || {
+    log "RESEND_API_KEY missing from $RUNTIME/staging.env — install it from the Mac, then deploy again:"
+    log "  pbpaste | ssh newswireos-vps 'bash $HERE/install-resend-key.sh'"
+    exit 1
+}
 docker network inspect bylinecrm-edge >/dev/null 2>&1 || {
     log "network bylinecrm-edge missing — see docs/deploy/staging.md, one-time steps"
     exit 1

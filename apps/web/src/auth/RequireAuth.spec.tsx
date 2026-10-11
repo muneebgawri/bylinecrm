@@ -15,6 +15,7 @@ function renderAt(path: string) {
     const router = createMemoryRouter(
         [
             { path: paths.signIn, element: <ShowLocation /> },
+            { path: paths.verifyEmail, element: <ShowLocation /> },
             {
                 element: <RequireAuth pending={<p>checking</p>} />,
                 children: [{ path: '/w/:workspaceId/people', element: <p>people page</p> }],
@@ -53,5 +54,12 @@ describe('RequireAuth', () => {
         expect(location).toHaveTextContent(
             `${paths.signIn}?returnTo=${encodeURIComponent('/w/ws-1/people?view=mine')}`,
         );
+    });
+
+    it('#93: holds a signed-in person whose address is not verified on the verify page', async () => {
+        stubMe(200, { id: 'u', email: 'a@b.c', emailVerified: false });
+        renderAt('/w/ws-1/people');
+        expect(await screen.findByRole('status')).toHaveTextContent(paths.verifyEmail);
+        expect(screen.queryByText('people page')).not.toBeInTheDocument();
     });
 });
