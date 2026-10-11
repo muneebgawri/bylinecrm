@@ -36,7 +36,8 @@ export function SendStatus({ workspaceId, send }: { workspaceId: string; send: P
     if (send.status === 'scheduled' && send.sendAt) {
         return (
             <>
-                <Badge status="info" role="status">
+                {/* The zone can be long ("America/Argentina/Buenos_Aires"): the badge wraps on a phone. */}
+                <Badge status="info" role="status" className="h-auto min-h-5.5 max-w-full py-0.5 whitespace-normal">
                     Scheduled for {formatSendAt(send.sendAt, send.senderTimeZone)}
                 </Badge>
                 <SchedulePicker
