@@ -75,3 +75,15 @@
     --width-sidebar-collapsed: var(--bc-sidebar-collapsed-width);
     --height-topbar: var(--bc-topbar-height);
 }
+
+/*
+ * `scrollbar-hidden` — a row that scrolls sideways (chip rows, the view tabs) without a visible bar
+ * (P1-UI-10). It still scrolls by touch, trackpad and wheel, and keyboard focus scrolls a chip into
+ * view, so nothing in it becomes unreachable; only the bar is not drawn.
+ */
+@utility scrollbar-hidden {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}

@@ -78,7 +78,8 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
         { name: 'name', label: 'Name', kind: 'text', sortable: true, groupable: false },
         { name: 'amount', label: 'Amount', kind: 'money', sortable: true, groupable: false },
         { name: 'currency', label: 'Currency', kind: 'text', sortable: false, groupable: true },
-        { name: 'closeDate', label: 'Close date', kind: 'date', sortable: true, groupable: false },
+        // The date the deal is EXPECTED to close; the day it actually closed is `closedAt` ("Closed").
+        { name: 'closeDate', label: 'Expected close', kind: 'date', sortable: true, groupable: false },
         { name: 'probability', label: 'Probability', kind: 'number', sortable: true, groupable: false },
         { name: 'ownerId', label: 'Owner', kind: 'uuid', sortable: false, groupable: true },
         { name: 'pointOfContactId', label: 'Point of contact', kind: 'uuid', sortable: false, groupable: true },

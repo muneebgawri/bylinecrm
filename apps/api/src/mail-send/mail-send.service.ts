@@ -220,7 +220,8 @@ export class MailSendService {
             const to = input.to ? await resolve(input.to, 'to') : [primaryOf(person, 'personId')];
             const member = await tx.workspaceMember.findUniqueOrThrow({
                 where: { id: memberId },
-                select: { displayName: true },
+                // The person's display name (P1-UI-10): one per person, read wherever a member is named.
+                select: { user: { select: { displayName: true } } },
             });
             let parentRow: Prisma.MailMessageGetPayload<{ include: { thread: true } }> | null = null;
             if (input.replyToMessageId) {
@@ -236,7 +237,7 @@ export class MailSendService {
                 }
             }
             return {
-                sender: member.displayName,
+                sender: member.user.displayName,
                 recipients: {
                     to,
                     cc: await resolve(input.cc, 'cc'),
