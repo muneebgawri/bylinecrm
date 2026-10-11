@@ -13,19 +13,24 @@ import {
     cn,
     focusRing,
 } from '@bylinecrm/ui';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, ServerCog } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
-import { useCreateWorkspace, useWorkspaces } from '../api/queries';
+import { useCreateWorkspace, usePlatformAccess, useWorkspaces } from '../api/queries';
 import { LogoMark } from '../shell/LogoMark';
 import { paths } from './paths';
 
-/** The picker. Exactly one workspace sends the person straight in; none offers to create one. */
+/**
+ * The picker. Exactly one workspace sends the person straight in — unless they are a platform
+ * admin, who also has the platform page to reach. Creating a workspace is offered only where the
+ * server allows it (P0-14): anyone when sign-up is open, otherwise platform admins only.
+ */
 export function Workspaces() {
     const workspaces = useWorkspaces();
+    const access = usePlatformAccess();
     const [creating, setCreating] = useState(false);
 
-    if (workspaces.isPending) {
+    if (workspaces.isPending || access.isPending) {
         return (
             <Frame>
                 <div className="grid gap-2" role="status" aria-label="Loading your workspaces">
@@ -36,25 +41,52 @@ export function Workspaces() {
         );
     }
     if (workspaces.isError) throw workspaces.error;
+    // Not knowing whether the person is a platform admin only hides the platform link; it is no outage.
+    const platformAdmin = access.data?.platformAdmin === true;
+    const mayCreate = platformAdmin || access.data?.signupMode === 'open';
     const list = workspaces.data;
-    if (list.length === 1 && list[0]) return <Navigate to={paths.home(list[0].id)} replace />;
+    if (list.length === 1 && list[0] && !platformAdmin) return <Navigate to={paths.home(list[0].id)} replace />;
 
     return (
         <Frame
             action={
-                <Button data-primary-action data-primary-dialog variant="primary" onClick={() => setCreating(true)}>
-                    <Plus aria-hidden /> New workspace
-                </Button>
+                mayCreate ? (
+                    <Button data-primary-action data-primary-dialog variant="primary" onClick={() => setCreating(true)}>
+                        <Plus aria-hidden /> New workspace
+                    </Button>
+                ) : undefined
             }
         >
+            {platformAdmin && (
+                <Link
+                    to={paths.platformWorkspaces}
+                    className={cn(
+                        'mb-4 flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 shadow-sm hover:bg-surface-raised',
+                        focusRing,
+                    )}
+                >
+                    <ServerCog aria-hidden className="size-5 text-text-muted" />
+                    <span className="min-w-0 leading-tight">
+                        <b className="block font-medium">All workspaces on this server</b>
+                        <span className="text-xs text-text-muted">Create workspaces and invite their owners</span>
+                    </span>
+                    <ChevronRight aria-hidden className="ml-auto size-4 text-text-faint" />
+                </Link>
+            )}
             {list.length === 0 ? (
                 <EmptyState
                     title="You are not in a workspace yet"
-                    body="Create one for your team, or accept an invitation from a colleague."
+                    body={
+                        mayCreate
+                            ? 'Create one for your team, or accept an invitation from a colleague.'
+                            : 'Ask your administrator to invite you; the link they send opens the workspace.'
+                    }
                     action={
-                        <Button variant="primary" shape="square" onClick={() => setCreating(true)}>
-                            Create a workspace
-                        </Button>
+                        mayCreate ? (
+                            <Button variant="primary" shape="square" onClick={() => setCreating(true)}>
+                                Create a workspace
+                            </Button>
+                        ) : undefined
                     }
                 />
             ) : (

@@ -1,5 +1,5 @@
 import { paths } from '../src/routes/paths';
-import { IDS } from './fixtures';
+import { IDS, INVITE_TOKEN } from './fixtures';
 
 /**
  * Every state the route gate visits. The list is built from `paths` — the one declaration of the
@@ -63,8 +63,10 @@ function routeStates(): RouteState[] {
     });
 }
 
-/** The states that are not a route of their own: the record drawer over a list, a thread, and the ⌘K palette. */
+/** The states that are not a route of their own: invitation accept, the record drawer, a thread, and the ⌘K palette. */
 const EXTRA_STATES: RouteState[] = [
+    // Accepting a workspace invitation while signed out (P0-14): `/sign-up` with a token.
+    { name: 'accept-invite', url: `${paths.signUp}?invite=${INVITE_TOKEN}` },
     { name: 'drawer-person', url: `${paths.deals(IDS.workspace)}?open=person:${IDS.person}` },
     { name: 'drawer-deal', url: `${paths.home(IDS.workspace)}?open=opportunity:${IDS.deal}` },
     { name: 'palette', url: paths.home(IDS.workspace), after: 'palette' },

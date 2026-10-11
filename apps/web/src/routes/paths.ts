@@ -11,6 +11,8 @@ export const paths = {
     workspaces: '/workspaces',
     status: '/status',
     forbidden: '/403',
+    /** Every workspace on the server, for platform admins (P0-14). */
+    platformWorkspaces: '/platform/workspaces',
     workspace: (workspaceId: string) => `/w/${workspaceId}`,
     home: (workspaceId: string) => `/w/${workspaceId}/home`,
     reports: (workspaceId: string) => `/w/${workspaceId}/reports`,

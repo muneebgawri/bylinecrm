@@ -29,7 +29,10 @@ const GETS: [RegExp, Handler][] = [
     [/^\/api\/me$/, () => data.user],
     [/^\/api\/me\/profile$/, () => data.profile],
     [/^\/api\/me\/workspaces$/, () => data.workspaces],
-    [/^\/api\/auth\/providers$/, () => ({ providers: ['google'] })],
+    [/^\/api\/auth\/providers$/, () => data.providers],
+    [/^\/api\/auth\/invites\/([^/]+)$/, (m) => invitePreview(m[1])],
+    [/^\/api\/platform\/access$/, () => data.platformAccess],
+    [/^\/api\/platform\/workspaces$/, () => data.platformWorkspaces],
     [new RegExp(`^${W}/me$`), () => data.membership],
     [new RegExp(`^${W}/members/summary$`), () => data.membersSummary],
     [new RegExp(`^${W}/members$`), () => data.members],
@@ -81,6 +84,11 @@ function byId<T extends { id: string }>(rows: readonly T[], id: string | undefin
     const row = rows.find((r) => r.id === id);
     if (!row) throw new Error(`no fixture with id ${id ?? '(none)'}`);
     return row;
+}
+
+function invitePreview(token: string | undefined) {
+    if (token !== data.INVITE_TOKEN) throw new Error(`no invitation fixture for token ${token ?? '(none)'}`);
+    return data.invitePreview;
 }
 
 function object(url: URL): RecordObject {
