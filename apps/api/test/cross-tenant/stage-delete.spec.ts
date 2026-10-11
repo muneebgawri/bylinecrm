@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, type DomainEvent } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { eventLog, settle, type EventLog } from '../support/outbox';
 
 interface Browser {
     cookie: string;
@@ -61,7 +61,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
     let workspace: string;
     let otherWorkspace: string;
     let otherPipeline: Pipeline;
-    const events: DomainEvent[] = [];
+    let events: EventLog;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -88,7 +88,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
         app = await createApp();
         await app.init();
         http = () => request(app.getHttpServer());
-        app.get(EventEmitter2).on('deal.*', (event: DomainEvent) => events.push(event));
+        events = await eventLog(app, 'deal.*');
 
         const signup = await http()
             .post('/api/auth/signup')
@@ -160,7 +160,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
         await as(admin)
             .delete(w(`/opportunities/${trashed.id}`))
             .expect(204);
-        const before = events.length;
+        await events.reset();
 
         await as(admin)
             .delete(w(`/pipelines/${p.id}/stages/${contacted.id}?moveDealsTo=${target.id}`))
@@ -175,9 +175,10 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
         expect(after.stages.map((s) => s.position)).toEqual(after.stages.map((_, i) => i + 1));
 
         // One event per deal, each the open-stage move, attributed to the admin.
-        const moved = events.slice(before).filter((e) => e.type === 'deal.stage_changed');
+        const recorded = await events.read();
+        const moved = recorded.filter((e) => e.type === 'deal.stage_changed');
         expect(moved.map((e) => e.recordId).sort()).toEqual([live.id, trashed.id].sort());
-        expect(events.slice(before).filter((e) => e.type !== 'deal.stage_changed')).toEqual([]);
+        expect(recorded.filter((e) => e.type !== 'deal.stage_changed')).toEqual([]);
         for (const e of moved) {
             expect(e.actor.kind).toBe('member');
             expect((e as { stage?: { reason?: string } }).stage?.reason).toBe('stage_deleted');
@@ -200,6 +201,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
             toStageName: 'New',
             reason: 'stage_deleted',
         });
+        await settle(app);
         const timeline = (
             await as(admin)
                 .get(w(`/timeline?target=opportunity:${live.id}&kinds=deal.stage_changed`))

@@ -150,7 +150,8 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
      * parameter so it can neither outlive the transaction nor be string-built. It runs on the
      * request pool inside a request's scope and on the background pool everywhere else, and its
      * callback runs marked as inside a transaction, so a network call made there is refused
-     * (`assertNoOpenTransaction`). It may run for `TRANSACTION_TIMEOUT_MS` before Prisma expires it.
+     * (`assertNoOpenTransaction`), and what it registered with `afterCommit` runs once the commit is
+     * through (never on a rollback). It may run for `TRANSACTION_TIMEOUT_MS` before Prisma expires it.
      * A transaction that could not get a connection — the pool
      * exhausted (P2024), or no connection within `TRANSACTION_MAX_WAIT_MS` (P2028 before the
      * callback ran) — is retried with a bounded, doubling delay; any other error propagates.
@@ -162,18 +163,22 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
         const pool = this.context.inRequest() ? (this.observed ?? this) : this.backgroundClient;
         for (let attempt = 1; ; attempt++) {
             let started = false;
+            // What the callback registered to run once the commit is through (`afterCommit`).
+            const committed: (() => void)[] = [];
             try {
-                return await pool.$transaction(
+                const result = await pool.$transaction(
                     async (tx) => {
                         started = true;
                         const client = tx as WorkspaceClient;
                         for (const [setting, value] of settings) {
                             await client.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
                         }
-                        return insideTransaction(() => fn(client));
+                        return insideTransaction(committed, () => fn(client));
                     },
                     { maxWait: TRANSACTION_MAX_WAIT_MS, timeout: TRANSACTION_TIMEOUT_MS },
                 );
+                for (const hook of committed) hook();
+                return result;
             } catch (error) {
                 if (!couldNotStart(error, started) || attempt >= POOL_RETRY_ATTEMPTS) throw error;
                 await sleep(POOL_RETRY_BASE_MS * 2 ** (attempt - 1));

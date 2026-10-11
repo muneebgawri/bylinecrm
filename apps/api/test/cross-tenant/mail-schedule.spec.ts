@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { type INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import {
@@ -31,6 +30,7 @@ import { MailSendSweep } from '../../src/mail-send/sweep';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { eventLog, type EventLog } from '../support/outbox';
 
 interface Browser {
     cookie: string;
@@ -71,12 +71,6 @@ interface ApiError {
     message: string;
     fieldErrors?: { path: string; message: string }[];
 }
-interface BusEvent {
-    type: string;
-    workspaceId: string;
-    recordId: string;
-}
-
 const body = (...content: object[]): RichText => ({ type: 'doc', content }) as RichText;
 const para = (...content: object[]) => ({ type: 'paragraph', content });
 const v = (path: string) => ({ type: 'variable', attrs: { path } });
@@ -121,7 +115,7 @@ describe('FR-CRMS-4 scheduled send', () => {
     let adminMailbox: string;
     let memberMailbox: string;
     let danaId: string;
-    const events: BusEvent[] = [];
+    let events: EventLog;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -131,7 +125,8 @@ describe('FR-CRMS-4 scheduled send', () => {
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const noWait = { sleep: () => Promise.resolve() };
     const err = (res: Response) => res.body as ApiError;
-    const ofType = (type: string, recordId: string) => events.filter((e) => e.type === type && e.recordId === recordId);
+    const ofType = async (type: string, recordId: string) =>
+        (await events.read()).filter((e) => e.type === type && e.recordId === recordId);
 
     async function connect(who: Browser, ws: string, email: string): Promise<string> {
         const start = await as(who).post(w('/mailboxes/connect', ws)).send({ purpose: 'personal' });
@@ -186,9 +181,7 @@ describe('FR-CRMS-4 scheduled send', () => {
         sweep = app.get(MailSendSweep);
         policy = app.get(SendPolicy);
         queue = app.get<Queue>(getQueueToken(MAIL_SEND_QUEUE));
-        app.get(EventEmitter2).onAny((type: string | string[], payload: unknown) => {
-            if (typeof type === 'string' && type.startsWith('email.')) events.push(payload as BusEvent);
-        });
+        events = await eventLog(app, 'email.*');
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -330,7 +323,7 @@ describe('FR-CRMS-4 scheduled send', () => {
             });
             const job = await queue.getJob(accepted.messageId);
             expect(await job?.getState()).toBe('delayed');
-            expect(ofType('email.scheduled', accepted.messageId)).toHaveLength(1);
+            expect(await ofType('email.scheduled', accepted.messageId)).toHaveLength(1);
             expect(gmail.sent.length).toBe(sentBefore);
         });
 
@@ -480,7 +473,7 @@ describe('FR-CRMS-4 scheduled send', () => {
             const again = await as(admin).post(w(`/mail/messages/${accepted.messageId}/cancel`));
             expect(again.status).toBe(200);
             expect((again.body as Outbound).status).toBe('cancelled');
-            expect(ofType('email.cancelled', accepted.messageId)).toHaveLength(1);
+            expect(await ofType('email.cancelled', accepted.messageId)).toHaveLength(1);
             const sentBefore = gmail.sent.length;
             expect(await send.deliver(workspace, accepted.messageId, noWait, Date.now() + 2 * HOUR)).toBe('cancelled');
             expect(gmail.sent.length).toBe(sentBefore);

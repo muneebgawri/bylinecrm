@@ -78,8 +78,8 @@ export class AttachmentsService {
         const { bytes } = await this.storage.put(storageKey, input.body);
         let row: AttachmentRow;
         try {
-            row = await this.rls.withWorkspace((tx) =>
-                tx.attachment.create({
+            row = await this.rls.withWorkspace(async (tx) => {
+                const created = await tx.attachment.create({
                     data: {
                         workspaceId: context.workspaceId,
                         name: input.name,
@@ -91,39 +91,39 @@ export class AttachmentsService {
                         authorId: context.memberId ?? null,
                         createdBy: actor,
                     },
-                }),
-            );
+                });
+                await this.events.record(tx, {
+                    type: 'attachment.created',
+                    object: 'attachment',
+                    workspaceId: context.workspaceId,
+                    actor,
+                    occurredAt: new Date().toISOString(),
+                    recordId: created.id,
+                    targets: [input.target],
+                });
+                return created;
+            });
         } catch (error) {
             await this.storage.delete(storageKey);
             throw error;
         }
-        this.events.publish({
-            type: 'attachment.created',
-            object: 'attachment',
-            workspaceId: context.workspaceId,
-            actor,
-            occurredAt: new Date().toISOString(),
-            recordId: row.id,
-            targets: [input.target],
-        });
         return view(row);
     }
 
     async remove(id: string): Promise<void> {
         const context = this.current();
-        const row = await this.rls.withWorkspace(async (tx) => {
+        await this.rls.withWorkspace(async (tx) => {
             const current = await find(tx, id, false);
             await tx.attachment.update({ where: { id }, data: { deletedAt: new Date() } });
-            return current;
-        });
-        this.events.publish({
-            type: 'attachment.deleted',
-            object: 'attachment',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            targets: [targetOf(row)],
+            await this.events.record(tx, {
+                type: 'attachment.deleted',
+                object: 'attachment',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                targets: [targetOf(current)],
+            });
         });
     }
 
@@ -131,16 +131,17 @@ export class AttachmentsService {
         const context = this.current();
         const row = await this.rls.withWorkspace(async (tx) => {
             await find(tx, id, true);
-            return tx.attachment.update({ where: { id }, data: { deletedAt: null } });
-        });
-        this.events.publish({
-            type: 'attachment.restored',
-            object: 'attachment',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
-            targets: [targetOf(row)],
+            const restored = await tx.attachment.update({ where: { id }, data: { deletedAt: null } });
+            await this.events.record(tx, {
+                type: 'attachment.restored',
+                object: 'attachment',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+                targets: [targetOf(restored)],
+            });
+            return restored;
         });
         return view(row);
     }

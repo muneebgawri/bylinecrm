@@ -7,7 +7,7 @@ import {
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { invitationUrl, MEMBER_DEFAULT_CAPABILITIES, type PlatformEvent, SYSTEM_ROLES } from '@bylinecrm/shared';
+import { invitationUrl, MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
@@ -119,12 +119,11 @@ export class AuthService {
      * roles and pipeline, no member yet, and an invitation to its admin role for `ownerEmail`. The
      * owner accepts with their account if they have one (signed in, address verified) or signs up
      * through the invitation, which works in every sign-up mode. The audit row is written in the
-     * same transaction; the event is returned for the caller to publish after commit.
+     * same transaction.
      */
     async createWorkspaceForOwner(input: { actorUserId: string; name: string; ownerEmail: string }): Promise<{
         workspace: WorkspaceView;
         invite: CreatedPlatformInvite;
-        event: PlatformEvent;
     }> {
         const email = normaliseEmail(input.ownerEmail);
         const { token, tokenHash, expiresAt } = AuthService.newInvite();
@@ -140,12 +139,12 @@ export class AuthService {
                     expiresAt,
                 },
             });
-            const event = await recordPlatformAction(tx, 'platform.workspace_created', input.actorUserId, {
+            await recordPlatformAction(tx, 'platform.workspace_created', input.actorUserId, {
                 workspaceId: workspace.id,
                 email,
             });
             const url = invitationUrl(this.env.WEB_URL, 'member', token);
-            return { workspace, invite: { email, token, url, expiresAt }, event };
+            return { workspace, invite: { email, token, url, expiresAt } };
         });
     }
 

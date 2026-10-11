@@ -7,17 +7,22 @@ import { TimelineService } from './timeline.service';
 /**
  * The fan-out rule (PAR-014) without a database: a record's own event leaves one row on the
  * record; a note's event leaves one row on each record it is on, naming the note; a diff travels
- * from the event into `properties` untouched; an event with nothing to attach to leaves nothing.
+ * from the event into `properties` untouched; an event with nothing to attach to leaves nothing;
+ * every row carries the outbox event's id and the write skips rows that exist (P1-6).
  */
 describe('TimelineService.writeFor', () => {
     const workspaceId = '11111111-1111-4111-8111-111111111111';
+    const eventId = '88888888-8888-4888-8888-888888888888';
+    const delivered = (event: DomainEvent) => ({ id: eventId, event });
     const actor = { kind: 'member', id: '22222222-2222-4222-8222-222222222222' } as const;
 
     function harness(noteTitle: string | null = 'FinCon') {
         const created: unknown[] = [];
         const tx = {
             timelineActivity: {
-                createMany: vi.fn(async ({ data }: { data: unknown[] }) => {
+                createMany: vi.fn(async ({ data, skipDuplicates }: { data: unknown[]; skipDuplicates?: boolean }) => {
+                    // A redelivered event must not write twice (P1-6): every write skips what exists.
+                    expect(skipDuplicates).toBe(true);
                     created.push(...data);
                     return { count: data.length };
                 }),
@@ -47,10 +52,11 @@ describe('TimelineService.writeFor', () => {
             recordId: '33333333-3333-4333-8333-333333333333',
             diff: { nameFirst: { from: 'Dan', to: 'Dana' } },
         };
-        expect(await service.writeFor(event)).toBe(1);
+        expect(await service.writeFor(delivered(event))).toBe(1);
         expect(created).toEqual([
             expect.objectContaining({
                 workspaceId,
+                eventId,
                 targetType: 'person',
                 targetId: event.recordId,
                 kind: 'person.updated',
@@ -77,7 +83,7 @@ describe('TimelineService.writeFor', () => {
             recordId: '66666666-6666-4666-8666-666666666666',
             targets,
         };
-        expect(await service.writeFor(event)).toBe(2);
+        expect(await service.writeFor(delivered(event))).toBe(2);
         expect(created.map((r) => (r as { targetType: string; targetId: string }).targetId)).toEqual(
             targets.map((t) => t.id),
         );
@@ -103,15 +109,17 @@ describe('TimelineService.writeFor', () => {
             recordId: '77777777-7777-4777-8777-777777777777',
         };
         expect(
-            await service.writeFor({
-                ...base,
-                type: 'note.deleted',
-                object: 'note',
-                targets: [{ type: 'person', id: '44444444-4444-4444-8444-444444444444' }],
-            }),
+            await service.writeFor(
+                delivered({
+                    ...base,
+                    type: 'note.deleted',
+                    object: 'note',
+                    targets: [{ type: 'person', id: '44444444-4444-4444-8444-444444444444' }],
+                }),
+            ),
         ).toBe(1);
         expect((created[0] as { properties: { linked: { name: unknown } } }).properties.linked.name).toBeNull();
-        expect(await service.writeFor({ ...base, type: 'note.restored', object: 'note' })).toBe(0);
+        expect(await service.writeFor(delivered({ ...base, type: 'note.restored', object: 'note' }))).toBe(0);
         expect(created).toHaveLength(1);
     });
 });

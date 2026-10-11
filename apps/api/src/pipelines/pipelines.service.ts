@@ -181,7 +181,7 @@ export class PipelinesService {
             );
         }
         const actor = actorOf(context);
-        const moved = await this.rls.withWorkspace(async (tx) => {
+        await this.rls.withWorkspace(async (tx) => {
             const stage = await findStage(tx, pipelineId, stageId);
             const [liveDeals, trashedDeals, rules, siblings, target] = await Promise.all([
                 tx.opportunity.count({ where: { stageId, deletedAt: null } }),
@@ -207,9 +207,10 @@ export class PipelinesService {
             await tx.pipelineStage.delete({ where: { id: stage.id } });
             // Close the gap so positions stay 1..n; the unique constraint is checked at commit.
             await tx.$executeRaw`UPDATE "pipeline_stages" SET "position" = "position" - 1 WHERE "pipeline_id" = ${pipelineId}::uuid AND "position" > ${stage.position}`;
-            return moves;
+            for (const { dealId, moved: move } of moves) {
+                await this.moves.announce(tx, context.workspaceId, dealId, actor, move);
+            }
         });
-        for (const { dealId, moved: move } of moved) this.moves.announce(context.workspaceId, dealId, actor, move);
     }
 
     /** Turns a refusal into its error, or performs the move a plan calls for. */
@@ -358,7 +359,7 @@ export class PipelinesService {
     async move(dealId: string, stageId: string, close: ClosePayload | undefined): Promise<MoveResult> {
         const context = this.current();
         const actor = actorOf(context);
-        const { deal, moved, rules } = await this.rls.withWorkspace(async (tx) => {
+        const { deal, rules } = await this.rls.withWorkspace(async (tx) => {
             const current = await findDeal(tx, context, dealId);
             const outcome = await this.moves.move(tx, current, stageId, actor, {
                 reason: 'manual',
@@ -379,9 +380,9 @@ export class PipelinesService {
                       },
                   })
                 : [];
-            return { deal: after, moved: outcome, rules: forward };
+            if (outcome.outcome === 'moved') await this.moves.announce(tx, context.workspaceId, dealId, actor, outcome);
+            return { deal: after, rules: forward };
         });
-        if (moved.outcome === 'moved') this.moves.announce(context.workspaceId, dealId, actor, moved);
         return { deal: dealView(deal), rulesThatMayMoveItForward: rules.map(ruleView) };
     }
 

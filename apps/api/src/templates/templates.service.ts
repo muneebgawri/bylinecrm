@@ -132,7 +132,7 @@ export class TemplatesService {
         const actor = actorOf(context);
         const row = await this.rls.withWorkspace(async (tx) => {
             await this.assertValid(tx, input);
-            return tx.emailTemplate.create({
+            const created = await tx.emailTemplate.create({
                 data: {
                     workspaceId: context.workspaceId,
                     name: input.name,
@@ -143,14 +143,15 @@ export class TemplatesService {
                     updatedBy: actor as Prisma.InputJsonObject,
                 },
             });
+            await this.record(tx, 'template.created', created.id, actor);
+            return created;
         });
-        this.publish('template.created', row.id, actor);
         return view(row);
     }
 
     /**
      * A partial update of the version the caller edited. Nothing that would change is nothing
-     * written: the version stays, `updatedAt` stays, and no event is published (P1-4a's rule).
+     * written: the version stays, `updatedAt` stays, and no event is recorded (P1-4a's rule).
      */
     async update(id: string, patch: TemplatePatch, editedVersion: number): Promise<EmailTemplateView> {
         const context = this.current();
@@ -185,9 +186,9 @@ export class TemplatesService {
                 const now = await find(tx, id, false);
                 throw versionConflict(editedVersion, now.version);
             }
+            await this.record(tx, 'template.updated', id, actor, diff);
             return { row: await find(tx, id, false), diff };
         });
-        if (!isEmpty(result.diff)) this.publish('template.updated', id, actor, result.diff);
         return view(result.row);
     }
 
@@ -201,8 +202,8 @@ export class TemplatesService {
                 where: { id },
                 data: { deletedAt: new Date(), updatedBy: actor as Prisma.InputJsonObject },
             });
+            await this.record(tx, 'template.deleted', id, actor);
         });
-        this.publish('template.deleted', id, actor);
     }
 
     async restore(id: string): Promise<EmailTemplateView> {
@@ -211,12 +212,13 @@ export class TemplatesService {
         const row = await this.rls.withWorkspace(async (tx) => {
             const current = await find(tx, id, true);
             assertMayWriteKind(context, current.kind);
-            return tx.emailTemplate.update({
+            const restored = await tx.emailTemplate.update({
                 where: { id },
                 data: { deletedAt: null, updatedBy: actor as Prisma.InputJsonObject },
             });
+            await this.record(tx, 'template.restored', id, actor);
+            return restored;
         });
-        this.publish('template.restored', id, actor);
         return view(row);
     }
 
@@ -267,14 +269,16 @@ export class TemplatesService {
         if (problems.length > 0) throw new ValidationFailed('the template is not valid', problems);
     }
 
-    private publish(
+    /** Records a template event in the transaction that made the change (P1-6). */
+    private record(
+        tx: WorkspaceClient,
         type: DomainEventType & `template.${string}`,
         recordId: string,
         actor: Actor,
         diff?: Record<string, FieldChange>,
-    ): void {
+    ): Promise<void> {
         const context = this.current();
-        this.events.publish({
+        return this.events.record(tx, {
             type,
             object: 'template',
             workspaceId: context.workspaceId,

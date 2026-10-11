@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { type INestApplication } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { CSRF_COOKIE, CSRF_HEADER, GMAIL_SCOPES, SESSION_COOKIE, SYSTEM_ROLES, type RichText } from '@bylinecrm/shared';
@@ -22,6 +21,7 @@ import { UNSUBSCRIBE_RATE_LIMIT, unsubscribeRateKey } from '../../src/suppressio
 import { UnsubscribeService } from '../../src/suppression/unsubscribe.service';
 import { withUnsubscribeUrl } from '../../src/templates/render/compose';
 import { FakeGmail } from '../support/fake-gmail';
+import { eventLog, type EventLog } from '../support/outbox';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 
 interface Browser {
@@ -112,7 +112,9 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
     const otherEmail = `supp-other-${stamp}@example.com`;
     let adminMailbox: string;
 
-    const events: BusEvent[] = [];
+    let log: EventLog;
+    /** The suppression events recorded since the suite started. */
+    const recorded = async () => (await log.read()) as unknown as BusEvent[];
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
@@ -170,9 +172,7 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
         suppressions = app.get(SuppressionService);
         unsubscribe = app.get(UnsubscribeService);
         env = app.get<Env>(ENV);
-        app.get(EventEmitter2).onAny((type: string | string[], payload: unknown) => {
-            if (typeof type === 'string' && type.startsWith('suppression.')) events.push(payload as BusEvent);
-        });
+        log = await eventLog(app, 'suppression.*');
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -245,7 +245,9 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
                 liftable: true,
             });
             expect((await list()).map((s) => s.id)).toContain(entry.id);
-            expect(events.filter((e) => e.type === 'suppression.added' && e.recordId === entry.id)).toHaveLength(1);
+            expect(
+                (await recorded()).filter((e) => e.type === 'suppression.added' && e.recordId === entry.id),
+            ).toHaveLength(1);
         });
 
         it('refuses an address already on the list, naming address', async () => {
@@ -283,7 +285,9 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
             expect(row.removedAt).not.toBeNull();
             expect(row.removalNote).toBe('added by mistake');
             expect((await sendTo(dana.id)).status).toBe(202);
-            expect(events.filter((e) => e.type === 'suppression.removed' && e.recordId === added.id)).toHaveLength(1);
+            expect(
+                (await recorded()).filter((e) => e.type === 'suppression.removed' && e.recordId === added.id),
+            ).toHaveLength(1);
             // Suppressed again later: a new live entry, the old one stays on record.
             await as(admin).post(w('/suppressions')).send({ address: dana.address }).expect(201);
         });
@@ -556,7 +560,7 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
             });
             expect(entries).toHaveLength(1);
             expect(entries[0]).toMatchObject({ reason: 'unsubscribe', source: 'recipient', personId: dana.id });
-            const announced = events.filter(
+            const announced = (await recorded()).filter(
                 (e) => e.type === 'suppression.added' && e.suppression?.address === dana.address,
             );
             expect(announced).toHaveLength(1);

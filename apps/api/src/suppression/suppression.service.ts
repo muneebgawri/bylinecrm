@@ -66,15 +66,13 @@ export class SuppressionService {
 
     /**
      * Puts an address on the list in this workspace, or finds it already there. Returns the live
-     * entry; announces `suppression.added` only when it wrote one.
+     * entry; records `suppression.added` only when it wrote one.
      */
     async suppress(workspaceId: string, input: SuppressInput, actor: Actor = SYSTEM): Promise<SuppressionView> {
         const address = normaliseSuppressionAddress(input.address);
         if (!address)
             throw new ValidationFailed('not an email address', [{ path: 'address', message: 'not an email address' }]);
-        const { row, created, superseded } = await this.writeOnce(workspaceId, address, input, actor);
-        if (superseded) this.announce('suppression.removed', workspaceId, actor, superseded);
-        if (created) this.announce('suppression.added', workspaceId, actor, row);
+        const { row } = await this.writeOnce(workspaceId, address, input, actor);
         return view(row);
     }
 
@@ -116,14 +114,13 @@ export class SuppressionService {
             context.memberId ?? null,
         );
         if (!created) throw new UniqueConflict('this address is already suppressed', 'address');
-        this.announce('suppression.added', context.workspaceId, actor, row);
         return view(row);
     }
 
     /** Lifts a hard bounce or a manual entry; the row stays, with who lifted it, when and why. */
     async remove(id: string, note: string): Promise<void> {
         const context = this.current();
-        const lifted = await this.rls.withWorkspace(async (tx) => {
+        await this.rls.withWorkspace(async (tx) => {
             const row = await tx.suppression.findFirst({ where: { id, removedAt: null } });
             if (!row) throw new NotFoundException('suppression not found');
             if (!isLiftable(row.reason)) {
@@ -133,12 +130,15 @@ export class SuppressionService {
                         : 'the person reported spam; only they can undo it',
                 );
             }
-            return tx.suppression.update({
+            const lifted = await tx.suppression.update({
                 where: { id },
                 data: { removedAt: new Date(), removedByMemberId: context.memberId ?? null, removalNote: note },
             });
+            await this.events.record(
+                tx,
+                suppressionEvent('suppression.removed', context.workspaceId, actorOf(context), lifted),
+            );
         });
-        this.announce('suppression.removed', context.workspaceId, actorOf(context), lifted);
     }
 
     // ── Internals ────────────────────────────────────────────────────────────────────────────
@@ -181,6 +181,11 @@ export class SuppressionService {
                         createdByMemberId,
                     },
                 });
+                // Recorded in the transaction that wrote them (P1-6): they exist exactly when the change does.
+                await this.events.recordAll(tx, [
+                    ...(superseded ? [suppressionEvent('suppression.removed', workspaceId, actor, superseded)] : []),
+                    suppressionEvent('suppression.added', workspaceId, actor, row),
+                ]);
                 return { row, created: true, superseded };
             });
         } catch (error) {
@@ -189,24 +194,6 @@ export class SuppressionService {
             if (!won) throw error;
             return { row: won, created: false, superseded: null };
         }
-    }
-
-    private announce(
-        type: 'suppression.added' | 'suppression.removed',
-        workspaceId: string,
-        actor: Actor,
-        row: Suppression,
-    ): void {
-        this.events.publish({
-            type,
-            object: 'suppression',
-            workspaceId,
-            actor,
-            occurredAt: new Date().toISOString(),
-            recordId: row.id,
-            suppression: { address: row.address, reason: row.reason, source: row.source, personId: row.personId },
-            ...(row.personId ? { related: [{ type: 'person', id: row.personId }] } : {}),
-        } as DomainEvent);
     }
 
     private current(): WorkspaceRunContext {
@@ -225,6 +212,25 @@ const SUPERSEDED_NOTE: Readonly<Record<SuppressionReason, string>> = {
     hard_bounce: 'replaced by a hard bounce',
     manual: 'replaced by a manual entry',
 };
+
+/** The event an entry's write records: `suppression.added` or `suppression.removed`. */
+function suppressionEvent(
+    type: 'suppression.added' | 'suppression.removed',
+    workspaceId: string,
+    actor: Actor,
+    row: Suppression,
+): DomainEvent {
+    return {
+        type,
+        object: 'suppression',
+        workspaceId,
+        actor,
+        occurredAt: new Date().toISOString(),
+        recordId: row.id,
+        suppression: { address: row.address, reason: row.reason, source: row.source, personId: row.personId },
+        ...(row.personId ? { related: [{ type: 'person', id: row.personId }] } : {}),
+    } as DomainEvent;
+}
 
 /** A refusal for recipients on the list — see `SendPolicy`. Exported for the policy's one use. */
 export class RecipientSuppressed extends ApiException {

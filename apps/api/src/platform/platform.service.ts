@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { invitationUrl, type PlatformEvent, SYSTEM_ROLES } from '@bylinecrm/shared';
+import { invitationUrl, SYSTEM_ROLES } from '@bylinecrm/shared';
 import { AuthService, normaliseEmail } from '../auth/auth.service';
 import { hashToken, randomToken } from '../auth/tokens';
 import { INVITE_TTL_S } from '../auth/auth.constants';
@@ -18,8 +17,8 @@ export const PLATFORM_WORKSPACE_LIST_LIMIT = 500;
  * writer of `users` and `workspaces`; this service adds the platform's own rows — sign-up
  * invitations and the audit — and reads across workspaces for the list. All of it is owner-client
  * work by nature (there is no one workspace to be inside of), and the controller lets only a
- * platform admin reach it. Every action is audited in its transaction and published on the bus
- * after commit, as an operator-level event no workspace subscriber takes.
+ * platform admin reach it. Every action is audited in its transaction; the audit is the platform's
+ * event record (operator-level actions belong to no workspace, so they are not domain events).
  */
 @Injectable()
 export class PlatformService {
@@ -27,7 +26,6 @@ export class PlatformService {
         @Inject(ENV) private readonly env: Env,
         private readonly ownerPrisma: PrismaService,
         private readonly auth: AuthService,
-        private readonly bus: EventEmitter2,
     ) {}
 
     async listWorkspaces(): Promise<PlatformWorkspaceView[]> {
@@ -66,9 +64,7 @@ export class PlatformService {
         actorUserId: string,
         input: { name: string; ownerEmail: string },
     ): Promise<CreatedPlatformWorkspaceView> {
-        const { workspace, invite, event } = await this.auth.createWorkspaceForOwner({ actorUserId, ...input });
-        this.publish(event);
-        return { workspace, invite };
+        return this.auth.createWorkspaceForOwner({ actorUserId, ...input });
     }
 
     /**
@@ -83,17 +79,12 @@ export class PlatformService {
         const email = normaliseEmail(rawEmail);
         const token = randomToken();
         const expiresAt = new Date(Date.now() + INVITE_TTL_S * 1000);
-        const event = await this.ownerPrisma.$transaction(async (tx) => {
+        await this.ownerPrisma.$transaction(async (tx) => {
             await tx.platformSignupInvite.create({
                 data: { email, tokenHash: hashToken(token), createdByUserId: actorUserId, expiresAt },
             });
-            return recordPlatformAction(tx, 'platform.signup_invite_created', actorUserId, { email });
+            await recordPlatformAction(tx, 'platform.signup_invite_created', actorUserId, { email });
         });
-        this.publish(event);
         return { email, token, url: invitationUrl(this.env.WEB_URL, 'signup', token), expiresAt };
-    }
-
-    private publish(event: PlatformEvent): void {
-        this.bus.emit(event.type, event);
     }
 }

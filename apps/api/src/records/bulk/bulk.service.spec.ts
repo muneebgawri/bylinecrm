@@ -55,7 +55,13 @@ function harness(options: {
         ...(options.ownerScope ? { ownerScopeMemberId: options.ownerScope } : {}),
     };
     const contexts = { get: () => context } as unknown as WorkspaceContext;
-    const events = { publish: (e: DomainEvent) => published.push(e) } as unknown as DomainEvents;
+    // Events are recorded in the chunk's own transaction (P1-6): with its client, before it commits.
+    const events = {
+        recordAll: async (client: WorkspaceClient, recorded: readonly DomainEvent[]) => {
+            expect(client).toBe(tx);
+            published.push(...recorded);
+        },
+    } as unknown as DomainEvents;
 
     const announce = (type: DomainEvent['type'], id: string): { event: DomainEvent } => ({
         event: {
