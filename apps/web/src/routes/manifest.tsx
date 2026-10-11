@@ -47,6 +47,10 @@ const templates = {
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
 
+/** The platform page is its own chunk: only platform admins ever load it (P0-14). */
+const platformWorkspacesPage = () =>
+    import('./platform/PlatformWorkspaces').then((m) => ({ Component: m.PlatformWorkspaces }));
+
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
 const dealsPage = () => import('./w/deals/DealsPage').then((m) => ({ Component: m.DealsPage }));
 
@@ -126,7 +130,15 @@ export const routes: RouteObject[] = [
     {
         element: <RequireAuth pending={<RouteSkeleton />} />,
         errorElement: <RouteError />,
-        children: [{ path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> }],
+        children: [
+            { path: paths.workspaces, element: <Workspaces />, errorElement: <RouteError /> },
+            {
+                path: paths.platformWorkspaces,
+                lazy: platformWorkspacesPage,
+                hydrateFallbackElement: <RouteSkeleton />,
+                errorElement: <RouteError />,
+            },
+        ],
     },
     workspaceRoutes,
     { path: '*', element: <NotFound /> },
