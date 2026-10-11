@@ -1,0 +1,91 @@
+# BylineCRM staging stack (P5-4a) — runs on the NewswireOS production VPS beside NewswireOS.
+#
+# Shares nothing with NewswireOS except the `bylinecrm-edge` network, which only `web` joins and the
+# NewswireOS edge container is connected to (docs/deploy/staging.md, one-time steps). Every service
+# has a hard memory cap so this stack can never starve production on the same box.
+#
+# Driven by deploy/staging/release-remote.sh. Variables:
+#   BYLINECRM_SHA      image tag to run (the commit CI built); required
+#   BYLINECRM_RUNTIME  state directory (env files, data); default /opt/bylinecrm-runtime
+#   BYLINECRM_IMAGES   image repository prefix; default ghcr.io/muneebgawri
+
+name: bylinecrm-staging
+
+x-api-image: &api-image ${BYLINECRM_IMAGES:-ghcr.io/muneebgawri}/bylinecrm-api:${BYLINECRM_SHA:?set BYLINECRM_SHA}
+
+services:
+    postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env_file: ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/postgres.env
+        volumes:
+            - ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/data/postgres:/var/lib/postgresql/data
+        mem_limit: 512m
+        restart: unless-stopped
+        healthcheck:
+            # Over TCP, not the socket: on first boot the image runs a temporary init server on the
+            # socket only, so a socket check reports healthy before the real server is up and the
+            # migrate job then meets "the database system is starting up" (57P03).
+            test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+            interval: 5s
+            timeout: 3s
+            retries: 20
+        networks: [internal]
+
+    redis:
+        image: public.ecr.aws/docker/library/redis:7
+        # noeviction: BullMQ keeps jobs (sends, syncs, webhook deliveries) in Redis; an evicting policy
+        # would silently drop them. Past the cap Redis refuses writes, which the API reports.
+        command: ['redis-server', '--maxmemory', '96mb', '--maxmemory-policy', 'noeviction', '--appendonly', 'yes']
+        volumes:
+            - ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/data/redis:/data
+        mem_limit: 128m
+        restart: unless-stopped
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 5s
+            timeout: 3s
+            retries: 20
+        networks: [internal]
+
+    # One-shot: creates or updates the restricted app role, then applies migrations. Started only by
+    # `docker compose run --rm migrate` (the `tools` profile keeps `up` from starting it).
+    migrate:
+        image: *api-image
+        profiles: [tools]
+        env_file: ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/staging.env
+        command: ['sh', '-c', 'node scripts/db-ensure-app-role.mjs && ./node_modules/.bin/prisma migrate deploy']
+        depends_on:
+            postgres:
+                condition: service_healthy
+        mem_limit: 384m
+        restart: 'no'
+        networks: [internal]
+
+    api:
+        image: *api-image
+        env_file: ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/staging.env
+        volumes:
+            - ${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}/data/attachments:/data/attachments
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        mem_limit: 768m
+        restart: unless-stopped
+        networks: [internal]
+
+    web:
+        image: ${BYLINECRM_IMAGES:-ghcr.io/muneebgawri}/bylinecrm-web:${BYLINECRM_SHA:?set BYLINECRM_SHA}
+        mem_limit: 64m
+        restart: unless-stopped
+        networks:
+            internal: {}
+            edge:
+                aliases: [bylinecrm-web]
+
+networks:
+    internal: {}
+    edge:
+        external: true
+        name: bylinecrm-edge
