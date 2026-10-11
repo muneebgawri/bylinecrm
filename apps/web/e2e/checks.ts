@@ -10,6 +10,7 @@ export type Check =
     | 'axe'
     | 'sideways-scroll'
     | 'touch-target'
+    | 'top-bar-spill'
     | 'input-text-size'
     | 'primary-action'
     | 'phone-table'
@@ -294,4 +295,34 @@ export async function aboveFold(page: Page, selector: string): Promise<Finding[]
         [selector, PHONE_FOLD_PX] as const,
     );
     return result ? [{ check: 'above-fold', detail: result }] : [];
+}
+
+/**
+ * On a phone, nothing in the app's top bar lets its content spill past its own box: a breadcrumb
+ * that does not truncate runs underneath the search and notification buttons beside it (found
+ * walking P1-UI-11 at 375px: "Settings / Cu[search]elds"). The page-scroll and touch-target checks
+ * cannot see this — nothing scrolls and every control is still 44px. A box that clips its overflow
+ * (`overflow` not visible) is fine; that is what truncation is.
+ */
+export async function phoneTopBarSpill(page: Page): Promise<Finding[]> {
+    return page.evaluate(() => {
+        const bar = document.querySelector('header');
+        if (!bar) return [];
+        const findings: { check: 'top-bar-spill'; detail: string }[] = [];
+        for (const el of bar.querySelectorAll('*')) {
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') continue;
+            if (style.overflowX !== 'visible') continue;
+            if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth === 0) continue;
+            const label = (el.getAttribute('aria-label') ?? el.textContent ?? '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .slice(0, 40);
+            findings.push({
+                check: 'top-bar-spill',
+                detail: `${el.tagName.toLowerCase()} "${label}" holds ${el.scrollWidth}px of content in ${el.clientWidth}px`,
+            });
+        }
+        return findings;
+    });
 }

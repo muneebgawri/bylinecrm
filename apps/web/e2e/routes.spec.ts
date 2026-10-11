@@ -7,6 +7,7 @@ import {
     OPEN_DIALOG,
     phoneBottomBar,
     phoneTables,
+    phoneTopBarSpill,
     phoneTargets,
     PRIMARY_DIALOG_TRIGGER,
     primaryAction,
@@ -58,6 +59,7 @@ for (const state of STATES) {
             ...primary.findings,
             ...(phone ? await phoneTargets(page) : []),
             ...(phone ? await phoneTables(page) : []),
+            ...(phone ? await phoneTopBarSpill(page) : []),
             ...(phone && state.phone?.bottomBar ? await phoneBottomBar(page) : []),
             ...(phone && state.phone?.aboveFold ? await aboveFold(page, state.phone.aboveFold) : []),
             ...unanswered.map((u) => ({
