@@ -22,6 +22,11 @@ export interface ParsedMessage {
     providerThreadId: string;
     labelIds: string[];
     rfc822MessageId: string | null;
+    /**
+     * The CRM's own `X-BylineCRM-Id` on a message it sent (P2-3a), a send id; null on any other
+     * message or when the value is not a UUID. Gmail keeps this header when it rewrites Message-ID.
+     */
+    crmId: string | null;
     inReplyTo: string | null;
     references: string[];
     subject: string;
@@ -56,6 +61,7 @@ export function parseGmailMessage(raw: GmailRawMessage): ParsedMessage {
         providerThreadId: raw.threadId,
         labelIds: raw.labelIds ?? [],
         rfc822MessageId: messageId(headerValue(headers, 'message-id')),
+        crmId: crmIdOf(headerValue(headers, 'x-bylinecrm-id')),
         inReplyTo: messageId(headerValue(headers, 'in-reply-to')),
         references: messageIds(headerValue(headers, 'references')),
         subject: line(libmime.decodeWords(headerValue(headers, 'subject') ?? '')),
@@ -68,6 +74,13 @@ export function parseGmailMessage(raw: GmailRawMessage): ParsedMessage {
         bodyTruncated: text.truncated || (html?.truncated ?? false),
         hasAttachments: bodies.hasAttachments,
     };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function crmIdOf(value: string | null): string | null {
+    const trimmed = value?.trim() ?? '';
+    return UUID.test(trimmed) ? trimmed.toLowerCase() : null;
 }
 
 function headerValues(headers: GmailHeader[], name: string): string[] {

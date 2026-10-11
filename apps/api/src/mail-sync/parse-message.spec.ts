@@ -111,4 +111,13 @@ describe('parseGmailMessage', () => {
         const parsed = parseGmailMessage(message({ To: 'x@y.example' }));
         expect(parsed.from).toBe('');
     });
+
+    it('FR-CRMS-2 reads the CRM’s own X-BylineCRM-Id (any case), and ignores a value that is not a send id', () => {
+        const id = '0190A1B2-C3D4-7E5F-8A6B-1C2D3E4F5A6B';
+        expect(parseGmailMessage(message({ From: 'a@b.example', 'x-bylinecrm-id': ` ${id} ` })).crmId).toBe(
+            id.toLowerCase(),
+        );
+        expect(parseGmailMessage(message({ From: 'a@b.example', 'X-BylineCRM-Id': 'not-an-id' })).crmId).toBeNull();
+        expect(parseGmailMessage(message({ From: 'a@b.example' })).crmId).toBeNull();
+    });
 });

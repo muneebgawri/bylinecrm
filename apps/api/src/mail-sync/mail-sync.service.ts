@@ -330,7 +330,13 @@ export class MailSyncService {
                     email,
                 };
                 if (direction === 'outbound') {
-                    await linkOutbound(tx, mailbox, row);
+                    await linkOutbound(tx, mailbox, {
+                        id: row.id,
+                        rfc822MessageId: row.rfc822MessageId,
+                        providerMessageId: row.providerMessageId,
+                        providerThreadId: parsed.providerThreadId,
+                        crmId: parsed.crmId,
+                    });
                     return [event];
                 }
                 const fromPeople = parsed.participants
@@ -393,6 +399,15 @@ export class MailSyncService {
                 update: { status, lastError: error },
             }),
         );
+    }
+
+    /**
+     * Counts `units` against the mailbox's per-second quota (waiting if the window is full), for a
+     * caller already holding a token from `gmailRequest` that makes further requests of its own —
+     * sending's lookup of a send whose answer was lost (P2-3a).
+     */
+    async chargeQuota(mailboxId: string, units: number): Promise<void> {
+        await this.quota.take(mailboxId, units);
     }
 
     /** Used by `Run`: one Gmail request under the quota, with retries. */
