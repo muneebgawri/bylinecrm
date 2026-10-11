@@ -27,6 +27,7 @@ export function RecordSkeleton({ layout }: { layout: 'page' | 'drawer' }) {
     return (
         <div
             className={layout === 'page' ? 'flex flex-col gap-5 p-7 max-md:p-4' : 'flex flex-col gap-4 px-5.5 py-5'}
+            role="status"
             aria-busy="true"
             aria-label="Loading record"
         >
