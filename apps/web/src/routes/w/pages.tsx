@@ -1,12 +1,12 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import { Building2, Inbox, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
+import { Building2, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 import { CREATE_PARAM } from '../paths';
 
 /**
  * The content pages this package does not build (dashboard, people and companies are
- * P1-UI-2/3; deals landed with P1-UI-4; templates with P2-UI-2; outreach is Phase 3). Each is a designed empty state with the right words, so the
+ * P1-UI-2/3; deals landed with P1-UI-4; templates with P2-UI-2; mailboxes with P2-UI-3; outreach is Phase 3). Each is a designed empty state with the right words, so the
  * shell, nav, breadcrumbs and permissions are real end to end before the content lands.
  */
 interface PageSpec {
@@ -62,14 +62,6 @@ const PAGES = {
         empty: 'No sequences yet',
         body: 'A sequence stops itself on a reply, a bounce, an unsubscribe or a stage change.',
         coming: 'Phase 3',
-    },
-    mailboxes: {
-        title: 'Mailboxes',
-        subtitle: 'Outreach is spread across these mailboxes; a mailbox pauses itself past the threshold.',
-        icon: <Inbox />,
-        empty: 'No mailbox connected',
-        body: 'Connect a Google Workspace mailbox through your own OAuth client.',
-        coming: 'Phase 2',
     },
     team: {
         title: 'Team',

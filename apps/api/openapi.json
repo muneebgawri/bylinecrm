@@ -3297,7 +3297,91 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/MailSendQueued"
+                                    "$ref": "#/components/schemas/MailSendAccepted"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/mail/scheduled": {
+            "get": {
+                "operationId": "mailSend_scheduled",
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 25,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailScheduledPage"
                                 }
                             }
                         },
@@ -3344,6 +3428,160 @@
         "/api/w/{workspaceId}/mail/messages/{messageId}": {
             "get": {
                 "operationId": "mailSend_status",
+                "parameters": [
+                    {
+                        "name": "messageId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailOutbound"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            },
+            "patch": {
+                "operationId": "mailSend_reschedule",
+                "parameters": [
+                    {
+                        "name": "messageId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RescheduleMailDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailOutbound"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/mail/messages/{messageId}/cancel": {
+            "post": {
+                "operationId": "mailSend_cancel",
                 "parameters": [
                     {
                         "name": "messageId",
@@ -12833,9 +13071,36 @@
                         "type": "string",
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "sendAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "description": "Send later: ISO 8601 with an offset, at least MAIL_SEND_MIN_LEAD_SECONDS from now and at most MAIL_SEND_HORIZON_DAYS ahead."
+                    },
+                    "timeZone": {
+                        "type": "string",
+                        "maxLength": 64
                     }
                 },
                 "required": ["mailboxId", "personId"]
+            },
+            "RescheduleMailDto": {
+                "type": "object",
+                "properties": {
+                    "sendAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "description": "Send later: ISO 8601 with an offset, at least MAIL_SEND_MIN_LEAD_SECONDS from now and at most MAIL_SEND_HORIZON_DAYS ahead."
+                    },
+                    "timeZone": {
+                        "type": "string",
+                        "maxLength": 64
+                    }
+                },
+                "required": ["sendAt"],
+                "additionalProperties": false
             },
             "CreateTemplateDto__schema0": {
                 "type": "object",
@@ -15174,7 +15439,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 39,
+                        "maxItems": 41,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -15214,6 +15479,8 @@
                                 "email.sent",
                                 "email.linked",
                                 "email.replied",
+                                "email.scheduled",
+                                "email.cancelled",
                                 "meeting.booked",
                                 "mailbox.connected",
                                 "mailbox.disconnected",
@@ -15242,7 +15509,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 39,
+                        "maxItems": 41,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -15282,6 +15549,8 @@
                                 "email.sent",
                                 "email.linked",
                                 "email.replied",
+                                "email.scheduled",
+                                "email.cancelled",
                                 "meeting.booked",
                                 "mailbox.connected",
                                 "mailbox.disconnected",
@@ -16846,7 +17115,7 @@
                 },
                 "required": ["postalAddress", "defaultSenderName", "unsubscribeFooterText"]
             },
-            "MailSendQueued": {
+            "MailSendAccepted": {
                 "type": "object",
                 "properties": {
                     "messageId": {
@@ -16858,10 +17127,30 @@
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["queued"]
+                        "enum": ["queued", "scheduled"],
+                        "description": "`queued`: sent by a job now. `scheduled`: built, checked and sent at `sendAt`."
+                    },
+                    "sendAt": {
+                        "nullable": true,
+                        "description": "When a scheduled send goes (UTC); null for a send now.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "senderTimeZone": {
+                        "nullable": true,
+                        "description": "The sender’s IANA time zone as they scheduled it; null when none was given.",
+                        "type": "string"
+                    },
+                    "recipientTimeZone": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [null],
+                        "description": "The recipient’s time zone. Not known yet — inferred later from enrichment (Phase 3) — so always null: show “recipient’s zone unknown”, never a guess."
                     }
                 },
-                "required": ["messageId", "status"]
+                "required": ["messageId", "status", "sendAt", "senderTimeZone", "recipientTimeZone"]
             },
             "MailOutbound": {
                 "type": "object",
@@ -16880,10 +17169,11 @@
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["queued", "sending", "sent", "failed"]
+                        "enum": ["scheduled", "queued", "sending", "sent", "failed", "cancelled"]
                     },
                     "subject": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "As built. A scheduled send shows the subject it had when scheduled; it is built again at `sendAt`."
                     },
                     "to": {
                         "type": "array",
@@ -16963,7 +17253,8 @@
                         "type": "object",
                         "properties": {
                             "code": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Why it failed: e.g. `unsendable` (a variable had no value at send time), `stale` (its time passed while nothing could send it), `forbidden`, `reconnect_needed`, `gmail.<reason>`."
                             },
                             "message": {
                                 "type": "string"
@@ -16973,9 +17264,41 @@
                                 "type": "string",
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "fields": {
+                                "description": "For `unsendable`: the variables that had no value.",
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
                             }
                         },
                         "required": ["code", "message", "at"]
+                    },
+                    "sendAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "senderTimeZone": {
+                        "nullable": true,
+                        "description": "The sender’s IANA time zone as they scheduled it; null when none was given.",
+                        "type": "string"
+                    },
+                    "recipientTimeZone": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [null],
+                        "description": "The recipient’s time zone. Not known yet — inferred later from enrichment (Phase 3) — so always null: show “recipient’s zone unknown”, never a guess."
+                    },
+                    "cancelledAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     },
                     "createdAt": {
                         "example": "2026-10-09T09:30:00.000Z",
@@ -17008,9 +17331,29 @@
                     "threadId",
                     "attempts",
                     "error",
+                    "sendAt",
+                    "senderTimeZone",
+                    "recipientTimeZone",
+                    "cancelledAt",
                     "createdAt",
                     "sentAt"
                 ]
+            },
+            "MailScheduledPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MailOutbound"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
             },
             "RecordSummary": {
                 "type": "object",

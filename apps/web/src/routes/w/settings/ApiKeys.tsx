@@ -20,6 +20,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
+import { CopyValue } from '../../../components/CopyValue';
 import { useApiKeys, useCreateApiKey, useRevokeApiKey, useRoles } from '../../../api/queries';
 import { useWorkspaceId } from '../../params';
 import { formatDate } from './SettingsLayout';
@@ -150,7 +151,7 @@ function CreateKeyDialog({ workspaceId, open, onClose }: { workspaceId: string; 
                 {secret ? (
                     <>
                         <DialogBody>
-                            <SecretOnce value={secret} />
+                            <CopyValue value={secret} />
                         </DialogBody>
                         <DialogFooter>
                             <Button variant="primary" onClick={close}>
@@ -196,37 +197,5 @@ function CreateKeyDialog({ workspaceId, open, onClose }: { workspaceId: string; 
                 )}
             </DialogContent>
         </Dialog>
-    );
-}
-
-/** A value shown once with a copy button; the copy result is announced, never assumed. */
-export function SecretOnce({ value }: { value: string }) {
-    const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
-    const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(value);
-            setCopied('copied');
-        } catch {
-            setCopied('failed');
-        }
-    };
-    return (
-        <div className="grid gap-2">
-            <code className="block rounded-md border border-border bg-surface-raised px-3 py-2 text-sm break-all select-all">
-                {value}
-            </code>
-            <div className="flex items-center gap-2">
-                <Button size="sm" shape="square" onClick={copy}>
-                    Copy
-                </Button>
-                <span role="status" className="text-xs text-text-muted">
-                    {copied === 'copied'
-                        ? 'Copied.'
-                        : copied === 'failed'
-                          ? 'Could not copy — select it and copy by hand.'
-                          : ''}
-                </span>
-            </div>
-        </div>
     );
 }

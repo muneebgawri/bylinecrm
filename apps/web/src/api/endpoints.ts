@@ -3,6 +3,8 @@ import { API_BASE, request, requestFile } from './client';
 import type {
     ApiKeyView,
     AttachmentView,
+    BlocklistEntryCreatedView,
+    BlocklistEntryView,
     BoardQuery,
     BoardView,
     BulkInput,
@@ -10,7 +12,9 @@ import type {
     CompanyInput,
     CompanyPage,
     CompanyView,
+    ConnectMailboxInput,
     CreateApiKeyInput,
+    CreateBlocklistEntryInput,
     CreateCustomFieldInput,
     CreateInviteInput,
     CreatePipelineInput,
@@ -22,8 +26,16 @@ import type {
     CustomFieldView,
     EmailTemplatePage,
     EmailTemplateView,
+    GoogleOAuthClientStatusView,
+    GoogleOAuthClientView,
     InviteView,
     LoginInput,
+    MailboxCheckView,
+    MailboxConnectStartView,
+    MailboxDisconnectedView,
+    MailboxSyncTriggeredView,
+    MailboxSyncView,
+    MailboxView,
     MailSettingsView,
     MembershipSummary,
     MemberSummaryView,
@@ -44,6 +56,7 @@ import type {
     PipelineView,
     PreviewTemplateInput,
     PutMailSettingsInput,
+    PutOAuthClientInput,
     RenderedEmailView,
     RoleView,
     RuleView,
@@ -463,4 +476,49 @@ export const mailSettings = {
         request<MailSettingsView>('GET', workspacePath(workspaceId, '/settings/mail'), { signal }),
     put: (workspaceId: string, input: PutMailSettingsInput) =>
         request<MailSettingsView>('PUT', workspacePath(workspaceId, '/settings/mail'), { body: input }),
+};
+
+/**
+ * The workspace's own Google OAuth client (P2-1, D-237). `describe`/`put`/`remove`/`verify` are an
+ * admin's; `status` is every member's — whether Google is set up, without the client's details.
+ */
+export const oauthClient = {
+    describe: (workspaceId: string, signal?: AbortSignal) =>
+        request<GoogleOAuthClientView>('GET', workspacePath(workspaceId, '/mail/oauth-client'), { signal }),
+    status: (workspaceId: string, signal?: AbortSignal) =>
+        request<GoogleOAuthClientStatusView>('GET', workspacePath(workspaceId, '/mail/oauth-client/status'), {
+            signal,
+        }),
+    put: (workspaceId: string, input: PutOAuthClientInput) =>
+        request<GoogleOAuthClientView>('PUT', workspacePath(workspaceId, '/mail/oauth-client'), { body: input }),
+    remove: (workspaceId: string) => request<void>('DELETE', workspacePath(workspaceId, '/mail/oauth-client')),
+    verify: (workspaceId: string) =>
+        request<GoogleOAuthClientView>('POST', workspacePath(workspaceId, '/mail/oauth-client/verify')),
+};
+
+/** Connected Google mailboxes (P2-1) and their sync (P2-2). */
+export const mailboxes = {
+    list: (workspaceId: string, signal?: AbortSignal) =>
+        request<MailboxView[]>('GET', workspacePath(workspaceId, '/mailboxes'), { signal }),
+    /** Starts a connect: the answer's `authorizeUrl` is where the browser goes next. */
+    connect: (workspaceId: string, input: ConnectMailboxInput) =>
+        request<MailboxConnectStartView>('POST', workspacePath(workspaceId, '/mailboxes/connect'), { body: input }),
+    check: (workspaceId: string, mailboxId: string) =>
+        request<MailboxCheckView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/check`)),
+    disconnect: (workspaceId: string, mailboxId: string) =>
+        request<MailboxDisconnectedView>('DELETE', workspacePath(workspaceId, `/mailboxes/${mailboxId}`)),
+    syncState: (workspaceId: string, mailboxId: string, signal?: AbortSignal) =>
+        request<MailboxSyncView>('GET', workspacePath(workspaceId, `/mailboxes/${mailboxId}/sync`), { signal }),
+    sync: (workspaceId: string, mailboxId: string) =>
+        request<MailboxSyncTriggeredView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/sync`)),
+};
+
+/** Addresses and domains whose mail is never imported, and removed when added (P2-2). */
+export const blocklist = {
+    list: (workspaceId: string, signal?: AbortSignal) =>
+        request<BlocklistEntryView[]>('GET', workspacePath(workspaceId, '/mail/blocklist'), { signal }),
+    create: (workspaceId: string, input: CreateBlocklistEntryInput) =>
+        request<BlocklistEntryCreatedView>('POST', workspacePath(workspaceId, '/mail/blocklist'), { body: input }),
+    remove: (workspaceId: string, entryId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/mail/blocklist/${entryId}`)),
 };
