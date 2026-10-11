@@ -2,6 +2,7 @@ import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight } from 'lucide-react';
 import { forwardRef, type ComponentPropsWithoutRef, type ComponentRef } from 'react';
 import { cn } from '../../lib/cn';
+import { phoneTouchArea } from '../../lib/touch';
 import { popoverSurface } from '../../lib/surfaces';
 
 export const DropdownMenu = MenuPrimitive.Root;
@@ -14,6 +15,8 @@ const itemClasses = [
     'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-text outline-none',
     'data-[highlighted]:bg-surface data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
     '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-muted',
+    // A finger, not a cursor, on a phone (FR-CRMS-UI-12).
+    phoneTouchArea.row,
 ];
 
 export const DropdownMenuContent = forwardRef<

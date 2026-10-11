@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 /**
  * The one "are you sure?" for a destructive action — built into the page, never `confirm()`.
  * When the server refuses, `error` carries its words and `children` what the person can do
- * instead (open the deals that block a stage's removal); the action stays offered for a retry.
+ * instead (choose where a stage's deals go); the action stays offered for a retry, and
+ * `confirmDisabled` holds it until the person has made the choice it needs.
  */
 export function ConfirmDialog({
     open,
@@ -15,6 +16,7 @@ export function ConfirmDialog({
     pending,
     onConfirm,
     error,
+    confirmDisabled = false,
     children,
 }: {
     open: boolean;
@@ -25,6 +27,7 @@ export function ConfirmDialog({
     pending: boolean;
     onConfirm: () => void;
     error?: string | undefined;
+    confirmDisabled?: boolean;
     children?: ReactNode;
 }) {
     return (
@@ -46,7 +49,13 @@ export function ConfirmDialog({
                     <Button shape="square" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button shape="square" variant="danger" loading={pending} onClick={onConfirm}>
+                    <Button
+                        shape="square"
+                        variant="danger"
+                        loading={pending}
+                        disabled={confirmDisabled}
+                        onClick={onConfirm}
+                    >
                         {confirm}
                     </Button>
                 </DialogFooter>

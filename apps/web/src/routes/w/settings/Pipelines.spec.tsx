@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toasts } from '@bylinecrm/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineView, RuleView, StageView } from '../../../api/types';
 import { PipelineDetail } from './PipelineDetail';
@@ -51,6 +52,19 @@ function api(extra: ((r: FakeRequest) => Response | undefined)[] = []) {
     ]);
 }
 
+/** The server's refusal to delete a stage that still holds deals (P1-2b), counts in `details`. */
+const stageRefusal = (details: { liveDeals: number; trashedDeals: number }) =>
+    json(
+        {
+            statusCode: 409,
+            code: 'conflict',
+            message: `${details.liveDeals + details.trashedDeals} deal(s) are in this stage (including the trash); move them first`,
+            details,
+            requestId: 'req-test',
+        },
+        409,
+    );
+
 const detail = () =>
     renderAt(
         [route('/w/:workspaceId/settings/pipelines/:pipelineId', <PipelineDetail />)],
@@ -59,7 +73,10 @@ const detail = () =>
     );
 
 describe('FR-CRMS-9: pipeline settings', () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        toasts.clear();
+    });
 
     it('lists the workspace pipelines, marking the default, each linking to its stages', async () => {
         api();
@@ -102,24 +119,87 @@ describe('FR-CRMS-9: pipeline settings', () => {
         expect(await screen.findByText('New moved to position 2 of 4.')).toBeInTheDocument();
     });
 
-    it('refused delete: says why in the server’s words and offers the deals in that pipeline', async () => {
-        api([
+    it('FR-CRMS-9: a stage holding deals is deleted by moving them first — counts from the server, one request', async () => {
+        const seen = api([
             (r) =>
                 r.method === 'DELETE' && r.url.endsWith('/stages/s-contacted')
-                    ? apiError(409, 'conflict', '2 deal(s) are in this stage (including the trash); move them first')
+                    ? stageRefusal({ liveDeals: 2, trashedDeals: 1 })
+                    : undefined,
+            (r) =>
+                r.method === 'DELETE' && r.url.endsWith('/stages/s-contacted?moveDealsTo=s-replied')
+                    ? json(null, 204)
                     : undefined,
         ]);
         detail();
         await userEvent.click(await screen.findByRole('button', { name: 'Actions for Contacted' }));
         await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
         await userEvent.click(await screen.findByRole('button', { name: 'Delete stage' }));
-        expect(
-            await screen.findByText('2 deal(s) are in this stage (including the trash); move them first'),
-        ).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Open this pipeline’s deals' })).toHaveAttribute(
-            'href',
-            `/w/${WS}/deals?pipeline=${P}`,
+
+        // The refusal turns the same dialog into the move step, with the server's counts.
+        expect(await screen.findByText('Move 3 deals (1 in the trash) to another stage first.')).toBeInTheDocument();
+        const target = screen.getByRole('combobox', { name: 'Move deals to' });
+        // Only open stages other than the one going: a delete never closes deals.
+        await userEvent.click(target);
+        const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+        expect(options).toEqual(['New', 'Replied']);
+        await userEvent.click(screen.getByRole('option', { name: 'Replied' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Move deals and delete' }));
+
+        await waitFor(() =>
+            expect(seen.filter((r) => r.method === 'DELETE').map((r) => r.url.replace(/^.*\/pipelines\//, ''))).toEqual(
+                [`${P}/stages/s-contacted`, `${P}/stages/s-contacted?moveDealsTo=s-replied`],
+            ),
         );
+        await waitFor(() =>
+            expect(toasts.all().map((t) => t.title)).toContain('Moved 3 deals to Replied and deleted Contacted'),
+        );
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
+    it('FR-CRMS-9: over the move limit, the server’s 413 message is shown and the step stays open', async () => {
+        api([
+            (r) =>
+                r.method === 'DELETE' && r.url.endsWith('/stages/s-contacted')
+                    ? stageRefusal({ liveDeals: 6000, trashedDeals: 0 })
+                    : undefined,
+            (r) =>
+                r.method === 'DELETE' && r.url.includes('moveDealsTo=')
+                    ? apiError(
+                          413,
+                          'payload_too_large',
+                          'This stage holds 6000 deals; at most 5000 can be moved at once',
+                      )
+                    : undefined,
+        ]);
+        detail();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for Contacted' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Delete stage' }));
+        await screen.findByText('Move 6,000 deals to another stage first.');
+        await userEvent.click(screen.getByRole('combobox', { name: 'Move deals to' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'New' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Move deals and delete' }));
+        expect(
+            await screen.findByText('This stage holds 6000 deals; at most 5000 can be moved at once'),
+        ).toBeInTheDocument();
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('FR-CRMS-9: a refusal for another reason (a rule points at the stage) shows the server’s words, no move step', async () => {
+        api([
+            (r) =>
+                r.method === 'DELETE' && r.url.endsWith('/stages/s-replied')
+                    ? apiError(409, 'conflict', 'A stage rule moves deals into this stage; change the rule first')
+                    : undefined,
+        ]);
+        detail();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for Replied' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Delete stage' }));
+        expect(
+            await screen.findByText('A stage rule moves deals into this stage; change the rule first'),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: 'Move deals to' })).not.toBeInTheDocument();
     });
 
     it('adds a rule from the editor, with its sentence shown before saving', async () => {

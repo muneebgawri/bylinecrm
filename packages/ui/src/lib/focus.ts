@@ -11,3 +11,11 @@ export const focusRing =
  */
 export const focusWithinRing =
     'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background';
+
+/**
+ * The same ring drawn on a child of the focused control: a switch whose button is a larger touch
+ * area than what it shows, so the ring belongs on the track the person sees. The control carries
+ * `group outline-none`.
+ */
+export const groupFocusRing =
+    'group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background';
