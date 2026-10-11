@@ -35,6 +35,7 @@ const settings = {
     pipeline: () => import('./w/settings/PipelineDetail').then((m) => ({ Component: m.PipelineDetail })),
     customFields: () => import('./w/settings/CustomFields').then((m) => ({ Component: m.CustomFields })),
     mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
+    google: () => import('./w/settings/GoogleSetup').then((m) => ({ Component: m.GoogleSetup })),
 };
 
 /** Templates are one chunk: the list and the editor, which brings the rich-text editor (FR-CRMS-UI-10). */
@@ -42,6 +43,9 @@ const templates = {
     list: () => import('./w/templates/TemplatesPage').then((m) => ({ Component: m.TemplatesPage })),
     editor: () => import('./w/templates/TemplateEditorPage').then((m) => ({ Component: m.TemplateEditorPage })),
 };
+
+/** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
+const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
 
 /** Deals is its own chunk: the board brings dnd-kit and the list brings TanStack (FR-CRMS-UI-10). */
 const dealsPage = () => import('./w/deals/DealsPage').then((m) => ({ Component: m.DealsPage }));
@@ -95,7 +99,7 @@ const workspaceRoutes: RouteObject = {
         page('sequences', 'sequences', 'Sequences'),
         lazyPage('templates', templates.list, 'Templates'),
         lazyPage('templates/:templateId', templates.editor, 'Template'),
-        page('mailboxes', 'mailboxes', 'Mailboxes'),
+        lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),
         page('team', 'team', 'Team'),
         lazyPage('settings', settings.layout, 'Settings', [
             { index: true, element: <Navigate to="members" replace /> },
@@ -107,6 +111,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage(`pipelines/:${PIPELINE_PARAM}`, settings.pipeline, 'Pipeline'),
             lazyPage('custom-fields', settings.customFields, 'Custom fields'),
             lazyPage('mail', settings.mail, 'Mail'),
+            lazyPage('google', settings.google, 'Google'),
         ]),
     ],
 };

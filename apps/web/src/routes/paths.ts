@@ -34,6 +34,7 @@ export const paths = {
     settingsPipeline: (workspaceId: string, pipelineId: string) => `/w/${workspaceId}/settings/pipelines/${pipelineId}`,
     settingsCustomFields: (workspaceId: string) => `/w/${workspaceId}/settings/custom-fields`,
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
+    settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
 } as const;
 
 /** `?create=1` on a list page opens its "new" dialog (the ⌘K and "+ Create" commands land there). */
