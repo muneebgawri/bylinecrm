@@ -66,7 +66,8 @@ export const PROFILES: Record<RichTextProfile, ProfileSpec> = {
         singleLine: false,
         minHeightClass: 'min-h-48',
     },
-    subject: { tools: [], singleLine: true, minHeightClass: '' },
+    // One line, but still a finger's 44px on a phone whatever the font's metrics (FR-CRMS-UI-12).
+    subject: { tools: [], singleLine: true, minHeightClass: 'max-md:min-h-touch' },
 };
 
 /** A document with exactly one paragraph: the subject line. */
@@ -175,7 +176,8 @@ export function RichTextEditor({
                 ...(spec.singleLine ? {} : { 'aria-multiline': 'true' }),
                 class: cn(
                     'rich-text outline-none px-3 text-[13px] leading-relaxed max-md:text-touch',
-                    spec.singleLine ? 'py-1.5 whitespace-nowrap overflow-x-auto' : `py-2 ${spec.minHeightClass}`,
+                    spec.singleLine ? 'py-1.5 whitespace-nowrap overflow-x-auto' : 'py-2',
+                    spec.minHeightClass,
                 ),
             },
             // A subject is one line: Enter does nothing rather than splitting it.
