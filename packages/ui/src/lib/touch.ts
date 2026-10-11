@@ -12,6 +12,8 @@
 export const phoneTouchArea = {
     /** Around a 1rem × 1rem box (Checkbox). */
     box: 'size-4 max-md:min-h-touch max-md:min-w-touch max-md:-m-[calc((var(--bc-touch-target)-1rem)/2)]',
+    /** A row in a menu or a picker's list: at least the touch target tall on a phone. */
+    row: 'max-md:min-h-touch',
     /** Around a 2.25rem × 1.25rem track (Switch). */
     track: 'h-5 w-9 max-md:min-h-touch max-md:min-w-touch max-md:-my-[calc((var(--bc-touch-target)-1.25rem)/2)] max-md:-mx-[calc((var(--bc-touch-target)-2.25rem)/2)]',
 } as const;
