@@ -118,16 +118,26 @@ export type EmailSummary = {
 };
 
 /**
- * Mail the CRM sends (P2-3) and where it stands. `queued`: accepted, waiting for the send job;
- * `sending`: an attempt has started (Gmail may or may not have it — the next attempt checks first);
- * `sent`: Gmail accepted it; `failed`: it will not be sent (the mailbox stopped working, Gmail refused
- * it, or the queue's attempts ran out). A message is sent from its sender's own personal mailbox.
+ * Mail the CRM sends (P2-3, P2-5) and where it stands. `scheduled`: accepted for a later time
+ * (`sendAt`); it is built and checked again when that time comes. `queued`: accepted, waiting for
+ * the send job; `sending`: an attempt has started (Gmail may or may not have it — the next attempt
+ * checks first); `sent`: Gmail accepted it; `failed`: it will not be sent (a check failed at send
+ * time, the mailbox stopped working, Gmail refused it, or the queue's attempts ran out);
+ * `cancelled`: its sender or an admin called a scheduled send off. A message is sent from its
+ * sender's own personal mailbox.
  */
-export const MAIL_OUTBOUND_STATUSES = ['queued', 'sending', 'sent', 'failed'] as const;
+export const MAIL_OUTBOUND_STATUSES = ['scheduled', 'queued', 'sending', 'sent', 'failed', 'cancelled'] as const;
 export type MailOutboundStatus = (typeof MAIL_OUTBOUND_STATUSES)[number];
 
 /** At most this many recipients (to, cc and bcc together) on one message. */
 export const MAIL_SEND_RECIPIENTS_MAX = 50;
+
+/**
+ * A scheduled send (P2-5, FR-CRMS-4) is for at least this long from now — less is a send now — and
+ * at most `MAIL_SEND_HORIZON_DAYS` ahead. The web app's time picker reads the same numbers.
+ */
+export const MAIL_SEND_MIN_LEAD_SECONDS = 60;
+export const MAIL_SEND_HORIZON_DAYS = 90;
 
 /**
  * What `email.replied` says about the reply (P2-3): the inbound message, the CRM message it answers,
