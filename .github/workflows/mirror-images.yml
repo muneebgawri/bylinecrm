@@ -1,0 +1,65 @@
+name: mirror-images
+
+# Copies every third-party image in deploy/images/mirror.json into our own registry (#123):
+# <source>@<digest> → ghcr.io/muneebgawri/mirror/<name>:<tag>, byte for byte, so the mirror's
+# digest is the upstream digest and anyone can check one against the other. CI, the Dockerfiles
+# and staging then pull only from GHCR, authenticated — never from an anonymous public registry
+# whose per-IP limits GitHub's shared runners exhaust (ECR Public's "Data limit exceeded").
+#
+# Runs when the list (or this file) changes on any branch, so a bump is mirrored by the push that
+# makes it, before CI on that push needs it; weekly, so the packages stay warm and upstream drift
+# is reported; and by hand. Never on pull requests: a fork must not get a token that writes packages.
+on:
+    push:
+        paths:
+            - deploy/images/mirror.json
+            - .github/workflows/mirror-images.yml
+    schedule:
+        - cron: '17 4 * * 1'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    packages: write
+
+concurrency:
+    group: mirror-images
+    cancel-in-progress: false
+
+jobs:
+    mirror:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: imjasonh/setup-crane@v0.4
+            - name: Log in to GHCR
+              run: crane auth login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+            - name: Copy each listed image and verify its digest
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  registry=$(jq -r .registry deploy/images/mirror.json)
+                  jq -c '.images[]' deploy/images/mirror.json | while read -r image; do
+                      name=$(jq -r .name <<<"$image")
+                      source=$(jq -r .source <<<"$image")
+                      tag=$(jq -r .tag <<<"$image")
+                      digest=$(jq -r .digest <<<"$image")
+                      target="$registry/$name:$tag"
+                      # The source registry is the one throttling anonymous pulls; this copier is the
+                      # only place that talks to it, so it is the place that waits and tries again.
+                      for attempt in 1 2 3 4 5; do
+                          if crane copy "$source@$digest" "$target"; then break; fi
+                          [ "$attempt" = 5 ] && { echo "::error::could not copy $source@$digest"; exit 1; }
+                          sleep $((attempt * 30))
+                      done
+                      mirrored=$(crane digest "$target")
+                      if [ "$mirrored" != "$digest" ]; then
+                          echo "::error::$target is $mirrored, the list says $digest"
+                          exit 1
+                      fi
+                      echo "mirrored $source@$digest → $target"
+                      # Drift: the tag upstream has moved on. Not a failure — a prompt to bump.
+                      if upstream=$(crane digest "$source:$tag" 2>/dev/null) && [ "$upstream" != "$digest" ]; then
+                          echo "::warning::$source:$tag is now $upstream (listed $digest) — bump deploy/images/mirror.json"
+                      fi
+                  done

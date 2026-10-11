@@ -1,0 +1,30 @@
+{
+    "$comment": "Every third-party image BylineCRM's CI, Dockerfiles and deployments run (#123). mirror-images.yml copies each source@digest byte-for-byte to ghcr.io/muneebgawri/mirror/<name>:<tag>, so the mirror's digest IS the upstream digest. Everything references ghcr.io/muneebgawri/mirror/<name>@<digest>; scripts/check-image-refs.mjs fails CI on any other image reference or a digest not listed here. To bump: change tag and digest here, change the same digest at every reference the check lists, push — mirror-images.yml copies it on that push. docs/deploy/images.md.",
+    "registry": "ghcr.io/muneebgawri/mirror",
+    "images": [
+        {
+            "name": "node",
+            "source": "docker.io/library/node",
+            "tag": "22-bookworm-slim",
+            "digest": "sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392"
+        },
+        {
+            "name": "nginx",
+            "source": "docker.io/library/nginx",
+            "tag": "1.27-alpine",
+            "digest": "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
+        },
+        {
+            "name": "postgres",
+            "source": "docker.io/library/postgres",
+            "tag": "16",
+            "digest": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d"
+        },
+        {
+            "name": "valkey",
+            "source": "docker.io/valkey/valkey",
+            "tag": "9.1",
+            "digest": "sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd"
+        }
+    ]
+}
