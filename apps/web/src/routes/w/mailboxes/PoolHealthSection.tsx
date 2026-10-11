@@ -138,6 +138,8 @@ export function PoolHealthSection({ workspaceId }: { workspaceId: string }) {
                         {
                             id: 'state',
                             header: 'State',
+                            // On a phone the state sits under the address: it is what a glance is for.
+                            phone: 'secondary',
                             cell: (m) =>
                                 m.paused ? (
                                     <Badge status="danger">Paused</Badge>
