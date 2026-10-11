@@ -23,6 +23,7 @@ export default defineConfig({
             DB_QUERY_EVENTS: '1',
             MAIL_SYNC_WORKER: '0',
             MAIL_SEND_WORKER: '0',
+            SEQUENCE_WORKER: '0',
             TRANSACTIONAL_MAIL_RELAY: '0',
             SIGNUP_MODE: 'open',
         },

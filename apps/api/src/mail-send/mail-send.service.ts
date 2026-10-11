@@ -24,7 +24,10 @@ import { actorOf } from '../records/actor';
 import { paginate } from '../records/list-query';
 import { recordWhere } from '../records/record-scope';
 import { RenderService } from '../templates/render.service';
+import { withUnsubscribeUrl } from '../templates/render/compose';
 import { TemplatesService } from '../templates/templates.service';
+import { UnsubscribeService } from '../suppression/unsubscribe.service';
+import { afterCommit } from '../infra/transaction-scope';
 import { RolesService } from '../workspace/roles.service';
 import {
     MAIL_CRM_ID_HEADER,
@@ -64,7 +67,37 @@ export interface SendInput {
 }
 
 /** What a scheduled send was asked to be: the request without its timing, kept to build it again later. */
-type StoredRequest = Omit<SendInput, 'sendAt' | 'timeZone'>;
+type PersonalRequest = Omit<SendInput, 'sendAt' | 'timeZone'>;
+type StoredRequest = PersonalRequest | OutreachRequest;
+
+/**
+ * A sequence step's send (P3-3), as stored: built at its time from the pool mailbox, the person and
+ * the step's **outreach** template, as the mailbox's owner with the workspace-wide scope a sequence has
+ * — with the outreach footer and the recipient's one-click unsubscribe (FR-CRMS-7).
+ */
+export interface OutreachRequest {
+    kind: 'outreach';
+    mailboxId: string;
+    personId: string;
+    dealId?: string | undefined;
+    templateId: string;
+    replyToMessageId?: string | undefined;
+    enrolmentId: string;
+    stepId: string;
+}
+
+/** What a sequence asks for when it schedules a step's send. */
+export interface ScheduleOutreachInput {
+    workspaceId: string;
+    mailboxId: string;
+    personId: string;
+    dealId: string | null;
+    templateId: string;
+    replyToMessageId: string | null;
+    sendAt: Date;
+    enrolmentId: string;
+    stepId: string;
+}
 
 /** Why the last attempt failed, as kept on the row. Never a token or a raw Google body. */
 interface SendErrorRecord {
@@ -147,6 +180,7 @@ export class MailSendService {
         private readonly roles: RolesService,
         private readonly events: DomainEvents,
         private readonly pool: SendingPoolService,
+        private readonly unsubscribes: UnsubscribeService,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
         @InjectQueue(MAIL_SEND_QUEUE) private readonly queue: Queue,
     ) {}
@@ -214,7 +248,17 @@ export class MailSendService {
      * send at its request, and for that send again at its time. Runs in the caller's workspace scope
      * (a request's, or the one a scheduled send's job opens for its sender).
      */
-    private async prepare(input: StoredRequest, send: { id: string; rfc822MessageId: string }): Promise<Prepared> {
+    private prepare(input: StoredRequest, send: { id: string; rfc822MessageId: string }): Promise<Prepared> {
+        return 'kind' in input && input.kind === 'outreach'
+            ? this.prepareOutreach(input, send)
+            : this.preparePersonal(input as PersonalRequest, send);
+    }
+
+    /** A member's own send from their personal mailbox (P2-3). */
+    private async preparePersonal(
+        input: PersonalRequest,
+        send: { id: string; rfc822MessageId: string },
+    ): Promise<Prepared> {
         const context = this.current();
         const memberId = context.memberId;
         if (!memberId) throw new ApiException(403, 'forbidden', "mail is sent from a member's own mailbox");
@@ -315,6 +359,170 @@ export class MailSendService {
             date: new Date(),
         });
         return { mailboxId: mailbox.id, memberId, recipients, parentId: parent?.id ?? null, subject, mime };
+    }
+
+    /**
+     * A sequence step's send, built at its time (P3-3): from the pool mailbox, to the person's primary
+     * address, from the step's outreach template rendered with the outreach footer and the workspace's
+     * postal address, with the recipient's one-click unsubscribe — a token per (recipient, send) — in
+     * `List-Unsubscribe` and in the footer's link (FR-CRMS-7). The same checks as any send: the
+     * mailbox's state, every variable filled, `SendPolicy`.
+     */
+    private async prepareOutreach(
+        input: OutreachRequest,
+        send: { id: string; rfc822MessageId: string },
+    ): Promise<Prepared> {
+        const context = this.current();
+        const memberId = context.memberId!;
+        const mailbox = await this.mailboxes.get(input.mailboxId);
+        if (mailbox.purpose !== 'pool') {
+            throw new ApiException(403, 'forbidden', 'a sequence sends only from the sending pool');
+        }
+        if (mailbox.status !== 'connected') throw new MailboxUnavailable(mailbox.status);
+
+        const { to, sender, parent } = await this.rls.withWorkspace(async (tx) => {
+            const person = await tx.person.findFirst({ where: { id: input.personId, deletedAt: null } });
+            if (!person) throw new NotFoundException('person not found');
+            const member = await tx.workspaceMember.findUniqueOrThrow({
+                where: { id: memberId },
+                select: { user: { select: { displayName: true } } },
+            });
+            const parentRow = input.replyToMessageId
+                ? await tx.mailMessage.findFirst({
+                      where: { id: input.replyToMessageId, copies: { some: { mailboxId: mailbox.id } } },
+                  })
+                : null;
+            return { to: primaryOf(person, 'personId', 'to'), sender: member.user.displayName, parent: parentRow };
+        });
+
+        const template = await this.templates.get(input.templateId);
+        if (template.kind !== 'outreach') {
+            throw new ApiException(422, 'unprocessable', 'a sequence sends outreach templates only', [
+                { path: 'templateId', message: 'not an outreach template' },
+            ]);
+        }
+        const rendered = await this.renderer.render(
+            { kind: 'outreach', subject: template.subject, body: template.body },
+            { personId: input.personId, dealId: input.dealId, senderMemberId: memberId },
+        );
+        if (!rendered.sendable) throw new Unsendable(rendered.missing);
+        const subject = parent && template.subject.trim() === '' ? replySubject(parent.subject) : rendered.subject;
+
+        await this.policy.assertSendable(context.workspaceId, [to]);
+        const link = await this.unsubscribes.issue(context.workspaceId, {
+            address: to.address,
+            personId: input.personId,
+            outboundId: send.id,
+        });
+        const email = withUnsubscribeUrl(rendered, link.pageUrl);
+        const references = parent
+            ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
+            : [];
+        const mime = buildMime({
+            from: { address: mailbox.email, name: sender },
+            to: [toMime(to)],
+            cc: [],
+            bcc: [],
+            subject,
+            text: email.text,
+            html: email.html,
+            messageId: send.rfc822MessageId,
+            crmId: send.id,
+            inReplyTo: parent?.rfc822MessageId ?? null,
+            references,
+            listUnsubscribe: { url: link.oneClickUrl },
+            date: new Date(),
+        });
+        return {
+            mailboxId: mailbox.id,
+            memberId,
+            recipients: { to: [to], cc: [], bcc: [] },
+            parentId: parent?.id ?? null,
+            subject,
+            mime,
+        };
+    }
+
+    /**
+     * Schedules a sequence step's send (P3-3) inside the caller's transaction — the one that moves the
+     * enrolment to wait for it — so the two exist together or not at all. Stored as a scheduled send
+     * whose request is outreach: it is built and checked at `sendAt` (`activate`), from the pool
+     * mailbox, as the mailbox's owner. Its job is added once the transaction commits.
+     */
+    async scheduleOutreach(tx: WorkspaceClient, input: ScheduleOutreachInput): Promise<string> {
+        const mailbox = await tx.mailbox.findUniqueOrThrow({ where: { id: input.mailboxId } });
+        const person = await tx.person.findUniqueOrThrow({ where: { id: input.personId } });
+        const request: OutreachRequest = {
+            kind: 'outreach',
+            mailboxId: input.mailboxId,
+            personId: input.personId,
+            ...(input.dealId ? { dealId: input.dealId } : {}),
+            templateId: input.templateId,
+            ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+            enrolmentId: input.enrolmentId,
+            stepId: input.stepId,
+        };
+        const created = await tx.mailOutbound.create({
+            data: {
+                workspaceId: input.workspaceId,
+                mailboxId: mailbox.id,
+                senderMemberId: mailbox.ownerMemberId,
+                personId: input.personId,
+                dealId: input.dealId,
+                templateId: input.templateId,
+                replyToMessageId: input.replyToMessageId,
+                rfc822MessageId: newMessageId(),
+                toAddresses: [primaryOf(person, 'personId', 'to').address],
+                subject: '',
+                status: 'scheduled',
+                mime: null,
+                sendAt: input.sendAt,
+                request: request as unknown as Prisma.InputJsonValue,
+                sequenceEnrolmentId: input.enrolmentId,
+                sequenceStepId: input.stepId,
+            },
+        });
+        await this.events.record(tx, {
+            type: 'email.scheduled',
+            object: 'email',
+            workspaceId: input.workspaceId,
+            actor: { kind: 'system', id: null },
+            occurredAt: new Date().toISOString(),
+            recordId: created.id,
+        } as DomainEvent);
+        const job: MailSendJob = { workspaceId: input.workspaceId, messageId: created.id };
+        const delay = Math.max(0, input.sendAt.getTime() - Date.now());
+        afterCommit('MailSendService.scheduleOutreach', () => {
+            this.queue.add('send', job, { jobId: created.id, delay }).catch((error: unknown) => {
+                // The send sweep gives a scheduled send without a job one; nothing is lost.
+                this.logger.warn(
+                    `outreach send ${created.id}: job not added (${error instanceof Error ? error.message : String(error)}); the sweep will`,
+                );
+            });
+        });
+        return created.id;
+    }
+
+    /**
+     * Calls off a sequence step's send that has not gone yet (P3-3: its enrolment stopped), in the
+     * caller's transaction. Only a `scheduled` send — once it is being built or sent it is left to finish.
+     * The same change and event as a member's cancel; its job is dropped after commit.
+     */
+    async cancelForSequence(tx: WorkspaceClient, workspaceId: string, id: string): Promise<void> {
+        const result = await tx.mailOutbound.updateMany({
+            where: { id, status: 'scheduled' },
+            data: { status: 'cancelled', cancelledAt: new Date() },
+        });
+        if (result.count === 0) return;
+        await this.events.record(tx, {
+            type: 'email.cancelled',
+            object: 'email',
+            workspaceId,
+            actor: { kind: 'system', id: null },
+            occurredAt: new Date().toISOString(),
+            recordId: id,
+        } as DomainEvent);
+        afterCommit('MailSendService.cancelForSequence', () => void this.dropJob(id));
     }
 
     // ── Scheduled sends: list, cancel, move ──────────────────────────────────────────────────
@@ -547,7 +755,10 @@ export class MailSendService {
                 at: new Date(now).toISOString(),
             });
         }
-        const sender = await this.senderContext(workspaceId, row.senderMemberId);
+        const outreach = (row.request as { kind?: string } | null)?.kind === 'outreach';
+        const sender = outreach
+            ? await this.outreachContext(workspaceId, row.senderMemberId)
+            : await this.senderContext(workspaceId, row.senderMemberId);
         if ('refusal' in sender) {
             return this.failScheduled(workspaceId, row.id, {
                 code: 'forbidden',
@@ -599,12 +810,14 @@ export class MailSendService {
         id: string,
         error: SendErrorRecord,
     ): Promise<'failed' | 'cancelled' | 'skipped'> {
-        const changed = await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailOutbound.updateMany({
+        const changed = await this.rls.withWorkspace(workspaceId, async (tx) => {
+            const result = await tx.mailOutbound.updateMany({
                 where: { id, status: 'scheduled' },
                 data: { status: 'failed', lastError: error as unknown as Prisma.InputJsonValue },
-            }),
-        );
+            });
+            if (result.count === 1) await this.announceFailure(tx, workspaceId, id, error);
+            return result;
+        });
         return changed.count === 1 ? 'failed' : this.lostTo(workspaceId, id);
     }
 
@@ -634,6 +847,34 @@ export class MailSendService {
                 roleName: access.roleName,
                 capabilities: access.capabilities,
                 ...(access.recordScope === 'own' ? { ownerScopeMemberId: memberId } : {}),
+            },
+        };
+    }
+
+    /**
+     * The scope a sequence step's send is built in (P3-3): the pool mailbox's owner, with the
+     * workspace-wide record scope a sequence has — a sequence is the workspace's, not a member's, so a
+     * role scoped to its own records does not narrow it.
+     */
+    private async outreachContext(
+        workspaceId: string,
+        memberId: string,
+    ): Promise<{ context: WorkspaceRunContext } | { refusal: string }> {
+        const member = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.workspaceMember.findUnique({ where: { id: memberId }, select: { userId: true, roleId: true } }),
+        );
+        if (!member)
+            return { refusal: "the pool mailbox's owner is no longer a member of this workspace; it was not sent" };
+        const access = await this.roles.access(workspaceId, member.roleId);
+        if (!access) return { refusal: "the pool mailbox's owner has no role; it was not sent" };
+        return {
+            context: {
+                workspaceId,
+                userId: member.userId,
+                memberId,
+                roleId: access.roleId,
+                roleName: access.roleName,
+                capabilities: access.capabilities,
             },
         };
     }
@@ -743,13 +984,35 @@ export class MailSendService {
         return null;
     }
 
+    /** Fails a send for good; announced once (`email.failed`), when it becomes failed — not on a re-mark. */
     private async markFailed(workspaceId: string, id: string, error: SendErrorRecord): Promise<void> {
-        await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailOutbound.updateMany({
-                where: { id, status: { in: ['queued', 'sending', 'failed'] } },
-                data: { status: 'failed', lastError: error as unknown as Prisma.InputJsonValue },
-            }),
-        );
+        await this.rls.withWorkspace(workspaceId, async (tx) => {
+            const record = error as unknown as Prisma.InputJsonValue;
+            const changed = await tx.mailOutbound.updateMany({
+                where: { id, status: { in: ['queued', 'sending'] } },
+                data: { status: 'failed', lastError: record },
+            });
+            if (changed.count === 1) await this.announceFailure(tx, workspaceId, id, error);
+            else await tx.mailOutbound.updateMany({ where: { id, status: 'failed' }, data: { lastError: record } });
+        });
+    }
+
+    /** `email.failed` (P3-3), in the transaction that failed the send: what a sequence reads to reschedule, hold or stop its step. */
+    private announceFailure(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        id: string,
+        error: SendErrorRecord,
+    ): Promise<void> {
+        return this.events.record(tx, {
+            type: 'email.failed',
+            object: 'email',
+            workspaceId,
+            actor: { kind: 'system', id: null },
+            occurredAt: new Date().toISOString(),
+            recordId: id,
+            failure: { outboundId: id, code: error.code, message: error.message },
+        } as DomainEvent);
     }
 
     private async recordError(workspaceId: string, id: string, error: SendErrorRecord): Promise<void> {
@@ -788,7 +1051,7 @@ function scheduledTime(iso: string, now = Date.now()): Date {
 }
 
 /** What a scheduled send keeps of its request: everything but its timing. */
-function storedRequest(input: SendInput): StoredRequest {
+function storedRequest(input: SendInput): PersonalRequest {
     const { sendAt: _sendAt, timeZone: _timeZone, ...rest } = input;
     return rest;
 }
