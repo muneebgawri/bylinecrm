@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import type { RichText } from '@bylinecrm/shared';
 import { RichTextEditor } from './RichTextEditor';
 
-const EMPTY_SUBJECT = { type: 'doc', content: [{ type: 'paragraph' }] } as const;
+const EMPTY_SUBJECT: RichText = { type: 'doc', content: [{ type: 'paragraph' }] };
 
 /**
  * FR-CRMS-UI-12: on a phone every control is a finger's 44px. The one-line subject editor drew
