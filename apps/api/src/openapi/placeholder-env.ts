@@ -13,9 +13,10 @@ export const PLACEHOLDER_ENV = {
     WEB_URL: 'http://localhost:2',
     // Any 32 bytes: nothing is sealed or opened while only compiling.
     SECRETS_KEY: Buffer.alloc(32, 1).toString('base64'),
-    // No worker and no outbox relay in a process that never connects.
+    // No worker and no relay (domain events, transactional mail) in a process that never connects.
     WEBHOOK_WORKER: '0',
     OUTBOX_RELAY: '0',
+    TRANSACTIONAL_MAIL_RELAY: '0',
 } as const;
 
 export function applyPlaceholderEnv(): void {

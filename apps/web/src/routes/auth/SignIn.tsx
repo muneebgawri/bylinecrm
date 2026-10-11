@@ -57,6 +57,14 @@ export function SignIn() {
                         onChange={(e) => setPassword(e.target.value)}
                     />
                 </Field>
+                <p className="m-0 -mt-2 text-right text-[13px]">
+                    <Link
+                        to={paths.forgotPassword}
+                        className="inline-flex min-h-touch items-center font-medium text-text-muted underline-offset-4 hover:text-text hover:underline md:min-h-0"
+                    >
+                        Forgot your password?
+                    </Link>
+                </p>
                 <Button
                     data-primary-action
                     type="submit"

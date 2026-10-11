@@ -135,6 +135,8 @@ export const platformWorkspaces: PlatformWorkspaceView[] = [
 
 /** The token the invitation-accept state opens `/sign-up?invite=` with, and what it is for. */
 export const INVITE_TOKEN = 'gate-invite-token';
+/** The secret in a mailed verification or reset link the gate opens (#93). */
+export const LINK_TOKEN = 'gate-link-token';
 export const invitePreview: InvitePreviewView = {
     email: 'owner@client.example',
     workspaceName: 'Demo workspace',

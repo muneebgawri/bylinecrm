@@ -43,7 +43,7 @@ const POLL_MS = 100;
 
 for (const state of STATES) {
     test(state.name, async ({ page }, testInfo) => {
-        const unanswered = await installApi(page);
+        const unanswered = await installApi(page, state.unverified ? { unverified: true } : {});
         const inFlight = trackRequests(page);
         await page.clock.setFixedTime(FIXED_NOW);
         await page.goto(state.url);

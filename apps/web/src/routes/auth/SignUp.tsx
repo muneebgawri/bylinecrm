@@ -14,10 +14,8 @@ import {
 } from '../../api/queries';
 import { paths, signInPath } from '../paths';
 import { AuthLayout } from './AuthLayout';
+import { PASSWORD_HINT } from './password';
 import { ProviderButtons } from './ProviderButtons';
-
-/** The API's password rule, mirrored for the hint only; the API decides. */
-const PASSWORD_HINT = 'At least 12 characters.';
 
 const linkClass = 'font-medium text-text underline-offset-4 hover:underline';
 

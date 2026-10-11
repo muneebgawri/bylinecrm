@@ -11,6 +11,7 @@ import {
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -78,6 +79,7 @@ describe('errors', () => {
             .post('/api/auth/signup')
             .send({ email: `errors-${stamp}@example.test`, password, workspaceName: 'Errors Co' })
             .expect(201);
+        await verifyAddress(app, http, `errors-${stamp}@example.test`);
         mine = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
 
@@ -85,6 +87,7 @@ describe('errors', () => {
             .post('/api/auth/signup')
             .send({ email: `errors-other-${stamp}@example.test`, password, workspaceName: 'Secret Rivals Ltd' })
             .expect(201);
+        await verifyAddress(app, http, `errors-other-${stamp}@example.test`);
         theirs = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
         const email = `confidential-${stamp}@rival.test`;

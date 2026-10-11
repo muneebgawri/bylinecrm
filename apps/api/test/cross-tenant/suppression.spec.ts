@@ -23,6 +23,7 @@ import { withUnsubscribeUrl } from '../../src/templates/render/compose';
 import { FakeGmail } from '../support/fake-gmail';
 import { eventLog, type EventLog } from '../support/outbox';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -177,6 +178,7 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
             expect(res.status).toBe(201);
+            await verifyAddress(app, http, email);
             return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
         };
         ({ browser: admin, workspace } = await signUp(adminEmail, `Suppression ${stamp}`));
@@ -191,6 +193,7 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
             .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
             .send({ password });
         expect(joined.status).toBe(201);
+        await verifyAddress(app, http, memberEmail);
         member = browserFrom(joined);
 
         const clientId = `555-a${stamp.replace(/[^a-z0-9]/g, '')}.apps.googleusercontent.com`;

@@ -5,6 +5,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
 import { eventLog, type EventLog } from '../support/outbox';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -99,6 +100,7 @@ describe('deals, notes, tasks, attachments', () => {
             .post('/api/auth/signup')
             .send({ email: `admin-${stamp}@example.test`, password, workspaceName: 'Deals Co' })
             .expect(201);
+        await verifyAddress(app, http, `admin-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
 
@@ -106,6 +108,7 @@ describe('deals, notes, tasks, attachments', () => {
             .post('/api/auth/signup')
             .send({ email: `other-${stamp}@example.test`, password, workspaceName: 'Elsewhere Co' })
             .expect(201);
+        await verifyAddress(app, http, `other-${stamp}@example.test`);
         other = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
 
@@ -127,6 +130,7 @@ describe('deals, notes, tasks, attachments', () => {
                 .send({ password })
                 .expect(201),
         );
+        await verifyAddress(app, http, `rep-${stamp}@example.test`);
 
         const members = await as(admin).get(w('/members')).expect(200);
         const byEmail = new Map((members.body as { id: string; email: string }[]).map((m) => [m.email, m.id] as const));

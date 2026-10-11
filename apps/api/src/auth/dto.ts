@@ -21,6 +21,11 @@ export class SignupDto extends createZodDto(
 export class LoginDto extends createZodDto(z.object({ email, password: z.string().min(1).max(PASSWORD_MAX_LENGTH) })) {}
 export class CreateWorkspaceDto extends createZodDto(z.object({ name })) {}
 export class AcceptInviteSignupDto extends createZodDto(z.object({ password })) {}
+/** A mailed single-use link's secret (#93). */
+const linkToken = z.string().min(1).max(200);
+export class VerifyEmailDto extends createZodDto(z.object({ token: linkToken })) {}
+export class ForgotPasswordDto extends createZodDto(z.object({ email })) {}
+export class ResetPasswordDto extends createZodDto(z.object({ token: linkToken, password })) {}
 /** The person's own name, trimmed; the only profile field in v1 (an avatar comes later). */
 export class UpdateProfileDto extends createZodDto(
     z.object({ displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH) }),

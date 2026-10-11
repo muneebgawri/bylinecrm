@@ -17,6 +17,7 @@ import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sy
 import { WEBHOOK_QUEUE } from '../../src/webhooks/webhooks.constants';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { verifyAddress } from '../support/mail';
 import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
@@ -96,6 +97,7 @@ describe('background work and request handling (#86, FR-CRMS-2)', () => {
         const signup = await http()
             .post('/api/auth/signup')
             .send({ email: adminEmail, password, workspaceName: `Pools ${stamp}` });
+        await verifyAddress(app, http, adminEmail);
         expect(signup.status).toBe(201);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;

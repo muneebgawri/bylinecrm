@@ -5,6 +5,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
 import { eventLog, settle, type EventLog } from '../support/outbox';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -94,6 +95,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
             .post('/api/auth/signup')
             .send({ email: `admin-${stamp}@example.test`, password, workspaceName: 'Stage Co' })
             .expect(201);
+        await verifyAddress(app, http, `admin-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
 
@@ -101,6 +103,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
             .post('/api/auth/signup')
             .send({ email: `other-${stamp}@example.test`, password, workspaceName: 'Elsewhere Co' })
             .expect(201);
+        await verifyAddress(app, http, `other-${stamp}@example.test`);
         other = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
         otherPipeline = (
@@ -127,6 +130,7 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
                 .send({ password })
                 .expect(201),
         );
+        await verifyAddress(app, http, `rep-${stamp}@example.test`);
     });
 
     afterAll(async () => {
@@ -341,12 +345,14 @@ describe('restoring an archived custom field', () => {
             .post('/api/auth/signup')
             .send({ email: `fields-${stamp}@example.test`, password, workspaceName: 'Fields Co' })
             .expect(201);
+        await verifyAddress(app, http, `fields-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
         const otherSignup = await http()
             .post('/api/auth/signup')
             .send({ email: `fields-other-${stamp}@example.test`, password, workspaceName: 'Other Fields Co' })
             .expect(201);
+        await verifyAddress(app, http, `fields-other-${stamp}@example.test`);
         other = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
     });

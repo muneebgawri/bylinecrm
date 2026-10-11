@@ -31,6 +31,7 @@ import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, type EventLog } from '../support/outbox';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -186,6 +187,7 @@ describe('FR-CRMS-4 scheduled send', () => {
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
             expect(res.status).toBe(201);
+            await verifyAddress(app, http, email);
             return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
         };
         ({ browser: admin, workspace } = await signUp(adminEmail, `Schedule ${stamp}`));
@@ -200,6 +202,7 @@ describe('FR-CRMS-4 scheduled send', () => {
             .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
             .send({ password });
         expect(joined.status).toBe(201);
+        await verifyAddress(app, http, memberEmail);
         member = browserFrom(joined);
         memberId = ((await as(admin).get(w('/members'))).body as { id: string; email: string }[]).find(
             (m) => m.email === memberEmail,

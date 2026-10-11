@@ -6,6 +6,7 @@ import { INVITE_TTL_S } from '../auth/auth.constants';
 import { ENV, type Env } from '../config/env';
 import { StateConflict } from '../infra/errors/api-errors';
 import { PrismaService } from '../infra/prisma.service';
+import { AccountMail } from '../transactional-mail/account-mail';
 import { recordPlatformAction } from './audit';
 import type { CreatedPlatformWorkspaceView, PlatformInviteView, PlatformWorkspaceView } from './responses';
 
@@ -26,6 +27,7 @@ export class PlatformService {
         @Inject(ENV) private readonly env: Env,
         private readonly ownerPrisma: PrismaService,
         private readonly auth: AuthService,
+        private readonly mail: AccountMail,
     ) {}
 
     async listWorkspaces(): Promise<PlatformWorkspaceView[]> {
@@ -80,11 +82,15 @@ export class PlatformService {
         const token = randomToken();
         const expiresAt = new Date(Date.now() + INVITE_TTL_S * 1000);
         await this.ownerPrisma.$transaction(async (tx) => {
-            await tx.platformSignupInvite.create({
+            const invite = await tx.platformSignupInvite.create({
                 data: { email, tokenHash: hashToken(token), createdByUserId: actorUserId, expiresAt },
+                select: { id: true },
             });
             await recordPlatformAction(tx, 'platform.signup_invite_created', actorUserId, { email });
+            await this.mail.signupInvitation(tx, { to: email, inviteId: invite.id, token });
         });
+        // Mailed (#93), and the link returned once to pass on by hand.
+        this.mail.kick();
         return { email, token, url: invitationUrl(this.env.WEB_URL, 'signup', token), expiresAt };
     }
 }

@@ -112,9 +112,19 @@ export interface Unanswered {
  * Installs the answers on `page` and returns the list unanswered requests are pushed onto. The
  * gate only reads pages, so a write is not expected; one that happens anyway is unanswered.
  */
-export async function installApi(page: Page): Promise<Unanswered[]> {
+/** Who the session is, when a state needs someone other than the fixture's verified user. */
+export interface ApiOptions {
+    /** A signed-in person who has not verified their address yet (#93). */
+    unverified?: true;
+}
+
+export async function installApi(page: Page, options: ApiOptions = {}): Promise<Unanswered[]> {
     const unanswered: Unanswered[] = [];
     await page.route('**/api/**', (route) => answer(route, unanswered));
+    // Registered after the table on purpose: Playwright tries the most recently added route first.
+    if (options.unverified) {
+        await page.route('**/api/me', (route) => route.fulfill({ json: { ...data.user, emailVerified: false } }));
+    }
     // The status page reads `/health`; it is served outside `/api` (vite.config.ts proxy).
     await page.route('**/health', (route) =>
         route.fulfill({ json: { status: 'ok', db: 'ok', redis: 'ok', rls: 'ok', version: 'gate' } }),

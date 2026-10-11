@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { PlatformAccess } from '../platform/platform-access.service';
+import { TransactionalMailModule } from '../transactional-mail/transactional-mail.module';
 import { MembersService } from '../workspace/members.service';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
@@ -18,6 +19,7 @@ import { ProfileService } from './profile.service';
 import { AuthService } from './auth.service';
 import { AuthGuard, CsrfGuard, RequestScopeMiddleware, RequiresGuard, WorkspaceGuard } from './guards';
 import { OidcService } from './oidc.service';
+import { OneTimeTokenService } from './one-time-token.service';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
 import { SessionService } from './session.service';
@@ -29,6 +31,7 @@ import { SessionService } from './session.service';
  * (RequiresGuard). The request-scope middleware runs first so the guards have a context to fill.
  */
 @Module({
+    imports: [TransactionalMailModule],
     controllers: [
         AuthController,
         MeController,
@@ -44,6 +47,7 @@ import { SessionService } from './session.service';
         PasswordService,
         RateLimiter,
         OidcService,
+        OneTimeTokenService,
         ApiKeyService,
         MembershipService,
         ProfileService,

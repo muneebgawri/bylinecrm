@@ -55,6 +55,7 @@ model Workspace {
   blocklistEntries       BlocklistEntry[]
 
   mailOutbound MailOutbound[]
+  mailOutbox   MailOutbox[]
 
   suppressions      Suppression[]
   unsubscribeTokens UnsubscribeToken[]
@@ -77,14 +78,72 @@ model User {
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  memberships WorkspaceMember[]
-  sessions    Session[]
-  identities  ExternalIdentity[]
+  memberships   WorkspaceMember[]
+  sessions      Session[]
+  identities    ExternalIdentity[]
+  oneTimeTokens OneTimeToken[]
 
   platformWorkspaceInvites WorkspaceInvite[]      @relation("PlatformWorkspaceInvites")
   platformSignupInvites    PlatformSignupInvite[]
 
   @@map("users")
+}
+
+/// What a mailed single-use link is for (#93). #101 adds `set_password`.
+enum OneTimeTokenPurpose {
+  email_verification
+  password_reset
+}
+
+/// A mailed single-use link (#93): verify an address, reset a password. Only the secret's hash is
+/// stored. Global and owner-client only, like `sessions`: it is read before any workspace is known,
+/// and the app role has no grant on it. One live link per user and purpose — issuing a new one
+/// deletes the unspent ones.
+model OneTimeToken {
+  id        String              @id @default(uuid()) @db.Uuid
+  purpose   OneTimeTokenPurpose
+  userId    String              @map("user_id") @db.Uuid
+  /// The address the link was mailed to; verification succeeds only while it is still the account's.
+  email     String
+  tokenHash String              @unique @map("token_hash")
+  expiresAt DateTime            @map("expires_at") @db.Timestamptz
+  usedAt    DateTime?           @map("used_at") @db.Timestamptz
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("one_time_tokens")
+}
+
+/// Transactional mail owed (#93): written in the transaction that makes the mail necessary, sent by
+/// `MailOutboxRelay` after the commit, at least once (the provider's idempotency key makes it once).
+/// `sealed` is the whole message sealed with `SecretBox` — it carries a single-use link — and is
+/// wiped when the mail is sent or given up on. `workspace_id` is set for a workspace's own mail (an
+/// invitation, written by the app role under RLS, INSERT only) and null for an account's (verify,
+/// reset, written by the owner client). Delivery state is the relay's, as the owner.
+model MailOutbox {
+  id                String    @id @db.Uuid
+  /// Insertion order, for the relay's scan.
+  seq               BigInt    @unique @default(autoincrement())
+  workspaceId       String?   @map("workspace_id") @db.Uuid
+  kind              String
+  /// The mail's identity; a second record of the same mail is dropped.
+  idempotencyKey    String    @unique @map("idempotency_key")
+  sealed            String
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  attempts          Int       @default(0)
+  nextAttemptAt     DateTime? @map("next_attempt_at") @db.Timestamptz
+  leaseUntil        DateTime? @map("lease_until") @db.Timestamptz
+  lastError         String?   @map("last_error")
+  sentAt            DateTime? @map("sent_at") @db.Timestamptz
+  providerMessageId String?   @map("provider_message_id")
+  failedAt          DateTime? @map("failed_at") @db.Timestamptz
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([sentAt])
+  @@map("mail_outbox")
 }
 
 /// A signed-in browser. The cookie carries a random token; only its hash is stored. Global table

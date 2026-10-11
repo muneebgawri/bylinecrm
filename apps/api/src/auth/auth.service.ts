@@ -15,9 +15,22 @@ import { ApiException, RateLimited, UniqueConflict } from '../infra/errors/api-e
 import { uniqueViolation } from '../infra/prisma-errors';
 import { seedDefaultPipeline } from '../pipelines/seed';
 import { recordPlatformAction } from '../platform/audit';
-import { INVITE_TTL_S, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_S, SLUG_SUFFIX_BYTES } from './auth.constants';
+import { AccountMail } from '../transactional-mail/account-mail';
+import {
+    INVITE_TTL_S,
+    LOGIN_MAX_ATTEMPTS,
+    LOGIN_WINDOW_S,
+    RESET_REQUEST_IP_MAX,
+    RESET_REQUEST_MAX,
+    RESET_REQUEST_WINDOW_S,
+    SLUG_SUFFIX_BYTES,
+    VERIFY_RESEND_MAX,
+    VERIFY_RESEND_WINDOW_S,
+} from './auth.constants';
+import { InvalidToken, OneTimeTokenService } from './one-time-token.service';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
+import { revokeAllSessions } from './session.service';
 import { hashToken, randomToken } from './tokens';
 import type { UserView, WorkspaceView } from '../workspace/responses';
 export type { UserView, WorkspaceView } from '../workspace/responses';
@@ -46,13 +59,16 @@ export class AuthService {
         private readonly ownerPrisma: PrismaService,
         private readonly passwords: PasswordService,
         private readonly limiter: RateLimiter,
+        private readonly links: OneTimeTokenService,
+        private readonly mail: AccountMail,
     ) {}
 
     /**
      * Local sign-up: a user, their first workspace, and their admin seat, in one transaction —
      * when `SIGNUP_MODE` allows it (P0-14). `closed` refuses every sign-up; `invite` needs a
-     * platform sign-up invitation for this address; `open` takes anyone. A sign-up invitation, when
-     * one is presented, is spent here and verifies the address (the holder read that mailbox).
+     * platform sign-up invitation for this address, spent here; `open` takes anyone. The account
+     * starts unverified and is mailed a verification link, recorded in the same transaction (#93): an invitation
+     * link was also shown to whoever created it, so holding it proves nothing about the mailbox.
      */
     async signup(input: {
         email: string;
@@ -65,24 +81,24 @@ export class AuthService {
         if (mode === 'invite' && !input.inviteToken) throw new SignupInvitationRequired();
         const email = normaliseEmail(input.email);
         const passwordHash = await this.passwords.hash(input.password);
+        let created: { user: UserView; workspace: WorkspaceView };
         try {
-            return await this.ownerPrisma.$transaction(async (tx) => {
-                const verified = input.inviteToken ? await spendSignupInvite(tx, input.inviteToken, email) : false;
+            created = await this.ownerPrisma.$transaction(async (tx) => {
+                if (input.inviteToken) await spendSignupInvite(tx, input.inviteToken, email);
                 const user = await tx.user.create({
-                    data: {
-                        email,
-                        passwordHash,
-                        displayName: displayNameFor(email),
-                        emailVerifiedAt: verified ? new Date() : null,
-                    },
+                    data: { email, passwordHash, displayName: displayNameFor(email) },
                 });
                 const workspace = await createWorkspaceWithAdmin(tx, user.id, input.workspaceName);
+                const link = await this.links.issue(tx, 'email_verification', user.id, email);
+                await this.mail.verification(tx, email, link);
                 return { user: userView(user), workspace };
             });
         } catch (error) {
             // The same message as a bad login: sign-up must not say whether an address is taken.
             throw uniqueViolation(error) ? new UniqueConflict('that sign-up cannot be completed') : error;
         }
+        this.mail.kick();
+        return created;
     }
 
     /**
@@ -109,9 +125,13 @@ export class AuthService {
         return userView(user);
     }
 
-    /** A further workspace for an existing user; they become its admin. */
+    /** A further workspace for an existing user, whose address is verified (#93); they become its admin. */
     createWorkspace(userId: string, name: string): Promise<WorkspaceView> {
-        return this.ownerPrisma.$transaction((tx) => createWorkspaceWithAdmin(tx, userId, name));
+        return this.ownerPrisma.$transaction(async (tx) => {
+            const user = await tx.user.findUnique({ where: { id: userId }, select: { emailVerifiedAt: true } });
+            if (!user?.emailVerifiedAt) throw new EmailUnverified();
+            return createWorkspaceWithAdmin(tx, userId, name);
+        });
     }
 
     /**
@@ -127,9 +147,9 @@ export class AuthService {
     }> {
         const email = normaliseEmail(input.ownerEmail);
         const { token, tokenHash, expiresAt } = AuthService.newInvite();
-        return this.ownerPrisma.$transaction(async (tx) => {
+        const created = await this.ownerPrisma.$transaction(async (tx) => {
             const { workspace, adminRoleId } = await createWorkspaceShell(tx, input.name);
-            await tx.workspaceInvite.create({
+            const invite = await tx.workspaceInvite.create({
                 data: {
                     workspaceId: workspace.id,
                     email,
@@ -138,14 +158,26 @@ export class AuthService {
                     invitedByUserId: input.actorUserId,
                     expiresAt,
                 },
+                select: { id: true },
             });
             await recordPlatformAction(tx, 'platform.workspace_created', input.actorUserId, {
                 workspaceId: workspace.id,
                 email,
             });
             const url = invitationUrl(this.env.WEB_URL, 'member', token);
+            await this.mail.workspaceInvitation(tx, {
+                workspaceId: workspace.id,
+                to: email,
+                inviteId: invite.id,
+                token,
+                workspaceName: workspace.name,
+                owner: true,
+            });
             return { workspace, invite: { email, token, url, expiresAt } };
         });
+        // Mailed (#93), and the link returned once to pass on by hand.
+        this.mail.kick();
+        return created;
     }
 
     /**
@@ -212,9 +244,10 @@ export class AuthService {
     }
 
     /**
-     * Accepting an invitation. The token proves the holder read the invited mailbox; the account
-     * accepting must be that address, and that address must be verified — or the account is being
-     * created right now from the invitation, which is itself the verification.
+     * Accepting an invitation, as the signed-in account or by creating one from it. The signed-in
+     * account must be the invited address, verified. An account created from the invitation starts
+     * unverified and is mailed a verification link, recorded in the same transaction (#93): the inviter was shown
+     * the same link, so holding it does not prove the holder reads the mailbox.
      */
     async acceptInvite(
         token: string,
@@ -222,7 +255,7 @@ export class AuthService {
     ): Promise<{ workspace: WorkspaceView; userId: string }> {
         const tokenHash = hashToken(token);
         const passwordHash = 'signup' in actor ? await this.passwords.hash(actor.signup.password) : null;
-        return this.ownerPrisma.$transaction(async (tx) => {
+        const accepted = await this.ownerPrisma.$transaction(async (tx) => {
             const invite = await tx.workspaceInvite.findUnique({ where: { tokenHash }, include: { workspace: true } });
             if (!invite) throw new NotFoundException('invitation not found');
             if (invite.acceptedAt) throw new GoneException('invitation already used');
@@ -232,22 +265,19 @@ export class AuthService {
             if ('signup' in actor) {
                 const created = await tx.user
                     .create({
-                        data: {
-                            email: invite.email,
-                            passwordHash,
-                            emailVerifiedAt: new Date(),
-                            displayName: displayNameFor(invite.email),
-                        },
+                        data: { email: invite.email, passwordHash, displayName: displayNameFor(invite.email) },
                     })
                     .catch((error: unknown) => {
                         throw uniqueViolation(error) ? new UniqueConflict('sign in to accept this invitation') : error;
                     });
                 userId = created.id;
+                const link = await this.links.issue(tx, 'email_verification', userId, invite.email);
+                await this.mail.verification(tx, invite.email, link);
             } else {
                 const user = await tx.user.findUnique({ where: { id: actor.userId } });
                 if (!user || user.email !== invite.email)
                     throw new ForbiddenException('invitation is for a different address');
-                if (!user.emailVerifiedAt) throw new ForbiddenException('verify your email address first');
+                if (!user.emailVerifiedAt) throw new EmailUnverified();
                 userId = user.id;
             }
             await tx.workspaceMember
@@ -260,6 +290,82 @@ export class AuthService {
             await tx.workspaceInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
             return { workspace: workspaceView(invite.workspace), userId };
         });
+        this.mail.kick();
+        return accepted;
+    }
+
+    /**
+     * A fresh verification link for a signed-in, unverified account (#93); the previous one stops
+     * working. Nothing is sent when the address is already verified. At most `VERIFY_RESEND_MAX`
+     * per window per account, then `429`.
+     */
+    async requestVerification(userId: string): Promise<void> {
+        if (await this.limiter.hit(`verify-resend:${userId}`, VERIFY_RESEND_MAX, VERIFY_RESEND_WINDOW_S)) {
+            throw new TooManyAttempts('too many verification emails; try again later');
+        }
+        await this.ownerPrisma.$transaction(async (tx) => {
+            const user = await tx.user.findUnique({ where: { id: userId } });
+            if (!user) throw new UnauthorizedException();
+            if (user.emailVerifiedAt) return;
+            const link = await this.links.issue(tx, 'email_verification', user.id, user.email);
+            await this.mail.verification(tx, user.email, link);
+        });
+        this.mail.kick();
+    }
+
+    /**
+     * Spends a verification link (#93). It verifies only the address it was mailed to: if the
+     * account's address changed since, the link is refused like any other bad link.
+     */
+    async verifyEmail(token: string): Promise<void> {
+        await this.ownerPrisma.$transaction(async (tx) => {
+            const spent = await this.links.spend(tx, 'email_verification', token);
+            const user = await tx.user.findUnique({ where: { id: spent.userId } });
+            if (!user || user.email !== spent.email) throw new InvalidToken();
+            if (!user.emailVerifiedAt) {
+                await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+            }
+        });
+    }
+
+    /**
+     * "Forgot password" (#93). The caller learns nothing: the answer is the same whether or not an
+     * account has this address, and mail goes only to an existing account. A provider-only account
+     * gets the link too — holding the mailbox is the proof the provider gave. Rate-limited per
+     * address+IP and per IP; over either is `429` with no detail.
+     */
+    async requestPasswordReset(rawEmail: string, ip: string): Promise<void> {
+        const email = normaliseEmail(rawEmail);
+        const overIp = await this.limiter.hit(`reset-ip:${ip}`, RESET_REQUEST_IP_MAX, RESET_REQUEST_WINDOW_S);
+        const overAddress = await this.limiter.hit(`reset:${email}:${ip}`, RESET_REQUEST_MAX, RESET_REQUEST_WINDOW_S);
+        if (overIp || overAddress) throw new TooManyAttempts('too many requests; try again later');
+        await this.ownerPrisma.$transaction(async (tx) => {
+            const user = await tx.user.findUnique({ where: { email } });
+            if (!user) return;
+            const link = await this.links.issue(tx, 'password_reset', user.id, email);
+            await this.mail.passwordReset(tx, email, link);
+        });
+        this.mail.kick();
+    }
+
+    /**
+     * Spends a reset link (#93): sets the password, marks the address verified (the link was mailed
+     * to it), and revokes every session of the account, in one transaction. The caller starts a
+     * new session for this browser.
+     */
+    async resetPassword(token: string, password: string): Promise<UserView> {
+        const passwordHash = await this.passwords.hash(password);
+        return this.ownerPrisma.$transaction(async (tx) => {
+            const spent = await this.links.spend(tx, 'password_reset', token);
+            const user = await tx.user.findUnique({ where: { id: spent.userId } });
+            if (!user || user.email !== spent.email) throw new InvalidToken();
+            const updated = await tx.user.update({
+                where: { id: user.id },
+                data: { passwordHash, emailVerifiedAt: user.emailVerifiedAt ?? new Date() },
+            });
+            await revokeAllSessions(tx, user.id);
+            return userView(updated);
+        });
     }
 
     /** The invite row, written by the workspace admin through RLS; this just makes the token. */
@@ -271,6 +377,13 @@ export class AuthService {
 
 /** `429` with the message the login route sends. */
 export class TooManyAttempts extends RateLimited {}
+
+/** `403 email.unverified`: the person has not verified their address yet (#93). */
+export class EmailUnverified extends ApiException {
+    constructor() {
+        super(403, 'email.unverified', 'verify your email address first; we sent you a link');
+    }
+}
 
 /** The one spelling of an email address the database ever sees. */
 export function normaliseEmail(email: string): string {
@@ -304,13 +417,12 @@ export class SignupInvitationRequired extends ApiException {
  * someone-else's tokens all get the same answer. The conditional update makes a token good for
  * exactly one sign-up even when two race.
  */
-async function spendSignupInvite(tx: OwnerTx, token: string, email: string): Promise<true> {
+async function spendSignupInvite(tx: OwnerTx, token: string, email: string): Promise<void> {
     const spent = await tx.platformSignupInvite.updateMany({
         where: { tokenHash: hashToken(token), email, usedAt: null, expiresAt: { gt: new Date() } },
         data: { usedAt: new Date() },
     });
     if (spent.count !== 1) throw new SignupInvitationRequired();
-    return true;
 }
 
 /**

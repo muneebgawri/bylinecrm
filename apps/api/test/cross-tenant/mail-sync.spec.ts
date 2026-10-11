@@ -18,6 +18,7 @@ import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sy
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, settle, type EventLog } from '../support/outbox';
+import { verifyAddress } from '../support/mail';
 import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
@@ -181,6 +182,7 @@ describe('mail sync', () => {
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
             expect(res.status).toBe(201);
+            await verifyAddress(app, http, email);
             return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
         };
         ({ browser: admin, workspace } = await signUp(adminEmail, `Sync ${stamp}`));
@@ -195,6 +197,7 @@ describe('mail sync', () => {
             .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
             .send({ password });
         expect(joined.status).toBe(201);
+        await verifyAddress(app, http, memberEmail);
         member = browserFrom(joined);
 
         // Google for both workspaces; mailboxes: the admin's personal one, the member's, a pool, and one in B.

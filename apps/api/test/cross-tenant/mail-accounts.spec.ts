@@ -24,6 +24,7 @@ import { CONNECT_STATE_KEY_PREFIX, MAIL_OAUTH_CALLBACK_PATH } from '../../src/ma
 import { MailboxTokens, MailboxUnavailable } from '../../src/mail-accounts/mailbox-tokens.service';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { eventLog, type EventLog } from '../support/outbox';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -166,6 +167,7 @@ describe('mail accounts', () => {
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
             expect(res.status).toBe(201);
+            await verifyAddress(app, http, email);
             return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
         };
         ({ browser: admin, workspace } = await signUp(`mail-admin-${stamp}@example.com`, `Mail ${stamp}`));
@@ -184,6 +186,7 @@ describe('mail accounts', () => {
             .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
             .send({ password });
         expect(joined.status).toBe(201);
+        await verifyAddress(app, http, `mail-member-${stamp}@example.com`);
         member = browserFrom(joined);
     });
 

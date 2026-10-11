@@ -78,6 +78,21 @@ describe('schema invariants', () => {
         expect(exposed, 'tables the app role can reach without a policy').toEqual([]);
     });
 
+    it('#93: mailed single-use links are out of the app role’s reach', () => {
+        const links = tables.find((t) => t.name === 'one_time_tokens');
+        expect(links, 'one_time_tokens exists').toBeDefined();
+        expect(links?.grantsToAppRole).toBe(0);
+    });
+
+    it('#93: the mail outbox takes the app role’s inserts under RLS and nothing else', async () => {
+        const mail = tables.find((t) => t.name === 'mail_outbox');
+        expect(mail).toMatchObject({ rowSecurity: true, forceRowSecurity: true });
+        const grants = await owner.$queryRaw<{ privilege: string }[]>`
+            SELECT privilege_type AS "privilege" FROM information_schema.role_table_grants
+            WHERE table_schema = 'public' AND table_name = 'mail_outbox' AND grantee = ${APP_DB_ROLE}`;
+        expect(grants.map((g) => g.privilege)).toEqual(['INSERT']);
+    });
+
     it('the migration history is out of the app role’s reach', () => {
         const history = tables.find((t) => t.name === '_prisma_migrations');
         expect(history?.grantsToAppRole).toBe(0);

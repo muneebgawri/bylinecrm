@@ -97,6 +97,33 @@ invitation link the page shows.
   from the first request after the restart. That delay is accepted; there is no runtime switch.
 - **Do not set `SIGNUP_MODE=open` on staging.** The URL is public.
 
+## Transactional mail (P0-15)
+
+Staging runs with `NODE_ENV=production`, so the api boots only with transactional mail configured
+(#93, D-246): sign-up verification, invitations and password-reset links go through **Resend**, a
+BylineCRM sending-only key on NewswireOS's account, from `no-reply@pinionnewswire.com`.
+
+- **`MAIL_FROM`** is written by `bootstrap-secrets.sh` (`BylineCRM <no-reply@pinionnewswire.com>`).
+- **`RESEND_API_KEY`** is installed by the owner and kept by every later `bootstrap-secrets.sh` run.
+- **Installing or rotating the key.** Copy the key to the clipboard on the Mac and run:
+
+    ```
+    pbpaste | ssh newswireos-vps 'bash /opt/bylinecrm/releases/<sha>/deploy/staging/install-resend-key.sh'
+    ```
+
+    `<sha>` is any release that has the script: the one a refused deploy names, or
+    `$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA)` once a release with it is live. The key travels
+    only on stdin. It is never an argument, never printed (the script shows its last four
+    characters), and the file stays 0600. Then `docker compose -p bylinecrm-staging restart api`,
+    or deploy.
+
+- **The deploy checks first.** `release-remote.sh` refuses, before pulling or restarting anything,
+  when `staging.env` has no key, and prints the install command for that release. The first
+  deploy of a release with P0-15 therefore goes: deploy (refused, with the command) → install the
+  key → deploy again.
+- **Checking delivery:** sign up or reset from a test address, then look in the Resend dashboard
+  (Emails) or at the received message's headers (SPF, DKIM and DMARC pass for pinionnewswire.com).
+
 ## Routine deploy (Mac)
 
 ```sh

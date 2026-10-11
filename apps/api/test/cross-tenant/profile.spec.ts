@@ -5,6 +5,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { createApp } from '../../src/app';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -64,6 +65,7 @@ describe('profile: the display name (exit check 11)', () => {
             .post('/api/auth/signup')
             .send({ email: `kate.morgan-${stamp}@example.test`, password, workspaceName: 'Profile Co' })
             .expect(201);
+        await verifyAddress(app, http, `kate.morgan-${stamp}@example.test`);
         kate = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
         kateUserId = (signup.body as { user: { id: string } }).user.id;
@@ -72,6 +74,7 @@ describe('profile: the display name (exit check 11)', () => {
             .post('/api/auth/signup')
             .send({ email: `sam-${stamp}@example.test`, password, workspaceName: 'Elsewhere Co' })
             .expect(201);
+        await verifyAddress(app, http, `sam-${stamp}@example.test`);
         sam = browserFrom(other);
     });
 
