@@ -6,6 +6,7 @@ import {
     type GmailPort,
     type GmailProfile,
     type GmailRawMessage,
+    type GmailMessageHeaders,
     type GmailSent,
 } from './gmail.port';
 import { GMAIL_API_BASE, GMAIL_HTTP_TIMEOUT_MS, GMAIL_LIST_PAGE_SIZE } from './mail-sync.constants';
@@ -58,6 +59,22 @@ export class GmailHttp implements GmailPort {
             throw new GmailApiError(null, 'unexpected_response', 'Gmail returned a message without an id or payload');
         }
         return body as unknown as GmailRawMessage;
+    }
+
+    async getMessageHeaders(accessToken: string, id: string, names: readonly string[]): Promise<GmailMessageHeaders> {
+        const params = new URLSearchParams({ format: 'metadata' });
+        for (const name of names) params.append('metadataHeaders', name);
+        const body = await this.get(accessToken, `/messages/${encodeURIComponent(id)}?${params.toString()}`);
+        if (typeof body['id'] !== 'string' || typeof body['threadId'] !== 'string') {
+            throw new GmailApiError(null, 'unexpected_response', 'Gmail returned a message without an id or thread');
+        }
+        const payload = (body['payload'] ?? {}) as { headers?: unknown };
+        const headers = Array.isArray(payload.headers)
+            ? (payload.headers as { name?: unknown; value?: unknown }[])
+                  .filter((h) => typeof h.name === 'string' && typeof h.value === 'string')
+                  .map((h) => ({ name: h.name as string, value: h.value as string }))
+            : [];
+        return { id: body['id'], threadId: body['threadId'], headers };
     }
 
     async send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {
