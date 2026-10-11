@@ -1,9 +1,8 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES, type PlatformEvent } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
@@ -41,7 +40,6 @@ describe('sign-up modes and platform admins (P0-14)', () => {
     let http: () => request.Agent;
     let owner: PrismaService;
     let env: Env;
-    const events: PlatformEvent[] = [];
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const adminEmail = `platform-${stamp}@example.test`;
     const outsiderEmail = `outsider-${stamp}@example.test`;
@@ -76,9 +74,6 @@ describe('sign-up modes and platform admins (P0-14)', () => {
         await app.init();
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         owner = app.get(PrismaService);
-        app.get(EventEmitter2).onAny((type: string | string[], payload: unknown) => {
-            if (typeof type === 'string' && type.startsWith('platform.')) events.push(payload as PlatformEvent);
-        });
 
         // Two accounts made while sign-up is open: the future platform admin and someone else.
         admin = browserFrom(await signup({ email: adminEmail, password, workspaceName: 'Operator' }).expect(201));
@@ -171,7 +166,6 @@ describe('sign-up modes and platform admins (P0-14)', () => {
 
         it('creates the workspace with its roles and no member, and returns the owner’s invitation', async () => {
             env.SIGNUP_MODE = 'closed';
-            events.length = 0;
             const res = await post(admin, '/api/platform/workspaces', { name: 'Client Co', ownerEmail }).expect(201);
             const body = res.body as {
                 workspace: { id: string; name: string };
@@ -192,12 +186,9 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             const row = audit.find((r) => (r.subject as { workspaceId?: string }).workspaceId === workspaceId);
             expect(row).toMatchObject({ subject: { workspaceId, email: ownerEmail } });
             expect(JSON.stringify(row)).not.toContain(token);
-            expect(events).toEqual([
-                expect.objectContaining({
-                    type: 'platform.workspace_created',
-                    subject: { workspaceId, email: ownerEmail },
-                }),
-            ]);
+            expect(
+                audit.filter((r) => (r.subject as { workspaceId?: string }).workspaceId === workspaceId),
+            ).toHaveLength(1);
 
             const list = await http().get('/api/platform/workspaces').set('Cookie', admin.cookie).expect(200);
             const listed = (
@@ -289,8 +280,13 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             });
             expect(again.status).toBe(403);
             expect(
-                events.some((e) => e.type === 'platform.signup_invite_created' && e.subject.email === invitedEmail),
-            ).toBe(true);
+                await owner.platformAudit.count({
+                    where: {
+                        action: 'platform.signup_invite_created',
+                        subject: { path: ['email'], equals: invitedEmail },
+                    },
+                }),
+            ).toBe(1);
         });
 
         it('refuses POST /api/workspaces to anyone who is not a platform admin', async () => {

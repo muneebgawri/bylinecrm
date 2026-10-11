@@ -240,13 +240,8 @@ export class MailSyncService {
             }
             incoming.sort((a, b) => a.parsed.sentAt.getTime() - b.parsed.sentAt.getTime());
             for (const message of incoming) {
-                const announced = await this.store(run.mailbox, message);
-                if (announced.length > 0) {
-                    totals.imported += 1;
-                    for (const event of announced) this.events.publish(event);
-                } else {
-                    totals.duplicates += 1;
-                }
+                if (await this.store(run.mailbox, message)) totals.imported += 1;
+                else totals.duplicates += 1;
             }
         }
         return totals;
@@ -255,12 +250,13 @@ export class MailSyncService {
     // ── Storing one message ──────────────────────────────────────────────────────────────────
 
     /**
-     * Stores the message, its thread and participants; returns the events to announce — its
-     * `email.received` / `email.sent`, then an `email.replied` when it answers one of our sends
-     * (P2-3) — or none when it was already stored. An outbound message that is one of our sends is
-     * linked to it here. One writer: the send job's import and a later sync both come through here.
+     * Stores the message, its thread and participants, and records its events in the same
+     * transaction (P1-6) — its `email.received` / `email.sent`, then an `email.replied` when it
+     * answers one of our sends (P2-3). Returns false when it was already stored (nothing written,
+     * nothing recorded). An outbound message that is one of our sends is linked to it here. One
+     * writer: the send job's import and a later sync both come through here.
      */
-    private async store(mailbox: MailboxRow, message: Incoming): Promise<DomainEvent[]> {
+    private async store(mailbox: MailboxRow, message: Incoming): Promise<boolean> {
         const { parsed, direction } = message;
         try {
             return await this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
@@ -337,7 +333,8 @@ export class MailSyncService {
                         providerThreadId: parsed.providerThreadId,
                         crmId: parsed.crmId,
                     });
-                    return [event];
+                    await this.events.record(tx, event);
+                    return true;
                 }
                 const fromPeople = parsed.participants
                     .filter((p) => p.role === 'from')
@@ -357,11 +354,12 @@ export class MailSyncService {
                     email,
                     fromPeople,
                 );
-                return replied ? [event, replied] : [event];
+                await this.events.recordAll(tx, replied ? [event, replied] : [event]);
+                return true;
             });
         } catch (error) {
             // Another run stored it between our check and our write: it is stored, once.
-            if (uniqueViolation(error)) return [];
+            if (uniqueViolation(error)) return false;
             throw error;
         }
     }

@@ -127,8 +127,8 @@ export class MailboxesService {
                 this.logger.warn(`mailbox ${row.id}: revoke not confirmed by Google (${error.error})`);
             }
         }
-        const after = await this.rls.withWorkspace((tx) =>
-            tx.mailbox.update({
+        const after = await this.rls.withWorkspace(async (tx) => {
+            const disconnected = await tx.mailbox.update({
                 where: { id },
                 data: {
                     status: 'disconnected',
@@ -137,15 +137,16 @@ export class MailboxesService {
                     accessExpiresAt: null,
                     lastError: Prisma.DbNull,
                 },
-            }),
-        );
-        this.events.publish({
-            type: 'mailbox.disconnected',
-            object: 'mailbox',
-            workspaceId: context.workspaceId,
-            actor: actorOf(context),
-            occurredAt: new Date().toISOString(),
-            recordId: id,
+            });
+            await this.events.record(tx, {
+                type: 'mailbox.disconnected',
+                object: 'mailbox',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+            });
+            return disconnected;
         });
         return { mailbox: view(after), revoked };
     }
@@ -310,18 +311,17 @@ export class MailboxesService {
                       },
                   });
             await this.clients.markVerifiedIn(tx, client.rowId);
-            return { result: 'connected' as const, mailboxId: row.id };
+            await this.events.record(tx, {
+                type: 'mailbox.connected',
+                object: 'mailbox',
+                workspaceId,
+                actor: { kind: 'member', id: pending.memberId },
+                occurredAt: new Date().toISOString(),
+                recordId: row.id,
+            });
+            return { result: 'connected' as const };
         });
         if (outcome.result !== 'connected') return end(outcome.result);
-
-        this.events.publish({
-            type: 'mailbox.connected',
-            object: 'mailbox',
-            workspaceId,
-            actor: { kind: 'member', id: pending.memberId },
-            occurredAt: new Date().toISOString(),
-            recordId: outcome.mailboxId,
-        });
         return end('connected');
     }
 

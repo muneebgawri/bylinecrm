@@ -1,11 +1,13 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CSRF_COOKIE, CSRF_HEADER, DEFAULT_STAGES, SESSION_COOKIE, type DomainEvent } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { DomainEvents } from '../../src/events/domain-events.service';
+import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { StageRulesService } from '../../src/pipelines/stage-rules.service';
+import { eventLog, settle, type EventLog } from '../support/outbox';
 
 interface Browser {
     cookie: string;
@@ -76,7 +78,7 @@ describe('pipelines, stages, history, rules', () => {
     let pipeline: Pipeline;
     let otherPipeline: Pipeline;
     const stage = (name: string) => pipeline.stages.find((s) => s.name === name)!;
-    const events: DomainEvent[] = [];
+    let events: EventLog;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -112,7 +114,7 @@ describe('pipelines, stages, history, rules', () => {
         app = await createApp();
         await app.init();
         http = () => request(app.getHttpServer());
-        app.get(EventEmitter2).on('deal.*', (event: DomainEvent) => events.push(event));
+        events = await eventLog(app, 'deal.*');
 
         const signup = await http()
             .post('/api/auth/signup')
@@ -204,7 +206,7 @@ describe('pipelines, stages, history, rules', () => {
 
         it('moves forward by hand, writing history and the stage_changed event', async () => {
             const d = await deal(admin, workspace, 'Forward');
-            events.length = 0;
+            await events.reset();
             const moved = await as(admin)
                 .post(w(`/opportunities/${d.id}/move`))
                 .send({ stageId: stage('Contacted').id })
@@ -219,22 +221,24 @@ describe('pipelines, stages, history, rules', () => {
             ).body as History[];
             expect(history.map((h) => h.reason)).toEqual(['manual', 'manual']);
             expect(history[0]).toMatchObject({ fromStageId: stage('New').id, toStageId: stage('Contacted').id });
-            expect(events.map((e) => e.type)).toEqual(['deal.stage_changed']);
-            expect(events[0]?.object).toBe('opportunity');
-            expect(events[0]?.stage).toMatchObject({
+            const recorded = await events.read();
+            expect(recorded.map((e) => e.type)).toEqual(['deal.stage_changed']);
+            expect(recorded[0]?.object).toBe('opportunity');
+            expect(recorded[0]?.stage).toMatchObject({
                 fromStageId: stage('New').id,
                 toStageId: stage('Contacted').id,
                 reason: 'manual',
             });
-            expect(events[0]?.diff).toEqual({ stageId: { from: stage('New').id, to: stage('Contacted').id } });
+            expect(recorded[0]?.diff).toEqual({ stageId: { from: stage('New').id, to: stage('Contacted').id } });
         });
 
-        it('leaves exactly one deal.stage_changed entry on the deal’s timeline per move', async () => {
+        it('leaves exactly one deal.stage_changed entry on the deal’s timeline per move (P0-13 #89)', async () => {
             const d = await deal(admin, workspace, 'On the timeline');
             await as(admin)
                 .post(w(`/opportunities/${d.id}/move`))
                 .send({ stageId: stage('Contacted').id })
                 .expect(201);
+            await settle(app);
             const page = (
                 await as(admin)
                     .get(w(`/timeline?target=opportunity:${d.id}&kinds=deal.stage_changed`))
@@ -270,7 +274,7 @@ describe('pipelines, stages, history, rules', () => {
 
         it('closes as won with the amount, emits deal.won, and reopens clearing the close', async () => {
             const d = await deal(admin, workspace, 'Winner', { amount: { amountMinor: 100 } });
-            events.length = 0;
+            await events.reset();
             const won = (
                 await as(admin)
                     .post(w(`/opportunities/${d.id}/move`))
@@ -280,8 +284,9 @@ describe('pipelines, stages, history, rules', () => {
             expect(won.deal.closedAt).not.toBeNull();
             expect(won.deal.amount).toEqual({ amountMinor: 1250000, currency: 'USD' });
             // One move, one event: a close is announced as deal.won and nothing else.
-            expect(events.map((e) => e.type)).toEqual(['deal.won']);
-            expect(events[0]?.stage).toMatchObject({ toStageId: stage('Won').id, reason: 'close' });
+            const recorded = await events.read();
+            expect(recorded.map((e) => e.type)).toEqual(['deal.won']);
+            expect(recorded[0]?.stage).toMatchObject({ toStageId: stage('Won').id, reason: 'close' });
             const history = (
                 await as(admin)
                     .get(w(`/opportunities/${d.id}/history`))
@@ -289,7 +294,7 @@ describe('pipelines, stages, history, rules', () => {
             ).body as History[];
             expect(history[0]?.reason).toBe('close');
 
-            events.length = 0;
+            await events.reset();
             const reopened = (
                 await as(admin)
                     .post(w(`/opportunities/${d.id}/move`))
@@ -299,12 +304,12 @@ describe('pipelines, stages, history, rules', () => {
             expect(reopened.deal.closedAt).toBeNull();
             expect(reopened.deal.stageId).toBe(stage('Meeting').id);
             // A reopen lands in an open stage, so it is an ordinary stage change.
-            expect(events.map((e) => e.type)).toEqual(['deal.stage_changed']);
+            expect((await events.read()).map((e) => e.type)).toEqual(['deal.stage_changed']);
         });
 
         it('closes as lost with the reason and emits deal.lost', async () => {
             const d = await deal(admin, workspace, 'Loser');
-            events.length = 0;
+            await events.reset();
             const lost = (
                 await as(admin)
                     .post(w(`/opportunities/${d.id}/move`))
@@ -312,7 +317,7 @@ describe('pipelines, stages, history, rules', () => {
                     .expect(201)
             ).body as { deal: Deal };
             expect(lost.deal.lostReason).toBe('went with a competitor');
-            expect(events.map((e) => e.type)).toEqual(['deal.lost']);
+            expect((await events.read()).map((e) => e.type)).toEqual(['deal.lost']);
         });
 
         it('writes exactly one timeline entry per move, whatever kind of move it is', async () => {
@@ -326,6 +331,7 @@ describe('pipelines, stages, history, rules', () => {
             await move(stage('Won').id, { wonAmount: { amountMinor: 500 } }); // open → won
             await move(stage('Replied').id); // won → open (reopen)
             await move(stage('Lost').id, { lostReason: 'budget' }); // open → lost
+            await settle(app);
             const page = (
                 await as(admin)
                     .get(w(`/timeline?target=opportunity:${d.id}&kinds=deal.`))
@@ -395,7 +401,7 @@ describe('pipelines, stages, history, rules', () => {
         it('move the person’s deals forward to the stage, writing history as the rule, and not twice', async () => {
             rulePerson = await person(admin, workspace, 'Replier');
             const d = await deal(admin, workspace, 'Ruled', { pointOfContactId: rulePerson });
-            events.length = 0;
+            await events.reset();
             const rules = app.get(StageRulesService);
             expect(await rules.apply(replied(workspace, rulePerson))).toBe(1);
             expect(await rules.apply(replied(workspace, rulePerson))).toBe(0);
@@ -413,7 +419,7 @@ describe('pipelines, stages, history, rules', () => {
             expect(history).toHaveLength(2);
             expect(history[0]).toMatchObject({ reason: 'rule', actor: { kind: 'rule' } });
             expect((history[0]?.actor as { id: string | null }).id).toBeTruthy();
-            expect(events.filter((e) => e.type === 'deal.stage_changed')).toHaveLength(1);
+            expect((await events.read()).filter((e) => e.type === 'deal.stage_changed')).toHaveLength(1);
         });
 
         it('never move a deal backward unless the rule allows it', async () => {
@@ -445,10 +451,13 @@ describe('pipelines, stages, history, rules', () => {
             expect(after.stageId).toBe(otherPipeline.stages[0]!.id);
         });
 
-        it('fire from the event bus', async () => {
+        it('fire when an email.replied event is recorded and delivered', async () => {
             const p = await person(admin, workspace, 'Bus');
             const d = await deal(admin, workspace, 'Via bus', { pointOfContactId: p });
-            await app.get(EventEmitter2).emitAsync('email.replied', replied(workspace, p));
+            await app
+                .get(RlsPrismaService)
+                .withWorkspace(workspace, (tx) => app.get(DomainEvents).record(tx, replied(workspace, p)));
+            await settle(app);
             const after = (
                 await as(admin)
                     .get(w(`/opportunities/${d.id}`))

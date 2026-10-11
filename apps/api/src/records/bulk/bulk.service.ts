@@ -74,8 +74,8 @@ function tooMany(count: number | string): PayloadTooLargeException {
  * - **What it acts on:** named ids (at most `BULK_MAX_IDS`, duplicates once), or the records a
  *   list request (filter / view / search) selects — counted first, and refused with `413` past
  *   `BULK_MAX_IDS` rather than cut short.
- * - **Chunks:** `BULK_CHUNK_SIZE` records per transaction; each chunk's events are published
- *   after it commits, so a subscriber never sees a change that rolled back.
+ * - **Chunks:** `BULK_CHUNK_SIZE` records per transaction; each chunk's events are recorded in
+ *   that transaction (P1-6), so they exist exactly when its changes committed.
  * - **What it reports:** one result per record, in the order named. A record the caller cannot
  *   act on in this state — another owner's, another workspace's, already deleted, never existed —
  *   is `{ ok: false, error: 'not_found' }`, the same answer whatever the reason, so the response
@@ -107,11 +107,20 @@ export class BulkService {
 
         const results = new Map<string, BulkRowResult>();
         for (const chunk of chunked(ids, BULK_CHUNK_SIZE)) {
-            const { rows, events } = await this.rls.withWorkspace((tx) =>
-                this.applyChunk(tx, context, records, request.action, chunk, deleted, ownerId ?? null),
-            );
+            const rows = await this.rls.withWorkspace(async (tx) => {
+                const applied = await this.applyChunk(
+                    tx,
+                    context,
+                    records,
+                    request.action,
+                    chunk,
+                    deleted,
+                    ownerId ?? null,
+                );
+                await this.events.recordAll(tx, applied.events);
+                return applied.rows;
+            });
             for (const row of rows) results.set(row.id, row);
-            for (const event of events) this.events.publish(event);
         }
 
         const ordered = ids.map((id) => results.get(id)!);

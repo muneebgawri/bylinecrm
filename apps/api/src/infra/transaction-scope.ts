@@ -12,16 +12,44 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * sender, and the Gmail and Google fakes every test runs against) call `assertNoOpenTransaction`
  * before they go out, so a regression fails loudly at the call that broke the rule.
  */
-const openTransaction = new AsyncLocalStorage<true>();
+interface OpenTransaction {
+    /** Run once the transaction has committed, in registration order; dropped if it rolls back. */
+    readonly afterCommit: (() => void)[];
+}
 
-/** Runs `fn` marked as inside a tenant transaction. Used by `withWorkspace` only. */
-export function insideTransaction<T>(fn: () => T): T {
-    return openTransaction.run(true, fn);
+const openTransaction = new AsyncLocalStorage<OpenTransaction>();
+
+/**
+ * Runs `fn` marked as inside a tenant transaction, with `hooks` collecting what must run after it
+ * commits (`afterCommit`). Used by `withWorkspace` only, which runs the hooks once the commit is
+ * through and discards them when the transaction fails.
+ */
+export function insideTransaction<T>(hooks: (() => void)[], fn: () => T): T {
+    return openTransaction.run({ afterCommit: hooks }, fn);
 }
 
 /** True inside a tenant transaction's callback (and anything it awaits). */
 export function transactionOpen(): boolean {
-    return openTransaction.getStore() === true;
+    return openTransaction.getStore() !== undefined;
+}
+
+/** Called outside a tenant transaction by code that may only run inside one. */
+export class NoOpenTransactionError extends Error {
+    constructor(call: string) {
+        super(`${call} must be called inside withWorkspace, in the transaction that makes the change`);
+        this.name = 'NoOpenTransactionError';
+    }
+}
+
+/**
+ * Registers `hook` to run after the current tenant transaction commits — never if it rolls back.
+ * The outbox uses it to wake the relay the moment an event is durable. A hook must not throw;
+ * throws `NoOpenTransactionError` outside a transaction. `call` names the caller, for the message.
+ */
+export function afterCommit(call: string, hook: () => void): void {
+    const open = openTransaction.getStore();
+    if (!open) throw new NoOpenTransactionError(call);
+    open.afterCommit.push(hook);
 }
 
 /** A network call was made while a tenant transaction held its connection. */

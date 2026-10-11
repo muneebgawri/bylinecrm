@@ -12,7 +12,7 @@ import { Prisma } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, StateConflict, ValidationFailed } from '../infra/errors/api-errors';
-import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
 import { MailboxesService } from '../mail-accounts/mailboxes.service';
@@ -163,8 +163,8 @@ export class MailSendService {
         const rfc822MessageId = newMessageId();
         const prepared = await this.prepare(input, { id, rfc822MessageId });
 
-        const row = await this.rls.withWorkspace((tx) =>
-            tx.mailOutbound.create({
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const created = await tx.mailOutbound.create({
                 data: {
                     id,
                     workspaceId: context.workspaceId,
@@ -187,14 +187,15 @@ export class MailSendService {
                           }
                         : { mime: prepared.mime }),
                 },
-            }),
-        );
+            });
+            if (sendAt) await this.announce(tx, 'email.scheduled', context, created.id);
+            return created;
+        });
         const job: MailSendJob = { workspaceId: context.workspaceId, messageId: row.id };
         await this.queue.add('send', job, {
             jobId: row.id,
             ...(sendAt ? { delay: Math.max(0, sendAt.getTime() - Date.now()) } : {}),
         });
-        if (sendAt) this.announce('email.scheduled', context, row.id);
         return {
             messageId: row.id,
             status: sendAt ? 'scheduled' : 'queued',
@@ -341,19 +342,20 @@ export class MailSendService {
         const row = await this.ownSend(id);
         if (row.status === 'cancelled') return view(row, null);
         if (row.status !== 'scheduled') throw notScheduled(row.status);
-        const changed = await this.rls.withWorkspace((tx) =>
-            tx.mailOutbound.updateMany({
+        const changed = await this.rls.withWorkspace(async (tx) => {
+            const result = await tx.mailOutbound.updateMany({
                 where: { id, status: 'scheduled' },
                 data: { status: 'cancelled', cancelledAt: new Date() },
-            }),
-        );
+            });
+            if (result.count > 0) await this.announce(tx, 'email.cancelled', context, id);
+            return result;
+        });
         if (changed.count === 0) {
             const now = await this.ownSend(id);
             if (now.status === 'cancelled') return view(now, null);
             throw notScheduled(now.status);
         }
         await this.dropJob(id);
-        this.announce('email.cancelled', context, id);
         return view(await this.ownSend(id), null);
     }
 
@@ -657,12 +659,14 @@ export class MailSendService {
         }
     }
 
+    /** Records a scheduling event in the transaction that made the change (P1-6). */
     private announce(
+        tx: WorkspaceClient,
         type: 'email.scheduled' | 'email.cancelled',
         context: WorkspaceRunContext,
         recordId: string,
-    ): void {
-        this.events.publish({
+    ): Promise<void> {
+        return this.events.record(tx, {
             type,
             object: 'email',
             workspaceId: context.workspaceId,

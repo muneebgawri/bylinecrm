@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { type INestApplication } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { CSRF_COOKIE, CSRF_HEADER, GMAIL_SCOPES, SESSION_COOKIE, SYSTEM_ROLES, type RichText } from '@bylinecrm/shared';
@@ -19,6 +18,7 @@ import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MailSyncService } from '../../src/mail-sync/mail-sync.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { eventLog, settle, type EventLog } from '../support/outbox';
 
 interface Browser {
     cookie: string;
@@ -129,7 +129,7 @@ describe('mail send and reply detection', () => {
     let stages: Stage[];
     let webhookEndpoint: string;
 
-    const events: BusEvent[] = [];
+    let events: EventLog;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -167,8 +167,10 @@ describe('mail send and reply detection', () => {
         return (await status(messageId, who)).body as Outbound;
     }
 
-    const ofType = (type: string, recordId?: string) =>
-        events.filter((e) => e.type === type && (recordId === undefined || e.recordId === recordId));
+    const ofType = async (type: string, recordId?: string) =>
+        ((await events.read()) as unknown as BusEvent[]).filter(
+            (e) => e.type === type && (recordId === undefined || e.recordId === recordId),
+        );
 
     async function deliveries(eventName: string): Promise<number> {
         return owner.webhookDelivery.count({ where: { endpointId: webhookEndpoint, eventName } });
@@ -188,9 +190,7 @@ describe('mail send and reply detection', () => {
         send = app.get(MailSendService);
         sync = app.get(MailSyncService);
         queue = app.get<Queue>(getQueueToken(MAIL_SEND_QUEUE));
-        app.get(EventEmitter2).onAny((type: string | string[], payload: unknown) => {
-            if (typeof type === 'string' && type.startsWith('email.')) events.push(payload as BusEvent);
-        });
+        events = await eventLog(app, 'email.*');
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -334,7 +334,8 @@ describe('mail send and reply detection', () => {
             expect(sent.threadId).not.toBeNull();
             const threads = await as(admin).get(w(`/mail/threads?target=person:${danaId}`));
             expect((threads.body as { items: { id: string }[] }).items.map((x) => x.id)).toContain(sent.threadId);
-            expect(ofType('email.sent', sent.mailMessageId!)).toHaveLength(1);
+            expect(await ofType('email.sent', sent.mailMessageId!)).toHaveLength(1);
+            await settle(app);
             const timeline = await as(admin).get(w(`/timeline?target=person:${danaId}&kinds=linked-email`));
             const kinds = (timeline.body as { items: { kind: string; linked: { id: string } | null }[] }).items
                 .filter((i) => i.linked?.id === sent.mailMessageId)
@@ -349,7 +350,7 @@ describe('mail send and reply detection', () => {
                 where: { mailboxId: adminMailbox, providerMessageId: gmail.sent.at(-1)!.id },
             });
             expect(rows).toBe(1);
-            expect(ofType('email.sent', sent.mailMessageId!)).toHaveLength(1);
+            expect(await ofType('email.sent', sent.mailMessageId!)).toHaveLength(1);
         });
 
         it('delivering the same job again sends nothing (one job, one message)', async () => {
@@ -573,7 +574,7 @@ describe('mail send and reply detection', () => {
                 inReplyTo: deliveredMessageId,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            const replied = ofType('email.replied');
+            const replied = await ofType('email.replied');
             expect(replied).toHaveLength(1);
             expect(replied[0]).toMatchObject({
                 workspaceId: workspace,
@@ -590,27 +591,20 @@ describe('mail send and reply detection', () => {
                     { type: 'company', id: acmeId },
                 ]),
             );
-            const deal = await eventually(
-                async () => ((await as(admin).get(w(`/opportunities/${dealId}`))).body as { stageId: string }).stageId,
-                (id) => id === stage('Replied').id,
-            );
+            await settle(app);
+            const deal = ((await as(admin).get(w(`/opportunities/${dealId}`))).body as { stageId: string }).stageId;
             expect(deal).toBe(stage('Replied').id);
             const history = (await as(admin).get(w(`/opportunities/${dealId}/history`))).body as {
                 reason: string;
                 actor: { kind: string };
             }[];
             expect(history[0]).toMatchObject({ reason: 'rule', actor: { kind: 'rule' } });
-            expect(
-                await eventually(
-                    () => deliveries('email.replied'),
-                    (n) => n === 1,
-                ),
-            ).toBe(1);
+            expect(await deliveries('email.replied')).toBe(1);
         });
 
         it('never announces the same reply twice', async () => {
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            expect(ofType('email.replied')).toHaveLength(1);
+            expect(await ofType('email.replied')).toHaveLength(1);
         });
 
         it('recognises a reply in the same Gmail thread without In-Reply-To', async () => {
@@ -629,13 +623,13 @@ describe('mail send and reply detection', () => {
                 date: sameSecond,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            expect(ofType('email.replied')).toHaveLength(2);
+            expect(await ofType('email.replied')).toHaveLength(2);
         });
 
         it('does not take unrelated inbound mail for a reply', async () => {
             gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Unrelated', text: 'Hello again' });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            expect(ofType('email.replied')).toHaveLength(2);
+            expect(await ofType('email.replied')).toHaveLength(2);
         });
 
         it('refuses a reply to a message that is not in the sending mailbox', async () => {
@@ -670,8 +664,8 @@ describe('mail send and reply detection', () => {
             body: body(para(t('Hello from the CRM.'))),
         });
         const sentBy = (email: string) => gmail.sent.filter((s) => s.email === email).length;
-        const repliesTo = (outboundId: string) =>
-            events.filter((e) => e.type === 'email.replied' && e.reply?.inReplyToOutboundId === outboundId);
+        const repliesTo = async (outboundId: string) =>
+            (await ofType('email.replied')).filter((e) => e.reply?.inReplyToOutboundId === outboundId);
 
         beforeAll(async () => {
             const created = await as(admin)
@@ -747,9 +741,9 @@ describe('mail send and reply detection', () => {
                 inReplyTo: copy.rfc822MessageId!,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            expect(repliesTo(out.id)).toHaveLength(1);
+            expect(await repliesTo(out.id)).toHaveLength(1);
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            expect(repliesTo(out.id)).toHaveLength(1);
+            expect(await repliesTo(out.id)).toHaveLength(1);
         });
 
         it('detects a reply in the same Gmail thread with no In-Reply-To exactly once', async () => {
@@ -763,7 +757,7 @@ describe('mail send and reply detection', () => {
                 threadId: row.providerThreadId!,
             });
             await sync.syncMailbox(workspace, adminMailbox, noWait);
-            expect(repliesTo(out.id)).toHaveLength(1);
+            expect(await repliesTo(out.id)).toHaveLength(1);
         });
     });
 
@@ -819,12 +813,3 @@ describe('mail send and reply detection', () => {
         });
     });
 });
-
-async function eventually<T>(read: () => Promise<T>, done: (value: T) => boolean, timeoutMs = 5_000): Promise<T> {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-        const value = await read();
-        if (done(value) || Date.now() > deadline) return value;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-}

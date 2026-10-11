@@ -1,44 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
-import { isDomainEventType, type DomainEvent } from '@bylinecrm/shared';
+import { Injectable } from '@nestjs/common';
+import type { DomainEvent } from '@bylinecrm/shared';
+import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
 import { TimelineService } from './timeline.service';
 
 /**
- * The one listener that turns domain events into timeline entries. It subscribes to every
- * channel and keeps only catalogue events, so an event a later package adds to the catalogue
- * (P1-2's stage moves) is on the timeline the day it is published, with no edit here.
- *
- * The bus delivers synchronously to the request that published, so a failure here is caught
- * and logged rather than thrown: the write that caused the event has already committed, and a
- * timeline entry that could not be written is a defect to fix, not a reason to fail a request
- * after the fact. `timeline.*` is never published, so nothing here can loop.
+ * The one consumer that turns domain events into timeline entries. It takes every event and
+ * writes what `writeFor` derives — nothing for a type with no entry (a mailbox's), so an event a
+ * later package adds is on the timeline the day it is recorded, with no edit here. A failure is
+ * thrown to the relay, which retries; the entry is keyed on the event, so a retry never doubles it.
  */
 @Injectable()
-export class TimelineSubscriber {
-    private readonly logger = new Logger(TimelineSubscriber.name);
-
+@OutboxConsumerOf('timeline')
+export class TimelineSubscriber implements OutboxConsumer {
     constructor(private readonly timeline: TimelineService) {}
 
-    @OnEvent('**')
-    async onDomainEvent(event: unknown): Promise<void> {
-        if (!isDomainEvent(event)) return;
-        try {
-            await this.timeline.writeFor(event);
-        } catch (error) {
-            this.logger.error(
-                `timeline entry not written for ${event.type} ${event.recordId} in ${event.workspaceId}`,
-                error instanceof Error ? error.stack : String(error),
-            );
-        }
+    accepts(_event: DomainEvent): boolean {
+        return true;
     }
-}
 
-function isDomainEvent(value: unknown): value is DomainEvent {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        isDomainEventType((value as { type?: unknown }).type) &&
-        typeof (value as { workspaceId?: unknown }).workspaceId === 'string' &&
-        typeof (value as { recordId?: unknown }).recordId === 'string'
-    );
+    async consume(delivered: DeliveredEvent): Promise<void> {
+        await this.timeline.writeFor(delivered);
+    }
 }
