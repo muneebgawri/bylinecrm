@@ -41,3 +41,30 @@ describe('SIGNUP_MODE and PLATFORM_ADMIN_EMAILS (P0-14)', () => {
         );
     });
 });
+
+describe('#93 (D-246): transactional mail configuration', () => {
+    it('outside production, no key is valid: mail goes to the in-process memory transport', () => {
+        const env = parseEnv(base);
+        expect(env.NODE_ENV).toBe('development');
+        expect(env.RESEND_API_KEY).toBeUndefined();
+        expect(env.MAIL_FROM).toBe('BylineCRM <no-reply@localhost>');
+        expect(env.TRANSACTIONAL_MAIL_WORKER).toBe(true);
+    });
+
+    it('in production, refuses to boot without a Resend key and an explicit From', () => {
+        expect(() => parseEnv({ ...base, NODE_ENV: 'production' })).toThrow(/RESEND_API_KEY/);
+        expect(() => parseEnv({ ...base, NODE_ENV: 'production', RESEND_API_KEY: 're_test_123' })).toThrow(/MAIL_FROM/);
+        const env = parseEnv({
+            ...base,
+            NODE_ENV: 'production',
+            RESEND_API_KEY: 're_test_123',
+            MAIL_FROM: 'BylineCRM <no-reply@pinionnewswire.com>',
+        });
+        expect(env.MAIL_FROM).toBe('BylineCRM <no-reply@pinionnewswire.com>');
+    });
+
+    it('refuses a key that is not a Resend key, and an unknown NODE_ENV', () => {
+        expect(() => parseEnv({ ...base, RESEND_API_KEY: 'sk_live_nope' })).toThrow(/RESEND_API_KEY/);
+        expect(() => parseEnv({ ...base, NODE_ENV: 'prod' })).toThrow(/NODE_ENV/);
+    });
+});
