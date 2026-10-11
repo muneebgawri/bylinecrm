@@ -60,7 +60,7 @@ export function SignIn() {
                 <p className="m-0 -mt-2 text-right text-[13px]">
                     <Link
                         to={paths.forgotPassword}
-                        className="inline-flex min-h-11 items-center font-medium text-text-muted underline-offset-4 hover:text-text hover:underline sm:min-h-0"
+                        className="inline-flex min-h-touch items-center font-medium text-text-muted underline-offset-4 hover:text-text hover:underline md:min-h-0"
                     >
                         Forgot your password?
                     </Link>
