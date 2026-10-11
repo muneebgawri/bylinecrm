@@ -62,6 +62,11 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/templates/${ID}$`), (m) => byId(data.templates, m[1])],
     [new RegExp(`^${W}/templates$`), () => data.page(data.templates)],
     [new RegExp(`^${W}/settings/mail$`), () => data.mailSettings],
+    [new RegExp(`^${W}/mail/oauth-client/status$`), () => data.oauthClientStatus],
+    [new RegExp(`^${W}/mail/oauth-client$`), () => data.oauthClient],
+    [new RegExp(`^${W}/mail/blocklist$`), () => data.blocklist],
+    [new RegExp(`^${W}/mailboxes/${ID}/sync$`), (m) => data.mailboxSync(m[1] ?? '')],
+    [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
     [
         new RegExp(`^${W}/search$`),
         () => ({ people: data.people, companies: data.companies, opportunities: data.deals }),
