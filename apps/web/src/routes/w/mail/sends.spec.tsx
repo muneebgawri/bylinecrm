@@ -10,6 +10,7 @@ import { json, renderAt, route, stubApi, type FakeRoute } from '../settings/sett
 import { PERSON, WS, isRecordSends, outbound, quietRecordRoutes, recordSendsRoute } from './mailTestKit';
 
 const CAN_SEND: Capability[] = ['email:send', 'mailbox:read', 'record:read'];
+const READ_ONLY: Capability[] = ['record:read'];
 const target = { type: 'person' as const, id: PERSON.id };
 
 const session = (id: string): SessionSend => ({
@@ -289,6 +290,54 @@ describe('#104: a record’s sends come from the server, a page at a time', () =
         expect(await screen.findByText('scheduled “Far ahead”')).toBeInTheDocument();
         expect(seen.some((r) => r.url.includes('cursor=c2'))).toBe(true);
         expect(screen.queryByRole('button', { name: 'Show more sends' })).not.toBeInTheDocument();
+    });
+});
+
+describe('#133: a colleague’s send on a shared record is visible, and read-only', () => {
+    const theirs = outbound({
+        id: 'out-12',
+        status: 'scheduled',
+        subject: 'Their follow-up',
+        sendAt: '2026-12-02T09:00:00.000Z',
+        senderTimeZone: 'Europe/London',
+        senderMemberId: 'm-2',
+        canChange: false,
+    });
+    const names = (r: { url: string }) =>
+        r.url.endsWith('/members/summary')
+            ? json([
+                  { memberId: 'm-1', name: 'Kate Morgan' },
+                  { memberId: 'm-2', name: 'Sam Lee' },
+              ])
+            : undefined;
+
+    it('shows when it goes and who sent it, without Reschedule or Cancel', async () => {
+        stubApi([recordSendsRoute([theirs]), statusRoute('out-12', [theirs]), names, ...quietRecordRoutes]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByText(/^Scheduled for .*\(Europe\/London\)$/)).toBeInTheDocument();
+        expect(await screen.findByText('Sam Lee')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Cancel send' })).not.toBeInTheDocument();
+    });
+
+    it('is shown to a reader who may not send mail', async () => {
+        const seen = stubApi([
+            recordSendsRoute([theirs]),
+            statusRoute('out-12', [theirs]),
+            names,
+            ...quietRecordRoutes,
+        ]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            READ_ONLY,
+        );
+        expect(await screen.findByText('scheduled “Their follow-up”')).toBeInTheDocument();
+        expect(seen.some(isRecordSends)).toBe(true);
     });
 });
 

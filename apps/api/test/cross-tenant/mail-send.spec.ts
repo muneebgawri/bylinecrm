@@ -782,9 +782,13 @@ describe('mail send and reply detection', () => {
             adminOutbound = (res.body as { messageId: string }).messageId;
         });
 
-        it('shows a message’s status to its sender and to an admin, not to another member', async () => {
-            expect((await status(adminOutbound)).status).toBe(200);
-            expect((await status(adminOutbound, member)).status).toBe(404);
+        it('shows a message’s status to anyone who can read its record, changeable only by sender or admin (#133)', async () => {
+            const own = await status(adminOutbound);
+            expect(own.status).toBe(200);
+            expect((own.body as { canChange: boolean }).canChange).toBe(true);
+            const colleague = await status(adminOutbound, member);
+            expect(colleague.status).toBe(200);
+            expect((colleague.body as { canChange: boolean }).canChange).toBe(false);
         });
 
         it('B cannot send from A’s mailbox, reply to A’s message, or read A’s status', async () => {

@@ -34,12 +34,17 @@ export function SendStatus({ workspaceId, send }: { workspaceId: string; send: P
     const [confirming, setConfirming] = useState(false);
 
     if (send.status === 'scheduled' && send.sendAt) {
+        // The zone can be long ("America/Argentina/Buenos_Aires"): the badge wraps on a phone.
+        const badge = (
+            <Badge status="info" role="status" className="h-auto min-h-5.5 max-w-full py-0.5 whitespace-normal">
+                Scheduled for {formatSendAt(send.sendAt, send.senderTimeZone)}
+            </Badge>
+        );
+        // A colleague's send is shown read-only: only its sender or an admin may move it (#133).
+        if (!send.canChange) return badge;
         return (
             <>
-                {/* The zone can be long ("America/Argentina/Buenos_Aires"): the badge wraps on a phone. */}
-                <Badge status="info" role="status" className="h-auto min-h-5.5 max-w-full py-0.5 whitespace-normal">
-                    Scheduled for {formatSendAt(send.sendAt, send.senderTimeZone)}
-                </Badge>
+                {badge}
                 <SchedulePicker
                     title="Reschedule send"
                     confirm="Reschedule"

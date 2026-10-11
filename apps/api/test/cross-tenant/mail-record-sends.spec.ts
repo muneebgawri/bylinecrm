@@ -40,6 +40,7 @@ interface Outbound {
     personId: string | null;
     dealId: string | null;
     senderMemberId: string;
+    canChange: boolean;
     createdAt: string;
     error: { code: string; message: string; fields?: string[] } | null;
 }
@@ -320,6 +321,10 @@ describe('#104 a record’s sends', () => {
         const detail = await as(member).get(w(`/mail/messages/${id}`));
         expect(detail.status, JSON.stringify(detail.body)).toBe(200);
         expect((detail.body as Outbound).senderMemberId).toBe(adminMember);
+        // The page offers Reschedule and Cancel only where the API will take them.
+        expect((detail.body as Outbound).canChange).toBe(false);
+        expect(items.find((s) => s.id === id)!.canChange).toBe(false);
+        expect(((await as(admin).get(w(`/mail/messages/${id}`))).body as Outbound).canChange).toBe(true);
     });
 
     it('#133 the scheduled list shows every scheduled send on records the caller can read', async () => {

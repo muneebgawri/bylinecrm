@@ -134,9 +134,10 @@ export function useOutboundMessages(workspaceId: string, messageIds: readonly st
 
 /**
  * A record's failed and scheduled sends from the server (#104), newest first, a page at a time —
- * so a reload still shows a failure with its reason, and a scheduled send with its time.
+ * so a reload still shows a failure with its reason, and a scheduled send with its time. Anyone who
+ * can read the record sees them (#133), whether or not they may send mail.
  */
-export const useRecordSends = (workspaceId: string, target: RecordTarget, enabled: boolean) =>
+export const useRecordSends = (workspaceId: string, target: RecordTarget) =>
     useInfiniteQuery({
         queryKey: keys.mailRecordSends(workspaceId, target),
         queryFn: ({ pageParam, signal }) =>
@@ -147,7 +148,6 @@ export const useRecordSends = (workspaceId: string, target: RecordTarget, enable
             ),
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (last) => last.nextCursor ?? undefined,
-        enabled,
     });
 
 /**

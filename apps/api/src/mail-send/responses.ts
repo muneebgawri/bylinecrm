@@ -45,6 +45,9 @@ export const mailOutboundView = named(
         templateId: id.nullable(),
         replyToMessageId: id.nullable().meta({ description: 'The stored message this one answers.' }),
         senderMemberId: id.meta({ description: 'The member who sent (or scheduled) it.' }),
+        canChange: z.boolean().meta({
+            description: 'Whether the caller may reschedule or cancel it: its sender or an admin (#133).',
+        }),
         rfc822MessageId: z.string().meta({ description: 'Our Message-ID, without angle brackets.' }),
         mailMessageId: id.nullable().meta({
             description: 'The stored copy of the sent message (its thread is on the records); null until stored.',
