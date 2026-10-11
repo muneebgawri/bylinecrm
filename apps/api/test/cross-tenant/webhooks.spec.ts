@@ -28,6 +28,7 @@ import {
     WEBHOOK_SWEEP_GRACE_MS,
 } from '../../src/webhooks/webhooks.constants';
 import { WebhooksService } from '../../src/webhooks/webhooks.service';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -148,6 +149,7 @@ describe('webhooks', () => {
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
             expect(res.status).toBe(201);
+            await verifyAddress(app, http, email);
             return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
         };
         ({ browser: admin, workspace } = await signUp(`wh-admin-${stamp}@example.com`, `Webhooks ${stamp}`));

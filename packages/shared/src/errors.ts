@@ -16,6 +16,10 @@ export const ERROR_CODES = [
     'signup.closed',
     /** `403`: sign-up needs a valid platform sign-up invitation for this address (`SIGNUP_MODE=invite`). */
     'signup.invitation_required',
+    /** `403`: the signed-in person has not verified their address yet; a mailed link does it (#93). */
+    'email.unverified',
+    /** `400`: a mailed single-use link is unknown, spent, expired or for something else (#93). */
+    'token.invalid',
     /** `403`: the route is for platform admins (a verified address in `PLATFORM_ADMIN_EMAILS`). */
     'platform.forbidden',
     /** No such record, or not one this caller can see — the two are never told apart. */

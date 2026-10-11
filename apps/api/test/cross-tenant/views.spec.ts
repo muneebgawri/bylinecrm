@@ -11,6 +11,7 @@ import {
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -88,6 +89,7 @@ describe('views, filters, export and search', () => {
             .post('/api/auth/signup')
             .send({ email: `admin-${stamp}@example.test`, password, workspaceName: 'Views Co' })
             .expect(201);
+        await verifyAddress(app, http, `admin-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
 
@@ -95,6 +97,7 @@ describe('views, filters, export and search', () => {
             .post('/api/auth/signup')
             .send({ email: `other-${stamp}@example.test`, password, workspaceName: 'Elsewhere Co' })
             .expect(201);
+        await verifyAddress(app, http, `other-${stamp}@example.test`);
         other = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
 
@@ -116,6 +119,7 @@ describe('views, filters, export and search', () => {
                 .send({ password })
                 .expect(201),
         );
+        await verifyAddress(app, http, `rep-${stamp}@example.test`);
         const members = await as(admin).get(w('/members')).expect(200);
         const byEmail = new Map((members.body as { id: string; email: string }[]).map((m) => [m.email, m.id] as const));
         adminMemberId = byEmail.get(`admin-${stamp}@example.test`)!;

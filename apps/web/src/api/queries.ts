@@ -251,6 +251,32 @@ export function useLogout() {
     return useMutation({ mutationFn: () => auth.logout(), onSettled: () => client.clear() });
 }
 
+/** Spends a verification link; whoever is signed in is now verified, so `me` is read again (#93). */
+export function useVerifyEmail() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (token: string) => auth.verifyEmail(token),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.me }),
+    });
+}
+
+export function useResendVerification() {
+    return useMutation({ mutationFn: () => auth.resendVerification() });
+}
+
+export function useForgotPassword() {
+    return useMutation({ mutationFn: (email: string) => auth.forgotPassword(email) });
+}
+
+/** A reset signs this browser in as the account (and out everywhere else): the cache starts over. */
+export function useResetPassword() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: { token: string; password: string }) => auth.resetPassword(input.token, input.password),
+        onSuccess: () => client.clear(),
+    });
+}
+
 export function useCreateWorkspace() {
     const client = useQueryClient();
     return useMutation({

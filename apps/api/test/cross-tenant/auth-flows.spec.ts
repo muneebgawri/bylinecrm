@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LOGIN_MAX_ATTEMPTS } from '../../src/auth/auth.constants';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { createApp } from '../../src/app';
+import { verifyAddress } from '../support/mail';
 
 /** A signed-in browser: the two cookies and the header a mutation needs. */
 interface Browser {
@@ -62,6 +63,9 @@ describe('auth flows', () => {
             .expect(201);
         b = browserFrom(signupB);
         workspaceB = (signupB.body as { workspace: { id: string } }).workspace.id;
+        // Both start unverified (#93); `transactional-mail.spec` covers that state. Here they prove their mailboxes.
+        await verifyAddress(app, http, emailA);
+        await verifyAddress(app, http, emailB);
     });
 
     afterAll(async () => {
@@ -70,7 +74,7 @@ describe('auth flows', () => {
 
     it('signs a user up and knows who they are', async () => {
         const me = await http().get('/api/me').set('Cookie', a.cookie).expect(200);
-        expect(me.body).toMatchObject({ email: emailA, emailVerified: false });
+        expect(me.body).toMatchObject({ email: emailA, emailVerified: true });
         const workspaces = await http().get('/api/me/workspaces').set('Cookie', a.cookie).expect(200);
         expect((workspaces.body as { id: string }[]).map((w) => w.id)).toEqual([workspaceA]);
     });
@@ -183,8 +187,10 @@ describe('auth flows', () => {
             m = browserFrom(joined);
             expect((joined.body as { id: string }).id).toBe(workspaceA);
             await http().post(`/api/auth/invites/${token}/signup`).send({ password }).expect(410);
+            // The inviter saw the same link, so it proves nothing about the mailbox (#93): a mailed link does.
             const me = await http().get('/api/me').set('Cookie', m.cookie).expect(200);
-            expect(me.body).toMatchObject({ email: emailM, emailVerified: true });
+            expect(me.body).toMatchObject({ email: emailM, emailVerified: false });
+            await verifyAddress(app, http, emailM);
         });
 
         it('a member can read roles but not change them', async () => {

@@ -23,7 +23,7 @@ function context(req: Partial<AuthenticatedRequest>, handler: object = {}): Exec
 
 describe('CsrfGuard', () => {
     const guard = new CsrfGuard();
-    const user: Principal = { kind: 'user', userId: 'u', sessionId: 's' };
+    const user: Principal = { kind: 'user', userId: 'u', sessionId: 's', emailVerified: true };
 
     it('lets a cookie-authenticated mutation through when the header echoes the cookie', () => {
         const req = {
@@ -137,7 +137,7 @@ describe('WorkspaceGuard', () => {
         const guard = new WorkspaceGuard(workspaceContext, memberships, roles);
         return { guard, workspaceContext, memberships, roles };
     }
-    const user: Principal = { kind: 'user', userId: 'u', sessionId: 's' };
+    const user: Principal = { kind: 'user', userId: 'u', sessionId: 's', emailVerified: true };
 
     it('refuses a non-member before any workspace-scoped query is made', async () => {
         const { guard, workspaceContext, roles } = build(null);
@@ -152,6 +152,25 @@ describe('WorkspaceGuard', () => {
                 ),
             ),
         ).rejects.toThrow(/not a member/);
+        expect(roles.access).not.toHaveBeenCalled();
+        expect(workspaceContext.get()).toBeUndefined();
+    });
+
+    it('#93: refuses an unverified person before looking up any membership', async () => {
+        const { guard, workspaceContext, memberships, roles } = build({ memberId: 'm', roleId: 'r' });
+        const unverified: Principal = { kind: 'user', userId: 'u', sessionId: 's', emailVerified: false };
+        await expect(
+            workspaceContext.begin(() =>
+                guard.canActivate(
+                    context({
+                        path: `/api/w/${WORKSPACE_A}/roles`,
+                        params: { workspaceId: WORKSPACE_A },
+                        principal: unverified,
+                    }),
+                ),
+            ),
+        ).rejects.toMatchObject({ code: 'email.unverified' });
+        expect(memberships.find).not.toHaveBeenCalled();
         expect(roles.access).not.toHaveBeenCalled();
         expect(workspaceContext.get()).toBeUndefined();
     });

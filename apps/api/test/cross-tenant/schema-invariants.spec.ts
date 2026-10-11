@@ -78,6 +78,12 @@ describe('schema invariants', () => {
         expect(exposed, 'tables the app role can reach without a policy').toEqual([]);
     });
 
+    it('#93: mailed single-use links are out of the app role’s reach', () => {
+        const links = tables.find((t) => t.name === 'one_time_tokens');
+        expect(links, 'one_time_tokens exists').toBeDefined();
+        expect(links?.grantsToAppRole).toBe(0);
+    });
+
     it('the migration history is out of the app role’s reach', () => {
         const history = tables.find((t) => t.name === '_prisma_migrations');
         expect(history?.grantsToAppRole).toBe(0);

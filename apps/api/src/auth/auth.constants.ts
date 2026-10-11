@@ -23,6 +23,19 @@ export const OIDC_STATE_TTL_S = 10 * 60;
 /** An invitation expires after this. */
 export const INVITE_TTL_S = 7 * 24 * 60 * 60;
 
+/** A mailed email-verification link expires after this (#93). */
+export const EMAIL_VERIFICATION_TTL_S = 24 * 60 * 60;
+/** A mailed password-reset link expires after this (#93): short, because it grants the account. */
+export const PASSWORD_RESET_TTL_S = 30 * 60;
+
+/** New verification links one account may ask for per window (#93). */
+export const VERIFY_RESEND_MAX = 5;
+export const VERIFY_RESEND_WINDOW_S = 60 * 60;
+/** Password-reset requests per address+IP, and per IP, per window (#93). Over either: `429`. */
+export const RESET_REQUEST_MAX = 5;
+export const RESET_REQUEST_IP_MAX = 20;
+export const RESET_REQUEST_WINDOW_S = 60 * 60;
+
 /** `last_used_at` on an API key is written at most this often. */
 export const API_KEY_TOUCH_INTERVAL_S = 5 * 60;
 

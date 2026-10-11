@@ -128,6 +128,27 @@ export const envSchema = z
                 }
                 return Object.freeze([...new Set(emails)]);
             }),
+        /**
+         * `production` turns on the checks a public deployment needs: transactional mail must be
+         * configured (#93). Anything else is a developer's or CI's process. An unknown value stops boot.
+         */
+        NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+        /**
+         * The Resend API key transactional mail is sent with (#93, D-246): sign-in verification,
+         * invitations, password reset — never outreach. A sending-only key. Required in production;
+         * absent elsewhere, mail goes to the in-process memory transport and a log line.
+         */
+        RESEND_API_KEY: z
+            .string()
+            .regex(/^re_[A-Za-z0-9_]+$/, 'must be a Resend API key (re_…)')
+            .optional(),
+        /** The From header of transactional mail. Required in production. */
+        MAIL_FROM: z.string().min(3).optional(),
+        /**
+         * Whether this process runs the transactional-mail delivery worker (#93). On by default, like
+         * the other workers; the cross-tenant suite sets `0` and delivers queued mail itself.
+         */
+        TRANSACTIONAL_MAIL_WORKER: flag('1'),
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
@@ -148,7 +169,21 @@ export const envSchema = z
     .refine((env) => Boolean(env.GOOGLE_CLIENT_ID) === Boolean(env.GOOGLE_CLIENT_SECRET), {
         message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together',
         path: ['GOOGLE_CLIENT_SECRET'],
-    });
+    })
+    // Every deployment mails (verification and reset in every sign-up mode, invitations when sign-up
+    // is closed), so production without a sender is a half-configured server: refuse it (#93).
+    .refine((env) => env.NODE_ENV !== 'production' || env.RESEND_API_KEY !== undefined, {
+        message: 'required when NODE_ENV=production (transactional mail, #93)',
+        path: ['RESEND_API_KEY'],
+    })
+    .refine((env) => env.NODE_ENV !== 'production' || env.MAIL_FROM !== undefined, {
+        message: 'required when NODE_ENV=production (transactional mail, #93)',
+        path: ['MAIL_FROM'],
+    })
+    .transform((env) => ({ ...env, MAIL_FROM: env.MAIL_FROM ?? DEV_MAIL_FROM }));
+
+/** The sender outside production, where mail goes to the memory transport and nowhere else. */
+export const DEV_MAIL_FROM = 'BylineCRM <no-reply@localhost>';
 
 export type Env = z.infer<typeof envSchema>;
 

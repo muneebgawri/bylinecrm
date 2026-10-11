@@ -1,5 +1,5 @@
 import { paths } from '../src/routes/paths';
-import { IDS, INVITE_TOKEN } from './fixtures';
+import { IDS, INVITE_TOKEN, LINK_TOKEN } from './fixtures';
 
 /**
  * Every state the route gate visits. The list is built from `paths` — the one declaration of the
@@ -27,6 +27,8 @@ export interface RouteState {
     after?: 'palette';
     /** What this state promises on a phone beyond every page's checks (FR-CRMS-UI-12). */
     phone?: PhoneExpectations;
+    /** The session is a signed-in person whose address is not verified yet (#93). */
+    unverified?: true;
 }
 
 export interface PhoneExpectations {
@@ -48,6 +50,12 @@ const PHONE: Record<string, PhoneExpectations> = {
     'drawer-deal': { bottomBar: true },
     deals: { aboveFold: '[data-deal-id]' },
 };
+
+/**
+ * States seen as a signed-in, unverified person (#93). `/verify-email` without a token is where such
+ * a person is held; a verified one is sent on to their workspaces, which the gate already visits.
+ */
+const UNVERIFIED = new Set(['verifyEmail']);
 
 function routeStates(): RouteState[] {
     return Object.entries(paths).map(([name, path]): RouteState => {
@@ -72,14 +80,18 @@ const EXTRA_STATES: RouteState[] = [
     { name: 'palette', url: paths.home(IDS.workspace), after: 'palette' },
     // An email thread opened from the person's timeline: a drawer on a desktop, the whole screen on a phone.
     { name: 'thread', url: `${paths.person(IDS.workspace, IDS.person)}?thread=${IDS.thread}` },
+    // The pages a mailed link opens (#93): verify the address, choose a new password.
+    { name: 'verify-email-link', url: `${paths.verifyEmail}?token=${LINK_TOKEN}` },
+    { name: 'reset-password-link', url: `${paths.resetPassword}?token=${LINK_TOKEN}` },
 ];
 
 export const STATES: readonly RouteState[] = [...routeStates(), ...EXTRA_STATES].map((state) => {
     const phone = PHONE[state.name];
-    return phone ? { ...state, phone } : state;
+    const withPhone = phone ? { ...state, phone } : state;
+    return UNVERIFIED.has(state.name) ? { ...withPhone, unverified: true as const } : withPhone;
 });
 
 // A phone promise for a state that no longer exists is a promise nobody checks: fail loudly.
-for (const name of Object.keys(PHONE)) {
+for (const name of [...Object.keys(PHONE), ...UNVERIFIED]) {
     if (!STATES.some((s) => s.name === name)) throw new Error(`route gate: PHONE names an unknown state "${name}"`);
 }

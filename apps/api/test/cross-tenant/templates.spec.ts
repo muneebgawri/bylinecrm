@@ -13,6 +13,7 @@ import {
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -95,6 +96,7 @@ describe('email templates', () => {
             .post('/api/auth/signup')
             .send({ email: `admin-${stamp}@example.test`, password, workspaceName: 'Templates Co' })
             .expect(201);
+        await verifyAddress(app, http, `admin-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
 
@@ -102,6 +104,7 @@ describe('email templates', () => {
             .post('/api/auth/signup')
             .send({ email: `other-${stamp}@example.test`, password, workspaceName: 'Elsewhere Co' })
             .expect(201);
+        await verifyAddress(app, http, `other-${stamp}@example.test`);
         other = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
 
@@ -124,6 +127,7 @@ describe('email templates', () => {
                 .send({ password })
                 .expect(201),
         );
+        await verifyAddress(app, http, `writer-${stamp}@example.test`);
 
         await as(admin)
             .post(w('/custom-fields'))

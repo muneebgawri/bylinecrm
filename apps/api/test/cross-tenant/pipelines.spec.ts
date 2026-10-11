@@ -6,6 +6,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
 import { StageRulesService } from '../../src/pipelines/stage-rules.service';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -118,6 +119,7 @@ describe('pipelines, stages, history, rules', () => {
             .post('/api/auth/signup')
             .send({ email: `admin-${stamp}@example.test`, password, workspaceName: 'Pipes Co' })
             .expect(201);
+        await verifyAddress(app, http, `admin-${stamp}@example.test`);
         admin = browserFrom(signup);
         workspace = (signup.body as { workspace: { id: string } }).workspace.id;
 
@@ -125,6 +127,7 @@ describe('pipelines, stages, history, rules', () => {
             .post('/api/auth/signup')
             .send({ email: `other-${stamp}@example.test`, password, workspaceName: 'Elsewhere Co' })
             .expect(201);
+        await verifyAddress(app, http, `other-${stamp}@example.test`);
         other = browserFrom(otherSignup);
         otherWorkspace = (otherSignup.body as { workspace: { id: string } }).workspace.id;
 
@@ -146,6 +149,7 @@ describe('pipelines, stages, history, rules', () => {
                 .send({ password })
                 .expect(201),
         );
+        await verifyAddress(app, http, `rep-${stamp}@example.test`);
         const members = await as(admin).get(w('/members')).expect(200);
         repMemberId = (members.body as { id: string; email: string }[]).find(
             (m) => m.email === `rep-${stamp}@example.test`,

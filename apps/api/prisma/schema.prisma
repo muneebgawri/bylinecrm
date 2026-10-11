@@ -62,25 +62,53 @@ model Workspace {
 /// `email` is stored lower-cased by the application and unique as stored. `passwordHash` is null
 /// for a user who only ever signed in through an identity provider.
 model User {
-  id              String    @id @default(uuid()) @db.Uuid
-  email           String    @unique
-  passwordHash    String?   @map("password_hash")
-  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique
+  passwordHash       String?   @map("password_hash")
+  emailVerifiedAt    DateTime? @map("email_verified_at") @db.Timestamptz
   /// How the person is shown to other members, in every workspace; pickers read it, never the email.
   displayName        String?   @map("display_name")
   /// When the person confirmed their name (saved, or kept the suggestion); `null` asks once.
   profileCompletedAt DateTime? @map("profile_completed_at") @db.Timestamptz
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  memberships WorkspaceMember[]
-  sessions    Session[]
-  identities  ExternalIdentity[]
+  memberships   WorkspaceMember[]
+  sessions      Session[]
+  identities    ExternalIdentity[]
+  oneTimeTokens OneTimeToken[]
 
   platformWorkspaceInvites WorkspaceInvite[]      @relation("PlatformWorkspaceInvites")
   platformSignupInvites    PlatformSignupInvite[]
 
   @@map("users")
+}
+
+/// What a mailed single-use link is for (#93). #101 adds `set_password`.
+enum OneTimeTokenPurpose {
+  email_verification
+  password_reset
+}
+
+/// A mailed single-use link (#93): verify an address, reset a password. Only the secret's hash is
+/// stored. Global and owner-client only, like `sessions`: it is read before any workspace is known,
+/// and the app role has no grant on it. One live link per user and purpose — issuing a new one
+/// deletes the unspent ones.
+model OneTimeToken {
+  id        String              @id @default(uuid()) @db.Uuid
+  purpose   OneTimeTokenPurpose
+  userId    String              @map("user_id") @db.Uuid
+  /// The address the link was mailed to; verification succeeds only while it is still the account's.
+  email     String
+  tokenHash String              @unique @map("token_hash")
+  expiresAt DateTime            @map("expires_at") @db.Timestamptz
+  usedAt    DateTime?           @map("used_at") @db.Timestamptz
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("one_time_tokens")
 }
 
 /// A signed-in browser. The cookie carries a random token; only its hash is stored. Global table

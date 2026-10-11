@@ -1,3 +1,5 @@
+import { FORGOT_PASSWORD_PAGE, RESET_PASSWORD_PAGE, VERIFY_EMAIL_PAGE } from '@bylinecrm/shared';
+
 /**
  * Every path the app has, once. Navigation, commands, redirects and tests build URLs through
  * these functions and never spell a path inline; a page that is not declared here does not
@@ -8,6 +10,11 @@ export const paths = {
     signIn: '/sign-in',
     signUp: '/sign-up',
     authCallback: '/auth/callback',
+    /** A mailed verification link's page, and where an unverified person is held (#93). */
+    verifyEmail: VERIFY_EMAIL_PAGE,
+    forgotPassword: FORGOT_PASSWORD_PAGE,
+    /** A mailed reset link's page (#93). */
+    resetPassword: RESET_PASSWORD_PAGE,
     workspaces: '/workspaces',
     status: '/status',
     forbidden: '/403',

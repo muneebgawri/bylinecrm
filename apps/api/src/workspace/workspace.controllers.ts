@@ -6,6 +6,7 @@ import { CreateApiKeyDto, CreateInviteDto, CreateRoleDto, SetMemberRoleDto, Upda
 import { ApiKeyService, type ApiKeyView } from '../auth/api-key.service';
 import { normaliseEmail } from '../auth/auth.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { AccountMail } from '../transactional-mail/account-mail';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MembersService, type MemberSummaryView, type MemberView } from './members.service';
 import { RolesService, type RoleView } from './roles.service';
@@ -167,6 +168,7 @@ export class InvitesController {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
+        private readonly mail: AccountMail,
     ) {}
 
     @Requires('workspace:admin')
@@ -180,17 +182,17 @@ export class InvitesController {
     }
 
     /**
-     * The token is returned once so the admin (or, later, the invitation email) can hand it to
-     * the invitee; only its hash is stored. Sending the email is not built here.
+     * The invitation is mailed to the invitee after the commit (#93), and the token is also
+     * returned once so the admin can pass the link on by hand; only its hash is stored.
      */
     @Requires('workspace:admin')
     @Post()
     @Returns(createdInvite)
-    create(@Body() body: CreateInviteDto): Promise<{ invite: InviteView; token: string }> {
+    async create(@Body() body: CreateInviteDto): Promise<{ invite: InviteView; token: string }> {
         const current = this.context.get();
         if (!current?.memberId) throw new Error('invitations are sent by a member, not by a key');
         const { token, tokenHash, expiresAt } = AuthService.newInvite();
-        return this.rls.withWorkspace(async (tx) => {
+        const created = await this.rls.withWorkspace(async (tx) => {
             const invite = await tx.workspaceInvite.create({
                 data: {
                     workspaceId: current.workspaceId,
@@ -201,8 +203,20 @@ export class InvitesController {
                     expiresAt,
                 },
             });
-            return { invite: inviteView(invite), token };
+            const workspace = await tx.workspace.findUniqueOrThrow({
+                where: { id: current.workspaceId },
+                select: { name: true },
+            });
+            return { invite, workspaceName: workspace.name };
         });
+        await this.mail.workspaceInvitation({
+            to: created.invite.email,
+            inviteId: created.invite.id,
+            token,
+            workspaceName: created.workspaceName,
+            owner: false,
+        });
+        return { invite: inviteView(created.invite), token };
     }
 
     @Requires('workspace:admin')

@@ -13,6 +13,9 @@ const auth = {
     signIn: () => import('./auth/AuthPages').then((m) => ({ Component: m.SignIn })),
     signUp: () => import('./auth/AuthPages').then((m) => ({ Component: m.SignUp })),
     callback: () => import('./auth/AuthPages').then((m) => ({ Component: m.AuthCallback })),
+    verifyEmail: () => import('./auth/AuthPages').then((m) => ({ Component: m.VerifyEmail })),
+    forgotPassword: () => import('./auth/AuthPages').then((m) => ({ Component: m.ForgotPassword })),
+    resetPassword: () => import('./auth/AuthPages').then((m) => ({ Component: m.ResetPassword })),
 };
 
 /**
@@ -140,6 +143,9 @@ export const routes: RouteObject[] = [
     authPage(paths.signIn, auth.signIn),
     authPage(paths.signUp, auth.signUp),
     authPage(paths.authCallback, auth.callback),
+    authPage(paths.verifyEmail, auth.verifyEmail),
+    authPage(paths.forgotPassword, auth.forgotPassword),
+    authPage(paths.resetPassword, auth.resetPassword),
     { path: paths.status, element: <ServiceStatus /> },
     { path: paths.forbidden, element: <Forbidden /> },
     {

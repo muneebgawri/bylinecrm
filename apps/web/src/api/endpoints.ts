@@ -151,6 +151,15 @@ export const auth = {
         request<WorkspaceView>('POST', `/auth/invites/${encodeURIComponent(token)}/accept`),
     acceptInviteSignup: (token: string, password: string) =>
         request<WorkspaceView>('POST', `/auth/invites/${encodeURIComponent(token)}/signup`, { body: { password } }),
+    /** Spends a mailed verification link (#93). */
+    verifyEmail: (token: string) => request<void>('POST', '/auth/email/verify', { body: { token } }),
+    /** Mails the signed-in person a fresh verification link (#93). */
+    resendVerification: () => request<void>('POST', '/auth/email/verification'),
+    /** "Forgot password" (#93): the answer is the same whether or not the address has an account. */
+    forgotPassword: (email: string) => request<void>('POST', '/auth/password/forgot', { body: { email } }),
+    /** Spends a mailed reset link: a new password, and this browser signed in (#93). */
+    resetPassword: (token: string, password: string) =>
+        request<{ user: UserView }>('POST', '/auth/password/reset', { body: { token, password } }),
 };
 
 export const me = {

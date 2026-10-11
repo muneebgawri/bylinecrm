@@ -45,7 +45,7 @@ const RecordDrawerHost = lazy(() =>
 export function AppShell() {
     const workspaceId = useWorkspaceId();
     const gate = useAuthGate();
-    if (gate.state === 'signed-out') return <Navigate to={gate.to} replace />;
+    if (gate.state === 'signed-out' || gate.state === 'unverified') return <Navigate to={gate.to} replace />;
     return (
         <WorkspaceCapabilities workspaceId={workspaceId}>
             <Shell workspaceId={workspaceId} signedIn={gate.state === 'signed-in'} />

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../infra/prisma.service';
 import { SESSION_TOUCH_INTERVAL_S, SESSION_TTL_S } from './auth.constants';
 import { hashToken, randomToken } from './tokens';
@@ -7,6 +8,8 @@ import { hashToken, randomToken } from './tokens';
 export interface ResolvedSession {
     sessionId: string;
     userId: string;
+    /** Whether the user's address is verified (#93): tenant routes refuse an unverified one. */
+    emailVerified: boolean;
 }
 
 /**
@@ -51,7 +54,14 @@ export class SessionService {
         const now = new Date();
         const session = await this.ownerPrisma.session.findUnique({
             where: { tokenHash: hashToken(token) },
-            select: { id: true, userId: true, expiresAt: true, revokedAt: true, lastSeenAt: true },
+            select: {
+                id: true,
+                userId: true,
+                expiresAt: true,
+                revokedAt: true,
+                lastSeenAt: true,
+                user: { select: { emailVerifiedAt: true } },
+            },
         });
         if (!session || session.revokedAt || session.expiresAt <= now) return null;
         if (now.getTime() - session.lastSeenAt.getTime() > SESSION_TOUCH_INTERVAL_S * 1000) {
@@ -60,7 +70,7 @@ export class SessionService {
                 data: { lastSeenAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL_S * 1000) },
             });
         }
-        return { sessionId: session.id, userId: session.userId };
+        return { sessionId: session.id, userId: session.userId, emailVerified: session.user.emailVerifiedAt !== null };
     }
 
     async revoke(sessionId: string): Promise<void> {
@@ -69,4 +79,12 @@ export class SessionService {
             data: { revokedAt: new Date() },
         });
     }
+}
+
+/**
+ * Revokes every live session of a user, inside the caller's owner transaction — a password reset
+ * (#93) signs the account out everywhere in the same commit that changes the password.
+ */
+export async function revokeAllSessions(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+    await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
 }

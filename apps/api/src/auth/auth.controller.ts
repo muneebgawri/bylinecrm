@@ -5,7 +5,6 @@ import {
     Get,
     HttpCode,
     Inject,
-    NotImplementedException,
     Param,
     Patch,
     Post,
@@ -21,13 +20,22 @@ import { PlatformAccess, PlatformForbidden } from '../platform/platform-access.s
 import { AuthService, SignupClosed, type UserView, type WorkspaceView } from './auth.service';
 import { AuthCookies } from './cookies';
 import { CurrentPrincipal, Public } from './decorators';
-import { AcceptInviteSignupDto, CreateWorkspaceDto, LoginDto, SignupDto, UpdateProfileDto } from './dto';
+import {
+    AcceptInviteSignupDto,
+    CreateWorkspaceDto,
+    ForgotPasswordDto,
+    LoginDto,
+    ResetPasswordDto,
+    SignupDto,
+    UpdateProfileDto,
+    VerifyEmailDto,
+} from './dto';
 import { ProfileService } from './profile.service';
 import { OidcService } from './oidc.service';
 import type { Principal } from './principal';
 import { SessionService } from './session.service';
 import { randomToken } from './tokens';
-import { NotImplementedYet, Redirects, Returns } from '../openapi/responses';
+import { Redirects, Returns } from '../openapi/responses';
 import {
     authProviders,
     invitePreview,
@@ -150,7 +158,10 @@ export class AuthController {
         return (await this.auth.acceptInvite(token, { userId: principal.userId })).workspace;
     }
 
-    /** Creating an account from an invitation: the invited address is the account's, verified. */
+    /**
+     * Creating an account from an invitation. The account starts unverified and is mailed a
+     * verification link (#93); it is a member at once, and its tenant routes open once it verifies.
+     */
     @Public()
     @Post('invites/:token/signup')
     @Returns(workspaceView)
@@ -165,12 +176,49 @@ export class AuthController {
         return workspace;
     }
 
-    /** Password reset is designed, not built: the design note names the flow. */
+    /**
+     * Spends a mailed verification link (#93). Public — the link may be opened in a browser that is
+     * not signed in — and a POST: the page asks for a click, because mail scanners fetch GET links.
+     */
     @Public()
+    @HttpCode(204)
+    @Post('email/verify')
+    async verifyEmail(@Body() body: VerifyEmailDto): Promise<void> {
+        await this.auth.verifyEmail(body.token);
+    }
+
+    /** Mails a fresh verification link to the signed-in person (#93); nothing when already verified. */
+    @HttpCode(202)
+    @Post('email/verification')
+    async resendVerification(@CurrentPrincipal() principal: Principal): Promise<void> {
+        if (principal.kind !== 'user') throw new ForbiddenException('an API key has no address to verify');
+        await this.auth.requestVerification(principal.userId);
+    }
+
+    /** "Forgot password": always `202`, whether or not the address has an account (#93). */
+    @Public()
+    @HttpCode(202)
     @Post('password/forgot')
-    @NotImplementedYet()
-    forgotPassword(): never {
-        throw new NotImplementedException('password reset is not available yet');
+    async forgotPassword(@Body() body: ForgotPasswordDto, @Req() req: Request): Promise<void> {
+        await this.auth.requestPasswordReset(body.email, req.ip ?? '');
+    }
+
+    /**
+     * Spends a mailed reset link (#93): a new password, every other session revoked, and this
+     * browser signed in.
+     */
+    @Public()
+    @HttpCode(200)
+    @Post('password/reset')
+    @Returns(signedIn)
+    async resetPassword(
+        @Body() body: ResetPasswordDto,
+        @Req() req: Request,
+        @Res({ passthrough: true }) res: Response,
+    ): Promise<{ user: UserView }> {
+        const user = await this.auth.resetPassword(body.token, body.password);
+        await this.startSession(req, res, user.id);
+        return { user };
     }
 
     /**

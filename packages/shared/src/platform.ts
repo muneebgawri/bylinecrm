@@ -36,6 +36,24 @@ export function invitationUrl(base: string, kind: InvitationKind, token: string)
 }
 
 /**
+ * The pages a mailed single-use link opens (#93), and its query parameter. Built here so the API
+ * (which mails the link) and the web app (which serves the page) cannot disagree.
+ */
+export const VERIFY_EMAIL_PAGE = '/verify-email';
+export const RESET_PASSWORD_PAGE = '/reset-password';
+export const FORGOT_PASSWORD_PAGE = '/forgot-password';
+export const LINK_TOKEN_PARAM = 'token';
+
+/** The verification or reset link for `token`, on the web app at `base`. */
+export function mailedLinkUrl(
+    base: string,
+    page: typeof VERIFY_EMAIL_PAGE | typeof RESET_PASSWORD_PAGE,
+    token: string,
+): string {
+    return `${base.replace(/\/+$/, '')}${page}?${LINK_TOKEN_PARAM}=${encodeURIComponent(token)}`;
+}
+
+/**
  * Where the API sends a browser whose provider sign-in it refused, and the query parameter that
  * carries the error code (P0-14): `/sign-in?error=signup.closed` when sign-up is not open and the
  * address has no account, no pending invitation and is not a platform admin's.

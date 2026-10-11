@@ -12,6 +12,7 @@ import { verifyPlatformAdminEmail, type VerifiedIdentity } from '../../src/auth/
 import { OidcService } from '../../src/auth/oidc.service';
 import { ENV, parseEnv, type Env } from '../../src/config/env';
 import { PrismaService } from '../../src/infra/prisma.service';
+import { verifyAddress } from '../support/mail';
 
 /** A signed-in browser: the two cookies and the header a mutation needs. */
 interface Browser {
@@ -85,6 +86,9 @@ describe('sign-up modes and platform admins (P0-14)', () => {
         const signedUp = await signup({ email: outsiderEmail, password, workspaceName: 'Outsider Co' }).expect(201);
         outsider = browserFrom(signedUp);
         outsiderWorkspace = (signedUp.body as { workspace: { id: string } }).workspace.id;
+        // The outsider proves their mailbox (#93), so its refusals below are about the platform, not
+        // verification; the admin stays unverified for the operator-command tests.
+        await verifyAddress(app, http, outsiderEmail);
     });
 
     afterAll(async () => {
@@ -216,6 +220,8 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             env.SIGNUP_MODE = 'closed';
             const joined = await http().post(`/api/auth/invites/${token}/signup`).send({ password }).expect(201);
             const ownerBrowser = browserFrom(joined);
+            // The invitation was mailed to the owner (#93); the account it creates verifies by a mailed link.
+            await verifyAddress(app, http, ownerEmail);
             const mine = await http().get('/api/me/workspaces').set('Cookie', ownerBrowser.cookie).expect(200);
             expect((mine.body as { id: string }[]).map((w) => w.id)).toEqual([workspaceId]);
             const standing = await http()
@@ -231,13 +237,14 @@ describe('sign-up modes and platform admins (P0-14)', () => {
         });
 
         it('an existing, verified account invited as owner accepts with that account', async () => {
-            // An account whose address an invitation has verified (the member path of auth-flows).
+            // An account created from an invitation, then verified by its mailed link (#93).
             const existingEmail = `existing-${stamp}@example.test`;
             const first = await post(admin, '/api/platform/workspaces', { name: 'First', ownerEmail: existingEmail });
             const firstToken = (first.body as { invite: { token: string } }).invite.token;
             const existing = browserFrom(
                 await http().post(`/api/auth/invites/${firstToken}/signup`).send({ password }).expect(201),
             );
+            await verifyAddress(app, http, existingEmail);
             const second = await post(admin, '/api/platform/workspaces', { name: 'Second', ownerEmail: existingEmail });
             const { workspace, invite } = second.body as { workspace: { id: string }; invite: { token: string } };
             await post(existing, `/api/auth/invites/${invite.token}/accept`, {}).expect(200);
@@ -280,7 +287,8 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             const ok = await signup({ email: invitedEmail, password, workspaceName: 'Inv', inviteToken: token }).expect(
                 201,
             );
-            expect(ok.body).toMatchObject({ user: { email: invitedEmail, emailVerified: true } });
+            // The platform admin saw the same link, so holding it does not verify the address (#93).
+            expect(ok.body).toMatchObject({ user: { email: invitedEmail, emailVerified: false } });
             const again = await signup({
                 email: `again-${stamp}@example.test`,
                 password,

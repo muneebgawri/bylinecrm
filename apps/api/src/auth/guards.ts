@@ -14,6 +14,7 @@ import { WorkspaceContext } from '../infra/workspace-context';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
 import { ApiKeyService } from './api-key.service';
+import { EmailUnverified } from './auth.service';
 import { ANY_MEMBER_KEY, PUBLIC_KEY, REQUIRES_KEY, requiredCapabilities } from './decorators';
 import type { AuthenticatedRequest } from './principal';
 import { SessionService } from './session.service';
@@ -124,6 +125,8 @@ export class WorkspaceGuard implements CanActivate {
             return true;
         }
 
+        // An unverified address reaches no workspace (#93): refused before any tenant query.
+        if (!principal.emailVerified) throw new EmailUnverified();
         const membership = await this.memberships.find(principal.userId, workspaceId);
         if (!membership) throw new ForbiddenException('not a member of this workspace');
         const access = await this.roles.access(workspaceId, membership.roleId);

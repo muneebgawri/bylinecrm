@@ -19,6 +19,7 @@ import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MailSyncService } from '../../src/mail-sync/mail-sync.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { verifyAddress } from '../support/mail';
 
 interface Browser {
     cookie: string;
@@ -195,6 +196,7 @@ describe('mail send and reply detection', () => {
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
             expect(res.status).toBe(201);
+            await verifyAddress(app, http, email);
             return { browser: browserFrom(res), workspace: (res.body as { workspace: { id: string } }).workspace.id };
         };
         ({ browser: admin, workspace } = await signUp(adminEmail, `Send ${stamp}`));
@@ -209,6 +211,7 @@ describe('mail send and reply detection', () => {
             .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
             .send({ password });
         expect(joined.status).toBe(201);
+        await verifyAddress(app, http, memberEmail);
         member = browserFrom(joined);
 
         for (const [who, ws, tag] of [
