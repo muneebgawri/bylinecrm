@@ -1,3 +1,5 @@
+import { UNSUBSCRIBE_PAGE_PATH } from '@bylinecrm/shared';
+
 /**
  * Every path the app has, once. Navigation, commands, redirects and tests build URLs through
  * these functions and never spell a path inline; a page that is not declared here does not
@@ -37,6 +39,9 @@ export const paths = {
     settingsCustomFields: (workspaceId: string) => `/w/${workspaceId}/settings/custom-fields`,
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
+    settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
+    /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */
+    unsubscribe: (token: string) => `${UNSUBSCRIBE_PAGE_PATH}/${token}`,
 } as const;
 
 /** `?create=1` on a list page opens its "new" dialog (the ⌘K and "+ Create" commands land there). */

@@ -163,6 +163,15 @@ export type BlocklistEntryView = Schemas['BlocklistEntry'];
 export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];
 export type CreateBlocklistEntryInput = Loose<Schemas['CreateBlocklistEntryDto']>;
 
+// ---- Suppression and unsubscribe (P3-1) ------------------------------------------------------
+export type SuppressionView = Schemas['Suppression'];
+export type SuppressionPage = Schemas['SuppressionPage'];
+export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
+export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;
+export type UnsubscribeStatusView = Schemas['UnsubscribeStatus'];
+export type SuppressionListQuery = Loose<
+    NonNullable<paths['/api/w/{workspaceId}/suppressions']['get']['parameters']['query']>
+>;
 // ---- Sending, scheduling and reading mail on a record (P2-3, P2-5; P2-UI-1) --------------------
 export type SendMailInput = Loose<Schemas['SendMailDto']>;
 export type MailSendAcceptedView = Schemas['MailSendAccepted'];

@@ -21,3 +21,12 @@ export function usePipelineId(): string {
     if (!value) throw new Error(`route has no :${PIPELINE_PARAM} segment`);
     return value;
 }
+
+/** The unsubscribe page's segment: the link's token (P3-1). */
+export const UNSUBSCRIBE_TOKEN_PARAM = 'token';
+
+export function useUnsubscribeToken(): string {
+    const value = useParams()[UNSUBSCRIBE_TOKEN_PARAM];
+    if (!value) throw new Error(`route has no :${UNSUBSCRIBE_TOKEN_PARAM} segment`);
+    return value;
+}

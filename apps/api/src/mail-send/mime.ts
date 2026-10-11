@@ -34,6 +34,12 @@ export interface MimeInput {
     inReplyTo?: string | null | undefined;
     /** The parent's References then the parent, oldest first, without angle brackets. */
     references?: readonly string[] | undefined;
+    /**
+     * Outreach only (P3-1, FR-CRMS-7): the recipient's one-click unsubscribe URL, written as
+     * `List-Unsubscribe` with `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). Personal
+     * 1:1 mail carries neither.
+     */
+    listUnsubscribe?: { url: string } | undefined;
     date: Date;
 }
 
@@ -69,6 +75,12 @@ export function buildMime(input: MimeInput): string {
         ...(input.inReplyTo ? [['In-Reply-To', `<${input.inReplyTo}>`] as [string, string]] : []),
         ...(input.references?.length
             ? [['References', input.references.map((id) => `<${id}>`).join(' ')] as [string, string]]
+            : []),
+        ...(input.listUnsubscribe
+            ? ([
+                  ['List-Unsubscribe', `<${oneLine(input.listUnsubscribe.url)}>`],
+                  ['List-Unsubscribe-Post', 'List-Unsubscribe=One-Click'],
+              ] as [string, string][])
             : []),
         ['MIME-Version', '1.0'],
         ['Content-Type', `multipart/alternative; boundary="${boundary}"`],

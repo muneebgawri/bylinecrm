@@ -32,6 +32,11 @@ export const ERROR_CODES = [
     'unsupported_media_type',
     /** The request is well-formed but refers to something it cannot use (a company the caller cannot see). */
     'unprocessable',
+    /**
+     * A recipient is on the workspace's suppression list (P3-1, FR-CRMS-7); `fieldErrors` names each
+     * one at its field (`to`, `cc`, `bcc`) with the reason. Nothing was sent.
+     */
+    'recipient.suppressed',
     /** Too many attempts; try again later. */
     'rate_limited',
     /** Any other refusal of the request (a 4xx with no more specific code). */

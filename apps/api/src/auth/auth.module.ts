@@ -56,7 +56,7 @@ import { SessionService } from './session.service';
         { provide: APP_GUARD, useClass: WorkspaceGuard },
         { provide: APP_GUARD, useClass: RequiresGuard },
     ],
-    exports: [AuthService, SessionService, ApiKeyService, MembershipService, RolesService, PlatformAccess],
+    exports: [AuthService, SessionService, ApiKeyService, MembershipService, RolesService, PlatformAccess, RateLimiter],
 })
 export class AuthModule implements NestModule {
     configure(consumer: MiddlewareConsumer): void {
