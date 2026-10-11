@@ -19,11 +19,12 @@ services:
             retries: 10
 
     redis:
-        image: redis:7
+        # Valkey (D-250), the same 9.1 as CI and staging; the service keeps its name so REDIS_URL is unchanged.
+        image: valkey/valkey:9.1
         ports:
             - '127.0.0.1:6391:6379'
         healthcheck:
-            test: ['CMD', 'redis-cli', 'ping']
+            test: ['CMD', 'valkey-cli', 'ping']
             interval: 5s
             timeout: 3s
             retries: 10

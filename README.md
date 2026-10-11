@@ -19,11 +19,16 @@ a licence allowlist and an identifier scan (`scripts/`).
 
 ## Run it locally
 
-Requires Node ≥ 22.12 (`.nvmrc`; `require(esm)` is used for two ESM-only libraries), pnpm 9.15 (`corepack enable`), Docker. PostgreSQL ≥ 14 (the migrations use SQL-standard function bodies; the local stack and CI run 16).
+Requires Node ≥ 22.12 (`.nvmrc`; `require(esm)` is used for two ESM-only libraries), pnpm 9.15 (`corepack enable`),
+PostgreSQL 16 and Valkey 9.1 (D-250 — the versions CI and staging run; the migrations need PostgreSQL ≥ 14 for
+SQL-standard function bodies). On macOS they run natively, no Docker: `brew install postgresql@16 valkey`, then
+`scripts/dev-native-db.sh setup` starts a Postgres cluster of BylineCRM's own and a Valkey, on the ports below, bound
+to 127.0.0.1 and started at login (`status`, `stop`, `purge` do what they say). Elsewhere, `docker compose up -d`
+runs the same two on the same ports.
 
 ```bash
-cp .env.example .env            # ports: Postgres 5441, Redis 6391, API 3300, web 3301; APP_URL/WEB_URL for auth
-docker compose up -d            # local Postgres + Redis
+cp .env.example .env            # ports: Postgres 5441, Valkey 6391, API 3300, web 3301; APP_URL/WEB_URL for auth
+scripts/dev-native-db.sh setup  # macOS; or: docker compose up -d
 pnpm install
 pnpm --filter @bylinecrm/shared build
 pnpm --filter api prisma:generate
