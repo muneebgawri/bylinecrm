@@ -547,11 +547,13 @@ export const mail = {
         request<MailOutboundView>('PATCH', workspacePath(workspaceId, `/mail/messages/${messageId}`), { body: input }),
     cancel: (workspaceId: string, messageId: string) =>
         request<MailOutboundView>('POST', workspacePath(workspaceId, `/mail/messages/${messageId}/cancel`)),
-    /** The caller's scheduled sends, soonest first: one page of up to `limit`. */
-    scheduled: (workspaceId: string, limit: number, signal?: AbortSignal) =>
-        request<MailScheduledPage>('GET', workspacePath(workspaceId, `/mail/scheduled${query({ limit })}`), {
-            signal,
-        }),
+    /** The caller's scheduled sends (an admin's: everyone's), soonest first, a page at a time. */
+    scheduled: (workspaceId: string, params: { limit: number; cursor?: string | undefined }, signal?: AbortSignal) =>
+        request<MailScheduledPage>(
+            'GET',
+            workspacePath(workspaceId, `/mail/scheduled${query({ limit: params.limit, cursor: params.cursor })}`),
+            { signal },
+        ),
     thread: (workspaceId: string, threadId: string, signal?: AbortSignal) =>
         request<MailThreadView>('GET', workspacePath(workspaceId, `/mail/threads/${threadId}`), { signal }),
 };

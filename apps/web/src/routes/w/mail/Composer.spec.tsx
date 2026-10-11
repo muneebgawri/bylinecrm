@@ -156,6 +156,16 @@ describe('FR-CRMS-3: a template fills the composer, and an empty variable holds 
         });
     });
 
+    it('says “edited — sends as written” once the filled template is changed', async () => {
+        composer(templateRoutes([]));
+        await pickTemplate();
+        const message = screen.getByRole('textbox', { name: 'Message' });
+        await waitFor(() => expect(message).toHaveTextContent('person.firstName'));
+        expect(screen.queryByText('edited — sends as written')).not.toBeInTheDocument();
+        await userEvent.type(message, '!');
+        expect(await screen.findByText('edited — sends as written')).toBeInTheDocument();
+    });
+
     it('marks the variables a refused send names (422), so the reason is on the chip', async () => {
         composer([
             ...templateRoutes([]).filter((_, i) => i !== 3),

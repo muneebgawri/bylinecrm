@@ -32,15 +32,24 @@ function concerns(target: RecordTarget, send: { personId: string | null; dealId:
 
 /**
  * The record's sends that are not (yet) a stored message on its timeline: this tab's, and the
- * scheduled ones the server holds (so a reload still shows "Scheduled for …"). Each is read back
+ * scheduled ones the server holds (so a reload still shows "Scheduled for …"). A failed send is
+ * kept by the API but no route lists it yet (#104), so after a reload only its tab knew it. Each is read back
  * until final (`outboundPollMs`). A sent one stays as "Sent" until the timeline carries the stored
  * message (`onTimeline`, the linked message ids it has); a cancelled one goes.
  */
+export interface PendingSends {
+    sends: PendingSend[];
+    /** The server holds more scheduled sends than were read; `more` reads the next page. */
+    hasMore: boolean;
+    loadingMore: boolean;
+    more: () => void;
+}
+
 export function usePendingSends(
     workspaceId: string,
     target: RecordTarget,
     onTimeline: ReadonlySet<string>,
-): PendingSend[] {
+): PendingSends {
     const canSend = useCan('email:send');
     const session = useSessionSends(workspaceId);
     const scheduled = useScheduledMail(workspaceId, canSend && target.type !== 'company');
@@ -48,7 +57,9 @@ export function usePendingSends(
     const mine = useMemo(() => (session.data ?? []).filter((s) => concerns(target, s)), [session.data, target]);
     const held = useMemo(
         () =>
-            (scheduled.data?.items ?? []).filter((s) => concerns(target, s) && !mine.some((m) => m.messageId === s.id)),
+            (scheduled.data?.pages.flatMap((p) => p.items) ?? []).filter(
+                (s) => concerns(target, s) && !mine.some((m) => m.messageId === s.id),
+            ),
         [scheduled.data, target, mine],
     );
     const ids = useMemo(() => [...mine.map((s) => s.messageId), ...held.map((s) => s.id)], [mine, held]);
@@ -92,5 +103,10 @@ export function usePendingSends(
         void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline'] });
     }, [pending, client, workspaceId]);
 
-    return pending;
+    return {
+        sends: pending,
+        hasMore: scheduled.hasNextPage,
+        loadingMore: scheduled.isFetchingNextPage,
+        more: () => void scheduled.fetchNextPage(),
+    };
 }

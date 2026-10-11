@@ -10,6 +10,7 @@ import {
     ownSendingMailboxes,
     refusedVariables,
     sendInput,
+    sendsAsTemplate,
     type Draft,
 } from './compose';
 
@@ -138,6 +139,13 @@ describe('FR-CRMS-2: the request a draft sends', () => {
             sendAt: '2026-10-12T08:00:00.000Z',
             timeZone: 'Europe/London',
         });
+    });
+
+    it('says when a filled template has been edited and will go as written', () => {
+        const fill = { templateId: 't-1', name: 'Follow-up', subject, body };
+        expect(sendsAsTemplate({ ...base, fill })).toBe(true);
+        expect(sendsAsTemplate({ ...base, fill, subject: subjectToDoc('Changed') })).toBe(false);
+        expect(sendsAsTemplate({ ...base, fill: null })).toBe(false);
     });
 
     it('never sends a reply as its template (the template’s subject would replace “Re:”)', () => {

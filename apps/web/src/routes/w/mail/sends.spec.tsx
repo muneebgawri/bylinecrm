@@ -189,6 +189,37 @@ describe('FR-CRMS-UI-2 / P2-5: a scheduled send on the timeline', () => {
     });
 });
 
+describe('FR-CRMS-UI-2: scheduled sends are read a page at a time', () => {
+    it('offers “Show more scheduled sends” while the API has a next page, and reads it with the cursor', async () => {
+        const later = outbound({
+            id: 'out-8',
+            status: 'scheduled',
+            subject: 'Far ahead',
+            sendAt: '2026-12-20T09:00:00.000Z',
+            senderTimeZone: 'Europe/London',
+        });
+        const seen = stubApi([
+            (r) =>
+                r.method === 'GET' && r.url.includes('/mail/scheduled')
+                    ? r.url.includes('cursor=c2')
+                        ? json({ items: [later], nextCursor: null })
+                        : json({ items: [], nextCursor: 'c2' })
+                    : undefined,
+            statusRoute('out-8', [later]),
+            ...quietRecordRoutes,
+        ]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        await userEvent.click(await screen.findByRole('button', { name: 'Show more scheduled sends' }));
+        expect(await screen.findByText('scheduled “Far ahead”')).toBeInTheDocument();
+        expect(seen.some((r) => r.url.includes('cursor=c2'))).toBe(true);
+        expect(screen.queryByRole('button', { name: 'Show more scheduled sends' })).not.toBeInTheDocument();
+    });
+});
+
 describe('FR-CRMS-4: stored mail on the timeline opens its thread', () => {
     const entry: TimelineActivityView = {
         id: 'tl-1',

@@ -71,17 +71,26 @@ export interface Draft {
 const same = (a: RichText, b: RichText) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
+ * Whether the draft goes AS its template (`templateId`). The composer says so when it does not
+ * ("edited — sends as written"), so an edit never changes what is sent without the person seeing it.
+ */
+export function sendsAsTemplate(draft: Pick<Draft, 'fill' | 'subject' | 'body' | 'replyToMessageId'>): boolean {
+    return (
+        draft.fill !== null &&
+        draft.replyToMessageId === undefined &&
+        same(draft.subject, draft.fill.subject) &&
+        same(draft.body, draft.fill.body)
+    );
+}
+
+/**
  * The request for a draft. A template left exactly as filled is sent AS the template
  * (`templateId`), so the send is attributed to it; once edited it is the written subject and body
  * (the API takes one or the other, never both). A reply is always written: with no subject of its
  * own it takes the parent's (`Re: …`) on the server, which a template's subject would replace.
  */
 export function sendInput(draft: Draft): SendMailInput {
-    const asTemplate =
-        draft.fill !== null &&
-        draft.replyToMessageId === undefined &&
-        same(draft.subject, draft.fill.subject) &&
-        same(draft.body, draft.fill.body);
+    const asTemplate = sendsAsTemplate(draft);
     const subject = docToSubject(draft.subject);
     return {
         mailboxId: draft.mailboxId,

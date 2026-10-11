@@ -33,6 +33,7 @@ import {
     ownSendingMailboxes,
     refusedVariables,
     sendInput,
+    sendsAsTemplate,
     type TemplateFill,
 } from './compose';
 import { SchedulePicker } from './SchedulePicker';
@@ -338,6 +339,11 @@ function ComposerForm({
                     {fill && (
                         <span className="text-xs">
                             Template <b className="font-medium text-text">{fill.name}</b>
+                            {!sendsAsTemplate({ fill, subject, body, replyToMessageId: reply?.messageId }) && (
+                                <Badge status="warning" className="ml-1.5">
+                                    edited — sends as written
+                                </Badge>
+                            )}
                         </span>
                     )}
                     <TemplateMenu

@@ -129,7 +129,7 @@ export function TimelinePanel({
         });
     }, [entries, members.data, names, target, stageNames, location.search]);
     const shown = useMemo(
-        () => [...(showPending ? pending.map((p) => pendingItem(workspaceId, p)) : []), ...items],
+        () => [...(showPending ? pending.sends.map((p) => pendingItem(workspaceId, p)) : []), ...items],
         [showPending, pending, items, workspaceId],
     );
 
@@ -205,6 +205,20 @@ export function TimelinePanel({
                             </div>
                         )}
                     </>
+                )}
+                {/* Scheduled sends are read a page at a time; this record's may be further on. */}
+                {showPending && pending.hasMore && (
+                    <div className="flex justify-center py-1">
+                        <Button
+                            size="sm"
+                            shape="square"
+                            variant="ghost"
+                            disabled={pending.loadingMore}
+                            onClick={pending.more}
+                        >
+                            {pending.loadingMore ? 'Loading…' : 'Show more scheduled sends'}
+                        </Button>
+                    </div>
                 )}
             </div>
         </section>

@@ -14,7 +14,8 @@ threads, P2-3's send and P2-5's scheduling. No API change.
 
 On a phone (FR-CRMS-UI-12) the inline box gives way to a **full-screen sheet** raised by the bottom bar's
 **Email** (`RecordCompose`); the template and schedule pickers are sheets (`ResponsivePanel`). The person
-page's primary action is now **Email** (Enrol stays, disabled, "Sequences arrive in Phase 3"); the deal
+page's primary action is now **Email** (accepted; Enrol stays, disabled, "Sequences arrive in Phase 3",
+and becomes the primary again with P3-3); the deal
 page adds Email beside Note and Task, disabled with its reason when there is no point of contact. `e` and
 the palette: "Email this person" / "Email the point of contact". The palette (and the `?` sheet) now list the record's own
 groups ("This record", "This panel") — they had none, so no record action appeared there; a palette
@@ -37,8 +38,10 @@ command runs after the palette has closed (`CommandDialog` `onCloseAutoFocus`), 
   footer names them ("custom.lastOutlet is empty for Dana Reyes · Send is disabled") and Send and
   Schedule are disabled. A send refused with `422 unprocessable` marks the variables it names the same
   way (the person's data can change between preview and send).
-- **Template or written.** The API takes `templateId` **or** `subject`+`body`. A template left exactly as
-  filled is sent as the template (so the send is attributed to it); once edited it is sent as written.
+- **Template or written** (ruling accepted for 1:1 mail). The API takes `templateId` **or**
+  `subject`+`body`. A template left exactly as filled is sent as the template (so the send is attributed
+  to it); once the subject or body diverges it is sent as written, and the composer says so beside the
+  template's name — "edited — sends as written" (`sendsAsTemplate`, the same rule the request uses).
   A reply is always written: with no subject it takes the parent's `Re:` on the server.
 - Chips come only from templates: the composer offers no "insert variable" (1:1 mail is written to a
   known person), so `{{` is just typed there — `Variable.configure({ trigger })` turns the `{{` rule on
@@ -54,8 +57,19 @@ command runs after the palette has closed (`CommandDialog` `onCloseAutoFocus`), 
 
 `POST /mail/send` answers `202` before anything is on a record, so the client keeps what it sent: the
 tab's sends live in the query cache (`keys.mailSession`, never fetched). The timeline merges them, plus
-the server's scheduled sends for this record (`GET /mail/scheduled?limit=100`, so a reload still shows
-them), at the top of the list:
+the server's scheduled sends for this record, at the top of the list:
+
+- Scheduled sends come from `GET /mail/scheduled`, the member's list (an admin's: everyone's), a page of
+  100 at a time with the API's cursor. The record keeps its own; **"Show more scheduled sends"** reads
+  the next page while there is one, so a reload still shows "Scheduled for …" however long the list.
+- **Failed sends are a known gap (#104).** The API keeps a failed send (`mail_outbound.status =
+'failed'`, with its `error`), but no route lists sends by record or by status. So a failure shows, with
+  its reason and Retry, only in the tab that sent it, and is gone from the record after a reload. #104
+  asks for `GET /mail/messages?target=…&status=failed,scheduled` (newest first, with a cursor). When it
+  lands, the record reads failed and scheduled sends from it instead of tab state and the client-side
+  filtering of `/mail/scheduled`. Nothing is faked in the meantime.
+
+Each line reads:
 
 - **Sending…** → **Sent**: `GET /mail/messages/:id` is polled with backoff (1s, 2s, 4s … 15s,
   `outboundPollMs`) until final — and, once sent, until its stored copy exists (`mailMessageId`). The

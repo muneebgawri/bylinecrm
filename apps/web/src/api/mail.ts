@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { mail } from './endpoints';
 import { keys } from './queries';
 import type { MailOutboundView, MailSendAcceptedView, RescheduleMailInput, SendMailInput } from './types';
@@ -9,7 +9,7 @@ import type { MailOutboundView, MailSendAcceptedView, RescheduleMailInput, SendM
  * (FR-CRMS-UI-10); their cache keys are in `keys` with every other.
  */
 
-/** How many scheduled sends a record page reads: the API's largest page, soonest first. */
+/** How many scheduled sends one page holds: the API's largest page, soonest first. */
 export const MAIL_SCHEDULED_PAGE = 100;
 
 /**
@@ -75,10 +75,18 @@ export function useOutboundMessages(workspaceId: string, messageIds: readonly st
     });
 }
 
+/**
+ * The caller's scheduled sends, a page at a time (the API's cursor). The list is the member's, not
+ * the record's — the API has no per-record filter yet (#104) — so a record page filters each page
+ * and offers the next while there is one.
+ */
 export const useScheduledMail = (workspaceId: string, enabled: boolean) =>
-    useQuery({
+    useInfiniteQuery({
         queryKey: keys.mailScheduled(workspaceId),
-        queryFn: ({ signal }) => mail.scheduled(workspaceId, MAIL_SCHEDULED_PAGE, signal),
+        queryFn: ({ pageParam, signal }) =>
+            mail.scheduled(workspaceId, { limit: MAIL_SCHEDULED_PAGE, cursor: pageParam }, signal),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (last) => last.nextCursor ?? undefined,
         enabled,
     });
 
