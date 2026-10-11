@@ -2,9 +2,10 @@ import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } f
 import { request } from './client';
 import { query, workspacePath } from './endpoints';
 import { keys } from './queries';
+import type { RecordTarget } from '@bylinecrm/shared';
 import type {
     MailOutboundView,
-    MailScheduledPage,
+    MailRecordSendsPage,
     MailSendAcceptedView,
     MailThreadView,
     RescheduleMailInput,
@@ -32,19 +33,41 @@ export const mail = {
         request<MailOutboundView>('PATCH', workspacePath(workspaceId, `/mail/messages/${messageId}`), { body: input }),
     cancel: (workspaceId: string, messageId: string) =>
         request<MailOutboundView>('POST', workspacePath(workspaceId, `/mail/messages/${messageId}/cancel`)),
-    /** The caller's scheduled sends (an admin's: everyone's), soonest first, a page at a time. */
-    scheduled: (workspaceId: string, params: { limit: number; cursor?: string | undefined }, signal?: AbortSignal) =>
-        request<MailScheduledPage>(
+    /**
+     * One record's sends in the statuses asked for, newest first, a page at a time (#104): only the
+     * ones the caller may see (their own; an admin's: everyone's).
+     */
+    recordSends: (
+        workspaceId: string,
+        params: {
+            target: RecordTarget;
+            status: readonly MailOutboundView['status'][];
+            limit: number;
+            cursor?: string | undefined;
+        },
+        signal?: AbortSignal,
+    ) =>
+        request<MailRecordSendsPage>(
             'GET',
-            workspacePath(workspaceId, `/mail/scheduled${query({ limit: params.limit, cursor: params.cursor })}`),
+            workspacePath(
+                workspaceId,
+                `/mail/messages${query({
+                    target: `${params.target.type}:${params.target.id}`,
+                    status: params.status.join(','),
+                    limit: params.limit,
+                    cursor: params.cursor,
+                })}`,
+            ),
             { signal },
         ),
     thread: (workspaceId: string, threadId: string, signal?: AbortSignal) =>
         request<MailThreadView>('GET', workspacePath(workspaceId, `/mail/threads/${threadId}`), { signal }),
 };
 
-/** How many scheduled sends one page holds: the API's largest page, soonest first. */
-export const MAIL_SCHEDULED_PAGE = 100;
+/** How many of a record's sends one page holds. */
+export const MAIL_RECORD_SENDS_PAGE = 25;
+/** The sends a record page shows besides its stored mail: failed (with the reason) and scheduled. */
+export const RECORD_SEND_STATUSES = ['failed', 'scheduled'] as const satisfies readonly MailOutboundView['status'][];
 
 /**
  * A send made in this tab. The server answers `202` before anything is stored on a record, so the
@@ -110,15 +133,18 @@ export function useOutboundMessages(workspaceId: string, messageIds: readonly st
 }
 
 /**
- * The caller's scheduled sends, a page at a time (the API's cursor). The list is the member's, not
- * the record's — the API has no per-record filter yet (#104) — so a record page filters each page
- * and offers the next while there is one.
+ * A record's failed and scheduled sends from the server (#104), newest first, a page at a time —
+ * so a reload still shows a failure with its reason, and a scheduled send with its time.
  */
-export const useScheduledMail = (workspaceId: string, enabled: boolean) =>
+export const useRecordSends = (workspaceId: string, target: RecordTarget, enabled: boolean) =>
     useInfiniteQuery({
-        queryKey: keys.mailScheduled(workspaceId),
+        queryKey: keys.mailRecordSends(workspaceId, target),
         queryFn: ({ pageParam, signal }) =>
-            mail.scheduled(workspaceId, { limit: MAIL_SCHEDULED_PAGE, cursor: pageParam }, signal),
+            mail.recordSends(
+                workspaceId,
+                { target, status: RECORD_SEND_STATUSES, limit: MAIL_RECORD_SENDS_PAGE, cursor: pageParam },
+                signal,
+            ),
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (last) => last.nextCursor ?? undefined,
         enabled,
@@ -147,7 +173,7 @@ export function useSendMail(workspaceId: string) {
                 ...list.filter((s) => s.messageId !== input.replaces),
             ]);
             if (accepted.status === 'scheduled') {
-                void client.invalidateQueries({ queryKey: keys.mailScheduled(workspaceId) });
+                void client.invalidateQueries({ queryKey: keys.mailRecordSendsAll(workspaceId) });
             }
         },
     });
@@ -160,7 +186,7 @@ function useOutboundWrite<I>(workspaceId: string, write: (input: I) => Promise<M
         mutationFn: write,
         onSuccess: (view) => {
             client.setQueryData(keys.mailMessage(workspaceId, view.id), view);
-            return client.invalidateQueries({ queryKey: keys.mailScheduled(workspaceId) });
+            return client.invalidateQueries({ queryKey: keys.mailRecordSendsAll(workspaceId) });
         },
     });
 }

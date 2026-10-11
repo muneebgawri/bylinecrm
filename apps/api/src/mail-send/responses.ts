@@ -44,6 +44,7 @@ export const mailOutboundView = named(
         dealId: id.nullable(),
         templateId: id.nullable(),
         replyToMessageId: id.nullable().meta({ description: 'The stored message this one answers.' }),
+        senderMemberId: id.meta({ description: 'The member who sent (or scheduled) it.' }),
         rfc822MessageId: z.string().meta({ description: 'Our Message-ID, without angle brackets.' }),
         mailMessageId: id.nullable().meta({
             description: 'The stored copy of the sent message (its thread is on the records); null until stored.',
@@ -77,3 +78,6 @@ export type MailOutboundView = z.output<typeof mailOutboundView>;
 
 export const mailScheduledPage = named('MailScheduledPage', page(mailOutboundView));
 export type MailScheduledPage = z.output<typeof mailScheduledPage>;
+
+export const mailRecordSendsPage = named('MailRecordSendsPage', page(mailOutboundView));
+export type MailRecordSendsPage = z.output<typeof mailRecordSendsPage>;

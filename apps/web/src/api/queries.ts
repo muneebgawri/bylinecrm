@@ -74,7 +74,10 @@ export const keys = {
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,
     mailMessage: (workspaceId: string, messageId: string) => ['w', workspaceId, 'mail', 'messages', messageId] as const,
-    mailScheduled: (workspaceId: string) => ['w', workspaceId, 'mail', 'scheduled'] as const,
+    /** Every record's sends list (#104); one record's is `mailRecordSends(…, target)`. */
+    mailRecordSendsAll: (workspaceId: string) => ['w', workspaceId, 'mail', 'record-sends'] as const,
+    mailRecordSends: (workspaceId: string, target: RecordTarget) =>
+        ['w', workspaceId, 'mail', 'record-sends', target.type, target.id] as const,
     mailThread: (workspaceId: string, threadId: string) => ['w', workspaceId, 'mail', 'threads', threadId] as const,
     /** The sends made in this tab: held by the client so a send shows before the server has stored it. */
     mailSession: (workspaceId: string) => ['w', workspaceId, 'mail', 'session'] as const,
