@@ -14,9 +14,9 @@ import {
 import { Building2, Plus, Search, Upload, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { useCustomFields, useMembersById, useViews } from '../../../api/queries';
+import { useCustomFields, useMembersById, useViews } from '../../../api/records';
 import { useBulkChange, useRecordPages, useViewCounts, type ListCount } from '../../../api/lists';
-import { companies as companiesApi, people as peopleApi } from '../../../api/endpoints';
+import { companies as companiesApi, people as peopleApi } from '../../../api/records';
 import { useMembership, usePermission } from '../../../auth/capabilities';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useKeyedState } from '../../../lib/useKeyedState';

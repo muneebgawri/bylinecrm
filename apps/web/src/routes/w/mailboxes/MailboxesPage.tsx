@@ -15,12 +15,12 @@ import {
     useCheckMailbox,
     useConnectMailbox,
     useDisconnectMailbox,
-    useMailboxes,
     useMailboxSyncs,
-    useMembersById,
+    useMailboxes,
     useOAuthClientStatus,
     useSyncMailbox,
-} from '../../../api/queries';
+} from '../../../api/mailAdmin';
+import { useMembersById } from '../../../api/records';
 import type { MailboxCheckView, MailboxSyncView, MailboxView } from '../../../api/types';
 import { can, useMembership } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';

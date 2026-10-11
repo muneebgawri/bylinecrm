@@ -17,7 +17,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { usePipelines } from '../../../api/queries';
+import { usePipelines } from '../../../api/deals';
 import { useCreatePipeline, useRemovePipeline, useUpdatePipeline } from '../../../api/settings';
 import type { PipelineView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';

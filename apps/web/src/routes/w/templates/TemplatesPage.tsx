@@ -19,7 +19,7 @@ import { FileText } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ApiError, fieldErrorAt } from '../../../api/client';
-import { useCreateTemplate, useDeleteTemplate, useDuplicateTemplate, useTemplates } from '../../../api/queries';
+import { useCreateTemplate, useDeleteTemplate, useDuplicateTemplate, useTemplates } from '../../../api/templates';
 import type { EmailTemplateView } from '../../../api/types';
 import { useCan, usePermission } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';

@@ -2,7 +2,7 @@ import { Button, Skeleton } from '@bylinecrm/ui';
 import { CircleCheck } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
 import { ApiError } from '../../api/client';
-import { useConfirmUnsubscribe, useUnsubscribeStatus } from '../../api/queries';
+import { useConfirmUnsubscribe, useUnsubscribeStatus } from '../../api/mailAdmin';
 import { failureText } from '../../lib/errors';
 import { useUnsubscribeToken } from '../params';
 
