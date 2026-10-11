@@ -1,5 +1,5 @@
 import type { Capability } from '@bylinecrm/shared';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -56,6 +56,7 @@ describe('FR-CRMS-UI-12: composing on a phone', () => {
         renderAt([route('/w/:workspaceId/people/:id', <Page />)], `/w/${WS}/people/${PERSON.id}`, CAN_SEND);
         const subject = await screen.findByRole('textbox', { name: 'Subject' });
         await userEvent.click(screen.getByRole('button', { name: 'Email' }));
-        expect(subject).toHaveFocus();
+        // Tiptap moves focus on the next animation frame.
+        await waitFor(() => expect(subject).toHaveFocus());
     });
 });

@@ -112,7 +112,8 @@ export function TimelinePanel({
                     <Link
                         to={{ search: withThread(location.search, threadId) }}
                         className={cn(
-                            'text-text underline decoration-border-strong underline-offset-2 hover:decoration-current',
+                            // A phone's finger target: the line is a 44px-tall link there (FR-CRMS-UI-12).
+                            'text-text underline decoration-border-strong underline-offset-2 hover:decoration-current max-md:inline-flex max-md:min-h-touch max-md:items-center',
                             focusRing,
                         )}
                     >
