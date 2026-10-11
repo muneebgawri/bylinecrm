@@ -3,7 +3,8 @@
 # (NewswireOS uses 5432/6379, its second stack 6390); the API reads them from .env.
 services:
     postgres:
-        image: postgres:16
+        # postgres:16, mirrored by digest (deploy/images/mirror.json, #123).
+        image: ghcr.io/muneebgawri/mirror/postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
         environment:
             POSTGRES_USER: bylinecrm
             POSTGRES_PASSWORD: bylinecrm
@@ -19,8 +20,8 @@ services:
             retries: 10
 
     redis:
-        # Valkey (D-250), the same 9.1 as CI and staging; the service keeps its name so REDIS_URL is unchanged.
-        image: valkey/valkey:9.1
+        # Valkey 9.1 (D-250), the same image as CI and staging; the service keeps its name so REDIS_URL is unchanged.
+        image: ghcr.io/muneebgawri/mirror/valkey@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
         ports:
             - '127.0.0.1:6391:6379'
         healthcheck:
