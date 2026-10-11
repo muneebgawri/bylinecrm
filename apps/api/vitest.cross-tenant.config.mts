@@ -15,7 +15,9 @@ export default defineConfig({
         // The list query-budget test (no N+1) counts statements; the client emits them only when asked.
         // No mail-sync or mail-send worker: the suite drives sync and sending directly against a fake
         // Gmail, and a worker started by any spec's application would call the real Gmail with a fake token.
-        env: { DB_QUERY_EVENTS: '1', MAIL_SYNC_WORKER: '0', MAIL_SEND_WORKER: '0' },
+        // Sign-up open (P0-14): nearly every spec makes its tenants through `/api/auth/signup`; the
+        // specs for `closed` and `invite` replace the environment in their own application.
+        env: { DB_QUERY_EVENTS: '1', MAIL_SYNC_WORKER: '0', MAIL_SEND_WORKER: '0', SIGNUP_MODE: 'open' },
         // One process: the suite shares one database and must not race itself.
         fileParallelism: false,
         testTimeout: 30_000,

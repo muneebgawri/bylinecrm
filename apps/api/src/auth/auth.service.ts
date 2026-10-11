@@ -2,16 +2,19 @@ import { randomBytes } from 'node:crypto';
 import {
     ForbiddenException,
     GoneException,
+    Inject,
     Injectable,
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
-import type { Prisma } from '@prisma/client';
+import { invitationUrl, MEMBER_DEFAULT_CAPABILITIES, type PlatformEvent, SYSTEM_ROLES } from '@bylinecrm/shared';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
-import { RateLimited, UniqueConflict } from '../infra/errors/api-errors';
+import { ApiException, RateLimited, UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { seedDefaultPipeline } from '../pipelines/seed';
+import { recordPlatformAction } from '../platform/audit';
 import { INVITE_TTL_S, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_S, SLUG_SUFFIX_BYTES } from './auth.constants';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
@@ -39,22 +42,35 @@ type OwnerTx = Prisma.TransactionClient;
 @Injectable()
 export class AuthService {
     constructor(
+        @Inject(ENV) private readonly env: Env,
         private readonly ownerPrisma: PrismaService,
         private readonly passwords: PasswordService,
         private readonly limiter: RateLimiter,
     ) {}
 
-    /** Local sign-up: a user, their first workspace, and their admin seat, in one transaction. */
+    /**
+     * Local sign-up: a user, their first workspace, and their admin seat, in one transaction —
+     * when `SIGNUP_MODE` allows it (P0-14). `closed` refuses every sign-up; `invite` needs a
+     * platform sign-up invitation for this address; `open` takes anyone. A sign-up invitation, when
+     * one is presented, is spent here and verifies the address (the holder read that mailbox).
+     */
     async signup(input: {
         email: string;
         password: string;
         workspaceName: string;
+        inviteToken?: string | undefined;
     }): Promise<{ user: UserView; workspace: WorkspaceView }> {
+        const mode = this.env.SIGNUP_MODE;
+        if (mode === 'closed') throw new SignupClosed();
+        if (mode === 'invite' && !input.inviteToken) throw new SignupInvitationRequired();
         const email = normaliseEmail(input.email);
         const passwordHash = await this.passwords.hash(input.password);
         try {
             return await this.ownerPrisma.$transaction(async (tx) => {
-                const user = await tx.user.create({ data: { email, passwordHash } });
+                const verified = input.inviteToken ? await spendSignupInvite(tx, input.inviteToken, email) : false;
+                const user = await tx.user.create({
+                    data: { email, passwordHash, emailVerifiedAt: verified ? new Date() : null },
+                });
                 const workspace = await createWorkspaceWithAdmin(tx, user.id, input.workspaceName);
                 return { user: userView(user), workspace };
             });
@@ -91,6 +107,57 @@ export class AuthService {
     /** A further workspace for an existing user; they become its admin. */
     createWorkspace(userId: string, name: string): Promise<WorkspaceView> {
         return this.ownerPrisma.$transaction((tx) => createWorkspaceWithAdmin(tx, userId, name));
+    }
+
+    /**
+     * A workspace a platform admin creates for someone else (P0-14): the workspace, its system
+     * roles and pipeline, no member yet, and an invitation to its admin role for `ownerEmail`. The
+     * owner accepts with their account if they have one (signed in, address verified) or signs up
+     * through the invitation, which works in every sign-up mode. The audit row is written in the
+     * same transaction; the event is returned for the caller to publish after commit.
+     */
+    async createWorkspaceForOwner(input: { actorUserId: string; name: string; ownerEmail: string }): Promise<{
+        workspace: WorkspaceView;
+        invite: CreatedPlatformInvite;
+        event: PlatformEvent;
+    }> {
+        const email = normaliseEmail(input.ownerEmail);
+        const { token, tokenHash, expiresAt } = AuthService.newInvite();
+        return this.ownerPrisma.$transaction(async (tx) => {
+            const { workspace, adminRoleId } = await createWorkspaceShell(tx, input.name);
+            await tx.workspaceInvite.create({
+                data: {
+                    workspaceId: workspace.id,
+                    email,
+                    roleId: adminRoleId,
+                    tokenHash,
+                    invitedByUserId: input.actorUserId,
+                    expiresAt,
+                },
+            });
+            const event = await recordPlatformAction(tx, 'platform.workspace_created', input.actorUserId, {
+                workspaceId: workspace.id,
+                email,
+            });
+            const url = invitationUrl(this.env.WEB_URL, 'member', token);
+            return { workspace, invite: { email, token, url, expiresAt }, event };
+        });
+    }
+
+    /**
+     * The public face of a workspace invitation, for the page that accepts it: the address it is
+     * for and the workspace's name. Only someone holding the token can ask; an unknown, spent or
+     * expired token answers the same way accepting it would.
+     */
+    async previewInvite(token: string): Promise<{ email: string; workspaceName: string; expiresAt: Date }> {
+        const invite = await this.ownerPrisma.workspaceInvite.findUnique({
+            where: { tokenHash: hashToken(token) },
+            select: { email: true, expiresAt: true, acceptedAt: true, workspace: { select: { name: true } } },
+        });
+        if (!invite) throw new NotFoundException('invitation not found');
+        if (invite.acceptedAt) throw new GoneException('invitation already used');
+        if (invite.expiresAt <= new Date()) throw new GoneException('invitation expired');
+        return { email: invite.email, workspaceName: invite.workspace.name, expiresAt: invite.expiresAt };
     }
 
     /**
@@ -183,7 +250,79 @@ export function normaliseEmail(email: string): string {
     return email.trim().toLowerCase();
 }
 
-async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: string): Promise<WorkspaceView> {
+/** A workspace invitation a platform admin made: the token and link are shown once. */
+export interface CreatedPlatformInvite {
+    email: string;
+    token: string;
+    url: string;
+    expiresAt: Date;
+}
+
+/** `403 signup.closed`: this deployment takes no sign-ups (`SIGNUP_MODE=closed`). */
+export class SignupClosed extends ApiException {
+    constructor() {
+        super(403, 'signup.closed', 'sign-ups are closed; ask your administrator for an invitation');
+    }
+}
+
+/** `403 signup.invitation_required`: sign-up needs a valid sign-up invitation for this address. */
+export class SignupInvitationRequired extends ApiException {
+    constructor() {
+        super(403, 'signup.invitation_required', 'sign-up needs a valid invitation for this address');
+    }
+}
+
+/**
+ * Spends a platform sign-up invitation for `email`, or refuses. Unknown, expired, spent and
+ * someone-else's tokens all get the same answer. The conditional update makes a token good for
+ * exactly one sign-up even when two race.
+ */
+async function spendSignupInvite(tx: OwnerTx, token: string, email: string): Promise<true> {
+    const spent = await tx.platformSignupInvite.updateMany({
+        where: { tokenHash: hashToken(token), email, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+    });
+    if (spent.count !== 1) throw new SignupInvitationRequired();
+    return true;
+}
+
+/**
+ * The operator's bootstrap for a platform admin's address (P0-14), run on the server by
+ * `cli/platform-verify-email`: marks the account's address verified, which today nothing else
+ * does for a password account that was not created from an invitation. It refuses an address
+ * that is not in `PLATFORM_ADMIN_EMAILS`, so it cannot be used to verify anyone else, and records
+ * the act (actor `null`: an operator command, not a signed-in person). The email-verification
+ * card replaces it with a mailed link.
+ */
+export async function verifyPlatformAdminEmail(
+    owner: PrismaClient,
+    env: Pick<Env, 'PLATFORM_ADMIN_EMAILS'>,
+    rawEmail: string,
+): Promise<{ email: string; alreadyVerified: boolean }> {
+    const email = normaliseEmail(rawEmail);
+    if (!env.PLATFORM_ADMIN_EMAILS.includes(email)) {
+        throw new Error(
+            `${email} is not in PLATFORM_ADMIN_EMAILS; only a platform admin's address is verified this way`,
+        );
+    }
+    return owner.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { email } });
+        if (!user) throw new Error(`no account for ${email}; sign up (or accept an invitation) first`);
+        if (user.emailVerifiedAt) return { email, alreadyVerified: true };
+        await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+        await recordPlatformAction(tx, 'platform.admin_email_verified', null, { email });
+        return { email, alreadyVerified: false };
+    });
+}
+
+/**
+ * A workspace with everything that makes it usable except a member: its two system roles and
+ * its pipeline (P1-2), the latter from the one stage list.
+ */
+async function createWorkspaceShell(
+    tx: OwnerTx,
+    name: string,
+): Promise<{ workspace: WorkspaceView; adminRoleId: string }> {
     const workspace = await tx.workspace.create({ data: { name: name.trim(), slug: slugFor(name) } });
     const admin = await tx.role.create({
         data: { workspaceId: workspace.id, name: SYSTEM_ROLES.admin, isSystem: true },
@@ -198,13 +337,18 @@ async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: strin
             },
         },
     });
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
-    await tx.workspaceMember.create({
-        data: { workspaceId: workspace.id, userId, roleId: admin.id, displayName: displayNameFor(user.email) },
-    });
     // The pipeline deals go into (P1-2), from the one stage list; a workspace is not usable without it.
     await seedDefaultPipeline(tx, workspace.id);
-    return workspaceView(workspace);
+    return { workspace: workspaceView(workspace), adminRoleId: admin.id };
+}
+
+async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: string): Promise<WorkspaceView> {
+    const { workspace, adminRoleId } = await createWorkspaceShell(tx, name);
+    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+    await tx.workspaceMember.create({
+        data: { workspaceId: workspace.id, userId, roleId: adminRoleId, displayName: displayNameFor(user.email) },
+    });
+    return workspace;
 }
 
 /**

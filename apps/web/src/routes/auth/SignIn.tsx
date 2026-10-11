@@ -2,7 +2,7 @@ import { Button, Field, Input } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../../api/client';
-import { useLogin } from '../../api/queries';
+import { useLogin, useProviders } from '../../api/queries';
 import { paths, returnToFrom } from '../paths';
 import { AuthLayout } from './AuthLayout';
 import { ProviderButtons } from './ProviderButtons';
@@ -11,6 +11,8 @@ export function SignIn() {
     const navigate = useNavigate();
     const location = useLocation();
     const login = useLogin();
+    // "Create a workspace" only where sign-up is open (P0-14); until the answer arrives, nothing.
+    const signupOpen = useProviders().data?.signup === 'open';
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
@@ -58,12 +60,18 @@ export function SignIn() {
                     Sign in
                 </Button>
             </form>
-            <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
-                New here?{' '}
-                <Link to={paths.signUp} className="font-medium text-text underline-offset-4 hover:underline">
-                    Create a workspace
-                </Link>
-            </p>
+            {signupOpen ? (
+                <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
+                    New here?{' '}
+                    <Link to={paths.signUp} className="font-medium text-text underline-offset-4 hover:underline">
+                        Create a workspace
+                    </Link>
+                </p>
+            ) : (
+                <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
+                    New here? Ask your administrator for an invitation.
+                </p>
+            )}
         </AuthLayout>
     );
 }

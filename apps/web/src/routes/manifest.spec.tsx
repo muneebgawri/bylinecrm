@@ -54,7 +54,7 @@ describe('route manifest', () => {
     });
 
     it('puts every workspace route behind the auth boundary', () => {
-        for (const path of [paths.workspaces, paths.home(ws), paths.settingsRoles(ws)]) {
+        for (const path of [paths.workspaces, paths.platformWorkspaces, paths.home(ws), paths.settingsRoles(ws)]) {
             // The boundary is a pathless layout route; it shows up as "(layout)" in the chain.
             expect(matched(path)[0], path).toBe('(layout)');
         }

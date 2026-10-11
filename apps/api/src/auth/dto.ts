@@ -9,7 +9,15 @@ const name = z.string().trim().min(1).max(120);
 const capability = z.enum(CAPABILITIES);
 const recordScope = z.enum(RECORD_SCOPES);
 
-export class SignupDto extends createZodDto(z.object({ email, password, workspaceName: name })) {}
+export class SignupDto extends createZodDto(
+    z.object({
+        email,
+        password,
+        workspaceName: name,
+        /** A platform sign-up invitation (P0-14): required when `SIGNUP_MODE` is `invite`. */
+        inviteToken: z.string().min(1).max(200).optional(),
+    }),
+) {}
 export class LoginDto extends createZodDto(z.object({ email, password: z.string().min(1).max(PASSWORD_MAX_LENGTH) })) {}
 export class CreateWorkspaceDto extends createZodDto(z.object({ name })) {}
 export class AcceptInviteSignupDto extends createZodDto(z.object({ password })) {}
@@ -31,3 +39,7 @@ export class UpdateRoleDto extends createZodDto(
 export class SetMemberRoleDto extends createZodDto(z.object({ roleId: z.uuid() })) {}
 export class CreateApiKeyDto extends createZodDto(z.object({ name, roleId: z.uuid() })) {}
 export class CreateInviteDto extends createZodDto(z.object({ email, roleId: z.uuid() })) {}
+
+/** A platform admin creating a workspace for someone else (P0-14). */
+export class CreatePlatformWorkspaceDto extends createZodDto(z.object({ name, ownerEmail: email })) {}
+export class CreateSignupInviteDto extends createZodDto(z.object({ email })) {}

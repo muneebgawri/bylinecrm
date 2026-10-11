@@ -1,3 +1,4 @@
+import type { SignupMode } from '@bylinecrm/shared';
 import { ThemeProvider } from '@bylinecrm/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
@@ -31,10 +32,10 @@ function renderSignIn(initial: string = paths.signIn) {
     );
 }
 
-function stubApi(login: { status: number; body: unknown }) {
+function stubApi(login: { status: number; body: unknown }, signup: SignupMode = 'closed') {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
         if (url.endsWith('/auth/providers'))
-            return Promise.resolve(new Response(JSON.stringify({ providers: ['google'] }), { status: 200 }));
+            return Promise.resolve(new Response(JSON.stringify({ providers: ['google'], signup }), { status: 200 }));
         if (url.endsWith('/auth/login') && init?.method === 'POST')
             return Promise.resolve(new Response(JSON.stringify(login.body), { status: login.status }));
         return Promise.resolve(new Response('{}', { status: 200 }));
@@ -76,5 +77,32 @@ describe('SignIn', () => {
         await user.type(screen.getByLabelText(/Password/), 'wrong');
         await user.click(screen.getByRole('button', { name: 'Sign in' }));
         expect(await screen.findByRole('alert')).toHaveTextContent('That email and password do not match.');
+    });
+
+    it('hides "Create a workspace" unless sign-up is open (P0-14)', async () => {
+        stubApi({ status: 200, body: {} }, 'closed');
+        const closed = renderSignIn();
+        expect(
+            await screen.findByText(/Ask your administrator for an invitation/, {}, { timeout: 5000 }),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Create a workspace' })).not.toBeInTheDocument();
+        closed.unmount();
+        vi.unstubAllGlobals();
+
+        stubApi({ status: 200, body: {} }, 'invite');
+        const invite = renderSignIn();
+        expect(
+            await screen.findByText(/Ask your administrator for an invitation/, {}, { timeout: 5000 }),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Create a workspace' })).not.toBeInTheDocument();
+        invite.unmount();
+        vi.unstubAllGlobals();
+
+        stubApi({ status: 200, body: {} }, 'open');
+        renderSignIn();
+        expect(await screen.findByRole('link', { name: 'Create a workspace' }, { timeout: 5000 })).toHaveAttribute(
+            'href',
+            paths.signUp,
+        );
     });
 });

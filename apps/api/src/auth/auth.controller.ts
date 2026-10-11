@@ -16,6 +16,7 @@ import { SESSION_COOKIE } from '@bylinecrm/shared';
 import type { Request, Response } from 'express';
 import { ENV, type Env } from '../config/env';
 import { MembershipService } from '../workspace/membership.service';
+import { PlatformAccess, PlatformForbidden } from '../platform/platform-access.service';
 import { AuthService, type UserView, type WorkspaceView } from './auth.service';
 import { AuthCookies } from './cookies';
 import { CurrentPrincipal, Public } from './decorators';
@@ -25,7 +26,16 @@ import type { Principal } from './principal';
 import { SessionService } from './session.service';
 import { randomToken } from './tokens';
 import { NotImplementedYet, Redirects, Returns } from '../openapi/responses';
-import { authProviders, signedIn, signedUp, userView, workspaceView } from '../workspace/responses';
+import {
+    authProviders,
+    invitePreview,
+    signedIn,
+    signedUp,
+    userView,
+    workspaceView,
+    type AuthProvidersView,
+    type InvitePreviewView,
+} from '../workspace/responses';
 
 /** Sign-up, sign-in and sign-out, for people. Machines use API keys and never come here. */
 @ApiTags('auth')
@@ -76,12 +86,15 @@ export class AuthController {
         this.cookies.clear(res);
     }
 
-    /** Which identity providers this deployment offers. */
+    /**
+     * Which identity providers this deployment offers, and who may sign up (P0-14) — so the
+     * sign-in page offers "Create a workspace" only where that can work.
+     */
     @Public()
     @Get('providers')
     @Returns(authProviders)
-    providers(): { providers: string[] } {
-        return { providers: this.oidc.available() };
+    providers(): AuthProvidersView {
+        return { providers: this.oidc.available(), signup: this.env.SIGNUP_MODE };
     }
 
     /** Google is the OIDC issuer `google`; the route exists so the web app has a stable name. */
@@ -111,6 +124,14 @@ export class AuthController {
     @Redirects()
     oidcCallback(@Param('issuer') issuer: string, @Req() req: Request, @Res() res: Response): Promise<void> {
         return this.finishOidc(issuer, req, res);
+    }
+
+    /** What an invitation is for — the address and the workspace — for the page that accepts it. */
+    @Public()
+    @Get('invites/:token')
+    @Returns(invitePreview)
+    previewInvite(@Param('token') token: string): Promise<InvitePreviewView> {
+        return this.auth.previewInvite(token);
     }
 
     /** Joining a workspace with an invitation while signed in. */
@@ -173,8 +194,10 @@ export class AuthController {
 @Controller()
 export class MeController {
     constructor(
+        @Inject(ENV) private readonly env: Env,
         private readonly auth: AuthService,
         private readonly memberships: MembershipService,
+        private readonly platformAccess: PlatformAccess,
     ) {}
 
     @Get('me')
@@ -191,13 +214,21 @@ export class MeController {
         return this.memberships.workspacesOf(principal.userId);
     }
 
+    /**
+     * A further workspace of the caller's own. Anyone signed in may when sign-up is `open`;
+     * otherwise only a platform admin (P0-14) — a closed deployment must not let any account mint
+     * workspaces. A platform admin creating one for someone else uses `POST /platform/workspaces`.
+     */
     @Post('workspaces')
     @Returns(workspaceView)
-    createWorkspace(
+    async createWorkspace(
         @Body() body: CreateWorkspaceDto,
         @CurrentPrincipal() principal: Principal,
     ): Promise<WorkspaceView> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key cannot create workspaces');
+        if (this.env.SIGNUP_MODE !== 'open' && !(await this.platformAccess.isPlatformAdmin(principal))) {
+            throw new PlatformForbidden('creating a workspace is for platform admins on this server');
+        }
         return this.auth.createWorkspace(principal.userId, body.name);
     }
 }

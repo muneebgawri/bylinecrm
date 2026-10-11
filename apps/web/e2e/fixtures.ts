@@ -8,6 +8,10 @@ import {
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
+    AuthProvidersView,
+    InvitePreviewView,
+    PlatformAccessView,
+    PlatformWorkspaceView,
     BlocklistEntryView,
     AttachmentView,
     BoardView,
@@ -88,6 +92,40 @@ export const workspaces: WorkspaceView[] = [
     { id: IDS.workspace, slug: 'pinion', name: 'Pinion Partners' },
     { id: IDS.secondWorkspace, slug: 'demo', name: 'Demo workspace' },
 ];
+
+/**
+ * Sign-up as a locked-down server has it (P0-14): closed, so the sign-in page offers no "Create a
+ * workspace" and `/sign-up` explains how to get in. The person is a platform admin, so the picker
+ * links to the platform page and that page renders its list.
+ */
+export const providers: AuthProvidersView = { providers: ['google'], signup: 'closed' };
+export const platformAccess: PlatformAccessView = { platformAdmin: true, signupMode: 'closed' };
+export const platformWorkspaces: PlatformWorkspaceView[] = [
+    {
+        id: IDS.workspace,
+        slug: 'pinion',
+        name: 'Pinion Partners',
+        createdAt: at(24 * 30),
+        memberCount: 4,
+        pendingInvites: [],
+    },
+    {
+        id: IDS.secondWorkspace,
+        slug: 'demo',
+        name: 'Demo workspace',
+        createdAt: at(26),
+        memberCount: 0,
+        pendingInvites: [{ email: 'owner@client.example', expiresAt: at(-24 * 6) }],
+    },
+];
+
+/** The token the invitation-accept state opens `/sign-up?invite=` with, and what it is for. */
+export const INVITE_TOKEN = 'gate-invite-token';
+export const invitePreview: InvitePreviewView = {
+    email: 'owner@client.example',
+    workspaceName: 'Demo workspace',
+    expiresAt: at(-24 * 6),
+};
 
 /** An admin: every capability, so every permission-gated control renders and is checked. */
 export const membership: MembershipSummary = {

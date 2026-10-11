@@ -36,6 +36,17 @@ export type InviteView = Schemas['Invite'];
 export type MembershipSummary = Schemas['Standing'];
 export type MemberSummaryView = Schemas['MemberSummary'];
 
+export type AuthProvidersView = Schemas['AuthProviders'];
+export type InvitePreviewView = Schemas['InvitePreview'];
+
+// ---- Platform (P0-14) -------------------------------------------------------------------------
+export type PlatformAccessView = Schemas['PlatformAccess'];
+export type PlatformWorkspaceView = Schemas['PlatformWorkspace'];
+export type PlatformInviteView = Schemas['PlatformInvite'];
+export type CreatedPlatformWorkspaceView = Schemas['CreatedPlatformWorkspace'];
+export type CreatePlatformWorkspaceInput = Loose<Schemas['CreatePlatformWorkspaceDto']>;
+export type CreateSignupInviteInput = Loose<Schemas['CreateSignupInviteDto']>;
+
 export type SignupInput = Loose<Schemas['SignupDto']>;
 export type LoginInput = Loose<Schemas['LoginDto']>;
 export type CreateRoleInput = Loose<Schemas['CreateRoleDto']>;
