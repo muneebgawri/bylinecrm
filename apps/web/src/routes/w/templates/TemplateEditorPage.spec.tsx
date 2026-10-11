@@ -267,6 +267,24 @@ describe('Template editor', () => {
         expect(editor.getText().endsWith(' x')).toBe(true);
     });
 
+    it('#108: on a phone, a variable picked in the bottom sheet lands at the caret and keeps focus in the body', async () => {
+        phoneMode();
+        stubApi();
+        const user = userEvent.setup();
+        renderEditor();
+        const body = await screen.findByRole('textbox', { name: 'Body' });
+        const editor = editorOf(body);
+        editor.commands.focus('end');
+        await user.click(screen.getByRole('button', { name: 'Insert variable' }));
+        const sheet = await screen.findByRole('dialog', { name: 'Insert variable' });
+        await user.click(within(sheet).getByRole('option', { name: /Company name/ }));
+        await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Insert variable' })).toBeNull());
+        await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+        expect(body.contains(document.activeElement)).toBe(true);
+        typeInto(editor, ',');
+        expect(editor.getText()).toBe('Hi {{person.firstName}}{{company.name}},');
+    });
+
     it('saves with the version it loaded, and offers reload or copy when someone saved first', async () => {
         const calls = stubApi((method, url) =>
             method === 'PATCH' && url.endsWith(`/templates/${TID}`)
