@@ -306,7 +306,7 @@ describe('FR-CRMS-5 sequences', () => {
             expect(reason(suppressed)).toMatchObject({ code: 'suppressed' });
 
             const again = (await enrol(seq.id, [ok])).body as EnrolmentBatchResult;
-            expect(again).toEqual({ enrolled: [], skipped: [ok], refused: [] });
+            expect(again).toEqual({ enrolled: [], skipped: [ok], refused: [], warnings: [] });
             expect(await owner.sequenceEnrolment.count({ where: { sequenceId: seq.id, personId: ok } })).toBe(1);
         });
 
@@ -497,6 +497,50 @@ describe('FR-CRMS-5 sequences', () => {
             expect(again.body as EnrolmentView).toMatchObject({ status: 'active', stepIndex: 0, stopReason: null });
             const listed = await as(admin).get(w(`/people/${ray}/enrolments`));
             expect((listed.body as EnrolmentView[]).map((x) => x.id)).toEqual([e.id]);
+        });
+    });
+
+    describe('D-251 / #142 unknown country: enrolled, flagged, stopped if it turns out blocked', () => {
+        it('enrols a person with no known country and flags them in the preview and the enrol', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const uma = await person({ emails: { primary: address('uma'), additional: [] } });
+            const preview = await as(admin)
+                .post(w(`/sequences/${seq.id}/enrolments/preview`))
+                .send({ personIds: [uma] });
+            expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+            const flag = { personId: uma, code: 'region.unknown' };
+            expect(preview.body).toMatchObject({ enrolled: [uma], warnings: [flag] });
+            const res = await enrol(seq.id, [uma]);
+            expect(res.body).toMatchObject({ enrolled: [uma], warnings: [flag] });
+            const listed = (await as(admin).get(w(`/people/${uma}/enrolments`))).body as Record<string, unknown>[];
+            expect(listed[0]).toMatchObject({ countryUnknownAtEnrol: true });
+        });
+
+        it('stops the enrolment when the person’s country is later set to a blocked region', async () => {
+            const seq = await sequence([
+                { kind: 'wait', waitDays: 1, businessDays: false },
+                { kind: 'email', templateId: template },
+            ]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const vic = await person({ emails: { primary: address('vic'), additional: [] } });
+            await enrol(seq.id, [vic]);
+            const patched = await as(admin)
+                .patch(w(`/people/${vic}`))
+                .send({ country: 'DE' });
+            expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+            await settle(app);
+            expect(await enrolment(seq.id, vic)).toMatchObject({ status: 'stopped', stopReason: 'region_blocked' });
+        });
+
+        it('the check before every step stops it too, even if the update’s event never arrived', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const wes = await person({ emails: { primary: address('wes'), additional: [] } });
+            await enrol(seq.id, [wes]);
+            await owner.person.update({ where: { id: wes }, data: { country: 'FR' } });
+            await runner.run(workspace, (await enrolment(seq.id, wes)).id, new Date());
+            expect(await enrolment(seq.id, wes)).toMatchObject({ status: 'stopped', stopReason: 'region_blocked' });
         });
     });
 

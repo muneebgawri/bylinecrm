@@ -71,6 +71,8 @@ export const PLATFORM_EVENT_TYPES = [
     'platform.workspace_created',
     'platform.signup_invite_created',
     'platform.admin_email_verified',
+    /** The operator created a platform admin's account on a fresh server (#101). */
+    'platform.admin_bootstrapped',
 ] as const;
 export type PlatformEventType = (typeof PLATFORM_EVENT_TYPES)[number];
 
