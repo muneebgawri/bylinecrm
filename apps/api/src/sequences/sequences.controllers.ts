@@ -4,6 +4,7 @@ import type {
     EnrolmentBatchResult,
     EnrolmentView,
     OutreachExclusionView,
+    RegionPolicyChange,
     RegionPolicyEntry,
     SequenceView,
 } from '@bylinecrm/shared';
@@ -27,6 +28,7 @@ import {
     enrolmentBatchResult,
     enrolmentView,
     outreachExclusionView,
+    regionPolicyChange,
     regionPolicyEntry,
     sequenceView,
 } from './responses';
@@ -198,6 +200,13 @@ export class OutreachComplianceController {
     @Returns([regionPolicyEntry])
     regionPolicy(): Promise<RegionPolicyEntry[]> {
         return this.regions.list();
+    }
+
+    @Requires('outreach:write')
+    @Get('region-policy/changes')
+    @Returns([regionPolicyChange])
+    regionPolicyChanges(): Promise<RegionPolicyChange[]> {
+        return this.regions.changes();
     }
 
     @Requires('workspace:admin')

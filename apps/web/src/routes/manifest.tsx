@@ -56,6 +56,7 @@ const settings = {
     mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
     google: () => import('./w/settings/GoogleSetup').then((m) => ({ Component: m.GoogleSetup })),
     suppression: () => import('./w/settings/Suppression').then((m) => ({ Component: m.Suppression })),
+    regionPolicy: () => import('./w/settings/RegionPolicy').then((m) => ({ Component: m.RegionPolicy })),
     importTwenty: () => import('./w/settings/ImportTwenty').then((m) => ({ Component: m.ImportTwenty })),
 };
 
@@ -148,6 +149,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('mail', settings.mail, 'Mail'),
             lazyPage('google', settings.google, 'Google'),
             lazyPage('suppression', settings.suppression, 'Suppression'),
+            lazyPage('region-policy', settings.regionPolicy, 'Region policy'),
             lazyPage('import-twenty', settings.importTwenty, 'Import from Twenty'),
         ]),
     ],

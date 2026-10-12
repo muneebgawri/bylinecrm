@@ -123,6 +123,24 @@ describe('DataTableChrome rows (data)', () => {
         expect(screen.queryByRole('button', { name: 'Actions for Sam Okafor' })).not.toBeInTheDocument();
     });
 
+    it('makes a table that scrolls sideways a labelled, focusable region — and adds no tab stop when it fits', () => {
+        const width = (scroll: number) => {
+            vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(scroll);
+            vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(600);
+        };
+        width(900);
+        const { unmount } = render(members('table'));
+        const region = screen.getByRole('region', { name: 'Members' });
+        expect(region).toHaveAttribute('tabindex', '0');
+        expect(region).toContainElement(screen.getByRole('table'));
+        unmount();
+        vi.restoreAllMocks();
+        width(600);
+        render(members('table'));
+        expect(screen.queryByRole('region', { name: 'Members' })).not.toBeInTheDocument();
+        vi.restoreAllMocks();
+    });
+
     it('draws cards from the same columns on a phone: no table, hidden columns left off', () => {
         render(members('cards'));
         expect(screen.queryByRole('table')).not.toBeInTheDocument();

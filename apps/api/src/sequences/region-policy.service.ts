@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { DEFAULT_REGION_POLICY, REGION_CODES, type RegionCode, type RegionPolicyEntry } from '@bylinecrm/shared';
+import {
+    DEFAULT_REGION_POLICY,
+    REGION_CODES,
+    REGION_POLICY_CHANGES_LIMIT,
+    type RegionCode,
+    type RegionPolicyChange,
+    type RegionPolicyEntry,
+} from '@bylinecrm/shared';
 import { ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { MEMBER_SUMMARY_SELECT } from '../records/summaries';
 import { WorkspaceContext } from '../infra/workspace-context';
 
 /**
  * The workspace's outreach policy per region (FR-CRMS-12): `DEFAULT_REGION_POLICY` (EU, UK and Canada
  * blocked — D-247) unless the workspace overrode a region. Opening a region blocked by default needs a
- * lawful basis, stated; the database checks the same.
+ * lawful basis, stated; the database checks the same. Every change is kept, with who made it (#141).
  */
 @Injectable()
 export class RegionPolicyService {
@@ -30,22 +38,54 @@ export class RegionPolicyService {
         const memberId = this.context.get()?.memberId ?? null;
         return this.rls.withWorkspace(async (tx) => {
             const workspaceId = this.context.get()!.workspaceId;
+            const lawfulBasis = input.allowed ? basis : null;
+            const current = (await this.allowedIn(tx))[input.region];
+            const stored = await tx.regionPolicy.findUnique({
+                where: { workspaceId_region: { workspaceId, region: input.region } },
+                select: { lawfulBasis: true },
+            });
+            // Setting a region to what it already is changes nothing and records nothing.
+            if (current === input.allowed && (stored?.lawfulBasis ?? null) === lawfulBasis) return this.entries(tx);
+            await tx.regionPolicyChange.create({
+                data: {
+                    workspaceId,
+                    region: input.region,
+                    allowed: input.allowed,
+                    lawfulBasis,
+                    changedByMemberId: memberId,
+                },
+            });
             await tx.regionPolicy.upsert({
                 where: { workspaceId_region: { workspaceId, region: input.region } },
                 create: {
                     workspaceId,
                     region: input.region,
                     allowed: input.allowed,
-                    lawfulBasis: input.allowed ? basis : null,
+                    lawfulBasis,
                     updatedByMemberId: memberId,
                 },
-                update: {
-                    allowed: input.allowed,
-                    lawfulBasis: input.allowed ? basis : null,
-                    updatedByMemberId: memberId,
-                },
+                update: { allowed: input.allowed, lawfulBasis, updatedByMemberId: memberId },
             });
             return this.entries(tx);
+        });
+    }
+
+    /** The newest changes first, up to `REGION_POLICY_CHANGES_LIMIT`. */
+    async changes(): Promise<RegionPolicyChange[]> {
+        return this.rls.withWorkspace(async (tx) => {
+            const rows = await tx.regionPolicyChange.findMany({
+                orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+                take: REGION_POLICY_CHANGES_LIMIT,
+                include: { changedBy: { select: MEMBER_SUMMARY_SELECT } },
+            });
+            return rows.map((row) => ({
+                id: row.id,
+                region: row.region,
+                allowed: row.allowed,
+                lawfulBasis: row.lawfulBasis,
+                changedBy: row.changedBy?.user.displayName ?? null,
+                changedAt: row.changedAt.toISOString(),
+            }));
         });
     }
 

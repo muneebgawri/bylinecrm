@@ -1,8 +1,9 @@
 import { ChevronDown, Columns3, Filter, ListFilter, MoreHorizontal, Search } from 'lucide-react';
-import { forwardRef, useId, type HTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useId, useRef, type HTMLAttributes, type ReactNode } from 'react';
 import { useIsMobile } from '../../lib/breakpoints';
 import { cn } from '../../lib/cn';
 import { focusRing } from '../../lib/focus';
+import { useScrollsHorizontally } from '../../lib/scroll-region';
 import { Button } from '../button/Button';
 import { CardList, type CardListItem } from '../card-list/CardList';
 import {
@@ -276,11 +277,17 @@ export function RowActionsMenu<R>({ actions, row }: { actions: TableRowActions<R
 }
 
 function DataTable<R>({ data }: { data: TableData<R> }) {
+    const scroller = useRef<HTMLDivElement>(null);
+    // A table wider than its container scrolls; keyboard users then reach it as a labelled region.
+    const scrolls = useScrollsHorizontally(scroller);
     return (
         // `relative`: an absolutely positioned cell part (an sr-only label) would otherwise escape
-        // this scroll container and widen the whole page. Focusable and named: a table wider than
-        // its place scrolls sideways, and a keyboard must be able to reach it (WCAG 2.1.1).
-        <div role="region" aria-label={data.label} tabIndex={0} className={cn('relative overflow-x-auto', focusRing)}>
+        // this scroll container and widen the whole page.
+        <div
+            ref={scroller}
+            className={cn('relative overflow-x-auto', scrolls && focusRing)}
+            {...(scrolls ? { role: 'region', 'aria-label': data.label, tabIndex: 0 } : {})}
+        >
             <table className={tableClasses.table}>
                 <thead>
                     <tr>
