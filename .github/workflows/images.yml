@@ -1,7 +1,7 @@
 name: images
 
 # Builds the deployable images (P5-4a) for every commit that lands on main and publishes them to
-# GHCR as ghcr.io/<owner>/bylinecrm-{api,web}:<sha> and :main. deploy/staging/deploy.sh pulls them;
+# GHCR as ghcr.io/<owner>/bylinecrm-{api,web}:<sha> and :main. deploy/env/deploy.sh pulls them;
 # nothing is ever built on the server.
 #
 # Never runs on pull requests (a PR's code is not deployable, and a fork must not get a token that

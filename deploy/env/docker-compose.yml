@@ -1,0 +1,144 @@
+# The BylineCRM stack (P5-4a, P5-4c) — one file for every environment, on the NewswireOS production
+# VPS beside NewswireOS. deploy/env/lib.sh supplies the per-environment values.
+#
+# Shares nothing with NewswireOS except the `bylinecrm-edge` network, which only the web colours join
+# and the NewswireOS edge container is connected to. Every service has a hard memory cap so this stack
+# can never starve production on the same box.
+#
+# Blue/green (P5-4c): `api` and `web` each exist twice, as the `blue` and `green` colours behind compose
+# profiles, so a bare `up` starts neither. release-remote.sh starts the idle colour, checks it, points
+# the web containers' api upstream and the NewswireOS edge at it, and drains the other. Web reaches
+# the api through the upstream file in $BYLINECRM_RUNTIME/web-dynamic/ (named colour); the edge
+# reaches web through the colour's alias on `bylinecrm-edge` (bylinecrm-<env>-web-<colour>).
+#
+# Variables (set by lib.sh / release-remote.sh):
+#   BYLINECRM_ENV      staging | production          BYLINECRM_SHA  image tag (the commit CI built)
+#   BYLINECRM_RUNTIME  state directory               BYLINECRM_IMAGES  image repository prefix
+#   BYLINECRM_*_MEM    memory caps; BYLINECRM_VALKEY_MAXMEMORY  Valkey's own cap under its container cap
+
+name: bylinecrm-${BYLINECRM_ENV:?set BYLINECRM_ENV}
+
+x-api-image: &api-image ${BYLINECRM_IMAGES:-ghcr.io/muneebgawri}/bylinecrm-api:${BYLINECRM_SHA:?set BYLINECRM_SHA}
+x-web-image: &web-image ${BYLINECRM_IMAGES:-ghcr.io/muneebgawri}/bylinecrm-web:${BYLINECRM_SHA:?set BYLINECRM_SHA}
+
+x-api: &api
+    image: *api-image
+    env_file: ${BYLINECRM_RUNTIME:?set BYLINECRM_RUNTIME}/${BYLINECRM_ENV}.env
+    volumes:
+        - ${BYLINECRM_RUNTIME}/data/attachments:/data/attachments
+    depends_on:
+        postgres:
+            condition: service_healthy
+        valkey:
+            condition: service_healthy
+    mem_limit: ${BYLINECRM_API_MEM:-768m}
+    # Graceful drain on a release: the api closes its listener, finishes in-flight requests and its
+    # workers' current jobs (main.ts enables Nest's shutdown hooks), then exits.
+    stop_grace_period: 45s
+    restart: unless-stopped
+    networks: [data, app]
+
+x-web: &web
+    image: *web-image
+    volumes:
+        # Which api colour this web proxies to: `upstream bylinecrm_api { server api-<colour>:3000; }`,
+        # written by release-remote.sh and applied with `nginx -s reload` (no dropped connection).
+        - ${BYLINECRM_RUNTIME}/web-dynamic:/etc/nginx/dynamic:ro
+    mem_limit: ${BYLINECRM_WEB_MEM:-64m}
+    # SIGQUIT: nginx stops listening and finishes in-flight requests before it exits.
+    stop_signal: SIGQUIT
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+services:
+    postgres:
+        # postgres:16, mirrored by digest (deploy/images/mirror.json, #123).
+        image: ghcr.io/muneebgawri/mirror/postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+        env_file: ${BYLINECRM_RUNTIME}/postgres.env
+        volumes:
+            - ${BYLINECRM_RUNTIME}/data/postgres:/var/lib/postgresql/data
+        mem_limit: ${BYLINECRM_POSTGRES_MEM:-512m}
+        restart: unless-stopped
+        healthcheck:
+            # Over TCP, not the socket: on first boot the image runs a temporary init server on the
+            # socket only, so a socket check reports healthy before the real server is up and the
+            # migrate job then meets "the database system is starting up" (57P03).
+            test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+            interval: 5s
+            timeout: 3s
+            retries: 20
+        networks: [data]
+
+    valkey:
+        # Valkey, not Redis (D-250): BSD-licensed, wire-compatible; the same 9.1 runs locally and in CI.
+        image: ghcr.io/muneebgawri/mirror/valkey@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+        # noeviction: BullMQ keeps jobs (sends, syncs, webhook deliveries) here; an evicting policy
+        # would silently drop them. Past the cap Valkey refuses writes, which the API reports.
+        command:
+            [
+                'valkey-server',
+                '--maxmemory',
+                '${BYLINECRM_VALKEY_MAXMEMORY:-96mb}',
+                '--maxmemory-policy',
+                'noeviction',
+                '--appendonly',
+                'yes',
+            ]
+        volumes:
+            - ${BYLINECRM_RUNTIME}/data/valkey:/data
+        mem_limit: ${BYLINECRM_VALKEY_MEM:-128m}
+        restart: unless-stopped
+        healthcheck:
+            test: ['CMD', 'valkey-cli', 'ping']
+            interval: 5s
+            timeout: 3s
+            retries: 20
+        networks: [data]
+
+    # One-shot: creates or updates the restricted app role, then applies migrations. Started only by
+    # `docker compose run --rm migrate` (the `tools` profile keeps `up` from starting it). The release
+    # also runs the environment check (#120) in this service: same image, same env file, no network
+    # it does not need.
+    migrate:
+        image: *api-image
+        profiles: [tools]
+        env_file: ${BYLINECRM_RUNTIME}/${BYLINECRM_ENV}.env
+        command: ['sh', '-c', 'node scripts/db-ensure-app-role.mjs && ./node_modules/.bin/prisma migrate deploy']
+        depends_on:
+            postgres:
+                condition: service_healthy
+        mem_limit: ${BYLINECRM_MIGRATE_MEM:-384m}
+        restart: 'no'
+        networks: [data]
+
+    api-blue:
+        <<: *api
+        profiles: [blue]
+    api-green:
+        <<: *api
+        profiles: [green]
+
+    web-blue:
+        <<: *web
+        profiles: [blue]
+        networks:
+            app: {}
+            edge:
+                aliases: ['${BYLINECRM_WEB_ALIAS:?set BYLINECRM_WEB_ALIAS}-blue']
+    web-green:
+        <<: *web
+        profiles: [green]
+        networks:
+            app: {}
+            edge:
+                aliases: ['${BYLINECRM_WEB_ALIAS:?set BYLINECRM_WEB_ALIAS}-green']
+
+networks:
+    # postgres, valkey, migrate and the api colours.
+    data: {}
+    # the web colours and the api colours; web names the colour it proxies to (web-dynamic).
+    app: {}
+    # shared with the NewswireOS edge; declared external so no compose command here creates or removes it.
+    edge:
+        external: true
+        name: bylinecrm-edge
