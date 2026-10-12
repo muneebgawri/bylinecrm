@@ -181,6 +181,7 @@ export const ENROLMENT_STOP_REASONS = [
     'excluded',
     'sequence_archived',
     'person_deleted',
+    'region_blocked',
 ] as const;
 export type EnrolmentStopReason = (typeof ENROLMENT_STOP_REASONS)[number];
 
@@ -202,11 +203,23 @@ export interface EnrolmentRefusal {
 }
 
 /** The answer to a preview or an enrol: who is (or would be) enrolled, skipped, refused. */
+/** Enrolled, but worth a look (D-251): never blocks an enrolment. */
+export const ENROLMENT_WARNING_CODES = ['region.unknown'] as const;
+export type EnrolmentWarningCode = (typeof ENROLMENT_WARNING_CODES)[number];
+
+export interface EnrolmentWarning {
+    personId: string;
+    code: EnrolmentWarningCode;
+    message: string;
+}
+
 export interface EnrolmentBatchResult {
     enrolled: string[];
     /** Already in this sequence: a no-op, never a second enrolment. */
     skipped: string[];
     refused: EnrolmentRefusal[];
+    /** Enrolled people flagged for review (D-251: no known country). */
+    warnings: EnrolmentWarning[];
 }
 
 export interface EnrolmentView {
@@ -224,6 +237,8 @@ export interface EnrolmentView {
     stopReason: EnrolmentStopReason | null;
     stopDetail: string | null;
     enrolledBy: Actor;
+    /** No country was known when they were enrolled (D-251); the region policy applies once one is. */
+    countryUnknownAtEnrol: boolean;
     /** The member who enrolled the person: the sender of each step's send (#144). */
     enrolledByMemberId: string;
     enrolledAt: string;

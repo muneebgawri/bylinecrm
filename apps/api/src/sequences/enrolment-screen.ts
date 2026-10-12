@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { REGION_LABELS, regionOfCountry, type EnrolmentRefusal, type Emails, type RegionCode } from '@bylinecrm/shared';
+import {
+    REGION_LABELS,
+    regionOfCountry,
+    type EnrolmentRefusal,
+    type EnrolmentWarning,
+    type Emails,
+    type RegionCode,
+} from '@bylinecrm/shared';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { SuppressionService } from '../suppression/suppression.service';
 import { inferCountry } from './country';
@@ -17,6 +24,8 @@ export interface EligiblePerson {
 export interface ScreenResult {
     eligible: EligiblePerson[];
     refused: EnrolmentRefusal[];
+    /** Eligible people flagged for review (D-251). */
+    warnings: EnrolmentWarning[];
 }
 
 const SUPPRESSION_WORDS: Readonly<Record<string, string>> = {
@@ -86,6 +95,7 @@ export class EnrolmentScreen {
             policy: await this.regions.allowedIn(tx),
         }));
         const eligible: EligiblePerson[] = [];
+        const warnings: EnrolmentWarning[] = [];
         for (const c of candidates) {
             const s = suppressed.get(c.address);
             if (s) {
@@ -111,10 +121,17 @@ export class EnrolmentScreen {
                 continue;
             }
             eligible.push({ ...c, region });
+            if (region === 'unknown') {
+                warnings.push({
+                    personId: c.personId,
+                    code: 'region.unknown',
+                    message: 'Country unknown — check it is not in a blocked region',
+                });
+            }
         }
         // Refusals in the order the people were asked for.
         const order = new Map(personIds.map((id, i) => [id, i]));
         refused.sort((a, b) => order.get(a.personId)! - order.get(b.personId)!);
-        return { eligible, refused };
+        return { eligible, refused, warnings };
     }
 }

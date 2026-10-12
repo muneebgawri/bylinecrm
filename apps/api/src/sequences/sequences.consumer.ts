@@ -38,6 +38,8 @@ export class SequencesConsumer implements OutboxConsumer {
             'deal.lost',
             'opportunity.deleted',
             'person.deleted',
+            'person.updated',
+            'company.updated',
         ].includes(event.type);
     }
 
@@ -73,6 +75,23 @@ export class SequencesConsumer implements OutboxConsumer {
             case 'person.deleted':
                 await this.stopFor(ws, { personId: event.recordId }, 'person_deleted');
                 return;
+            // D-251: a country (the person's, their address's, or their company's) may now be known.
+            case 'person.updated':
+                if (changed(event, ['country', 'emails', 'companyId'])) {
+                    await this.runner.stopWhereRegionBlocked(ws, [event.recordId]);
+                }
+                return;
+            case 'company.updated': {
+                if (!changed(event, ['address'])) return;
+                const people = await this.rls.withWorkspace(ws, (tx) =>
+                    tx.person.findMany({ where: { companyId: event.recordId, deletedAt: null }, select: { id: true } }),
+                );
+                await this.runner.stopWhereRegionBlocked(
+                    ws,
+                    people.map((p) => p.id),
+                );
+                return;
+            }
             default: {
                 // A deal moved, closed or was deleted: enrolments on it whose sequence stops on leaving the pipeline.
                 const enrolments = await this.rls.withWorkspace(ws, (tx) =>
@@ -111,4 +130,10 @@ export class SequencesConsumer implements OutboxConsumer {
         );
         for (const e of enrolments) await this.runner.stop(workspaceId, e.id, reason);
     }
+}
+
+/** Whether an `updated` event's diff names any of these fields. */
+function changed(event: DomainEvent, fields: readonly string[]): boolean {
+    const diff = (event.diff ?? {}) as Record<string, unknown>;
+    return fields.some((f) => f in diff);
 }
