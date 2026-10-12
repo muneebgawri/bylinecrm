@@ -67,6 +67,12 @@ const templates = {
     editor: () => import('./w/templates/TemplateEditorPage').then((m) => ({ Component: m.TemplateEditorPage })),
 };
 
+/** Sequences are one chunk: the list and the builder, which brings the enrol dialog (FR-CRMS-UI-10). */
+const sequences = {
+    list: () => import('./w/sequences/SequencesPage').then((m) => ({ Component: m.SequencesPage })),
+    builder: () => import('./w/sequences/SequencePage').then((m) => ({ Component: m.SequencePage })),
+};
+
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
 
@@ -123,7 +129,8 @@ const workspaceRoutes: RouteObject = {
         lazyPage('companies/:companyId', records.company, 'Company'),
         lazyPage('deals', dealsPage, 'Deals'),
         lazyPage('deals/:dealId', records.deal, 'Deal'),
-        page('sequences', 'sequences', 'Sequences'),
+        lazyPage('sequences', sequences.list, 'Sequences'),
+        lazyPage('sequences/:sequenceId', sequences.builder, 'Sequence'),
         lazyPage('templates', templates.list, 'Templates'),
         lazyPage('templates/:templateId', templates.editor, 'Template'),
         lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),

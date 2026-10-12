@@ -99,10 +99,12 @@ invitation link the page shows.
   rewrites it), then restart the api:
   `BYLINECRM_PLATFORM_ADMIN_EMAILS=a@x.com,b@y.com bash deploy/staging/bootstrap-secrets.sh`.
   A run without the variable keeps the stored list.
-- **Verifying an existing password account,** once per address, on the server:
-  `docker compose -p bylinecrm-staging exec api node dist/cli/platform-verify-email.js <address>`.
-  The command refuses any address that is not on the list. A Google sign-in verifies the address
-  too, and creates the account if none exists yet.
+- **Setting up a platform admin,** once per address, on the server:
+  `docker compose -p bylinecrm-staging exec api node dist/cli/platform-bootstrap-admin.js <address>`.
+  The command refuses any address that is not on the list. An existing account's address is marked
+  verified. With no account yet (a fresh server, sign-up closed) it creates one, verified, and prints
+  a single-use set-password link valid for 30 minutes — open it to choose the password; no password
+  is ever printed (#101). A Google sign-in verifies a listed address too, and creates the account.
 - **Removing an admin:** re-run the script without the address and restart the api. Access ends
   from the first request after the restart. That delay is accepted; there is no runtime switch.
 - **Do not set `SIGNUP_MODE=open` on staging.** The URL is public.
