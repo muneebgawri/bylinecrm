@@ -32,6 +32,7 @@
         "bullmq": "^6.3.11",
         "busboy": "1.6.0",
         "cookie-parser": "^1.4.7",
+        "disposable-email-domains": "1.0.62",
         "express": "5.2.1",
         "ioredis": "^5.10.1",
         "libmime": "^5",

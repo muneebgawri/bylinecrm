@@ -51,3 +51,4 @@ export * from './views.js';
 export * from './timeline.js';
 export * from './webhooks.js';
 export * from './twenty-import.js';
+export * from './verification.js';

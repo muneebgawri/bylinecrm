@@ -6,6 +6,7 @@ import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { MailboxTokens, MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
+import { mapPool } from '../infra/map-pool';
 import { GMAIL_PORT, GmailApiError, type GmailPort, type GmailRawMessage } from './gmail.port';
 import {
     GMAIL_FETCH_CONCURRENCY,
@@ -526,20 +527,6 @@ function classify(
         return 'blocked';
     const direction = parsed.from === mailbox.email || labels.includes(SENT_LABEL) ? 'outbound' : 'inbound';
     return { parsed, direction };
-}
-
-/** `items` mapped with at most `concurrency` in flight; results in input order. */
-async function mapPool<T, R>(items: readonly T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-    const results = new Array<R>(items.length);
-    let next = 0;
-    const worker = async (): Promise<void> => {
-        while (next < items.length) {
-            const index = next++;
-            results[index] = await fn(items[index]!);
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
-    return results;
 }
 
 function unavailableError(status: string): SyncErrorRecord {

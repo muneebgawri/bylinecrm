@@ -84,6 +84,8 @@ export const keys = {
     sendingPool: (workspaceId: string) => ['w', workspaceId, 'sending-pool'] as const,
     /** The region policy and its change history (#141); one key so a change refreshes both. */
     regionPolicy: (workspaceId: string) => ['w', workspaceId, 'outreach', 'region-policy'] as const,
+    /** How long an address's verification stands (P3-5, FR-CRMS-16). */
+    verificationSettings: (workspaceId: string) => ['w', workspaceId, 'outreach', 'verification'] as const,
     suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,

@@ -6,6 +6,7 @@ import { RecordsModule } from '../records/records.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { SuppressionModule } from '../suppression/suppression.module';
 import { TemplatesModule } from '../templates/templates.module';
+import { VerificationModule } from '../verification/verification.module';
 import { EnrolmentScreen } from './enrolment-screen';
 import { EnrolmentsService } from './enrolments.service';
 import { ExclusionsService } from './exclusions.service';
@@ -30,7 +31,7 @@ import { SequenceWorkers } from './sequences.workers';
 
 /**
  * Sequences (P3-3, FR-CRMS-5, -10, -11, -12): the builder's backend, enrolment through one screen
- * (suppression is P3-1's check, the pool P3-2's), the step runner and its jobs, the sweep, and the
+ * (suppression is P3-1's check, the pool P3-2's, verification P3-5's), the step runner and its jobs, the sweep, and the
  * outbox consumer that reacts to sends, replies, suppressions, deals and deletions. A step's send is
  * scheduled through sending (`MailSendService.scheduleOutreach`) — one send path.
  */
@@ -42,6 +43,7 @@ import { SequenceWorkers } from './sequences.workers';
         SendingPoolModule,
         SuppressionModule,
         TemplatesModule,
+        VerificationModule,
         BullModule.registerQueue({
             name: SEQUENCE_STEP_QUEUE,
             defaultJobOptions: {

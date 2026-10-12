@@ -126,6 +126,17 @@ Never pass `DATABASE_URL` as a `--shadow-database-url`: a shadow database is res
   types), metadata, `GET …/:id/content` download; bytes live under `FILE_STORAGE_ROOT` (`.env`, git-ignored).
 - `GET /api/w/:id/members/summary`: members as pickers show them (`memberId`, `name`), readable with `record:read`.
 
+## Email verification (P3-5)
+
+Before a person is enrolled in a sequence, and again before every email step, their address is verified without
+touching the recipient's mail server: syntax, the domain's MX records, the disposable-domain list, role-address
+detection. `valid` enrols; `invalid` is refused (and stops a running enrolment before its next email); `risky` (a
+role address, a disposable domain) enrols and is flagged in the preview; `unknown` (DNS did not answer) is not
+valid and does not enrol. A result stands for 90 days unless Settings → _Verification_ says otherwise, then is
+found again before the next send. The API is `/api/w/:id/outreach/verification` (the age) and
+`/api/w/:id/people/:personId/verification` (a person's result; `POST` re-runs it). Why each result is what it
+is: `docs/design-notes/P3-5.md`.
+
 ## Import from Twenty (P4-4)
 
 Settings → _Import from Twenty_ (an admin's): connect a Twenty workspace (its URL and an API key, sealed at rest),

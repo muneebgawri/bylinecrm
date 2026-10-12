@@ -72,6 +72,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/suppressions$`), () => data.page(data.suppressions)],
     [new RegExp(`^${W}/outreach/region-policy/changes$`), () => data.regionPolicyChanges],
     [new RegExp(`^${W}/outreach/region-policy$`), () => data.regionPolicy],
+    [new RegExp(`^${W}/outreach/verification$`), () => data.verificationSettings],
     [new RegExp(`^${W}/sequences/${ID}/enrolments$`), () => data.enrolments],
     [new RegExp(`^${W}/sequences/${ID}$`), (m) => byId(data.sequences, m[1])],
     [new RegExp(`^${W}/sequences$`), () => data.sequences],

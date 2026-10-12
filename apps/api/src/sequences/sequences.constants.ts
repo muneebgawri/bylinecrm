@@ -23,6 +23,12 @@ export const SEQUENCE_WORKER_CONCURRENCY = 4;
  */
 export const SEQUENCE_POOL_RETRY_MS = 60 * 60_000;
 
+/**
+ * When the address cannot be verified before an email step (DNS did not answer — FR-CRMS-14), the
+ * step is tried again this much later; it is never sent unverified and never dropped.
+ */
+export const SEQUENCE_VERIFY_RETRY_MS = 15 * 60_000;
+
 /** Failure codes that mean "the pool could not send it now": the step is rescheduled, not held. */
 export const RESCHEDULE_FAILURE_CODES: ReadonlySet<string> = new Set([
     'mailbox.cap_reached',
