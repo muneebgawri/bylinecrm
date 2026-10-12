@@ -21,8 +21,9 @@ export interface SweepCursorStore {
     set(name: string, position: SweepPosition | null): Promise<void>;
 }
 
-/** The commands the Redis-backed store uses. */
+/** The commands the Redis-backed store uses (`RedisService`: lazy, no offline queue — so connect first). */
 export interface SweepRedis {
+    ensureReady(): Promise<void>;
     get(key: string): Promise<string | null>;
     set(key: string, value: string, mode: 'EX', seconds: number): Promise<unknown>;
     del(key: string): Promise<unknown>;
@@ -36,11 +37,13 @@ export class RedisSweepCursors implements SweepCursorStore {
     constructor(private readonly redis: SweepRedis) {}
 
     async get(name: string): Promise<SweepPosition | null> {
+        await this.redis.ensureReady();
         const raw = await this.redis.get(key(name));
         return raw ? (JSON.parse(raw) as SweepPosition) : null;
     }
 
     async set(name: string, position: SweepPosition | null): Promise<void> {
+        await this.redis.ensureReady();
         if (position) await this.redis.set(key(name), JSON.stringify(position), 'EX', SWEEP_CURSOR_TTL_SECONDS);
         else await this.redis.del(key(name));
     }
