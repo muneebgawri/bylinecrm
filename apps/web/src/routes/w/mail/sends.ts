@@ -22,16 +22,14 @@ export interface PendingSend {
      * admin); this tab's own send is its sender's. A colleague's send is shown read-only.
      */
     canChange: boolean;
+    /** Whether the caller may send this failed send again — the API's answer (#134). */
+    canRetry: boolean;
     /** When it was made; null for this tab's own send before the server has answered (it is now). */
     createdAt: string | null;
     /** The stored copy once sent; the timeline's own entry for it replaces this one. */
     mailMessageId: string | null;
     threadId: string | null;
-    /**
-     * What was sent from this tab — what Retry sends again. Null for a send this tab did not make
-     * (read from the server, #104): the API keeps a send's outcome, not what was written, so a
-     * failure from before a reload shows its reason without Retry.
-     */
+    /** This tab's own send, until the server has answered for it; null for one read from the server (#104). */
     session: SessionSend | null;
 }
 
@@ -91,6 +89,7 @@ export function usePendingSends(
                 error: view?.error ?? null,
                 senderMemberId: view?.senderMemberId ?? null,
                 canChange: view?.canChange ?? own !== null,
+                canRetry: view?.canRetry ?? false,
                 createdAt: view?.createdAt ?? null,
                 mailMessageId,
                 threadId: view?.threadId ?? null,
