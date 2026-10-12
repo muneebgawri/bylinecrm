@@ -11,6 +11,7 @@ import {
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, StateConflict, UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
+import { personsByAddress } from '../mail-sync/matching';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
@@ -169,13 +170,16 @@ export class SuppressionService {
                           data: { removedAt: new Date(), removalNote: SUPERSEDED_NOTE[input.reason] },
                       })
                     : null;
+                // Whose address it is, when the caller didn't say (a member's manual entry): the same
+                // rule synced mail uses (PAR-028), so the entry and its timeline line land on that person.
+                const personId = input.personId ?? (await personsByAddress(tx, [address])).get(address) ?? null;
                 const row = await tx.suppression.create({
                     data: {
                         workspaceId,
                         address,
                         reason: input.reason,
                         source: input.source,
-                        personId: input.personId ?? null,
+                        personId,
                         outboundId: input.outboundId ?? null,
                         note: input.note ?? null,
                         createdByMemberId,
@@ -227,8 +231,17 @@ function suppressionEvent(
         actor,
         occurredAt: new Date().toISOString(),
         recordId: row.id,
-        suppression: { address: row.address, reason: row.reason, source: row.source, personId: row.personId },
-        ...(row.personId ? { related: [{ type: 'person', id: row.personId }] } : {}),
+        suppression: {
+            address: row.address,
+            reason: row.reason,
+            source: row.source,
+            personId: row.personId,
+            note: type === 'suppression.added' ? row.note : row.removalNote,
+        },
+        // The person the address belongs to: what the event concerns, and where its timeline entry goes (#114).
+        ...(row.personId
+            ? { related: [{ type: 'person', id: row.personId }], targets: [{ type: 'person', id: row.personId }] }
+            : {}),
     } as DomainEvent;
 }
 
