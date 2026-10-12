@@ -6,6 +6,7 @@ import {
     type RichText,
 } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
+import { formatPostalAddress as sharedFormatPostalAddress } from '@bylinecrm/shared';
 import { composeEmail, formatPostalAddress, withUnsubscribeUrl, renderSubject } from './compose';
 
 const body: RichText = {
@@ -114,8 +115,14 @@ describe('composeEmail', () => {
 describe('formatPostalAddress', () => {
     it('skips empty parts', () => {
         expect(formatPostalAddress({ ...address, region: null, line2: 'Suite 4' })).toBe(
-            '123 Main St, Suite 4, Austin, 78701, US',
+            '123 Main St, Suite 4, Austin, 78701, United States',
         );
+    });
+
+    it('#76 names the country, the same string the web preview shows (one shared function)', () => {
+        expect(formatPostalAddress(address)).toBe(sharedFormatPostalAddress(address));
+        const email = composeEmail({ kind: 'outreach', subject: 'Hi', body }, resolve, settings);
+        expect(email.text).toContain('123 Main St, Austin, TX, 78701, United States');
     });
 });
 

@@ -1,4 +1,4 @@
-import { CAPABILITIES, type Capability } from '@bylinecrm/shared';
+import { CAPABILITIES, formatPostalAddress, type Capability } from '@bylinecrm/shared';
 import { MOBILE_QUERY, ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -190,6 +190,35 @@ describe('the variable node', () => {
 });
 
 describe('Template editor', () => {
+    it('#76 the locked footer names the postal address’s country, the same string the sent email carries', async () => {
+        const address = {
+            line1: '123 Main St',
+            line2: null,
+            city: 'Austin',
+            region: 'TX',
+            postalCode: '78701',
+            country: 'US',
+        };
+        stubApi((method, url) => {
+            if (method === 'GET' && url.endsWith(`/templates/${TID}`))
+                return { status: 200, json: { ...template, kind: 'outreach' } };
+            if (url.endsWith('/settings/mail'))
+                return {
+                    status: 200,
+                    json: {
+                        postalAddress: address,
+                        defaultSenderName: null,
+                        unsubscribeFooterText: 'You asked for this.',
+                    },
+                };
+            return undefined;
+        });
+        renderEditor();
+        const footer = await screen.findByLabelText('Locked footer');
+        expect(await within(footer).findByText(formatPostalAddress(address))).toBeInTheDocument();
+        expect(within(footer).getByText(/United States$/)).toBeInTheDocument();
+    });
+
     it('shows the stored subject and body with variables as chips', async () => {
         stubApi();
         renderEditor();
