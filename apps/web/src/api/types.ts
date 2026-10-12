@@ -196,3 +196,21 @@ export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
 export type MailThreadView = Schemas['MailThread'];
 export type MailMessageView = Schemas['MailMessage'];
 export type MailParticipantView = MailMessageView['participants'][number];
+// ---- Sequences and enrolment (P3-3; P3-UI-1) -----------------------------------------------------
+export type SequenceView = Schemas['Sequence'];
+export type SequenceStatus = SequenceView['status'];
+export type SequenceStepView = SequenceView['steps'][number];
+export type SequenceWindow = SequenceView['window'];
+export type CreateSequenceInput = Loose<Schemas['CreateSequenceDto']>;
+export type UpdateSequenceInput = Loose<Schemas['UpdateSequenceDto']>;
+export type PutSequenceStepsInput = Loose<Schemas['PutSequenceStepsDto']>;
+/** One step as the builder sends it: the API's union of step kinds. */
+export type SequenceStepInput = PutSequenceStepsInput['steps'][number];
+export type EnrolInput = Loose<Schemas['EnrolDto']>;
+export type PreviewEnrolInput = Loose<Schemas['PreviewEnrolDto']>;
+export type EnrolmentBatchView = Schemas['EnrolmentBatchResult'];
+export type EnrolmentRefusalView = EnrolmentBatchView['refused'][number];
+export type SequenceEnrolmentView = Schemas['SequenceEnrolment'];
+export type EnrolmentStatus = SequenceEnrolmentView['status'];
+export type EnrolmentStopReason = NonNullable<SequenceEnrolmentView['stopReason']>;
+export type StopEnrolmentInput = Loose<Schemas['StopEnrolmentDto']>;

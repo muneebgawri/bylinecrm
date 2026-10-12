@@ -30,22 +30,17 @@ import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
+import { SUPPRESSION_REASON_LABEL } from '../../../lib/suppression';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useWorkspaceId } from '../../params';
 
 type Tab = 'all' | SuppressionReason;
 
-/** The reason as a tab, and — short enough for a phone card — as a row's badge. */
+/** The reason as a tab; a row's badge reads `SUPPRESSION_REASON_LABEL`, short enough for a phone card. */
 const REASON_TAB: Record<SuppressionReason, string> = {
     unsubscribe: 'Unsubscribed',
     hard_bounce: 'Hard bounces',
     complaint: 'Complaints',
-    manual: 'Manual',
-};
-const REASON_BADGE: Record<SuppressionReason, string> = {
-    unsubscribe: 'Unsubscribed',
-    hard_bounce: 'Hard bounce',
-    complaint: 'Spam complaint',
     manual: 'Manual',
 };
 
@@ -153,7 +148,9 @@ export function Suppression() {
                             id: 'reason',
                             header: 'Reason',
                             cell: (entry) => (
-                                <Badge status={REASON_TONE[entry.reason]}>{REASON_BADGE[entry.reason]}</Badge>
+                                <Badge status={REASON_TONE[entry.reason]}>
+                                    {SUPPRESSION_REASON_LABEL[entry.reason]}
+                                </Badge>
                             ),
                         },
                         // On a phone the card keeps what decides a send — the address, why, and when.

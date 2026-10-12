@@ -53,4 +53,6 @@ export interface SuppressionEventPayload {
     reason: SuppressionReason;
     source: SuppressionSource;
     personId: string | null;
+    /** `suppression.added`: the entry's note; `suppression.removed`: the note the lift was given. */
+    note: string | null;
 }

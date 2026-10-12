@@ -3,6 +3,7 @@ import {
     EXTERNAL_KIND_PREFIX,
     type DomainEvent,
     type EmailSummary,
+    type SuppressionEventPayload,
     type LinkedObject,
     type Money,
     type RecordObject,
@@ -206,6 +207,7 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
             linked: { type: event.object, id: event.recordId, name },
             ...(event.diff ? { diff: event.diff } : {}),
             ...(event.email ? { email: emailEntry(event.email) } : {}),
+            ...(event.suppression ? { suppression: suppressionEntry(event.suppression) } : {}),
         });
         return targets.map((t) => ({
             ...base,
@@ -230,7 +232,14 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
             return (await tx.attachment.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
         case 'email':
             return (await tx.mailMessage.findUnique({ where: { id }, select: { subject: true } }))?.subject ?? null;
+        case 'suppression':
+            return (await tx.suppression.findUnique({ where: { id }, select: { address: true } }))?.address ?? null;
     }
+}
+
+/** What a suppression's entry shows (#114): why the address is on the list, by whom, and the note. */
+function suppressionEntry(suppression: SuppressionEventPayload) {
+    return { reason: suppression.reason, source: suppression.source, note: suppression.note };
 }
 
 /**

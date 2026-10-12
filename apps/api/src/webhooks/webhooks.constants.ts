@@ -59,8 +59,13 @@ export const WEBHOOK_SWEEP_GRACE_MS = 60_000;
  * timeout — so a slow but live attempt is never mistaken for a dead one.
  */
 export const WEBHOOK_STUCK_DELIVERING_MS = 10 * WEBHOOK_REQUEST_TIMEOUT_MS;
-/** Rows handled per sweep pass; a larger backlog is worked through on the next passes. */
+/** Rows read per sweep query. */
 export const WEBHOOK_SWEEP_BATCH = 500;
+/**
+ * Rows examined per sweep pass at most (#97); a larger backlog is reached by the next passes, which
+ * resume where this one stopped — never from the start, so live-job rows cannot hide a lost one.
+ */
+export const WEBHOOK_SWEEP_MAX_ROWS_PER_PASS = 10 * WEBHOOK_SWEEP_BATCH;
 
 /** How long a failure's message is kept on the delivery row. */
 export const WEBHOOK_ERROR_MAX_CHARS = 500;
