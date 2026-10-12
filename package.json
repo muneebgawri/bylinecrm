@@ -25,7 +25,7 @@
         "test:visual": "turbo test:visual",
         "test:deploy": "bash deploy/staging/test/release-preflight.test.sh",
         "images:check": "node scripts/check-image-refs.mjs",
-        "test:images": "node --test scripts/check-image-refs.test.mjs"
+        "test:scripts": "node --test scripts/check-image-refs.test.mjs scripts/lib/wait-for-run.test.mjs"
     },
     "devDependencies": {
         "@bylinecrm/eslint-config": "workspace:*",

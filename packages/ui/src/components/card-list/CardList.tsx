@@ -110,13 +110,23 @@ export function CardList({
                         <span className="min-w-0 flex-1">
                             <span className="block truncate font-medium">{item.primary}</span>
                             {item.secondary && item.secondary.length > 0 && (
-                                <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-text-muted">
-                                    {item.secondary.map((part, i) => (
-                                        <span key={i} className="flex min-w-0 items-center gap-1.5">
-                                            {i > 0 && <span aria-hidden>·</span>}
-                                            <span className="min-w-0 truncate">{part}</span>
-                                        </span>
-                                    ))}
+                                /*
+                                 * Separators never lead a line (#82): each part draws its "·" as a
+                                 * pseudo-element in the space to its left, the row is shifted left by
+                                 * that space, and the outer span clips it — so the first part of every
+                                 * wrapped line has its dot cut off, and no dot is a text node.
+                                 */
+                                <span data-card-secondary className="block overflow-hidden text-[13px] text-text-muted">
+                                    <span className="-ml-3 flex min-w-0 flex-wrap items-center gap-y-1">
+                                        {item.secondary.map((part, i) => (
+                                            <span
+                                                key={i}
+                                                className="relative min-w-0 truncate pl-3 before:absolute before:left-1 before:content-['·']"
+                                            >
+                                                {part}
+                                            </span>
+                                        ))}
+                                    </span>
                                 </span>
                             )}
                         </span>

@@ -1,5 +1,5 @@
 import type { RecordObject } from '@bylinecrm/shared';
-import { EmptyState, Skeleton } from '@bylinecrm/ui';
+import { EmptyState, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { useParams } from 'react-router';
 import { ApiError } from '../../../api/client';
 import { useMembersById, useRecord } from '../../../api/records';
@@ -25,11 +25,9 @@ function useRequiredParam(name: string): string {
 /** The page's shape while the record loads: header, fact strip, three columns — no shift. */
 export function RecordSkeleton({ layout }: { layout: 'page' | 'drawer' }) {
     return (
-        <div
+        <LoadingRegion
+            label="Loading record"
             className={layout === 'page' ? 'flex flex-col gap-5 p-7 max-md:p-4' : 'flex flex-col gap-4 px-5.5 py-5'}
-            role="status"
-            aria-busy="true"
-            aria-label="Loading record"
         >
             <div className="flex items-center gap-3.5">
                 <Skeleton className="size-14 rounded-full" />
@@ -48,7 +46,7 @@ export function RecordSkeleton({ layout }: { layout: 'page' | 'drawer' }) {
             ) : (
                 <Skeleton className="h-64" />
             )}
-        </div>
+        </LoadingRegion>
     );
 }
 

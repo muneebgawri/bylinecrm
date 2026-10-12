@@ -1,5 +1,5 @@
 import { CSRF_COOKIE, MEMBER_INVITE_PARAM, SIGNUP_INVITE_PARAM } from '@bylinecrm/shared';
-import { Button, Field, Input, Skeleton } from '@bylinecrm/ui';
+import { Button, Field, Input, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ApiError, fieldErrorAt, readCookie } from '../../api/client';
@@ -285,10 +285,10 @@ function AlreadyHaveAccount() {
 function Pending({ title }: { title: string }): ReactNode {
     return (
         <AuthLayout title={title}>
-            <div className="grid gap-3" role="status" aria-label="Loading">
+            <LoadingRegion label="Loading" className="grid gap-3">
                 <Skeleton className="h-10" />
                 <Skeleton className="h-10" />
-            </div>
+            </LoadingRegion>
         </AuthLayout>
     );
 }

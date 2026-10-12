@@ -16,6 +16,7 @@ import {
     CLIENT_SECRET_SHOWN_CHARS,
     GOOGLE_CLIENT_ID_PATTERN,
     MAIL_OAUTH_CALLBACK_PATH,
+    OAUTH_CHECK_MESSAGES as M,
 } from './mail-accounts.constants';
 import type { OAuthClientCheck, OAuthClientStatus, OAuthClientView } from './responses';
 
@@ -145,11 +146,27 @@ export class OAuthClientsService {
         return { rowId: row.id, clientId: row.clientId, clientSecret: this.secrets.open(row.clientSecretCiphertext) };
     }
 
-    /** Marks the client proven by a completed connect; a later connect leaves the first time. */
+    /**
+     * Marks the client proven by a completed connect; a later connect leaves the first time. The
+     * connect is also what proves the redirect URI, so the stored check records it here — the one
+     * writer of the client's check state besides `verify` — and the setup screen stops reading
+     * "not yet confirmed" (#82).
+     */
     async markVerifiedIn(tx: WorkspaceClient, rowId: string): Promise<void> {
+        const row = await tx.googleOAuthClient.findFirst({
+            where: { id: rowId, verifiedAt: null },
+            select: { lastCheck: true },
+        });
+        if (!row) return;
+        const lastCheck = row.lastCheck
+            ? ({
+                  ...(row.lastCheck as Prisma.JsonObject),
+                  redirectUri: step('pass', M.redirectProvenByConnect),
+              } as Prisma.InputJsonValue)
+            : undefined;
         await tx.googleOAuthClient.updateMany({
             where: { id: rowId, verifiedAt: null },
-            data: { verifiedAt: new Date() },
+            data: { verifiedAt: new Date(), ...(lastCheck ? { lastCheck } : {}) },
         });
     }
 
@@ -158,12 +175,12 @@ export class OAuthClientsService {
         if (!GOOGLE_CLIENT_ID_PATTERN.test(stored.clientId)) {
             return {
                 checkedAt,
-                format: step('fail', 'the client ID is not a Google web client ID (…apps.googleusercontent.com)'),
-                credentials: step('unverified', 'not checked: the client ID is malformed'),
-                redirectUri: step('unverified', 'not checked: the client ID is malformed'),
+                format: step('fail', M.formatFail),
+                credentials: step('unverified', M.notCheckedMalformed),
+                redirectUri: step('unverified', M.notCheckedMalformed),
             };
         }
-        const format = step('pass', 'the client ID has the shape of a Google web client ID');
+        const format = step('pass', M.formatPass);
         let probe;
         try {
             probe = await this.google.probeClient(stored, this.redirectUri());
@@ -172,25 +189,22 @@ export class OAuthClientsService {
             return {
                 checkedAt,
                 format,
-                credentials: step('unverified', 'Google could not be reached; try again'),
-                redirectUri: step('unverified', 'Google could not be reached; try again'),
+                credentials: step('unverified', M.googleUnreachable),
+                redirectUri: step('unverified', M.googleUnreachable),
             };
         }
         const credentials =
             probe.credentials === 'accepted'
-                ? step('pass', 'Google knows this client ID and accepts the secret')
+                ? step('pass', M.credentialsPass)
                 : probe.credentials === 'refused'
-                  ? step('fail', 'Google does not know this client ID, or refuses this secret')
-                  : step('unverified', 'Google did not say whether it accepts these credentials');
+                  ? step('fail', M.credentialsFail)
+                  : step('unverified', M.credentialsUnknown);
         const redirectUri =
             probe.redirectUri === 'not_registered'
-                ? step('fail', 'Google refused the redirect URI; register it exactly as shown')
+                ? step('fail', M.redirectFail)
                 : probe.redirectUri === 'registered'
-                  ? step('pass', 'the redirect URI is registered')
-                  : step(
-                        'unverified',
-                        'confirmed when the first mailbox connects; Google checks it only when a person signs in',
-                    );
+                  ? step('pass', M.redirectPass)
+                  : step('unverified', M.redirectAwaitsConnect);
         return { checkedAt, format, credentials, redirectUri };
     }
 

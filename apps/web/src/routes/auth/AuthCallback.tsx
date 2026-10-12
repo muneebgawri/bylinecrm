@@ -1,4 +1,4 @@
-import { Button, Skeleton } from '@bylinecrm/ui';
+import { Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { Navigate, useLocation } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useMe } from '../../api/queries';
@@ -30,10 +30,10 @@ export function AuthCallback() {
                     </Button>
                 </div>
             ) : (
-                <div className="grid gap-2" role="status" aria-label="Checking your session">
+                <LoadingRegion label="Checking your session" className="grid gap-2">
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-5 w-1/2" />
-                </div>
+                </LoadingRegion>
             )}
         </AuthLayout>
     );
