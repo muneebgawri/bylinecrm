@@ -1003,6 +1003,7 @@ export const sequences: SequenceView[] = [
                 replyInThread: false,
                 waitDays: null,
                 businessDays: false,
+                taskTitle: null,
             },
             {
                 id: '0b1e0000-0000-4000-8000-000000000a22',
@@ -1012,6 +1013,7 @@ export const sequences: SequenceView[] = [
                 replyInThread: false,
                 waitDays: 3,
                 businessDays: true,
+                taskTitle: null,
             },
             {
                 id: '0b1e0000-0000-4000-8000-000000000a23',
@@ -1021,6 +1023,7 @@ export const sequences: SequenceView[] = [
                 replyInThread: true,
                 waitDays: null,
                 businessDays: false,
+                taskTitle: null,
             },
         ],
         counts: { enrolled: 184, active: 61, held: 0, finished: 97, stopped: 26 },

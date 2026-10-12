@@ -25,7 +25,8 @@
         "test:visual": "turbo test:visual",
         "test:deploy": "bash deploy/staging/test/release-preflight.test.sh",
         "images:check": "node scripts/check-image-refs.mjs",
-        "test:scripts": "node --test scripts/check-image-refs.test.mjs scripts/lib/wait-for-run.test.mjs"
+        "fr:check": "node scripts/fr-traceability.mjs",
+        "test:scripts": "node --test scripts/check-image-refs.test.mjs scripts/lib/wait-for-run.test.mjs scripts/fr-traceability.test.mjs"
     },
     "devDependencies": {
         "@bylinecrm/eslint-config": "workspace:*",

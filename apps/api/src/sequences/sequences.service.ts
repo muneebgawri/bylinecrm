@@ -330,9 +330,15 @@ async function validateSteps(tx: WorkspaceClient, steps: readonly StepInput[]): 
 }
 
 function stepData(s: StepInput) {
-    return s.kind === 'email'
-        ? { templateId: s.templateId, replyInThread: s.replyInThread, waitDays: null, businessDays: true }
-        : { templateId: null, replyInThread: false, waitDays: s.waitDays, businessDays: s.businessDays };
+    const none = { templateId: null, replyInThread: false, waitDays: null, businessDays: true, taskTitle: null };
+    switch (s.kind) {
+        case 'email':
+            return { ...none, templateId: s.templateId, replyInThread: s.replyInThread };
+        case 'wait':
+            return { ...none, waitDays: s.waitDays, businessDays: s.businessDays };
+        case 'task':
+            return { ...none, taskTitle: s.taskTitle };
+    }
 }
 
 async function countsFor(tx: WorkspaceClient, ids: readonly string[]): Promise<Map<string, SequenceCounts>> {
@@ -370,6 +376,7 @@ export function view(row: SequenceRow, counts: SequenceCounts | undefined): Sequ
                 replyInThread: s.replyInThread,
                 waitDays: s.waitDays,
                 businessDays: s.businessDays,
+                taskTitle: s.taskTitle,
             })),
         counts: counts ?? { enrolled: 0, active: 0, held: 0, finished: 0, stopped: 0 },
         createdBy: row.createdBy as unknown as Actor,

@@ -31,6 +31,10 @@ const step = named(
         replyInThread: z.boolean(),
         waitDays: z.number().int().nullable().meta({ description: '`wait` steps.' }),
         businessDays: z.boolean(),
+        taskTitle: z.string().nullable().meta({
+            description:
+                '`task` steps: a task on the person for their owner (else the enroller), due when the step runs.',
+        }),
     }),
 );
 

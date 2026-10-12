@@ -127,7 +127,7 @@ export interface OutreachExclusionView {
 export const SEQUENCE_STATUSES = ['draft', 'active', 'paused', 'archived'] as const;
 export type SequenceStatus = (typeof SEQUENCE_STATUSES)[number];
 
-export const SEQUENCE_STEP_KINDS = ['email', 'wait'] as const;
+export const SEQUENCE_STEP_KINDS = ['email', 'wait', 'task'] as const;
 export type SequenceStepKind = (typeof SEQUENCE_STEP_KINDS)[number];
 
 /** Monday-first bitmask of the days a sequence sends on: bit 0 Monday … bit 6 Sunday. */
@@ -137,6 +137,7 @@ export const SEQUENCE_LIMITS = {
     name: 200,
     steps: 30,
     waitDays: { min: 1, max: 90 },
+    taskTitle: 200,
     enrolBatch: 500,
     stopNote: 1000,
 } as const;
@@ -154,6 +155,8 @@ export interface SequenceStepView {
     /** `wait` steps. */
     waitDays: number | null;
     businessDays: boolean;
+    /** `task` steps (#136): the task created on the person, for their owner (else the enroller). */
+    taskTitle: string | null;
 }
 
 export interface SequenceCounts {

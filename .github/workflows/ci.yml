@@ -63,6 +63,8 @@ jobs:
             # The staging release refuses an environment the new image would not boot (#120).
             - run: pnpm test:deploy
             - run: pnpm test:scripts
+            # Every requirement of a complete phase is named by a test (doc 49 §7, #69).
+            - run: pnpm fr:check
             # The client contract (P1-1c): a typed client generated from openapi.json must type-check.
             - run: pnpm --filter api contract:check
 

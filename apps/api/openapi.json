@@ -14605,288 +14605,6 @@
                 "tags": ["sequences"]
             }
         },
-        "/api/w/{workspaceId}/outreach/verification": {
-            "get": {
-                "operationId": "verificationSettings_settings",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EmailVerificationSettings"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["verification"]
-            },
-            "put": {
-                "operationId": "verificationSettings_putSettings",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PutVerificationSettingsDto"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EmailVerificationSettings"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["verification"]
-            }
-        },
-        "/api/w/{workspaceId}/people/{personId}/verification": {
-            "get": {
-                "operationId": "personVerification_read",
-                "parameters": [
-                    {
-                        "name": "personId",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/PersonVerification"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["verification"]
-            },
-            "post": {
-                "operationId": "personVerification_verify",
-                "parameters": [
-                    {
-                        "name": "personId",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EmailVerification"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["verification"]
-            }
-        },
         "/api/w/{workspaceId}/timeline": {
             "get": {
                 "operationId": "timeline_list",
@@ -19569,6 +19287,26 @@
                                         }
                                     },
                                     "required": ["kind", "waitDays"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        },
+                                        "kind": {
+                                            "type": "string",
+                                            "enum": ["task"]
+                                        },
+                                        "taskTitle": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 200
+                                        }
+                                    },
+                                    "required": ["kind", "taskTitle"]
                                 }
                             ]
                         }
@@ -19690,17 +19428,6 @@
                     }
                 },
                 "required": ["note"]
-            },
-            "PutVerificationSettingsDto": {
-                "type": "object",
-                "properties": {
-                    "maxAgeDays": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 365
-                    }
-                },
-                "required": ["maxAgeDays"]
             },
             "ExternalActivityDto": {
                 "type": "object",
@@ -23792,87 +23519,81 @@
                 },
                 "required": ["pipeline", "columns"]
             },
-            "EmailVerification": {
+            "Group": {
                 "type": "object",
                 "properties": {
-                    "address": {
-                        "type": "string"
+                    "value": {
+                        "description": "The field's value for this group; `null` groups the unset rows."
                     },
-                    "result": {
-                        "type": "string",
-                        "enum": ["valid", "invalid", "risky", "unknown"]
-                    },
-                    "reason": {
-                        "type": "string",
-                        "enum": [
-                            "deliverable",
-                            "syntax",
-                            "no_domain",
-                            "no_mail_server",
-                            "null_mx",
-                            "disposable",
-                            "role",
-                            "lookup_failed"
-                        ]
-                    },
-                    "message": {
-                        "type": "string",
-                        "description": "Why, in words, naming the domain."
-                    },
-                    "source": {
-                        "type": "string",
-                        "description": "The verifier that answered: `free`, or a vendor adapter."
-                    },
-                    "verifiedAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "stale": {
-                        "type": "boolean",
-                        "description": "Older than the workspace’s age, or unknown: found again at the next check."
-                    }
-                },
-                "required": ["address", "result", "reason", "message", "source", "verifiedAt", "stale"]
-            },
-            "PersonVerification": {
-                "type": "object",
-                "properties": {
-                    "address": {
-                        "nullable": true,
-                        "description": "The person’s primary address; null when they have none.",
-                        "type": "string"
-                    },
-                    "verification": {
-                        "nullable": true,
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/EmailVerification"
-                            }
-                        ]
-                    }
-                },
-                "required": ["address", "verification"]
-            },
-            "EmailVerificationSettings": {
-                "type": "object",
-                "properties": {
-                    "maxAgeDays": {
+                    "count": {
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991
                     },
-                    "isDefault": {
-                        "type": "boolean"
-                    },
-                    "updatedAt": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    "sum": {
+                        "description": "The object's money field summed in minor units; absent for people.",
+                        "type": "object",
+                        "properties": {
+                            "amountMinor": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "field": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["amountMinor", "field"]
                     }
                 },
-                "required": ["maxAgeDays", "isDefault", "updatedAt"]
+                "required": ["value", "count"]
+            },
+            "SearchHit": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "subtitle": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["object", "id", "title", "subtitle"]
+            },
+            "SearchResults": {
+                "type": "object",
+                "properties": {
+                    "person": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    },
+                    "company": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    },
+                    "opportunity": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    }
+                },
+                "required": ["person", "company", "opportunity"]
             },
             "SequenceStep": {
                 "type": "object",
@@ -23890,7 +23611,7 @@
                     },
                     "kind": {
                         "type": "string",
-                        "enum": ["email", "wait"]
+                        "enum": ["email", "wait", "task"]
                     },
                     "templateId": {
                         "nullable": true,
@@ -23912,9 +23633,23 @@
                     },
                     "businessDays": {
                         "type": "boolean"
+                    },
+                    "taskTitle": {
+                        "nullable": true,
+                        "description": "`task` steps: a task on the person for their owner (else the enroller), due when the step runs.",
+                        "type": "string"
                     }
                 },
-                "required": ["id", "position", "kind", "templateId", "replyInThread", "waitDays", "businessDays"]
+                "required": [
+                    "id",
+                    "position",
+                    "kind",
+                    "templateId",
+                    "replyInThread",
+                    "waitDays",
+                    "businessDays",
+                    "taskTitle"
+                ]
             },
             "Sequence": {
                 "type": "object",
@@ -24102,8 +23837,7 @@
                             "excluded",
                             "sequence_archived",
                             "person_deleted",
-                            "region_blocked",
-                            "invalid_address"
+                            "region_blocked"
                         ]
                     },
                     "stopDetail": {
@@ -24203,9 +23937,7 @@
                                         "source.missing",
                                         "suppressed",
                                         "excluded",
-                                        "region.blocked",
-                                        "email.invalid",
-                                        "email.unverified"
+                                        "region.blocked"
                                     ]
                                 },
                                 "message": {
@@ -24229,7 +23961,7 @@
                                 },
                                 "code": {
                                     "type": "string",
-                                    "enum": ["region.unknown", "email.risky"]
+                                    "enum": ["region.unknown"]
                                 },
                                 "message": {
                                     "type": "string"
@@ -24455,82 +24187,6 @@
                     }
                 },
                 "required": ["workspace", "invite"]
-            },
-            "Group": {
-                "type": "object",
-                "properties": {
-                    "value": {
-                        "description": "The field's value for this group; `null` groups the unset rows."
-                    },
-                    "count": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "sum": {
-                        "description": "The object's money field summed in minor units; absent for people.",
-                        "type": "object",
-                        "properties": {
-                            "amountMinor": {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                            },
-                            "field": {
-                                "type": "string"
-                            }
-                        },
-                        "required": ["amountMinor", "field"]
-                    }
-                },
-                "required": ["value", "count"]
-            },
-            "SearchHit": {
-                "type": "object",
-                "properties": {
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "subtitle": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["object", "id", "title", "subtitle"]
-            },
-            "SearchResults": {
-                "type": "object",
-                "properties": {
-                    "person": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    },
-                    "company": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    },
-                    "opportunity": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    }
-                },
-                "required": ["person", "company", "opportunity"]
             },
             "TimelineActor": {
                 "anyOf": [

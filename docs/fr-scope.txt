@@ -1,0 +1,45 @@
+# FR traceability scope (doc 49 §7, #69). Read by scripts/fr-traceability.mjs in CI.
+#
+# Every doc 48 requirement, by the build-plan phase that builds it. A phase marked `complete`
+# must have every one of its ids named in a test title (describe/it/test) somewhere in the repo;
+# a gap fails CI. A phase `in progress` or `not started` reports coverage only. `deferred` lists
+# requirements consciously out of v1 (with the ledger row that says so); they are not checked.
+# When a phase is declared complete in doc 49, change its marker here in the same PR.
+
+[phase 1: complete]   # Pipeline — P1-1…P1-5, P1-UI-1…P1-UI-11, P0-10 (a11y + mobile gate)
+FR-CRMS-9
+FR-CRMS-UI-1
+FR-CRMS-UI-2
+FR-CRMS-UI-3
+FR-CRMS-UI-4
+FR-CRMS-UI-6
+FR-CRMS-UI-7
+FR-CRMS-UI-8
+FR-CRMS-UI-9
+FR-CRMS-UI-10
+FR-CRMS-UI-12
+
+[phase 2: complete]   # Mail — P2-1…P2-5, P2-UI-1…P2-UI-3
+FR-CRMS-1
+FR-CRMS-2
+FR-CRMS-3
+FR-CRMS-4
+FR-CRMS-UI-5
+
+[phase 3: in progress]   # Outreach — P3-1, P3-2, P3-3 built; P3-4 (FR-8), P3-5 (FR-14), P3-UI-2 open
+FR-CRMS-5
+FR-CRMS-6
+FR-CRMS-7
+FR-CRMS-8
+FR-CRMS-10
+FR-CRMS-11
+FR-CRMS-12
+FR-CRMS-13
+FR-CRMS-14
+
+[phase 4: not started]   # Data — P4-1 (FR-16), P4-2 (FR-15)
+FR-CRMS-15
+FR-CRMS-16
+
+[deferred]
+FR-CRMS-UI-11   # English only in v1, catalogue-ready — parity/LEDGER.md PAR-092

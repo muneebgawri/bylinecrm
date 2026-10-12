@@ -15,6 +15,7 @@ import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
 import { EmailVerificationService } from '../verification/email-verification.service';
 import { inferCountry } from './country';
+import { TasksService } from '../records/tasks.service';
 import { ExclusionsService } from './exclusions.service';
 import { RegionPolicyService } from './region-policy.service';
 import { addWaitDays, nextWindowStart, zoneForCountry, type SendWindow } from './schedule';
@@ -96,6 +97,7 @@ export class SequenceRunner {
         private readonly templates: TemplatesService,
         private readonly renderer: RenderService,
         private readonly verification: EmailVerificationService,
+        private readonly tasks: TasksService,
         @InjectQueue(SEQUENCE_STEP_QUEUE) private readonly queue: Queue<SequenceStepJob>,
     ) {}
 
@@ -137,6 +139,35 @@ export class SequenceRunner {
                     this.enqueueAfterCommit(workspaceId, e.id, next);
                 }
                 return moved;
+            });
+            return done ? 'advanced' : 'skipped';
+        }
+
+        if (step.kind === 'task') {
+            // #136 (doc 50 §D "Call if no reply → owner"): a task on the person for their owner — else the
+            // member who enrolled them — due now; the enrolment moves straight on. Created in the same
+            // transaction as the move, so a second delivery of this step's job creates no second task.
+            const done = await this.rls.withWorkspace(workspaceId, async (tx) => {
+                const moved = await claim(tx, e, { stepIndex: e.stepIndex + 1, nextRunAt: now });
+                if (!moved) return false;
+                const person = await tx.person.findUniqueOrThrow({
+                    where: { id: e.personId },
+                    select: { ownerId: true },
+                });
+                const task = await this.tasks.createIn(
+                    tx,
+                    { workspaceId, capabilities: new Set() },
+                    {
+                        title: step.taskTitle!,
+                        dueAt: now.toISOString(),
+                        assigneeId: person.ownerId ?? e.enrolledByMemberId,
+                        targets: [{ type: 'person', id: e.personId }],
+                    },
+                );
+                await this.events.record(tx, task.event);
+                await this.announce(tx, e, 'enrolment.step_completed', { stepIndex: e.stepIndex });
+                this.enqueueAfterCommit(workspaceId, e.id, now);
+                return true;
             });
             return done ? 'advanced' : 'skipped';
         }
