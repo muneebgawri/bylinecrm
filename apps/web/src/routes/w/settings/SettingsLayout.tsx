@@ -52,7 +52,7 @@ export function SettingsLayout() {
         <div className="p-7">
             <PageHeader
                 title="Settings"
-                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, and the addresses it never mails."
+                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, the addresses it never mails, and the regions its outreach may reach."
             />
             <nav ref={nav} aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
                 {sections.map((section) => (
