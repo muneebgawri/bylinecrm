@@ -16,6 +16,7 @@ import type {
     RegionPolicyChangeView,
     RegionPolicyEntryView,
     EmailVerificationSettingsView,
+    TrackingSettingsView,
     SuppressionView,
     SendingPoolView,
     TwentyImportOverviewView,
@@ -836,6 +837,18 @@ export const verificationSettings: EmailVerificationSettingsView = {
     updatedAt: at(12),
 };
 
+/** The short-link domain (P3-4): set and verified, so sequence links are tracked. */
+export const trackingSettings: TrackingSettingsView = {
+    cnameTarget: 'api.bylinecrm.example',
+    domain: {
+        domain: 'go.pinion.example',
+        status: 'pass',
+        lastCheck: { outcome: 'pass', message: 'go.pinion.example is a CNAME to api.bylinecrm.example' },
+        checkedAt: at(6),
+        updatedAt: at(20),
+    },
+};
+
 /** The suppression list (P3-1): one of each kind of entry — a permanent one and two an admin may lift. */
 export const suppressions: SuppressionView[] = [
     {
@@ -981,6 +994,7 @@ export const scheduledSends: MailOutboundView[] = [
         cancelledAt: null,
         createdAt: at(1),
         sentAt: null,
+        tracking: { clicks: 0, uniqueClicks: 0, opens: 0 },
     },
 ];
 
@@ -1004,6 +1018,7 @@ export const sequences: SequenceView[] = [
                 waitDays: null,
                 businessDays: false,
                 taskTitle: null,
+                tracking: { clicks: 7, uniqueClicks: 5, opens: 12 },
             },
             {
                 id: '0b1e0000-0000-4000-8000-000000000a22',
@@ -1014,6 +1029,7 @@ export const sequences: SequenceView[] = [
                 waitDays: 3,
                 businessDays: true,
                 taskTitle: null,
+                tracking: { clicks: 0, uniqueClicks: 0, opens: 0 },
             },
             {
                 id: '0b1e0000-0000-4000-8000-000000000a23',
@@ -1024,6 +1040,7 @@ export const sequences: SequenceView[] = [
                 waitDays: null,
                 businessDays: false,
                 taskTitle: null,
+                tracking: { clicks: 0, uniqueClicks: 0, opens: 0 },
             },
         ],
         counts: { enrolled: 184, active: 61, held: 0, finished: 97, stopped: 26 },

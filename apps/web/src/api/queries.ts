@@ -86,6 +86,8 @@ export const keys = {
     regionPolicy: (workspaceId: string) => ['w', workspaceId, 'outreach', 'region-policy'] as const,
     /** How long an address's verification stands (P3-5, FR-CRMS-16). */
     verificationSettings: (workspaceId: string) => ['w', workspaceId, 'outreach', 'verification'] as const,
+    /** The short-link domain and its check (P3-4, FR-CRMS-8). */
+    trackingSettings: (workspaceId: string) => ['w', workspaceId, 'tracking', 'domain'] as const,
     suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,

@@ -23,9 +23,10 @@ export const STAGE_DELETE_MOVE_LIMIT = 5000;
 /**
  * The events a stage rule may react to. Mail (P2) and meetings (P3) emit them; the rule engine
  * (P1-2) listens for them from the day the enum exists, so a rule saved now works the day the
- * event first fires.
+ * event first fires. A tracked link clicked (P3-4) is one; an open never is — opens are indicative
+ * (FR-CRMS-8) and may not move a deal.
  */
-export const STAGE_RULE_EVENTS = ['email.replied', 'meeting.booked'] as const;
+export const STAGE_RULE_EVENTS = ['email.replied', 'meeting.booked', 'email.clicked'] as const;
 export type StageRuleEvent = (typeof STAGE_RULE_EVENTS)[number];
 
 /** The colour a stage is drawn in: a semantic token name, never a colour value. */

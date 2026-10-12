@@ -38,6 +38,17 @@ export class NodeDns implements DnsPort {
             throw failed(name, error);
         }
     }
+
+    async resolveCname(name: string): Promise<string | null> {
+        assertNoOpenTransaction('NodeDns.resolveCname');
+        try {
+            const records = await this.resolver.resolveCname(name);
+            return records[0]?.toLowerCase() ?? null;
+        } catch (error) {
+            if (NO_RECORDS.has(codeOf(error))) return null;
+            throw failed(name, error);
+        }
+    }
 }
 
 function codeOf(error: unknown): string {

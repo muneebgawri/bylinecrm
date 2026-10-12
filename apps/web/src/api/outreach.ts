@@ -4,7 +4,9 @@ import { workspacePath } from './endpoints';
 import { keys } from './queries';
 import type {
     EmailVerificationSettingsView,
+    PutTrackingDomainInput,
     PutVerificationSettingsInput,
+    TrackingSettingsView,
     RegionPolicyChangeView,
     RegionPolicyEntryView,
     SetRegionPolicyInput,
@@ -66,5 +68,47 @@ export function usePutVerificationSettings(workspaceId: string) {
     return useMutation({
         mutationFn: (input: PutVerificationSettingsInput) => verificationSettings.put(workspaceId, input),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.verificationSettings(workspaceId) }),
+    });
+}
+
+// ---- Tracking (P3-4, FR-CRMS-8) ---------------------------------------------------------------
+
+export const trackingSettings = {
+    get: (workspaceId: string, signal?: AbortSignal) =>
+        request<TrackingSettingsView>('GET', workspacePath(workspaceId, '/tracking/domain'), { signal }),
+    put: (workspaceId: string, input: PutTrackingDomainInput) =>
+        request<TrackingSettingsView>('PUT', workspacePath(workspaceId, '/tracking/domain'), { body: input }),
+    remove: (workspaceId: string) => request<void>('DELETE', workspacePath(workspaceId, '/tracking/domain')),
+    check: (workspaceId: string) =>
+        request<TrackingSettingsView>('POST', workspacePath(workspaceId, '/tracking/domain/check')),
+};
+
+export const useTrackingSettings = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.trackingSettings(workspaceId),
+        queryFn: ({ signal }) => trackingSettings.get(workspaceId, signal),
+    });
+
+export function usePutTrackingDomain(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: PutTrackingDomainInput) => trackingSettings.put(workspaceId, input),
+        onSuccess: (data) => client.setQueryData(keys.trackingSettings(workspaceId), data),
+    });
+}
+
+export function useCheckTrackingDomain(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => trackingSettings.check(workspaceId),
+        onSuccess: (data) => client.setQueryData(keys.trackingSettings(workspaceId), data),
+    });
+}
+
+export function useRemoveTrackingDomain(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => trackingSettings.remove(workspaceId),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.trackingSettings(workspaceId) }),
     });
 }

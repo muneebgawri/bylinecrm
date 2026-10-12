@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { API_PREFIX } from '../app';
+import { API_PREFIX, UNPREFIXED_PATHS } from '../app';
 import { buildOpenApiDocument } from './build';
 import { APP_COMPILE_TIMEOUT_MS } from './placeholder-env';
 import { OPENAPI_PATH } from './write';
@@ -51,8 +51,10 @@ describe('the OpenAPI contract', () => {
         async () => {
             const current = await buildOpenApiDocument();
             expect(current).toEqual(committed);
+            // The routes served without the prefix are declared once, in `UNPREFIXED_PATHS`.
+            const unprefixed = new Set(UNPREFIXED_PATHS.map((p) => `/${p.replace(/:(\w+)/g, '{$1}')}`));
             const offPrefix = Object.keys(current.paths).filter(
-                (p) => p !== '/health' && !p.startsWith(`/${API_PREFIX}/`),
+                (p) => !unprefixed.has(p) && !p.startsWith(`/${API_PREFIX}/`),
             );
             expect(offPrefix, 'paths written without the global prefix').toEqual([]);
         },

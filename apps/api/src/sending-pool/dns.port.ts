@@ -11,7 +11,8 @@ export type MxLookup = { status: 'found'; exchanges: string[] } | { status: 'no_
 
 /**
  * The only DNS the application does: a name's TXT records for the sending pool's domain checks
- * (FR-CRMS-13), and a domain's MX records for address verification (FR-CRMS-14). A TXT name with no
+ * (FR-CRMS-13), a domain's MX records for address verification (FR-CRMS-14), and a name's CNAME for
+ * the short-link domain (FR-CRMS-8). A TXT name with no
  * records (NXDOMAIN or no TXT data) answers `[]`; a lookup that fails for any other reason — a
  * timeout, a SERVFAIL — throws `DnsLookupFailed`, so "could not check" is never read as "has no
  * record". Never called inside a database transaction (P2-2a).
@@ -19,6 +20,11 @@ export type MxLookup = { status: 'found'; exchanges: string[] } | { status: 'no_
 export interface DnsPort {
     resolveTxt(name: string): Promise<string[]>;
     resolveMx(name: string): Promise<MxLookup>;
+    /**
+     * The name's CNAME target, lower case, or `null` when the name has none (NXDOMAIN or no CNAME) —
+     * the short-link domain check (P3-4, FR-CRMS-8). Fails as the others do.
+     */
+    resolveCname(name: string): Promise<string | null>;
 }
 
 export class DnsLookupFailed extends Error {

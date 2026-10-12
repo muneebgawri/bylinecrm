@@ -17,6 +17,10 @@ describe('FR-CRMS-9: a stage rule reads as a sentence', () => {
         expect(ruleSummary('meeting.booked', 'Meeting', false)).toBe(
             'When a meeting is booked, move the deal to Meeting',
         );
+        // FR-CRMS-8: a click may drive a rule; an open is not an event a rule can be made on.
+        expect(ruleSummary('email.clicked', 'Contacted', false)).toBe(
+            'When a link is clicked, move the deal to Contacted',
+        );
     });
 
     it('says when the rule may move a deal backward', () => {

@@ -82,6 +82,7 @@ export const outbound = (over: Partial<MailOutboundView> = {}): MailOutboundView
     cancelledAt: null,
     createdAt: AT,
     sentAt: null,
+    tracking: { clicks: 0, uniqueClicks: 0, opens: 0 },
     ...over,
 });
 

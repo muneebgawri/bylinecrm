@@ -3,6 +3,7 @@ import {
     EXTERNAL_KIND_PREFIX,
     type DomainEvent,
     type EmailSummary,
+    type EmailTrackingPayload,
     type SuppressionEventPayload,
     type LinkedObject,
     type Money,
@@ -208,6 +209,7 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
             ...(event.diff ? { diff: event.diff } : {}),
             ...(event.email ? { email: emailEntry(event.email) } : {}),
             ...(event.suppression ? { suppression: suppressionEntry(event.suppression) } : {}),
+            ...(event.tracking ? { tracking: trackingEntry(event.tracking) } : {}),
         });
         return targets.map((t) => ({
             ...base,
@@ -231,10 +233,20 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
         case 'attachment':
             return (await tx.attachment.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
         case 'email':
-            return (await tx.mailMessage.findUnique({ where: { id }, select: { subject: true } }))?.subject ?? null;
+            // A synced message, or — for a tracking event (P3-4) — the send it is about.
+            return (
+                (await tx.mailMessage.findUnique({ where: { id }, select: { subject: true } }))?.subject ??
+                (await tx.mailOutbound.findUnique({ where: { id }, select: { subject: true } }))?.subject ??
+                null
+            );
         case 'suppression':
             return (await tx.suppression.findUnique({ where: { id }, select: { address: true } }))?.address ?? null;
     }
+}
+
+/** What a click or an open shows (P3-4): the link, and that an open is indicative — never the client. */
+function trackingEntry(tracking: EmailTrackingPayload) {
+    return { url: tracking.url, indicative: tracking.indicative, sequenceStepId: tracking.sequenceStepId };
 }
 
 /** What a suppression's entry shows (#114): why the address is on the list, by whom, and the note. */

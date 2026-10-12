@@ -173,6 +173,11 @@ export type EmailVerificationView = Schemas['EmailVerification'];
 export type PersonVerificationView = Schemas['PersonVerification'];
 export type EmailVerificationSettingsView = Schemas['EmailVerificationSettings'];
 export type PutVerificationSettingsInput = Schemas['PutVerificationSettingsDto'];
+// ---- Tracking (P3-4) ---------------------------------------------------------------------------
+export type TrackingSettingsView = Schemas['TrackingSettings'];
+export type TrackingDomainView = NonNullable<TrackingSettingsView['domain']>;
+export type TrackingCountsView = Schemas['TrackingCounts'];
+export type PutTrackingDomainInput = Schemas['PutTrackingDomainDto'];
 export type SuppressionPage = Schemas['SuppressionPage'];
 export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
 export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;

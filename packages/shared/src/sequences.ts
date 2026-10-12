@@ -1,3 +1,4 @@
+import type { TrackingCounts } from './tracking.js';
 import type { Actor } from './records.js';
 
 /**
@@ -157,6 +158,8 @@ export interface SequenceStepView {
     businessDays: boolean;
     /** `task` steps (#136): the task created on the person, for their owner (else the enroller). */
     taskTitle: string | null;
+    /** `email` steps (P3-4): clicks and indicative opens across the step's sends; zeros elsewhere. */
+    tracking: TrackingCounts;
 }
 
 export interface SequenceCounts {
