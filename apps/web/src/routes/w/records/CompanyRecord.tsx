@@ -8,6 +8,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
 import { paths } from '../../paths';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
@@ -206,6 +207,7 @@ export function CompanyRecord({
                 <RecordHeader
                     layout={layout}
                     name={company.name}
+                    avatarSrc={company.logoUrl}
                     subtitle={
                         [company.domain, company.address.city, company.address.country].filter(Boolean).join(' · ') ||
                         undefined
@@ -252,6 +254,7 @@ export function CompanyRecord({
             }
             rail={
                 <>
+                    <EnrichmentPanel workspaceId={workspaceId} object="company" recordId={company.id} />
                     <RailCard title="People" count={people.data && !people.more ? companyPeople.length : undefined}>
                         {people.isPending ? (
                             <RailLoading />

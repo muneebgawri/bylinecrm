@@ -25,6 +25,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'region-policy', label: 'Region policy', to: paths.settingsRegionPolicy, requires: 'outreach:write' },
     // What verification does before an enrolment and a send (P3-5): read with outreach rights; an admin sets the age.
     { id: 'verification', label: 'Verification', to: paths.settingsVerification, requires: 'outreach:write' },
+    // What enrichment asks about records (P4-2): read with record rights; an admin changes it.
+    { id: 'enrichment', label: 'Enrichment', to: paths.settingsEnrichment, requires: 'record:read' },
     // The Twenty importer (P4-4): it writes every object the workspace has, so an admin's.
     { id: 'import-twenty', label: 'Import from Twenty', to: paths.settingsImportTwenty, requires: 'workspace:admin' },
 ];
@@ -56,7 +58,7 @@ export function SettingsLayout() {
         <div className="p-7">
             <PageHeader
                 title="Settings"
-                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, the addresses it never mails, the regions its outreach may reach, how long an address's verification stands, and the Twenty workspace it imports from."
+                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, the addresses it never mails, the regions its outreach may reach, how long an address's verification stands, what enrichment looks up, and the Twenty workspace it imports from."
             />
             <nav ref={nav} aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
                 {sections.map((section) => (

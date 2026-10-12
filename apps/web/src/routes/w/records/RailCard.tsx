@@ -1,8 +1,8 @@
 import { cn, focusRing, LoadingRegion, Skeleton } from '@bylinecrm/ui';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router';
 
-/** The right rail's card: a muted heading with a count, an action, and rows beneath (mockup v3 `.rel`). */
+/** The right rail's card: a muted heading with a count, an action, and rows beneath (mockup v3 `.rel`); a named region. */
 export function RailCard({
     title,
     count,
@@ -16,10 +16,14 @@ export function RailCard({
     children: ReactNode;
     className?: string;
 }) {
+    const headingId = useId();
     return (
-        <section className={cn('rounded-lg border border-border bg-surface shadow-sm', className)}>
+        <section
+            aria-labelledby={headingId}
+            className={cn('rounded-lg border border-border bg-surface shadow-sm', className)}
+        >
             <h3 className="m-0 flex items-center gap-2 border-b border-border px-4 py-3 text-[13px] font-medium text-text-muted">
-                {title}
+                <span id={headingId}>{title}</span>
                 {count !== undefined && <span className="tabular-nums text-text-faint">{count}</span>}
                 {action && <span className="ml-auto">{action}</span>}
             </h3>
