@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { EventActor, MailboxStatus } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
@@ -8,14 +7,10 @@ import { RedisService } from '../infra/redis.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { GOOGLE_OAUTH_PORT, GoogleOAuthError, type GoogleOAuthPort } from './google-oauth.port';
-import {
-    TOKEN_LOCK_KEY_PREFIX,
-    TOKEN_LOCK_POLL_MS,
-    TOKEN_LOCK_TTL_MS,
-    TOKEN_REFRESH_SKEW_S,
-} from './mail-accounts.constants';
+import { TOKEN_LOCK_KEY_PREFIX, TOKEN_REFRESH_SKEW_S } from './mail-accounts.constants';
 import { OAuthClientsService } from './oauth-clients.service';
 import { assessGrant } from './oauth-flow';
+import { tokenUnderLock } from './token-lock';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
 
@@ -39,13 +34,10 @@ export class MailboxUnavailable extends ApiException {
     }
 }
 
-/** Deletes the lock only if this caller still holds it (its token matches): never another's. */
-const RELEASE_LOCK = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end`;
-
 /**
- * The one place an access token is handed out (P2-1). A token close to expiry is refreshed first;
- * a mailbox is refreshed by one process at a time — the others wait for it and read the result —
- * so two workers never race Google with the same refresh token. Google refusing the grant
+ * The one place a mailbox's access token is handed out (P2-1). A token close to expiry is
+ * refreshed first; a mailbox is refreshed by one process at a time (`tokenUnderLock`) — the others
+ * wait for it and read the result — so two workers never race Google with the same refresh token. Google refusing the grant
  * (`invalid_grant`: revoked, expired, the account changed) or withdrawing a scope moves the
  * mailbox to `reconnect_needed` and announces it; nothing is retried against a dead grant.
  */
@@ -65,22 +57,12 @@ export class MailboxTokens {
      * (P2-2, P2-3) call it outside any request.
      */
     async getAccessToken(workspaceId: string, mailboxId: string): Promise<string> {
-        const deadline = Date.now() + TOKEN_LOCK_TTL_MS;
-        for (;;) {
-            const row = await this.read(workspaceId, mailboxId);
-            const fresh = this.freshToken(row);
-            if (fresh) return fresh;
-            const lockToken = await this.acquire(mailboxId);
-            if (lockToken) {
-                try {
-                    return await this.refreshUnderLock(workspaceId, mailboxId);
-                } finally {
-                    await this.release(mailboxId, lockToken);
-                }
-            }
-            if (Date.now() >= deadline) throw new Error('timed out waiting for another process to refresh the mailbox');
-            await sleep(TOKEN_LOCK_POLL_MS);
-        }
+        return tokenUnderLock(
+            this.redis,
+            `${TOKEN_LOCK_KEY_PREFIX}${mailboxId}`,
+            async () => this.freshToken(await this.read(workspaceId, mailboxId)),
+            () => this.refreshUnderLock(workspaceId, mailboxId),
+        );
     }
 
     /**
@@ -189,25 +171,10 @@ export class MailboxTokens {
         if (row.accessExpiresAt.getTime() - Date.now() <= TOKEN_REFRESH_SKEW_S * 1000) return null;
         return this.secrets.open(row.accessTokenCiphertext);
     }
-
-    private async acquire(mailboxId: string): Promise<string | null> {
-        await this.redis.ensureReady();
-        const token = randomUUID();
-        const ok = await this.redis.set(`${TOKEN_LOCK_KEY_PREFIX}${mailboxId}`, token, 'PX', TOKEN_LOCK_TTL_MS, 'NX');
-        return ok === 'OK' ? token : null;
-    }
-
-    private async release(mailboxId: string, token: string): Promise<void> {
-        await this.redis.eval(RELEASE_LOCK, 1, `${TOKEN_LOCK_KEY_PREFIX}${mailboxId}`, token);
-    }
 }
 
 /** What `last_error` holds: the reason and when, as JSON. */
 function errorRecord(reason: { code: string; message: string }): Prisma.InputJsonObject {
     const record: MailboxErrorRecord = { ...reason, at: new Date().toISOString() };
     return { code: record.code, message: record.message, at: record.at };
-}
-
-function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
 }

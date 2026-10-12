@@ -1,21 +1,29 @@
-import { Body, HttpCode, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { Body, Delete, HttpCode, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { PoolMailboxHealth, SendingDomainView, SendingPoolSettings, SendingPoolView } from '@bylinecrm/shared';
 import { Requires, TenantController } from '../auth/decorators';
+import { MailboxesService } from '../mail-accounts/mailboxes.service';
+import { connectStart, type ConnectStart } from '../mail-accounts/responses';
 import { Returns } from '../openapi/responses';
 import { ResumeMailboxDto, SetMailboxPoolDto, UpdateSendingDomainDto, UpdateSendingPoolSettingsDto } from './dto';
+import { PostmasterService } from './postmaster.service';
 import { poolMailboxHealth, sendingDomainView, sendingPoolSettings, sendingPoolView } from './responses';
 import { SendingDomainsService } from './sending-domains.service';
 import { SendingPoolService } from './sending-pool.service';
 
 /**
  * The sending pool (P3-2): its health is `outreach:write`'s to read — the people who run outreach
- * see why a mailbox is not sending; the settings are an admin's.
+ * see why a mailbox is not sending; the settings, and the Postmaster Tools account (#129), are an
+ * admin's.
  */
 @ApiTags('sending-pool')
 @TenantController('sending-pool')
 export class SendingPoolController {
-    constructor(private readonly pool: SendingPoolService) {}
+    constructor(
+        private readonly pool: SendingPoolService,
+        private readonly postmaster: PostmasterService,
+        private readonly mailboxes: MailboxesService,
+    ) {}
 
     @Requires('outreach:write')
     @Get()
@@ -29,6 +37,27 @@ export class SendingPoolController {
     @Returns(sendingPoolSettings)
     updateSettings(@Body() body: UpdateSendingPoolSettingsDto): Promise<SendingPoolSettings> {
         return this.pool.updateSettings(body);
+    }
+
+    /**
+     * Starts connecting the workspace's Postmaster Tools account through its own OAuth client, with
+     * Postmaster's scopes only; send the browser to `authorizeUrl`. Google returns it to the mail
+     * OAuth callback, which lands on the Mailboxes page with the result. Connecting again replaces it.
+     */
+    @Requires('workspace:admin')
+    @HttpCode(201)
+    @Post('postmaster/connect')
+    @Returns(connectStart)
+    connectPostmaster(): Promise<ConnectStart> {
+        return this.mailboxes.startConnect('postmaster');
+    }
+
+    /** Revokes the grant at Google and removes the connection; `404` while none is connected. */
+    @Requires('workspace:admin')
+    @HttpCode(204)
+    @Delete('postmaster')
+    disconnectPostmaster(): Promise<void> {
+        return this.postmaster.remove();
     }
 }
 

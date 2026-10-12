@@ -11,7 +11,9 @@ import { OAuthClientsService } from './oauth-clients.service';
  * Mail accounts (P2-1): the workspace's own Google OAuth client and the mailboxes connected
  * through it. Google sits behind `GOOGLE_OAUTH_PORT` — the HTTP adapter here, a fake in tests.
  * `MailboxTokens` is exported for the workers that use a mailbox (sync P2-2, send P2-3), and
- * `MailboxesService` for routes about a mailbox that live in those packages (its visibility rules).
+ * `MailboxesService` for routes about a mailbox that live in those packages (its visibility rules)
+ * and for the Postmaster Tools connect (P3-2b, #129), which runs through the same flow;
+ * `OAuthClientsService` for the pool to refresh that grant through the workspace's client.
  */
 @Module({
     imports: [AuthModule],
@@ -22,6 +24,6 @@ import { OAuthClientsService } from './oauth-clients.service';
         MailboxesService,
         MailboxTokens,
     ],
-    exports: [MailboxTokens, MailboxesService],
+    exports: [MailboxTokens, MailboxesService, OAuthClientsService, GOOGLE_OAUTH_PORT],
 })
 export class MailAccountsModule {}

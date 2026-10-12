@@ -137,6 +137,15 @@ found again before the next send. The API is `/api/w/:id/outreach/verification` 
 `/api/w/:id/people/:personId/verification` (a person's result; `POST` re-runs it). Why each result is what it
 is: `docs/design-notes/P3-5.md`.
 
+## Postmaster Tools (#129)
+
+An admin connects, on the Mailboxes page, the Google account that owns the outreach sending domains in Postmaster
+Tools, through the workspace's own OAuth client (Postmaster's read scope only, never Gmail's). Every sending-domain
+check then reads the domain's user-reported spam rate for the day before and, at or past the pool's complaint
+threshold, pauses every pool mailbox on the domain. Nothing calls Google until the one-time step in
+`docs/design-notes/P3-2.md` (enable the Postmaster Tools API, add the scope to the consent screen, verify the
+domains at postmaster.google.com) is done: until then each domain reports "not connected" and nothing pauses.
+
 ## Enrichment (P4-2)
 
 A new person or company — and one whose address or domain changes — is looked up in four free sources: the

@@ -21,6 +21,7 @@ const tokenResponse = z.object({
 const errorResponse = z.object({ error: z.string().min(1), error_description: z.string().optional() });
 
 const profileResponse = z.object({ emailAddress: z.string().min(1) });
+const userinfoResponse = z.object({ email: z.string().min(1) });
 const tokenInfoResponse = z.object({ scope: z.string().default('') });
 
 /**
@@ -62,6 +63,17 @@ export class GoogleOAuthHttp implements GoogleOAuthPort {
         if (!res.ok)
             throw new GoogleOAuthError(await errorName(res), res.status, `Gmail profile read failed (${res.status})`);
         return parse(profileResponse, await json(res)).emailAddress;
+    }
+
+    async accountEmail(accessToken: string): Promise<string> {
+        const res = await send(GOOGLE_ENDPOINTS.userinfo, { headers: { authorization: `Bearer ${accessToken}` } });
+        if (!res.ok)
+            throw new GoogleOAuthError(
+                await errorName(res),
+                res.status,
+                `account information read failed (${res.status})`,
+            );
+        return parse(userinfoResponse, await json(res)).email;
     }
 
     async grantedScopes(accessToken: string): Promise<string[]> {

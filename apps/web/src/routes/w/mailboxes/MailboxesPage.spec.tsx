@@ -152,6 +152,15 @@ describe('FR-CRMS-1: connecting a Google mailbox', () => {
         const row = (await screen.findAllByText('kate@example.com'))[0]?.closest('tr');
         expect(row && within(row).getByText('Just connected')).toBeTruthy();
     });
+
+    it('#129 says Postmaster Tools connected when that is what the callback finished, and marks no mailbox', async () => {
+        api();
+        page('?connect=connected&for=postmaster');
+        expect(await screen.findByText('Postmaster Tools connected')).toBeInTheDocument();
+        expect(screen.queryByText('Mailbox connected')).not.toBeInTheDocument();
+        await screen.findAllByText('kate@example.com');
+        expect(screen.queryByText('Just connected')).not.toBeInTheDocument();
+    });
 });
 
 describe('FR-CRMS-1, FR-CRMS-2: each mailbox shows where it stands and its sync', () => {

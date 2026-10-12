@@ -9,6 +9,7 @@ describe('the connect request', () => {
         redirectUri: 'https://crm.example/api/mail/oauth/callback',
         state: 'state-1',
         codeChallenge: 'challenge-1',
+        scopes: GMAIL_SCOPES,
     });
 
     it("goes to Google's authorization endpoint", () => {

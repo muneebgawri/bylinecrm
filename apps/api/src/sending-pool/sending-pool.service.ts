@@ -8,6 +8,7 @@ import {
     type MailboxPause,
     type MailboxPauseCode,
     type PoolMailboxHealth,
+    type SendingDomainSpamRate,
     type SendingPoolSettings,
     type SendingPoolView,
 } from '@bylinecrm/shared';
@@ -15,8 +16,9 @@ import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { DOMAIN_WITH_RATE, domainView } from './domain-view';
 import { sendingDomainOf } from './pool-mailbox';
-import { domainView } from './sending-domains.service';
+import { PostmasterService } from './postmaster.service';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
 
@@ -52,6 +54,7 @@ export class SendingPoolService {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         private readonly events: DomainEvents,
+        private readonly postmaster: PostmasterService,
     ) {}
 
     // ── The gate ────────────────────────────────────────────────────────────────────────────
@@ -180,29 +183,77 @@ export class SendingPoolService {
                 const rateBps = Math.floor((count * 10_000) / sends);
                 if (count === 0 || rateBps < thresholdBps) continue;
                 const what = code === 'bounce_rate' ? 'hard bounces' : 'complaints';
-                const pause: MailboxPause = {
+                await this.pause(tx, workspaceId, mailboxId, {
                     code,
                     message: `${count} ${what} in ${sends} sends over ${settings.rateWindowDays} days (${percent(rateBps)}), at or above the ${percent(thresholdBps)} threshold`,
                     rateBps,
                     thresholdBps,
                     sends,
                     at: now.toISOString(),
-                };
-                await tx.mailbox.update({
-                    where: { id: mailboxId },
-                    data: { pausedAt: now, pauseReason: pause as unknown as Prisma.InputJsonValue },
-                });
-                await this.events.record(tx, {
-                    type: 'mailbox.paused',
-                    object: 'mailbox',
-                    workspaceId,
-                    actor: { kind: 'system', id: null },
-                    occurredAt: now.toISOString(),
-                    recordId: mailboxId,
-                    pause,
                 });
                 return;
             }
+        });
+    }
+
+    /**
+     * Judges a sending domain's user-reported spam rate from Postmaster Tools (#129) — the domain's
+     * own complaint rate, as Google measures it — against the complaint threshold, and pauses every
+     * connected, unpaused pool mailbox on the domain when it is at or above it. Called by the
+     * domain check after it stored the rate. Idempotent like `evaluate`: a paused mailbox keeps its
+     * first reason, and a rate under the threshold pauses nothing (an admin resumes; the next check
+     * judges the next day's rate).
+     */
+    async evaluateDomain(
+        workspaceId: string,
+        domain: string,
+        rate: SendingDomainSpamRate,
+        now = new Date(),
+    ): Promise<void> {
+        await this.rls.withWorkspace(workspaceId, async (tx) => {
+            const settings = await this.settingsIn(tx);
+            const thresholdBps = settings.complaintPauseBps;
+            if (rate.rateBps < thresholdBps) return;
+            const mailboxes = await tx.mailbox.findMany({
+                where: { purpose: 'pool', status: 'connected', pausedAt: null, email: { endsWith: `@${domain}` } },
+                orderBy: { id: 'asc' },
+            });
+            for (const mailbox of mailboxes) {
+                if (sendingDomainOf(mailbox.email) !== domain) continue;
+                await tx.$queryRaw`SELECT id FROM mailboxes WHERE id = ${mailbox.id}::uuid FOR UPDATE`;
+                const locked = await tx.mailbox.findUniqueOrThrow({ where: { id: mailbox.id } });
+                if (locked.pausedAt) continue;
+                await this.pause(tx, workspaceId, mailbox.id, {
+                    code: 'domain_spam_rate',
+                    message: `${domain} had a user-reported spam rate of ${percent(rate.rateBps)} in Postmaster Tools on ${rate.day}, at or above the ${percent(thresholdBps)} threshold`,
+                    rateBps: rate.rateBps,
+                    thresholdBps,
+                    sends: null,
+                    at: now.toISOString(),
+                });
+            }
+        });
+    }
+
+    /** The one pause write: the mailbox row (locked by the caller) and the announcement. */
+    private async pause(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        mailboxId: string,
+        pause: MailboxPause,
+    ): Promise<void> {
+        await tx.mailbox.update({
+            where: { id: mailboxId },
+            data: { pausedAt: new Date(pause.at), pauseReason: pause as unknown as Prisma.InputJsonValue },
+        });
+        await this.events.record(tx, {
+            type: 'mailbox.paused',
+            object: 'mailbox',
+            workspaceId,
+            actor: { kind: 'system', id: null },
+            occurredAt: pause.at,
+            recordId: mailboxId,
+            pause,
         });
     }
 
@@ -266,7 +317,7 @@ export class SendingPoolService {
         this.current();
         return this.rls.withWorkspace(async (tx) => {
             const settings = await this.settingsIn(tx);
-            const domains = await tx.sendingDomain.findMany({ orderBy: { domain: 'asc' } });
+            const domains = await tx.sendingDomain.findMany({ ...DOMAIN_WITH_RATE, orderBy: { domain: 'asc' } });
             const byDomain = new Map(domains.map((d) => [d.domain, domainView(d)]));
             const mailboxes = await tx.mailbox.findMany({
                 where: { purpose: 'pool', status: { not: 'disconnected' } },
@@ -276,7 +327,12 @@ export class SendingPoolService {
             for (const mailbox of mailboxes) {
                 health.push(healthOf(mailbox, await this.allowanceOf(tx, mailbox, settings, now), byDomain));
             }
-            return { settings, mailboxes: health, domains: [...byDomain.values()] };
+            return {
+                settings,
+                mailboxes: health,
+                domains: [...byDomain.values()],
+                postmaster: await this.postmaster.viewIn(tx),
+            };
         });
     }
 

@@ -4319,6 +4319,129 @@
                 "tags": ["sending-pool"]
             }
         },
+        "/api/w/{workspaceId}/sending-pool/postmaster/connect": {
+            "post": {
+                "operationId": "sendingPool_connectPostmaster",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailboxConnectStart"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
+        "/api/w/{workspaceId}/sending-pool/postmaster": {
+            "delete": {
+                "operationId": "sendingPool_disconnectPostmaster",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            }
+        },
         "/api/w/{workspaceId}/mailboxes/{mailboxId}/pool": {
             "put": {
                 "operationId": "poolMailboxes_setCap",
@@ -22271,16 +22394,85 @@
                         "type": "string",
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "spamRate": {
+                        "nullable": true,
+                        "description": "The latest user-reported spam rate Postmaster Tools gave for the domain (#129); a failed lookup keeps the last one.",
+                        "type": "object",
+                        "properties": {
+                            "day": {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                "description": "The day the rate is for, UTC."
+                            },
+                            "rateBps": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Basis points: 35 = 0.35%."
+                            }
+                        },
+                        "required": ["day", "rateBps"]
+                    },
+                    "postmaster": {
+                        "type": "object",
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "enum": ["not_connected", "not_verified", "ok", "failed"],
+                                "description": "What the last check learned from Postmaster Tools: nothing connected, the domain not verified there, a failed lookup, or an answer."
+                            },
+                            "message": {
+                                "nullable": true,
+                                "type": "string"
+                            }
+                        },
+                        "required": ["status", "message"]
                     }
                 },
-                "required": ["id", "domain", "dkimSelector", "status", "lastCheck", "checkedAt", "nextCheckAt"]
+                "required": [
+                    "id",
+                    "domain",
+                    "dkimSelector",
+                    "status",
+                    "lastCheck",
+                    "checkedAt",
+                    "nextCheckAt",
+                    "spamRate",
+                    "postmaster"
+                ]
+            },
+            "PostmasterConnection": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "The Google account that verified the sending domains in Postmaster Tools."
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["connected", "reconnect_needed"]
+                    },
+                    "connectedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastError": {
+                        "nullable": true,
+                        "description": "Why it needs reconnecting, when it does.",
+                        "type": "string"
+                    }
+                },
+                "required": ["email", "status", "connectedAt", "lastError"]
             },
             "MailboxPause": {
                 "type": "object",
                 "properties": {
                     "code": {
                         "type": "string",
-                        "enum": ["bounce_rate", "complaint_rate"]
+                        "enum": ["bounce_rate", "complaint_rate", "domain_spam_rate"]
                     },
                     "message": {
                         "type": "string"
@@ -22297,6 +22489,8 @@
                         "maximum": 9007199254740991
                     },
                     "sends": {
+                        "nullable": true,
+                        "description": "Sends the rate was measured over; null for a domain rate from Postmaster Tools.",
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991
@@ -22472,9 +22666,18 @@
                         "items": {
                             "$ref": "#/components/schemas/SendingDomain"
                         }
+                    },
+                    "postmaster": {
+                        "nullable": true,
+                        "description": "The Postmaster Tools account connected (#129), or null while none is.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PostmasterConnection"
+                            }
+                        ]
                     }
                 },
-                "required": ["settings", "mailboxes", "domains"]
+                "required": ["settings", "mailboxes", "domains", "postmaster"]
             },
             "EmailTemplate": {
                 "type": "object",

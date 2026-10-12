@@ -798,11 +798,14 @@ export const sendingPool: SendingPoolView = {
                 },
                 checkedAt: at(1),
                 nextCheckAt: at(-5),
+                spamRate: null,
+                postmaster: { status: 'not_connected', message: null },
             },
             canSend: false,
         },
     ],
     domains: [],
+    postmaster: null,
 };
 sendingPool.domains = sendingPool.mailboxes.map((m) => m.domain!);
 

@@ -34,7 +34,12 @@ import { CREATE_PARAM } from '../../paths';
 import { BlocklistSection } from './BlocklistSection';
 import { PoolHealthSection } from './PoolHealthSection';
 import { ConnectMailboxDialog, PURPOSE_LABEL } from './ConnectMailboxDialog';
-import { CONNECT_RESULT_MESSAGES, MAILBOX_CONNECT_RESULT_PARAM, connectResultFrom } from './connectResults';
+import {
+    MAILBOX_CONNECT_PURPOSE_PARAM,
+    MAILBOX_CONNECT_RESULT_PARAM,
+    connectMessage,
+    connectResultFrom,
+} from './connectResults';
 
 const CHECK_PROBLEM: Record<NonNullable<MailboxCheckView['problem']>, string> = {
     reconnect_needed: 'Google refused the stored access. Reconnect the mailbox.',
@@ -57,20 +62,22 @@ export function MailboxesPage() {
     const [connecting, setConnecting] = useState(params.get(CREATE_PARAM) === '1');
     // The callback's result is read once, then taken off the URL so a reload doesn't repeat it.
     const [result] = useState(() => connectResultFrom(params.get(MAILBOX_CONNECT_RESULT_PARAM)));
+    const [purpose] = useState(() => params.get(MAILBOX_CONNECT_PURPOSE_PARAM));
     // Announced once per visit: effects can run twice before the URL change lands (StrictMode in development).
     const announced = useRef(false);
     useEffect(() => {
         if (!params.has(MAILBOX_CONNECT_RESULT_PARAM) && !params.has(CREATE_PARAM)) return;
         if (result && !announced.current) {
             announced.current = true;
-            const message = CONNECT_RESULT_MESSAGES[result];
+            const message = connectMessage(result, purpose);
             toast({ title: message.title, description: message.body, tone: message.tone });
         }
         const next = new URLSearchParams(params);
         next.delete(MAILBOX_CONNECT_RESULT_PARAM);
+        next.delete(MAILBOX_CONNECT_PURPOSE_PARAM);
         next.delete(CREATE_PARAM);
         setParams(next, { replace: true });
-    }, [params, result, setParams]);
+    }, [params, purpose, result, setParams]);
     if (status.isError) throw status.error;
     if (list.isError) throw list.error;
 
@@ -108,7 +115,9 @@ export function MailboxesPage() {
             <MailboxTable
                 workspaceId={workspaceId}
                 mailboxes={list.data}
-                justConnected={result === 'connected' ? newestConnected(list.data ?? []) : null}
+                justConnected={
+                    result === 'connected' && purpose !== 'postmaster' ? newestConnected(list.data ?? []) : null
+                }
             />
             <PoolHealthSection workspaceId={workspaceId} />
             <BlocklistSection workspaceId={workspaceId} />

@@ -62,9 +62,11 @@ model Workspace {
   suppressions      Suppression[]
   unsubscribeTokens UnsubscribeToken[]
 
-  sendingPoolSettings SendingPoolSettings?
-  sendingDomains      SendingDomain[]
-  mailBounces         MailBounce[]
+  sendingPoolSettings  SendingPoolSettings?
+  sendingDomains       SendingDomain[]
+  sendingDomainStats   SendingDomainStat[]
+  postmasterConnection PostmasterConnection?
+  mailBounces          MailBounce[]
 
   regionPolicies            RegionPolicy[]
   regionPolicyChanges       RegionPolicyChange[]
@@ -230,6 +232,7 @@ model WorkspaceMember {
   savedViews             SavedView[]
   resumedMailboxes       Mailbox[]           @relation("MailboxResumedBy")
   configuredOAuthClients GoogleOAuthClient[]
+  postmasterConnections  PostmasterConnection[]
   mailboxes              Mailbox[]
   mailParticipations     MailParticipant[]
   blocklistEntries       BlocklistEntry[]    @relation("BlocklistOwner")
@@ -1543,6 +1546,23 @@ enum SendingDomainStatus {
   @@map("sending_domain_status")
 }
 
+/// What the last check learned from Postmaster Tools about a sending domain (#129).
+enum PostmasterDomainStatus {
+  not_connected
+  not_verified
+  ok
+  failed
+
+  @@map("postmaster_domain_status")
+}
+
+enum PostmasterConnectionStatus {
+  connected
+  reconnect_needed
+
+  @@map("postmaster_connection_status")
+}
+
 /// A pool mailbox's sending domain and its last DNS check (FR-CRMS-13). One row per domain per workspace.
 model SendingDomain {
   id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -1556,14 +1576,61 @@ model SendingDomain {
   lastCheck    Json?               @map("last_check")
   checkedAt    DateTime?           @map("checked_at") @db.Timestamptz
   nextCheckAt  DateTime            @default(now()) @map("next_check_at") @db.Timestamptz
+  /// What the last check learned from Postmaster Tools (#129), and why when it is not `ok`.
+  postmasterStatus  PostmasterDomainStatus @default(not_connected) @map("postmaster_status")
+  postmasterMessage String?                @map("postmaster_message")
   createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stats     SendingDomainStat[]
 
   @@unique([workspaceId, domain])
   @@index([nextCheckAt])
   @@map("sending_domains")
+}
+
+/// A day's user-reported spam rate for a sending domain, as Postmaster Tools published it (#129):
+/// one row per domain and day, replaced when the day is read again, never deleted by the app.
+model SendingDomainStat {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  domainId    String   @map("domain_id") @db.Uuid
+  /// The day the rate is for, UTC.
+  day         DateTime @db.Date
+  /// Basis points: 35 = 0.35%.
+  spamRateBps Int      @map("spam_rate_bps")
+  fetchedAt   DateTime @default(now()) @map("fetched_at") @db.Timestamptz
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  domain    SendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, day])
+  @@map("sending_domain_stats")
+}
+
+/// The one Google account a workspace connected for Postmaster Tools (#129), through its own OAuth
+/// client: the account that verified the sending domains there. Tokens are held encrypted like a
+/// mailbox's; `reconnect_needed` when Google refused the grant. Deleted when disconnected.
+model PostmasterConnection {
+  workspaceId            String                     @id @map("workspace_id") @db.Uuid
+  /// Lower case: the Google account's address.
+  email                  String
+  status                 PostmasterConnectionStatus @default(connected)
+  grantedScopes          String[]                   @default([]) @map("granted_scopes")
+  refreshTokenCiphertext String                     @map("refresh_token_ciphertext")
+  accessTokenCiphertext  String                     @map("access_token_ciphertext")
+  accessExpiresAt        DateTime                   @map("access_expires_at") @db.Timestamptz
+  /// Why it needs reconnecting; null while it works.
+  lastError              String?                    @map("last_error")
+  connectedByMemberId    String                     @map("connected_by_member_id") @db.Uuid
+  connectedAt            DateTime                   @map("connected_at") @db.Timestamptz
+  updatedAt              DateTime                   @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectedBy WorkspaceMember @relation(fields: [connectedByMemberId], references: [id])
+
+  @@map("postmaster_connections")
 }
 
 /// A delivery failure a pool mailbox was told about (P3-2): one row per bounce report and failed address.

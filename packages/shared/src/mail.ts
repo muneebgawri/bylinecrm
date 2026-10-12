@@ -16,6 +16,16 @@ export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.reado
 export const GMAIL_SCOPES = [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE] as const;
 
 /**
+ * Postmaster Tools (P3-2b, #129, FR-CRMS-13): a workspace connects one Google account that owns
+ * its sending domains in Postmaster Tools, through the same OAuth client, so the sending-domain
+ * check can read each domain's user-reported spam rate. Its own two scopes — read-only Postmaster
+ * data, and the account's address so the pool can say whose grant it holds — and nothing of Gmail.
+ */
+export const POSTMASTER_SCOPE = 'https://www.googleapis.com/auth/postmaster.readonly';
+export const GOOGLE_EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
+export const POSTMASTER_SCOPES = [POSTMASTER_SCOPE, GOOGLE_EMAIL_SCOPE] as const;
+
+/**
  * Full mailbox access — read, write, delete and settings. The service never asks for it, and a
  * connection whose grant includes it is refused: holding it is a liability the product does not
  * need, and it is the scope Google's reviewers object to hardest.
@@ -53,7 +63,7 @@ export const MAILBOX_CONNECT_RESULTS = [
     'no_client',
     /** Google granted full mailbox access; the service refuses to hold it. */
     'scope_too_broad',
-    /** Google did not grant one of the two scopes the service needs. */
+    /** Google did not grant one of the scopes the service needs (Gmail's two, or Postmaster's). */
     'scope_missing',
     /** Google returned no refresh token, so the connection could not be kept. */
     'no_refresh_token',
@@ -68,6 +78,8 @@ export type MailboxConnectResult = (typeof MAILBOX_CONNECT_RESULTS)[number];
 
 /** The query parameter the callback's redirect carries the result in. */
 export const MAILBOX_CONNECT_RESULT_PARAM = 'connect';
+/** And the one saying what the connect was for: a mailbox purpose, or `postmaster` (#129). */
+export const MAILBOX_CONNECT_PURPOSE_PARAM = 'for';
 
 /** One step of the OAuth-client check the setup screen shows (doc 50 §E). */
 export const OAUTH_CHECK_OUTCOMES = ['pass', 'fail', 'unverified'] as const;
