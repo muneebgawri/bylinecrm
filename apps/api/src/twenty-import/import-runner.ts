@@ -39,7 +39,6 @@ import { countLinks, loadLinks, writeLink, type LinkIndex, type LinkRef, type Lo
 import {
     isSkip,
     mapCompany,
-    mapJournalist,
     mapLeadLookup,
     mapLeadView,
     mapMessageCampaign,
@@ -71,7 +70,6 @@ const DEPTH: Readonly<Record<TwentyImportObject, 0 | 1>> = {
     workspaceMembers: 0,
     companies: 0,
     people: 0,
-    journalists: 0,
     opportunities: 0,
     notes: 1,
     tasks: 1,
@@ -86,7 +84,6 @@ const DEPTH: Readonly<Record<TwentyImportObject, 0 | 1>> = {
 const CUSTOM_OBJECT: Readonly<Partial<Record<TwentyImportObject, RecordObject>>> = {
     companies: 'company',
     people: 'person',
-    journalists: 'person',
     opportunities: 'opportunity',
     leadViews: 'person',
 };
@@ -106,7 +103,6 @@ function referencesOf(object: TwentyImportObject, record: TwentyRecord): LinkRef
             add('people', raw.targetPersonId);
             add('companies', raw.targetCompanyId);
             add('opportunities', raw.targetOpportunityId);
-            add('journalists', raw.targetJournalistId);
         }
     };
     switch (object) {
@@ -136,7 +132,6 @@ function referencesOf(object: TwentyImportObject, record: TwentyRecord): LinkRef
             break;
         case 'messageListMembers':
             add('people', record.personId);
-            add('journalists', record.personId);
             add('messageLists', record.listId);
             break;
         default:
@@ -261,7 +256,7 @@ export class TwentyImportRunner {
                     since: state.since,
                 });
             } catch (error) {
-                // An object this Twenty workspace does not have (no journalists, no campaigns): nothing to read.
+                // An object this Twenty workspace does not have (no message lists, no campaigns): nothing to read.
                 if (
                     error instanceof TwentyApiError &&
                     error.permanent &&
@@ -354,8 +349,6 @@ export class TwentyImportRunner {
                 return withCustom(mapCompany(record, links));
             case 'people':
                 return withCustom(mapPerson(record, links));
-            case 'journalists':
-                return withCustom(mapJournalist(record, links));
             case 'opportunities': {
                 // The deal's stage and lost reason ride beside the input: the write places and closes it.
                 const deal = mapOpportunity(record, links, currency);
@@ -476,11 +469,10 @@ export class TwentyImportRunner {
                 return 'created';
             }
             case 'people':
-            case 'journalists':
             case 'leadViews': {
                 const lead = object === 'leadViews' ? (mapped.input as MappedLeadView) : null;
                 const input: PersonInput = { ...(lead ? lead.input : (mapped.input as PersonInput)), custom };
-                // Twenty's person is the truth about a person; a journalist or a lead only adds to one that exists.
+                // Twenty's person is the truth about a person; a lead only adds to one that exists.
                 const authoritative = object === 'people';
                 const target = existing?.localId ?? lead?.personId ?? null;
                 if (target) {
@@ -657,9 +649,9 @@ export class TwentyImportRunner {
     }
 
     /**
-     * Writes a person that exists. Twenty's person record overwrites; a journalist or a lead
-     * record only fills what is empty and adds its custom values, so a person's own fields are
-     * never replaced by a sidecar's.
+     * Writes a person that exists. Twenty's person record overwrites; a lead record only fills
+     * what is empty and adds its custom values, so a person's own fields are never replaced by a
+     * sidecar's.
      */
     private async updatePerson(
         tx: WorkspaceClient,

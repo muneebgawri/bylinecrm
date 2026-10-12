@@ -6,12 +6,16 @@
  * Why each mapping is what it is: docs/design-notes/P4-4.md.
  */
 
-/** The Twenty objects the importer reads, in the order it reads them (a later one refers to earlier ones). */
+/**
+ * The Twenty objects the importer reads, in the order it reads them (a later one refers to earlier
+ * ones). Not read, by ruling (D-252): `journalists` — journalist outreach is a different activity from
+ * customer outreach and is deferred, so Twenty keeps that data — and `leadLookupRequests`, Lead Engine's
+ * audit log, which is not CRM history.
+ */
 export const TWENTY_IMPORT_OBJECTS = [
     'workspaceMembers',
     'companies',
     'people',
-    'journalists',
     'opportunities',
     'notes',
     'tasks',
@@ -32,7 +36,6 @@ export const TWENTY_IMPORT_OBJECT_LABELS: Readonly<Record<TwentyImportObject, { 
     workspaceMembers: { label: 'Owners', lands: 'Members, matched by email' },
     companies: { label: 'Companies', lands: 'Companies' },
     people: { label: 'People', lands: 'People' },
-    journalists: { label: 'Journalists', lands: 'People (source twenty:journalist)' },
     opportunities: { label: 'Opportunities', lands: 'Deals in the default pipeline' },
     notes: { label: 'Notes', lands: 'Notes on their records' },
     tasks: { label: 'Tasks', lands: 'Tasks on their records' },

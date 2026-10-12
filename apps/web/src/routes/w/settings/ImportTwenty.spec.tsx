@@ -136,7 +136,7 @@ describe('P4-UI-2 (doc 48 §11): the importer screen', () => {
         const table = await screen.findByLabelText('Counts per object');
         expect(within(table).getByText('158,869')).toBeInTheDocument();
         expect(within(table).getByText('93,167')).toBeInTheDocument();
-        expect(within(table).getAllByText('Journalists').length).toBeGreaterThan(0);
+        expect(within(table).getAllByText('Companies').length).toBeGreaterThan(0);
     });
 
     it(

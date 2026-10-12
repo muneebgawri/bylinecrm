@@ -139,4 +139,4 @@ custom objects are Pinion's own data model (Lead Engine, BylineAI, Bigin migrati
 ### Open questions (status: question)
 
 - **PAR-095** — how a participant address is classified as a group/distribution address.
-- ~~**`journalists` fields**~~ — closed 2026-10-12: the instance now exposes the object's CRUD tool; its fields are in the table above, and P4-4 imports journalists as people.
+- ~~**`journalists` fields**~~ — closed 2026-10-12: the instance now exposes the object's CRUD tool; its fields are in the table above. P4-4 does **not** import journalists (D-252: journalist outreach is deferred; Twenty keeps the data).

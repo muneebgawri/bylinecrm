@@ -22,7 +22,6 @@ import {
     nameOf,
     phoneOf,
     phonesOf,
-    splitName,
     text,
 } from './twenty-records';
 import type { TwentyRecord } from './twenty.port';
@@ -117,34 +116,6 @@ export function mapPerson(record: TwentyRecord, links: LinkIndex): Mapped<Person
     };
 }
 
-const JOURNALIST_FIELDS = new Set(['name', 'email', 'phone', 'linkedinLink', 'xLink']);
-
-/** A journalist is a person who writes: their outlet and beat ride along as custom fields. */
-export function mapJournalist(record: TwentyRecord, links: LinkIndex): Mapped<PersonInput> | Skip {
-    void links;
-    const name = splitName(record.name);
-    const emails = emailsOf(record.email);
-    if (!name.first && !name.last && !emails.primary) return { skip: 'no name and no email' };
-    const phone = isObject(record.phone)
-        ? phoneOf(
-              record.phone.primaryPhoneNumber,
-              record.phone.primaryPhoneCountryCode,
-              record.phone.primaryPhoneCallingCode,
-          )
-        : null;
-    return {
-        input: {
-            nameFirst: name.first,
-            nameLast: name.last,
-            emails,
-            phones: { primary: phone, additional: [] },
-            links: { linkedin: linkOf(record.linkedinLink), x: linkOf(record.xLink) },
-            source: `${TWENTY_IMPORT_SOURCE}:journalist`,
-        },
-        custom: inferCustomValues(record, JOURNALIST_FIELDS),
-    };
-}
-
 const OPPORTUNITY_FIELDS = new Set([
     'name',
     'amount',
@@ -202,7 +173,6 @@ const TARGET_COLUMNS: readonly { column: string; object: TwentyImportObject; typ
     { column: 'targetPersonId', object: 'people', type: 'person' },
     { column: 'targetCompanyId', object: 'companies', type: 'company' },
     { column: 'targetOpportunityId', object: 'opportunities', type: 'opportunity' },
-    { column: 'targetJournalistId', object: 'journalists', type: 'person' },
 ];
 
 /** The records here that a note's or task's targets point at; a target on an object with no home is left out. */
@@ -347,7 +317,7 @@ export function mapMessageListMember(
     record: TwentyRecord,
     links: LinkIndex,
 ): { personId: string; listName: string } | Skip {
-    const personId = links.resolve('people', record.personId) ?? links.resolve('journalists', record.personId);
+    const personId = links.resolve('people', record.personId);
     if (!personId) return { skip: 'person not in BylineCRM' };
     const list = links.link('messageLists', record.listId);
     if (!list?.label) return { skip: 'list not in BylineCRM' };

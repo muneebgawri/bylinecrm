@@ -2,7 +2,6 @@ import { TWENTY_IMPORT_SOURCE, type TwentyImportObject } from '@bylinecrm/shared
 import { describe, expect, it } from 'vitest';
 import {
     mapCompany,
-    mapJournalist,
     mapLeadLookup,
     mapLeadView,
     mapMessageCampaign,
@@ -190,55 +189,6 @@ describe('P4-4 (doc 48 §11): a Twenty person becomes a person', () => {
     });
 });
 
-describe('P4-4 (doc 48 §11): a journalist is a person who writes', () => {
-    it('splits the name, keeps the outlet and the rest as custom values, and says where it came from', () => {
-        const mapped = mapJournalist(
-            {
-                ...base,
-                name: 'Ada Lovelace Byron',
-                outlet: 'The Times',
-                email: { primaryEmail: 'ADA@thetimes.example', additionalEmails: [] },
-                phone: {
-                    primaryPhoneNumber: '2075550199',
-                    primaryPhoneCountryCode: 'GB',
-                    primaryPhoneCallingCode: '+44',
-                },
-                linkedinLink: { primaryLinkUrl: 'https://linkedin.com/in/ada', primaryLinkLabel: '' },
-                xLink: { primaryLinkUrl: 'https://x.com/ada', primaryLinkLabel: '@ada' },
-                storyLink: { primaryLinkUrl: 'https://thetimes.example/story', primaryLinkLabel: '' },
-                niche: 'fintech',
-                isBylined: true,
-                emailConfirmations: 3,
-                emailStatus: 'valid',
-                lastCrawledAt: '2026-09-01T00:00:00.000Z',
-            },
-            links({}),
-        );
-        expect(mapped).toMatchObject({
-            input: {
-                nameFirst: 'Ada Lovelace',
-                nameLast: 'Byron',
-                emails: { primary: 'ada@thetimes.example', additional: [] },
-                phones: { primary: { number: '2075550199', countryCode: 'GB' }, additional: [] },
-                links: {
-                    linkedin: { url: 'https://linkedin.com/in/ada', label: null },
-                    x: { url: 'https://x.com/ada', label: '@ada' },
-                },
-                source: `${TWENTY_IMPORT_SOURCE}:journalist`,
-            },
-            custom: {
-                outlet: { type: 'text', value: 'The Times' },
-                story_link: { type: 'url', value: 'https://thetimes.example/story' },
-                niche: { type: 'text', value: 'fintech' },
-                is_bylined: { type: 'boolean', value: true },
-                email_confirmations: { type: 'number', value: 3 },
-                email_status: { type: 'text', value: 'valid' },
-                last_crawled_at: { type: 'datetime', value: '2026-09-01T00:00:00.000Z' },
-            },
-        });
-    });
-});
-
 describe('P4-4 (doc 48 §11): a Twenty opportunity becomes a deal', () => {
     it('maps the amount from micros to minor units, the stage by name and kind, and the references', () => {
         const mapped = mapOpportunity(
@@ -313,7 +263,6 @@ describe('P4-4 (doc 48 §11): notes and tasks land on the records they were on',
         people: { 'tp-1': PERSON },
         companies: { 'tc-1': COMPANY },
         opportunities: { 'to-1': DEAL },
-        journalists: { 'tj-1': PERSON },
         workspaceMembers: { 'tm-1': MEMBER },
     });
 
@@ -330,7 +279,6 @@ describe('P4-4 (doc 48 §11): notes and tasks land on the records they were on',
                         targetPersonId: 'tp-1',
                         targetCompanyId: null,
                         targetOpportunityId: null,
-                        targetJournalistId: null,
                         targetLeadLookupId: null,
                     },
                     {
@@ -338,15 +286,6 @@ describe('P4-4 (doc 48 §11): notes and tasks land on the records they were on',
                         targetPersonId: null,
                         targetCompanyId: 'tc-1',
                         targetOpportunityId: null,
-                        targetJournalistId: null,
-                        targetLeadLookupId: null,
-                    },
-                    {
-                        id: 'nt-3',
-                        targetPersonId: null,
-                        targetCompanyId: null,
-                        targetOpportunityId: null,
-                        targetJournalistId: 'tj-1',
                         targetLeadLookupId: null,
                     },
                     {
@@ -354,7 +293,6 @@ describe('P4-4 (doc 48 §11): notes and tasks land on the records they were on',
                         targetPersonId: null,
                         targetCompanyId: null,
                         targetOpportunityId: null,
-                        targetJournalistId: null,
                         targetLeadLookupId: 'tl-1',
                     },
                 ],

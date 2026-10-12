@@ -279,23 +279,8 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
                 companyId: c2!.id,
             },
         ]);
-        const [j1] = twenty.seed('journalists', [
-            {
-                name: 'Ada Byron',
-                outlet: 'The Times',
-                email: { primaryEmail: 'ada@thetimes.example', additionalEmails: [] },
-                phone: { primaryPhoneNumber: '', primaryPhoneCountryCode: '', primaryPhoneCallingCode: '' },
-                niche: 'fintech',
-                isBylined: true,
-                emailStatus: 'valid',
-            },
-            // The same address as a person: one person, two Twenty ids.
-            {
-                name: 'Matthew Croteau',
-                outlet: 'Robert Half blog',
-                email: { primaryEmail: 'matthew.croteau@roberthalf.com', additionalEmails: [] },
-            },
-        ]);
+        // Journalists exist in Twenty but are not read (D-252): the fake holds the object so a read of it would answer, and none happens.
+        twenty.seed('journalists', [{ name: 'Ada Byron', outlet: 'The Times' }]);
         const [o1, o2, o3] = twenty.seed('opportunities', [
             {
                 name: 'Open deal',
@@ -396,7 +381,8 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
         const [ml1] = twenty.seed('messageLists', [{ name: 'Tech press', description: 'Journalists we brief' }]);
         twenty.seed('messageListMembers', [
             { listId: ml1!.id, personId: p1!.id },
-            { listId: ml1!.id, personId: j1!.id },
+            // A member whose person is not a Twenty person (a journalist's id): no home here, skipped.
+            { listId: ml1!.id, personId: 'not-a-person' },
         ]);
         twenty.seed('messageCampaigns', [
             {
@@ -498,7 +484,6 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
                 workspaceMembers: 2,
                 companies: 2,
                 people: 3,
-                journalists: 2,
                 opportunities: 3,
                 notes: 2,
                 tasks: 1,
@@ -533,14 +518,13 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             expect(by.workspaceMembers!.errors[0]).toMatchObject({ message: expect.stringMatching(/no member/i) });
             expect(counts(by.companies!)).toEqual({ ...zero, read: 2, created: 2 });
             expect(counts(by.people!)).toEqual({ ...zero, read: 3, created: 2, merged: 1 });
-            expect(counts(by.journalists!)).toEqual({ ...zero, read: 2, created: 1, merged: 1 });
             expect(counts(by.opportunities!)).toEqual({ ...zero, read: 3, created: 3 });
             expect(counts(by.notes!)).toEqual({ ...zero, read: 2, created: 1, skipped: 1 });
             expect(counts(by.tasks!)).toEqual({ ...zero, read: 1, created: 1 });
             expect(counts(by.leadLookups!)).toEqual({ ...zero, read: 2, created: 1, skipped: 1 });
             expect(counts(by.leadViews!)).toEqual({ ...zero, read: 2, created: 1, updated: 1 });
             expect(counts(by.messageLists!)).toEqual({ ...zero, read: 1, created: 1 });
-            expect(counts(by.messageListMembers!)).toEqual({ ...zero, read: 2, updated: 2 });
+            expect(counts(by.messageListMembers!)).toEqual({ ...zero, read: 2, updated: 1, skipped: 1 });
             expect(counts(by.messageCampaigns!)).toEqual({ ...zero, read: 1, created: 1 });
             for (const r of firstRun.report) {
                 expect(r.remote, r.object).toBe(r.read);
@@ -599,9 +583,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
                 pr_link: 'https://www.newswire.ca/news-releases/robert-half',
                 email_status: 'DELIVERABLE',
             });
-            // The journalist with the same address is the same person: their outlet landed on them, nothing was duplicated.
             expect(rows.filter((p) => p.emails.primary === 'matthew.croteau@roberthalf.com')).toHaveLength(1);
-            expect(matthew.custom).toMatchObject({ outlet: 'Robert Half blog' });
 
             const dana = rows.find((p) => p.id === ids.existingPerson)!;
             expect(dana, 'the person who existed was updated, not duplicated').toMatchObject({
@@ -610,13 +592,8 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             });
             expect(rows.filter((p) => p.emails.primary === existingPersonEmail)).toHaveLength(1);
 
-            const ada = rows.find((p) => p.emails.primary === 'ada@thetimes.example')!;
-            expect(ada).toMatchObject({
-                nameFirst: 'Ada',
-                nameLast: 'Byron',
-                source: `${TWENTY_IMPORT_SOURCE}:journalist`,
-            });
-            expect(ada.custom).toMatchObject({ outlet: 'The Times', niche: 'fintech', is_bylined: true });
+            // Journalists are not imported (D-252): nobody here carries the journalist's address.
+            expect(rows.find((p) => p.emails.primary === 'ada@thetimes.example')).toBeUndefined();
             expect(rows.find((p) => p.nameFirst === 'Josh')).toMatchObject({ source: TWENTY_IMPORT_SOURCE });
         });
 
@@ -758,9 +735,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
         it('message lists: the "Lists" field on people names each list a person is on, and each list has a shared view', async () => {
             const rows = await people();
             const matthew = rows.find((p) => p.emails.primary === 'matthew.croteau@roberthalf.com')!;
-            const ada = rows.find((p) => p.emails.primary === 'ada@thetimes.example')!;
             expect(matthew.custom.lists).toEqual(['Tech press']);
-            expect(ada.custom.lists).toEqual(['Tech press']);
             const views = await as(admin).get(w('/views?object=person'));
             expect(views.status).toBe(200);
             const view = (views.body as { name: string; isShared: boolean; filter: unknown }[]).find(
@@ -789,14 +764,14 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             await settle(app);
             const events = await log.read();
             const created = events.filter((e) => e.type === 'person.created' && e.actor.kind === 'import');
-            expect(created.length).toBeGreaterThanOrEqual(4);
+            expect(created.length).toBe(3); // Matthew, Josh and the lead's Margaret; Dana existed
             expect(created.every((e) => e.actor.id === firstRun.id)).toBe(true);
             expect(events.some((e) => e.type === 'deal.won')).toBe(true);
             expect(events.some((e) => e.type === 'deal.lost')).toBe(true);
             const timeline = await owner.timelineActivity.count({
                 where: { workspaceId: workspace, kind: 'person.created' },
             });
-            expect(timeline).toBeGreaterThanOrEqual(4);
+            expect(timeline).toBeGreaterThanOrEqual(3);
         });
 
         it('the overview now shows what is mapped, and the latest run', async () => {
@@ -808,7 +783,6 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
                 workspaceMembers: 1,
                 companies: 2,
                 people: 3,
-                journalists: 2,
                 opportunities: 3,
                 notes: 1,
                 tasks: 1,
