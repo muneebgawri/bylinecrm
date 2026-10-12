@@ -21233,9 +21233,17 @@
                     "name": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "leftAt": {
+                        "nullable": true,
+                        "description": "When the member was removed (#147); null for a member in the workspace. A picker leaves a removed member out; a row they left behind still names them.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     }
                 },
-                "required": ["memberId", "name"]
+                "required": ["memberId", "name", "leftAt"]
             },
             "Role": {
                 "type": "object",
