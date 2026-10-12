@@ -9,6 +9,7 @@ import {
     type EnrolmentBatchResult,
     type EnrolmentView,
     type OutreachExclusionView,
+    type RegionPolicyChange,
     type RegionPolicyEntry,
     type SequenceView,
 } from '@bylinecrm/shared';
@@ -107,6 +108,18 @@ export const regionPolicyEntry = named(
     }),
 );
 
+export const regionPolicyChange = named(
+    'RegionPolicyChange',
+    z.object({
+        id,
+        region: z.enum(REGION_CODES),
+        allowed: z.boolean(),
+        lawfulBasis: z.string().nullable(),
+        changedBy: z.string().nullable().meta({ description: 'The member, by name; null once removed.' }),
+        changedAt: isoTime,
+    }),
+);
+
 export const outreachExclusionView = named(
     'OutreachExclusion',
     z.object({
@@ -129,5 +142,6 @@ export type _Checks = [
     Assert<Same<z.output<typeof enrolmentView>, EnrolmentView>>,
     Assert<Same<z.output<typeof enrolmentBatchResult>, EnrolmentBatchResult>>,
     Assert<Same<z.output<typeof regionPolicyEntry>, RegionPolicyEntry>>,
+    Assert<Same<z.output<typeof regionPolicyChange>, RegionPolicyChange>>,
     Assert<Same<z.output<typeof outreachExclusionView>, OutreachExclusionView>>,
 ];
