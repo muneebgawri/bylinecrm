@@ -145,7 +145,7 @@ export class SequenceRunner {
                     where: { id: e.personId },
                     select: { ownerId: true },
                 });
-                await this.tasks.createIn(
+                const task = await this.tasks.createIn(
                     tx,
                     { workspaceId, capabilities: new Set() },
                     {
@@ -155,6 +155,7 @@ export class SequenceRunner {
                         targets: [{ type: 'person', id: e.personId }],
                     },
                 );
+                await this.events.record(tx, task.event);
                 await this.announce(tx, e, 'enrolment.step_completed', { stepIndex: e.stepIndex });
                 this.enqueueAfterCommit(workspaceId, e.id, now);
                 return true;

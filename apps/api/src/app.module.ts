@@ -17,6 +17,7 @@ import { PlatformModule } from './platform/platform.module';
 import { RecordsModule } from './records/records.module';
 import { TemplatesModule } from './templates/templates.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { TwentyImportModule } from './twenty-import/twenty-import.module';
 import { ViewsModule } from './views/views.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
@@ -38,6 +39,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         SequencesModule,
         TemplatesModule,
         TimelineModule,
+        TwentyImportModule,
         ViewsModule,
         WebhooksModule,
     ],

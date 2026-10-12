@@ -79,9 +79,23 @@ export class ViewsService {
     async create(object: RecordObject, input: ViewInput & { name: string }): Promise<SavedView> {
         const context = this.current();
         if (input.isShared) this.requireShare(context);
-        const row = await this.rls.withWorkspace(async (tx) => {
-            await this.check(tx, object, input);
-            return tx.savedView.create({
+        const row = await this.rls.withWorkspace((tx) => this.createIn(tx, context, object, input));
+        return view(row);
+    }
+
+    /**
+     * The write inside a caller's transaction, checked against the object's fields like any view.
+     * Whether the caller may share is the route's decision (`create`); the Twenty importer (P4-4)
+     * makes a shared view per message list here, in the transaction that imports the list.
+     */
+    createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        object: RecordObject,
+        input: ViewInput & { name: string },
+    ): Promise<ViewRow> {
+        return this.check(tx, object, input).then(() =>
+            tx.savedView.create({
                 data: {
                     workspaceId: context.workspaceId,
                     object,
@@ -95,9 +109,8 @@ export class ViewsService {
                     groupBy: input.groupBy ?? null,
                     ...(input.position !== undefined ? { position: input.position } : {}),
                 },
-            });
-        });
-        return view(row);
+            }),
+        );
     }
 
     async update(id: string, patch: ViewInput): Promise<SavedView> {

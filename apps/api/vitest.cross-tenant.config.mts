@@ -24,6 +24,7 @@ export default defineConfig({
             MAIL_SYNC_WORKER: '0',
             MAIL_SEND_WORKER: '0',
             SEQUENCE_WORKER: '0',
+            TWENTY_IMPORT_WORKER: '0',
             TRANSACTIONAL_MAIL_RELAY: '0',
             SIGNUP_MODE: 'open',
         },

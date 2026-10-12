@@ -6,6 +6,16 @@ import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
 
+export interface ExclusionInput {
+    address?: string | null | undefined;
+    domain?: string | null | undefined;
+    reason: ExclusionReason;
+    accountManagerName?: string | null | undefined;
+    source?: string | undefined;
+    externalRef?: string | null | undefined;
+    note?: string | null | undefined;
+}
+
 export interface ExclusionHit {
     reason: ExclusionReason;
     accountManagerName: string | null;
@@ -32,33 +42,34 @@ export class ExclusionsService {
         );
     }
 
-    async add(input: {
-        address?: string | null | undefined;
-        domain?: string | null | undefined;
-        reason: ExclusionReason;
-        accountManagerName?: string | null | undefined;
-        source?: string | undefined;
-        externalRef?: string | null | undefined;
-        note?: string | null | undefined;
-    }): Promise<OutreachExclusionView> {
+    async add(input: ExclusionInput): Promise<OutreachExclusionView> {
         const workspaceId = this.context.get()!.workspaceId;
+        return view(await this.rls.withWorkspace((tx) => this.addIn(tx, workspaceId, input)));
+    }
+
+    async remove(id: string, note: string): Promise<void> {
+        const removed = await this.rls.withWorkspace((tx) => this.removeIn(tx, id, note));
+        if (!removed) throw new NotFoundException('exclusion not found');
+    }
+
+    // The writes inside a caller's transaction — the routes above and the Twenty importer (P4-4,
+    // a lead lookup is an exclusion) both run these, so an exclusion is shaped one way.
+
+    /** One live entry per address and per domain: a second is a `409` naming the field. */
+    async addIn(tx: WorkspaceClient, workspaceId: string, input: ExclusionInput): Promise<OutreachExclusion> {
         try {
-            return await this.rls.withWorkspace(async (tx) =>
-                view(
-                    await tx.outreachExclusion.create({
-                        data: {
-                            workspaceId,
-                            address: input.address ? normaliseSuppressionAddress(input.address) : null,
-                            domain: input.domain?.trim().toLowerCase() || null,
-                            reason: input.reason,
-                            accountManagerName: input.accountManagerName ?? null,
-                            source: input.source ?? 'manual',
-                            externalRef: input.externalRef ?? null,
-                            note: input.note ?? null,
-                        },
-                    }),
-                ),
-            );
+            return await tx.outreachExclusion.create({
+                data: {
+                    workspaceId,
+                    address: input.address ? normaliseSuppressionAddress(input.address) : null,
+                    domain: input.domain?.trim().toLowerCase() || null,
+                    reason: input.reason,
+                    accountManagerName: input.accountManagerName ?? null,
+                    source: input.source ?? 'manual',
+                    externalRef: input.externalRef ?? null,
+                    note: input.note ?? null,
+                },
+            });
         } catch (error) {
             if (uniqueViolation(error)) {
                 throw new UniqueConflict(
@@ -70,14 +81,13 @@ export class ExclusionsService {
         }
     }
 
-    async remove(id: string, note: string): Promise<void> {
-        const changed = await this.rls.withWorkspace((tx) =>
-            tx.outreachExclusion.updateMany({
-                where: { id, removedAt: null },
-                data: { removedAt: new Date(), removedNote: note },
-            }),
-        );
-        if (changed.count === 0) throw new NotFoundException('exclusion not found');
+    /** Ends a live entry, keeping the row; `false` when there is no live entry with that id. */
+    async removeIn(tx: WorkspaceClient, id: string, note: string): Promise<boolean> {
+        const changed = await tx.outreachExclusion.updateMany({
+            where: { id, removedAt: null },
+            data: { removedAt: new Date(), removedNote: note },
+        });
+        return changed.count > 0;
     }
 
     /** The live exclusion for each address (by the address, else its domain), read in `tx`. */

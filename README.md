@@ -50,7 +50,9 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
 - **`MAIL_SEND_WORKER`** — `1` (default) runs the send job in this process (a queued message goes out through Gmail);
   `0` on an API when a separate worker process runs it. The cross-tenant suite sets `0`.
 - **`WEBHOOK_ALLOW_PRIVATE_TARGETS`** — `0` in every deployed environment (it admits private/loopback webhook
-  targets, for local receivers only).
+  targets, for local receivers only; the Twenty importer's base URL is held to the same rule).
+- **`TWENTY_IMPORT_WORKER`** — `1` (default) drives Twenty import runs in this process (P4-4); `0` on an API when
+  a separate worker process runs them.
 
 ## Webhooks (P1-5)
 
@@ -123,6 +125,14 @@ Never pass `DATABASE_URL` as a `--shadow-database-url`: a shadow database is res
 - `/api/w/:id/attachments?target=…`: multipart upload (`file` field, ≤ `ATTACHMENT_MAX_BYTES`, allowlisted
   types), metadata, `GET …/:id/content` download; bytes live under `FILE_STORAGE_ROOT` (`.env`, git-ignored).
 - `GET /api/w/:id/members/summary`: members as pickers show them (`memberId`, `name`), readable with `record:read`.
+
+## Import from Twenty (P4-4)
+
+Settings → _Import from Twenty_ (an admin's): connect a Twenty workspace (its URL and an API key, sealed at rest),
+check it (Twenty's count per object beside what is mapped here), start a run and follow it. A run reads every object
+through Twenty's REST API a page at a time and maps each record by its Twenty id, so it can be run again: what changed
+is updated, what did not is left alone, and nothing is imported twice. What lands where, and why:
+`docs/design-notes/P4-4.md`. The API is `/api/w/:id/import/twenty` (`workspace:admin`).
 
 ## Working against the mock
 

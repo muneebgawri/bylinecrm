@@ -110,29 +110,10 @@ export class PeopleService implements BulkRecords {
 
     async create(input: PersonInput): Promise<PersonView> {
         const context = this.current();
-        const actor = actorOf(context);
         const row = await this.rls.withWorkspace(async (tx) => {
-            const ownerId = resolveOwner(context, input.ownerId, undefined);
-            await assertOwnerIsMember(tx, ownerId);
-            await assertCompanyExists(tx, input.companyId ?? null);
-            const custom = await this.customFields.validated(tx, 'person', input.custom ?? {}, 'create');
-            assertIdentifiable(input.nameFirst ?? '', input.nameLast ?? '', input.emails?.primary ?? null);
-            try {
-                const row = await tx.person.create({
-                    data: {
-                        ...compact(fields(input)),
-                        workspaceId: context.workspaceId,
-                        ownerId,
-                        createdBy: actor,
-                        custom,
-                    },
-                    include: personInclude,
-                });
-                await this.events.record(tx, event(context, 'person.created', row.id));
-                return row;
-            } catch (error) {
-                throw uniqueViolation(error) ? conflict() : error;
-            }
+            const created = await this.createIn(tx, context, input);
+            await this.events.record(tx, created.event);
+            return created.row;
         });
         return view(row);
     }
@@ -172,6 +153,33 @@ export class PeopleService implements BulkRecords {
     // (P1-4a) both run these, so one record changed by either is changed — and announced — alike.
     // The event is returned for the caller to record in the same transaction (P1-6).
     // ─────────────────────────────────────────────────────────────────────────
+
+    async createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: PersonInput,
+    ): Promise<{ row: PersonRow; event: DomainEvent }> {
+        const ownerId = resolveOwner(context, input.ownerId, undefined);
+        await assertOwnerIsMember(tx, ownerId);
+        await assertCompanyExists(tx, input.companyId ?? null);
+        const custom = await this.customFields.validated(tx, 'person', input.custom ?? {}, 'create');
+        assertIdentifiable(input.nameFirst ?? '', input.nameLast ?? '', input.emails?.primary ?? null);
+        try {
+            const row = await tx.person.create({
+                data: {
+                    ...compact(fields(input)),
+                    workspaceId: context.workspaceId,
+                    ownerId,
+                    createdBy: actorOf(context),
+                    custom,
+                },
+                include: personInclude,
+            });
+            return { row, event: event(context, 'person.created', row.id) };
+        } catch (error) {
+            throw uniqueViolation(error) ? conflict() : error;
+        }
+    }
 
     async updateIn(
         tx: WorkspaceClient,
