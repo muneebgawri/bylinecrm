@@ -817,6 +817,7 @@ enum LinkedObject {
   task
   attachment
   email
+  suppression
 
   @@map("linked_object")
 }

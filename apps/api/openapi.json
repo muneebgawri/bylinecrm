@@ -23441,7 +23441,7 @@
                         "properties": {
                             "type": {
                                 "type": "string",
-                                "enum": ["note", "task", "attachment", "email"]
+                                "enum": ["note", "task", "attachment", "email", "suppression"]
                             },
                             "id": {
                                 "type": "string",
