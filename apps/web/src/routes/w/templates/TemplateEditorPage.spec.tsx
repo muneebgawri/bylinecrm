@@ -189,7 +189,7 @@ describe('the variable node', () => {
     });
 });
 
-describe('Template editor', () => {
+describe('FR-CRMS-UI-5: template editor', () => {
     it('#76 the locked footer names the postal address’s country, the same string the sent email carries', async () => {
         const address = {
             line1: '123 Main St',

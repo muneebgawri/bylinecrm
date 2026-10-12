@@ -256,7 +256,7 @@ describe('FR-CRMS-5 sequences', () => {
         });
     });
 
-    describe('FR-CRMS-10 / -11 / -12 / FR-CRMS-7 enrolment gates', () => {
+    describe('FR-CRMS-10, FR-CRMS-11, FR-CRMS-12, FR-CRMS-7: enrolment gates', () => {
         let seq: SequenceView;
         beforeAll(async () => {
             seq = await sequence([{ kind: 'email', templateId: template }]);
