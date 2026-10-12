@@ -50,6 +50,7 @@ const enrolment = (over: Partial<SequenceEnrolmentView> = {}): SequenceEnrolment
     stopReason: null,
     stopDetail: null,
     enrolledBy: actor,
+    enrolledByMemberId: 'm-1',
     enrolledAt: '2026-10-11T10:00:00Z',
     finishedAt: null,
     stoppedAt: null,
