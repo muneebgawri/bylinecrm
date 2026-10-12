@@ -3,7 +3,7 @@ import {
     EMAIL_VERIFICATION_RESULT_LABELS,
     type EmailVerificationResult,
 } from '@bylinecrm/shared';
-import { Badge, Button, DataTableChrome, Field, Input, LoadingRegion, toast } from '@bylinecrm/ui';
+import { Badge, Button, Field, Input, LoadingRegion, toast } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import { usePutVerificationSettings, useVerificationSettings } from '../../../api/outreach';
@@ -65,25 +65,20 @@ export function Verification() {
                 its form, whether its domain has a mail server, and whether it is a throwaway mailbox or a role address.
                 Nothing connects to the recipient’s mail server, and no mail is sent to find out.
             </p>
-            <DataTableChrome
-                data={{
-                    label: 'Verification results',
-                    rows: RESULTS,
-                    getRowId: (row) => row.result,
-                    columns: [
-                        {
-                            id: 'result',
-                            header: 'Result',
-                            className: 'font-medium',
-                            cell: (row) => (
-                                <Badge status={row.tone}>{EMAIL_VERIFICATION_RESULT_LABELS[row.result]}</Badge>
-                            ),
-                        },
-                        { id: 'means', header: 'What it means', muted: true, cell: (row) => row.means },
-                        { id: 'enrolment', header: 'At enrolment', phone: 'meta', cell: (row) => row.enrolment },
-                    ],
-                }}
-            />
+            <ul aria-label="Verification results" className="m-0 grid list-none gap-3 p-0 md:grid-cols-2">
+                {RESULTS.map((row) => (
+                    <li key={row.result} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+                        <div>
+                            <Badge status={row.tone}>{EMAIL_VERIFICATION_RESULT_LABELS[row.result]}</Badge>
+                        </div>
+                        <p className="m-0 text-[13px] text-text">{row.means}</p>
+                        <p className="m-0 text-[13px] text-text-muted">
+                            <span className="font-medium text-text">At enrolment: </span>
+                            {row.enrolment}
+                        </p>
+                    </li>
+                ))}
+            </ul>
             <h3 className="mt-6 mb-2 text-[14px] font-semibold text-text">Re-verification</h3>
             {settings.data ? (
                 // A save (here or elsewhere) starts the form again from what is stored.

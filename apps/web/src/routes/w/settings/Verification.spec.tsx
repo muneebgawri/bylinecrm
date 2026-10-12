@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EmailVerificationSettingsView } from '../../../api/types';
@@ -32,10 +32,11 @@ describe('P3-5 FR-CRMS-14 Settings → Verification', { timeout: 20_000 }, () =>
         expect(age).toBeDisabled();
         expect(screen.getByText(/An admin changes/)).toBeInTheDocument();
         // The four results, each with what the enrolment check does.
-        for (const result of ['Valid', 'Invalid', 'Risky', 'Unknown']) {
-            expect(screen.getByRole('row', { name: new RegExp(`^${result}`) })).toBeInTheDocument();
-        }
-        expect(screen.getByRole('row', { name: /^Unknown/ })).toHaveTextContent(/not enrolled/i);
+        const results = screen.getByRole('list', { name: 'Verification results' });
+        const card = (label: string) => within(results).getByText(label).closest('li')!;
+        for (const result of ['Valid', 'Invalid', 'Risky', 'Unknown']) expect(card(result)).toBeInTheDocument();
+        expect(card('Unknown')).toHaveTextContent(/not enrolled/i);
+        expect(card('Invalid')).toHaveTextContent(/Refused/);
         expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     });
 
