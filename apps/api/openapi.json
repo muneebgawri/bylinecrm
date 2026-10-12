@@ -15266,6 +15266,304 @@
                 "tags": ["verification"]
             }
         },
+        "/api/w/{workspaceId}/enrichment/settings": {
+            "get": {
+                "operationId": "enrichment_getSettings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnrichmentSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["enrichment"]
+            },
+            "put": {
+                "operationId": "enrichment_putSettings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutEnrichmentSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnrichmentSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["enrichment"]
+            }
+        },
+        "/api/w/{workspaceId}/enrichment/{object}/{recordId}": {
+            "get": {
+                "operationId": "enrichment_history",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "recordId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnrichmentHistory"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["enrichment"]
+            },
+            "post": {
+                "operationId": "enrichment_enrichNow",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "recordId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnrichmentHistory"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["enrichment"]
+            }
+        },
         "/api/w/{workspaceId}/timeline": {
             "get": {
                 "operationId": "timeline_list",
@@ -19067,6 +19365,12 @@
                         "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
                         "nullable": true
                     },
+                    "logoUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri",
+                        "nullable": true
+                    },
                     "employeeCount": {
                         "type": "integer",
                         "minimum": 0,
@@ -19190,6 +19494,12 @@
                     "domain": {
                         "type": "string",
                         "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                        "nullable": true
+                    },
+                    "logoUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri",
                         "nullable": true
                     },
                     "employeeCount": {
@@ -20111,6 +20421,35 @@
                     }
                 },
                 "required": ["maxAgeDays"]
+            },
+            "PutEnrichmentSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "reaskAfterDays": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 365
+                    },
+                    "sources": {
+                        "type": "object",
+                        "properties": {
+                            "website": {
+                                "type": "boolean"
+                            },
+                            "dns": {
+                                "type": "boolean"
+                            },
+                            "gravatar": {
+                                "type": "boolean"
+                            },
+                            "email_domain": {
+                                "type": "boolean"
+                            }
+                        },
+                        "required": ["website", "dns", "gravatar", "email_domain"]
+                    }
+                },
+                "required": ["reaskAfterDays", "sources"]
             },
             "ExternalActivityDto": {
                 "type": "object",
@@ -23311,6 +23650,10 @@
                         "nullable": true,
                         "type": "string"
                     },
+                    "logoUrl": {
+                        "nullable": true,
+                        "type": "string"
+                    },
                     "employeeCount": {
                         "nullable": true,
                         "type": "integer",
@@ -23384,6 +23727,7 @@
                     "id",
                     "name",
                     "domain",
+                    "logoUrl",
                     "employeeCount",
                     "arr",
                     "address",
@@ -24958,6 +25302,155 @@
                     "note",
                     "createdAt"
                 ]
+            },
+            "EnrichmentAnswer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "field": {
+                        "type": "string",
+                        "enum": [
+                            "name",
+                            "domain",
+                            "logo_url",
+                            "linkedin_url",
+                            "x_url",
+                            "mail_provider",
+                            "avatar_url",
+                            "country"
+                        ]
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["website", "dns", "gravatar", "email_domain"]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["answered", "no_answer", "failed"]
+                    },
+                    "value": {
+                        "nullable": true,
+                        "description": "The fact; null unless answered — never an empty string.",
+                        "type": "string"
+                    },
+                    "rank": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "note": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "applied": {
+                        "type": "boolean",
+                        "description": "Whether the answer was written to the record’s field."
+                    },
+                    "askedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "object",
+                    "recordId",
+                    "field",
+                    "source",
+                    "status",
+                    "value",
+                    "rank",
+                    "note",
+                    "applied",
+                    "askedAt"
+                ]
+            },
+            "EnrichmentHistory": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "lastAskedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "pending": {
+                        "type": "boolean",
+                        "description": "A run for the record is queued or going."
+                    },
+                    "answers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/EnrichmentAnswer"
+                        },
+                        "description": "Newest first."
+                    }
+                },
+                "required": ["object", "recordId", "lastAskedAt", "pending", "answers"]
+            },
+            "EnrichmentSettings": {
+                "type": "object",
+                "properties": {
+                    "reaskAfterDays": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "sources": {
+                        "type": "object",
+                        "properties": {
+                            "website": {
+                                "type": "boolean"
+                            },
+                            "dns": {
+                                "type": "boolean"
+                            },
+                            "gravatar": {
+                                "type": "boolean"
+                            },
+                            "email_domain": {
+                                "type": "boolean"
+                            }
+                        },
+                        "required": ["website", "dns", "gravatar", "email_domain"]
+                    },
+                    "isDefault": {
+                        "type": "boolean"
+                    },
+                    "updatedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["reaskAfterDays", "sources", "isDefault", "updatedAt"]
             },
             "PlatformAccess": {
                 "type": "object",

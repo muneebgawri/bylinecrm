@@ -23,6 +23,8 @@ export type { CompanyView } from './responses';
 export interface CompanyInput {
     name?: string | undefined;
     domain?: string | null | undefined;
+    /** The company's logo, as a URL (enrichment fills it from the website, P4-2). */
+    logoUrl?: string | null | undefined;
     employeeCount?: number | null | undefined;
     arr?: MoneyInput | null | undefined;
     address?: Address | undefined;
@@ -36,6 +38,7 @@ export interface CompanyInput {
 const DIFF_FIELDS = [
     'name',
     'domain',
+    'logoUrl',
     'employeeCount',
     'arr',
     'address',
@@ -223,6 +226,7 @@ function fields(input: CompanyInput) {
     return {
         name: input.name,
         domain: input.domain,
+        logoUrl: input.logoUrl,
         employeeCount: input.employeeCount,
         address: input.address,
         links: input.links,
@@ -275,6 +279,7 @@ export function view(row: CompanyRow): CompanyView {
         id: row.id,
         name: row.name,
         domain: row.domain,
+        logoUrl: row.logoUrl,
         employeeCount: row.employeeCount,
         arr:
             row.arrMinor !== null && row.arrCurrency !== null

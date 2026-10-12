@@ -73,6 +73,11 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/outreach/region-policy/changes$`), () => data.regionPolicyChanges],
     [new RegExp(`^${W}/outreach/region-policy$`), () => data.regionPolicy],
     [new RegExp(`^${W}/outreach/verification$`), () => data.verificationSettings],
+    [new RegExp(`^${W}/enrichment/settings$`), () => data.enrichmentSettings],
+    [
+        new RegExp(`^${W}/enrichment/(person|company)/${ID}$`),
+        (m) => data.enrichmentHistory(m[1] as 'person' | 'company', m[2]!),
+    ],
     [new RegExp(`^${W}/tracking/domain$`), () => data.trackingSettings],
     [new RegExp(`^${W}/sequences/${ID}/enrolments$`), () => data.enrolments],
     [new RegExp(`^${W}/sequences/${ID}$`), (m) => byId(data.sequences, m[1])],

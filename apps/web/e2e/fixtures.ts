@@ -16,6 +16,8 @@ import type {
     RegionPolicyChangeView,
     RegionPolicyEntryView,
     EmailVerificationSettingsView,
+    EnrichmentHistoryView,
+    EnrichmentSettingsView,
     TrackingSettingsView,
     SuppressionView,
     SendingPoolView,
@@ -251,6 +253,7 @@ export const companies: CompanyView[] = [
         id: IDS.company,
         name: 'Acme Corp',
         domain: 'acme.example',
+        logoUrl: null,
         employeeCount: 240,
         arr: { amountMinor: 1_200_000_00, currency: 'USD' },
         address: { ...noAddress, city: 'Austin', country: 'US' },
@@ -266,6 +269,7 @@ export const companies: CompanyView[] = [
         id: IDS.secondCompany,
         name: 'Initech',
         domain: 'initech.example',
+        logoUrl: null,
         employeeCount: 1800,
         arr: null,
         address: noAddress,
@@ -829,6 +833,87 @@ export const regionPolicyChanges: RegionPolicyChangeView[] = [
         changedAt: at(30),
     },
 ];
+
+/** Enrichment (P4-2): every free source on but Gravatar; answers asked a day ago. */
+export const enrichmentSettings: EnrichmentSettingsView = {
+    reaskAfterDays: 90,
+    sources: { website: true, dns: true, gravatar: false, email_domain: true },
+    isDefault: false,
+    updatedAt: at(5),
+};
+
+export const enrichmentHistory = (object: 'person' | 'company', recordId: string): EnrichmentHistoryView => ({
+    object,
+    recordId,
+    lastAskedAt: at(1),
+    pending: false,
+    answers:
+        object === 'company'
+            ? [
+                  answer(
+                      recordId,
+                      object,
+                      'logo_url',
+                      'website',
+                      'answered',
+                      'https://bigpr.example/logo.png',
+                      true,
+                      2,
+                  ),
+                  answer(
+                      recordId,
+                      object,
+                      'linkedin_url',
+                      'website',
+                      'answered',
+                      'https://www.linkedin.com/company/bigpr/',
+                      true,
+                      2,
+                  ),
+                  answer(recordId, object, 'x_url', 'website', 'no_answer', null, false, 0),
+                  answer(recordId, object, 'mail_provider', 'dns', 'answered', 'google', false, 1),
+              ]
+            : [
+                  answer(recordId, object, 'country', 'email_domain', 'answered', 'GB', true, 1),
+                  answer(
+                      recordId,
+                      object,
+                      'avatar_url',
+                      'gravatar',
+                      'failed',
+                      null,
+                      false,
+                      0,
+                      'could not fetch gravatar.com: ETIMEDOUT',
+                  ),
+              ],
+});
+
+function answer(
+    recordId: string,
+    object: 'person' | 'company',
+    field: EnrichmentHistoryView['answers'][number]['field'],
+    source: EnrichmentHistoryView['answers'][number]['source'],
+    status: EnrichmentHistoryView['answers'][number]['status'],
+    value: string | null,
+    applied: boolean,
+    rank: number,
+    note: string | null = null,
+): EnrichmentHistoryView['answers'][number] {
+    return {
+        id: `${recordId}-${field}`,
+        object,
+        recordId,
+        field,
+        source,
+        status,
+        value,
+        rank,
+        note,
+        applied,
+        askedAt: at(1),
+    };
+}
 
 /** How long a verification stands (P3-5): the workspace shortened it from the 90-day default. */
 export const verificationSettings: EmailVerificationSettingsView = {

@@ -173,6 +173,11 @@ export type EmailVerificationView = Schemas['EmailVerification'];
 export type PersonVerificationView = Schemas['PersonVerification'];
 export type EmailVerificationSettingsView = Schemas['EmailVerificationSettings'];
 export type PutVerificationSettingsInput = Schemas['PutVerificationSettingsDto'];
+// ---- Enrichment (P4-2) --------------------------------------------------------------------
+export type EnrichmentAnswerView = Schemas['EnrichmentAnswer'];
+export type EnrichmentHistoryView = Schemas['EnrichmentHistory'];
+export type EnrichmentSettingsView = Schemas['EnrichmentSettings'];
+export type PutEnrichmentSettingsInput = Schemas['PutEnrichmentSettingsDto'];
 // ---- Tracking (P3-4) ---------------------------------------------------------------------------
 export type TrackingSettingsView = Schemas['TrackingSettings'];
 export type TrackingDomainView = NonNullable<TrackingSettingsView['domain']>;

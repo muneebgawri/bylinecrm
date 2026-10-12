@@ -49,6 +49,8 @@ export const paths = {
     settingsRegionPolicy: (workspaceId: string) => `/w/${workspaceId}/settings/region-policy`,
     /** Email verification (P3-5): what each result does at enrolment, and how long a result stands. */
     settingsVerification: (workspaceId: string) => `/w/${workspaceId}/settings/verification`,
+    /** Enrichment (P4-2): the free sources on or off, and how long an answer stands. */
+    settingsEnrichment: (workspaceId: string) => `/w/${workspaceId}/settings/enrichment`,
     /** Tracking (P3-4): the short-link domain, its CNAME and whether it is verified. */
     settingsTracking: (workspaceId: string) => `/w/${workspaceId}/settings/tracking`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */

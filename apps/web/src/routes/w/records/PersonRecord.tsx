@@ -9,6 +9,7 @@ import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
@@ -257,6 +258,7 @@ export function PersonRecord({
                 <RecordHeader
                     layout={layout}
                     name={personName(person)}
+                    avatarSrc={person.avatarUrl}
                     subtitle={
                         <>
                             {person.jobTitle}
@@ -310,6 +312,7 @@ export function PersonRecord({
             }
             rail={
                 <>
+                    <EnrichmentPanel workspaceId={workspaceId} object="person" recordId={person.id} />
                     <RailCard title="Company">
                         {person.companyId && companyName ? (
                             <RailRow
