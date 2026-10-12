@@ -1,5 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
+    type TwentyImportMissingView,
+    type TwentyImportObject,
     TWENTY_IMPORT_OBJECTS,
     type TwentyImportMode,
     type TwentyImportOverview,
@@ -10,11 +12,13 @@ import {
 import { ENV, type Env } from '../config/env';
 import { ApiException, StateConflict, UnknownReference } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
-import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { afterCommit } from '../infra/transaction-scope';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { assertWebhookUrl } from '../webhooks/url-guard';
+import { personName } from '../records/summaries';
+import type { Page } from '../records/list-query';
 import { countLinks } from './links';
 import { TWENTY_API_KEY_SHOWN_CHARS, TWENTY_IMPORT_RUNS_SHOWN } from './twenty-import.constants';
 import { readConnection, runView, settingsView } from './twenty-import.settings';
@@ -155,6 +159,56 @@ export class TwentyImportService {
         return runView(row);
     }
 
+    /**
+     * The records a reconcile pass flagged as missing in Twenty (#156), oldest flag first, with the
+     * local record's name for the review list. Nothing here is deleted on its own: a person decides,
+     * record by record, and the next run that sees a record in Twenty again clears its flag.
+     */
+    async missing(query: {
+        object?: TwentyImportObject | undefined;
+        limit: number;
+        cursor?: string | undefined;
+    }): Promise<Page<TwentyImportMissingView>> {
+        this.current();
+        return this.rls.withWorkspace(async (tx) => {
+            const after = query.cursor ? decodeMissingCursor(query.cursor) : null;
+            const rows = await tx.twentyImportLink.findMany({
+                where: {
+                    missingSince: { not: null },
+                    ...(query.object ? { object: query.object } : {}),
+                    ...(after
+                        ? {
+                              OR: [
+                                  { object: { gt: after.object } },
+                                  { object: after.object, externalId: { gt: after.externalId } },
+                              ],
+                          }
+                        : {}),
+                },
+                orderBy: [{ object: 'asc' }, { externalId: 'asc' }],
+                take: query.limit + 1,
+            });
+            const hasMore = rows.length > query.limit;
+            const items = hasMore ? rows.slice(0, query.limit) : rows;
+            const names = await localNames(tx, items);
+            const last = items[items.length - 1];
+            return {
+                items: items.map((row) => ({
+                    object: row.object as TwentyImportObject,
+                    externalId: row.externalId,
+                    localType: row.localType,
+                    localId: row.localId,
+                    name: names.get(`${row.localType}:${row.localId}`) ?? row.label,
+                    missingSince: row.missingSince!.toISOString(),
+                })),
+                nextCursor:
+                    hasMore && last
+                        ? Buffer.from(`${last.object}\n${last.externalId}`, 'utf8').toString('base64url')
+                        : null,
+            };
+        });
+    }
+
     runs(): Promise<TwentyImportRunView[]> {
         this.current();
         return this.rls.withWorkspace(async (tx) =>
@@ -221,4 +275,57 @@ export function twentyHttp(): TwentyApi {
 
 function notFound(): NotFoundException {
     return new NotFoundException('import run not found');
+}
+
+function decodeMissingCursor(cursor: string): { object: string; externalId: string } {
+    const [object, externalId] = Buffer.from(cursor, 'base64url').toString('utf8').split('\n');
+    if (!object || externalId === undefined) throw new ApiException(400, 'validation.failed', 'cursor is not valid');
+    return { object, externalId };
+}
+
+/** The names of the local records a page of flagged links maps to, one query per record type. */
+async function localNames(
+    tx: WorkspaceClient,
+    rows: readonly { localType: string; localId: string }[],
+): Promise<Map<string, string>> {
+    const ids = (type: string) => [...new Set(rows.filter((r) => r.localType === type).map((r) => r.localId))];
+    const names = new Map<string, string>();
+    const companies = ids('company');
+    if (companies.length) {
+        for (const c of await tx.company.findMany({
+            where: { id: { in: companies } },
+            select: { id: true, name: true },
+        }))
+            names.set(`company:${c.id}`, c.name);
+    }
+    const people = ids('person');
+    if (people.length) {
+        for (const p of await tx.person.findMany({
+            where: { id: { in: people } },
+            select: { id: true, nameFirst: true, nameLast: true, emails: true },
+        }))
+            names.set(
+                `person:${p.id}`,
+                personName(p.nameFirst, p.nameLast, (p.emails as { primary?: string | null } | null)?.primary),
+            );
+    }
+    const deals = ids('opportunity');
+    if (deals.length) {
+        for (const d of await tx.opportunity.findMany({
+            where: { id: { in: deals } },
+            select: { id: true, name: true },
+        }))
+            names.set(`opportunity:${d.id}`, d.name);
+    }
+    const notes = ids('note');
+    if (notes.length) {
+        for (const n of await tx.note.findMany({ where: { id: { in: notes } }, select: { id: true, title: true } }))
+            if (n.title) names.set(`note:${n.id}`, n.title);
+    }
+    const tasks = ids('task');
+    if (tasks.length) {
+        for (const t of await tx.task.findMany({ where: { id: { in: tasks } }, select: { id: true, title: true } }))
+            names.set(`task:${t.id}`, t.title);
+    }
+    return names;
 }

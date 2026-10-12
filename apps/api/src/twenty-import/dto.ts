@@ -1,4 +1,4 @@
-import { TWENTY_IMPORT_MODES } from '@bylinecrm/shared';
+import { LIST_LIMIT_DEFAULT, LIST_LIMIT_MAX, TWENTY_IMPORT_MODES, TWENTY_IMPORT_OBJECTS } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -10,7 +10,16 @@ export class PutTwentyImportSettingsDto extends createZodDto(
     }),
 ) {}
 
-/** `POST /import/twenty/runs` — everything, or only what Twenty changed since the last successful run. */
+/** `POST /import/twenty/runs` — everything, only what Twenty changed since the last successful run, or a reconcile pass (#156). */
 export class StartTwentyImportDto extends createZodDto(
     z.object({ mode: z.enum(TWENTY_IMPORT_MODES).default('full') }),
+) {}
+
+/** `GET /import/twenty/missing` — the records a reconcile pass flagged, one object or all, paged. */
+export class ListTwentyImportMissingDto extends createZodDto(
+    z.object({
+        object: z.enum(TWENTY_IMPORT_OBJECTS).optional(),
+        limit: z.coerce.number().int().min(1).max(LIST_LIMIT_MAX).default(LIST_LIMIT_DEFAULT),
+        cursor: z.string().optional(),
+    }),
 ) {}

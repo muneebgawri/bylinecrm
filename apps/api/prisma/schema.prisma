@@ -1848,6 +1848,8 @@ enum TwentyImportRunStatus {
 enum TwentyImportMode {
   full
   changes
+  /// #156: flags mapped records Twenty no longer returns; writes no record.
+  reconcile
 
   @@map("twenty_import_mode")
 }
@@ -1896,11 +1898,16 @@ model TwentyImportLink {
   /// Twenty's `updatedAt` when the record was last read.
   externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz
   importedAt        DateTime  @default(now()) @map("imported_at") @db.Timestamptz
+  /// When a reconcile pass (#156) last saw the record in Twenty; null until one has.
+  checkedAt         DateTime? @map("checked_at") @db.Timestamptz
+  /// Set by a reconcile pass that no longer found the record in Twenty; cleared the moment any run sees it again.
+  missingSince      DateTime? @map("missing_since") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@id([workspaceId, object, externalId])
   @@index([workspaceId, localType, localId])
+  @@index([workspaceId, missingSince])
   @@map("twenty_import_links")
 }
 

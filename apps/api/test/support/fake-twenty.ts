@@ -87,6 +87,16 @@ export class FakeTwenty {
         Object.assign(row, patch, { updatedAt });
     }
 
+    /** Deletes a record the way Twenty does: it is gone from every list (PAR-101), nothing says so. */
+    remove(objects: string, id: string): void {
+        this.update(objects, id, { deletedAt: new Date().toISOString() });
+    }
+
+    /** Puts a deleted record back. */
+    restore(objects: string, id: string): void {
+        this.update(objects, id, { deletedAt: null });
+    }
+
     all(objects: string): FakeTwentyRecord[] {
         return [...(this.tables.get(objects) ?? [])];
     }

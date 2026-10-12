@@ -10,6 +10,7 @@ import {
     TWENTY_IMPORT_OBJECTS,
     TWENTY_IMPORT_SOURCE,
     TWENTY_LIST_VIEW_PREFIX,
+    type TwentyImportMode,
     type TwentyImportObject,
     type TwentyImportObjectReport,
     type TwentyImportOverview,
@@ -140,12 +141,12 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
     });
     const zero = { read: 0, created: 0, updated: 0, unchanged: 0, merged: 0, skipped: 0, failed: 0 };
 
-    async function startRun(mode: 'full' | 'changes' = 'full'): Promise<TwentyImportRunView> {
+    async function startRun(mode: TwentyImportMode = 'full'): Promise<TwentyImportRunView> {
         const res = await as(admin).post(w('/import/twenty/runs')).send({ mode });
         expect(res.status, JSON.stringify(res.body)).toBe(202);
         return res.body as TwentyImportRunView;
     }
-    async function runToEnd(mode: 'full' | 'changes' = 'full'): Promise<TwentyImportRunView> {
+    async function runToEnd(mode: TwentyImportMode = 'full'): Promise<TwentyImportRunView> {
         const queued = await startRun(mode);
         await runner.run(queued.id);
         const res = await as(admin).get(w(`/import/twenty/runs/${queued.id}`));
@@ -847,6 +848,58 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             const again = await startRun('full');
             expect(again.status).toBe('queued');
             await runner.run(again.id);
+        });
+
+        it('#156 D-252: a reconcile run flags records Twenty no longer returns as missing in source, for review — never deletes them', async () => {
+            twenty.remove('companies', ids.c2!);
+            const link = await owner.twentyImportLink.findFirstOrThrow({
+                where: { workspaceId: workspace, object: 'companies', externalId: ids.c2! },
+            });
+            const run = await runToEnd('reconcile');
+            expect(run.status, run.error ?? '').toBe('succeeded');
+            expect(run.mode).toBe('reconcile');
+            const companies = reportOf(run, 'companies');
+            expect(companies.missingInSource).toBe(1);
+            expect(companies.read).toBe(companies.remote);
+            for (const r of run.report) if (r.object !== 'companies') expect(r.missingInSource, r.object).toBe(0);
+            // A reconcile pass writes no record: the counts of a pass that imports stay zero.
+            expect(counts(companies)).toEqual({ ...zero, read: companies.read });
+
+            // The flag is on the link, for a person to review; the record itself is untouched.
+            const listed = (await as(admin).get(w('/import/twenty/missing'))).body as {
+                items: {
+                    object: string;
+                    externalId: string;
+                    localType: string;
+                    localId: string;
+                    name: string | null;
+                    missingSince: string;
+                }[];
+                nextCursor: string | null;
+            };
+            expect(listed.items).toEqual([
+                {
+                    object: 'companies',
+                    externalId: ids.c2!,
+                    localType: 'company',
+                    localId: link.localId,
+                    name: expect.any(String),
+                    missingSince: expect.any(String),
+                },
+            ]);
+            expect((await as(admin).get(w(`/companies/${link.localId}`))).status).toBe(200);
+            expect(await owner.company.count({ where: { id: link.localId, deletedAt: null } })).toBe(1);
+
+            // Back in Twenty, the next run that sees it clears the flag.
+            twenty.restore('companies', ids.c2!);
+            const again = await runToEnd('full');
+            expect(reportOf(again, 'companies').missingInSource).toBeNull();
+            expect(((await as(admin).get(w('/import/twenty/missing'))).body as { items: unknown[] }).items).toEqual([]);
+            // Another workspace reads none of it.
+            expect(
+                ((await as(otherAdmin).get(w('/import/twenty/missing', otherWorkspace))).body as { items: unknown[] })
+                    .items,
+            ).toEqual([]);
         });
 
         it('the run list is newest first and an admin’s', async () => {

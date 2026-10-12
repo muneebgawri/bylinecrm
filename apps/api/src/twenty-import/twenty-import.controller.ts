@@ -1,15 +1,23 @@
-import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type {
+    TwentyImportMissingView,
     TwentyImportOverview,
     TwentyImportPreview,
     TwentyImportRunView,
     TwentyImportSettingsView,
 } from '@bylinecrm/shared';
+import type { Page } from '../records/list-query';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
-import { PutTwentyImportSettingsDto, StartTwentyImportDto } from './dto';
-import { twentyImportOverview, twentyImportPreview, twentyImportRun, twentyImportSettings } from './responses';
+import { ListTwentyImportMissingDto, PutTwentyImportSettingsDto, StartTwentyImportDto } from './dto';
+import {
+    twentyImportMissingPage,
+    twentyImportOverview,
+    twentyImportPreview,
+    twentyImportRun,
+    twentyImportSettings,
+} from './responses';
 import { TwentyImportService } from './twenty-import.service';
 
 /** The Twenty importer (P4-4, doc 48 §11): an admin's — it writes every object the workspace has. */
@@ -30,6 +38,14 @@ export class TwentyImportController {
     @Returns(twentyImportSettings)
     putSettings(@Body() body: PutTwentyImportSettingsDto): Promise<TwentyImportSettingsView> {
         return this.importer.putSettings(body);
+    }
+
+    /** What a reconcile pass flagged as missing in Twenty (#156), for review; nothing here is deleted on its own. */
+    @Requires('workspace:admin')
+    @Get('missing')
+    @Returns(twentyImportMissingPage)
+    missing(@Query() query: ListTwentyImportMissingDto): Promise<Page<TwentyImportMissingView>> {
+        return this.importer.missing(query);
     }
 
     @Requires('workspace:admin')

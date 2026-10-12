@@ -76,6 +76,8 @@ export async function writeLink(
         label: link.label,
         externalUpdatedAt: link.externalUpdatedAt ? new Date(link.externalUpdatedAt) : null,
         importedAt: new Date(),
+        // Seen in Twenty just now: a "missing in source" flag from an earlier reconcile pass is wrong (#156).
+        missingSince: null,
     };
     if (existing) {
         await tx.twentyImportLink.update({
@@ -93,4 +95,39 @@ export async function writeLink(
 /** How many of one Twenty object's records are mapped to something here. */
 export function countLinks(tx: WorkspaceClient, object: TwentyImportObject): Promise<number> {
     return tx.twentyImportLink.count({ where: { object } });
+}
+
+/**
+ * A reconcile pass (#156) saw these Twenty ids on a page: their links are marked checked now, and a
+ * "missing in source" flag on any of them is cleared.
+ */
+export async function markLinksSeen(
+    tx: WorkspaceClient,
+    object: TwentyImportObject,
+    externalIds: readonly string[],
+    at: Date,
+): Promise<void> {
+    if (externalIds.length === 0) return;
+    await tx.twentyImportLink.updateMany({
+        where: { object, externalId: { in: [...externalIds] } },
+        data: { checkedAt: at, missingSince: null },
+    });
+}
+
+/**
+ * The pass read every page of the object: a link it did not see — never checked, or checked before
+ * this pass started — maps a record Twenty no longer returns. Flagged, never deleted. Returns how
+ * many of the object's links are flagged now (this pass's and earlier ones' alike).
+ */
+export async function flagLinksUnseen(
+    tx: WorkspaceClient,
+    object: TwentyImportObject,
+    passStartedAt: Date,
+    at: Date,
+): Promise<number> {
+    await tx.twentyImportLink.updateMany({
+        where: { object, missingSince: null, OR: [{ checkedAt: null }, { checkedAt: { lt: passStartedAt } }] },
+        data: { missingSince: at },
+    });
+    return tx.twentyImportLink.count({ where: { object, missingSince: { not: null } } });
 }

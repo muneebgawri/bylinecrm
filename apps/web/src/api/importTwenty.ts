@@ -5,6 +5,7 @@ import { keys } from './queries';
 import type {
     PutTwentyImportSettingsInput,
     StartTwentyImportInput,
+    TwentyImportMissingPage,
     TwentyImportOverviewView,
     TwentyImportPreviewView,
     TwentyImportRunView,
@@ -34,6 +35,10 @@ export const twentyImport = {
         request<TwentyImportRunView>('GET', workspacePath(workspaceId, `/import/twenty/runs/${runId}`), { signal }),
     cancel: (workspaceId: string, runId: string) =>
         request<TwentyImportRunView>('POST', workspacePath(workspaceId, `/import/twenty/runs/${runId}/cancel`)),
+    missing: (workspaceId: string, signal?: AbortSignal) =>
+        request<TwentyImportMissingPage>('GET', workspacePath(workspaceId, '/import/twenty/missing?limit=200'), {
+            signal,
+        }),
 };
 
 const POLL_FIRST_MS = 1_000;
@@ -54,6 +59,14 @@ export const useTwentyImport = (workspaceId: string, enabled = true) =>
     useQuery({
         queryKey: keys.twentyImport(workspaceId),
         queryFn: ({ signal }) => twentyImport.overview(workspaceId, signal),
+        enabled,
+    });
+
+/** The records a reconcile pass flagged as missing in Twenty (#156): the first 200, for review. */
+export const useTwentyImportMissing = (workspaceId: string, enabled = true) =>
+    useQuery({
+        queryKey: keys.twentyImportMissing(workspaceId),
+        queryFn: ({ signal }) => twentyImport.missing(workspaceId, signal),
         enabled,
     });
 
