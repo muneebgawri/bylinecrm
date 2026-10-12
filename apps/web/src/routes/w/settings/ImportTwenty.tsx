@@ -5,7 +5,17 @@ import {
     type TwentyImportObject,
     type TwentyImportRunStatus,
 } from '@bylinecrm/shared';
-import { Badge, Button, DataTableChrome, Field, Input, SegmentedControl, Skeleton, toast } from '@bylinecrm/ui';
+import {
+    Badge,
+    Button,
+    DataTableChrome,
+    Field,
+    Input,
+    LoadingRegion,
+    SegmentedControl,
+    Skeleton,
+    toast,
+} from '@bylinecrm/ui';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fieldErrorAt } from '../../../api/client';
@@ -66,10 +76,10 @@ function AdminImporter({ workspaceId }: { workspaceId: string }) {
     if (overview.isError) throw overview.error;
     if (!overview.data) {
         return (
-            <div aria-busy="true" aria-label="Loading the importer" className="flex flex-col gap-4">
+            <LoadingRegion label="Loading the importer" className="flex flex-col gap-4">
                 <Skeleton className="h-40" />
                 <Skeleton className="h-24" />
-            </div>
+            </LoadingRegion>
         );
     }
     return (
@@ -430,7 +440,7 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                         {failureText(runs.error)}
                     </p>
                 ) : !runs.data ? (
-                    <Skeleton aria-busy="true" aria-label="Loading runs" className="h-10" />
+                    <LoadingRegion label="Loading runs" />
                 ) : runs.data.length === 0 ? (
                     <p className="m-0 text-[13px] text-text-muted">No runs yet.</p>
                 ) : (
