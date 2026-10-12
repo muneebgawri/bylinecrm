@@ -137,6 +137,17 @@ found again before the next send. The API is `/api/w/:id/outreach/verification` 
 `/api/w/:id/people/:personId/verification` (a person's result; `POST` re-runs it). Why each result is what it
 is: `docs/design-notes/P3-5.md`.
 
+## Enrichment (P4-2)
+
+A new person or company — and one whose address or domain changes — is looked up in four free sources: the
+company's website (name, logo, LinkedIn and X profiles, the domain it is served from), DNS (its mail provider),
+Gravatar (a person's picture) and the addresses themselves (a person's country, a company's domain). Every answer
+is kept with its source and the time it was asked; it is written to the record only when better than what is
+there (an empty field takes any answer; what a member typed is never replaced); no answer is kept as no answer. A
+record's _Enrichment_ card shows the answers and offers _Enrich now_; Settings → _Enrichment_ turns sources off
+and sets how long an answer stands (90 days unless set). Jobs run in a worker (`ENRICHMENT_WORKER`). The API is
+`/api/w/:id/enrichment/...`. The rule per field type: `docs/design-notes/P4-2.md`.
+
 ## Import from Twenty (P4-4)
 
 Settings → _Import from Twenty_ (an admin's): connect a Twenty workspace (its URL and an API key, sealed at rest),

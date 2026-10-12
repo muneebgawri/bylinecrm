@@ -49,6 +49,8 @@ export const paths = {
     settingsRegionPolicy: (workspaceId: string) => `/w/${workspaceId}/settings/region-policy`,
     /** Email verification (P3-5): what each result does at enrolment, and how long a result stands. */
     settingsVerification: (workspaceId: string) => `/w/${workspaceId}/settings/verification`,
+    /** Enrichment (P4-2): the free sources on or off, and how long an answer stands. */
+    settingsEnrichment: (workspaceId: string) => `/w/${workspaceId}/settings/enrichment`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
     settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */

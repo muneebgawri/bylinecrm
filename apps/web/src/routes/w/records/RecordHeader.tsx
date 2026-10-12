@@ -5,6 +5,8 @@ import { Link } from 'react-router';
 
 export interface RecordHeaderProps {
     name: string;
+    /** The person's picture or the company's logo, when one is known (enrichment fills them, P4-2). */
+    avatarSrc?: string | null | undefined;
     /** "Head of Comms · Acme Corp · dana@acme.example" */
     subtitle?: ReactNode;
     /** A status pill after the name. */
@@ -26,6 +28,7 @@ export interface RecordHeaderProps {
 /** A record's identity row: avatar initials, name, the one-line summary, status, actions. */
 export function RecordHeader({
     name,
+    avatarSrc,
     subtitle,
     status,
     actions,
@@ -88,7 +91,7 @@ export function RecordHeader({
                 </div>
             )}
             <div className="flex flex-wrap items-center gap-3.5">
-                <Avatar name={name} size={layout === 'page' ? 'lg' : 'lg'} />
+                <Avatar name={name} src={avatarSrc ?? undefined} size={layout === 'page' ? 'lg' : 'lg'} />
                 <div className="min-w-0 flex-1">
                     <h1 className="m-0 flex flex-wrap items-center gap-2.5 text-xl leading-tight font-semibold tracking-tight">
                         <span className="truncate">{name}</span>
