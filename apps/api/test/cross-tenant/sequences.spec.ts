@@ -10,6 +10,7 @@ import {
     SESSION_COOKIE,
     type EnrolmentBatchResult,
     type EnrolmentView,
+    type RegionPolicyChange,
     type RegionPolicyEntry,
     type SequenceView,
 } from '@bylinecrm/shared';
@@ -325,6 +326,32 @@ describe('FR-CRMS-5 sequences', () => {
             const eu = await person({ emails: { primary: address('eu2'), additional: [] }, country: 'FR' });
             expect(((await enrol(seq.id, [eu])).body as EnrolmentBatchResult).enrolled).toEqual([eu]);
             await as(admin).put(w('/outreach/region-policy')).send({ region: 'eu', allowed: false }).expect(200);
+        });
+
+        it('#141 FR-CRMS-12: keeps every region policy change, who made it and why; a no-op is not a change', async () => {
+            const before = await as(admin).get(w('/outreach/region-policy/changes'));
+            expect(before.status, JSON.stringify(before.body)).toBe(200);
+            const known = (before.body as RegionPolicyChange[]).length;
+            await as(admin)
+                .put(w('/outreach/region-policy'))
+                .send({ region: 'ca', allowed: true, lawfulBasis: 'Express consent captured at sign-up.' })
+                .expect(200);
+            await as(admin).put(w('/outreach/region-policy')).send({ region: 'ca', allowed: false }).expect(200);
+            // Setting a region to what it already is records nothing.
+            await as(admin).put(w('/outreach/region-policy')).send({ region: 'ca', allowed: false }).expect(200);
+            const after = (await as(admin).get(w('/outreach/region-policy/changes'))).body as RegionPolicyChange[];
+            expect(after).toHaveLength(known + 2);
+            expect(after[0]).toMatchObject({ region: 'ca', allowed: false, lawfulBasis: null });
+            expect(after[1]).toMatchObject({
+                region: 'ca',
+                allowed: true,
+                lawfulBasis: 'Express consent captured at sign-up.',
+            });
+            expect(after[0]!.changedBy).toEqual(expect.any(String));
+            // Another workspace sees none of it.
+            const theirs = (await as(otherAdmin).get(w('/outreach/region-policy/changes', otherWorkspace)))
+                .body as RegionPolicyChange[];
+            expect(theirs).toEqual([]);
         });
     });
 

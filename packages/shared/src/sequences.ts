@@ -87,6 +87,22 @@ export interface RegionPolicyEntry {
 
 export const REGION_LAWFUL_BASIS_MAX = 1000;
 
+/**
+ * One change to a region's policy (#141): what it became, the lawful basis stated, and who made it. The
+ * history is append-only; the settings page shows the newest `REGION_POLICY_CHANGES_LIMIT`.
+ */
+export interface RegionPolicyChange {
+    id: string;
+    region: RegionCode;
+    allowed: boolean;
+    lawfulBasis: string | null;
+    /** The member's name, or null when that member has since been removed. */
+    changedBy: string | null;
+    changedAt: string;
+}
+
+export const REGION_POLICY_CHANGES_LIMIT = 100;
+
 // ── Outreach exclusions (FR-CRMS-10) ─────────────────────────────────────────────────────────
 
 export const EXCLUSION_REASONS = ['customer', 'account_managed'] as const;
