@@ -2,7 +2,7 @@ import { CSRF_COOKIE, MEMBER_INVITE_PARAM, SIGNUP_INVITE_PARAM } from '@bylinecr
 import { Button, Field, Input, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { ApiError, readCookie } from '../../api/client';
+import { ApiError, fieldErrorAt, readCookie } from '../../api/client';
 import {
     useAcceptInvite,
     useAcceptInviteSignup,
@@ -63,7 +63,7 @@ function CreateAccount({ signupToken }: { signupToken: string | null }) {
     };
 
     const failure = signup.error instanceof ApiError ? signup.error : null;
-    const fieldError = (path: string) => failure?.fieldErrors.find((f) => f.path === path)?.message;
+    const fieldError = (path: string) => fieldErrorAt(failure, path);
     const general =
         failure?.code === 'signup.invitation_required'
             ? 'This invitation is not valid for that email address, or it was already used or has expired.'
@@ -238,7 +238,7 @@ function AcceptInvitation({ token }: { token: string }) {
                                 .
                             </>
                         ) : (
-                            (failure?.fieldErrors.find((f) => f.path === 'password')?.message ??
+                            (fieldErrorAt(failure, 'password') ??
                             (failure ? failure.message : signup.isError ? 'Could not reach the server.' : undefined))
                         )
                     }

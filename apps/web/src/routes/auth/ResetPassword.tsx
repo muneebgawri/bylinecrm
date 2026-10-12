@@ -2,7 +2,7 @@ import { LINK_TOKEN_PARAM } from '@bylinecrm/shared';
 import { Button, Field, Input } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { ApiError } from '../../api/client';
+import { ApiError, fieldErrorAt } from '../../api/client';
 import { useResetPassword } from '../../api/queries';
 import { paths } from '../paths';
 import { AuthLayout } from './AuthLayout';
@@ -52,7 +52,7 @@ export function ResetPassword() {
     }
 
     const passwordError =
-        failure?.fieldErrors.find((f) => f.path === 'password')?.message ??
+        fieldErrorAt(failure, 'password') ??
         (failure && failure.status !== 400 ? 'Could not save. Check your connection and try again.' : null);
 
     return (

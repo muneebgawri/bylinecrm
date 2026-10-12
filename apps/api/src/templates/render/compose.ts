@@ -1,11 +1,11 @@
 import {
+    formatPostalAddress,
     MISSING_POSTAL_ADDRESS,
     TEMPLATE_SUBJECT_TOKEN,
     UNSUBSCRIBE_LINK_LABEL,
     UNSUBSCRIBE_URL_PLACEHOLDER,
     type EmailTemplateBody,
     type MailSettings,
-    type PostalAddress,
 } from '@bylinecrm/shared';
 import { escapeHtml, missingMarker, renderBody, type VariableResolver } from './serializer';
 
@@ -38,13 +38,6 @@ export function renderSubject(subject: string, resolve: VariableResolver): { sub
         return `{{${path}}}`;
     });
     return { subject: out, missing };
-}
-
-/** One line of a postal address, as it reads at the foot of an email. */
-export function formatPostalAddress(address: PostalAddress): string {
-    return [address.line1, address.line2, address.city, address.region, address.postalCode, address.country]
-        .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
-        .join(', ');
 }
 
 function outreachFooter(settings: MailSettings): { html: string; text: string; missing: string[] } {
