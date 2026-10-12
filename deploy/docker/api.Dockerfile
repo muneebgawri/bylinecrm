@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# BylineCRM API image (P5-4a). One image serves two services in deploy/staging/docker-compose.yml:
+# BylineCRM API image (P5-4a). One image serves two services in deploy/env/docker-compose.yml:
 # `api` (the default command) and the one-shot `migrate` (app-role setup + `prisma migrate deploy`).
 #
 # Base images come from the ECR Public mirror of Docker's official library: Docker Hub's anonymous

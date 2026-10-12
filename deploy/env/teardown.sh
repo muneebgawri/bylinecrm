@@ -1,30 +1,40 @@
 #!/usr/bin/env bash
-# teardown.sh --yes [--purge-data --i-understand-this-deletes-staging-data] — remove BylineCRM staging.
+# teardown.sh <env> --yes [--purge-data --i-understand-this-deletes-<env>-data] — remove a BylineCRM
+# environment (P5-4a, P5-4c).
 #
-# Runs ON the VPS, as root. Removes, in this order:
-#   1. the edge include file /opt/newswireos-runtime/nginx-dynamic/bylinecrm-staging.conf, using the same
-#      test-and-restore pattern as install-edge.sh: the edge (newswireos-web-1) is reloaded only after
-#      `nginx -t` passes, and on failure the file is put back and the edge re-tested;
-#   2. every container of the `bylinecrm-staging` compose project, and the project's own networks;
-#   3. with --purge-data AND --i-understand-this-deletes-staging-data: /opt/bylinecrm-runtime/data
-#      (Postgres and attachment files). Secrets (*.env) and release files are kept either way.
+# Runs ON the VPS, as root. For PRODUCTION it also asks for the word `production` to be typed at the
+# terminal; no flag stands in for that. Removes, in this order:
+#   1. the environment's edge include file /opt/newswireos-runtime/nginx-dynamic/bylinecrm-<env>.conf,
+#      using the same test-and-restore pattern as install-edge.sh: the edge (newswireos-web-1) is
+#      reloaded only after `nginx -t` passes, and on failure the file is put back and the edge re-tested;
+#   2. every container of the `bylinecrm-<env>` compose project, and the project's own networks;
+#   3. with --purge-data AND --i-understand-this-deletes-<env>-data: the runtime data directory
+#      (Postgres, Valkey and attachment files). Secrets (*.env) and release files are kept either way.
 #
 # It NEVER removes the `bylinecrm-edge` docker network. That network is SHARED: NewswireOS's edge
 # container is attached to it, NewswireOS's compose declares it and NewswireOS's deploy creates it if it
-# is missing. Removing it would detach the NewswireOS edge — so this script only reports who is attached.
+# is missing, and the other BylineCRM environment uses it too. Removing it would detach them all — so
+# this script only reports who is attached.
 #
-# Refuses while either deploy lock is held (a BylineCRM deploy, or a NewswireOS deploy that may be
-# testing and reloading the same edge).
+# Refuses while either deploy lock is held (a BylineCRM deploy of this environment, or a NewswireOS
+# deploy that may be testing and reloading the same edge).
 
 set -euo pipefail
+
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib.sh
+. "$HERE/lib.sh"
+bylinecrm_env "${1:?usage: teardown.sh <staging|production> --yes [--purge-data --i-understand-this-deletes-<env>-data]}"
+shift
 
 EDGE=${EDGE_CONTAINER:-newswireos-web-1}
 DYN=${DYNAMIC_DIR:-/opt/newswireos-runtime/nginx-dynamic}
 NW_LOCK=${NEWSWIREOS_LOCK:-/opt/newswireos-runtime/deploy.lock}
-RUNTIME=${BYLINECRM_RUNTIME:-/opt/bylinecrm-runtime}
-PROJECT=${BYLINECRM_PROJECT:-bylinecrm-staging}
+RUNTIME=$BYLINECRM_RUNTIME
+PROJECT=$BYLINECRM_PROJECT
 SHARED_NETWORK=bylinecrm-edge
-TARGET="$DYN/bylinecrm-staging.conf"
+TARGET="$DYN/$BYLINECRM_EDGE_CONF"
+PURGE_FLAG="--i-understand-this-deletes-$BYLINECRM_ENV-data"
 
 log() { echo "teardown: $*" >&2; }
 
@@ -33,7 +43,7 @@ for arg in "$@"; do
     case "$arg" in
         --yes) yes=1 ;;
         --purge-data) purge=1 ;;
-        --i-understand-this-deletes-staging-data) purge_confirmed=1 ;;
+        "$PURGE_FLAG") purge_confirmed=1 ;;
         *)
             log "unknown argument: $arg"
             exit 2
@@ -42,13 +52,26 @@ for arg in "$@"; do
 done
 
 if [ "$yes" != 1 ]; then
-    log "this removes BylineCRM staging (containers, its edge include file). Re-run with --yes to proceed."
-    log "data is kept unless --purge-data --i-understand-this-deletes-staging-data is also given."
+    log "this removes BylineCRM $BYLINECRM_ENV (containers, its edge include file). Re-run with --yes to proceed."
+    log "data is kept unless --purge-data $PURGE_FLAG is also given."
     exit 2
 fi
 if [ "$purge" = 1 ] && [ "$purge_confirmed" != 1 ]; then
-    log "--purge-data deletes $RUNTIME/data for good; add --i-understand-this-deletes-staging-data to confirm."
+    log "--purge-data deletes $RUNTIME/data for good; add $PURGE_FLAG to confirm."
     exit 2
+fi
+if [ "$BYLINECRM_ENV" = production ]; then
+    # Typed, at a terminal, every time: there is no flag for this and no way to script it.
+    if [ ! -t 0 ]; then
+        log "removing PRODUCTION needs the word 'production' typed at a terminal — refusing (stdin is not a terminal)"
+        exit 2
+    fi
+    printf 'teardown: this removes PRODUCTION (%s). Type "production" to continue: ' "$BYLINECRM_PUBLIC_HOST" >&2
+    IFS= read -r typed
+    if [ "$typed" != production ]; then
+        log "not confirmed; nothing changed"
+        exit 2
+    fi
 fi
 
 for lock in "$RUNTIME/deploy.lock" "$NW_LOCK"; do
@@ -110,20 +133,21 @@ for net in $(docker network ls -q --filter "label=com.docker.compose.project=$PR
     docker network rm "$net" >/dev/null
     log "removed project network $name"
 done
+rm -f "$RUNTIME/ACTIVE_COLOUR"
 
 # 3. Data, only when explicitly confirmed twice.
 if [ "$purge" = 1 ]; then
     rm -rf "${RUNTIME:?}/data"
-    log "deleted $RUNTIME/data (Postgres and attachments)"
+    log "deleted $RUNTIME/data (Postgres, Valkey and attachments)"
 else
-    log "kept $RUNTIME/data (re-run with --purge-data --i-understand-this-deletes-staging-data to delete it)"
+    log "kept $RUNTIME/data (re-run with --purge-data $PURGE_FLAG to delete it)"
 fi
 
 # The shared network: report, never remove.
 if docker network inspect "$SHARED_NETWORK" >/dev/null 2>&1; then
     attached=$(docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$SHARED_NETWORK")
     log "kept the shared network $SHARED_NETWORK; still attached: ${attached:-none}"
-    log "it is shared with NewswireOS's edge — do not remove it"
+    log "it is shared with NewswireOS's edge and the other BylineCRM environment — do not remove it"
 else
     log "network $SHARED_NETWORK does not exist (NewswireOS's deploy recreates it when needed)"
 fi

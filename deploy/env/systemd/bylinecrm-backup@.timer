@@ -1,0 +1,12 @@
+# bylinecrm-backup@<env>.timer — nightly at 02:47 UTC, after NewswireOS's own 02:17 backup has had
+# its half hour of the disk (P5-4c). Persistent: a run missed while the box was down happens at boot.
+[Unit]
+Description=Nightly BylineCRM %i backup
+
+[Timer]
+OnCalendar=*-*-* 02:47:00 UTC
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
