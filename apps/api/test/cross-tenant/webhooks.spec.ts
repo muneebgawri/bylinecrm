@@ -25,6 +25,7 @@ import {
     WEBHOOK_MAX_ATTEMPTS,
     WEBHOOK_QUEUE,
     WEBHOOK_STUCK_DELIVERING_MS,
+    WEBHOOK_SWEEP_BATCH,
     WEBHOOK_SWEEP_GRACE_MS,
 } from '../../src/webhooks/webhooks.constants';
 import { WebhooksService } from '../../src/webhooks/webhooks.service';
@@ -544,6 +545,55 @@ describe('webhooks', () => {
             // The one job ran and was removed; the sweeps added no second job (same id), so one request.
             expect(await queue.getJob(id)).toBeUndefined();
             expect(hits(path)).toBe(1);
+        });
+
+        it('#97 finds a lost delivery behind more live-job deliveries than one page: the sweep resumes, never restarts', async () => {
+            const path = `/behind-${stamp}`;
+            const endpoint = await endpointAt(path);
+            const owner = app.get(PrismaService);
+            const queue = app.get<Queue>(getQueueToken(WEBHOOK_QUEUE));
+            const service = app.get(WebhooksService);
+            // More than a page of stranded-looking rows that do have a live (held) job, all older than the lost one.
+            const live = WEBHOOK_SWEEP_BATCH + 100;
+            const base = Date.now() - 10 * 60 * 1_000;
+            const ids = Array.from({ length: live }, () => crypto.randomUUID());
+            await owner.webhookDelivery.createMany({
+                data: ids.map((id, i) => ({
+                    id,
+                    workspaceId: workspace,
+                    endpointId: endpoint.id,
+                    eventId: crypto.randomUUID(),
+                    eventName: 'company.created',
+                    payload: { id, event: 'company.created' },
+                    createdAt: new Date(base + i),
+                })),
+            });
+            for (let i = 0; i < ids.length; i += 50) {
+                await Promise.all(
+                    ids
+                        .slice(i, i + 50)
+                        .map((id) =>
+                            service.enqueue(
+                                { deliveryId: id, workspaceId: workspace, endpointId: endpoint.id },
+                                HELD_MS,
+                            ),
+                        ),
+                );
+            }
+            const lost = await strandedRow(endpoint.id, { createdAt: new Date(base + live + 1) });
+
+            // Every candidate is eventually examined: within as many passes as the backlog needs.
+            const sweep = app.get(WebhooksSweep);
+            const passes = Math.ceil((live + 1) / WEBHOOK_SWEEP_BATCH) + 1;
+            let found = false;
+            for (let pass = 0; pass < passes && !found; pass += 1) {
+                await sweep.run(later());
+                found = (await queue.getJob(lost)) !== undefined;
+            }
+            expect(found).toBe(true);
+
+            for (const id of ids) await (await queue.getJob(id))?.remove();
+            await owner.webhookDelivery.deleteMany({ where: { id: { in: ids } } });
         });
 
         it('returns an attempt abandoned mid-flight to pending with its count kept, then delivers it', async () => {

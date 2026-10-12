@@ -55,8 +55,10 @@ export const MAIL_SEND_SWEEP_EVERY_MS = 60_000;
  */
 export const MAIL_SEND_SWEEP_GRACE_MS = 60_000;
 export const MAIL_SEND_SWEEP_HORIZON_MS = 2 * MAIL_SEND_SWEEP_EVERY_MS;
-/** Rows one sweep pass handles; the earliest first, so a backlog is worked through over passes. */
+/** Rows read per sweep query. */
 export const MAIL_SEND_SWEEP_BATCH = 200;
+/** Rows examined per sweep pass at most (#97); the next pass resumes where this one stopped. */
+export const MAIL_SEND_SWEEP_MAX_ROWS_PER_PASS = 10 * MAIL_SEND_SWEEP_BATCH;
 
 /** `GET /mail/scheduled` page size. */
 export const MAIL_SCHEDULED_LIMIT_DEFAULT = 25;
@@ -64,3 +66,6 @@ export const MAIL_SCHEDULED_LIMIT_MAX = 100;
 /** A page of a record's sends (#104, `GET /mail/messages`). */
 export const MAIL_RECORD_SENDS_LIMIT_DEFAULT = 25;
 export const MAIL_RECORD_SENDS_LIMIT_MAX = 100;
+
+/** Failure codes a retry would meet again unchanged (#134): such a send offers no Retry. */
+export const MAIL_SEND_NOT_RETRYABLE: ReadonlySet<string> = new Set(['recipient.suppressed']);

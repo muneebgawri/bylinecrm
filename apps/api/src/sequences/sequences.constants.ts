@@ -7,6 +7,8 @@ export const SEQUENCE_SWEEP_EVERY_MS = 60_000;
 /** A pass re-adds jobs for steps due before the next two passes. */
 export const SEQUENCE_SWEEP_HORIZON_MS = 2 * SEQUENCE_SWEEP_EVERY_MS;
 export const SEQUENCE_SWEEP_BATCH = 500;
+/** Rows examined per sweep pass at most, per query (#97); the next pass resumes where this one stopped. */
+export const SEQUENCE_SWEEP_MAX_ROWS_PER_PASS = 10 * SEQUENCE_SWEEP_BATCH;
 /** A step whose send has finished but whose enrolment still waits this long has missed its outcome. */
 export const SEQUENCE_OUTCOME_GRACE_MS = 2 * 60_000;
 

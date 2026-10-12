@@ -15,7 +15,7 @@ function service(
     const rls = { $queryRaw: opts.rls ?? (() => Promise.resolve(appRole)) } as unknown as RlsPrismaService;
     const redis = {
         status: 'ready',
-        connect: () => Promise.resolve(),
+        ensureReady: () => Promise.resolve(),
         ping: opts.redis ?? (() => Promise.resolve('PONG')),
     } as unknown as RedisService;
     return new HealthService(owner, rls, redis);

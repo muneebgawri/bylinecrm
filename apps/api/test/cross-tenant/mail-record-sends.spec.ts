@@ -13,6 +13,8 @@ import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.
 import { MailSendService } from '../../src/mail-send/mail-send.service';
 import { SendPolicy } from '../../src/mail-send/send-policy';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
+import { PrismaService } from '../../src/infra/prisma.service';
+import { RecipientSuppressed } from '../../src/suppression/suppression.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { verifyAddress } from '../support/mail';
@@ -41,6 +43,7 @@ interface Outbound {
     dealId: string | null;
     senderMemberId: string;
     canChange: boolean;
+    canRetry: boolean;
     createdAt: string;
     error: { code: string; message: string; fields?: string[] } | null;
 }
@@ -68,6 +71,7 @@ describe('#104 a record’s sends', () => {
     let http: () => request.Agent;
     let send: MailSendService;
     let policy: SendPolicy;
+    let owner: PrismaService;
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
 
@@ -162,6 +166,7 @@ describe('#104 a record’s sends', () => {
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         send = app.get(MailSendService);
         policy = app.get(SendPolicy);
+        owner = app.get(PrismaService);
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -432,5 +437,113 @@ describe('#104 a record’s sends', () => {
             expect(res.status, query).toBe(400);
             expect(JSON.stringify(res.body), query).toContain(field);
         }
+    });
+    // ── #134 Retry a failed send from the server ──────────────────────────────────────────────
+
+    /** A send made now whose every Gmail attempt is refused for good (a 400): failed, with its content kept. */
+    async function failedNow(subject: string, personId: string): Promise<string> {
+        gmail.failNext(adminEmail, 'send', 400);
+        const res = await as(admin)
+            .post(w('/mail/send'))
+            .send({ mailboxId: adminMailbox, personId, subject, body: body(para(t('Hello again.'))) });
+        expect(res.status, JSON.stringify(res.body)).toBe(202);
+        const id = (res.body as { messageId: string }).messageId;
+        expect(await send.deliver(workspace, id, noWait)).toBe('failed');
+        return id;
+    }
+
+    async function read(who: Browser, id: string): Promise<Outbound> {
+        const res = await as(who).get(w(`/mail/messages/${id}`));
+        expect(res.status).toBe(200);
+        return res.body as Outbound;
+    }
+
+    it('#134 a failed send made now is retried from the server: built and checked again, then sent once', async () => {
+        const id = await failedNow('Retry me now', danaId);
+        expect((await read(admin, id)).canRetry).toBe(true);
+        const sentBefore = gmail.sent.length;
+
+        const retried = await as(admin).post(w(`/mail/messages/${id}/retry`));
+        expect(retried.status, JSON.stringify(retried.body)).toBe(200);
+        expect((retried.body as Outbound).status).not.toBe('failed');
+        expect((retried.body as Outbound).error).toBeNull();
+
+        expect(await send.deliver(workspace, id, noWait)).toBe('sent');
+        expect(gmail.sent.length).toBe(sentBefore + 1);
+        expect((await read(admin, id)).status).toBe('sent');
+    });
+
+    it('#134 a scheduled send that failed at its time is retried, re-checked against the state now', async () => {
+        const id = await failed('Retry scheduled', danaId);
+        expect((await read(admin, id)).canRetry).toBe(true);
+        expect((await as(admin).post(w(`/mail/messages/${id}/retry`))).status).toBe(200);
+        // The policy still refuses: the retry fails again, with the reason as it stands now.
+        vi.spyOn(policy, 'assertSendable').mockRejectedValueOnce(
+            new ValidationFailed('still refused', [{ path: 'to', message: 'still refused' }]),
+        );
+        expect(await send.deliver(workspace, id, noWait)).toBe('failed');
+        const after = await read(admin, id);
+        expect(after.status).toBe('failed');
+        expect(after.error?.message).toContain('still refused');
+    });
+
+    it('#134 retry is idempotent: a second retry while the first is under way sends nothing more', async () => {
+        const id = await failedNow('Retry twice', danaId);
+        const sentBefore = gmail.sent.length;
+        const [one, two] = await Promise.all([
+            as(admin).post(w(`/mail/messages/${id}/retry`)),
+            as(admin).post(w(`/mail/messages/${id}/retry`)),
+        ]);
+        expect([one.status, two.status]).toEqual([200, 200]);
+        expect(await send.deliver(workspace, id, noWait)).toBe('sent');
+        expect(await send.deliver(workspace, id, noWait)).toBe('skipped');
+        expect(gmail.sent.length).toBe(sentBefore + 1);
+    });
+
+    it('#134 a send refused because a recipient is suppressed is not retryable', async () => {
+        const id = await schedule('Suppressed', danaId);
+        const view = (await as(admin).get(w(`/mail/messages/${id}`))).body as { sendAt: string };
+        const at = new Date(view.sendAt).getTime() + 1_000;
+        vi.spyOn(policy, 'assertSendable').mockRejectedValueOnce(
+            new RecipientSuppressed([{ path: 'to', message: 'unsubscribed' }]),
+        );
+        expect(await send.deliver(workspace, id, noWait, at)).toBe('failed');
+        expect((await read(admin, id)).canRetry).toBe(false);
+        const res = await as(admin).post(w(`/mail/messages/${id}/retry`));
+        expect(res.status).toBe(409);
+        expect((res.body as { code: string }).code).toBe('send.not_retryable');
+    });
+
+    it('#134 only the sender or an admin may retry; a reader gets 403, another workspace 404', async () => {
+        const id = await failedNow('Retry permissions', danaId);
+        expect((await read(member, id)).canRetry).toBe(false);
+        expect((await as(member).post(w(`/mail/messages/${id}/retry`))).status).toBe(403);
+        expect((await read(admin, id)).status).toBe('failed');
+        expect((await as(otherAdmin).post(w(`/mail/messages/${id}/retry`, otherWorkspace))).status).toBe(404);
+    });
+
+    it('#134 a send that is not failed is not retried: 409', async () => {
+        const id = await schedule('Not failed', danaId);
+        const res = await as(admin).post(w(`/mail/messages/${id}/retry`));
+        expect(res.status).toBe(409);
+    });
+
+    it('#134 what was written is kept while a send can still go, and wiped once it is sent or cancelled', async () => {
+        const kept = await failedNow('Kept until sent', danaId);
+        const stored = async (id: string) =>
+            (await owner.mailOutbound.findUniqueOrThrow({ where: { id }, select: { request: true } })).request;
+        expect(await stored(kept)).not.toBeNull();
+        await as(admin)
+            .post(w(`/mail/messages/${kept}/retry`))
+            .expect(200);
+        expect(await send.deliver(workspace, kept, noWait)).toBe('sent');
+        expect(await stored(kept)).toBeNull();
+
+        const cancelled = await schedule('Kept until cancelled', danaId);
+        expect(await stored(cancelled)).not.toBeNull();
+        await as(admin)
+            .post(w(`/mail/messages/${cancelled}/cancel`))
+            .expect(200);
+        expect(await stored(cancelled)).toBeNull();
     });
 });
