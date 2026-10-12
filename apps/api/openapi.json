@@ -19287,6 +19287,26 @@
                                         }
                                     },
                                     "required": ["kind", "waitDays"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        },
+                                        "kind": {
+                                            "type": "string",
+                                            "enum": ["task"]
+                                        },
+                                        "taskTitle": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 200
+                                        }
+                                    },
+                                    "required": ["kind", "taskTitle"]
                                 }
                             ]
                         }
@@ -23499,6 +23519,82 @@
                 },
                 "required": ["pipeline", "columns"]
             },
+            "Group": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "description": "The field's value for this group; `null` groups the unset rows."
+                    },
+                    "count": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "sum": {
+                        "description": "The object's money field summed in minor units; absent for people.",
+                        "type": "object",
+                        "properties": {
+                            "amountMinor": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "field": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["amountMinor", "field"]
+                    }
+                },
+                "required": ["value", "count"]
+            },
+            "SearchHit": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "subtitle": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["object", "id", "title", "subtitle"]
+            },
+            "SearchResults": {
+                "type": "object",
+                "properties": {
+                    "person": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    },
+                    "company": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    },
+                    "opportunity": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    }
+                },
+                "required": ["person", "company", "opportunity"]
+            },
             "SequenceStep": {
                 "type": "object",
                 "properties": {
@@ -23515,7 +23611,7 @@
                     },
                     "kind": {
                         "type": "string",
-                        "enum": ["email", "wait"]
+                        "enum": ["email", "wait", "task"]
                     },
                     "templateId": {
                         "nullable": true,
@@ -23537,9 +23633,23 @@
                     },
                     "businessDays": {
                         "type": "boolean"
+                    },
+                    "taskTitle": {
+                        "nullable": true,
+                        "description": "`task` steps: a task on the person for their owner (else the enroller), due when the step runs.",
+                        "type": "string"
                     }
                 },
-                "required": ["id", "position", "kind", "templateId", "replyInThread", "waitDays", "businessDays"]
+                "required": [
+                    "id",
+                    "position",
+                    "kind",
+                    "templateId",
+                    "replyInThread",
+                    "waitDays",
+                    "businessDays",
+                    "taskTitle"
+                ]
             },
             "Sequence": {
                 "type": "object",
@@ -24077,82 +24187,6 @@
                     }
                 },
                 "required": ["workspace", "invite"]
-            },
-            "Group": {
-                "type": "object",
-                "properties": {
-                    "value": {
-                        "description": "The field's value for this group; `null` groups the unset rows."
-                    },
-                    "count": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "sum": {
-                        "description": "The object's money field summed in minor units; absent for people.",
-                        "type": "object",
-                        "properties": {
-                            "amountMinor": {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                            },
-                            "field": {
-                                "type": "string"
-                            }
-                        },
-                        "required": ["amountMinor", "field"]
-                    }
-                },
-                "required": ["value", "count"]
-            },
-            "SearchHit": {
-                "type": "object",
-                "properties": {
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "subtitle": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["object", "id", "title", "subtitle"]
-            },
-            "SearchResults": {
-                "type": "object",
-                "properties": {
-                    "person": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    },
-                    "company": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    },
-                    "opportunity": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    }
-                },
-                "required": ["person", "company", "opportunity"]
             },
             "TimelineActor": {
                 "anyOf": [
