@@ -36,6 +36,7 @@ import { RolesService } from '../workspace/roles.service';
 import {
     MAIL_CRM_ID_HEADER,
     MAIL_SEND_DEDUPE_MAX_CANDIDATES,
+    MAIL_SEND_NOT_RETRYABLE,
     MAIL_SEND_DEDUPE_SKEW_MS,
     MAIL_SEND_EARLY_TOLERANCE_MS,
     MAIL_SEND_QUEUE,
@@ -227,7 +228,11 @@ export class MailSendService {
                               senderTimeZone: input.timeZone ?? null,
                               request: storedRequest(input) as unknown as Prisma.InputJsonValue,
                           }
-                        : { mime: prepared.mime }),
+                        : {
+                              mime: prepared.mime,
+                              // Kept until the send is final (#134): a failed send is retried from it.
+                              request: storedRequest(input) as unknown as Prisma.InputJsonValue,
+                          }),
                 },
             });
             if (sendAt) await this.announce(tx, 'email.scheduled', context, created.id);
@@ -515,7 +520,7 @@ export class MailSendService {
     async cancelForSequence(tx: WorkspaceClient, workspaceId: string, id: string): Promise<void> {
         const result = await tx.mailOutbound.updateMany({
             where: { id, status: 'scheduled' },
-            data: { status: 'cancelled', cancelledAt: new Date() },
+            data: { status: 'cancelled', cancelledAt: new Date(), request: Prisma.DbNull },
         });
         if (result.count === 0) return;
         await this.events.record(tx, {
@@ -598,7 +603,7 @@ export class MailSendService {
         const changed = await this.rls.withWorkspace(async (tx) => {
             const result = await tx.mailOutbound.updateMany({
                 where: { id, status: 'scheduled' },
-                data: { status: 'cancelled', cancelledAt: new Date() },
+                data: { status: 'cancelled', cancelledAt: new Date(), request: Prisma.DbNull },
             });
             if (result.count > 0) await this.announce(tx, 'email.cancelled', context, id);
             return result;
@@ -609,6 +614,45 @@ export class MailSendService {
             throw notScheduled(now.status);
         }
         await this.dropJob(id);
+        return view(await this.changeableSend(id), null, this.current());
+    }
+
+    /**
+     * Sends a failed send again (#134) — its sender or an admin. Nothing of the failed attempt is
+     * reused: the send goes back through the one path a scheduled send takes at its time
+     * (`activate`), so it is built and every check runs again as the sender, the mailbox, the
+     * person and the suppression list stand now. Idempotent: the move from `failed` is one
+     * conditional update, so a second retry while one is under way changes nothing and answers with
+     * where the send stands. A send whose refusal will not change (`recipient.suppressed`), a
+     * sequence's send (its enrolment decides, P3-3), or one whose content is no longer kept, is not
+     * retried (`409 send.not_retryable`).
+     */
+    async retry(id: string): Promise<MailOutboundView> {
+        const row = await this.changeableSend(id);
+        if (row.status !== 'failed') {
+            // A retry already under way (a double click): where it stands, nothing changed.
+            if (['scheduled', 'queued', 'sending'].includes(row.status) && row.retriedAt !== null) {
+                return view(row, null, this.current());
+            }
+            throw new StateConflict(`this send is ${row.status}; only a failed send can be retried`, {
+                status: row.status,
+            });
+        }
+        const refusal = retryRefusal(row);
+        if (refusal) throw new ApiException(409, 'send.not_retryable', refusal);
+        const changed = await this.rls.withWorkspace((tx) =>
+            tx.mailOutbound.updateMany({
+                where: { id, status: 'failed' },
+                data: {
+                    status: 'scheduled',
+                    sendAt: new Date(),
+                    retriedAt: new Date(),
+                    mime: null,
+                    lastError: Prisma.DbNull,
+                },
+            }),
+        );
+        if (changed.count === 1) await this.setJob(row.workspaceId, id, new Date());
         return view(await this.changeableSend(id), null, this.current());
     }
 
@@ -704,7 +748,7 @@ export class MailSendService {
             sent = await this.sync.gmailRequest(mailbox, GMAIL_UNITS.send, retry, async (token) => {
                 attempt += 1;
                 // An attempt that may have reached Gmail is looked for before anything is sent again.
-                if (attempt > 1 || startedBefore) {
+                if (attempt > 1 || startedBefore || row.attempts > 0) {
                     const found = await this.findSent(token, mailbox.id, row);
                     if (found) return { message: found, found: true };
                 }
@@ -745,6 +789,7 @@ export class MailSendService {
                     providerThreadId: sent.message.threadId,
                     sentAt: new Date(),
                     lastError: Prisma.DbNull,
+                    request: Prisma.DbNull,
                 },
             }),
         );
@@ -1103,6 +1148,17 @@ function addressesOf(prepared: Prepared): { toAddresses: string[]; ccAddresses: 
     };
 }
 
+/** Why a failed send cannot be retried (#134), or `null` when it can. */
+function retryRefusal(row: OutboundRow): string | null {
+    if (row.sequenceEnrolmentId !== null) return "a sequence's send is retried by its enrolment, not by hand";
+    if (row.request === null) return 'what was written is no longer kept; write it again';
+    const code = (row.lastError as SendErrorRecord | null)?.code;
+    if (code !== undefined && MAIL_SEND_NOT_RETRYABLE.has(code)) {
+        return 'a recipient is on the suppression list; sending again would be refused the same way';
+    }
+    return null;
+}
+
 function notScheduled(status: string): StateConflict {
     return new StateConflict(`this send is ${status}; only a scheduled send can be moved or cancelled`, { status });
 }
@@ -1237,6 +1293,7 @@ function view(row: OutboundRow, threadId: string | null, caller: SendAccessCalle
         replyToMessageId: row.replyToMessageId,
         senderMemberId: row.senderMemberId,
         canChange: canChangeSend(caller, row),
+        canRetry: row.status === 'failed' && canChangeSend(caller, row) && retryRefusal(row) === null,
         rfc822MessageId: row.rfc822MessageId,
         mailMessageId: row.mailMessageId,
         threadId,

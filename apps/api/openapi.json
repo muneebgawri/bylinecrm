@@ -4033,6 +4033,79 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/mail/messages/{messageId}/retry": {
+            "post": {
+                "operationId": "mailSend_retry",
+                "parameters": [
+                    {
+                        "name": "messageId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailOutbound"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mail/messages/{messageId}/cancel": {
             "post": {
                 "operationId": "mailSend_cancel",
@@ -19559,6 +19632,7 @@
                             "mailbox.paused",
                             "mailbox.domain_unverified",
                             "mailbox.cap_reached",
+                            "send.not_retryable",
                             "rate_limited",
                             "bad_request",
                             "not_implemented",
@@ -21455,6 +21529,10 @@
                         "type": "boolean",
                         "description": "Whether the caller may reschedule or cancel it: its sender or an admin (#133)."
                     },
+                    "canRetry": {
+                        "type": "boolean",
+                        "description": "Whether the caller may send this failed send again (#134): its sender or an admin, and a refusal that would not simply repeat."
+                    },
                     "rfc822MessageId": {
                         "type": "string",
                         "description": "Our Message-ID, without angle brackets."
@@ -21561,6 +21639,7 @@
                     "replyToMessageId",
                     "senderMemberId",
                     "canChange",
+                    "canRetry",
                     "rfc822MessageId",
                     "mailMessageId",
                     "threadId",
