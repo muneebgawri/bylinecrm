@@ -9,6 +9,19 @@ const ITEMS: CardListItem[] = [
 ];
 
 describe('CardList', () => {
+    it('#82 draws the secondary line’s separators with CSS, so a wrapped line never starts with “·”', () => {
+        render(
+            <CardList
+                items={[{ id: 'm', primary: 'dana@acme.example', secondary: ['Connected', 'Personal', 'You'] }]}
+            />,
+        );
+        const line = screen.getByText('Personal').closest('[data-card-secondary]');
+        expect(line).not.toBeNull();
+        // No separator is a text node: the parts read as themselves, and the dot is a pseudo-element
+        // the line's clip hides at the start of every line.
+        expect(line!.textContent).toBe('ConnectedPersonalYou');
+    });
+
     it('opens a card on tap, and is not a button when nothing opens', async () => {
         const user = userEvent.setup();
         const onOpen = vi.fn();
