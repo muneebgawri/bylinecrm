@@ -16,9 +16,11 @@ import { ACTOR_KINDS, RECORD_OBJECTS, type Actor, type RecordObject } from './re
 /**
  * The things that attach to a record and leave `linked-…` entries on it. Synced mail (P2-2) is one:
  * a message is on every record it concerns, so `email.received` leaves `linked-email.received` on
- * each (doc 50 §A: mail is a timeline entry, one list).
+ * each (doc 50 §A: mail is a timeline entry, one list). A suppression entry (P3-1) is another: an
+ * address of a person put on or lifted from the list leaves `linked-suppression.added|removed` on
+ * that person, with the reason and the note (#114).
  */
-export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email'] as const;
+export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email', 'suppression'] as const;
 export type LinkedObject = (typeof LINKED_OBJECTS)[number];
 
 export function isLinkedObject(value: unknown): value is LinkedObject {

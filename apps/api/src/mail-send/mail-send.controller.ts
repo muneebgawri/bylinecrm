@@ -76,6 +76,19 @@ export class MailSendController {
         return this.send.reschedule(messageId, body);
     }
 
+    /**
+     * Sends a failed send again (#134) — its sender or an admin: rebuilt and checked as things stand
+     * now, through the same path as a scheduled send at its time. Idempotent while the retry is
+     * under way; `409` for a send that is not failed or whose refusal would repeat.
+     */
+    @Requires('email:send')
+    @HttpCode(200)
+    @Post('messages/:messageId/retry')
+    @Returns(mailOutboundView)
+    retry(@Param('messageId', ParseUUIDPipe) messageId: string): Promise<MailOutboundView> {
+        return this.send.retry(messageId);
+    }
+
     /** Calls a scheduled send off — its sender or an admin; idempotent; `409` once it has started. */
     @Requires('email:send')
     @HttpCode(200)

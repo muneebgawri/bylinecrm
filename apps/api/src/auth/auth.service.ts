@@ -7,7 +7,13 @@ import {
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { invitationUrl, MEMBER_DEFAULT_CAPABILITIES, SYSTEM_ROLES } from '@bylinecrm/shared';
+import {
+    invitationUrl,
+    mailedLinkUrl,
+    MEMBER_DEFAULT_CAPABILITIES,
+    RESET_PASSWORD_PAGE,
+    SYSTEM_ROLES,
+} from '@bylinecrm/shared';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
@@ -426,31 +432,44 @@ async function spendSignupInvite(tx: OwnerTx, token: string, email: string): Pro
 }
 
 /**
- * The operator's bootstrap for a platform admin's address (P0-14), run on the server by
- * `cli/platform-verify-email`: marks the account's address verified, which today nothing else
- * does for a password account that was not created from an invitation. It refuses an address
- * that is not in `PLATFORM_ADMIN_EMAILS`, so it cannot be used to verify anyone else, and records
- * the act (actor `null`: an operator command, not a signed-in person). The email-verification
- * card replaces it with a mailed link.
+ * The operator's command for a platform admin (P0-14, #101): `node dist/cli/platform-bootstrap-admin.js
+ * <email>`, run on the server. Only an address in `PLATFORM_ADMIN_EMAILS`.
+ *
+ * - **Account present:** marks its address verified (once; audited `platform.admin_email_verified`).
+ * - **Account absent** (a fresh server, sign-up closed): creates it with no password and a verified
+ *   address, and issues a single-use set-password link — #93's `password_reset` link and page, the
+ *   one mechanism for setting a password from a link — returned for the operator's terminal. No
+ *   password is ever printed. Audited `platform.admin_bootstrapped` and `platform.admin_email_verified`;
+ *   the link is never in the audit subject.
  */
-export async function verifyPlatformAdminEmail(
+export async function bootstrapPlatformAdmin(
     owner: PrismaClient,
-    env: Pick<Env, 'PLATFORM_ADMIN_EMAILS'>,
+    env: Pick<Env, 'PLATFORM_ADMIN_EMAILS' | 'WEB_URL'>,
     rawEmail: string,
-): Promise<{ email: string; alreadyVerified: boolean }> {
+    links: OneTimeTokenService = new OneTimeTokenService(),
+): Promise<{ email: string; created: boolean; alreadyVerified: boolean; setPasswordUrl: string | null }> {
     const email = normaliseEmail(rawEmail);
     if (!env.PLATFORM_ADMIN_EMAILS.includes(email)) {
-        throw new Error(
-            `${email} is not in PLATFORM_ADMIN_EMAILS; only a platform admin's address is verified this way`,
-        );
+        throw new Error(`${email} is not in PLATFORM_ADMIN_EMAILS; only a platform admin's address is set up this way`);
     }
     return owner.$transaction(async (tx) => {
-        const user = await tx.user.findUnique({ where: { email } });
-        if (!user) throw new Error(`no account for ${email}; sign up (or accept an invitation) first`);
-        if (user.emailVerifiedAt) return { email, alreadyVerified: true };
-        await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+        const existing = await tx.user.findUnique({ where: { email } });
+        if (existing) {
+            if (existing.emailVerifiedAt) return { email, created: false, alreadyVerified: true, setPasswordUrl: null };
+            await tx.user.update({ where: { id: existing.id }, data: { emailVerifiedAt: new Date() } });
+            await recordPlatformAction(tx, 'platform.admin_email_verified', null, { email });
+            return { email, created: false, alreadyVerified: false, setPasswordUrl: null };
+        }
+        const user = await tx.user.create({ data: { email, emailVerifiedAt: new Date() } });
+        await recordPlatformAction(tx, 'platform.admin_bootstrapped', null, { email });
         await recordPlatformAction(tx, 'platform.admin_email_verified', null, { email });
-        return { email, alreadyVerified: false };
+        const link = await links.issue(tx, 'password_reset', user.id, email);
+        return {
+            email,
+            created: true,
+            alreadyVerified: false,
+            setPasswordUrl: mailedLinkUrl(env.WEB_URL, RESET_PASSWORD_PAGE, link.token),
+        };
     });
 }
 

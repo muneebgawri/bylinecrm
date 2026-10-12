@@ -817,6 +817,7 @@ enum LinkedObject {
   task
   attachment
   email
+  suppression
 
   @@map("linked_object")
 }
@@ -1146,6 +1147,8 @@ model MailOutbound {
   /// `sendAt`, as its sender's role and the person stand then.
   request                 Json?
   cancelledAt             DateTime?          @map("cancelled_at") @db.Timestamptz
+  /// When a failed send was last sent again by hand (#134); null if never.
+  retriedAt               DateTime?          @map("retried_at") @db.Timestamptz
   providerMessageId       String?            @map("provider_message_id")
   providerThreadId        String?            @map("provider_thread_id")
   /// Gmail's own Message-ID for the sent message, once known (from the stored copy). Not ours: Gmail
