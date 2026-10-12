@@ -117,8 +117,8 @@ export const DOMAIN_EVENT_TYPES = [
     'mailbox.paused',
     'mailbox.resumed',
     // An address put on, or lifted from, the workspace's suppression list (P3-1); `recordId` is the
-    // entry, `suppression` what it says, `related` the person the address belongs to when known. Not
-    // a record: the timeline writes nothing for these, webhooks deliver them.
+    // entry, `suppression` what it says, `related` and `targets` the person the address belongs to
+    // when known — the timeline writes a `linked-suppression.*` entry on that person (#114).
     'suppression.added',
     'suppression.removed',
     // Sequences (P3-3, FR-CRMS-5): `recordId` is the sequence; `sequence.updated` carries the diff
