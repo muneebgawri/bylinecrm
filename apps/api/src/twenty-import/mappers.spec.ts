@@ -43,7 +43,7 @@ describe('P4-4 (doc 48 §11): a Twenty company becomes a company', () => {
             },
             links({}),
         );
-        expect(mapped.input.domain).toBeNull();
+        expect(mapped).toMatchObject({ input: { domain: null } });
     });
 
     it('maps the standard fields, the owner through the member link, and the rest as custom values', () => {
