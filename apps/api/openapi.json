@@ -23016,6 +23016,13 @@
                     "enrolledBy": {
                         "$ref": "#/components/schemas/Actor"
                     },
+                    "enrolledByMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The member who enrolled the person: the sender of each step's send (#144)."
+                    },
                     "countryUnknownAtEnrol": {
                         "type": "boolean",
                         "description": "No country was known at enrolment (D-251); the region policy applies once one is."
@@ -23051,6 +23058,7 @@
                     "stopReason",
                     "stopDetail",
                     "enrolledBy",
+                    "enrolledByMemberId",
                     "countryUnknownAtEnrol",
                     "enrolledAt",
                     "finishedAt",

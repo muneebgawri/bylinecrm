@@ -237,6 +237,7 @@ model WorkspaceMember {
   @@index([userId])
   @@index([roleId])
   @@map("workspace_members")
+  sequenceEnrolments SequenceEnrolment[] @relation("EnrolmentEnroller")
 }
 
 /// A named set of capabilities in a workspace. The two system roles (`admin`, `member`) exist from
@@ -1748,6 +1749,9 @@ model SequenceEnrolment {
   /// No country was known at enrolment (D-251): enrolled and flagged; stopped if one later falls in a
   /// blocked region.
   countryUnknownAtEnrol Boolean           @default(false) @map("country_unknown_at_enrol")
+  /// The member who enrolled the person (#144): the sender of every step's send — the pool mailbox
+  /// only carries it. An API key's enrolment is its creator's.
+  enrolledByMemberId String              @map("enrolled_by_member_id") @db.Uuid
   enrolledAt        DateTime             @default(now()) @map("enrolled_at") @db.Timestamptz
   finishedAt        DateTime?            @map("finished_at") @db.Timestamptz
   stoppedAt         DateTime?            @map("stopped_at") @db.Timestamptz
@@ -1758,6 +1762,7 @@ model SequenceEnrolment {
   sequence    Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
   person      Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
   deal        Opportunity?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  enrolledByMember WorkspaceMember @relation("EnrolmentEnroller", fields: [enrolledByMemberId], references: [id])
   waitingSend MailOutbound?  @relation("EnrolmentWaitingSend", fields: [waitingOutboundId], references: [id], onDelete: SetNull)
   sends       MailOutbound[] @relation("EnrolmentSends")
 

@@ -239,6 +239,8 @@ export interface EnrolmentView {
     enrolledBy: Actor;
     /** No country was known when they were enrolled (D-251); the region policy applies once one is. */
     countryUnknownAtEnrol: boolean;
+    /** The member who enrolled the person: the sender of each step's send (#144). */
+    enrolledByMemberId: string;
     enrolledAt: string;
     finishedAt: string | null;
     stoppedAt: string | null;

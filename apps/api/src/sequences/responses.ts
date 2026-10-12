@@ -76,6 +76,9 @@ export const enrolmentView = named(
         stopReason: z.enum(ENROLMENT_STOP_REASONS).nullable(),
         stopDetail: z.string().nullable(),
         enrolledBy: actor,
+        enrolledByMemberId: id.meta({
+            description: "The member who enrolled the person: the sender of each step's send (#144).",
+        }),
         countryUnknownAtEnrol: z.boolean().meta({
             description: 'No country was known at enrolment (D-251); the region policy applies once one is.',
         }),
