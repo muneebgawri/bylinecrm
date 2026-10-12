@@ -1,5 +1,6 @@
 import {
     Button,
+    cn,
     Dialog,
     DialogBody,
     DialogContent,
@@ -8,10 +9,10 @@ import {
     DialogTitle,
     EmptyState,
     Field,
-    Input,
-    Skeleton,
-    cn,
     focusRing,
+    Input,
+    LoadingRegion,
+    Skeleton,
 } from '@bylinecrm/ui';
 import { ChevronRight, Plus, ServerCog } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
@@ -33,10 +34,10 @@ export function Workspaces() {
     if (workspaces.isPending || access.isPending) {
         return (
             <Frame>
-                <div className="grid gap-2" role="status" aria-label="Loading your workspaces">
+                <LoadingRegion label="Loading your workspaces" className="grid gap-2">
                     <Skeleton className="h-14" />
                     <Skeleton className="h-14" />
-                </div>
+                </LoadingRegion>
             </Frame>
         );
     }

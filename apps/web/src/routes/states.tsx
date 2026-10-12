@@ -1,4 +1,4 @@
-import { Button, EmptyState, Skeleton } from '@bylinecrm/ui';
+import { Button, EmptyState, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { isRouteErrorResponse, Link, useNavigate, useRouteError } from 'react-router';
 import { ApiError } from '../api/client';
 import { LogoMark } from '../shell/LogoMark';
@@ -7,7 +7,7 @@ import { paths } from './paths';
 /** What a route shows while its data loads: the page's shape, no layout shift (FR-CRMS-UI-7). */
 export function RouteSkeleton() {
     return (
-        <div className="p-7" role="status" aria-busy="true" aria-label="Loading">
+        <LoadingRegion label="Loading" className="p-7">
             <Skeleton className="mb-2 h-7 w-56" />
             <Skeleton className="mb-6 h-4 w-96" />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
@@ -17,7 +17,7 @@ export function RouteSkeleton() {
                 <Skeleton className="h-24" />
             </div>
             <Skeleton className="mt-4 h-80" />
-        </div>
+        </LoadingRegion>
     );
 }
 
@@ -27,13 +27,8 @@ export function RouteSkeleton() {
  */
 export function AuthSkeleton() {
     return (
-        <main
-            className="grid min-h-dvh place-items-center bg-background px-4 py-10 text-text"
-            role="status"
-            aria-busy="true"
-            aria-label="Loading"
-        >
-            <div className="w-full max-w-100">
+        <main className="grid min-h-dvh place-items-center bg-background px-4 py-10 text-text">
+            <LoadingRegion label="Loading" className="w-full max-w-100">
                 <div className="mb-6 flex flex-col items-center gap-3">
                     <LogoMark size="lg" />
                     <Skeleton className="h-7 w-48" />
@@ -45,7 +40,7 @@ export function AuthSkeleton() {
                     <Skeleton className="mb-6 h-10" />
                     <Skeleton className="h-10" />
                 </div>
-            </div>
+            </LoadingRegion>
         </main>
     );
 }

@@ -1,4 +1,4 @@
-import { Button, Skeleton } from '@bylinecrm/ui';
+import { Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { EyeOff, Paperclip, Reply } from 'lucide-react';
 import { useState } from 'react';
 import { useMailThread } from '../../../api/mail';
@@ -25,15 +25,10 @@ export function ThreadView({ workspaceId, threadId }: { workspaceId: string; thr
 
     if (thread.isPending) {
         return (
-            <div
-                className="flex flex-col gap-3 px-5.5 py-5"
-                role="status"
-                aria-busy="true"
-                aria-label="Loading the thread"
-            >
+            <LoadingRegion label="Loading the thread" className="flex flex-col gap-3 px-5.5 py-5">
                 <Skeleton className="h-6 w-2/3" />
                 <Skeleton className="h-40" />
-            </div>
+            </LoadingRegion>
         );
     }
     if (thread.isError) {
