@@ -70,6 +70,8 @@ model Workspace {
   regionPolicyChanges       RegionPolicyChange[]
   emailVerifications        EmailVerification[]
   emailVerificationSettings EmailVerificationSettings?
+  enrichmentAnswers         EnrichmentAnswer[]
+  enrichmentSettings        EnrichmentSettings?
   outreachExclusions        OutreachExclusion[]
   sequences                 Sequence[]
   sequenceSteps             SequenceStep[]
@@ -241,6 +243,7 @@ model WorkspaceMember {
   updatedRegionPolicies            RegionPolicy[]
   regionPolicyChanges              RegionPolicyChange[]
   updatedEmailVerificationSettings EmailVerificationSettings[]
+  updatedEnrichmentSettings        EnrichmentSettings[]
 
   configuredTwentyImports TwentyImportSettings[]
   startedTwentyImports    TwentyImportRun[]
@@ -381,6 +384,8 @@ model Company {
   workspaceId   String                   @map("workspace_id") @db.Uuid
   name          String
   domain        String?
+  /// The logo, as a URL; enrichment fills it from the website (P4-2).
+  logoUrl       String?                  @map("logo_url")
   employeeCount Int?                     @map("employee_count")
   /// ARR in the currency's minor unit, with `arrCurrency`: both or neither (the database checks).
   arrMinor      BigInt?                  @map("arr_minor")
@@ -1941,4 +1946,56 @@ model EmailVerificationSettings {
   updatedBy WorkspaceMember? @relation(fields: [updatedByMemberId], references: [id], onDelete: SetNull)
 
   @@map("email_verification_settings")
+}
+
+/// How an ask went for one fact (P4-2, FR-CRMS-15): answered; looked and found nothing; could not look.
+enum EnrichmentAnswerStatus {
+  answered
+  no_answer
+  failed
+
+  @@map("enrichment_answer_status")
+}
+
+/// One answer a source gave about one fact of a record: kept with its source and the time it was
+/// asked, whether it was written to the record, and — never a zero or an empty string — `value`
+/// only when answered. The record's panel reads them newest first; the re-ask age is dated from them.
+model EnrichmentAnswer {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String                 @map("workspace_id") @db.Uuid
+  object      RecordObject
+  recordId    String                 @map("record_id") @db.Uuid
+  /// `EnrichmentFactKey` from @bylinecrm/shared.
+  field       String
+  /// `EnrichmentSource` from @bylinecrm/shared.
+  source      String
+  status      EnrichmentAnswerStatus
+  value       String?
+  rank        Int                    @default(0)
+  note        String?
+  applied     Boolean                @default(false)
+  askedAt     DateTime               @map("asked_at") @db.Timestamptz
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, object, recordId, askedAt(sort: Desc)])
+  @@index([workspaceId, askedAt])
+  @@map("enrichment_answers")
+}
+
+/// Which sources a workspace asks and how long an answer stands (P4-2): a row is an override; no row
+/// means every free source on and 90 days.
+model EnrichmentSettings {
+  workspaceId       String   @id @map("workspace_id") @db.Uuid
+  reaskAfterDays    Int      @default(90) @map("reask_after_days")
+  /// `EnrichmentSource` keys the workspace turned off.
+  disabledSources   String[] @default([]) @map("disabled_sources")
+  updatedByMemberId String?  @map("updated_by_member_id") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedBy WorkspaceMember? @relation(fields: [updatedByMemberId], references: [id], onDelete: SetNull)
+
+  @@map("enrichment_settings")
 }

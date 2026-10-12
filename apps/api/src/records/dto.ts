@@ -80,6 +80,7 @@ export class UpdatePersonDto extends createZodDto(z.object(personFields).partial
 const companyFields = {
     name: text(200).min(1),
     domain: domain.nullable(),
+    logoUrl: url.nullable(),
     employeeCount: z.number().int().min(0).nullable(),
     arr: money.nullable(),
     address,

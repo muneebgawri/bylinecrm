@@ -71,6 +71,7 @@ export const companyView = named(
         id,
         name: z.string(),
         domain: z.string().nullable(),
+        logoUrl: z.string().nullable(),
         employeeCount: z.number().int().nullable(),
         arr: money.nullable(),
         address,
