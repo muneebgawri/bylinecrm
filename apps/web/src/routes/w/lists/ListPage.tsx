@@ -1,4 +1,4 @@
-import { ID_FIELD, LIST_LIMIT_DEFAULT, type ViewColumn, type ViewSort } from '@bylinecrm/shared';
+import { ID_FIELD, LIST_LIMIT_DEFAULT, SEQUENCE_LIMITS, type ViewColumn, type ViewSort } from '@bylinecrm/shared';
 import {
     BulkBar,
     BulkBarAction,
@@ -24,6 +24,7 @@ import { saveFile } from '../../../lib/saveFile';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { withOpen } from '../records/targets';
+import { EnrolDialog, enrolSummary, type EnrolPerson } from '../sequences/EnrolDialog';
 import { ListCards } from './ListCards';
 import { AssignOwnerDialog, bulkSummary, ConfirmDialog, CreateRecordDialog, failureText } from './ListDialogs';
 import {
@@ -31,6 +32,7 @@ import {
     IDENTITY_FIELD,
     isSortable,
     LIST_COPY,
+    personName,
     resolveColumns,
     type ListObject,
     type ListRow,
@@ -146,6 +148,8 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     };
 
     const [assigning, setAssigning] = useState<string[] | null>(null);
+    const enrol = usePermission('sequence:enrol');
+    const [enrolling, setEnrolling] = useState<EnrolPerson[] | null>(null);
     const [deleting, setDeleting] = useState<string[] | null>(null);
     const [creating, setCreating] = useState(false);
     const bulk = useBulkChange(workspaceId, object);
@@ -433,9 +437,26 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     discardLabel="Clear"
                     className="max-md:fixed max-md:inset-x-3 max-md:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:z-30 max-md:mx-0 max-md:w-auto max-md:flex-wrap max-md:justify-center"
                 >
-                    <BulkBarAction disabled title="Sequences arrive in Phase 3.">
-                        Enrol in sequence
-                    </BulkBarAction>
+                    {object === 'person' && (
+                        <BulkBarAction
+                            disabled={!enrol.allowed || selected.size > SEQUENCE_LIMITS.enrolBatch}
+                            title={
+                                enrol.reason ||
+                                (selected.size > SEQUENCE_LIMITS.enrolBatch
+                                    ? `At most ${SEQUENCE_LIMITS.enrolBatch} people at a time.`
+                                    : undefined)
+                            }
+                            onClick={() =>
+                                setEnrolling(
+                                    (rows as ListRow<'person'>[])
+                                        .filter((r) => selected.has(r.id))
+                                        .map((r) => ({ id: r.id, name: personName(r), email: r.emails.primary })),
+                                )
+                            }
+                        >
+                            Enrol in sequence
+                        </BulkBarAction>
+                    )}
                     <BulkBarAction
                         disabled={!write.allowed}
                         title={write.reason || undefined}
@@ -454,6 +475,18 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                 </BulkBar>
             )}
 
+            {enrolling && (
+                <EnrolDialog
+                    workspaceId={workspaceId}
+                    people={enrolling}
+                    onOpenChange={(o) => !o && setEnrolling(null)}
+                    onDone={(result) => {
+                        setEnrolling(null);
+                        clearSelection();
+                        toast({ title: enrolSummary(result) });
+                    }}
+                />
+            )}
             {assigning && (
                 <AssignOwnerDialog
                     workspaceId={workspaceId}
