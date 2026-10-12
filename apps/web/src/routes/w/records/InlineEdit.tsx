@@ -1,7 +1,7 @@
 import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, focusRing } from '@bylinecrm/ui';
 import { ExternalLink, Pencil } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ApiError } from '../../../api/client';
+import { ApiError, fieldErrorAt } from '../../../api/client';
 
 /**
  * The inline-edit contract (FR-CRMS-UI-2): a value reads as text; a click (or Enter on it)
@@ -37,10 +37,7 @@ export interface InlineTextProps extends InlineProps {
 
 /** The message for this field from a failed save, or the error's own message. */
 export function messageFor(error: unknown, path: string): string {
-    if (error instanceof ApiError) {
-        const field = error.fieldErrors.find((f) => f.path === path || f.path.endsWith(`.${path}`));
-        return field?.message ?? error.message;
-    }
+    if (error instanceof ApiError) return fieldErrorAt(error, path) ?? error.message;
     return error instanceof Error ? error.message : 'Could not save.';
 }
 
