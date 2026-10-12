@@ -36,6 +36,7 @@ export * from './components/dialog/Dialog';
 export * from './components/dropdown-menu/DropdownMenu';
 export * from './components/tabs/Tabs';
 export * from './components/command/Command';
+export { LoadingRegion, type LoadingRegionProps } from './components/loading-region/LoadingRegion';
 export { Skeleton } from './components/skeleton/Skeleton';
 export { EmptyState, type EmptyStateProps } from './components/empty-state/EmptyState';
 export { DataTableShell, type DataTableShellProps } from './components/data-table/DataTableShell';

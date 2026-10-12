@@ -3,6 +3,7 @@ import {
     Button,
     Field,
     Input,
+    LoadingRegion,
     Select,
     SelectContent,
     SelectItem,
@@ -94,11 +95,11 @@ export function MailSettings() {
                     settings={settings.data}
                 />
             ) : (
-                <div aria-busy="true" aria-label="Loading mail settings" className="flex flex-col gap-4">
+                <LoadingRegion label="Loading mail settings" className="flex flex-col gap-4">
                     <Skeleton className="h-16" />
                     <Skeleton className="h-16" />
                     <Skeleton className="h-24" />
-                </div>
+                </LoadingRegion>
             )}
         </section>
     );
