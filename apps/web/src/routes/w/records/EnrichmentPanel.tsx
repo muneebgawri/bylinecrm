@@ -140,7 +140,7 @@ function valueOf(answer: EnrichmentAnswerView): React.ReactNode {
                 href={value}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="break-all text-accent underline-offset-2 hover:underline"
+                className="inline-flex items-center break-all text-accent underline-offset-2 hover:underline max-md:min-h-touch"
             >
                 {value.replace(/^https?:\/\//, '')}
             </a>
