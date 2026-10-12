@@ -10,6 +10,7 @@ import {
     SESSION_COOKIE,
     type EnrolmentBatchResult,
     type EnrolmentView,
+    type RegionPolicyChange,
     type RegionPolicyEntry,
     type SequenceView,
 } from '@bylinecrm/shared';
@@ -306,7 +307,7 @@ describe('FR-CRMS-5 sequences', () => {
             expect(reason(suppressed)).toMatchObject({ code: 'suppressed' });
 
             const again = (await enrol(seq.id, [ok])).body as EnrolmentBatchResult;
-            expect(again).toEqual({ enrolled: [], skipped: [ok], refused: [] });
+            expect(again).toEqual({ enrolled: [], skipped: [ok], refused: [], warnings: [] });
             expect(await owner.sequenceEnrolment.count({ where: { sequenceId: seq.id, personId: ok } })).toBe(1);
         });
 
@@ -325,6 +326,32 @@ describe('FR-CRMS-5 sequences', () => {
             const eu = await person({ emails: { primary: address('eu2'), additional: [] }, country: 'FR' });
             expect(((await enrol(seq.id, [eu])).body as EnrolmentBatchResult).enrolled).toEqual([eu]);
             await as(admin).put(w('/outreach/region-policy')).send({ region: 'eu', allowed: false }).expect(200);
+        });
+
+        it('#141 FR-CRMS-12: keeps every region policy change, who made it and why; a no-op is not a change', async () => {
+            const before = await as(admin).get(w('/outreach/region-policy/changes'));
+            expect(before.status, JSON.stringify(before.body)).toBe(200);
+            const known = (before.body as RegionPolicyChange[]).length;
+            await as(admin)
+                .put(w('/outreach/region-policy'))
+                .send({ region: 'ca', allowed: true, lawfulBasis: 'Express consent captured at sign-up.' })
+                .expect(200);
+            await as(admin).put(w('/outreach/region-policy')).send({ region: 'ca', allowed: false }).expect(200);
+            // Setting a region to what it already is records nothing.
+            await as(admin).put(w('/outreach/region-policy')).send({ region: 'ca', allowed: false }).expect(200);
+            const after = (await as(admin).get(w('/outreach/region-policy/changes'))).body as RegionPolicyChange[];
+            expect(after).toHaveLength(known + 2);
+            expect(after[0]).toMatchObject({ region: 'ca', allowed: false, lawfulBasis: null });
+            expect(after[1]).toMatchObject({
+                region: 'ca',
+                allowed: true,
+                lawfulBasis: 'Express consent captured at sign-up.',
+            });
+            expect(after[0]!.changedBy).toEqual(expect.any(String));
+            // Another workspace sees none of it.
+            const theirs = (await as(otherAdmin).get(w('/outreach/region-policy/changes', otherWorkspace)))
+                .body as RegionPolicyChange[];
+            expect(theirs).toEqual([]);
         });
     });
 
@@ -497,6 +524,50 @@ describe('FR-CRMS-5 sequences', () => {
             expect(again.body as EnrolmentView).toMatchObject({ status: 'active', stepIndex: 0, stopReason: null });
             const listed = await as(admin).get(w(`/people/${ray}/enrolments`));
             expect((listed.body as EnrolmentView[]).map((x) => x.id)).toEqual([e.id]);
+        });
+    });
+
+    describe('D-251 / #142 unknown country: enrolled, flagged, stopped if it turns out blocked', () => {
+        it('enrols a person with no known country and flags them in the preview and the enrol', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const uma = await person({ emails: { primary: address('uma'), additional: [] } });
+            const preview = await as(admin)
+                .post(w(`/sequences/${seq.id}/enrolments/preview`))
+                .send({ personIds: [uma] });
+            expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+            const flag = { personId: uma, code: 'region.unknown' };
+            expect(preview.body).toMatchObject({ enrolled: [uma], warnings: [flag] });
+            const res = await enrol(seq.id, [uma]);
+            expect(res.body).toMatchObject({ enrolled: [uma], warnings: [flag] });
+            const listed = (await as(admin).get(w(`/people/${uma}/enrolments`))).body as Record<string, unknown>[];
+            expect(listed[0]).toMatchObject({ countryUnknownAtEnrol: true });
+        });
+
+        it('stops the enrolment when the person’s country is later set to a blocked region', async () => {
+            const seq = await sequence([
+                { kind: 'wait', waitDays: 1, businessDays: false },
+                { kind: 'email', templateId: template },
+            ]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const vic = await person({ emails: { primary: address('vic'), additional: [] } });
+            await enrol(seq.id, [vic]);
+            const patched = await as(admin)
+                .patch(w(`/people/${vic}`))
+                .send({ country: 'DE' });
+            expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+            await settle(app);
+            expect(await enrolment(seq.id, vic)).toMatchObject({ status: 'stopped', stopReason: 'region_blocked' });
+        });
+
+        it('the check before every step stops it too, even if the update’s event never arrived', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const wes = await person({ emails: { primary: address('wes'), additional: [] } });
+            await enrol(seq.id, [wes]);
+            await owner.person.update({ where: { id: wes }, data: { country: 'FR' } });
+            await runner.run(workspace, (await enrolment(seq.id, wes)).id, new Date());
+            expect(await enrolment(seq.id, wes)).toMatchObject({ status: 'stopped', stopReason: 'region_blocked' });
         });
     });
 

@@ -1,4 +1,4 @@
-import { Button, Skeleton } from '@bylinecrm/ui';
+import { Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { CircleCheck } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
 import { ApiError } from '../../api/client';
@@ -24,10 +24,10 @@ export function UnsubscribePage() {
     if (status.isPending) {
         return (
             <Frame title="Unsubscribe">
-                <div aria-busy="true" aria-label="Loading" className="grid gap-3">
+                <LoadingRegion label="Loading" className="grid gap-3">
                     <Skeleton className="h-5 w-3/4" />
                     <Skeleton className="h-11 w-full" />
-                </div>
+                </LoadingRegion>
             </Frame>
         );
     }

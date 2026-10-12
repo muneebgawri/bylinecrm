@@ -5,6 +5,7 @@ import {
     DataTableChrome,
     DropdownMenuItem,
     EmptyState,
+    LoadingRegion,
     PageHeader,
     Skeleton,
     toast,
@@ -99,7 +100,9 @@ export function MailboxesPage() {
                 {status.data ? (
                     !status.data.configured && <GoogleStatus workspaceId={workspaceId} status={status.data} />
                 ) : (
-                    <Skeleton aria-busy="true" aria-label="Loading Google status" className="h-9" />
+                    <LoadingRegion label="Loading Google status">
+                        <Skeleton className="h-9" />
+                    </LoadingRegion>
                 )}
             </div>
             <MailboxTable

@@ -1,4 +1,4 @@
-import { Badge, Button, cn, focusRing, Input, Skeleton } from '@bylinecrm/ui';
+import { Badge, Button, cn, focusRing, Input, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
@@ -46,10 +46,10 @@ export function PipelineDetail() {
                 Pipelines
             </Link>
             {pipeline.isPending ? (
-                <div className="grid gap-3" aria-busy="true">
+                <LoadingRegion label="Loading pipeline" className="grid gap-3">
                     <Skeleton className="h-7 w-56" />
                     <Skeleton className="h-64 w-full" />
-                </div>
+                </LoadingRegion>
             ) : (
                 <>
                     <PipelineName

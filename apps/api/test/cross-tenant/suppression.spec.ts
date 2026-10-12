@@ -21,7 +21,7 @@ import { UNSUBSCRIBE_RATE_LIMIT, unsubscribeRateKey } from '../../src/suppressio
 import { UnsubscribeService } from '../../src/suppression/unsubscribe.service';
 import { withUnsubscribeUrl } from '../../src/templates/render/compose';
 import { FakeGmail } from '../support/fake-gmail';
-import { eventLog, type EventLog } from '../support/outbox';
+import { eventLog, settle, type EventLog } from '../support/outbox';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { verifyAddress } from '../support/mail';
 
@@ -293,6 +293,40 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
             ).toHaveLength(1);
             // Suppressed again later: a new live entry, the old one stays on record.
             await as(admin).post(w('/suppressions')).send({ address: dana.address }).expect(201);
+        });
+
+        it('#114 FR-CRMS-7: puts the suppression and its lift on the person’s timeline, with the reason and the note', async () => {
+            const dana = await person('timeline');
+            const added = (
+                await as(admin).post(w('/suppressions')).send({ address: dana.address, note: 'asked on a call' })
+            ).body as Suppression;
+            await as(admin)
+                .post(w(`/suppressions/${added.id}/remove`))
+                .send({ note: 'added by mistake' })
+                .expect(204);
+            await settle(app);
+            const res = await as(admin).get(w(`/timeline?target=person:${dana.id}&kinds=linked-suppression&limit=10`));
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            const entries = (res.body as { items: { kind: string; properties: Record<string, unknown> }[] }).items;
+            expect(entries.map((e) => e.kind).sort()).toEqual([
+                'linked-suppression.added',
+                'linked-suppression.removed',
+            ]);
+            const byKind = (kind: string) => entries.find((e) => e.kind === kind)!.properties;
+            expect(byKind('linked-suppression.added')).toMatchObject({
+                linked: { type: 'suppression', id: added.id, name: dana.address },
+                suppression: { reason: 'manual', source: 'member', note: 'asked on a call' },
+            });
+            expect(byKind('linked-suppression.removed')).toMatchObject({
+                suppression: { reason: 'manual', note: 'added by mistake' },
+            });
+        });
+
+        it('#114 writes no timeline entry for an address that belongs to no person', async () => {
+            const address = `nobody-${stamp}@acme.example`;
+            const added = (await as(admin).post(w('/suppressions')).send({ address })).body as Suppression;
+            await settle(app);
+            expect(await owner.timelineActivity.count({ where: { linkedId: added.id } })).toBe(0);
         });
 
         it('requires a note to lift an entry', async () => {

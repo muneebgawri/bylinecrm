@@ -4033,6 +4033,79 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/mail/messages/{messageId}/retry": {
+            "post": {
+                "operationId": "mailSend_retry",
+                "parameters": [
+                    {
+                        "name": "messageId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailOutbound"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mail/messages/{messageId}/cancel": {
             "post": {
                 "operationId": "mailSend_cancel",
@@ -14247,6 +14320,74 @@
                 "tags": ["sequences"]
             }
         },
+        "/api/w/{workspaceId}/outreach/region-policy/changes": {
+            "get": {
+                "operationId": "outreachCompliance_regionPolicyChanges",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RegionPolicyChange"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sequences"]
+            }
+        },
         "/api/w/{workspaceId}/outreach/exclusions": {
             "get": {
                 "operationId": "outreachCompliance_exclusionList",
@@ -19579,6 +19720,7 @@
                             "mailbox.paused",
                             "mailbox.domain_unverified",
                             "mailbox.cap_reached",
+                            "send.not_retryable",
                             "rate_limited",
                             "bad_request",
                             "not_implemented",
@@ -21475,6 +21617,10 @@
                         "type": "boolean",
                         "description": "Whether the caller may reschedule or cancel it: its sender or an admin (#133)."
                     },
+                    "canRetry": {
+                        "type": "boolean",
+                        "description": "Whether the caller may send this failed send again (#134): its sender or an admin, and a refusal that would not simply repeat."
+                    },
                     "rfc822MessageId": {
                         "type": "string",
                         "description": "Our Message-ID, without angle brackets."
@@ -21581,6 +21727,7 @@
                     "replyToMessageId",
                     "senderMemberId",
                     "canChange",
+                    "canRetry",
                     "rfc822MessageId",
                     "mailMessageId",
                     "threadId",
@@ -23115,7 +23262,8 @@
                             "pipeline_exit",
                             "excluded",
                             "sequence_archived",
-                            "person_deleted"
+                            "person_deleted",
+                            "region_blocked"
                         ]
                     },
                     "stopDetail": {
@@ -23131,6 +23279,10 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
                         "description": "The member who enrolled the person: the sender of each step's send (#144)."
+                    },
+                    "countryUnknownAtEnrol": {
+                        "type": "boolean",
+                        "description": "No country was known at enrolment (D-251); the region policy applies once one is."
                     },
                     "enrolledAt": {
                         "type": "string",
@@ -23164,6 +23316,7 @@
                     "stopDetail",
                     "enrolledBy",
                     "enrolledByMemberId",
+                    "countryUnknownAtEnrol",
                     "enrolledAt",
                     "finishedAt",
                     "stoppedAt"
@@ -23220,9 +23373,32 @@
                             },
                             "required": ["personId", "code", "message"]
                         }
+                    },
+                    "warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "personId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "enum": ["region.unknown"]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["personId", "code", "message"]
+                        },
+                        "description": "Enrolled, flagged for review — never blocking (D-251: no known country)."
                     }
                 },
-                "required": ["enrolled", "skipped", "refused"]
+                "required": ["enrolled", "skipped", "refused", "warnings"]
             },
             "RegionPolicyEntry": {
                 "type": "object",
@@ -23249,6 +23425,39 @@
                     }
                 },
                 "required": ["region", "allowed", "isDefault", "lawfulBasis", "updatedAt"]
+            },
+            "RegionPolicyChange": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "region": {
+                        "type": "string",
+                        "enum": ["eu", "uk", "ca", "us", "other", "unknown"]
+                    },
+                    "allowed": {
+                        "type": "boolean"
+                    },
+                    "lawfulBasis": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "changedBy": {
+                        "nullable": true,
+                        "description": "The member, by name; null once removed.",
+                        "type": "string"
+                    },
+                    "changedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["id", "region", "allowed", "lawfulBasis", "changedBy", "changedAt"]
             },
             "OutreachExclusion": {
                 "type": "object",
@@ -23475,7 +23684,7 @@
                         "properties": {
                             "type": {
                                 "type": "string",
-                                "enum": ["note", "task", "attachment", "email"]
+                                "enum": ["note", "task", "attachment", "email", "suppression"]
                             },
                             "id": {
                                 "type": "string",

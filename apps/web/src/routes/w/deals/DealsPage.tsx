@@ -7,6 +7,7 @@ import {
     DialogTitle,
     EmptyState,
     Input,
+    LoadingRegion,
     PageHeader,
     readStored,
     SegmentedControl,
@@ -511,10 +512,9 @@ export function DealsPage() {
 function BoardSkeleton({ stageNames }: { stageNames: string[] | undefined }) {
     const names = stageNames && stageNames.length > 0 ? stageNames : ['', '', '', ''];
     return (
-        <div
+        <LoadingRegion
+            label="Loading deals"
             className="grid auto-cols-[minmax(260px,1fr)] grid-flow-col gap-4 overflow-hidden"
-            aria-busy="true"
-            aria-label="Loading deals"
         >
             {names.map((name, i) => (
                 <div key={`${name}-${i}`}>
@@ -528,6 +528,6 @@ function BoardSkeleton({ stageNames }: { stageNames: string[] | undefined }) {
                     <Skeleton className="h-28" />
                 </div>
             ))}
-        </div>
+        </LoadingRegion>
     );
 }

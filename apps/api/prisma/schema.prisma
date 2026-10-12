@@ -67,6 +67,7 @@ model Workspace {
   mailBounces         MailBounce[]
 
   regionPolicies     RegionPolicy[]
+  regionPolicyChanges RegionPolicyChange[]
   outreachExclusions OutreachExclusion[]
   sequences          Sequence[]
   sequenceSteps      SequenceStep[]
@@ -232,6 +233,7 @@ model WorkspaceMember {
   removedSuppressions Suppression[] @relation("SuppressionRemover")
 
   updatedRegionPolicies RegionPolicy[]
+  regionPolicyChanges   RegionPolicyChange[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -817,6 +819,7 @@ enum LinkedObject {
   task
   attachment
   email
+  suppression
 
   @@map("linked_object")
 }
@@ -1146,6 +1149,8 @@ model MailOutbound {
   /// `sendAt`, as its sender's role and the person stand then.
   request                 Json?
   cancelledAt             DateTime?          @map("cancelled_at") @db.Timestamptz
+  /// When a failed send was last sent again by hand (#134); null if never.
+  retriedAt               DateTime?          @map("retried_at") @db.Timestamptz
   providerMessageId       String?            @map("provider_message_id")
   providerThreadId        String?            @map("provider_thread_id")
   /// Gmail's own Message-ID for the sent message, once known (from the stored copy). Not ours: Gmail
@@ -1604,6 +1609,23 @@ model RegionPolicy {
   @@map("region_policies")
 }
 
+/// Every change to a region's policy (#141): append-only, written in the same transaction as the change.
+model RegionPolicyChange {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String     @map("workspace_id") @db.Uuid
+  region            RegionCode
+  allowed           Boolean
+  lawfulBasis       String?    @map("lawful_basis")
+  changedByMemberId String?    @map("changed_by_member_id") @db.Uuid
+  changedAt         DateTime   @default(now()) @map("changed_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  changedBy WorkspaceMember? @relation(fields: [changedByMemberId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, changedAt])
+  @@map("region_policy_changes")
+}
+
 enum ExclusionReason {
   customer
   account_managed
@@ -1672,6 +1694,7 @@ enum EnrolmentStopReason {
   excluded
   sequence_archived
   person_deleted
+  region_blocked
 
   @@map("enrolment_stop_reason")
 }
@@ -1748,6 +1771,9 @@ model SequenceEnrolment {
   stopReason        EnrolmentStopReason? @map("stop_reason")
   stopDetail        String?              @map("stop_detail")
   enrolledBy        Json                 @map("enrolled_by")
+  /// No country was known at enrolment (D-251): enrolled and flagged; stopped if one later falls in a
+  /// blocked region.
+  countryUnknownAtEnrol Boolean           @default(false) @map("country_unknown_at_enrol")
   /// The member who enrolled the person (#144): the sender of every step's send — the pool mailbox
   /// only carries it. An API key's enrolment is its creator's.
   enrolledByMemberId String              @map("enrolled_by_member_id") @db.Uuid

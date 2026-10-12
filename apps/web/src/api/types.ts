@@ -165,6 +165,9 @@ export type CreateBlocklistEntryInput = Loose<Schemas['CreateBlocklistEntryDto']
 
 // ---- Suppression and unsubscribe (P3-1) ------------------------------------------------------
 export type SuppressionView = Schemas['Suppression'];
+export type RegionPolicyEntryView = Schemas['RegionPolicyEntry'];
+export type RegionPolicyChangeView = Schemas['RegionPolicyChange'];
+export type SetRegionPolicyInput = Schemas['SetRegionPolicyDto'];
 export type SuppressionPage = Schemas['SuppressionPage'];
 export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
 export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;

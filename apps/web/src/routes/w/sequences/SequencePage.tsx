@@ -7,6 +7,7 @@ import {
     EmptyState,
     Field,
     Input,
+    LoadingRegion,
     PageHeader,
     Select,
     SelectContent,
@@ -106,7 +107,7 @@ export function SequencePage() {
     const { sequenceId = '' } = useParams();
     const sequence = useSequence(workspaceId, sequenceId);
     if (sequence.isError) throw sequence.error;
-    if (!sequence.data) return <div className="p-7 max-md:p-4" aria-busy="true" />;
+    if (!sequence.data) return <LoadingRegion label="Loading sequence" className="p-7 max-md:p-4" />;
     return <SequenceBuilder key={sequence.data.id} workspaceId={workspaceId} sequence={sequence.data} />;
 }
 

@@ -27,8 +27,3 @@ export function countries(locale: string = navigator.language): Country[] {
         collator.compare(a.name, b.name),
     );
 }
-
-/** A country's name in `locale`; the code itself when the browser does not know it. */
-export function countryName(code: string, locale: string = navigator.language): string {
-    return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? code;
-}

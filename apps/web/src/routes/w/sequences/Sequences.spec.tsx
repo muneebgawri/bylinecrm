@@ -52,6 +52,7 @@ const enrolment = (over: Partial<SequenceEnrolmentView> = {}): SequenceEnrolment
     stopDetail: null,
     enrolledBy: actor,
     enrolledByMemberId: 'm-1',
+    countryUnknownAtEnrol: false,
     enrolledAt: '2026-10-11T10:00:00Z',
     finishedAt: null,
     stoppedAt: null,
@@ -192,6 +193,7 @@ describe('FR-CRMS-5 sequences UI (P3-UI-1)', { timeout: 30_000 }, () => {
             enrolled: ['p-1'],
             skipped: ['p-3'],
             refused: [{ personId: 'p-2', code: 'region.blocked', message: 'Region blocked: EU (policy)' }],
+            warnings: [],
         };
         const seen = stubApi([
             (r) =>
