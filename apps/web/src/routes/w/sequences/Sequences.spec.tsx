@@ -28,6 +28,7 @@ const sequence = (over: Partial<SequenceView> = {}): SequenceView => ({
             replyInThread: false,
             waitDays: null,
             businessDays: false,
+            taskTitle: null,
         },
     ],
     counts: { enrolled: 12, active: 5, held: 1, finished: 4, stopped: 2 },
@@ -141,6 +142,31 @@ describe('FR-CRMS-5 sequences UI (P3-UI-1)', { timeout: 30_000 }, () => {
                 { id: 'st-1', kind: 'email', templateId: 'tp-1', replyInThread: false },
                 { kind: 'wait', waitDays: 3, businessDays: true },
                 { kind: 'email', templateId: 'tp-2', replyInThread: false },
+            ],
+        });
+    });
+
+    it('#136 adds a task step with a title, which saves as a task', async () => {
+        const seen = stubApi([
+            one(sequence()),
+            templatesList,
+            noEnrolments,
+            (r) => (r.method === 'PUT' && r.url.endsWith('/steps') ? json(sequence()) : undefined),
+        ]);
+        renderAt([route('/w/:workspaceId/sequences/:sequenceId', <SequencePage />)], `/w/${WS}/sequences/sq-1`, [
+            'sequence:write',
+            'sequence:enrol',
+        ]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Add task' }));
+        // An untitled task cannot be saved.
+        expect(screen.getByRole('button', { name: 'Save steps' })).toBeDisabled();
+        await userEvent.type(screen.getByRole('textbox', { name: 'Task title, step 2' }), 'Call if no reply');
+        await userEvent.click(screen.getByRole('button', { name: 'Save steps' }));
+        await waitFor(() => expect(seen.some((r) => r.method === 'PUT')).toBe(true));
+        expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({
+            steps: [
+                { id: 'st-1', kind: 'email', templateId: 'tp-1', replyInThread: false },
+                { kind: 'task', taskTitle: 'Call if no reply' },
             ],
         });
     });

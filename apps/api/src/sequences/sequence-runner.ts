@@ -13,6 +13,7 @@ import { SuppressionService } from '../suppression/suppression.service';
 import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
 import { inferCountry } from './country';
+import { TasksService } from '../records/tasks.service';
 import { ExclusionsService } from './exclusions.service';
 import { addWaitDays, nextWindowStart, zoneForCountry, type SendWindow } from './schedule';
 import { RESCHEDULE_FAILURE_CODES, SEQUENCE_POOL_RETRY_MS, SEQUENCE_STEP_QUEUE } from './sequences.constants';
@@ -84,6 +85,7 @@ export class SequenceRunner {
         private readonly exclusions: ExclusionsService,
         private readonly templates: TemplatesService,
         private readonly renderer: RenderService,
+        private readonly tasks: TasksService,
         @InjectQueue(SEQUENCE_STEP_QUEUE) private readonly queue: Queue<SequenceStepJob>,
     ) {}
 
@@ -125,6 +127,34 @@ export class SequenceRunner {
                     this.enqueueAfterCommit(workspaceId, e.id, next);
                 }
                 return moved;
+            });
+            return done ? 'advanced' : 'skipped';
+        }
+
+        if (step.kind === 'task') {
+            // #136 (doc 50 §D "Call if no reply → owner"): a task on the person for their owner — else the
+            // member who enrolled them — due now; the enrolment moves straight on. Created in the same
+            // transaction as the move, so a second delivery of this step's job creates no second task.
+            const done = await this.rls.withWorkspace(workspaceId, async (tx) => {
+                const moved = await claim(tx, e, { stepIndex: e.stepIndex + 1, nextRunAt: now });
+                if (!moved) return false;
+                const person = await tx.person.findUniqueOrThrow({
+                    where: { id: e.personId },
+                    select: { ownerId: true },
+                });
+                await this.tasks.createIn(
+                    tx,
+                    { workspaceId, capabilities: new Set() },
+                    {
+                        title: step.taskTitle!,
+                        dueAt: now.toISOString(),
+                        assigneeId: person.ownerId ?? e.enrolledByMemberId,
+                        targets: [{ type: 'person', id: e.personId }],
+                    },
+                );
+                await this.announce(tx, e, 'enrolment.step_completed', { stepIndex: e.stepIndex });
+                this.enqueueAfterCommit(workspaceId, e.id, now);
+                return true;
             });
             return done ? 'advanced' : 'skipped';
         }

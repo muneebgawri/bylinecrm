@@ -580,6 +580,64 @@ describe('FR-CRMS-5 sequences', () => {
         });
     });
 
+    describe('#136 task step (doc 50 §D: "Call if no reply → owner")', () => {
+        it('creates a task on the person for their owner, due now, then moves straight on', async () => {
+            const seq = await sequence([
+                { kind: 'task', taskTitle: 'Call if no reply' },
+                { kind: 'email', templateId: template },
+            ]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const xan = await person({ emails: { primary: address('xan'), additional: [] } });
+            const ownerId = (await owner.person.findUniqueOrThrow({ where: { id: xan } })).ownerId;
+            expect(ownerId).not.toBeNull();
+            await enrol(seq.id, [xan]);
+            const before = Date.now();
+            await runner.run(workspace, (await enrolment(seq.id, xan)).id, new Date());
+
+            const tasks = await owner.task.findMany({
+                where: { targets: { some: { targetType: 'person', targetId: xan } } },
+            });
+            expect(tasks).toHaveLength(1);
+            expect(tasks[0]).toMatchObject({ title: 'Call if no reply', assigneeId: ownerId, status: 'todo' });
+            expect(tasks[0]!.dueAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+            const e = await enrolment(seq.id, xan);
+            expect(e).toMatchObject({ status: 'active', stepIndex: 1 });
+            expect(e.nextRunAt!.getTime()).toBeLessThanOrEqual(Date.now());
+            // Run again on the same step's job: no second task.
+            await runner.run(workspace, e.id, new Date());
+            expect(
+                await owner.task.count({ where: { targets: { some: { targetType: 'person', targetId: xan } } } }),
+            ).toBe(1);
+        });
+
+        it('assigns the task to the member who enrolled the person when the person has no owner', async () => {
+            const seq = await sequence([
+                { kind: 'task', taskTitle: 'Research the agency' },
+                { kind: 'email', templateId: template },
+            ]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const yan = await person({ emails: { primary: address('yan'), additional: [] } });
+            await owner.person.update({ where: { id: yan }, data: { ownerId: null } });
+            await enrol(seq.id, [yan]);
+            const e = await enrolment(seq.id, yan);
+            await runner.run(workspace, e.id, new Date());
+            const task = await owner.task.findFirstOrThrow({
+                where: { targets: { some: { targetType: 'person', targetId: yan } } },
+            });
+            expect(task.assigneeId).toBe(e.enrolledByMemberId);
+        });
+
+        it('refuses a task step without a title', async () => {
+            const created = await as(admin)
+                .post(w('/sequences'))
+                .send({ name: `No title ${stamp}`, timeZone: 'UTC' });
+            const put = await as(admin)
+                .put(w(`/sequences/${(created.body as { id: string }).id}/steps`))
+                .send({ steps: [{ kind: 'task' }] });
+            expect(put.status).toBe(400);
+        });
+    });
+
     describe('cross-tenant', () => {
         it('another workspace cannot see a sequence, enrol into it, or enrol a person from elsewhere', async () => {
             const seq = await sequence([{ kind: 'email', templateId: template }]);

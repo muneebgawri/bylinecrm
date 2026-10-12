@@ -1647,6 +1647,7 @@ enum SequenceStatus {
 enum SequenceStepKind {
   email
   wait
+  task
 
   @@map("sequence_step_kind")
 }
@@ -1717,6 +1718,8 @@ model SequenceStep {
   replyInThread Boolean          @default(false) @map("reply_in_thread")
   waitDays      Int?             @map("wait_days")
   businessDays  Boolean          @default(true) @map("business_days")
+  /// `task` steps (#136): the title of the task created on the person.
+  taskTitle     String?          @map("task_title")
   createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 

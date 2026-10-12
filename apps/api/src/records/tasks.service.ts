@@ -84,11 +84,32 @@ export class TasksService {
 
     async create(input: TaskInput & { title: string; targets: RecordTarget[] }): Promise<TaskView> {
         const context = this.current();
+        const row = await this.rls.withWorkspace((tx) => this.insert(tx, context, input));
+        return view(row);
+    }
+
+    /**
+     * The one write of a new task, inside the caller's transaction — for a write that must happen
+     * together with another (a sequence's task step, #136). Same checks, same `task.created`.
+     */
+    async createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: TaskInput & { title: string; targets: RecordTarget[] },
+    ): Promise<TaskView> {
+        return view(await this.insert(tx, context, input));
+    }
+
+    private async insert(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: TaskInput & { title: string; targets: RecordTarget[] },
+    ) {
         const actor = actorOf(context);
         const targets = dedupeTargets(input.targets);
         const body = input.body ?? EMPTY_RICH_TEXT;
         const status = input.status ?? 'todo';
-        const row = await this.rls.withWorkspace(async (tx) => {
+        {
             await assertTargetsReadable(tx, targets);
             await assertOwnerIsMember(tx, input.assigneeId ?? null, 'assigneeId');
             const created = await tx.task.create({
@@ -118,8 +139,7 @@ export class TasksService {
                 targets,
             });
             return created;
-        });
-        return view(row);
+        }
     }
 
     /** Partial; `targets` replaces the set; `completedAt` follows `status` by the one rule. */

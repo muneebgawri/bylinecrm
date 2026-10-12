@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { MailSendModule } from '../mail-send/mail-send.module';
+import { RecordsModule } from '../records/records.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { SuppressionModule } from '../suppression/suppression.module';
 import { TemplatesModule } from '../templates/templates.module';
@@ -37,6 +38,7 @@ import { SequenceWorkers } from './sequences.workers';
     imports: [
         AuthModule,
         MailSendModule,
+        RecordsModule,
         SendingPoolModule,
         SuppressionModule,
         TemplatesModule,
