@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Actor, DomainEvent, EnrolmentBatchResult, EnrolmentView } from '@bylinecrm/shared';
 import type { Prisma, SequenceEnrolment } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
-import { StateConflict, ValidationFailed } from '../infra/errors/api-errors';
+import { ApiException, StateConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
@@ -35,6 +35,7 @@ export class EnrolmentsService {
         if (decided.enrolled.length === 0) return decided;
         const now = new Date();
         const inserted = await this.rls.withWorkspace(async (tx) => {
+            const enroller = await enrollerMemberId(tx, context);
             if (dealId && !(await tx.opportunity.findFirst({ where: { id: dealId, deletedAt: null } }))) {
                 throw new ValidationFailed('no such deal', [
                     { path: 'dealId', message: 'not a deal in this workspace' },
@@ -48,6 +49,7 @@ export class EnrolmentsService {
                     dealId: dealId ?? null,
                     nextRunAt: now,
                     enrolledBy: actorOf(context) as unknown as Prisma.InputJsonValue,
+                    enrolledByMemberId: enroller,
                 })),
                 skipDuplicates: true,
             });
@@ -116,6 +118,7 @@ export class EnrolmentsService {
                     finishedAt: null,
                     enrolledAt: now,
                     enrolledBy: actorOf(context) as unknown as Prisma.InputJsonValue,
+                    enrolledByMemberId: await enrollerMemberId(tx, context),
                 },
             });
             if (changed.count === 0) throw new StateConflict('the enrolment changed meanwhile; try again');
@@ -239,8 +242,25 @@ export function view(row: SequenceEnrolment): EnrolmentView {
         stopReason: row.stopReason,
         stopDetail: row.stopDetail,
         enrolledBy: row.enrolledBy as unknown as Actor,
+        enrolledByMemberId: row.enrolledByMemberId,
         enrolledAt: row.enrolledAt.toISOString(),
         finishedAt: row.finishedAt?.toISOString() ?? null,
         stoppedAt: row.stoppedAt?.toISOString() ?? null,
     };
+}
+
+/**
+ * The member an enrolment belongs to (#144): the caller, or — for an API key — the member who created
+ * the key. Every step's send is theirs to answer for; the pool mailbox only carries it.
+ */
+async function enrollerMemberId(tx: WorkspaceClient, context: WorkspaceRunContext): Promise<string> {
+    if (context.memberId) return context.memberId;
+    if (context.apiKeyId) {
+        const key = await tx.apiKey.findUniqueOrThrow({
+            where: { id: context.apiKeyId },
+            select: { createdById: true },
+        });
+        return key.createdById;
+    }
+    throw new ApiException(403, 'forbidden', 'only a member or a member’s API key may enrol people');
 }

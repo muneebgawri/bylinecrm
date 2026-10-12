@@ -527,6 +527,86 @@ describe('FR-CRMS-5 sequences', () => {
         });
     });
 
+    describe('#144 a step’s send belongs to the member who enrolled the person', () => {
+        let enroller: Browser;
+        let bystander: Browser;
+        let enrollerMemberId: string;
+        let poolOwnerMemberId: string;
+
+        beforeAll(async () => {
+            const role = await as(admin)
+                .post(w('/roles'))
+                .send({
+                    name: `enroller ${stamp}`,
+                    capabilities: ['record:read', 'record:write', 'sequence:enrol', 'email:send'],
+                    recordScope: 'all',
+                })
+                .expect(201);
+            const roleId = (role.body as { id: string }).id;
+            const join = async (email: string) => {
+                const invite = await as(admin).post(w('/invites')).send({ email, roleId });
+                expect(invite.status, JSON.stringify(invite.body)).toBe(201);
+                const joined = await http()
+                    .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+                    .send({ password });
+                expect(joined.status, JSON.stringify(joined.body)).toBe(201);
+                await verifyAddress(app, http, email);
+                return browserFrom(joined);
+            };
+            const enrollerEmail = `seq-enroller-${stamp}@example.com`;
+            enroller = await join(enrollerEmail);
+            bystander = await join(`seq-bystander-${stamp}@example.com`);
+            enrollerMemberId = (
+                await owner.workspaceMember.findFirstOrThrow({
+                    where: { workspaceId: workspace, user: { email: enrollerEmail } },
+                })
+            ).id;
+            poolOwnerMemberId = (await owner.mailbox.findUniqueOrThrow({ where: { id: poolMailbox } })).ownerMemberId;
+        });
+
+        it('records the enroller on the enrolment and as the send’s sender, from the pool mailbox', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const ivy = await person({ nameFirst: 'Ivy', emails: { primary: address('ivy'), additional: [] } });
+            const res = await enrol(seq.id, [ivy], enroller);
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            const e = await enrolment(seq.id, ivy);
+            const listed = (await as(enroller).get(w(`/people/${ivy}/enrolments`))).body as Record<string, unknown>[];
+            expect(listed.find((x) => x.id === e.id)).toMatchObject({ enrolledByMemberId: enrollerMemberId });
+
+            await runner.run(workspace, e.id, new Date());
+            const out = await owner.mailOutbound.findUniqueOrThrow({
+                where: { id: (await enrolment(seq.id, ivy)).waitingOutboundId! },
+            });
+            expect(enrollerMemberId).not.toBe(poolOwnerMemberId);
+            expect(out).toMatchObject({ mailboxId: poolMailbox, senderMemberId: enrollerMemberId });
+        });
+
+        it('lets the enroller reschedule and cancel it, refuses a colleague who did not enrol (403), and an admin may', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const later = () => new Date(Date.now() + 6 * 3600_000).toISOString();
+            const ids: string[] = [];
+            for (const name of ['jo', 'kai']) {
+                const p = await person({ emails: { primary: address(name), additional: [] } });
+                await enrol(seq.id, [p], enroller);
+                const e = await enrolment(seq.id, p);
+                await runner.run(workspace, e.id, new Date());
+                ids.push((await enrolment(seq.id, p)).waitingOutboundId!);
+            }
+            const [first, second] = ids as [string, string];
+
+            const byBystander = await as(bystander).post(w(`/mail/messages/${first}/cancel`));
+            expect(byBystander.status, JSON.stringify(byBystander.body)).toBe(403);
+            const moved = await as(enroller)
+                .patch(w(`/mail/messages/${first}`))
+                .send({ sendAt: later() });
+            expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+            expect((await as(enroller).post(w(`/mail/messages/${first}/cancel`))).status).toBe(200);
+            expect((await as(admin).post(w(`/mail/messages/${second}/cancel`))).status).toBe(200);
+        });
+    });
+
     describe('cross-tenant', () => {
         it('another workspace cannot see a sequence, enrol into it, or enrol a person from elsewhere', async () => {
             const seq = await sequence([{ kind: 'email', templateId: template }]);
