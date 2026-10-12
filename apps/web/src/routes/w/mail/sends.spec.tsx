@@ -72,12 +72,13 @@ describe('FR-CRMS-UI-2: a send shows on the timeline at once and follows its sta
         expect(await screen.findByText('emailed “About company.name”')).toBeInTheDocument();
     });
 
-    it('shows a failure’s reason and sends the same message again on Retry', async () => {
+    it('#134 shows a failure’s reason, and Retry asks the server to send it again', async () => {
         const seen = timeline(
             [
                 statusRoute('out-1', [
                     outbound({
                         status: 'failed',
+                        canRetry: true,
                         error: {
                             code: 'gmail.rejected',
                             message: 'Gmail refused the message.',
@@ -86,28 +87,18 @@ describe('FR-CRMS-UI-2: a send shows on the timeline at once and follows its sta
                     }),
                 ]),
                 (r) =>
-                    r.method === 'POST' && r.url.endsWith('/mail/send')
-                        ? json(
-                              {
-                                  messageId: 'out-2',
-                                  status: 'queued',
-                                  sendAt: null,
-                                  senderTimeZone: null,
-                                  recipientTimeZone: null,
-                              },
-                              202,
-                          )
+                    r.method === 'POST' && r.url.endsWith('/mail/messages/out-1/retry')
+                        ? json(outbound({ status: 'scheduled', sendAt: new Date().toISOString(), canRetry: false }))
                         : undefined,
-                statusRoute('out-2', [outbound({ id: 'out-2', status: 'sending' })]),
             ],
             [session('out-1')],
         );
         expect(await screen.findByText('Failed')).toBeInTheDocument();
         expect(screen.getByText('Gmail refused the message.')).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
-        await waitFor(() => expect(screen.getByText('Sending…')).toBeInTheDocument());
-        expect(screen.queryByText('Failed')).not.toBeInTheDocument();
-        expect(seen.find((r) => r.url.endsWith('/mail/send'))?.body).toEqual(session('out-1').input);
+        await waitFor(() => expect(screen.queryByText('Failed')).not.toBeInTheDocument());
+        expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/mail/messages/out-1/retry'))).toBe(true);
+        expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(false);
     });
 
     it('names the variables a scheduled send found empty at its time', async () => {
@@ -206,7 +197,7 @@ describe('#104: a record’s sends come from the server, a page at a time', () =
         expect(url.searchParams.get('status')).toBe('failed,scheduled');
     });
 
-    it('shows a failed send after a reload, with its reason — and no Retry, since what was written is not kept', async () => {
+    it('#134 shows a failed send after a reload with its reason, and no Retry when the server says it cannot be retried', async () => {
         stubApi([recordSendsRoute([failed]), statusRoute('out-7', [failed]), ...quietRecordRoutes]);
         renderAt(
             [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
@@ -217,6 +208,18 @@ describe('#104: a record’s sends come from the server, a page at a time', () =
         expect(screen.getByText('Failed')).toBeInTheDocument();
         expect(screen.getByText('dana@acme.com unsubscribed.')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    });
+
+    it('#134 a failed send loaded after a reload offers Retry when the server says it can', async () => {
+        const retryable = outbound({ ...failed, id: 'out-8', subject: 'Kept to retry', canRetry: true });
+        stubApi([recordSendsRoute([retryable]), statusRoute('out-8', [retryable]), ...quietRecordRoutes]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByText('emailed “Kept to retry”')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     });
 
     it('names a colleague’s send by its sender and dates it when it was made', async () => {
