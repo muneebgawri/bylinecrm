@@ -58,3 +58,21 @@ export const MAILBOX_LABEL_MAX = 80;
  * client and accepts its secret (see `GoogleOAuthPort.probeClient`).
  */
 export const PROBE_AUTHORIZATION_CODE = 'bylinecrm-client-check';
+
+/**
+ * Every message the OAuth client check records (#82), in one place: sentence case, a full stop at the
+ * end, so the setup screen reads the same everywhere. The web shows them as given.
+ */
+export const OAUTH_CHECK_MESSAGES = {
+    formatFail: 'The client ID is not a Google web client ID (…apps.googleusercontent.com).',
+    formatPass: 'The client ID has the shape of a Google web client ID.',
+    notCheckedMalformed: 'Not checked: the client ID is malformed.',
+    googleUnreachable: 'Google could not be reached; try again.',
+    credentialsPass: 'Google knows this client ID and accepts the secret.',
+    credentialsFail: 'Google does not know this client ID, or refuses this secret.',
+    credentialsUnknown: 'Google did not say whether it accepts these credentials.',
+    redirectFail: 'Google refused the redirect URI; register it exactly as shown.',
+    redirectPass: 'The redirect URI is registered.',
+    redirectAwaitsConnect: 'Confirmed when the first mailbox connects; Google checks it only when a person signs in.',
+    redirectProvenByConnect: 'Confirmed: a mailbox connected through this redirect URI.',
+} as const;
