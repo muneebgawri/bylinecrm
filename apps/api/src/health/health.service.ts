@@ -26,7 +26,7 @@ export class HealthService {
         const [db, redis, rls] = await Promise.all([
             probe(() => this.ownerPrisma.$queryRaw`SELECT 1`),
             probe(async () => {
-                if (this.redis.status !== 'ready') await this.redis.connect();
+                await this.redis.ensureReady();
                 await this.redis.ping();
             }),
             this.rlsState(),
