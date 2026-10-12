@@ -1,5 +1,5 @@
 import { LINK_TOKEN_PARAM } from '@bylinecrm/shared';
-import { Button, Skeleton } from '@bylinecrm/ui';
+import { Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useLogout, useMe, useResendVerification, useVerifyEmail } from '../../api/queries';
@@ -91,9 +91,9 @@ function CheckInbox() {
         <AuthLayout title="Check your inbox" subtitle="Verify your email address to start using BylineCRM.">
             <div className="flex flex-col gap-4">
                 {me.isPending ? (
-                    <div className="grid gap-2" role="status" aria-label="Loading">
+                    <LoadingRegion label="Loading" className="grid gap-2">
                         <Skeleton className="h-5 w-3/4" />
-                    </div>
+                    </LoadingRegion>
                 ) : (
                     <p className="m-0 text-text-muted">
                         We sent a link to <strong className="font-medium text-text">{me.data.email}</strong>. Open it on

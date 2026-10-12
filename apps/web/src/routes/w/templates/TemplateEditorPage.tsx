@@ -1,6 +1,7 @@
 import { TEMPLATE_NAME_MAX, type RichText, type TemplateKind } from '@bylinecrm/shared';
 import {
     Button,
+    cn,
     Dialog,
     DialogContent,
     DialogDescription,
@@ -8,16 +9,16 @@ import {
     DialogTitle,
     EmptyState,
     Input,
+    LoadingRegion,
     Skeleton,
     Tabs,
     TabsContent,
     TabsList,
     TabsTrigger,
+    toast,
     Tooltip,
     TooltipContent,
     TooltipTrigger,
-    cn,
-    toast,
     useIsMobile,
 } from '@bylinecrm/ui';
 import { ArrowLeft, Lock, RefreshCw } from 'lucide-react';
@@ -106,13 +107,13 @@ export function TemplateEditorPage() {
 
 function EditorSkeleton() {
     return (
-        <div className="flex flex-col gap-4 p-7 max-md:p-4" aria-busy="true" aria-label="Loading template">
+        <LoadingRegion label="Loading template" className="flex flex-col gap-4 p-7 max-md:p-4">
             <Skeleton className="h-9 w-80" />
             <div className="grid gap-4 md:grid-cols-2">
                 <Skeleton className="h-96" />
                 <Skeleton className="h-96" />
             </div>
-        </div>
+        </LoadingRegion>
     );
 }
 
@@ -497,7 +498,7 @@ function LockedFooter({ workspaceId }: { workspaceId: string }) {
     const settings = useMailSettings(workspaceId);
     const address = settings.data?.postalAddress ?? null;
     return (
-        <div className="flex flex-col gap-2" aria-label="Locked footer">
+        <div className="flex flex-col gap-2" role="group" aria-label="Locked footer">
             <LockedBlock title="Unsubscribe link">
                 {settings.data?.unsubscribeFooterText ?? 'The workspace’s unsubscribe notice'} · Unsubscribe
             </LockedBlock>
@@ -628,10 +629,10 @@ function PreviewPane({
             ) : failure ? (
                 <EmptyState tone="error" className="py-10" title="No preview" body={failure} />
             ) : !rendered || preview.isPending ? (
-                <div aria-busy="true" aria-label="Rendering preview" className="flex flex-col gap-2">
+                <LoadingRegion label="Rendering preview" className="flex flex-col gap-2">
                     <Skeleton className="h-6 w-2/3" />
                     <Skeleton className="h-64" />
-                </div>
+                </LoadingRegion>
             ) : (
                 <>
                     <div className="flex items-start gap-2">

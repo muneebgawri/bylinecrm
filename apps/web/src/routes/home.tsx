@@ -1,5 +1,5 @@
 import type { DependencyState, HealthStatus, RlsState } from '@bylinecrm/shared';
-import { Badge, Button, EmptyState, Skeleton, ThemeToggle, type BadgeProps } from '@bylinecrm/ui';
+import { Badge, Button, EmptyState, LoadingRegion, Skeleton, ThemeToggle, type BadgeProps } from '@bylinecrm/ui';
 import { useEffect, useState } from 'react';
 import { fetchHealth } from '../api/health';
 
@@ -50,11 +50,11 @@ export function Home() {
                 <h1 className="text-2xl font-semibold">Service status</h1>
                 <section aria-live="polite" className="mt-4 max-w-md text-sm">
                     {health.state === 'loading' && (
-                        <div className="grid gap-2" role="status" aria-label="Checking the API">
+                        <LoadingRegion label="Checking the API" className="grid gap-2">
                             <Skeleton className="h-6 w-40" />
                             <Skeleton className="h-6 w-56" />
                             <Skeleton className="h-6 w-48" />
-                        </div>
+                        </LoadingRegion>
                     )}
                     {health.state === 'error' && (
                         <EmptyState

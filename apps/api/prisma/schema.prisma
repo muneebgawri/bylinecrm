@@ -1693,6 +1693,7 @@ enum EnrolmentStopReason {
   excluded
   sequence_archived
   person_deleted
+  region_blocked
 
   @@map("enrolment_stop_reason")
 }
@@ -1767,6 +1768,9 @@ model SequenceEnrolment {
   stopReason        EnrolmentStopReason? @map("stop_reason")
   stopDetail        String?              @map("stop_detail")
   enrolledBy        Json                 @map("enrolled_by")
+  /// No country was known at enrolment (D-251): enrolled and flagged; stopped if one later falls in a
+  /// blocked region.
+  countryUnknownAtEnrol Boolean           @default(false) @map("country_unknown_at_enrol")
   /// The member who enrolled the person (#144): the sender of every step's send — the pool mailbox
   /// only carries it. An API key's enrolment is its creator's.
   enrolledByMemberId String              @map("enrolled_by_member_id") @db.Uuid

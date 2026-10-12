@@ -23152,7 +23152,8 @@
                             "pipeline_exit",
                             "excluded",
                             "sequence_archived",
-                            "person_deleted"
+                            "person_deleted",
+                            "region_blocked"
                         ]
                     },
                     "stopDetail": {
@@ -23168,6 +23169,10 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
                         "description": "The member who enrolled the person: the sender of each step's send (#144)."
+                    },
+                    "countryUnknownAtEnrol": {
+                        "type": "boolean",
+                        "description": "No country was known at enrolment (D-251); the region policy applies once one is."
                     },
                     "enrolledAt": {
                         "type": "string",
@@ -23201,6 +23206,7 @@
                     "stopDetail",
                     "enrolledBy",
                     "enrolledByMemberId",
+                    "countryUnknownAtEnrol",
                     "enrolledAt",
                     "finishedAt",
                     "stoppedAt"
@@ -23257,9 +23263,32 @@
                             },
                             "required": ["personId", "code", "message"]
                         }
+                    },
+                    "warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "personId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "enum": ["region.unknown"]
+                                },
+                                "message": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["personId", "code", "message"]
+                        },
+                        "description": "Enrolled, flagged for review — never blocking (D-251: no known country)."
                     }
                 },
-                "required": ["enrolled", "skipped", "refused"]
+                "required": ["enrolled", "skipped", "refused", "warnings"]
             },
             "RegionPolicyEntry": {
                 "type": "object",
