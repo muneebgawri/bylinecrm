@@ -61,6 +61,14 @@ export const keys = {
         ['w', workspaceId, 'templates', 'list', { kind: params.kind ?? '', q: params.q ?? '' }] as const,
     template: (workspaceId: string, templateId: string) => ['w', workspaceId, 'templates', 'one', templateId] as const,
     templateVariables: (workspaceId: string) => ['w', workspaceId, 'templates', 'variables'] as const,
+    /** Every sequence query of the workspace — what a sequence write invalidates. */
+    sequences: (workspaceId: string) => ['w', workspaceId, 'sequences'] as const,
+    sequence: (workspaceId: string, sequenceId: string) => ['w', workspaceId, 'sequences', 'one', sequenceId] as const,
+    sequenceEnrolments: (workspaceId: string, sequenceId: string) =>
+        ['w', workspaceId, 'sequences', 'enrolments', sequenceId] as const,
+    /** A person's enrolments; under `sequences` so an enrolment change refreshes both views. */
+    personEnrolments: (workspaceId: string, personId: string) =>
+        ['w', workspaceId, 'sequences', 'person', personId] as const,
     mailSettings: (workspaceId: string) => ['w', workspaceId, 'settings', 'mail'] as const,
     oauthClient: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client'] as const,
     twentyImport: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty'] as const,

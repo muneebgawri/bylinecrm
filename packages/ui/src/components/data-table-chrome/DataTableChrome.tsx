@@ -278,8 +278,9 @@ export function RowActionsMenu<R>({ actions, row }: { actions: TableRowActions<R
 function DataTable<R>({ data }: { data: TableData<R> }) {
     return (
         // `relative`: an absolutely positioned cell part (an sr-only label) would otherwise escape
-        // this scroll container and widen the whole page.
-        <div className="relative overflow-x-auto">
+        // this scroll container and widen the whole page. Focusable and named: a table wider than
+        // its place scrolls sideways, and a keyboard must be able to reach it (WCAG 2.1.1).
+        <div role="region" aria-label={data.label} tabIndex={0} className={cn('relative overflow-x-auto', focusRing)}>
             <table className={tableClasses.table}>
                 <thead>
                     <tr>

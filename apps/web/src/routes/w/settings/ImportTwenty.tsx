@@ -276,7 +276,7 @@ const label = (object: TwentyImportObject) => TWENTY_IMPORT_OBJECT_LABELS[object
 function PreviewTable({ preview }: { preview: TwentyImportPreviewView }) {
     type Row = TwentyImportPreviewView['objects'][number];
     return (
-        <section aria-label="Counts per object" className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2">
             <p className="m-0 text-[13px] text-text-muted">
                 Twenty answered at {formatDate(preview.checkedAt)}. “In Twenty” is what a run reads; “Mapped here” is
                 what earlier runs already brought over.
@@ -484,7 +484,7 @@ function ReportTable({ report }: { report: TwentyImportObjectReportView[] }) {
     );
     const errors = rows.flatMap((r) => r.errors.map((e) => ({ object: r.object, ...e })));
     return (
-        <section aria-label="Run report" className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2">
             <DataTableChrome
                 data={{
                     label: 'Run report',
@@ -567,7 +567,7 @@ function ReportTable({ report }: { report: TwentyImportObjectReportView[] }) {
             />
             {errors.length > 0 && (
                 <details className="text-[13px]">
-                    <summary className="cursor-pointer text-text-muted">
+                    <summary className="flex min-h-touch cursor-pointer items-center text-text-muted md:min-h-0">
                         {errors.length} record{errors.length === 1 ? '' : 's'} skipped or refused
                     </summary>
                     <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">

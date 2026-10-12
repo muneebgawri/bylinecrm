@@ -1,3 +1,4 @@
+import type { Links } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 import { diffOf, isEmpty, projectedChanges } from './diff';
 
@@ -20,10 +21,12 @@ describe('projectedChanges (P1-4a)', () => {
 
 describe('diffOf (P4-4): a composite read back from jsonb is the composite the caller sent', () => {
     it('ignores the order of an object’s keys at every depth, and still sees a changed value', () => {
-        const fromRow = { links: { x: null, linkedin: { url: 'https://l.example/a', label: null } } };
-        const fromCaller = { links: { linkedin: { label: null, url: 'https://l.example/a' }, x: null } };
+        const fromRow: { links: Links } = { links: { x: null, linkedin: { url: 'https://l.example/a', label: null } } };
+        const fromCaller: { links: Links } = {
+            links: { linkedin: { label: null, url: 'https://l.example/a' }, x: null },
+        };
         expect(isEmpty(diffOf(fromRow, fromCaller, ['links']))).toBe(true);
-        const changed = { links: { linkedin: { label: 'A', url: 'https://l.example/a' }, x: null } };
+        const changed: { links: Links } = { links: { linkedin: { label: 'A', url: 'https://l.example/a' }, x: null } };
         expect(Object.keys(diffOf(fromRow, changed, ['links']))).toEqual(['links']);
     });
 

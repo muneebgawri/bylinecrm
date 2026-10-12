@@ -170,6 +170,7 @@ export class SequenceRunner {
                 sendAt,
                 enrolmentId: e.id,
                 stepId: step.id,
+                senderMemberId: e.enrolledByMemberId,
             });
             await tx.sequenceEnrolment.update({ where: { id: e.id }, data: { waitingOutboundId: outboundId } });
             return true;
