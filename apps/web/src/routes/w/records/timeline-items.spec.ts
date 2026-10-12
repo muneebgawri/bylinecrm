@@ -58,6 +58,31 @@ describe('wordsFor', () => {
         expect(words.family).toBe('note');
     });
 
+    it('#114 reads a suppression by its address, reason and note, and its lift with the lift note', () => {
+        const linked = { type: 'suppression' as const, id: 's1' };
+        const named = { linked: { ...linked, name: 'dana@acme.example' } };
+        const added = wordsFor(
+            entry({
+                kind: 'linked-suppression.added',
+                linked,
+                properties: { ...named, suppression: { reason: 'hard_bounce', source: 'provider', note: null } },
+            }),
+            names,
+        );
+        expect(added.action).toBe('suppressed dana@acme.example');
+        expect(added.detail).toEqual([{ label: 'Hard bounce' }]);
+        const lifted = wordsFor(
+            entry({
+                kind: 'linked-suppression.removed',
+                linked,
+                properties: { ...named, suppression: { reason: 'manual', source: 'member', note: 'added by mistake' } },
+            }),
+            names,
+        );
+        expect(lifted.action).toBe('lifted the suppression of dana@acme.example');
+        expect(lifted.detail).toEqual([{ label: 'Manual' }, { label: 'added by mistake' }]);
+    });
+
     it('reads an external event by its title and shows the amount', () => {
         const words = wordsFor(
             entry({

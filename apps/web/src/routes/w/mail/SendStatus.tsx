@@ -1,6 +1,6 @@
 import { Badge, Button } from '@bylinecrm/ui';
 import { useState } from 'react';
-import { useCancelMail, useRescheduleMail, useSendMail } from '../../../api/mail';
+import { useCancelMail, useRescheduleMail, useRetryMail } from '../../../api/mail';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatSendAt } from './schedule';
@@ -28,7 +28,7 @@ export function failureReason(error: PendingSend['error']): string {
  * politely as it changes.
  */
 export function SendStatus({ workspaceId, send }: { workspaceId: string; send: PendingSend }) {
-    const resend = useSendMail(workspaceId);
+    const retry = useRetryMail(workspaceId);
     const reschedule = useRescheduleMail(workspaceId);
     const cancel = useCancelMail(workspaceId);
     const [confirming, setConfirming] = useState(false);
@@ -83,29 +83,27 @@ export function SendStatus({ workspaceId, send }: { workspaceId: string; send: P
         );
     }
     if (send.status === 'failed') {
-        const retry = send.session;
         return (
             <>
                 <Badge status="danger" role="status">
                     Failed
                 </Badge>
                 <span className="text-xs text-text-muted">{failureReason(send.error)}</span>
-                {retry && (
+                {/* Sent again by the server, rebuilt and checked as things stand now (#134). */}
+                {send.canRetry && (
                     <Button
                         size="xs"
                         shape="square"
                         variant="secondary"
-                        loading={resend.isPending}
-                        onClick={() =>
-                            resend.mutate({ send: retry.input, subject: retry.subject, replaces: send.messageId })
-                        }
+                        loading={retry.isPending}
+                        onClick={() => retry.mutate(send.messageId)}
                     >
                         Retry
                     </Button>
                 )}
-                {resend.error && (
+                {retry.error && (
                     <span role="alert" className="text-xs text-danger">
-                        {failureText(resend.error)}
+                        {failureText(retry.error)}
                     </span>
                 )}
             </>

@@ -1,6 +1,7 @@
-import type { RecordObject } from '@bylinecrm/shared';
+import type { RecordObject, SuppressionReason } from '@bylinecrm/shared';
 import type { TimelineActivityView } from '../../../api/types';
 import { formatMoney } from '../../../lib/money';
+import { SUPPRESSION_REASON_LABEL } from '../../../lib/suppression';
 import { fieldLabel } from './fields';
 import { OBJECT_LABEL } from './targets';
 
@@ -67,6 +68,10 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         return { ...base, ...emailWords(entry, names), family: 'mail' };
     }
 
+    if (entry.kind.startsWith('linked-suppression.')) {
+        return { ...base, ...suppressionWords(entry), family: 'mail' };
+    }
+
     if (entry.kind.startsWith('linked-')) {
         const [thing = '', action = ''] = entry.kind.slice(7).split('.');
         const name = typeof entry.properties['name'] === 'string' ? entry.properties['name'] : undefined;
@@ -93,6 +98,28 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         action: `${ACTIONS[action] ?? action} the ${OBJECT_LABEL[object as RecordObject]?.toLowerCase() ?? object}`,
         family: 'record',
         ...(detail && detail.length ? { detail } : {}),
+    };
+}
+
+/**
+ * The person's address put on or lifted from the suppression list (#114): the address, why, and the
+ * note — the entry's own note when added, the lift's note when lifted.
+ */
+function suppressionWords(entry: TimelineActivityView): Pick<TimelineWords, 'action' | 'detail'> {
+    const linked = entry.properties['linked'];
+    const address = isRecord(linked) && typeof linked['name'] === 'string' ? linked['name'] : 'an address';
+    const suppression = entry.properties['suppression'];
+    const reason = isRecord(suppression) ? suppression['reason'] : undefined;
+    const note = isRecord(suppression) && typeof suppression['note'] === 'string' ? suppression['note'] : undefined;
+    const detail = [
+        ...(typeof reason === 'string' && reason in SUPPRESSION_REASON_LABEL
+            ? [{ label: SUPPRESSION_REASON_LABEL[reason as SuppressionReason] }]
+            : []),
+        ...(note ? [{ label: note }] : []),
+    ];
+    return {
+        action: entry.kind.endsWith('.removed') ? `lifted the suppression of ${address}` : `suppressed ${address}`,
+        ...(detail.length ? { detail } : {}),
     };
 }
 
