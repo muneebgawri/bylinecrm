@@ -16,7 +16,7 @@ import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { paths } from '../../paths';
 import { RailCard, RailEmpty, RailLoading } from '../records/RailCard';
-import { ENROLMENT_STATUS_LABEL, ENROLMENT_STATUS_TONE, STOP_REASON_LABEL } from './sequenceText';
+import { ENROLMENT_STATUS_LABEL, ENROLMENT_STATUS_TONE, STOP_REASON_LABEL, enrolmentTaskLine } from './sequenceText';
 
 /** Where an enrolment stands, in one line: the step it is on, why it is held, or why it stopped. */
 export function enrolmentLine(e: SequenceEnrolmentView): string {
@@ -77,6 +77,11 @@ export function PersonEnrolments({ workspaceId, personId }: { workspaceId: strin
                                 </Badge>
                             </div>
                             <span className="text-xs text-text-muted">{enrolmentLine(e)}</span>
+                            {e.tasks.map((task) => (
+                                <span key={task.id} className="text-xs text-text-muted">
+                                    {enrolmentTaskLine(task)}
+                                </span>
+                            ))}
                             <div className="flex flex-wrap gap-2">
                                 {(e.status === 'active' || e.status === 'held') && (
                                     <Button size="sm" variant="ghost" onClick={() => setStopping(e)}>

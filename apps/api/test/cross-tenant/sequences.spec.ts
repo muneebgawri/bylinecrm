@@ -683,6 +683,33 @@ describe('FR-CRMS-5 sequences', () => {
             expect(
                 await owner.task.count({ where: { targets: { some: { targetType: 'person', targetId: xan } } } }),
             ).toBe(1);
+
+            // #158: the enrolment view carries the step's task — which step, its title, its state — so a
+            // record's sequences card can show it; completing the task shows there, and drives nothing.
+            const listed = (await as(admin).get(w(`/people/${xan}/enrolments`))).body as EnrolmentView[];
+            const mine = listed.find((x) => x.id === e.id)!;
+            expect(mine.tasks).toEqual([
+                {
+                    id: tasks[0]!.id,
+                    stepId: seq.steps[0]!.id,
+                    title: 'Call if no reply',
+                    status: 'todo',
+                    dueAt: tasks[0]!.dueAt!.toISOString(),
+                    completedAt: null,
+                    assigneeId: ownerId,
+                },
+            ]);
+            await as(admin)
+                .patch(w(`/tasks/${tasks[0]!.id}`))
+                .send({ status: 'done' })
+                .expect(200);
+            const after = ((await as(admin).get(w(`/people/${xan}/enrolments`))).body as EnrolmentView[]).find(
+                (x) => x.id === e.id,
+            )!;
+            expect(after.tasks[0]).toMatchObject({ status: 'done', completedAt: expect.any(String) });
+            expect(after).toMatchObject({ status: 'active', stepIndex: 1 });
+            // The other workspace reads none of it.
+            expect((await as(otherAdmin).get(w(`/people/${xan}/enrolments`, otherWorkspace))).status).toBe(404);
         });
 
         it('assigns the task to the member who enrolled the person when the person has no owner', async () => {
