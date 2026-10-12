@@ -30,6 +30,7 @@ export const paths = {
     deals: (workspaceId: string) => `/w/${workspaceId}/deals`,
     deal: (workspaceId: string, dealId: string) => `/w/${workspaceId}/deals/${dealId}`,
     sequences: (workspaceId: string) => `/w/${workspaceId}/sequences`,
+    sequence: (workspaceId: string, sequenceId: string) => `/w/${workspaceId}/sequences/${sequenceId}`,
     templates: (workspaceId: string) => `/w/${workspaceId}/templates`,
     template: (workspaceId: string, templateId: string) => `/w/${workspaceId}/templates/${templateId}`,
     mailboxes: (workspaceId: string) => `/w/${workspaceId}/mailboxes`,
