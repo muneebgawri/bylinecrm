@@ -1,5 +1,5 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import { Building2, LayoutDashboard, ListOrdered, BarChart3, Users, UsersRound } from 'lucide-react';
+import { Building2, LayoutDashboard, BarChart3, Users, UsersRound } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 import { CREATE_PARAM } from '../paths';
@@ -54,14 +54,6 @@ const PAGES = {
         body: 'A company is created from a person’s work domain or added by hand.',
         action: { label: 'Add company', requires: 'record:write' },
         coming: 'P1-UI-2',
-    },
-    sequences: {
-        title: 'Sequences',
-        subtitle: 'Drips with waits, stop conditions and a send window.',
-        icon: <ListOrdered />,
-        empty: 'No sequences yet',
-        body: 'A sequence stops itself on a reply, a bounce, an unsubscribe or a stage change.',
-        coming: 'Phase 3',
     },
     team: {
         title: 'Team',

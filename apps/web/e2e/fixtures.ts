@@ -49,6 +49,8 @@ import type {
     ProfileView,
     UserView,
     WorkspaceView,
+    SequenceEnrolmentView,
+    SequenceView,
 } from '../src/api/types';
 
 /**
@@ -94,6 +96,9 @@ export const IDS = {
     mailMessage: '0b1e0000-0000-4000-8000-0000000008c2',
     secondMailMessage: '0b1e0000-0000-4000-8000-0000000008c3',
     scheduledSend: '0b1e0000-0000-4000-8000-0000000008d1',
+    sequence: '0b1e0000-0000-4000-8000-000000000a01',
+    enrolment: '0b1e0000-0000-4000-8000-000000000a11',
+    stoppedEnrolment: '0b1e0000-0000-4000-8000-000000000a12',
 } as const;
 
 const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
@@ -936,5 +941,91 @@ export const scheduledSends: MailOutboundView[] = [
         cancelledAt: null,
         createdAt: at(1),
         sentAt: null,
+    },
+];
+
+/** One active sequence: an email, a wait, a follow-up in the thread (doc 50 §D). */
+export const sequences: SequenceView[] = [
+    {
+        id: IDS.sequence,
+        name: 'Q4 agency outreach',
+        status: 'active',
+        pipelineId: IDS.pipeline,
+        stopOnPipelineExit: true,
+        timeZone: 'Asia/Karachi',
+        window: { startMinute: 540, endMinute: 1020, days: 31 },
+        steps: [
+            {
+                id: '0b1e0000-0000-4000-8000-000000000a21',
+                position: 0,
+                kind: 'email',
+                templateId: IDS.outreachTemplate,
+                replyInThread: false,
+                waitDays: null,
+                businessDays: false,
+            },
+            {
+                id: '0b1e0000-0000-4000-8000-000000000a22',
+                position: 1,
+                kind: 'wait',
+                templateId: null,
+                replyInThread: false,
+                waitDays: 3,
+                businessDays: true,
+            },
+            {
+                id: '0b1e0000-0000-4000-8000-000000000a23',
+                position: 2,
+                kind: 'email',
+                templateId: IDS.outreachTemplate,
+                replyInThread: true,
+                waitDays: null,
+                businessDays: false,
+            },
+        ],
+        counts: { enrolled: 184, active: 61, held: 0, finished: 97, stopped: 26 },
+        createdBy: member,
+        createdAt: at(10),
+        updatedAt: at(2),
+    },
+];
+
+/** The person's enrolments: one running, one stopped by a reply (re-enrollable). */
+export const enrolments: SequenceEnrolmentView[] = [
+    {
+        id: IDS.enrolment,
+        sequenceId: IDS.sequence,
+        personId: IDS.person,
+        dealId: null,
+        status: 'active',
+        stepIndex: 1,
+        nextRunAt: at(-1),
+        waitingOutboundId: null,
+        heldReason: null,
+        stopReason: null,
+        stopDetail: null,
+        enrolledBy: member,
+        enrolledByMemberId: IDS.member,
+        enrolledAt: at(3),
+        finishedAt: null,
+        stoppedAt: null,
+    },
+    {
+        id: IDS.stoppedEnrolment,
+        sequenceId: IDS.sequence,
+        personId: IDS.secondPerson,
+        dealId: null,
+        status: 'stopped',
+        stepIndex: 0,
+        nextRunAt: null,
+        waitingOutboundId: null,
+        heldReason: null,
+        stopReason: 'reply',
+        stopDetail: null,
+        enrolledBy: member,
+        enrolledByMemberId: IDS.member,
+        enrolledAt: at(9),
+        finishedAt: null,
+        stoppedAt: at(5),
     },
 ];

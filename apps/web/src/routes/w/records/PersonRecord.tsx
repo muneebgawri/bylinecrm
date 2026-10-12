@@ -1,4 +1,4 @@
-import { Badge, FactGrid } from '@bylinecrm/ui';
+import { Badge, FactGrid, toast } from '@bylinecrm/ui';
 import { ListTodo, Mail, Send, StickyNote } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
@@ -18,6 +18,8 @@ import { RecordLayout } from './RecordLayout';
 import { RecordActionBar, RecordHeaderActions, type RecordAction } from './recordActions';
 import { useRelated } from './related';
 import { TasksPanel } from './TasksPanel';
+import { EnrolDialog, enrolSummary } from '../sequences/EnrolDialog';
+import { PersonEnrolments } from '../sequences/PersonEnrolments';
 import { TimelinePanel } from './TimelinePanel';
 import { useRecordCommands } from './useRecordCommands';
 
@@ -45,6 +47,8 @@ export function PersonRecord({
     const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
+    const enrol = usePermission('sequence:enrol');
+    const [enrolling, setEnrolling] = useState(false);
     const compose = useRef<RecordComposeHandle>(null);
     const ownerId = useId();
     const target = { type: 'person' as const, id: person.id };
@@ -205,11 +209,21 @@ export function PersonRecord({
 
     const actions: RecordAction[] = [
         {
+            id: 'enrol',
+            label: 'Enrol in sequence',
+            short: 'Enrol',
+            icon: <Send aria-hidden />,
+            // The person page's primary action once sequences exist (P2-UI-1 ruling, #140).
+            primary: true,
+            onSelect: () => setEnrolling(true),
+            disabled: !enrol.allowed,
+            reason: enrol.reason || undefined,
+        },
+        {
             id: 'email',
             label: 'Email',
             short: 'Email',
             icon: <Mail aria-hidden />,
-            primary: true,
             onSelect: () => compose.current?.start(),
             hint: 'Write an email (e)',
         },
@@ -232,14 +246,6 @@ export function PersonRecord({
             disabled: !write.allowed,
             reason: write.reason || undefined,
             hint: 'Add a task (t)',
-        },
-        {
-            id: 'enrol',
-            label: 'Enrol in sequence',
-            short: 'Enrol',
-            icon: <Send aria-hidden />,
-            disabled: true,
-            reason: 'Sequences arrive in Phase 3',
         },
     ];
 
@@ -343,6 +349,7 @@ export function PersonRecord({
                         open={notesOpen}
                         onOpenChange={setNotesOpen}
                     />
+                    <PersonEnrolments workspaceId={workspaceId} personId={person.id} />
                     <AttachmentsPanel workspaceId={workspaceId} target={target} />
                 </>
             }
@@ -353,6 +360,17 @@ export function PersonRecord({
                 handle={compose}
             />
             <TimelinePanel workspaceId={workspaceId} target={target} />
+            {enrolling && (
+                <EnrolDialog
+                    workspaceId={workspaceId}
+                    people={[{ id: person.id, name: personName(person), email: person.emails.primary }]}
+                    onOpenChange={(open) => !open && setEnrolling(false)}
+                    onDone={(result) => {
+                        setEnrolling(false);
+                        toast({ title: enrolSummary(result) });
+                    }}
+                />
+            )}
         </RecordLayout>
     );
 }
