@@ -13,11 +13,17 @@ import { SendingPoolService } from '../sending-pool/sending-pool.service';
 import { SuppressionService } from '../suppression/suppression.service';
 import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
+import { EmailVerificationService } from '../verification/email-verification.service';
 import { inferCountry } from './country';
 import { ExclusionsService } from './exclusions.service';
 import { RegionPolicyService } from './region-policy.service';
 import { addWaitDays, nextWindowStart, zoneForCountry, type SendWindow } from './schedule';
-import { RESCHEDULE_FAILURE_CODES, SEQUENCE_POOL_RETRY_MS, SEQUENCE_STEP_QUEUE } from './sequences.constants';
+import {
+    RESCHEDULE_FAILURE_CODES,
+    SEQUENCE_POOL_RETRY_MS,
+    SEQUENCE_STEP_QUEUE,
+    SEQUENCE_VERIFY_RETRY_MS,
+} from './sequences.constants';
 
 /** A step's job: which enrolment, and the `next_run_at` it was added for. */
 export interface SequenceStepJob {
@@ -64,7 +70,9 @@ const SUPPRESSION_STOP: Readonly<Record<SuppressionReason, EnrolmentStopReason>>
  * complaint), exclusion (FR-CRMS-10), the deal leaving the pipeline, the person deleted. Then:
  *
  * - `wait` — advance; the next step runs `waitDays` later in the recipient's zone.
- * - `email` — a pool mailbox (`pick`; the previous email step's for a reply in thread), the next open
+ * - `email` — the address verified again if its result has aged past the workspace's limit (FR-CRMS-14:
+ *   not deliverable → stopped `invalid_address`; not verifiable → the step is tried later), then
+ *   a pool mailbox (`pick`; the previous email step's for a reply in thread), the next open
  *   window instant in the recipient's zone spaced by `nextSendAt`, and the send scheduled in the same
  *   transaction as the enrolment's move to wait for it. No mailbox can send → rescheduled, never dropped.
  *   A variable the person has no value for → held, with the variables named (FR-CRMS-3).
@@ -87,6 +95,7 @@ export class SequenceRunner {
         private readonly regions: RegionPolicyService,
         private readonly templates: TemplatesService,
         private readonly renderer: RenderService,
+        private readonly verification: EmailVerificationService,
         @InjectQueue(SEQUENCE_STEP_QUEUE) private readonly queue: Queue<SequenceStepJob>,
     ) {}
 
@@ -132,7 +141,15 @@ export class SequenceRunner {
             return done ? 'advanced' : 'skipped';
         }
 
-        // An email step: the mailbox, then the time, then the send.
+        // An email step: the address checked again (P3-5), the mailbox, then the time, then the send.
+        const verdict = (await this.verification.check(workspaceId, [address])).get(address)!;
+        if (verdict.result === 'invalid') {
+            await this.stop(workspaceId, e.id, 'invalid_address', verdict.message);
+            return 'stopped';
+        }
+        if (verdict.result === 'unknown') {
+            return this.reschedule(workspaceId, e, new Date(now.getTime() + SEQUENCE_VERIFY_RETRY_MS), window, zone);
+        }
         let mailboxId: string | null;
         let parentId: string | null = null;
         if (step.replyInThread) {

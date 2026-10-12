@@ -66,12 +66,14 @@ model Workspace {
   sendingDomains      SendingDomain[]
   mailBounces         MailBounce[]
 
-  regionPolicies     RegionPolicy[]
-  regionPolicyChanges RegionPolicyChange[]
-  outreachExclusions OutreachExclusion[]
-  sequences          Sequence[]
-  sequenceSteps      SequenceStep[]
-  sequenceEnrolments SequenceEnrolment[]
+  regionPolicies            RegionPolicy[]
+  regionPolicyChanges       RegionPolicyChange[]
+  emailVerifications        EmailVerification[]
+  emailVerificationSettings EmailVerificationSettings?
+  outreachExclusions        OutreachExclusion[]
+  sequences                 Sequence[]
+  sequenceSteps             SequenceStep[]
+  sequenceEnrolments        SequenceEnrolment[]
 
   twentyImportSettings TwentyImportSettings?
   twentyImportRuns     TwentyImportRun[]
@@ -236,17 +238,18 @@ model WorkspaceMember {
   createdSuppressions Suppression[] @relation("SuppressionCreator")
   removedSuppressions Suppression[] @relation("SuppressionRemover")
 
-  updatedRegionPolicies RegionPolicy[]
-  regionPolicyChanges   RegionPolicyChange[]
+  updatedRegionPolicies            RegionPolicy[]
+  regionPolicyChanges              RegionPolicyChange[]
+  updatedEmailVerificationSettings EmailVerificationSettings[]
 
   configuredTwentyImports TwentyImportSettings[]
   startedTwentyImports    TwentyImportRun[]
+  sequenceEnrolments      SequenceEnrolment[]    @relation("EnrolmentEnroller")
 
   @@unique([workspaceId, userId])
   @@index([userId])
   @@index([roleId])
   @@map("workspace_members")
-  sequenceEnrolments SequenceEnrolment[] @relation("EnrolmentEnroller")
 }
 
 /// A named set of capabilities in a workspace. The two system roles (`admin`, `member`) exist from
@@ -1701,6 +1704,7 @@ enum EnrolmentStopReason {
   sequence_archived
   person_deleted
   region_blocked
+  invalid_address
 
   @@map("enrolment_stop_reason")
 }
@@ -1761,39 +1765,39 @@ model SequenceStep {
 
 /// A person in a sequence: the truth the runner reads (FR-CRMS-5). One per (sequence, person).
 model SequenceEnrolment {
-  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId       String               @map("workspace_id") @db.Uuid
-  sequenceId        String               @map("sequence_id") @db.Uuid
-  personId          String               @map("person_id") @db.Uuid
-  dealId            String?              @map("deal_id") @db.Uuid
-  status            EnrolmentStatus      @default(active)
-  stepIndex         Int                  @default(0) @map("step_index")
+  id                    String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String               @map("workspace_id") @db.Uuid
+  sequenceId            String               @map("sequence_id") @db.Uuid
+  personId              String               @map("person_id") @db.Uuid
+  dealId                String?              @map("deal_id") @db.Uuid
+  status                EnrolmentStatus      @default(active)
+  stepIndex             Int                  @default(0) @map("step_index")
   /// When the next step runs; null while a step's send is out (`waitingOutboundId`) or once ended.
-  nextRunAt         DateTime?            @map("next_run_at") @db.Timestamptz
-  waitingOutboundId String?              @unique @map("waiting_outbound_id") @db.Uuid
-  heldReason        String?              @map("held_reason")
-  stopReason        EnrolmentStopReason? @map("stop_reason")
-  stopDetail        String?              @map("stop_detail")
-  enrolledBy        Json                 @map("enrolled_by")
+  nextRunAt             DateTime?            @map("next_run_at") @db.Timestamptz
+  waitingOutboundId     String?              @unique @map("waiting_outbound_id") @db.Uuid
+  heldReason            String?              @map("held_reason")
+  stopReason            EnrolmentStopReason? @map("stop_reason")
+  stopDetail            String?              @map("stop_detail")
+  enrolledBy            Json                 @map("enrolled_by")
   /// No country was known at enrolment (D-251): enrolled and flagged; stopped if one later falls in a
   /// blocked region.
-  countryUnknownAtEnrol Boolean           @default(false) @map("country_unknown_at_enrol")
+  countryUnknownAtEnrol Boolean              @default(false) @map("country_unknown_at_enrol")
   /// The member who enrolled the person (#144): the sender of every step's send — the pool mailbox
   /// only carries it. An API key's enrolment is its creator's.
-  enrolledByMemberId String              @map("enrolled_by_member_id") @db.Uuid
-  enrolledAt        DateTime             @default(now()) @map("enrolled_at") @db.Timestamptz
-  finishedAt        DateTime?            @map("finished_at") @db.Timestamptz
-  stoppedAt         DateTime?            @map("stopped_at") @db.Timestamptz
-  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  enrolledByMemberId    String               @map("enrolled_by_member_id") @db.Uuid
+  enrolledAt            DateTime             @default(now()) @map("enrolled_at") @db.Timestamptz
+  finishedAt            DateTime?            @map("finished_at") @db.Timestamptz
+  stoppedAt             DateTime?            @map("stopped_at") @db.Timestamptz
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  sequence    Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  person      Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
-  deal        Opportunity?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sequence         Sequence        @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  person           Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
+  deal             Opportunity?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
   enrolledByMember WorkspaceMember @relation("EnrolmentEnroller", fields: [enrolledByMemberId], references: [id])
-  waitingSend MailOutbound?  @relation("EnrolmentWaitingSend", fields: [waitingOutboundId], references: [id], onDelete: SetNull)
-  sends       MailOutbound[] @relation("EnrolmentSends")
+  waitingSend      MailOutbound?   @relation("EnrolmentWaitingSend", fields: [waitingOutboundId], references: [id], onDelete: SetNull)
+  sends            MailOutbound[]  @relation("EnrolmentSends")
 
   @@unique([sequenceId, personId])
   @@index([status, nextRunAt])
@@ -1890,4 +1894,48 @@ model TwentyImportLink {
   @@id([workspaceId, object, externalId])
   @@index([workspaceId, localType, localId])
   @@map("twenty_import_links")
+}
+
+/// What verification found about an address (P3-5, FR-CRMS-14); `@bylinecrm/shared` says what each means.
+enum EmailVerificationResult {
+  valid
+  invalid
+  risky
+  unknown
+
+  @@map("email_verification_result")
+}
+
+/// The workspace's stored answer about an address (lower case): one per (workspace, address), found
+/// again once older than the workspace's age (FR-CRMS-16) or whenever it is `unknown`.
+model EmailVerification {
+  workspaceId String                  @map("workspace_id") @db.Uuid
+  address     String
+  result      EmailVerificationResult
+  /// `EmailVerificationReason` from @bylinecrm/shared.
+  reason      String
+  message     String
+  /// The verifier that answered (`free`, or a vendor adapter's name).
+  source      String
+  verifiedAt  DateTime                @map("verified_at") @db.Timestamptz
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, address])
+  @@map("email_verifications")
+}
+
+/// How long a result stands (FR-CRMS-16): a row is an override; no row means 90 days.
+model EmailVerificationSettings {
+  workspaceId       String   @id @map("workspace_id") @db.Uuid
+  maxAgeDays        Int      @default(90) @map("max_age_days")
+  updatedByMemberId String?  @map("updated_by_member_id") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedBy WorkspaceMember? @relation(fields: [updatedByMemberId], references: [id], onDelete: SetNull)
+
+  @@map("email_verification_settings")
 }

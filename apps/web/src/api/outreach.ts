@@ -2,11 +2,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
 import { keys } from './queries';
-import type { RegionPolicyChangeView, RegionPolicyEntryView, SetRegionPolicyInput } from './types';
+import type {
+    EmailVerificationSettingsView,
+    PutVerificationSettingsInput,
+    RegionPolicyChangeView,
+    RegionPolicyEntryView,
+    SetRegionPolicyInput,
+} from './types';
 
 /**
- * Outreach compliance (P3-3, FR-CRMS-12): the workspace's region policy and its change history (#141).
- * Apart from `queries.ts` so it loads with the settings chunk (FR-CRMS-UI-10, #131).
+ * Outreach compliance (P3-3, FR-CRMS-12): the workspace's region policy and its change history (#141),
+ * and how long an address's verification stands (P3-5, FR-CRMS-16). Apart from `queries.ts` so it
+ * loads with the settings chunk (FR-CRMS-UI-10, #131).
  */
 export const regionPolicy = {
     list: (workspaceId: string, signal?: AbortSignal) =>
@@ -36,5 +43,28 @@ export function useSetRegionPolicy(workspaceId: string) {
     return useMutation({
         mutationFn: (input: SetRegionPolicyInput) => regionPolicy.set(workspaceId, input),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.regionPolicy(workspaceId) }),
+    });
+}
+
+export const verificationSettings = {
+    get: (workspaceId: string, signal?: AbortSignal) =>
+        request<EmailVerificationSettingsView>('GET', workspacePath(workspaceId, '/outreach/verification'), { signal }),
+    put: (workspaceId: string, input: PutVerificationSettingsInput) =>
+        request<EmailVerificationSettingsView>('PUT', workspacePath(workspaceId, '/outreach/verification'), {
+            body: input,
+        }),
+};
+
+export const useVerificationSettings = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.verificationSettings(workspaceId),
+        queryFn: ({ signal }) => verificationSettings.get(workspaceId, signal),
+    });
+
+export function usePutVerificationSettings(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: PutVerificationSettingsInput) => verificationSettings.put(workspaceId, input),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.verificationSettings(workspaceId) }),
     });
 }

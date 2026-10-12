@@ -198,6 +198,8 @@ export const ENROLMENT_STOP_REASONS = [
     'sequence_archived',
     'person_deleted',
     'region_blocked',
+    // FR-CRMS-14: the address was found not deliverable when checked again before a step (P3-5).
+    'invalid_address',
 ] as const;
 export type EnrolmentStopReason = (typeof ENROLMENT_STOP_REASONS)[number];
 
@@ -209,6 +211,9 @@ export const ENROLMENT_REFUSAL_CODES = [
     'suppressed',
     'excluded',
     'region.blocked',
+    // FR-CRMS-14 (P3-5): the address is not deliverable, or could not be verified — `unknown` does not enrol.
+    'email.invalid',
+    'email.unverified',
 ] as const;
 export type EnrolmentRefusalCode = (typeof ENROLMENT_REFUSAL_CODES)[number];
 
@@ -218,9 +223,11 @@ export interface EnrolmentRefusal {
     message: string;
 }
 
-/** The answer to a preview or an enrol: who is (or would be) enrolled, skipped, refused. */
-/** Enrolled, but worth a look (D-251): never blocks an enrolment. */
-export const ENROLMENT_WARNING_CODES = ['region.unknown'] as const;
+/**
+ * Enrolled, but worth a look: never blocks an enrolment. No known country (D-251); an address that
+ * is deliverable but may not reach a person — a role address or a disposable domain (FR-CRMS-14).
+ */
+export const ENROLMENT_WARNING_CODES = ['region.unknown', 'email.risky'] as const;
 export type EnrolmentWarningCode = (typeof ENROLMENT_WARNING_CODES)[number];
 
 export interface EnrolmentWarning {
@@ -234,7 +241,7 @@ export interface EnrolmentBatchResult {
     /** Already in this sequence: a no-op, never a second enrolment. */
     skipped: string[];
     refused: EnrolmentRefusal[];
-    /** Enrolled people flagged for review (D-251: no known country). */
+    /** Enrolled people flagged for review (D-251: no known country; FR-CRMS-14: a risky address). */
     warnings: EnrolmentWarning[];
 }
 

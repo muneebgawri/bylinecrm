@@ -168,6 +168,11 @@ export type SuppressionView = Schemas['Suppression'];
 export type RegionPolicyEntryView = Schemas['RegionPolicyEntry'];
 export type RegionPolicyChangeView = Schemas['RegionPolicyChange'];
 export type SetRegionPolicyInput = Schemas['SetRegionPolicyDto'];
+// ---- Email verification (P3-5) ---------------------------------------------------------------
+export type EmailVerificationView = Schemas['EmailVerification'];
+export type PersonVerificationView = Schemas['PersonVerification'];
+export type EmailVerificationSettingsView = Schemas['EmailVerificationSettings'];
+export type PutVerificationSettingsInput = Schemas['PutVerificationSettingsDto'];
 export type SuppressionPage = Schemas['SuppressionPage'];
 export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
 export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;

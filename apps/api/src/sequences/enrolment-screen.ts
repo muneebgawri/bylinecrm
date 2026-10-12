@@ -9,6 +9,7 @@ import {
 } from '@bylinecrm/shared';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { SuppressionService } from '../suppression/suppression.service';
+import { EmailVerificationService } from '../verification/email-verification.service';
 import { inferCountry } from './country';
 import { ExclusionsService, exclusionMessage } from './exclusions.service';
 import { RegionPolicyService } from './region-policy.service';
@@ -24,7 +25,7 @@ export interface EligiblePerson {
 export interface ScreenResult {
     eligible: EligiblePerson[];
     refused: EnrolmentRefusal[];
-    /** Eligible people flagged for review (D-251). */
+    /** Eligible people flagged for review (D-251, FR-CRMS-14). */
     warnings: EnrolmentWarning[];
 }
 
@@ -39,10 +40,13 @@ const SUPPRESSION_WORDS: Readonly<Record<string, string>> = {
  * The enrolment gates (P3-3) — one function, so the preview and the enrol make the same decision and
  * the dialog shows the server's reasons, never a guess (doc 50 §D). In order: the person exists and is
  * visible (`person.not_found`), has a primary address (`email.missing`), has a source (FR-CRMS-11,
- * `source.missing`), is not suppressed (FR-CRMS-7, P3-1's one query), not excluded (FR-CRMS-10), and is
- * in a region the workspace's policy allows (FR-CRMS-12). Reads in the caller's scope (a person their
- * role cannot see is `person.not_found`); each read is its own short transaction — never one held open
- * across another — and the step runner checks again before every step.
+ * `source.missing`), is not suppressed (FR-CRMS-7, P3-1's one query), not excluded (FR-CRMS-10), is
+ * in a region the workspace's policy allows (FR-CRMS-12), and has an address verification finds
+ * deliverable (FR-CRMS-14, P3-5's one check: `email.invalid`; `unknown` is not valid and does not
+ * enrol — `email.unverified`; a risky address enrols with a warning). Reads in the caller's scope (a
+ * person their role cannot see is `person.not_found`); each read is its own short transaction —
+ * never one held open across another, and verification's lookups happen with none open — and the
+ * step runner checks again before every step.
  */
 @Injectable()
 export class EnrolmentScreen {
@@ -51,6 +55,7 @@ export class EnrolmentScreen {
         private readonly suppressions: SuppressionService,
         private readonly exclusions: ExclusionsService,
         private readonly regions: RegionPolicyService,
+        private readonly verification: EmailVerificationService,
     ) {}
 
     async screen(workspaceId: string, personIds: readonly string[]): Promise<ScreenResult> {
@@ -94,8 +99,7 @@ export class EnrolmentScreen {
             excluded: await this.exclusions.check(tx, addresses),
             policy: await this.regions.allowedIn(tx),
         }));
-        const eligible: EligiblePerson[] = [];
-        const warnings: EnrolmentWarning[] = [];
+        const passing: EligiblePerson[] = [];
         for (const c of candidates) {
             const s = suppressed.get(c.address);
             if (s) {
@@ -120,8 +124,31 @@ export class EnrolmentScreen {
                 });
                 continue;
             }
-            eligible.push({ ...c, region });
-            if (region === 'unknown') {
+            passing.push({ ...c, region });
+        }
+
+        // FR-CRMS-14: P3-5's one check, last — only for those every cheaper gate let through.
+        const verified = await this.verification.check(
+            workspaceId,
+            passing.map((c) => c.address),
+        );
+        const eligible: EligiblePerson[] = [];
+        const warnings: EnrolmentWarning[] = [];
+        for (const c of passing) {
+            const verdict = verified.get(c.address)!;
+            if (verdict.result === 'invalid') {
+                refused.push({ personId: c.personId, code: 'email.invalid', message: verdict.message });
+                continue;
+            }
+            if (verdict.result === 'unknown') {
+                refused.push({ personId: c.personId, code: 'email.unverified', message: verdict.message });
+                continue;
+            }
+            eligible.push(c);
+            if (verdict.result === 'risky') {
+                warnings.push({ personId: c.personId, code: 'email.risky', message: verdict.message });
+            }
+            if (c.region === 'unknown') {
                 warnings.push({
                     personId: c.personId,
                     code: 'region.unknown',

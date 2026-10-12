@@ -47,6 +47,8 @@ export const paths = {
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
     settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
     settingsRegionPolicy: (workspaceId: string) => `/w/${workspaceId}/settings/region-policy`,
+    /** Email verification (P3-5): what each result does at enrolment, and how long a result stands. */
+    settingsVerification: (workspaceId: string) => `/w/${workspaceId}/settings/verification`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
     settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */

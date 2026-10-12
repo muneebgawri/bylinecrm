@@ -43,6 +43,7 @@ export const STOP_REASON_LABEL: Record<EnrolmentStopReason, string> = {
     sequence_archived: 'sequence archived',
     person_deleted: 'person deleted',
     region_blocked: 'region now blocked by policy',
+    invalid_address: 'address no longer deliverable',
 };
 
 /**

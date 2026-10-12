@@ -15,6 +15,7 @@ import type {
     BlocklistEntryView,
     RegionPolicyChangeView,
     RegionPolicyEntryView,
+    EmailVerificationSettingsView,
     SuppressionView,
     SendingPoolView,
     TwentyImportOverviewView,
@@ -827,6 +828,13 @@ export const regionPolicyChanges: RegionPolicyChangeView[] = [
         changedAt: at(30),
     },
 ];
+
+/** How long a verification stands (P3-5): the workspace shortened it from the 90-day default. */
+export const verificationSettings: EmailVerificationSettingsView = {
+    maxAgeDays: 60,
+    isDefault: false,
+    updatedAt: at(12),
+};
 
 /** The suppression list (P3-1): one of each kind of entry — a permanent one and two an admin may lift. */
 export const suppressions: SuppressionView[] = [

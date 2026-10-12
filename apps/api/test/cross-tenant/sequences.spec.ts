@@ -152,6 +152,10 @@ describe('FR-CRMS-5 sequences', () => {
 
     beforeAll(async () => {
         dns.allowGoogle(domain);
+        // Every prospect domain the tests enrol has a mail server (P3-5 verifies before enrolling).
+        for (const d of ['prospect.example', 'halepr.co.uk', `ortiz-${stamp}.agency`, 'x.example']) {
+            dns.setMx(d, `mx.${d}`);
+        }
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
             .overrideProvider(GOOGLE_OAUTH_PORT)
             .useValue(google)

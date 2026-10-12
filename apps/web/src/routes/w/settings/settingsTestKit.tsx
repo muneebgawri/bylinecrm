@@ -1,4 +1,4 @@
-import type { Capability } from '@bylinecrm/shared';
+import type { Capability, FieldError } from '@bylinecrm/shared';
 import { ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
@@ -24,9 +24,9 @@ export const json = (body: unknown, status = 200) =>
         headers: { 'Content-Type': 'application/json' },
     });
 
-/** The API's one error envelope (P1-1d), as the server sends it. */
-export const apiError = (status: number, code: string, message: string) =>
-    json({ statusCode: status, code, message, requestId: 'req-test' }, status);
+/** The API's one error envelope (P1-1d), as the server sends it; `fieldErrors` as a refused body carries them. */
+export const apiError = (status: number, code: string, message: string, fieldErrors?: FieldError[]) =>
+    json({ statusCode: status, code, message, requestId: 'req-test', ...(fieldErrors ? { fieldErrors } : {}) }, status);
 
 /**
  * Stubs `fetch` with an ordered list of routes; the first that answers wins. Every request is

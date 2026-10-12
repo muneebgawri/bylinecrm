@@ -14,7 +14,8 @@ import { SendingPoolService } from './sending-pool.service';
  * handling and auto-pause (the outbox consumer), sending domains and their DNS checks. A pool mailbox
  * is enrolled when it connects (`enrolPoolMailbox`, inside mail accounts' transaction) and its bounce
  * reports are recorded by sync's writer (`recordBounces`) — both plain functions, so neither module
- * depends on this one. The domain re-check runs on sending's maintenance queue.
+ * depends on this one. The domain re-check runs on sending's maintenance queue. The DNS port is the
+ * application's one (verification reads MX records through it, P3-5), so it is exported.
  */
 @Module({
     imports: [AuthModule, SuppressionModule],
@@ -25,6 +26,6 @@ import { SendingPoolService } from './sending-pool.service';
         SendingPoolConsumer,
         { provide: DNS_PORT, useClass: NodeDns },
     ],
-    exports: [SendingPoolService, SendingDomainsService],
+    exports: [SendingPoolService, SendingDomainsService, DNS_PORT],
 })
 export class SendingPoolModule {}
