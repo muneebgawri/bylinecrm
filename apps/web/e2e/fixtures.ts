@@ -13,6 +13,8 @@ import type {
     PlatformAccessView,
     PlatformWorkspaceView,
     BlocklistEntryView,
+    RegionPolicyChangeView,
+    RegionPolicyEntryView,
     SuppressionView,
     SendingPoolView,
     UnsubscribeStatusView,
@@ -796,6 +798,33 @@ export const sendingPool: SendingPoolView = {
     domains: [],
 };
 sendingPool.domains = sendingPool.mailboxes.map((m) => m.domain!);
+
+/** The region policy (#141): the defaults, with Canada opened on a stated basis, and that change on record. */
+export const regionPolicy: RegionPolicyEntryView[] = [
+    { region: 'eu', allowed: false, isDefault: true, lawfulBasis: null, updatedAt: null },
+    { region: 'uk', allowed: false, isDefault: true, lawfulBasis: null, updatedAt: null },
+    {
+        region: 'ca',
+        allowed: true,
+        isDefault: false,
+        lawfulBasis: 'Express consent captured at event sign-up.',
+        updatedAt: at(30),
+    },
+    { region: 'us', allowed: true, isDefault: true, lawfulBasis: null, updatedAt: null },
+    { region: 'other', allowed: true, isDefault: true, lawfulBasis: null, updatedAt: null },
+    { region: 'unknown', allowed: true, isDefault: true, lawfulBasis: null, updatedAt: null },
+];
+
+export const regionPolicyChanges: RegionPolicyChangeView[] = [
+    {
+        id: '0193a000-0000-7000-8000-00000000c141',
+        region: 'ca',
+        allowed: true,
+        lawfulBasis: 'Express consent captured at event sign-up.',
+        changedBy: 'Kate Morgan',
+        changedAt: at(30),
+    },
+];
 
 /** The suppression list (P3-1): one of each kind of entry — a permanent one and two an admin may lift. */
 export const suppressions: SuppressionView[] = [

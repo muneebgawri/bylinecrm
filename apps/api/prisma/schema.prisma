@@ -67,6 +67,7 @@ model Workspace {
   mailBounces         MailBounce[]
 
   regionPolicies     RegionPolicy[]
+  regionPolicyChanges RegionPolicyChange[]
   outreachExclusions OutreachExclusion[]
   sequences          Sequence[]
   sequenceSteps      SequenceStep[]
@@ -232,6 +233,7 @@ model WorkspaceMember {
   removedSuppressions Suppression[] @relation("SuppressionRemover")
 
   updatedRegionPolicies RegionPolicy[]
+  regionPolicyChanges   RegionPolicyChange[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -1605,6 +1607,23 @@ model RegionPolicy {
 
   @@id([workspaceId, region])
   @@map("region_policies")
+}
+
+/// Every change to a region's policy (#141): append-only, written in the same transaction as the change.
+model RegionPolicyChange {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String     @map("workspace_id") @db.Uuid
+  region            RegionCode
+  allowed           Boolean
+  lawfulBasis       String?    @map("lawful_basis")
+  changedByMemberId String?    @map("changed_by_member_id") @db.Uuid
+  changedAt         DateTime   @default(now()) @map("changed_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  changedBy WorkspaceMember? @relation(fields: [changedByMemberId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, changedAt])
+  @@map("region_policy_changes")
 }
 
 enum ExclusionReason {
