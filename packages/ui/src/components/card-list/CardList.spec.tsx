@@ -12,6 +12,7 @@ describe('CardList', () => {
     it('#82 draws the secondary line’s separators with CSS, so a wrapped line never starts with “·”', () => {
         render(
             <CardList
+                aria-label="Mailboxes"
                 items={[{ id: 'm', primary: 'dana@acme.example', secondary: ['Connected', 'Personal', 'You'] }]}
             />,
         );
