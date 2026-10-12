@@ -140,3 +140,22 @@ function tieBreak(type: EnrichmentFactType, value: string): number {
     if (type === 'domain') return value.startsWith('www.') ? 0 : 0.5;
     return 0;
 }
+
+/** A bare host: labels of letters, digits and hyphens with at least one dot and no spaces — a name nobody typed. */
+const BARE_HOST = /^(www\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
+
+/**
+ * Whether a company's stored name is a placeholder the website's name may replace (#170): empty, the
+ * company's own domain or host (with or without `www.`), or any bare host — an import (Twenty names
+ * companies by their domain) rather than a person. A name a member typed is never a placeholder.
+ */
+export function isPlaceholderCompanyName(name: string | null | undefined, domain: string | null | undefined): boolean {
+    const value = (name ?? '').trim().toLowerCase();
+    if (value === '') return true;
+    const host = (domain ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/^www\./, '');
+    if (host !== '' && value.replace(/^www\./, '') === host) return true;
+    return BARE_HOST.test(value);
+}
