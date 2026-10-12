@@ -101,6 +101,8 @@ export interface ScheduleOutreachInput {
     sendAt: Date;
     enrolmentId: string;
     stepId: string;
+    /** The member who enrolled the person: the send's sender (#144). */
+    senderMemberId: string;
 }
 
 /** Why the last attempt failed, as kept on the row. Never a token or a raw Google body. */
@@ -387,8 +389,10 @@ export class MailSendService {
         const { to, sender, parent } = await this.rls.withWorkspace(async (tx) => {
             const person = await tx.person.findFirst({ where: { id: input.personId, deletedAt: null } });
             if (!person) throw new NotFoundException('person not found');
+            // The mail speaks as the pool mailbox's owner (its From name and {{sender.*}}); the send is
+            // the enrolling member's to answer for (#144).
             const member = await tx.workspaceMember.findUniqueOrThrow({
-                where: { id: memberId },
+                where: { id: mailbox.ownerMemberId },
                 select: { user: { select: { displayName: true } } },
             });
             const parentRow = input.replyToMessageId
@@ -407,7 +411,7 @@ export class MailSendService {
         }
         const rendered = await this.renderer.render(
             { kind: 'outreach', subject: template.subject, body: template.body },
-            { personId: input.personId, dealId: input.dealId, senderMemberId: memberId },
+            { personId: input.personId, dealId: input.dealId, senderMemberId: mailbox.ownerMemberId },
         );
         if (!rendered.sendable) throw new Unsendable(rendered.missing);
         const subject = parent && template.subject.trim() === '' ? replySubject(parent.subject) : rendered.subject;
@@ -451,7 +455,7 @@ export class MailSendService {
      * Schedules a sequence step's send (P3-3) inside the caller's transaction — the one that moves the
      * enrolment to wait for it — so the two exist together or not at all. Stored as a scheduled send
      * whose request is outreach: it is built and checked at `sendAt` (`activate`), from the pool
-     * mailbox, as the mailbox's owner. Its job is added once the transaction commits.
+     * mailbox, as the member who enrolled the person (#144) — the mail itself speaks as the mailbox's owner. Its job is added once the transaction commits.
      */
     async scheduleOutreach(tx: WorkspaceClient, input: ScheduleOutreachInput): Promise<string> {
         const mailbox = await tx.mailbox.findUniqueOrThrow({ where: { id: input.mailboxId } });
@@ -470,7 +474,7 @@ export class MailSendService {
             data: {
                 workspaceId: input.workspaceId,
                 mailboxId: mailbox.id,
-                senderMemberId: mailbox.ownerMemberId,
+                senderMemberId: input.senderMemberId,
                 personId: input.personId,
                 dealId: input.dealId,
                 templateId: input.templateId,
@@ -901,9 +905,9 @@ export class MailSendService {
             tx.workspaceMember.findUnique({ where: { id: memberId }, select: { userId: true, roleId: true } }),
         );
         if (!member)
-            return { refusal: "the pool mailbox's owner is no longer a member of this workspace; it was not sent" };
+            return { refusal: 'the member who enrolled this person is no longer in this workspace; it was not sent' };
         const access = await this.roles.access(workspaceId, member.roleId);
-        if (!access) return { refusal: "the pool mailbox's owner has no role; it was not sent" };
+        if (!access) return { refusal: 'the member who enrolled this person has no role; it was not sent' };
         return {
             context: {
                 workspaceId,
