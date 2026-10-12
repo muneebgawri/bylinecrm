@@ -26,11 +26,9 @@ export const trackingDomainView = named(
 export const trackingSettingsView = named(
     'TrackingSettings',
     z.object({
-        cnameTarget: z
-            .string()
-            .meta({
-                description: 'The host the domain’s CNAME must point at (the API); known before any domain is set.',
-            }),
+        cnameTarget: z.string().meta({
+            description: 'The host the domain’s CNAME must point at (the API); known before any domain is set.',
+        }),
         domain: trackingDomainView
             .nullable()
             .meta({ description: '`null` while none is set: links go out untracked.' }),

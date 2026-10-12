@@ -129,7 +129,6 @@ describe('FR-CRMS-8 tracking', () => {
     let otherAdmin: Browser;
     let workspace: string;
     let otherWorkspace: string;
-    let poolMailbox: string;
     let personalMailbox: string;
     let template: string;
     let pipeline: Pipeline;
@@ -250,7 +249,7 @@ describe('FR-CRMS-8 tracking', () => {
         const oauth = await as(admin).get(w('/mail/oauth-client'));
         google.registerClient(clientId, secret, [(oauth.body as { redirectUri: string }).redirectUri]);
         await as(admin).put(w('/mail/oauth-client')).send({ clientId, clientSecret: secret }).expect(200);
-        poolMailbox = await connect('pool', poolAddress);
+        await connect('pool', poolAddress);
         personalMailbox = await connect('personal', `trk-admin-${stamp}@example.com`);
         const domains = (await as(admin).get(w('/sending-domains'))).body as { id: string; domain: string }[];
         await as(admin)
