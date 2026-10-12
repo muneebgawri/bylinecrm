@@ -19,7 +19,7 @@ const body = {
     ],
 };
 
-describe('template preview', () => {
+describe('FR-CRMS-UI-5: template preview', () => {
     it('counts each distinct variable once, from the subject and the body', () => {
         expect(templateVariablePaths('Quick one for {{person.firstName}} {{deal.name}}', body)).toEqual([
             'person.firstName',
