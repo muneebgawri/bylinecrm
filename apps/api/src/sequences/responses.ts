@@ -2,6 +2,7 @@ import {
     ENROLMENT_REFUSAL_CODES,
     ENROLMENT_STATUSES,
     ENROLMENT_STOP_REASONS,
+    ENROLMENT_WARNING_CODES,
     EXCLUSION_REASONS,
     REGION_CODES,
     SEQUENCE_STATUSES,
@@ -78,6 +79,9 @@ export const enrolmentView = named(
         enrolledByMemberId: id.meta({
             description: "The member who enrolled the person: the sender of each step's send (#144).",
         }),
+        countryUnknownAtEnrol: z.boolean().meta({
+            description: 'No country was known at enrolment (D-251); the region policy applies once one is.',
+        }),
         enrolledAt: isoTime,
         finishedAt: isoTime.nullable(),
         stoppedAt: isoTime.nullable(),
@@ -96,6 +100,15 @@ export const enrolmentBatchResult = named(
                 message: z.string().meta({ description: "The server's reason, naming the rule." }),
             }),
         ),
+        warnings: z
+            .array(
+                z.object({
+                    personId: id,
+                    code: z.enum(ENROLMENT_WARNING_CODES),
+                    message: z.string(),
+                }),
+            )
+            .meta({ description: 'Enrolled, flagged for review — never blocking (D-251: no known country).' }),
     }),
 );
 
