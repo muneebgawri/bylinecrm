@@ -27,21 +27,6 @@ export interface EnrolPerson {
     email: string | null;
 }
 
-/**
- * A non-blocking note about one person (`region.unknown`, D-251, #142): enrolled, and flagged for
- * review. Read only when the server sends `warnings`; until then a preview simply has none.
- */
-interface EnrolWarning {
-    personId: string;
-    code: string;
-    message: string;
-}
-
-function warningsOf(result: EnrolmentBatchView): readonly EnrolWarning[] {
-    const extra = result as EnrolmentBatchView & { warnings?: readonly EnrolWarning[] };
-    return extra.warnings ?? [];
-}
-
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -81,7 +66,8 @@ export function EnrolDialog({
     }, [sequenceId, ids, runPreview, resetPreview]);
 
     const result = preview.data;
-    const warnings = result ? warningsOf(result) : [];
+    // Non-blocking notes (D-251, #142: no known country) — enrolled, and flagged for review.
+    const warnings = result?.warnings ?? [];
     const count = result?.enrolled.length ?? 0;
     const confirm = () => {
         if (!sequenceId) return;

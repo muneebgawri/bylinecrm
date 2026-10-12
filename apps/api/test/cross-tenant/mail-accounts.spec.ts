@@ -19,6 +19,7 @@ import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { RedisService } from '../../src/infra/redis.service';
+import { OAUTH_CHECK_MESSAGES } from '../../src/mail-accounts/mail-accounts.constants';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { CONNECT_STATE_KEY_PREFIX, MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
 import { MailboxTokens, MailboxUnavailable } from '../../src/mail-accounts/mailbox-tokens.service';
@@ -269,10 +270,12 @@ describe('mail accounts', () => {
             google.registerClient(clientId, clientSecret, [redirectUri]);
             res = track(await as(admin).post(w('/mail/oauth-client/verify')));
             expect((res.body as ClientView).lastCheck).toMatchObject({
-                format: { outcome: 'pass' },
-                credentials: { outcome: 'pass' },
-                redirectUri: { outcome: 'unverified' },
+                format: { outcome: 'pass', message: OAUTH_CHECK_MESSAGES.formatPass },
+                credentials: { outcome: 'pass', message: OAUTH_CHECK_MESSAGES.credentialsPass },
+                redirectUri: { outcome: 'unverified', message: OAUTH_CHECK_MESSAGES.redirectAwaitsConnect },
             });
+            // #82: every message is a sentence: capital first letter, ends with a full stop.
+            for (const message of Object.values(OAUTH_CHECK_MESSAGES)) expect(message).toMatch(/^[A-Z].*\.$/);
         });
     });
 
@@ -302,6 +305,10 @@ describe('mail accounts', () => {
 
             const client = track(await as(admin).get(w('/mail/oauth-client'))).body as ClientView;
             expect(client.verifiedAt).not.toBeNull();
+            // #82: the first connect proves the redirect URI; the stored check no longer reads 'unverified'.
+            expect(client.lastCheck).toMatchObject({
+                redirectUri: { outcome: 'pass', message: OAUTH_CHECK_MESSAGES.redirectProvenByConnect },
+            });
             const status = track(await as(member).get(w('/mail/oauth-client/status')));
             expect(status.body).toMatchObject({ configured: true, verified: true });
             expect(client.liveMailboxes).toBe(1);

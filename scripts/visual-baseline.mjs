@@ -20,6 +20,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { waitForRun } from './lib/wait-for-run.mjs';
 
 const WORKFLOW = 'ci.yml';
 
@@ -36,6 +37,9 @@ const ARTIFACT = arg('artifact');
 const snapshots = resolve(dirname(fileURLToPath(import.meta.url)), '..', arg('dir'));
 const POLL_ATTEMPTS = 20;
 const POLL_INTERVAL_MS = 3000;
+/** How often the run's status is read while it runs, and how long it may take before the script gives up. */
+const RUN_POLL_INTERVAL_MS = 15_000;
+const RUN_TIMEOUT_MS = 45 * 60 * 1000;
 
 /** `capture` returns gh's stdout; `run` streams it to the terminal (progress output) and returns nothing. */
 const capture = (args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
@@ -76,8 +80,8 @@ for (let attempt = 0; attempt < POLL_ATTEMPTS && !id; attempt++) {
 }
 if (!id) throw new Error('the baseline run did not appear within a minute; check `gh run list`');
 
-console.log(`visual:baseline — watching run ${id}`);
-run(['run', 'watch', id]);
+console.log(`visual:baseline — waiting for run ${id} (gh run view ${id} to follow it)`);
+await waitForRun(capture, id, { intervalMs: RUN_POLL_INTERVAL_MS, timeoutMs: RUN_TIMEOUT_MS });
 
 const jobs = JSON.parse(capture(['run', 'view', id, '--json', 'jobs'])).jobs;
 const job = jobs.find((j) => j.name === JOB);

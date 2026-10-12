@@ -7,7 +7,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
-import { verifyPlatformAdminEmail, type VerifiedIdentity } from '../../src/auth/auth.service';
+import { bootstrapPlatformAdmin, type VerifiedIdentity } from '../../src/auth/auth.service';
 import { OidcService } from '../../src/auth/oidc.service';
 import { ENV, parseEnv, type Env } from '../../src/config/env';
 import { PrismaService } from '../../src/infra/prisma.service';
@@ -117,16 +117,68 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             expect(access.body).toMatchObject({ platformAdmin: false });
         });
 
-        it('the operator command verifies only a listed address, and audits it', async () => {
-            await expect(verifyPlatformAdminEmail(owner, env, outsiderEmail)).rejects.toThrow(/PLATFORM_ADMIN_EMAILS/);
-            expect(await verifyPlatformAdminEmail(owner, env, adminEmail.toUpperCase())).toEqual({
+        it('#101 the operator command verifies an existing listed account only, and audits it', async () => {
+            await expect(bootstrapPlatformAdmin(owner, env, outsiderEmail)).rejects.toThrow(/PLATFORM_ADMIN_EMAILS/);
+            expect(await bootstrapPlatformAdmin(owner, env, adminEmail.toUpperCase())).toEqual({
                 email: adminEmail,
+                created: false,
                 alreadyVerified: false,
+                setPasswordUrl: null,
             });
             const audit = await owner.platformAudit.findMany({ where: { action: 'platform.admin_email_verified' } });
             expect(audit.some((row) => (row.subject as { email?: string }).email === adminEmail)).toBe(true);
             const access = await http().get('/api/platform/access').set('Cookie', admin.cookie).expect(200);
             expect(access.body).toMatchObject({ platformAdmin: true, signupMode: env.SIGNUP_MODE });
+        });
+
+        it('#101 on a fresh server it creates the listed admin, verified, and prints a single-use set-password link', async () => {
+            const fresh = `bootstrap-${stamp}@example.test`;
+            const listed = { ...env, PLATFORM_ADMIN_EMAILS: [...env.PLATFORM_ADMIN_EMAILS, fresh] };
+            const result = await bootstrapPlatformAdmin(owner, listed, fresh);
+            expect(result).toMatchObject({ email: fresh, created: true, alreadyVerified: false });
+            const url = new URL(result.setPasswordUrl!);
+            expect(url.pathname).toBe('/reset-password');
+            const token = url.searchParams.get('token')!;
+            expect(token.length).toBeGreaterThan(20);
+
+            const user = await owner.user.findUniqueOrThrow({ where: { email: fresh } });
+            expect(user.passwordHash).toBeNull();
+            expect(user.emailVerifiedAt).not.toBeNull();
+
+            const audit = await owner.platformAudit.findMany({ where: { action: 'platform.admin_bootstrapped' } });
+            const row = audit.find((r) => (r.subject as { email?: string }).email === fresh);
+            expect(row).toBeDefined();
+            expect(JSON.stringify(row!.subject)).not.toContain(token);
+
+            const password = 'a long enough bootstrap password';
+            await http().post('/api/auth/password/reset').send({ token, password }).expect(200);
+            const again = await http().post('/api/auth/password/reset').send({ token, password }).expect(400);
+            expect(again.body).toMatchObject({ code: 'token.invalid' });
+            await http().post('/api/auth/login').send({ email: fresh, password }).expect(200);
+
+            // Run again for the same address: the account exists now, so it is only verified (already).
+            expect(await bootstrapPlatformAdmin(owner, listed, fresh)).toMatchObject({
+                created: false,
+                alreadyVerified: true,
+                setPasswordUrl: null,
+            });
+        });
+
+        it('#101 an expired set-password link is refused', async () => {
+            const fresh = `bootstrap-expired-${stamp}@example.test`;
+            const listed = { ...env, PLATFORM_ADMIN_EMAILS: [...env.PLATFORM_ADMIN_EMAILS, fresh] };
+            const { setPasswordUrl } = await bootstrapPlatformAdmin(owner, listed, fresh);
+            const token = new URL(setPasswordUrl!).searchParams.get('token')!;
+            const user = await owner.user.findUniqueOrThrow({ where: { email: fresh } });
+            await owner.oneTimeToken.updateMany({
+                where: { userId: user.id },
+                data: { expiresAt: new Date(Date.now() - 1_000) },
+            });
+            const res = await http()
+                .post('/api/auth/password/reset')
+                .send({ token, password: 'another long password' })
+                .expect(400);
+            expect(res.body).toMatchObject({ code: 'token.invalid' });
         });
 
         it('platform routes answer 403 to every caller not on the list, and 401 to nobody', async () => {

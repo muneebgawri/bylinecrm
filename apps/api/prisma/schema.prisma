@@ -817,6 +817,7 @@ enum LinkedObject {
   task
   attachment
   email
+  suppression
 
   @@map("linked_object")
 }
@@ -1146,6 +1147,8 @@ model MailOutbound {
   /// `sendAt`, as its sender's role and the person stand then.
   request                 Json?
   cancelledAt             DateTime?          @map("cancelled_at") @db.Timestamptz
+  /// When a failed send was last sent again by hand (#134); null if never.
+  retriedAt               DateTime?          @map("retried_at") @db.Timestamptz
   providerMessageId       String?            @map("provider_message_id")
   providerThreadId        String?            @map("provider_thread_id")
   /// Gmail's own Message-ID for the sent message, once known (from the stored copy). Not ours: Gmail
@@ -1671,6 +1674,7 @@ enum EnrolmentStopReason {
   excluded
   sequence_archived
   person_deleted
+  region_blocked
 
   @@map("enrolment_stop_reason")
 }
@@ -1745,6 +1749,9 @@ model SequenceEnrolment {
   stopReason        EnrolmentStopReason? @map("stop_reason")
   stopDetail        String?              @map("stop_detail")
   enrolledBy        Json                 @map("enrolled_by")
+  /// No country was known at enrolment (D-251): enrolled and flagged; stopped if one later falls in a
+  /// blocked region.
+  countryUnknownAtEnrol Boolean           @default(false) @map("country_unknown_at_enrol")
   /// The member who enrolled the person (#144): the sender of every step's send — the pool mailbox
   /// only carries it. An API key's enrolment is its creator's.
   enrolledByMemberId String              @map("enrolled_by_member_id") @db.Uuid

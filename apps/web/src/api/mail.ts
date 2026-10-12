@@ -33,6 +33,9 @@ export const mail = {
         request<MailOutboundView>('PATCH', workspacePath(workspaceId, `/mail/messages/${messageId}`), { body: input }),
     cancel: (workspaceId: string, messageId: string) =>
         request<MailOutboundView>('POST', workspacePath(workspaceId, `/mail/messages/${messageId}/cancel`)),
+    /** Sends a failed send again, rebuilt and checked as things stand now (#134). */
+    retry: (workspaceId: string, messageId: string) =>
+        request<MailOutboundView>('POST', workspacePath(workspaceId, `/mail/messages/${messageId}/retry`)),
     /**
      * One record's sends in the statuses asked for, newest first, a page at a time (#104): only the
      * ones the caller may see (their own; an admin's: everyone's).
@@ -108,7 +111,7 @@ export function outboundPollMs(
     return Math.min(POLL_FIRST_MS * 2 ** Math.max(reads - 1, 0), POLL_MAX_MS);
 }
 
-/** This tab's sends; never fetched — the composer adds to it, Retry replaces in it. */
+/** This tab's sends; never fetched — the composer adds to it. */
 export const useSessionSends = (workspaceId: string) =>
     useQuery({
         queryKey: keys.mailSession(workspaceId),
@@ -151,14 +154,13 @@ export const useRecordSends = (workspaceId: string, target: RecordTarget) =>
     });
 
 /**
- * Sends (or schedules) one message. On `202` the send joins this tab's list — replacing the one it
- * retries, when it is a retry — so the timeline shows it before the server has stored anything.
+ * Sends (or schedules) one message. On `202` the send joins this tab's list, so the timeline shows
+ * it before the server has stored anything.
  */
 export function useSendMail(workspaceId: string) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: (input: { send: SendMailInput; subject: string; replaces?: string | undefined }) =>
-            mail.send(workspaceId, input.send),
+        mutationFn: (input: { send: SendMailInput; subject: string }) => mail.send(workspaceId, input.send),
         onSuccess: (accepted, input) => {
             const entry: SessionSend = {
                 messageId: accepted.messageId,
@@ -168,10 +170,7 @@ export function useSendMail(workspaceId: string) {
                 input: input.send,
                 accepted,
             };
-            client.setQueryData<SessionSend[]>(keys.mailSession(workspaceId), (list = []) => [
-                entry,
-                ...list.filter((s) => s.messageId !== input.replaces),
-            ]);
+            client.setQueryData<SessionSend[]>(keys.mailSession(workspaceId), (list = []) => [entry, ...list]);
             if (accepted.status === 'scheduled') {
                 void client.invalidateQueries({ queryKey: keys.mailRecordSendsAll(workspaceId) });
             }
@@ -179,7 +178,7 @@ export function useSendMail(workspaceId: string) {
     });
 }
 
-/** A reschedule or a cancel answers with the send as it now stands: that is what the timeline shows. */
+/** A reschedule, a cancel or a retry answers with the send as it now stands: that is what the timeline shows. */
 function useOutboundWrite<I>(workspaceId: string, write: (input: I) => Promise<MailOutboundView>) {
     const client = useQueryClient();
     return useMutation({
@@ -197,6 +196,8 @@ export const useRescheduleMail = (workspaceId: string) =>
     );
 export const useCancelMail = (workspaceId: string) =>
     useOutboundWrite(workspaceId, (messageId: string) => mail.cancel(workspaceId, messageId));
+export const useRetryMail = (workspaceId: string) =>
+    useOutboundWrite(workspaceId, (messageId: string) => mail.retry(workspaceId, messageId));
 
 export const useMailThread = (workspaceId: string, threadId: string) =>
     useQuery({

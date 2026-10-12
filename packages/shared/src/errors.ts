@@ -47,6 +47,8 @@ export const ERROR_CODES = [
     'mailbox.domain_unverified',
     /** `422`: a pool mailbox has used its allowance for the rolling 24 hours (cap or warm-up limit, FR-CRMS-6). */
     'mailbox.cap_reached',
+    /** `409`: a failed send whose refusal would repeat, a sequence's send, or one whose content is gone, is not retried (#134). */
+    'send.not_retryable',
     /** Too many attempts; try again later. */
     'rate_limited',
     /** Any other refusal of the request (a 4xx with no more specific code). */

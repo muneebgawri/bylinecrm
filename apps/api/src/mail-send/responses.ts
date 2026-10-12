@@ -48,6 +48,10 @@ export const mailOutboundView = named(
         canChange: z.boolean().meta({
             description: 'Whether the caller may reschedule or cancel it: its sender or an admin (#133).',
         }),
+        canRetry: z.boolean().meta({
+            description:
+                'Whether the caller may send this failed send again (#134): its sender or an admin, and a refusal that would not simply repeat.',
+        }),
         rfc822MessageId: z.string().meta({ description: 'Our Message-ID, without angle brackets.' }),
         mailMessageId: id.nullable().meta({
             description: 'The stored copy of the sent message (its thread is on the records); null until stored.',
