@@ -70,6 +70,8 @@ export const keys = {
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
     suppressions: (workspaceId: string) => ['w', workspaceId, 'suppressions'] as const,
     sendingPool: (workspaceId: string) => ['w', workspaceId, 'sending-pool'] as const,
+    /** The region policy and its change history (#141); one key so a change refreshes both. */
+    regionPolicy: (workspaceId: string) => ['w', workspaceId, 'outreach', 'region-policy'] as const,
     suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,

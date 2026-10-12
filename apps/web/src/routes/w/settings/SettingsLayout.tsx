@@ -21,6 +21,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'google', label: 'Google', to: paths.settingsGoogle, requires: 'workspace:admin' },
     // Addresses the workspace never mails (P3-1): the other half of outreach, so outreach's capability.
     { id: 'suppression', label: 'Suppression', to: paths.settingsSuppression, requires: 'outreach:write' },
+    // Where sequences may enrol (FR-CRMS-12, #141): read with outreach rights; an admin changes it.
+    { id: 'region-policy', label: 'Region policy', to: paths.settingsRegionPolicy, requires: 'outreach:write' },
 ];
 
 /** Workspace settings: a section row, then the section's table. The server is still the gate on every write. */

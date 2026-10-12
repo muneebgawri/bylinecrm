@@ -45,6 +45,7 @@ export const paths = {
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
     settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
+    settingsRegionPolicy: (workspaceId: string) => `/w/${workspaceId}/settings/region-policy`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */
     unsubscribe: (token: string) => `${UNSUBSCRIBE_PAGE_PATH}/${token}`,
 } as const;
