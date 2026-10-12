@@ -6,8 +6,8 @@ import {
     type RichText,
 } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
-import { formatPostalAddress as sharedFormatPostalAddress } from '@bylinecrm/shared';
-import { composeEmail, formatPostalAddress, withUnsubscribeUrl, renderSubject } from './compose';
+import { formatPostalAddress } from '@bylinecrm/shared';
+import { composeEmail, withUnsubscribeUrl, renderSubject } from './compose';
 
 const body: RichText = {
     type: 'doc',
@@ -57,10 +57,10 @@ describe('composeEmail', () => {
         expect(email.html).toBe(
             '<p>Hi Dana</p><hr>' +
                 `<p>${DEFAULT_UNSUBSCRIBE_FOOTER_TEXT} <a href="${UNSUBSCRIBE_URL_PLACEHOLDER}">Unsubscribe</a></p>` +
-                '<p>123 Main St, Austin, TX, 78701, US</p>',
+                '<p>123 Main St, Austin, TX, 78701, United States</p>',
         );
         expect(email.text).toBe(
-            `Hi Dana\n\n--\n${DEFAULT_UNSUBSCRIBE_FOOTER_TEXT} Unsubscribe: ${UNSUBSCRIBE_URL_PLACEHOLDER}\n123 Main St, Austin, TX, 78701, US`,
+            `Hi Dana\n\n--\n${DEFAULT_UNSUBSCRIBE_FOOTER_TEXT} Unsubscribe: ${UNSUBSCRIBE_URL_PLACEHOLDER}\n123 Main St, Austin, TX, 78701, United States`,
         );
         expect(email.sendable).toBe(true);
     });
@@ -119,8 +119,7 @@ describe('formatPostalAddress', () => {
         );
     });
 
-    it('#76 names the country, the same string the web preview shows (one shared function)', () => {
-        expect(formatPostalAddress(address)).toBe(sharedFormatPostalAddress(address));
+    it('#76 names the country in the footer: the shared function the web preview uses too', () => {
         const email = composeEmail({ kind: 'outreach', subject: 'Hi', body }, resolve, settings);
         expect(email.text).toContain('123 Main St, Austin, TX, 78701, United States');
     });

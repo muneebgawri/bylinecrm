@@ -1,4 +1,4 @@
-import { TEMPLATE_NAME_MAX, type RichText, type TemplateKind } from '@bylinecrm/shared';
+import { formatPostalAddress, TEMPLATE_NAME_MAX, type RichText, type TemplateKind } from '@bylinecrm/shared';
 import {
     Button,
     Dialog,
@@ -32,13 +32,12 @@ import {
     useUpdateTemplate,
 } from '../../../api/templates';
 import { useMailSettings } from '../../../api/mailAdmin';
-import type { EmailTemplateView, MailSettingsView } from '../../../api/types';
+import type { EmailTemplateView } from '../../../api/types';
 import { useCan, usePermission } from '../../../auth/capabilities';
 import { useRegisterCommands } from '../../../commands/registry';
 import { EmailFrame } from '../../../components/EmailFrame';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { RichTextEditor, type RichTextHandle } from '../../../components/rich-text/RichTextEditor';
-import { countryName } from '../../../lib/countries';
 import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
@@ -394,7 +393,7 @@ function TemplateEditor({
 
 /** A body field error names its path in the document (`body.content.1…`); show the first. */
 function bodyErrorText(error: ApiError): string | undefined {
-    return error.fieldErrors.find((f) => f.path === 'body' || f.path.startsWith('body.'))?.message;
+    return fieldErrorAt(error, 'body', { within: true });
 }
 
 function EditPane({
@@ -502,7 +501,11 @@ function LockedFooter({ workspaceId }: { workspaceId: string }) {
                 {settings.data?.unsubscribeFooterText ?? 'The workspace’s unsubscribe notice'} · Unsubscribe
             </LockedBlock>
             <LockedBlock title="Postal address" warning={settings.isSuccess && !address}>
-                {settings.isSuccess ? (address ? formatAddress(address) : 'Not set — this email cannot be sent.') : '…'}
+                {settings.isSuccess
+                    ? address
+                        ? formatPostalAddress(address)
+                        : 'Not set — this email cannot be sent.'
+                    : '…'}
             </LockedBlock>
             <p className="m-0 text-xs text-text-muted">
                 Required on outreach templates.{' '}
@@ -530,19 +533,6 @@ function LockedBlock({ title, warning, children }: { title: string; warning?: bo
             </span>
         </div>
     );
-}
-
-function formatAddress(address: NonNullable<MailSettingsView['postalAddress']>): string {
-    return [
-        address.line1,
-        address.line2,
-        address.city,
-        address.region,
-        address.postalCode,
-        countryName(address.country),
-    ]
-        .filter(Boolean)
-        .join(', ');
 }
 
 function PreviewPane({
