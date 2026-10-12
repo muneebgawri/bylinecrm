@@ -98,6 +98,8 @@ export const envSchema = z
          * steps itself.
          */
         SEQUENCE_WORKER: flag('1'),
+        /** Whether this process drives Twenty import runs (P4-4); `0` leaves them to a worker process. */
+        TWENTY_IMPORT_WORKER: flag('1'),
         /**
          * Whether this process relays the outbox (P1-6): delivers recorded domain events to the
          * timeline, webhooks, stage rules and mail re-matching. On by default; any number of processes

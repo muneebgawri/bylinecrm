@@ -193,3 +193,12 @@ export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
 export type MailThreadView = Schemas['MailThread'];
 export type MailMessageView = Schemas['MailMessage'];
 export type MailParticipantView = MailMessageView['participants'][number];
+
+// ---- The Twenty importer (P4-4) ---------------------------------------------------------------
+export type TwentyImportOverviewView = Schemas['TwentyImportOverview'];
+export type TwentyImportSettingsView = Schemas['TwentyImportSettings'];
+export type TwentyImportRunView = Schemas['TwentyImportRun'];
+export type TwentyImportObjectReportView = Schemas['TwentyImportObjectReport'];
+export type TwentyImportPreviewView = Schemas['TwentyImportPreview'];
+export type PutTwentyImportSettingsInput = Loose<Schemas['PutTwentyImportSettingsDto']>;
+export type StartTwentyImportInput = Loose<Schemas['StartTwentyImportDto']>;

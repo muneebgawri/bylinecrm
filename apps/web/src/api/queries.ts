@@ -63,6 +63,10 @@ export const keys = {
     templateVariables: (workspaceId: string) => ['w', workspaceId, 'templates', 'variables'] as const,
     mailSettings: (workspaceId: string) => ['w', workspaceId, 'settings', 'mail'] as const,
     oauthClient: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client'] as const,
+    twentyImport: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty'] as const,
+    twentyImportRuns: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty', 'runs'] as const,
+    twentyImportRun: (workspaceId: string, runId: string) =>
+        ['w', workspaceId, 'import', 'twenty', 'runs', runId] as const,
     oauthClientStatus: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client', 'status'] as const,
     mailboxes: (workspaceId: string) => ['w', workspaceId, 'mailboxes'] as const,
     mailboxSync: (workspaceId: string, mailboxId: string) =>

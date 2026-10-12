@@ -72,6 +72,10 @@ model Workspace {
   sequenceSteps      SequenceStep[]
   sequenceEnrolments SequenceEnrolment[]
 
+  twentyImportSettings TwentyImportSettings?
+  twentyImportRuns     TwentyImportRun[]
+  twentyImportLinks    TwentyImportLink[]
+
   @@map("workspaces")
 }
 
@@ -232,6 +236,9 @@ model WorkspaceMember {
   removedSuppressions Suppression[] @relation("SuppressionRemover")
 
   updatedRegionPolicies RegionPolicy[]
+
+  configuredTwentyImports TwentyImportSettings[]
+  startedTwentyImports    TwentyImportRun[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -1761,4 +1768,95 @@ model SequenceEnrolment {
   @@index([status, nextRunAt])
   @@index([workspaceId, personId])
   @@map("sequence_enrolments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Twenty importer (P4-4, doc 48 §11): the connection to a Twenty workspace, the runs that read
+// it, and the links that make a run repeatable — one row per Twenty record, saying what it became.
+// docs/design-notes/P4-4.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The Twenty workspace an import reads: its REST base URL and an API key, sealed with `SecretBox`.
+/// One per workspace; absent until an admin connects one.
+model TwentyImportSettings {
+  workspaceId      String   @id @map("workspace_id") @db.Uuid
+  baseUrl          String   @map("base_url")
+  apiKeyCiphertext String   @map("api_key_ciphertext")
+  apiKeyLast4      String   @map("api_key_last4")
+  configuredById   String?  @map("configured_by_id") @db.Uuid
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember? @relation(fields: [configuredById], references: [id], onDelete: SetNull)
+
+  @@map("twenty_import_settings")
+}
+
+enum TwentyImportRunStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+
+  @@map("twenty_import_run_status")
+}
+
+enum TwentyImportMode {
+  full
+  changes
+
+  @@map("twenty_import_mode")
+}
+
+/// One run of the importer. The row is the truth the worker resumes from: `phase` and `cursor`
+/// say where it is, `report` what it did per object (`TwentyImportObjectReport[]` from
+/// @bylinecrm/shared). At most one queued or running run per workspace (partial unique index).
+model TwentyImportRun {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String                @map("workspace_id") @db.Uuid
+  status          TwentyImportRunStatus @default(queued)
+  mode            TwentyImportMode
+  /// `changes` mode: records Twenty updated at or after this instant are read.
+  since           DateTime?             @db.Timestamptz
+  /// The object being read, while running; null before and after.
+  phase           String?
+  /// Per object, the cursor to continue from: `{ [object]: string | null }`; an object not present has not started, one mapped to `null` is done.
+  cursor          Json                  @default("{}")
+  report          Json                  @default("[]")
+  error           String?
+  cancelRequested Boolean               @default(false) @map("cancel_requested")
+  startedById     String?               @map("started_by_id") @db.Uuid
+  queuedAt        DateTime              @default(now()) @map("queued_at") @db.Timestamptz
+  startedAt       DateTime?             @map("started_at") @db.Timestamptz
+  finishedAt      DateTime?             @map("finished_at") @db.Timestamptz
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  startedBy WorkspaceMember? @relation(fields: [startedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, queuedAt(sort: Desc)])
+  @@map("twenty_import_runs")
+}
+
+/// What one Twenty record became here: `object` is the Twenty object (`people`, `leadLookups`, …),
+/// `localType` what it maps to (`person`, `exclusion`, `member`, …) and `localId` that row. Two
+/// Twenty records may map to one row (a journalist and a person with one address). `label` names
+/// a local thing that has no row of its own (a message list's name on the Lists field).
+model TwentyImportLink {
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  object            String
+  externalId        String    @map("external_id")
+  localType         String    @map("local_type")
+  localId           String    @map("local_id") @db.Uuid
+  label             String?
+  /// Twenty's `updatedAt` when the record was last read.
+  externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz
+  importedAt        DateTime  @default(now()) @map("imported_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, object, externalId])
+  @@index([workspaceId, localType, localId])
+  @@map("twenty_import_links")
 }

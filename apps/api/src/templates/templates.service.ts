@@ -128,25 +128,31 @@ export class TemplatesService {
 
     async create(input: TemplateInput): Promise<EmailTemplateView> {
         const context = this.current();
+        const row = await this.rls.withWorkspace((tx) => this.createIn(tx, context, input));
+        return view(row);
+    }
+
+    /**
+     * The write inside a caller's transaction, validated and announced like any create. The routes
+     * above and the Twenty importer (P4-4, a campaign becomes an outreach template) both run it.
+     */
+    async createIn(tx: WorkspaceClient, context: WorkspaceRunContext, input: TemplateInput): Promise<TemplateRow> {
         assertMayWriteKind(context, input.kind);
         const actor = actorOf(context);
-        const row = await this.rls.withWorkspace(async (tx) => {
-            await this.assertValid(tx, input);
-            const created = await tx.emailTemplate.create({
-                data: {
-                    workspaceId: context.workspaceId,
-                    name: input.name,
-                    kind: input.kind,
-                    subject: input.subject,
-                    body: input.body as Prisma.InputJsonObject,
-                    createdBy: actor as Prisma.InputJsonObject,
-                    updatedBy: actor as Prisma.InputJsonObject,
-                },
-            });
-            await this.record(tx, 'template.created', created.id, actor);
-            return created;
+        await this.assertValid(tx, input);
+        const created = await tx.emailTemplate.create({
+            data: {
+                workspaceId: context.workspaceId,
+                name: input.name,
+                kind: input.kind,
+                subject: input.subject,
+                body: input.body as Prisma.InputJsonObject,
+                createdBy: actor as Prisma.InputJsonObject,
+                updatedBy: actor as Prisma.InputJsonObject,
+            },
         });
-        return view(row);
+        await this.record(tx, 'template.created', created.id, actor);
+        return created;
     }
 
     /**
@@ -155,41 +161,55 @@ export class TemplatesService {
      */
     async update(id: string, patch: TemplatePatch, editedVersion: number): Promise<EmailTemplateView> {
         const context = this.current();
-        const actor = actorOf(context);
-        const result = await this.rls.withWorkspace(async (tx) => {
-            const current = await find(tx, id, false);
-            assertMayWriteKind(context, current.kind);
-            if (patch.kind) assertMayWriteKind(context, patch.kind);
-            if (current.version !== editedVersion) throw versionConflict(editedVersion, current.version);
-            const next: EmailTemplateBody = {
-                name: patch.name ?? current.name,
-                kind: patch.kind ?? current.kind,
-                subject: patch.subject ?? current.subject,
-                body: patch.body ?? (current.body as unknown as RichText),
-            };
-            const diff = diffOf(view(current), { ...view(current), ...next }, DIFF_FIELDS);
-            if (isEmpty(diff)) return { row: current, diff };
-            if (patch.subject !== undefined || patch.body !== undefined) await this.assertValid(tx, next);
-            // The version guard makes the write conditional on nobody having written in between.
-            const written = await tx.emailTemplate.updateMany({
-                where: { id, version: current.version, deletedAt: null },
-                data: {
-                    name: next.name,
-                    kind: next.kind,
-                    subject: next.subject,
-                    body: next.body as Prisma.InputJsonObject,
-                    version: { increment: 1 },
-                    updatedBy: actor as Prisma.InputJsonObject,
-                },
-            });
-            if (written.count === 0) {
-                const now = await find(tx, id, false);
-                throw versionConflict(editedVersion, now.version);
-            }
-            await this.record(tx, 'template.updated', id, actor, diff);
-            return { row: await find(tx, id, false), diff };
-        });
+        const result = await this.rls.withWorkspace((tx) => this.updateIn(tx, context, id, patch, editedVersion));
         return view(result.row);
+    }
+
+    /**
+     * The update inside a caller's transaction. `editedVersion` is the version the caller edited —
+     * or `null` for a caller that owns the content whatever its version (the Twenty importer
+     * re-reading a campaign), which still never overwrites an edit made while it ran.
+     */
+    async updateIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        patch: TemplatePatch,
+        editedVersion: number | null,
+    ): Promise<{ row: TemplateRow; diff: Record<string, FieldChange> }> {
+        const actor = actorOf(context);
+        const current = await find(tx, id, false);
+        assertMayWriteKind(context, current.kind);
+        if (patch.kind) assertMayWriteKind(context, patch.kind);
+        const edited = editedVersion ?? current.version;
+        if (current.version !== edited) throw versionConflict(edited, current.version);
+        const next: EmailTemplateBody = {
+            name: patch.name ?? current.name,
+            kind: patch.kind ?? current.kind,
+            subject: patch.subject ?? current.subject,
+            body: patch.body ?? (current.body as unknown as RichText),
+        };
+        const diff = diffOf(view(current), { ...view(current), ...next }, DIFF_FIELDS);
+        if (isEmpty(diff)) return { row: current, diff };
+        if (patch.subject !== undefined || patch.body !== undefined) await this.assertValid(tx, next);
+        // The version guard makes the write conditional on nobody having written in between.
+        const written = await tx.emailTemplate.updateMany({
+            where: { id, version: current.version, deletedAt: null },
+            data: {
+                name: next.name,
+                kind: next.kind,
+                subject: next.subject,
+                body: next.body as Prisma.InputJsonObject,
+                version: { increment: 1 },
+                updatedBy: actor as Prisma.InputJsonObject,
+            },
+        });
+        if (written.count === 0) {
+            const now = await find(tx, id, false);
+            throw versionConflict(edited, now.version);
+        }
+        await this.record(tx, 'template.updated', id, actor, diff);
+        return { row: await find(tx, id, false), diff };
     }
 
     async remove(id: string): Promise<void> {

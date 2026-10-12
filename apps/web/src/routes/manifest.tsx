@@ -56,6 +56,7 @@ const settings = {
     mail: () => import('./w/settings/MailSettings').then((m) => ({ Component: m.MailSettings })),
     google: () => import('./w/settings/GoogleSetup').then((m) => ({ Component: m.GoogleSetup })),
     suppression: () => import('./w/settings/Suppression').then((m) => ({ Component: m.Suppression })),
+    importTwenty: () => import('./w/settings/ImportTwenty').then((m) => ({ Component: m.ImportTwenty })),
 };
 
 /** A recipient's unsubscribe page is its own chunk: public, outside the app, never in the first load (P3-1). */
@@ -140,6 +141,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('mail', settings.mail, 'Mail'),
             lazyPage('google', settings.google, 'Google'),
             lazyPage('suppression', settings.suppression, 'Suppression'),
+            lazyPage('import-twenty', settings.importTwenty, 'Import from Twenty'),
         ]),
     ],
 };

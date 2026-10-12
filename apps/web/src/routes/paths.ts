@@ -45,6 +45,8 @@ export const paths = {
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
     settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
+    /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
+    settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */
     unsubscribe: (token: string) => `${UNSUBSCRIBE_PAGE_PATH}/${token}`,
 } as const;

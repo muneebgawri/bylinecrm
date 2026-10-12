@@ -17,3 +17,18 @@ describe('projectedChanges (P1-4a)', () => {
         expect(projected).toEqual(diffOf(view(current), view({ ...current, ownerId: 'm2' }), ['ownerId', 'nameFirst']));
     });
 });
+
+describe('diffOf (P4-4): a composite read back from jsonb is the composite the caller sent', () => {
+    it('ignores the order of an object’s keys at every depth, and still sees a changed value', () => {
+        const fromRow = { links: { x: null, linkedin: { url: 'https://l.example/a', label: null } } };
+        const fromCaller = { links: { linkedin: { label: null, url: 'https://l.example/a' }, x: null } };
+        expect(isEmpty(diffOf(fromRow, fromCaller, ['links']))).toBe(true);
+        const changed = { links: { linkedin: { label: 'A', url: 'https://l.example/a' }, x: null } };
+        expect(Object.keys(diffOf(fromRow, changed, ['links']))).toEqual(['links']);
+    });
+
+    it('keeps arrays in order and dates as instants', () => {
+        expect(isEmpty(diffOf({ tags: ['a', 'b'] }, { tags: ['b', 'a'] }, ['tags']))).toBe(false);
+        expect(isEmpty(diffOf({ at: new Date(0) }, { at: new Date(0) }, ['at']))).toBe(true);
+    });
+});
