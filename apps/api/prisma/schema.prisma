@@ -1670,6 +1670,7 @@ enum EnrolmentStopReason {
   excluded
   sequence_archived
   person_deleted
+  region_blocked
 
   @@map("enrolment_stop_reason")
 }
@@ -1744,6 +1745,9 @@ model SequenceEnrolment {
   stopReason        EnrolmentStopReason? @map("stop_reason")
   stopDetail        String?              @map("stop_detail")
   enrolledBy        Json                 @map("enrolled_by")
+  /// No country was known at enrolment (D-251): enrolled and flagged; stopped if one later falls in a
+  /// blocked region.
+  countryUnknownAtEnrol Boolean           @default(false) @map("country_unknown_at_enrol")
   enrolledAt        DateTime             @default(now()) @map("enrolled_at") @db.Timestamptz
   finishedAt        DateTime?            @map("finished_at") @db.Timestamptz
   stoppedAt         DateTime?            @map("stopped_at") @db.Timestamptz

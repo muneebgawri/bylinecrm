@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
-import type { DomainEvent, Emails, EnrolmentEventPayload, EnrolmentStopReason } from '@bylinecrm/shared';
+import { REGION_LABELS, regionOfCountry } from '@bylinecrm/shared';
+import type { DomainEvent, Emails, EnrolmentEventPayload, EnrolmentStopReason, RegionCode } from '@bylinecrm/shared';
 import type { Prisma, SuppressionReason } from '@prisma/client';
 import type { Queue } from 'bullmq';
 import { DomainEvents } from '../events/domain-events.service';
@@ -14,6 +15,7 @@ import { RenderService } from '../templates/render.service';
 import { TemplatesService } from '../templates/templates.service';
 import { inferCountry } from './country';
 import { ExclusionsService } from './exclusions.service';
+import { RegionPolicyService } from './region-policy.service';
 import { addWaitDays, nextWindowStart, zoneForCountry, type SendWindow } from './schedule';
 import { RESCHEDULE_FAILURE_CODES, SEQUENCE_POOL_RETRY_MS, SEQUENCE_STEP_QUEUE } from './sequences.constants';
 
@@ -82,6 +84,7 @@ export class SequenceRunner {
         private readonly send: MailSendService,
         private readonly suppressions: SuppressionService,
         private readonly exclusions: ExclusionsService,
+        private readonly regions: RegionPolicyService,
         private readonly templates: TemplatesService,
         private readonly renderer: RenderService,
         @InjectQueue(SEQUENCE_STEP_QUEUE) private readonly queue: Queue<SequenceStepJob>,
@@ -306,6 +309,31 @@ export class SequenceRunner {
         );
     }
 
+    /**
+     * D-251: a person's country became known (or changed) after they were enrolled. Each of their running
+     * enrolments whose region the workspace's policy now blocks is stopped (`region_blocked`); the check
+     * before every step does the same, so a lost event only delays it to the next step.
+     */
+    async stopWhereRegionBlocked(workspaceId: string, personIds: readonly string[]): Promise<void> {
+        if (personIds.length === 0) return;
+        const rows = await this.rls.withWorkspace(workspaceId, async (tx) => ({
+            policy: await this.regions.allowedIn(tx),
+            enrolments: await tx.sequenceEnrolment.findMany({
+                where: { personId: { in: [...personIds] }, status: { in: ['active', 'held'] } },
+                select: {
+                    id: true,
+                    person: { select: { emails: true, country: true, company: { select: { address: true } } } },
+                },
+            }),
+        }));
+        for (const e of rows.enrolments) {
+            const address = primaryAddress(e);
+            if (!address) continue;
+            const blocked = blockedRegion(e.person, address, rows.policy);
+            if (blocked) await this.stop(workspaceId, e.id, 'region_blocked', blocked);
+        }
+    }
+
     // ── Internals ────────────────────────────────────────────────────────────────────────────
 
     private load(workspaceId: string, id: string): Promise<EnrolmentRow | null> {
@@ -338,6 +366,7 @@ export class SequenceRunner {
                 select: { id: true },
             });
             const excluded = (await this.exclusions.check(tx, [address])).get(address) ?? null;
+            const policy = await this.regions.allowedIn(tx);
             const deal =
                 e.dealId && e.sequence.pipelineId && e.sequence.stopOnPipelineExit
                     ? await tx.opportunity.findUnique({
@@ -345,12 +374,14 @@ export class SequenceRunner {
                           select: { pipelineId: true, deletedAt: true, stage: { select: { kind: true } } },
                       })
                     : undefined;
-            return { reply, excluded, deal };
+            return { reply, excluded, deal, policy };
         });
         if (found.reply) return { reason: 'reply' };
         const suppressed = (await this.suppressions.check(e.workspaceId, [address])).get(address);
         if (suppressed) return { reason: SUPPRESSION_STOP[suppressed.reason] };
         if (found.excluded) return { reason: 'excluded', detail: found.excluded.reason };
+        const blocked = blockedRegion(e.person, address, found.policy);
+        if (blocked) return { reason: 'region_blocked', detail: blocked };
         if (
             found.deal !== undefined &&
             (!found.deal ||
@@ -479,4 +510,17 @@ async function claim(
         data,
     });
     return moved.count === 1;
+}
+
+/** The blocked region a person now falls in under the workspace's policy, labelled; `null` when allowed. */
+function blockedRegion(
+    person: { country: string | null; company: { address: unknown } | null },
+    address: string,
+    policy: Record<RegionCode, boolean>,
+): string | null {
+    const companyCountry = (person.company?.address as { country?: string | null } | null)?.country ?? null;
+    const region = regionOfCountry(
+        inferCountry({ personCountry: person.country, companyCountry, email: address }).country,
+    );
+    return policy[region] ? null : `Region blocked: ${REGION_LABELS[region]} (policy)`;
 }

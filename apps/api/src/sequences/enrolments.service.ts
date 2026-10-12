@@ -33,6 +33,9 @@ export class EnrolmentsService {
         const context = this.current();
         const decided = await this.decide(sequenceId, personIds, true);
         if (decided.enrolled.length === 0) return decided;
+        const unknownCountry = new Set(
+            decided.warnings.filter((x) => x.code === 'region.unknown').map((x) => x.personId),
+        );
         const now = new Date();
         const inserted = await this.rls.withWorkspace(async (tx) => {
             if (dealId && !(await tx.opportunity.findFirst({ where: { id: dealId, deletedAt: null } }))) {
@@ -48,6 +51,7 @@ export class EnrolmentsService {
                     dealId: dealId ?? null,
                     nextRunAt: now,
                     enrolledBy: actorOf(context) as unknown as Prisma.InputJsonValue,
+                    countryUnknownAtEnrol: unknownCountry.has(personId),
                 })),
                 skipDuplicates: true,
             });
@@ -60,7 +64,12 @@ export class EnrolmentsService {
         });
         // A person enrolled by another request between the decision and the insert is skipped, not doubled.
         const raced = decided.enrolled.filter((id) => !inserted.includes(id));
-        return { enrolled: inserted, skipped: [...decided.skipped, ...raced], refused: decided.refused };
+        return {
+            enrolled: inserted,
+            skipped: [...decided.skipped, ...raced],
+            refused: decided.refused,
+            warnings: decided.warnings.filter((x) => inserted.includes(x.personId)),
+        };
     }
 
     async list(sequenceId: string): Promise<EnrolmentView[]> {
@@ -177,11 +186,11 @@ export class EnrolmentsService {
             );
         });
         const skipped = unique.filter((id) => existing.has(id));
-        const { eligible, refused } = await this.screen.screen(
+        const { eligible, refused, warnings } = await this.screen.screen(
             context.workspaceId,
             unique.filter((id) => !existing.has(id)),
         );
-        return { enrolled: eligible.map((e) => e.personId), skipped, refused };
+        return { enrolled: eligible.map((e) => e.personId), skipped, refused, warnings };
     }
 
     private find(id: string): Promise<SequenceEnrolment> {
@@ -239,6 +248,7 @@ export function view(row: SequenceEnrolment): EnrolmentView {
         stopReason: row.stopReason,
         stopDetail: row.stopDetail,
         enrolledBy: row.enrolledBy as unknown as Actor,
+        countryUnknownAtEnrol: row.countryUnknownAtEnrol,
         enrolledAt: row.enrolledAt.toISOString(),
         finishedAt: row.finishedAt?.toISOString() ?? null,
         stoppedAt: row.stoppedAt?.toISOString() ?? null,
