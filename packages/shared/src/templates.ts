@@ -120,6 +120,32 @@ export interface PostalAddress {
     country: string;
 }
 
+/**
+ * A country's name for its ISO 3166-1 alpha-2 code, from the runtime's region data
+ * (`Intl.DisplayNames`), in `locale`; the code itself when the runtime does not know it (#76).
+ */
+export function countryName(code: string, locale = 'en'): string {
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? code;
+}
+
+/**
+ * A postal address as one line, as it reads at the foot of an outreach email (FR-CRMS-12): the parts
+ * that are set, comma-separated, the country by name (#76). One function for the API's render and the
+ * web's preview, so the two cannot disagree. English: the footer is rendered once for every recipient.
+ */
+export function formatPostalAddress(address: PostalAddress, locale = 'en'): string {
+    return [
+        address.line1,
+        address.line2,
+        address.city,
+        address.region,
+        address.postalCode,
+        countryName(address.country, locale),
+    ]
+        .filter(Boolean)
+        .join(', ');
+}
+
 export const DEFAULT_UNSUBSCRIBE_FOOTER_TEXT = 'You are receiving this email because we thought it would interest you.';
 export const MAIL_SETTINGS_TEXT_MAX = 300;
 

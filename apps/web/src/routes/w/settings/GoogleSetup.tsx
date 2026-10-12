@@ -1,5 +1,5 @@
 import { GMAIL_BROAD_SCOPE, type OAuthCheckOutcome } from '@bylinecrm/shared';
-import { Badge, Button, Field, Input, Skeleton, toast } from '@bylinecrm/ui';
+import { Badge, Button, Field, Input, LoadingRegion, Skeleton, toast } from '@bylinecrm/ui';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { fieldErrorAt } from '../../../api/client';
@@ -45,7 +45,12 @@ export function GoogleSetup() {
 function MemberStatus({ workspaceId }: { workspaceId: string }) {
     const status = useOAuthClientStatus(workspaceId);
     if (status.isError) throw status.error;
-    if (!status.data) return <Skeleton aria-busy="true" aria-label="Loading Google status" className="h-10" />;
+    if (!status.data)
+        return (
+            <LoadingRegion label="Loading Google status">
+                <Skeleton className="h-10" />
+            </LoadingRegion>
+        );
     return <GoogleStatus workspaceId={workspaceId} status={status.data} />;
 }
 
@@ -54,10 +59,10 @@ function AdminSetup({ workspaceId }: { workspaceId: string }) {
     if (client.isError) throw client.error;
     if (!client.data) {
         return (
-            <div aria-busy="true" aria-label="Loading Google setup" className="flex flex-col gap-4">
+            <LoadingRegion label="Loading Google setup" className="flex flex-col gap-4">
                 <Skeleton className="h-40" />
                 <Skeleton className="h-24" />
-            </div>
+            </LoadingRegion>
         );
     }
     const view = client.data;

@@ -14,6 +14,17 @@ export const react = tseslint.config(...base, reactHooks.configs.flat.recommende
         // warning describes nothing that happens. Re-enable it in the same change that adopts the
         // compiler; components using those libraries then opt out with 'use no memo'. (P1-UI-4.)
         'react-hooks/incompatible-library': 'off',
+        'no-restricted-syntax': [
+            'error',
+            {
+                // A plain element's generic role prohibits a name (ARIA 1.2): screen readers skip it, and
+                // the a11y gate fails it only when the element happens to render. Caught here instead (#95).
+                selector:
+                    "JSXOpeningElement[name.name=/^(div|span|p)$/]:has(JSXAttribute[name.name='aria-label']):not(:has(JSXAttribute[name.name='role']))",
+                message:
+                    'aria-label on an element with no role is ignored by assistive tech: give it a role, or use <LoadingRegion label> for a loading state.',
+            },
+        ],
     },
 });
 

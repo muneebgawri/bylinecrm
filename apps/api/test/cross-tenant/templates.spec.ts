@@ -408,7 +408,7 @@ describe('email templates', () => {
             ).body as Rendered;
             expect(withAddress.sendable).toBe(true);
             expect(withAddress.html).toContain(`<a href="${UNSUBSCRIBE_URL_PLACEHOLDER}">Unsubscribe</a>`);
-            expect(withAddress.html).toContain('123 Main St, Austin, TX, 78701, US');
+            expect(withAddress.html).toContain('123 Main St, Austin, TX, 78701, United States');
         });
 
         it('the footer cannot be edited away: it is not part of the stored body', async () => {

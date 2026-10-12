@@ -1,6 +1,6 @@
 import { CSRF_COOKIE, CSRF_HEADER } from '@bylinecrm/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, isClientError, onUnauthorized, readCookie, request } from './client';
+import { ApiError, fieldErrorAt, isClientError, onUnauthorized, readCookie, request } from './client';
 
 function stubFetch(status: number, body?: unknown) {
     const fetchMock = vi.fn(() =>
@@ -121,5 +121,23 @@ describe('readCookie', () => {
         expect(readCookie('b', 'a=1; b=two%20words; c=3')).toBe('two words');
         expect(readCookie('missing', 'a=1')).toBeUndefined();
         expect(readCookie('a', 'a=x=y')).toBe('x=y');
+    });
+});
+
+describe('#76 fieldErrorAt, the one field-error lookup', () => {
+    const error = new ApiError(400, 'validation.failed', 'invalid', [
+        { path: 'password', message: 'too short' },
+        { path: 'body.content.1.text', message: 'empty variable' },
+    ]);
+
+    it('finds the error at a path exactly', () => {
+        expect(fieldErrorAt(error, 'password')).toBe('too short');
+        expect(fieldErrorAt(error, 'email')).toBeUndefined();
+        expect(fieldErrorAt(new Error('x'), 'password')).toBeUndefined();
+    });
+
+    it('with within, also an error anywhere under the path', () => {
+        expect(fieldErrorAt(error, 'body')).toBeUndefined();
+        expect(fieldErrorAt(error, 'body', { within: true })).toBe('empty variable');
     });
 });

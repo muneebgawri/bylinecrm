@@ -16,7 +16,7 @@ import {
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { ApiError } from '../../api/client';
+import { ApiError, fieldErrorAt } from '../../api/client';
 import {
     useCreatePlatformWorkspace,
     useCreateSignupInvite,
@@ -146,7 +146,7 @@ function CreateWorkspaceForOwnerDialog({ open, onClose }: { open: boolean; onClo
         create.mutate({ name, ownerEmail }, { onSuccess: (result) => setInvite(result.invite) });
     };
     const failure = create.error instanceof ApiError ? create.error : null;
-    const fieldError = (path: string) => failure?.fieldErrors.find((f) => f.path === path)?.message;
+    const fieldError = (path: string) => fieldErrorAt(failure, path);
     return (
         <Dialog open={open} onOpenChange={(o) => !o && close()}>
             <DialogContent>
@@ -242,7 +242,7 @@ function SignupInviteDialog({ open, onClose }: { open: boolean; onClose: () => v
                                 label="Email"
                                 required
                                 error={
-                                    failure?.fieldErrors.find((f) => f.path === 'email')?.message ??
+                                    fieldErrorAt(failure, 'email') ??
                                     failure?.message ??
                                     (create.isError ? 'Could not reach the server.' : undefined)
                                 }

@@ -186,10 +186,15 @@ function isEnvelope(payload: unknown): payload is ApiErrorBody {
 
 /**
  * The API's message for one request-body path (`postalAddress.city`), when it named that field;
- * `undefined` otherwise. A form places each message under its own field with this.
+ * `undefined` otherwise. With `within`, an error anywhere under the path counts too (`body` →
+ * `body.content.1.text`). The one field-error lookup (#76): a form places each message under its
+ * own field with this.
  */
-export function fieldErrorAt(error: unknown, path: string): string | undefined {
-    return error instanceof ApiError ? error.fieldErrors.find((f) => f.path === path)?.message : undefined;
+export function fieldErrorAt(error: unknown, path: string, options: { within?: boolean } = {}): string | undefined {
+    if (!(error instanceof ApiError)) return undefined;
+    const under = `${path}.`;
+    return error.fieldErrors.find((f) => f.path === path || (options.within === true && f.path.startsWith(under)))
+        ?.message;
 }
 
 /** One numeric fact from an error's `details` (a count, a limit); `undefined` when absent or not a number. */

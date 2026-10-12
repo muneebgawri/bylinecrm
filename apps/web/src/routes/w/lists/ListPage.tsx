@@ -6,6 +6,7 @@ import {
     cn,
     DataTableChrome,
     EmptyState,
+    LoadingRegion,
     PageHeader,
     Skeleton,
     toast,
@@ -557,11 +558,11 @@ function ListBody({
     const Icon = object === 'person' ? Users : Building2;
     if (loading) {
         return (
-            <div aria-busy="true" className="flex flex-col gap-2 p-3">
+            <LoadingRegion label={`Loading ${copy.plural.toLowerCase()}`} className="flex flex-col gap-2 p-3">
                 {Array.from({ length: 8 }, (_, i) => (
                     <Skeleton key={i} className="h-12 w-full" />
                 ))}
-            </div>
+            </LoadingRegion>
         );
     }
     if (error) {
