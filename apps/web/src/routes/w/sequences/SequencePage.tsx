@@ -17,7 +17,7 @@ import {
     Switch,
     toast,
 } from '@bylinecrm/ui';
-import { ArrowDown, ArrowUp, Clock, Mail, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Clock, ListTodo, Mail, Trash2 } from 'lucide-react';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { usePipelines } from '../../../api/deals';
@@ -54,7 +54,8 @@ import {
 /** A step as the builder holds it: the saved id when it has one, and a key for the list. */
 type DraftStep =
     | { key: string; id?: string; kind: 'email'; templateId: string | null; replyInThread: boolean }
-    | { key: string; id?: string; kind: 'wait'; waitDays: number; businessDays: boolean };
+    | { key: string; id?: string; kind: 'wait'; waitDays: number; businessDays: boolean }
+    | { key: string; id?: string; kind: 'task'; taskTitle: string };
 
 /** A new wait: three business days, the follow-up gap the wireframe draws. */
 const NEW_WAIT_DAYS = 3;
@@ -63,26 +64,36 @@ let draftKey = 0;
 const nextKey = () => `new-${(draftKey += 1)}`;
 
 function toDraft(sequence: SequenceView): DraftStep[] {
-    return sequence.steps.map((s) =>
-        s.kind === 'email'
-            ? { key: s.id, id: s.id, kind: 'email', templateId: s.templateId, replyInThread: s.replyInThread }
-            : {
-                  key: s.id,
-                  id: s.id,
-                  kind: 'wait',
-                  waitDays: s.waitDays ?? NEW_WAIT_DAYS,
-                  businessDays: s.businessDays,
-              },
-    );
+    return sequence.steps.map((s): DraftStep => {
+        switch (s.kind) {
+            case 'email':
+                return { key: s.id, id: s.id, kind: 'email', templateId: s.templateId, replyInThread: s.replyInThread };
+            case 'wait':
+                return {
+                    key: s.id,
+                    id: s.id,
+                    kind: 'wait',
+                    waitDays: s.waitDays ?? NEW_WAIT_DAYS,
+                    businessDays: s.businessDays,
+                };
+            case 'task':
+                return { key: s.id, id: s.id, kind: 'task', taskTitle: s.taskTitle ?? '' };
+        }
+    });
 }
 
 /** What the API takes: the step list in order; a saved step keeps its id so its enrolments keep their place. */
 function toInput(steps: readonly DraftStep[]): SequenceStepInput[] {
     return steps.map((s) => {
         const id = s.id ? { id: s.id } : {};
-        return s.kind === 'email'
-            ? { ...id, kind: 'email', templateId: s.templateId ?? '', replyInThread: s.replyInThread }
-            : { ...id, kind: 'wait', waitDays: s.waitDays, businessDays: s.businessDays };
+        switch (s.kind) {
+            case 'email':
+                return { ...id, kind: 'email', templateId: s.templateId ?? '', replyInThread: s.replyInThread };
+            case 'wait':
+                return { ...id, kind: 'wait', waitDays: s.waitDays, businessDays: s.businessDays };
+            case 'task':
+                return { ...id, kind: 'task', taskTitle: s.taskTitle.trim() };
+        }
     });
 }
 
@@ -259,9 +270,15 @@ function StepsCard({
             ...steps,
             kind === 'email'
                 ? { key: nextKey(), kind, templateId: null, replyInThread: false }
-                : { key: nextKey(), kind, waitDays: NEW_WAIT_DAYS, businessDays: true },
+                : kind === 'wait'
+                  ? { key: nextKey(), kind, waitDays: NEW_WAIT_DAYS, businessDays: true }
+                  : { key: nextKey(), kind, taskTitle: '' },
         ]);
-    const complete = steps.length > 0 && steps.every((s) => s.kind === 'wait' || s.templateId !== null);
+    const complete =
+        steps.length > 0 &&
+        steps.every((s) =>
+            s.kind === 'email' ? s.templateId !== null : s.kind === 'task' ? s.taskTitle.trim() !== '' : true,
+        );
     const full = steps.length >= SEQUENCE_LIMITS.steps;
     // Each email step's number among the emails, computed once per render ("Email 2" is the first follow-up).
     const emailNumbers = steps.map((_, i) => steps.slice(0, i + 1).filter((s) => s.kind === 'email').length);
@@ -292,6 +309,9 @@ function StepsCard({
                         <Button size="sm" variant="ghost" disabled={full} onClick={() => add('email')}>
                             <Mail aria-hidden /> Add email
                         </Button>
+                        <Button size="sm" variant="ghost" disabled={full} onClick={() => add('task')}>
+                            <ListTodo aria-hidden /> Add task
+                        </Button>
                         <Button size="sm" variant="ghost" disabled={full} onClick={() => add('wait')}>
                             <Clock aria-hidden /> Add wait
                         </Button>
@@ -300,7 +320,7 @@ function StepsCard({
                             size="sm"
                             variant="primary"
                             disabled={!dirty || !complete}
-                            title={complete ? undefined : 'Choose a template for every email step'}
+                            title={complete ? undefined : 'Choose a template for every email step and title every task'}
                             loading={put.isPending}
                             onClick={save}
                         >
@@ -375,6 +395,21 @@ function StepsCard({
                                                 onChange={(replyInThread) => update(index, { replyInThread })}
                                             />
                                         )}
+                                    </>
+                                ) : step.kind === 'task' ? (
+                                    <>
+                                        <ListTodo aria-hidden className="size-4 text-text-muted" />
+                                        <span className="text-sm font-medium">Task</span>
+                                        <Input
+                                            aria-label={`Task title, ${label}`}
+                                            className="min-w-56 flex-1 max-md:w-full"
+                                            maxLength={SEQUENCE_LIMITS.taskTitle}
+                                            placeholder="Call if no reply"
+                                            disabled={!editable}
+                                            value={step.taskTitle}
+                                            onChange={(e) => update(index, { taskTitle: e.target.value })}
+                                        />
+                                        <span className="text-sm text-text-muted">→ person&rsquo;s owner</span>
                                     </>
                                 ) : (
                                     <>

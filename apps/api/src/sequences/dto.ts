@@ -53,6 +53,11 @@ const stepInput = z.discriminatedUnion('kind', [
         waitDays: z.number().int().min(L.waitDays.min).max(L.waitDays.max),
         businessDays: z.boolean().default(true),
     }),
+    z.object({
+        id: uuid.optional(),
+        kind: z.literal(SEQUENCE_STEP_KINDS[2]),
+        taskTitle: z.string().trim().min(1).max(L.taskTitle),
+    }),
 ]);
 
 /** `PUT /sequences/:id/steps` — the whole ordered list. */
