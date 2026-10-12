@@ -18,5 +18,6 @@ RUN pnpm --filter @bylinecrm/shared build && pnpm --filter web build
 
 FROM ${NGINX_IMAGE} AS runtime
 COPY deploy/docker/web-nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/docker/web-api-upstream.conf /etc/nginx/dynamic/api-upstream.conf
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 CMD wget -qO /dev/null http://127.0.0.1/ || exit 1

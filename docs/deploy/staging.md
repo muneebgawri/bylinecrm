@@ -1,8 +1,8 @@
-# Staging — runbook (P5-4a)
+# Staging — runbook (P5-4a, P5-4c)
 
 **Where:** `https://staging.crm.pinionnewswire.com`, on the NewswireOS production VPS
 (`ssh newswireos-vps`, 169.58.194.188). **What runs:** the `bylinecrm-staging` compose project —
-postgres, valkey, api, web — from images CI builds for each commit on `main`
+postgres, valkey, and the api and web colours (blue or green, P5-4c) — from images CI builds for each commit on `main`
 (`ghcr.io/muneebgawri/bylinecrm-{api,web}:<sha>`). Nothing is built on the server. Postgres and Valkey come from our GHCR
 mirror, pinned by digest ([`images.md`](images.md), #123).
 
@@ -10,8 +10,11 @@ This box serves NewswireOS production, and other sessions deploy NewswireOS to i
 is written so that BylineCRM cannot take NewswireOS down: read "What this can break" before
 changing any of it.
 
-Files: `deploy/docker/` (images), `deploy/staging/` (compose, edge configs, scripts),
-`.github/workflows/images.yml` (publishing).
+Files: `deploy/docker/` (images), `deploy/env/` (compose, edge templates, scripts — **shared with
+production**, the environment name is every script's first argument; `lib.sh` is the one table of what
+differs), `.github/workflows/images.yml` (publishing). The deploy mechanism itself — blue/green cutover,
+the environment check, rollback, backups — is described once, in [`production.md`](production.md); this
+page keeps what is staging's own.
 
 ## Shared with NewswireOS — read first
 
@@ -31,14 +34,15 @@ Three things on this box belong to both products. Treat them as shared infrastru
 
 ## Layout on the server
 
-| Path                                                           | What                                              | Survives                                                 |
-| -------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- |
-| `/opt/bylinecrm/releases/<sha>/deploy/staging/`                | the deploy files for each release (newest 5 kept) | replaced per deploy                                      |
-| `/opt/bylinecrm-runtime/staging.env`, `postgres.env`           | environment, incl. secrets (0600)                 | everything                                               |
-| `/opt/bylinecrm-runtime/data/{postgres,valkey,attachments}`    | data                                              | everything                                               |
-| `/opt/bylinecrm-runtime/DEPLOYED_SHA`, `PREVIOUS_SHA`          | what runs, what ran before                        | everything                                               |
-| `/opt/bylinecrm-runtime/deploy.lock/`                          | held during a deploy                              | removed on exit                                          |
-| `/opt/newswireos-runtime/nginx-dynamic/bylinecrm-staging.conf` | this host's server blocks on the NewswireOS edge  | NewswireOS deploys (they only write `api-upstream.conf`) |
+| Path                                                                   | What                                                                                      | Survives                                                 |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `/opt/bylinecrm/releases/<sha>/deploy/env/`                            | the deploy files for each release (newest 5 per environment kept; shared with production) | replaced per deploy                                      |
+| `/opt/bylinecrm-runtime/staging.env`, `postgres.env`                   | environment, incl. secrets (0600)                                                         | everything                                               |
+| `/opt/bylinecrm-runtime/data/{postgres,valkey,attachments}`            | data                                                                                      | everything                                               |
+| `/opt/bylinecrm-runtime/DEPLOYED_SHA`, `PREVIOUS_SHA`, `ACTIVE_COLOUR` | what runs, what ran before, which colour serves                                           | everything                                               |
+| `/opt/bylinecrm-runtime/web-dynamic/api-upstream.conf`                 | the api colour the web containers proxy to                                                | rewritten per deploy                                     |
+| `/opt/bylinecrm-runtime/deploy.lock/`                                  | held during a deploy                                                                      | removed on exit                                          |
+| `/opt/newswireos-runtime/nginx-dynamic/bylinecrm-staging.conf`         | this host's server blocks on the NewswireOS edge                                          | NewswireOS deploys (they only write `api-upstream.conf`) |
 
 ## One-time setup (in this order)
 
@@ -70,10 +74,10 @@ file".
    an external network on `web` — a NewswireOS change, made in that repo by whoever owns it, not by
    this runbook.
 4. **Secrets:** copy the scripts up and generate the environment:
-   **Mac:** `SYNC=$(git rev-parse origin/main); git archive --format=tar $SYNC deploy/staging | ssh newswireos-vps "mkdir -p /opt/bylinecrm/releases/$SYNC && tar -x -C /opt/bylinecrm/releases/$SYNC"`
-   then on the server `bash /opt/bylinecrm/releases/<sha>/deploy/staging/bootstrap-secrets.sh`.
+   **Mac:** `SYNC=$(git rev-parse origin/main); git archive --format=tar $SYNC deploy/env | ssh newswireos-vps "mkdir -p /opt/bylinecrm/releases/$SYNC && tar -x -C /opt/bylinecrm/releases/$SYNC"`
+   then on the server `bash /opt/bylinecrm/releases/<sha>/deploy/env/bootstrap-secrets.sh staging`.
    It prints which secrets it generated, never their values. Re-running it keeps every secret.
-5. **Edge, HTTP only:** `bash /opt/bylinecrm/releases/<sha>/deploy/staging/install-edge.sh http`.
+5. **Edge, HTTP only:** `bash /opt/bylinecrm/releases/<sha>/deploy/env/install-edge.sh staging http`.
    It refuses while a NewswireOS deploy holds its lock or if the edge already fails `nginx -t`, and
    restores the previous state if its own file fails the test. Before running, look at the listen
    directives the edge already uses (`grep -n listen /opt/pressboard/plane/deploy/nginx.conf`): this
@@ -82,10 +86,12 @@ file".
 6. **Certificate:** `certbot certonly --webroot -w /var/www/certbot -d staging.crm.pinionnewswire.com`.
    The renewal config records the webroot, and the existing deploy hook
    (`/etc/letsencrypt/renewal-hooks/deploy/reload-web.sh`) reloads the edge on every renewal.
-7. **Edge, HTTPS:** `bash /opt/bylinecrm/releases/<sha>/deploy/staging/install-edge.sh https`
-   (refuses if the certificate is missing).
-8. **First deploy (Mac):** `deploy/staging/deploy.sh origin/main`. Before step 7 is done, use
+7. **Edge, HTTPS:** `bash /opt/bylinecrm/releases/<sha>/deploy/env/install-edge.sh staging https`
+   (refuses if the certificate is missing; sends traffic to the blue web colour until the first deploy).
+8. **First deploy (Mac):** `deploy/env/deploy.sh staging origin/main`. Before step 7 is done, use
    `SKIP_EDGE_PROBE=1`. `DRY=1` prints the plan.
+9. **Backups:** `bash /opt/bylinecrm/releases/<sha>/deploy/env/install-backup.sh staging` — the same nightly
+   timer as production ([`production.md`](production.md) § Backups), to `r2:bylinecrm-backups/staging/`.
 
 ## Sign-up and platform admins (P0-14)
 
@@ -97,10 +103,10 @@ invitation link the page shows.
   `/opt/bylinecrm-runtime/staging.env` (currently `matt@pinionpartners.co`). The account's email
   must be verified. Change the list through the script, never by editing the file (a re-run
   rewrites it), then restart the api:
-  `BYLINECRM_PLATFORM_ADMIN_EMAILS=a@x.com,b@y.com bash deploy/staging/bootstrap-secrets.sh`.
+  `BYLINECRM_PLATFORM_ADMIN_EMAILS=a@x.com,b@y.com bash deploy/env/bootstrap-secrets.sh staging`.
   A run without the variable keeps the stored list.
 - **Setting up a platform admin,** once per address, on the server:
-  `docker compose -p bylinecrm-staging exec api node dist/cli/platform-bootstrap-admin.js <address>`.
+  `cd /opt/bylinecrm/releases/$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA)/deploy/env && BYLINECRM_ENV=staging BYLINECRM_SHA=$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA) docker compose -p bylinecrm-staging --profile $(cat /opt/bylinecrm-runtime/ACTIVE_COLOUR) exec api-$(cat /opt/bylinecrm-runtime/ACTIVE_COLOUR) node dist/cli/platform-bootstrap-admin.js <address>`.
   The command refuses any address that is not on the list. An existing account's address is marked
   verified. With no account yet (a fresh server, sign-up closed) it creates one, verified, and prints
   a single-use set-password link valid for 30 minutes — open it to choose the password; no password
@@ -120,14 +126,13 @@ BylineCRM sending-only key on NewswireOS's account, from `no-reply@pinionnewswir
 - **Installing or rotating the key.** Copy the key to the clipboard on the Mac and run:
 
     ```
-    pbpaste | ssh newswireos-vps 'bash /opt/bylinecrm/releases/<sha>/deploy/staging/install-resend-key.sh'
+    pbpaste | ssh newswireos-vps 'bash /opt/bylinecrm/releases/<sha>/deploy/env/install-resend-key.sh staging'
     ```
 
     `<sha>` is any release that has the script: the one a refused deploy names, or
     `$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA)` once a release with it is live. The key travels
     only on stdin. It is never an argument, never printed (the script shows its last four
-    characters), and the file stays 0600. Then `docker compose -p bylinecrm-staging restart api`,
-    or deploy.
+    characters), and the file stays 0600. Then deploy (the api reads its environment at start).
 
 - **The deploy checks first.** A release whose environment lacks the key is refused by the
   environment check (below, #120) before anything is migrated or restarted; the refusal names
@@ -139,8 +144,8 @@ BylineCRM sending-only key on NewswireOS's account, from `no-reply@pinionnewswir
 ## Routine deploy (Mac)
 
 ```sh
-deploy/staging/deploy.sh origin/main     # or any commit on origin whose images CI built
-DRY=1 deploy/staging/deploy.sh <commit>  # print the plan only
+deploy/env/deploy.sh staging origin/main     # or any commit on origin whose images CI built
+DRY=1 deploy/env/deploy.sh staging <commit>  # print the plan only
 ```
 
 The deploy takes its own lock (two BylineCRM deploys cannot overlap), then:
@@ -155,30 +160,33 @@ The deploy takes its own lock (two BylineCRM deploys cannot overlap), then:
    the new api image with `staging.env` and the api's own schema. Every variable the new build
    would refuse to boot without is listed by name (never by value) and the deploy stops: nothing
    migrated, the old api still serving. Fix what it names, then deploy again.
-4. Migrates, starts the api and waits for `/health` to report `ok`, starts web and waits until it
-   serves the app and reaches the api through itself, records `DEPLOYED_SHA`, then probes the
-   public URL once.
+4. Migrates (expand now, contract later: the live colour keeps serving against the new schema), then
+   the **blue/green cutover** described in [`production.md`](production.md) § "Routine deploy": the
+   idle api colour up and healthy → the web containers pointed at it → the idle web colour up and
+   serving → the edge file rendered for it and reloaded → the old colour drained and stopped →
+   `ACTIVE_COLOUR` and `DEPLOYED_SHA` recorded; then one probe of the public URL. No request is
+   dropped; a failure before the edge switch reverts to the colour that never stopped serving.
 
 It does not take NewswireOS's lock and does not need to: it never touches a NewswireOS container
 or file.
 
 ## Rollback (Mac)
 
-`deploy/staging/rollback.sh` redeploys `PREVIOUS_SHA` through the same path. Migrations only move
+`deploy/env/rollback.sh staging` redeploys `PREVIOUS_SHA` through the same path. Migrations only move
 forward, so rolling back images does not roll back the schema. A migration that the previous code
 cannot run against needs a forward fix, not a rollback.
 
 ## Teardown (on the server)
 
-`deploy/staging/teardown.sh` (in any release directory) removes staging and nothing shared:
+`deploy/env/teardown.sh staging` (in any release directory) removes staging and nothing shared:
 
 ```
-bash /opt/bylinecrm/releases/<sha>/deploy/staging/teardown.sh --yes
+bash /opt/bylinecrm/releases/<sha>/deploy/env/teardown.sh staging --yes
 ```
 
 1. removes the edge include file, reloading the edge only after `nginx -t` passes without it (on failure
    it puts the file back, shows the error and re-tests);
-2. removes the `bylinecrm-staging` project's containers and its own `internal` network;
+2. removes the `bylinecrm-staging` project's containers and its own `data` and `app` networks;
 3. keeps `/opt/bylinecrm-runtime/data`, the secrets and the release files — add
    `--purge-data --i-understand-this-deletes-staging-data` to delete the data for good;
 4. **keeps the `bylinecrm-edge` network** and prints which containers are still attached.
@@ -193,20 +201,21 @@ with `install-edge.sh https`).
 | ------------------ | ---------------------------------------------------------------------------- |
 | postgres           | 512 MiB                                                                      |
 | valkey             | 128 MiB (`maxmemory 96mb`, `noeviction` — BullMQ jobs must never be evicted) |
-| api                | 768 MiB                                                                      |
+| api (per colour)   | 768 MiB                                                                      |
 | migrate (one-shot) | 384 MiB                                                                      |
-| web                | 64 MiB                                                                       |
+| web (per colour)   | 64 MiB                                                                       |
 
-About 1.5 GiB in steady state on an 11 GiB box. Check with
+About 1.5 GiB in steady state (2.3 GiB during a cutover, when two colours run) on an 11 GiB box. Check with
 `docker stats --no-stream $(docker ps -q --filter label=com.docker.compose.project=bylinecrm-staging)`.
 A service at its cap is OOM-killed and restarted by Docker; it cannot take memory from NewswireOS.
 
 ## Logs and state
 
 ```sh
-cd /opt/bylinecrm/releases/$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA)/deploy/staging
-BYLINECRM_SHA=$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA) docker compose -p bylinecrm-staging -f docker-compose.yml logs --tail 100 api
-BYLINECRM_SHA=$(cat /opt/bylinecrm-runtime/DEPLOYED_SHA) docker compose -p bylinecrm-staging -f docker-compose.yml ps
+R=/opt/bylinecrm-runtime; C=$(cat $R/ACTIVE_COLOUR)
+cd /opt/bylinecrm/releases/$(cat $R/DEPLOYED_SHA)/deploy/env
+BYLINECRM_ENV=staging BYLINECRM_SHA=$(cat $R/DEPLOYED_SHA) docker compose -p bylinecrm-staging --profile $C -f docker-compose.yml logs --tail 100 api-$C
+docker ps --filter label=com.docker.compose.project=bylinecrm-staging
 ```
 
 ## What this can break on the shared box, and how it is prevented

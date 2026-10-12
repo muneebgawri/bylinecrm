@@ -1,0 +1,15 @@
+# bylinecrm-backup@<env>.service — one nightly backup run of a BylineCRM environment (P5-4c).
+# Installed by deploy/env/install-backup.sh; started by bylinecrm-backup@<env>.timer.
+[Unit]
+Description=BylineCRM %i backup (database, roles, attachments; offsite copy)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bylinecrm/tools/%i/backup.sh %i
+# The log of record: journalctl -u bylinecrm-backup@%i
+StandardOutput=journal
+StandardError=journal
+Nice=10
+IOSchedulingClass=idle
