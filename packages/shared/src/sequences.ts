@@ -224,6 +224,8 @@ export interface EnrolmentView {
     stopReason: EnrolmentStopReason | null;
     stopDetail: string | null;
     enrolledBy: Actor;
+    /** The member who enrolled the person: the sender of each step's send (#144). */
+    enrolledByMemberId: string;
     enrolledAt: string;
     finishedAt: string | null;
     stoppedAt: string | null;
