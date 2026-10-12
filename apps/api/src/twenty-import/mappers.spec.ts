@@ -34,6 +34,18 @@ const DEAL = '44444444-4444-4444-8444-444444444444';
 const base = { id: 'ext-1', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z' };
 
 describe('P4-4 (doc 48 §11): a Twenty company becomes a company', () => {
+    it('P4-4b: a company whose link does not parse maps with no domain instead of throwing', () => {
+        const mapped = mapCompany(
+            {
+                ...base,
+                name: 'Broken Link Ltd',
+                domainName: { primaryLinkUrl: 'http://', primaryLinkLabel: '', secondaryLinks: [] },
+            },
+            links({}),
+        );
+        expect(mapped).toMatchObject({ input: { domain: null } });
+    });
+
     it('maps the standard fields, the owner through the member link, and the rest as custom values', () => {
         const mapped = mapCompany(
             {

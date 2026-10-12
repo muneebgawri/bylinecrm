@@ -10,10 +10,10 @@ import type { LinkIndex } from './links';
 import { markdownToRichText } from './markdown';
 import {
     addressOf,
+    domainOf,
     emailOf,
     emailsOf,
     humanise,
-    idOf,
     isObject,
     isoDate,
     isoDateTime,
@@ -336,11 +336,9 @@ function domainOfRecord(value: unknown): string | null {
 }
 
 function domainOfLink(value: unknown): string | null {
-    const url = text(value);
-    if (!url) return null;
-    const host = idOf(url) ? new URL(/^[a-z]+:\/\//i.test(url) ? url : `https://${url}`).hostname : '';
-    const cleaned = host.toLowerCase().replace(/^www\./, '');
-    return cleaned.includes('.') ? cleaned : null;
+    // The tolerant helper: a link Twenty accepted but the URL parser does not (P4-4b) is no domain,
+    // never an error that stops the run.
+    return domainOf(value);
 }
 
 function numberOrNull(value: unknown): number | null {
