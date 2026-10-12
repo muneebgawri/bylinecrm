@@ -502,7 +502,7 @@ async function assertRuleTarget(tx: WorkspaceClient, pipelineId: string, stageId
         throw new UnprocessableEntityException('a rule moves deals into an open stage; closing is a member’s decision');
 }
 
-function stageData(
+export function stageData(
     workspaceId: string,
     pipelineId: string,
     position: number,

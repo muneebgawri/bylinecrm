@@ -17,6 +17,8 @@ import type {
     RegionPolicyEntryView,
     SuppressionView,
     SendingPoolView,
+    TwentyImportOverviewView,
+    TwentyImportRunView,
     UnsubscribeStatusView,
     AttachmentView,
     BoardView,
@@ -1061,3 +1063,89 @@ export const enrolments: SequenceEnrolmentView[] = [
         stoppedAt: at(5),
     },
 ];
+
+// ---- The Twenty importer (P4-4, P4-UI-2) ----------------------------------------------------
+
+const twentyObjects = [
+    'workspaceMembers',
+    'companies',
+    'people',
+    'opportunities',
+    'notes',
+    'tasks',
+    'leadLookups',
+    'leadViews',
+    'messageLists',
+    'messageListMembers',
+    'messageCampaigns',
+] as const;
+const twentyCounts: Record<
+    (typeof twentyObjects)[number],
+    [remote: number, created: number, updated: number, skipped: number]
+> = {
+    workspaceMembers: [33, 31, 0, 2],
+    companies: [93167, 93167, 0, 0],
+    people: [158869, 158420, 0, 0],
+    opportunities: [107357, 107357, 0, 0],
+    notes: [4754, 4700, 0, 54],
+    tasks: [2, 2, 0, 0],
+    leadLookups: [154888, 150928, 0, 3960],
+    leadViews: [51, 3, 48, 0],
+    messageLists: [0, 0, 0, 0],
+    messageListMembers: [0, 0, 0, 0],
+    messageCampaigns: [0, 0, 0, 0],
+};
+
+/** A finished first import: every object read, with Twenty's counts beside what it did. */
+export const twentyImportRun: TwentyImportRunView = {
+    id: '0b1e0000-0000-4000-8000-000000000a01',
+    status: 'succeeded',
+    mode: 'full',
+    since: null,
+    phase: null,
+    report: twentyObjects.map((object) => {
+        const [remote, created, updated, skipped] = twentyCounts[object];
+        return {
+            object,
+            remote,
+            before: 0,
+            read: remote,
+            created,
+            updated,
+            unchanged: 0,
+            merged: remote - created - updated - skipped,
+            skipped,
+            failed: 0,
+            after: created + updated,
+            errors:
+                object === 'workspaceMembers'
+                    ? [
+                          {
+                              externalId: '0e3de48c-8114-4277-bb82-7b3ad6f7928e',
+                              message: 'no member with email dana@example.com',
+                          },
+                      ]
+                    : [],
+        };
+    }),
+    error: null,
+    cancelRequested: false,
+    startedBy: IDS.member,
+    queuedAt: at(26),
+    startedAt: at(26),
+    finishedAt: at(23),
+};
+
+export const twentyImport: TwentyImportOverviewView = {
+    settings: {
+        configured: true,
+        baseUrl: 'https://crm.example.com',
+        apiKeyLast4: '7f3a',
+        configuredBy: IDS.member,
+        updatedAt: at(30),
+    },
+    latestRun: twentyImportRun,
+    linked: twentyImportRun.report.map((r) => ({ object: r.object, count: r.after ?? 0 })),
+};
+
+export const twentyImportRuns: TwentyImportRunView[] = [twentyImportRun];

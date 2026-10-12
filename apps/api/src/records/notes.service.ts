@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Actor, RecordTarget, RichText } from '@bylinecrm/shared';
+import type { Actor, DomainEvent, RecordTarget, RichText } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from './actor';
-import { diffOf } from './diff';
+import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type Page, paginate } from './list-query';
 import { compact, stored } from './references';
 import { EMPTY_RICH_TEXT, richTextToPlain } from './rich-text';
@@ -17,6 +17,8 @@ export interface NoteInput {
     title?: string | undefined;
     body?: RichText | undefined;
     targets?: RecordTarget[] | undefined;
+    /** Create only: the member who wrote it; the caller when absent (an import names the Twenty author). */
+    authorId?: string | null | undefined;
 }
 
 export interface ListByTargetQuery {
@@ -69,35 +71,10 @@ export class NotesService {
 
     async create(input: NoteInput & { targets: RecordTarget[] }): Promise<NoteView> {
         const context = this.current();
-        const actor = actorOf(context);
-        const targets = dedupeTargets(input.targets);
-        const body = input.body ?? EMPTY_RICH_TEXT;
         const row = await this.rls.withWorkspace(async (tx) => {
-            await assertTargetsReadable(tx, targets);
-            const created = await tx.note.create({
-                data: {
-                    workspaceId: context.workspaceId,
-                    title: input.title ?? '',
-                    body: body as Prisma.InputJsonObject,
-                    bodyText: richTextToPlain(body),
-                    authorId: context.memberId ?? null,
-                    createdBy: actor,
-                    targets: {
-                        create: targetRows(context.workspaceId, targets),
-                    },
-                },
-                include: { targets: true },
-            });
-            await this.events.record(tx, {
-                type: 'note.created',
-                object: 'note',
-                workspaceId: context.workspaceId,
-                actor,
-                occurredAt: new Date().toISOString(),
-                recordId: created.id,
-                targets,
-            });
-            return created;
+            const created = await this.createIn(tx, context, input);
+            await this.events.record(tx, created.event);
+            return created.row;
         });
         return view(row);
     }
@@ -105,30 +82,99 @@ export class NotesService {
     /** Partial; `targets`, when given, replaces the whole set. */
     async update(id: string, patch: NoteInput): Promise<NoteView> {
         const context = this.current();
-        const after = await this.rls.withWorkspace(async (tx) => {
-            const current = await find(tx, id, false);
-            const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
-            if (targets) await assertTargetsReadable(tx, targets);
-            const updated = await tx.note.update({
-                where: { id },
-                data: {
-                    ...compact({ title: patch.title }),
-                    ...(patch.body
-                        ? { body: patch.body as Prisma.InputJsonObject, bodyText: richTextToPlain(patch.body) }
-                        : {}),
-                    ...(targets
-                        ? {
-                              targets: {
-                                  deleteMany: {},
-                                  create: targetRows(context.workspaceId, targets),
-                              },
-                          }
-                        : {}),
+        const { after } = await this.rls.withWorkspace(async (tx) => {
+            const result = await this.updateIn(tx, context, id, patch);
+            if (result.event) await this.events.record(tx, result.event);
+            return result;
+        });
+        return view(after);
+    }
+
+    // The writes inside a caller's transaction — the routes above and the Twenty importer (P4-4)
+    // both run these; each returns the event for the caller to record in the same transaction (P1-6).
+
+    async createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: NoteInput & { targets: RecordTarget[] },
+    ): Promise<{ row: NoteRow; event: DomainEvent }> {
+        const actor = actorOf(context);
+        const targets = dedupeTargets(input.targets);
+        const body = input.body ?? EMPTY_RICH_TEXT;
+        await assertTargetsReadable(tx, targets);
+        const row = await tx.note.create({
+            data: {
+                workspaceId: context.workspaceId,
+                title: input.title ?? '',
+                body: body as Prisma.InputJsonObject,
+                bodyText: richTextToPlain(body),
+                authorId: input.authorId === undefined ? (context.memberId ?? null) : input.authorId,
+                createdBy: actor,
+                targets: {
+                    create: targetRows(context.workspaceId, targets),
                 },
-                include: { targets: true },
-            });
-            const updatedView = view(updated);
-            await this.events.record(tx, {
+            },
+            include: { targets: true },
+        });
+        return {
+            row,
+            event: {
+                type: 'note.created',
+                object: 'note',
+                workspaceId: context.workspaceId,
+                actor,
+                occurredAt: new Date().toISOString(),
+                recordId: row.id,
+                targets,
+            },
+        };
+    }
+
+    /** Nothing would change: no write, no `updated` event, the note as it was. */
+    async updateIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        patch: NoteInput,
+    ): Promise<{ after: NoteRow; event: DomainEvent | null }> {
+        const current = await find(tx, id, false);
+        const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
+        if (targets) await assertTargetsReadable(tx, targets);
+        const projected = projectedChanges(
+            current,
+            {
+                ...compact({ title: patch.title }),
+                ...(patch.body ? { body: patch.body } : {}),
+                ...(targets
+                    ? { targets: targetRows(context.workspaceId, targets).map((t) => ({ ...t, id: '', noteId: id })) }
+                    : {}),
+            },
+            view,
+            DIFF_FIELDS,
+        );
+        if (isEmpty(projected)) return { after: current, event: null };
+        const after = await tx.note.update({
+            where: { id },
+            data: {
+                ...compact({ title: patch.title }),
+                ...(patch.body
+                    ? { body: patch.body as Prisma.InputJsonObject, bodyText: richTextToPlain(patch.body) }
+                    : {}),
+                ...(targets
+                    ? {
+                          targets: {
+                              deleteMany: {},
+                              create: targetRows(context.workspaceId, targets),
+                          },
+                      }
+                    : {}),
+            },
+            include: { targets: true },
+        });
+        const updatedView = view(after);
+        return {
+            after,
+            event: {
                 type: 'note.updated',
                 object: 'note',
                 workspaceId: context.workspaceId,
@@ -137,10 +183,8 @@ export class NotesService {
                 recordId: id,
                 diff: diffOf(view(current), updatedView, DIFF_FIELDS),
                 targets: updatedView.targets,
-            });
-            return updatedView;
-        });
-        return after;
+            },
+        };
     }
 
     async remove(id: string): Promise<void> {

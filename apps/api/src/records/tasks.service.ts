@@ -1,11 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Actor, RecordTarget, RichText, TaskStatus } from '@bylinecrm/shared';
+import type { Actor, DomainEvent, RecordTarget, RichText, TaskStatus } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from './actor';
-import { diffOf } from './diff';
+import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type Page, paginate } from './list-query';
 import { assertOwnerIsMember, compact, stored } from './references';
 import { EMPTY_RICH_TEXT, richTextToPlain } from './rich-text';
@@ -84,40 +84,10 @@ export class TasksService {
 
     async create(input: TaskInput & { title: string; targets: RecordTarget[] }): Promise<TaskView> {
         const context = this.current();
-        const actor = actorOf(context);
-        const targets = dedupeTargets(input.targets);
-        const body = input.body ?? EMPTY_RICH_TEXT;
-        const status = input.status ?? 'todo';
         const row = await this.rls.withWorkspace(async (tx) => {
-            await assertTargetsReadable(tx, targets);
-            await assertOwnerIsMember(tx, input.assigneeId ?? null, 'assigneeId');
-            const created = await tx.task.create({
-                data: {
-                    workspaceId: context.workspaceId,
-                    title: input.title,
-                    body: body as Prisma.InputJsonObject,
-                    bodyText: richTextToPlain(body),
-                    status,
-                    dueAt: input.dueAt ? new Date(input.dueAt) : null,
-                    assigneeId: input.assigneeId ?? null,
-                    completedAt: completedAtFor(status, undefined, new Date()),
-                    createdBy: actor,
-                    targets: {
-                        create: targetRows(context.workspaceId, targets),
-                    },
-                },
-                include: { targets: true },
-            });
-            await this.events.record(tx, {
-                type: 'task.created',
-                object: 'task',
-                workspaceId: context.workspaceId,
-                actor,
-                occurredAt: new Date().toISOString(),
-                recordId: created.id,
-                targets,
-            });
-            return created;
+            const created = await this.createIn(tx, context, input);
+            await this.events.record(tx, created.event);
+            return created.row;
         });
         return view(row);
     }
@@ -125,39 +95,113 @@ export class TasksService {
     /** Partial; `targets` replaces the set; `completedAt` follows `status` by the one rule. */
     async update(id: string, patch: TaskInput): Promise<TaskView> {
         const context = this.current();
-        const after = await this.rls.withWorkspace(async (tx) => {
-            const current = await find(tx, context, id, false);
-            const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
-            if (targets) await assertTargetsReadable(tx, targets);
-            if (patch.assigneeId != null && patch.assigneeId !== current.assigneeId) {
-                await assertOwnerIsMember(tx, patch.assigneeId, 'assigneeId');
-            }
-            const status = patch.status ?? current.status;
-            const updated = await tx.task.update({
-                where: { id },
-                data: {
-                    ...compact({ title: patch.title, assigneeId: patch.assigneeId }),
-                    ...(patch.body
-                        ? { body: patch.body as Prisma.InputJsonObject, bodyText: richTextToPlain(patch.body) }
-                        : {}),
-                    ...(patch.dueAt === undefined
-                        ? {}
-                        : { dueAt: patch.dueAt === null ? null : new Date(patch.dueAt) }),
-                    status,
-                    completedAt: completedAtFor(status, current, new Date()),
-                    ...(targets
-                        ? {
-                              targets: {
-                                  deleteMany: {},
-                                  create: targetRows(context.workspaceId, targets),
-                              },
-                          }
-                        : {}),
+        const { after } = await this.rls.withWorkspace(async (tx) => {
+            const result = await this.updateIn(tx, context, id, patch);
+            if (result.event) await this.events.record(tx, result.event);
+            return result;
+        });
+        return view(after);
+    }
+
+    // The writes inside a caller's transaction — the routes above and the Twenty importer (P4-4)
+    // both run these; each returns the event for the caller to record in the same transaction (P1-6).
+
+    async createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: TaskInput & { title: string; targets: RecordTarget[] },
+    ): Promise<{ row: TaskRow; event: DomainEvent }> {
+        const actor = actorOf(context);
+        const targets = dedupeTargets(input.targets);
+        const body = input.body ?? EMPTY_RICH_TEXT;
+        const status = input.status ?? 'todo';
+        await assertTargetsReadable(tx, targets);
+        await assertOwnerIsMember(tx, input.assigneeId ?? null, 'assigneeId');
+        const row = await tx.task.create({
+            data: {
+                workspaceId: context.workspaceId,
+                title: input.title,
+                body: body as Prisma.InputJsonObject,
+                bodyText: richTextToPlain(body),
+                status,
+                dueAt: input.dueAt ? new Date(input.dueAt) : null,
+                assigneeId: input.assigneeId ?? null,
+                completedAt: completedAtFor(status, undefined, new Date()),
+                createdBy: actor,
+                targets: {
+                    create: targetRows(context.workspaceId, targets),
                 },
-                include: { targets: true },
-            });
-            const updatedView = view(updated);
-            await this.events.record(tx, {
+            },
+            include: { targets: true },
+        });
+        return {
+            row,
+            event: {
+                type: 'task.created',
+                object: 'task',
+                workspaceId: context.workspaceId,
+                actor,
+                occurredAt: new Date().toISOString(),
+                recordId: row.id,
+                targets,
+            },
+        };
+    }
+
+    /** Nothing would change: no write, no `updated` event, the task as it was. */
+    async updateIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        patch: TaskInput,
+    ): Promise<{ after: TaskRow; event: DomainEvent | null }> {
+        const current = await find(tx, context, id, false);
+        const targets = patch.targets ? dedupeTargets(patch.targets) : undefined;
+        if (targets) await assertTargetsReadable(tx, targets);
+        if (patch.assigneeId != null && patch.assigneeId !== current.assigneeId) {
+            await assertOwnerIsMember(tx, patch.assigneeId, 'assigneeId');
+        }
+        const status = patch.status ?? current.status;
+        const data = {
+            ...compact({ title: patch.title, assigneeId: patch.assigneeId }),
+            ...(patch.body
+                ? { body: patch.body as Prisma.InputJsonObject, bodyText: richTextToPlain(patch.body) }
+                : {}),
+            ...(patch.dueAt === undefined ? {} : { dueAt: patch.dueAt === null ? null : new Date(patch.dueAt) }),
+            status,
+            completedAt: completedAtFor(status, current, new Date()),
+        };
+        const projected = projectedChanges(
+            current,
+            {
+                ...data,
+                ...(targets
+                    ? { targets: targetRows(context.workspaceId, targets).map((t) => ({ ...t, id: '', taskId: id })) }
+                    : {}),
+            },
+            view,
+            DIFF_FIELDS,
+        );
+        if (isEmpty(projected)) return { after: current, event: null };
+        const after = await tx.task.update({
+            where: { id },
+            data: {
+                ...data,
+                ...(targets
+                    ? {
+                          targets: {
+                              deleteMany: {},
+                              create: targetRows(context.workspaceId, targets),
+                          },
+                      }
+                    : {}),
+            },
+            include: { targets: true },
+        });
+        const updatedView = view(after);
+        return {
+            after,
+            event: {
                 type: 'task.updated',
                 object: 'task',
                 workspaceId: context.workspaceId,
@@ -166,10 +210,8 @@ export class TasksService {
                 recordId: id,
                 diff: diffOf(view(current), updatedView, DIFF_FIELDS),
                 targets: updatedView.targets,
-            });
-            return updatedView;
-        });
-        return after;
+            },
+        };
     }
 
     async remove(id: string): Promise<void> {

@@ -122,35 +122,45 @@ export class OpportunitiesService implements BulkRecords {
 
     async create(input: OpportunityInput & { name: string }): Promise<OpportunityView> {
         const context = this.current();
-        const actor = actorOf(context);
         const row = await this.rls.withWorkspace(async (tx) => {
-            const ownerId = resolveOwner(context, input.ownerId, undefined);
-            await assertOwnerIsMember(tx, ownerId);
-            await assertCompanyExists(tx, input.companyId ?? null);
-            await assertPersonExists(tx, input.pointOfContactId ?? null);
-            const custom = await this.customFields.validated(tx, 'opportunity', input.custom ?? {}, 'create');
-            // A deal always has a currency, amount or not: the workspace's unless the caller named one.
-            const money = await moneyColumns(tx, context.workspaceId, input.amount ?? null);
-            const currency = input.amount?.currency ?? (await defaultCurrency(tx, context.workspaceId));
-            const placement = await startingStage(tx, input.pipelineId, input.stageId);
-            const created = await tx.opportunity.create({
-                data: {
-                    ...compact(fields(input)),
-                    name: input.name,
-                    amountMinor: money.amountMinor ?? null,
-                    currency,
-                    workspaceId: context.workspaceId,
-                    ownerId,
-                    createdBy: actor,
-                    custom,
-                    ...placement,
-                },
-            });
-            await this.moves.place(tx, created, actor, 'manual');
-            await this.events.record(tx, event(context, 'opportunity.created', created.id));
-            return find(tx, context, created.id);
+            const created = await this.createIn(tx, context, input);
+            await this.events.record(tx, created.event);
+            return created.row;
         });
         return view(row);
+    }
+
+    /** Creates a deal in its starting stage, with its first history row (placed by hand, or by an import). */
+    async createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: OpportunityInput & { name: string },
+    ): Promise<{ row: OpportunityRow; event: DomainEvent }> {
+        const actor = actorOf(context);
+        const ownerId = resolveOwner(context, input.ownerId, undefined);
+        await assertOwnerIsMember(tx, ownerId);
+        await assertCompanyExists(tx, input.companyId ?? null);
+        await assertPersonExists(tx, input.pointOfContactId ?? null);
+        const custom = await this.customFields.validated(tx, 'opportunity', input.custom ?? {}, 'create');
+        // A deal always has a currency, amount or not: the workspace's unless the caller named one.
+        const money = await moneyColumns(tx, context.workspaceId, input.amount ?? null);
+        const currency = input.amount?.currency ?? (await defaultCurrency(tx, context.workspaceId));
+        const placement = await startingStage(tx, input.pipelineId, input.stageId);
+        const created = await tx.opportunity.create({
+            data: {
+                ...compact(fields(input)),
+                name: input.name,
+                amountMinor: money.amountMinor ?? null,
+                currency,
+                workspaceId: context.workspaceId,
+                ownerId,
+                createdBy: actor,
+                custom,
+                ...placement,
+            },
+        });
+        await this.moves.place(tx, created, actor, actor.kind === 'import' ? 'import' : 'manual');
+        return { row: await find(tx, context, created.id), event: event(context, 'opportunity.created', created.id) };
     }
 
     /** Partial. `amount: null` clears the amount and keeps the currency; `custom` is merged key by key. */

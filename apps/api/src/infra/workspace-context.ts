@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable } from '@nestjs/common';
-import type { Capability } from '@bylinecrm/shared';
+import type { Actor, Capability } from '@bylinecrm/shared';
 
 /** What a request (or a job) knows about its tenant once a guard has decided it may act there. */
 export interface WorkspaceRunContext {
@@ -22,6 +22,12 @@ export interface WorkspaceRunContext {
      * services filter by it. Absent means every owner.
      */
     ownerScopeMemberId?: string;
+    /**
+     * Who the records written in this scope say made them, when it is not the caller: a job that
+     * acts as an import (`{ kind: 'import', id: <run id> }`). Absent, `actorOf` derives the actor
+     * from the caller — the member, else the key, else the system.
+     */
+    actor?: Actor;
 }
 
 /** The store for one request or job: empty until a guard fills it. */

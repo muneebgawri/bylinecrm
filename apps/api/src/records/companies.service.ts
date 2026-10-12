@@ -88,30 +88,10 @@ export class CompaniesService implements BulkRecords {
 
     async create(input: CompanyInput & { name: string }): Promise<CompanyView> {
         const context = this.current();
-        const actor = actorOf(context);
         const row = await this.rls.withWorkspace(async (tx) => {
-            const ownerId = resolveOwner(context, input.ownerId, undefined);
-            await assertOwnerIsMember(tx, ownerId);
-            const custom = await this.customFields.validated(tx, 'company', input.custom ?? {}, 'create');
-            const arr = await moneyColumns(tx, context.workspaceId, input.arr);
-            try {
-                const row = await tx.company.create({
-                    data: {
-                        ...compact(fields(input)),
-                        ...arrColumns(arr),
-                        name: input.name,
-                        workspaceId: context.workspaceId,
-                        ownerId,
-                        createdBy: actor,
-                        custom,
-                    },
-                    include: companyInclude,
-                });
-                await this.events.record(tx, event(context, 'company.created', row.id));
-                return row;
-            } catch (error) {
-                throw uniqueViolation(error) ? conflict() : error;
-            }
+            const created = await this.createIn(tx, context, input);
+            await this.events.record(tx, created.event);
+            return created.row;
         });
         return view(row);
     }
@@ -147,6 +127,34 @@ export class CompaniesService implements BulkRecords {
 
     // The writes inside a caller's transaction — the single routes and the bulk service (P1-4a)
     // both run these; each returns the event for the caller to record in the same transaction (P1-6).
+
+    async createIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: CompanyInput & { name: string },
+    ): Promise<{ row: CompanyRow; event: DomainEvent }> {
+        const ownerId = resolveOwner(context, input.ownerId, undefined);
+        await assertOwnerIsMember(tx, ownerId);
+        const custom = await this.customFields.validated(tx, 'company', input.custom ?? {}, 'create');
+        const arr = await moneyColumns(tx, context.workspaceId, input.arr);
+        try {
+            const row = await tx.company.create({
+                data: {
+                    ...compact(fields(input)),
+                    ...arrColumns(arr),
+                    name: input.name,
+                    workspaceId: context.workspaceId,
+                    ownerId,
+                    createdBy: actorOf(context),
+                    custom,
+                },
+                include: companyInclude,
+            });
+            return { row, event: event(context, 'company.created', row.id) };
+        } catch (error) {
+            throw uniqueViolation(error) ? conflict() : error;
+        }
+    }
 
     async updateIn(
         tx: WorkspaceClient,

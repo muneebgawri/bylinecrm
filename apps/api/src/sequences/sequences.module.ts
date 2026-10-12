@@ -66,5 +66,7 @@ import { SequenceWorkers } from './sequences.workers';
         SequencesConsumer,
         SequenceWorkers,
     ],
+    // The Twenty importer (P4-4) writes a lead lookup as an exclusion through the one service.
+    exports: [ExclusionsService],
 })
 export class SequencesModule {}
