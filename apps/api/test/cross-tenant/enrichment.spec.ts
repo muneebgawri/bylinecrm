@@ -272,6 +272,45 @@ describe('FR-CRMS-15 enrichment', () => {
         expect((await read('company', c.id)).logoUrl).toBe(`https://${domain}/logo.png`);
     });
 
+    it('FR-CRMS-15 (#170): the website’s name is applied over a placeholder — empty, the domain, a bare host — and recorded like any field; a member’s name never', async () => {
+        const domain = `named-${stamp}.example`;
+        web.page(`https://${domain}/`, homePage('Named Properly Ltd', 'https://www.linkedin.com/company/named/', null));
+        dns.setMx(domain, `mx.${domain}`);
+        // An imported company is often named by its domain (the Twenty importer brings such rows).
+        const byDomain = await company({ name: domain, domain });
+        const byHost = await company({ name: `www.${domain}`, domain: `www.${domain}` });
+        const named = await company({ name: 'Named by a member', domain: `member-${domain}` });
+        web.page(
+            `https://www.${domain}/`,
+            homePage('Named Properly Ltd', 'https://www.linkedin.com/company/named/', null),
+        );
+        web.page(
+            `https://member-${domain}/`,
+            homePage('Named Properly Ltd', 'https://www.linkedin.com/company/named/', null),
+        );
+        dns.setMx(`www.${domain}`, `mx.${domain}`);
+        dns.setMx(`member-${domain}`, `mx.${domain}`);
+
+        const log = await EventLog.open(app, ['company.updated']);
+        for (const c of [byDomain, byHost, named]) await runner.enrich(workspace, 'company', c.id, { force: true });
+
+        expect((await read('company', byDomain.id)).name).toBe('Named Properly Ltd');
+        expect((await read('company', byHost.id)).name).toBe('Named Properly Ltd');
+        expect((await read('company', named.id)).name).toBe('Named by a member');
+        expect(answer((await history('company', byDomain.id)).body, 'name', 'website')).toMatchObject({
+            value: 'Named Properly Ltd',
+            applied: true,
+        });
+        expect(answer((await history('company', named.id)).body, 'name', 'website')).toMatchObject({
+            value: 'Named Properly Ltd',
+            applied: false,
+        });
+        // The overwrite is an update like any other: recorded, by the system, with the name in its diff.
+        const events = (await log.read()).filter((e) => e.recordId === byDomain.id);
+        expect(events).toHaveLength(1);
+        expect(events[0]!.diff?.['name']).toEqual({ from: domain, to: 'Named Properly Ltd' });
+    });
+
     it('FR-CRMS-15: a source that fails is recorded as failed, not as an empty value; a source turned off is not asked', async () => {
         const domain = `down-${stamp}.example`;
         web.fail(`https://${domain}/`);
