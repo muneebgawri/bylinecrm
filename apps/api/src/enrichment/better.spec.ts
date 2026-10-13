@@ -1,4 +1,4 @@
-import { isBetterAnswer } from '@bylinecrm/shared';
+import { isBetterAnswer, isPlaceholderCompanyName } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -21,6 +21,18 @@ describe('FR-CRMS-15 better than what is there', () => {
         expect(isBetterAnswer('text', answer('Acme Corporation', 3), { value: 'Acme', rank: 1 })).toBe(true);
         expect(isBetterAnswer('text', answer('Acme Ltd', 1), { value: 'Acme', rank: 1 })).toBe(true);
         expect(isBetterAnswer('text', answer('acme', 1), { value: 'Acme Corporation', rank: 3 })).toBe(false);
+    });
+
+    it('#170: a company name is a placeholder when empty, its own domain or host, or any bare host — never a typed name', () => {
+        expect(isPlaceholderCompanyName('', 'acme.example')).toBe(true);
+        expect(isPlaceholderCompanyName(null, null)).toBe(true);
+        expect(isPlaceholderCompanyName('acme.example', 'acme.example')).toBe(true);
+        expect(isPlaceholderCompanyName('WWW.Acme.example', 'acme.example')).toBe(true);
+        expect(isPlaceholderCompanyName('acme.example', 'www.acme.example')).toBe(true);
+        expect(isPlaceholderCompanyName('acme-holdings.co.uk', null)).toBe(true);
+        expect(isPlaceholderCompanyName('Acme', 'acme.example')).toBe(false);
+        expect(isPlaceholderCompanyName('Acme Corporation', 'acme.example')).toBe(false);
+        expect(isPlaceholderCompanyName('acme.example ltd', 'acme.example')).toBe(false);
     });
 
     it('does nothing for the same value', () => {

@@ -733,28 +733,34 @@ model NoteTarget {
 
 /// A task (PAR-011). `completedAt` is set exactly when `status` is `done` (the database checks).
 model Task {
-  id          String                   @id @default(uuid()) @db.Uuid
-  workspaceId String                   @map("workspace_id") @db.Uuid
-  title       String
-  body        Json                     @default("{\"type\":\"doc\",\"content\":[]}")
-  bodyText    String                   @default("") @map("body_text")
-  status      TaskStatus               @default(todo)
-  dueAt       DateTime?                @map("due_at") @db.Timestamptz
-  assigneeId  String?                  @map("assignee_id") @db.Uuid
-  completedAt DateTime?                @map("completed_at") @db.Timestamptz
-  createdBy   Json                     @map("created_by")
-  deletedAt   DateTime?                @map("deleted_at") @db.Timestamptz
-  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
-  search      Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(body_text, ''::text)))"))
+  id                  String                   @id @default(uuid()) @db.Uuid
+  workspaceId         String                   @map("workspace_id") @db.Uuid
+  title               String
+  body                Json                     @default("{\"type\":\"doc\",\"content\":[]}")
+  bodyText            String                   @default("") @map("body_text")
+  status              TaskStatus               @default(todo)
+  dueAt               DateTime?                @map("due_at") @db.Timestamptz
+  assigneeId          String?                  @map("assignee_id") @db.Uuid
+  completedAt         DateTime?                @map("completed_at") @db.Timestamptz
+  /// The sequence step that made it (#158): shown on the enrolment with its state; null for a member's task.
+  sequenceEnrolmentId String?                  @map("sequence_enrolment_id") @db.Uuid
+  sequenceStepId      String?                  @map("sequence_step_id") @db.Uuid
+  createdBy           Json                     @map("created_by")
+  deletedAt           DateTime?                @map("deleted_at") @db.Timestamptz
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  search              Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((COALESCE(title, ''::text) || ' '::text) || COALESCE(body_text, ''::text)))"))
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignee  WorkspaceMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
-  targets   TaskTarget[]
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee          WorkspaceMember?   @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  targets           TaskTarget[]
+  sequenceEnrolment SequenceEnrolment? @relation(fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
+  sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, assigneeId])
   @@index([workspaceId, status])
+  @@index([sequenceEnrolmentId])
   @@index([search], type: Gin)
   @@map("tasks")
 }
@@ -1776,6 +1782,7 @@ model SequenceStep {
   template  EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
   sends     MailOutbound[]
   trackingHits TrackingHit[]
+  tasks        Task[]
 
   @@unique([sequenceId, position])
   @@map("sequence_steps")
@@ -1817,6 +1824,7 @@ model SequenceEnrolment {
   waitingSend      MailOutbound?   @relation("EnrolmentWaitingSend", fields: [waitingOutboundId], references: [id], onDelete: SetNull)
   sends            MailOutbound[]  @relation("EnrolmentSends")
   trackingHits     TrackingHit[]
+  tasks            Task[]
 
   @@unique([sequenceId, personId])
   @@index([status, nextRunAt])

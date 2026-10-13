@@ -50,6 +50,7 @@ import {
     MANDATORY_STOPS,
     minuteToInput,
     timeToMinute,
+    enrolmentTaskLine,
 } from './sequenceText';
 
 /** A step as the builder holds it: the saved id when it has one, and a key for the list. */
@@ -420,7 +421,9 @@ function StepsCard({
                                             value={step.taskTitle}
                                             onChange={(e) => update(index, { taskTitle: e.target.value })}
                                         />
-                                        <span className="text-sm text-text-muted">→ person&rsquo;s owner</span>
+                                        <span className="text-sm text-text-muted">
+                                            due when this step runs → person&rsquo;s owner
+                                        </span>
                                     </>
                                 ) : (
                                     <>
@@ -711,7 +714,17 @@ function EnrolmentsCard({ workspaceId, sequence }: { workspaceId: string; sequen
                             header: 'Where',
                             muted: true,
                             phone: 'secondary',
-                            cell: (e) => enrolmentLine(e),
+                            cell: (e) =>
+                                e.tasks.length === 0 ? (
+                                    enrolmentLine(e)
+                                ) : (
+                                    <span className="flex flex-col gap-0.5">
+                                        <span>{enrolmentLine(e)}</span>
+                                        {e.tasks.map((task) => (
+                                            <span key={task.id}>{enrolmentTaskLine(task)}</span>
+                                        ))}
+                                    </span>
+                                ),
                         },
                         { id: 'enrolled', header: 'Enrolled', muted: true, cell: (e) => formatWhen(e.enrolledAt) },
                     ],
