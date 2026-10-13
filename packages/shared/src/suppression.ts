@@ -1,3 +1,4 @@
+import { EMAIL_ADDRESS_MAX } from './email.js';
 /**
  * The suppression list (P3-1, FR-CRMS-7): addresses the workspace never mails. One per workspace;
  * every send and every enrolment checks it.
@@ -30,18 +31,9 @@ export const SUPPRESSION_REASON_LABELS: Readonly<Record<SuppressionReason, strin
     manual: 'suppressed by a member',
 };
 
-/** RFC 5321's limit on an address's length. */
-export const SUPPRESSION_ADDRESS_MAX = 254;
+/** An address's length limit (RFC 5321), as the suppression routes validate it. */
+export const SUPPRESSION_ADDRESS_MAX = EMAIL_ADDRESS_MAX;
 export const SUPPRESSION_NOTE_MAX = 500;
-
-const ADDRESS = /^[^\s@]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
-
-/** The stored form of an address — trimmed, lower case — or `null` when it is not an address. */
-export function normaliseSuppressionAddress(raw: string): string | null {
-    const value = raw.trim().toLowerCase();
-    if (value.length === 0 || value.length > SUPPRESSION_ADDRESS_MAX) return null;
-    return ADDRESS.test(value) ? value : null;
-}
 
 /** Where a recipient's mail client and the visible link reach the CRM, under the API and the web app. */
 export const UNSUBSCRIBE_API_PATH = '/api/unsubscribe';

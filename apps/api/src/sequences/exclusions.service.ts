@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { normaliseSuppressionAddress, type ExclusionReason, type OutreachExclusionView } from '@bylinecrm/shared';
+import { normaliseEmail, type ExclusionReason, type OutreachExclusionView } from '@bylinecrm/shared';
 import type { OutreachExclusion } from '@prisma/client';
-import { UniqueConflict } from '../infra/errors/api-errors';
+import { UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
@@ -57,12 +57,13 @@ export class ExclusionsService {
 
     /** One live entry per address and per domain: a second is a `409` naming the field. */
     async addIn(tx: WorkspaceClient, workspaceId: string, input: ExclusionInput): Promise<OutreachExclusion> {
+        const { address, domain } = exclusionTarget(input);
         try {
             return await tx.outreachExclusion.create({
                 data: {
                     workspaceId,
-                    address: input.address ? normaliseSuppressionAddress(input.address) : null,
-                    domain: input.domain?.trim().toLowerCase() || null,
+                    address,
+                    domain,
                     reason: input.reason,
                     accountManagerName: input.accountManagerName ?? null,
                     source: input.source ?? 'manual',
@@ -135,4 +136,30 @@ function view(row: OutreachExclusion): OutreachExclusionView {
         note: row.note,
         createdAt: row.createdAt.toISOString(),
     };
+}
+
+/**
+ * Exactly one target, normalised by the one email rule (#180) — checked here, so the database's
+ * `outreach_exclusions_one_target` constraint is a backstop, never the check a caller meets.
+ */
+export function exclusionTarget(input: Pick<ExclusionInput, 'address' | 'domain'>): {
+    address: string | null;
+    domain: string | null;
+} {
+    const address = input.address ? normaliseEmail(input.address) : null;
+    const domain = input.domain?.trim().toLowerCase() || null;
+    if (input.address && !address) {
+        throw new ValidationFailed('not an email address', [{ path: 'address', message: 'not an email address' }]);
+    }
+    if (address && domain) {
+        throw new ValidationFailed('an exclusion is an address or a domain, not both', [
+            { path: 'domain', message: 'give an address or a domain, not both' },
+        ]);
+    }
+    if (!address && !domain) {
+        throw new ValidationFailed('an exclusion needs an address or a domain', [
+            { path: 'address', message: 'an address or a domain is required' },
+        ]);
+    }
+    return { address, domain };
 }

@@ -1,7 +1,7 @@
 import {
     SUPPRESSION_NOTE_MAX,
     SUPPRESSION_REASONS,
-    normaliseSuppressionAddress,
+    normaliseEmail,
     type SuppressionReason,
     type SuppressionSource,
 } from '@bylinecrm/shared';
@@ -216,7 +216,7 @@ function AddDialog({
     const submit = (event: FormEvent) => {
         event.preventDefault();
         // The API's own rule, so a typo is caught here and a correct value is sent normalised.
-        const normalised = normaliseSuppressionAddress(address);
+        const normalised = normaliseEmail(address);
         if (!normalised) {
             setInvalid(true);
             return;
