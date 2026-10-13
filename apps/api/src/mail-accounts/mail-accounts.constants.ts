@@ -33,6 +33,7 @@ export const GOOGLE_ENDPOINTS = {
     revoke: 'https://oauth2.googleapis.com/revoke',
     tokenInfo: 'https://oauth2.googleapis.com/tokeninfo',
     gmailProfile: 'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    userinfo: 'https://www.googleapis.com/oauth2/v3/userinfo',
 } as const;
 
 /** One Google request may take this long before it is abandoned. */

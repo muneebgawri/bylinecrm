@@ -1,12 +1,13 @@
 import {
     GMAIL_BROAD_SCOPE,
+    MAILBOX_CONNECT_PURPOSE_PARAM,
     MAILBOX_CONNECT_RESULTS,
     MAILBOX_CONNECT_RESULT_PARAM,
     type MailboxConnectResult,
 } from '@bylinecrm/shared';
 import type { Tone } from '@bylinecrm/ui';
 
-export { MAILBOX_CONNECT_RESULT_PARAM };
+export { MAILBOX_CONNECT_PURPOSE_PARAM, MAILBOX_CONNECT_RESULT_PARAM };
 
 export interface ConnectResultMessage {
     title: string;
@@ -82,6 +83,33 @@ export const CONNECT_RESULT_MESSAGES: Record<MailboxConnectResult, ConnectResult
         tone: 'danger',
     },
 };
+
+/**
+ * The same callback finishes a Postmaster Tools connect (#129, `?for=postmaster`): the results that
+ * read differently for it — the rest (declined, expired, wrong person…) say the same for both.
+ */
+const POSTMASTER_RESULT_MESSAGES: Partial<Record<MailboxConnectResult, ConnectResultMessage>> = {
+    connected: {
+        title: 'Postmaster Tools connected',
+        body: 'Each sending-domain check now reads the domain’s user-reported spam rate for the day before.',
+        tone: 'success',
+    },
+    scope_missing: {
+        title: 'Postmaster Tools access was not granted',
+        body: 'Connect again and leave the Postmaster Tools box ticked on Google’s screen; if it isn’t offered, an admin adds postmaster.readonly to the consent screen and enables the Postmaster Tools API.',
+        tone: 'danger',
+    },
+    not_permitted: {
+        title: 'You can no longer connect Postmaster Tools here',
+        body: 'Your role changed while you were at Google. The Postmaster Tools account is connected by an admin.',
+        tone: 'danger',
+    },
+};
+
+/** What the person reads for a result, given what the connect was for (`?for=`). */
+export function connectMessage(result: MailboxConnectResult, purpose: string | null): ConnectResultMessage {
+    return (purpose === 'postmaster' && POSTMASTER_RESULT_MESSAGES[result]) || CONNECT_RESULT_MESSAGES[result];
+}
 
 /** The result in a query-string value, when it is one the API reports; anything else is ignored. */
 export function connectResultFrom(value: string | null): MailboxConnectResult | null {

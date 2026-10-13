@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { GOOGLE_EMAIL_SCOPE } from '@bylinecrm/shared';
 import { probeFromError } from '../../src/mail-accounts/google-oauth.http';
 import {
     GoogleOAuthError,
@@ -152,6 +153,19 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
         const grant = access ? this.grants.get(access.grantKey) : undefined;
         if (!grant || grant.revoked)
             return Promise.reject(new GoogleOAuthError('invalid_token', 401, 'Gmail profile read failed (401)'));
+        return Promise.resolve(grant.email);
+    }
+
+    accountEmail(accessToken: string): Promise<string> {
+        assertNoOpenTransaction('Google accountEmail');
+        const access = this.accessTokens.get(accessToken);
+        const grant = access ? this.grants.get(access.grantKey) : undefined;
+        if (!grant || grant.revoked)
+            return Promise.reject(new GoogleOAuthError('invalid_token', 401, 'account information read failed (401)'));
+        if (!access!.scopes.includes(GOOGLE_EMAIL_SCOPE))
+            return Promise.reject(
+                new GoogleOAuthError('insufficient_scope', 403, 'account information read failed (403)'),
+            );
         return Promise.resolve(grant.email);
     }
 

@@ -12,6 +12,7 @@ import {
     type PoolMailboxHealth,
     type SendingDomainView,
     type SendingPoolView,
+    POSTMASTER_SCOPES,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -25,11 +26,14 @@ import { buildMime, newMessageId } from '../../src/mail-send/mime';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MailSyncService } from '../../src/mail-sync/mail-sync.service';
 import { DNS_PORT } from '../../src/sending-pool/dns.port';
+import { POSTMASTER_PORT } from '../../src/sending-pool/postmaster.port';
+import { postmasterDay } from '../../src/sending-pool/postmaster.http';
 import { SendingPoolService } from '../../src/sending-pool/sending-pool.service';
 import { SuppressionService } from '../../src/suppression/suppression.service';
 import { FakeDns } from '../support/fake-dns';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { FakePostmaster } from '../support/fake-postmaster';
 import { verifyAddress } from '../support/mail';
 import { eventLog, settle, type EventLog } from '../support/outbox';
 
@@ -81,6 +85,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
     const dns = new FakeDns();
+    const postmaster = new FakePostmaster();
 
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
@@ -103,6 +108,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         put: (path: string) => http().put(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const noWait = { sleep: () => Promise.resolve() };
@@ -222,6 +228,8 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             .useValue(gmail)
             .overrideProvider(DNS_PORT)
             .useValue(dns)
+            .overrideProvider(POSTMASTER_PORT)
+            .useValue(postmaster)
             .compile();
         app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
         await app.init();
@@ -525,6 +533,104 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                 404,
             );
             expect(await pool.pick(otherWorkspace)).toBeNull();
+        });
+    });
+
+    describe('#129 FR-CRMS-13 Postmaster Tools spam rate per sending domain', () => {
+        const yesterday = postmasterDay(new Date());
+        const connectPostmaster = async (
+            who = admin,
+            ws = workspace,
+            scopes: readonly string[] = POSTMASTER_SCOPES,
+        ) => {
+            const start = await as(who).post(w('/sending-pool/postmaster/connect', ws));
+            expect(start.status, JSON.stringify(start.body)).toBe(201);
+            const { code, state } = google.consent((start.body as { authorizeUrl: string }).authorizeUrl, {
+                email: who === admin ? adminEmail : otherEmail,
+                scopes: [...scopes],
+            });
+            const callback = await as(who).get(`${MAIL_OAUTH_CALLBACK_PATH}?state=${state}&code=${code}`);
+            return new URL(String(callback.headers['location'])).searchParams.get('connect');
+        };
+
+        it('connects Postmaster Tools through the workspace’s OAuth client with its own scope — never Gmail’s — and shows the account on the pool', async () => {
+            expect((await view()).postmaster).toBeNull();
+            // The consent asks for Postmaster’s read scope and the account’s address, nothing of Gmail.
+            const start = await as(admin).post(w('/sending-pool/postmaster/connect'));
+            const scope =
+                new URL((start.body as { authorizeUrl: string }).authorizeUrl).searchParams.get('scope') ?? '';
+            expect(scope.split(' ').sort()).toEqual([...POSTMASTER_SCOPES].sort());
+            expect(scope).not.toContain('gmail');
+            // A grant without the Postmaster scope is refused.
+            expect(await connectPostmaster(admin, workspace, [GMAIL_SCOPES[1]])).toBe('scope_missing');
+            expect(await connectPostmaster()).toBe('connected');
+            expect((await view()).postmaster).toMatchObject({ email: adminEmail, status: 'connected' });
+            expect(await owner.postmasterConnection.count({ where: { workspaceId: workspace } })).toBe(1);
+            // The refresh token is sealed, never stored as given.
+            const row = await owner.postmasterConnection.findUniqueOrThrow({ where: { workspaceId: workspace } });
+            expect(row.refreshTokenCiphertext).not.toContain('refresh');
+        });
+
+        it('reads the domain’s user-reported spam rate with the check, shows it, and pauses every pool mailbox on a domain at or past the complaint threshold', async () => {
+            await log.reset();
+            postmaster.setSpamRate(goodDomain, 35);
+            const checked = await checkDomain(goodDomain);
+            expect(checked.status).toBe('pass');
+            expect(checked.postmaster).toEqual({ status: 'ok', message: null });
+            expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 35 });
+            expect(postmaster.lookups.at(-1)).toMatchObject({ domain: goodDomain, day: yesterday });
+            expect(
+                await owner.sendingDomainStat.count({ where: { workspaceId: workspace, domainId: checked.id } }),
+            ).toBe(1);
+
+            const after = await view();
+            for (const address of poolAddresses) {
+                const m = after.mailboxes.find((x) => x.mailboxId === mailbox[address]!)!;
+                expect(m.paused, address).toMatchObject({ code: 'domain_spam_rate', rateBps: 35, thresholdBps: 20 });
+                expect(m.paused!.message).toContain(goodDomain);
+                expect(m.canSend).toBe(false);
+            }
+            const paused = (await recorded()).filter((e) => e.type === 'mailbox.paused');
+            expect(paused).toHaveLength(poolAddresses.length);
+            // Checked again with the same rate: nothing is paused twice, nothing announced twice.
+            await checkDomain(goodDomain);
+            expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(poolAddresses.length);
+
+            // An admin resumes them; a rate under the threshold pauses nothing.
+            for (const address of poolAddresses) {
+                await as(admin)
+                    .post(w(`/mailboxes/${mailbox[address]!}/resume`))
+                    .send({ note: 'Postmaster rate reviewed' })
+                    .expect(200);
+            }
+            postmaster.setSpamRate(goodDomain, 5);
+            expect((await checkDomain(goodDomain)).spamRate).toEqual({ day: yesterday, rateBps: 5 });
+            expect((await view()).mailboxes.every((m) => m.paused === null)).toBe(true);
+            // The day's row was replaced, not added to.
+            expect(
+                await owner.sendingDomainStat.count({ where: { workspaceId: workspace, domainId: checked.id } }),
+            ).toBe(1);
+        });
+
+        it('says when a domain is not verified in Postmaster Tools, when the lookup failed, and when nothing is connected; another workspace sees none of it', async () => {
+            postmaster.notVerified(badDomain);
+            const unverified = await checkDomain(badDomain);
+            expect(unverified.postmaster).toMatchObject({ status: 'not_verified' });
+            expect(unverified.spamRate).toBeNull();
+
+            postmaster.failNext();
+            const failed = await checkDomain(goodDomain);
+            expect(failed.postmaster).toMatchObject({ status: 'failed', message: expect.stringContaining('503') });
+            // The last known rate stays what it was: a failed lookup is not a zero.
+            expect(failed.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+
+            expect((await view(otherAdmin, otherWorkspace)).postmaster).toBeNull();
+            expect(await owner.sendingDomainStat.count({ where: { workspaceId: otherWorkspace } })).toBe(0);
+            expect((await as(otherAdmin).delete(w('/sending-pool/postmaster', otherWorkspace))).status).toBe(404);
+
+            await as(admin).delete(w('/sending-pool/postmaster')).expect(204);
+            expect((await view()).postmaster).toBeNull();
+            expect((await checkDomain(goodDomain)).postmaster).toMatchObject({ status: 'not_connected' });
         });
     });
 });

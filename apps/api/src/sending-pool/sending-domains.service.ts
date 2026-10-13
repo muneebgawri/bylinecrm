@@ -1,32 +1,24 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { SENDING_DOMAIN_RECHECK_MS, type DomainCheck, type SendingDomainView } from '@bylinecrm/shared';
+import { SENDING_DOMAIN_RECHECK_MS, type SendingDomainView } from '@bylinecrm/shared';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { domainCheckNames, evaluateDomain } from './domain-checks';
+import { DOMAIN_WITH_RATE, domainView, type DomainRow } from './domain-view';
 import { DNS_PORT, DnsLookupFailed, type DnsPort } from './dns.port';
+import { PostmasterService } from './postmaster.service';
 import { SENDING_DOMAIN_CHECK_BATCH } from './sending-pool.constants';
-
-type DomainRow = Prisma.SendingDomainGetPayload<object>;
-
-export function domainView(row: DomainRow): SendingDomainView {
-    return {
-        id: row.id,
-        domain: row.domain,
-        dkimSelector: row.dkimSelector,
-        status: row.status,
-        lastCheck: (row.lastCheck as unknown as DomainCheck | null) ?? null,
-        checkedAt: row.checkedAt?.toISOString() ?? null,
-        nextCheckAt: row.nextCheckAt.toISOString(),
-    };
-}
+import { SendingPoolService } from './sending-pool.service';
 
 /**
- * Pool mailboxes' sending domains and their DNS checks (FR-CRMS-13): SPF, DKIM and DMARC by DNS
- * lookup — never inside a transaction — on demand, and again every `SENDING_DOMAIN_RECHECK_MS` from the
- * maintenance job. Until a domain passes, the gate refuses every send from it. A lookup that fails
- * (timeout, SERVFAIL) fails its step and says so: "could not check" is never "passed".
+ * Pool mailboxes' sending domains and their checks (FR-CRMS-13): SPF, DKIM and DMARC by DNS lookup,
+ * and — once a Postmaster Tools account is connected (#129) — the domain's user-reported spam rate
+ * for yesterday, which pauses every pool mailbox on the domain at the complaint threshold. Neither
+ * is ever asked inside a transaction. On demand, and again every `SENDING_DOMAIN_RECHECK_MS` from
+ * the maintenance job. Until a domain passes DNS, the gate refuses every send from it. A lookup that
+ * fails (timeout, SERVFAIL, a 5xx from Google) fails its step and says so: "could not check" is
+ * never "passed", and never a rate of zero.
  */
 @Injectable()
 export class SendingDomainsService {
@@ -36,12 +28,14 @@ export class SendingDomainsService {
         private readonly rls: RlsPrismaService,
         private readonly ownerPrisma: PrismaService,
         private readonly context: WorkspaceContext,
+        private readonly postmaster: PostmasterService,
+        private readonly pool: SendingPoolService,
         @Inject(DNS_PORT) private readonly dns: DnsPort,
     ) {}
 
     async list(): Promise<SendingDomainView[]> {
         return this.rls.withWorkspace(async (tx) =>
-            (await tx.sendingDomain.findMany({ orderBy: { domain: 'asc' } })).map(domainView),
+            (await tx.sendingDomain.findMany({ ...DOMAIN_WITH_RATE, orderBy: { domain: 'asc' } })).map(domainView),
         );
     }
 
@@ -50,7 +44,11 @@ export class SendingDomainsService {
         return this.rls.withWorkspace(async (tx) => {
             await this.find(tx, id);
             return domainView(
-                await tx.sendingDomain.update({ where: { id }, data: { dkimSelector, nextCheckAt: new Date() } }),
+                await tx.sendingDomain.update({
+                    ...DOMAIN_WITH_RATE,
+                    where: { id },
+                    data: { dkimSelector, nextCheckAt: new Date() },
+                }),
             );
         });
     }
@@ -66,6 +64,7 @@ export class SendingDomainsService {
     /** The maintenance job: every domain due, the most overdue first, across workspaces (as the owner). */
     async checkDue(now = new Date()): Promise<number> {
         const due = await this.ownerPrisma.sendingDomain.findMany({
+            ...DOMAIN_WITH_RATE,
             where: { nextCheckAt: { lte: now } },
             orderBy: { nextCheckAt: 'asc' },
             take: SENDING_DOMAIN_CHECK_BATCH,
@@ -108,21 +107,41 @@ export class SendingDomainsService {
         }
         const passed = check.spf.outcome === 'pass' && check.dkim.outcome === 'pass' && check.dmarc.outcome === 'pass';
         const now = new Date();
-        return this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.sendingDomain.update({
+        const reading = await this.postmaster.read(workspaceId, row.domain, now);
+        const updated = await this.rls.withWorkspace(workspaceId, async (tx) => {
+            if (reading.rate) {
+                // One row per domain and day: a day read again is replaced, so the view shows the latest.
+                await tx.sendingDomainStat.upsert({
+                    where: { domainId_day: { domainId: row.id, day: new Date(reading.rate.day) } },
+                    create: {
+                        workspaceId,
+                        domainId: row.id,
+                        day: new Date(reading.rate.day),
+                        spamRateBps: reading.rate.rateBps,
+                        fetchedAt: now,
+                    },
+                    update: { spamRateBps: reading.rate.rateBps, fetchedAt: now },
+                });
+            }
+            return tx.sendingDomain.update({
+                ...DOMAIN_WITH_RATE,
                 where: { id: row.id },
                 data: {
                     status: passed ? 'pass' : 'fail',
                     lastCheck: check as unknown as Prisma.InputJsonValue,
                     checkedAt: now,
                     nextCheckAt: new Date(now.getTime() + SENDING_DOMAIN_RECHECK_MS),
+                    postmasterStatus: reading.status,
+                    postmasterMessage: reading.message,
                 },
-            }),
-        );
+            });
+        });
+        if (reading.rate) await this.pool.evaluateDomain(workspaceId, row.domain, reading.rate, now);
+        return updated;
     }
 
     private async find(tx: Prisma.TransactionClient, id: string): Promise<DomainRow> {
-        const row = await tx.sendingDomain.findUnique({ where: { id } });
+        const row = await tx.sendingDomain.findUnique({ ...DOMAIN_WITH_RATE, where: { id } });
         if (!row) throw new NotFoundException('sending domain not found');
         return row;
     }

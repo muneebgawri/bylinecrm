@@ -15,7 +15,7 @@ import {
     Res,
 } from '@nestjs/common';
 import { ApiExtraModels, ApiTags } from '@nestjs/swagger';
-import { MAILBOX_CONNECT_RESULT_PARAM } from '@bylinecrm/shared';
+import { MAILBOX_CONNECT_PURPOSE_PARAM, MAILBOX_CONNECT_RESULT_PARAM } from '@bylinecrm/shared';
 import type { Response } from 'express';
 import { Public, Requires, TenantController } from '../auth/decorators';
 import type { AuthenticatedRequest } from '../auth/principal';
@@ -155,7 +155,8 @@ export class MailboxesController {
  * Where Google sends the browser back after consent. Public — Google's redirect carries no API
  * credential of its own — but the connect is finished only for the signed-in person who started
  * it (`MailboxesService.finishConnect`). The answer is always a redirect to the web app's mailbox
- * screen with one result code (`MailboxConnectResult`) and never a token or a Google error text.
+ * screen with one result code (`MailboxConnectResult`) and what the connect was for (a mailbox
+ * purpose, or `postmaster`, #129) — never a token or a Google error text.
  */
 @ApiTags('mail')
 @ApiExtraModels()
@@ -182,6 +183,7 @@ export class MailOAuthCallbackController {
         const path = outcome.workspaceId ? `/w/${outcome.workspaceId}/mailboxes` : '/workspaces';
         const url = new URL(path, this.env.WEB_URL);
         url.searchParams.set(MAILBOX_CONNECT_RESULT_PARAM, mailboxConnectResult.parse(outcome.result));
+        if (outcome.purpose) url.searchParams.set(MAILBOX_CONNECT_PURPOSE_PARAM, outcome.purpose);
         return url.toString();
     }
 }

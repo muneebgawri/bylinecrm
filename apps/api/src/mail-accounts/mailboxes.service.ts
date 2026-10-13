@@ -1,6 +1,11 @@
-import { enrolPoolMailbox } from '../sending-pool/pool-mailbox';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { MAILBOX_PURPOSES, type MailboxConnectResult, type MailboxPurpose } from '@bylinecrm/shared';
+import {
+    GMAIL_SCOPES,
+    MAILBOX_PURPOSES,
+    POSTMASTER_SCOPES,
+    type MailboxConnectResult,
+    type MailboxPurpose,
+} from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
@@ -9,6 +14,8 @@ import { actorOf } from '../records/actor';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { enrolPoolMailbox } from '../sending-pool/pool-mailbox';
+import { storePostmasterConnection } from '../sending-pool/postmaster-connection';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
 import { GOOGLE_OAUTH_PORT, GoogleOAuthError, type GoogleOAuthPort, type TokenGrant } from './google-oauth.port';
@@ -20,21 +27,29 @@ import type { ConnectStart, MailboxCheck, MailboxDisconnected, MailboxView } fro
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
 
+/**
+ * What a connect is for: a mailbox (personal or pool), or the workspace's Postmaster Tools account
+ * (#129) — the same flow through the same client, asking for Postmaster's scopes instead of Gmail's.
+ */
+export type ConnectPurpose = MailboxPurpose | 'postmaster';
+const CONNECT_PURPOSES: readonly ConnectPurpose[] = [...MAILBOX_PURPOSES, 'postmaster'];
+
 /** A connect request, kept server-side until Google calls back. Never sent to the browser. */
 interface PendingConnect {
     workspaceId: string;
     memberId: string;
     userId: string;
-    purpose: MailboxPurpose;
+    purpose: ConnectPurpose;
     codeVerifier: string;
     /** The client the request was made through; a client changed mid-flow ends the request. */
     clientRowId: string;
 }
 
-/** How a callback ended: where to send the browser, and the one code it carries. */
+/** How a callback ended: where to send the browser, the one code it carries, and what the connect was for. */
 export interface ConnectOutcome {
     workspaceId: string | null;
     result: MailboxConnectResult;
+    purpose: ConnectPurpose | null;
 }
 
 /**
@@ -192,15 +207,16 @@ export class MailboxesService {
 
     /**
      * Starts a connect: a server-side request (state, PKCE verifier, who, what for) and the Google
-     * URL to send the browser to. A member connects a mailbox for themselves; an API key cannot.
+     * URL to send the browser to. A member connects a mailbox for themselves (or, an admin, the
+     * workspace's Postmaster Tools account); an API key cannot.
      */
-    async startConnect(purpose: MailboxPurpose): Promise<ConnectStart> {
+    async startConnect(purpose: ConnectPurpose): Promise<ConnectStart> {
         const context = this.current();
         if (!context.memberId || !context.userId) {
             throw new ApiException(
                 403,
                 'forbidden',
-                'a mailbox is connected by a member signing in to Google, not by an API key',
+                'a connection is made by a member signing in to Google, not by an API key',
             );
         }
         const client = await this.rls.withWorkspace((tx) => this.clients.storedIn(tx));
@@ -225,6 +241,7 @@ export class MailboxesService {
                 redirectUri: this.clients.redirectUri(),
                 state,
                 codeChallenge: codeChallengeS256(codeVerifier),
+                scopes: purpose === 'postmaster' ? POSTMASTER_SCOPES : GMAIL_SCOPES,
             }).toString(),
             expiresAt: new Date(Date.now() + CONNECT_STATE_TTL_S * 1000),
         };
@@ -243,9 +260,13 @@ export class MailboxesService {
         query: { state?: string | undefined; code?: string | undefined; error?: string | undefined },
     ): Promise<ConnectOutcome> {
         const pending = query.state ? await this.takePending(query.state) : null;
-        if (!pending) return { workspaceId: null, result: 'invalid_state' };
+        if (!pending) return { workspaceId: null, result: 'invalid_state', purpose: null };
         const workspaceId = pending.workspaceId;
-        const end = (result: MailboxConnectResult): ConnectOutcome => ({ workspaceId, result });
+        const end = (result: MailboxConnectResult): ConnectOutcome => ({
+            workspaceId,
+            result,
+            purpose: pending.purpose,
+        });
 
         if (query.error || !query.code) return end('denied');
         if (callerUserId !== pending.userId) return end('wrong_user');
@@ -267,6 +288,8 @@ export class MailboxesService {
             this.logger.warn(`connect in workspace ${workspaceId}: code exchange refused (${error.error})`);
             return end('exchange_failed');
         }
+        if (pending.purpose === 'postmaster') return end(await this.finishPostmaster(pending, client.rowId, grant));
+        const purpose: MailboxPurpose = pending.purpose;
         const assessment = assessGrant(grant.scopes);
         if (!assessment.ok) return end(assessment.result);
         if (!grant.refreshToken) return end('no_refresh_token');
@@ -285,7 +308,7 @@ export class MailboxesService {
             });
             if (existing && existing.status !== 'disconnected') {
                 if (existing.ownerMemberId !== pending.memberId) return { result: 'owned_by_another' as const };
-                if (existing.purpose !== pending.purpose) return { result: 'purpose_mismatch' as const };
+                if (existing.purpose !== purpose) return { result: 'purpose_mismatch' as const };
             }
             const tokens = {
                 status: 'connected' as const,
@@ -300,7 +323,7 @@ export class MailboxesService {
                 ? await tx.mailbox.update({
                       where: { id: existing.id },
                       // A disconnected mailbox connects afresh: owner and purpose are the new connection's.
-                      data: { ...tokens, ownerMemberId: pending.memberId, purpose: pending.purpose },
+                      data: { ...tokens, ownerMemberId: pending.memberId, purpose },
                   })
                 : await tx.mailbox.create({
                       data: {
@@ -308,7 +331,7 @@ export class MailboxesService {
                           workspaceId,
                           ownerMemberId: pending.memberId,
                           email: address,
-                          purpose: pending.purpose,
+                          purpose,
                       },
                   });
             if (row.purpose === 'pool') await enrolPoolMailbox(tx, row);
@@ -327,6 +350,45 @@ export class MailboxesService {
         return end('connected');
     }
 
+    /**
+     * The Postmaster Tools account (#129): the grant must carry Postmaster's scopes and a refresh
+     * token; the account's address comes from userinfo (a Postmaster grant has no Gmail scope).
+     * One connection per workspace — connecting again replaces it.
+     */
+    private async finishPostmaster(
+        pending: PendingConnect,
+        clientRowId: string,
+        grant: TokenGrant,
+    ): Promise<MailboxConnectResult> {
+        const assessment = assessGrant(grant.scopes, POSTMASTER_SCOPES);
+        if (!assessment.ok) return assessment.result;
+        if (!grant.refreshToken) return 'no_refresh_token';
+        let email: string;
+        try {
+            email = (await this.google.accountEmail(grant.accessToken)).toLowerCase();
+        } catch (error) {
+            if (!(error instanceof GoogleOAuthError)) throw error;
+            this.logger.warn(
+                `Postmaster connect in workspace ${pending.workspaceId}: account read refused (${error.error})`,
+            );
+            return 'exchange_failed';
+        }
+        const refreshToken = grant.refreshToken;
+        await this.rls.withWorkspace(pending.workspaceId, async (tx) => {
+            await storePostmasterConnection(tx, {
+                workspaceId: pending.workspaceId,
+                email,
+                grantedScopes: grant.scopes,
+                refreshTokenCiphertext: this.secrets.seal(refreshToken),
+                accessTokenCiphertext: this.secrets.seal(grant.accessToken),
+                accessExpiresAt: new Date(Date.now() + grant.expiresInS * 1000),
+                connectedByMemberId: pending.memberId,
+            });
+            await this.clients.markVerifiedIn(tx, clientRowId);
+        });
+        return 'connected';
+    }
+
     // ── Internals ────────────────────────────────────────────────────────────────────────────
 
     /** Reads and deletes a pending request in one step: a state is accepted once. */
@@ -335,15 +397,20 @@ export class MailboxesService {
         const raw = await this.redis.getdel(`${CONNECT_STATE_KEY_PREFIX}${state}`);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as PendingConnect;
-        return (MAILBOX_PURPOSES as readonly string[]).includes(parsed.purpose) ? parsed : null;
+        return CONNECT_PURPOSES.includes(parsed.purpose) ? parsed : null;
     }
 
-    /** The member who started the connect is still a member and may still connect mailboxes. */
+    /**
+     * The member who started the connect is still a member and may still do what they started: a
+     * mailbox takes `mailbox:manage`; the Postmaster Tools account is an admin's.
+     */
     private async mayStillConnect(pending: PendingConnect): Promise<boolean> {
         const membership = await this.memberships.find(pending.userId, pending.workspaceId);
         if (!membership || membership.memberId !== pending.memberId) return false;
         const access = await this.roles.access(pending.workspaceId, membership.roleId);
-        return access?.capabilities.has('mailbox:manage') ?? false;
+        return (
+            access?.capabilities.has(pending.purpose === 'postmaster' ? 'workspace:admin' : 'mailbox:manage') ?? false
+        );
     }
 
     /** The mailbox if the caller may see it; otherwise `404`, never a hint that it exists. */
