@@ -29,13 +29,13 @@ const RESULTS: readonly {
     {
         result: 'invalid',
         tone: 'danger',
-        means: 'Not an address, no such domain, no mail server, or a domain that accepts no mail.',
+        means: 'Not an address, no such domain, no mail server, a domain that accepts no mail, or a throwaway (disposable) domain.',
         enrolment: 'Refused. A running enrolment whose address becomes invalid is stopped before its next email.',
     },
     {
         result: 'risky',
         tone: 'warning',
-        means: 'Deliverable, but a role address (info@, press@…) or a disposable domain: it may not reach a person.',
+        means: 'Deliverable, but a role address (info@, press@…): it may not reach a person.',
         enrolment: 'Enrolled, and flagged in the preview for review.',
     },
     {

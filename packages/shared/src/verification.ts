@@ -5,8 +5,9 @@
 
 /**
  * What verification found. `valid` is the only answer that says the address is deliverable to a
- * person; `invalid` that it is not; `risky` that mail may arrive but not reach a person (a role
- * address, a disposable domain); `unknown` that nothing could be decided — DNS did not answer.
+ * person; `invalid` that it is not (no such domain, no mail server, a disposable domain — #165);
+ * `risky` that mail may arrive but not reach a person (a role address); `unknown` that nothing
+ * could be decided — DNS did not answer.
  * `unknown` is not valid: it does not enrol, and it is never kept past the next check.
  */
 export const EMAIL_VERIFICATION_RESULTS = ['valid', 'invalid', 'risky', 'unknown'] as const;
