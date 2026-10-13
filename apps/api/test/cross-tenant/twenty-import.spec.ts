@@ -902,6 +902,29 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             ).toEqual([]);
         });
 
+        it('#168: a record that fails to map or write counts as Failed with its reason and Twenty id; the run goes on', async () => {
+            // Twenty would never send this, but a bad record is what the issue is about: its timestamp does
+            // not parse, so writing its link throws something that is not a service's refusal.
+            const [bad] = twenty.seed('companies', [
+                {
+                    name: `Broken ${stamp}`,
+                    domainName: { primaryLinkUrl: `https://broken-${stamp}.example` },
+                    updatedAt: 'not a date',
+                },
+            ]);
+            const run = await runToEnd('full');
+            expect(run.status, run.error ?? '').toBe('succeeded');
+            expect(run.error).toBeNull();
+            const companies = reportOf(run, 'companies');
+            expect(companies.failed).toBe(1);
+            expect(companies.errors).toContainEqual({ externalId: bad!.id, message: expect.stringMatching(/date/i) });
+            // The page's other records were written as if the bad one were not there.
+            expect(companies.read).toBe(3);
+            expect(companies.unchanged).toBe(2);
+            expect(await owner.company.count({ where: { workspaceId: workspace, name: `Broken ${stamp}` } })).toBe(0);
+            for (const r of run.report) if (r.object !== 'companies') expect(r.failed, r.object).toBe(0);
+        });
+
         it('the run list is newest first and an admin’s', async () => {
             const res = await as(admin).get(w('/import/twenty/runs'));
             expect(res.status).toBe(200);

@@ -20,3 +20,24 @@ export function uniqueViolation(error: unknown): boolean {
 export function foreignKeyViolation(error: unknown): boolean {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === FOREIGN_KEY_VIOLATION_CODE;
 }
+
+/**
+ * Prisma's codes for the database being unreachable or the transaction itself gone: a connection
+ * refused, lost or timed out (`P1xxx`), the pool exhausted (`P2024`), the transaction closed under
+ * the client (`P2028`), a serialisation conflict (`P2034`).
+ */
+const UNAVAILABLE_CODES = /^P1\d{3}$|^P2024$|^P2028$|^P2034$/;
+
+/**
+ * True when the database, not the write, failed: the connection, the pool, the transaction, the
+ * engine. A caller doing many small writes (the Twenty importer, #168) lets this one through to
+ * be retried as a whole, and keeps a per-row error — a validation, a refusal — to the row.
+ */
+export function databaseUnavailable(error: unknown): boolean {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) return UNAVAILABLE_CODES.test(error.code);
+    return (
+        error instanceof Prisma.PrismaClientInitializationError ||
+        error instanceof Prisma.PrismaClientRustPanicError ||
+        error instanceof Prisma.PrismaClientUnknownRequestError
+    );
+}

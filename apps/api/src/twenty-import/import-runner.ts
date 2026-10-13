@@ -1,6 +1,7 @@
 import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import {
     TWENTY_IMPORT_ERRORS_KEPT,
+    TWENTY_IMPORT_ERROR_MESSAGE_MAX,
     type TwentyImportMode,
     TWENTY_IMPORT_OBJECTS,
     TWENTY_IMPORT_SOURCE,
@@ -65,6 +66,7 @@ import {
 import { TWENTY_RELEASE_NOTE } from './twenty-import.constants';
 import { readConnection } from './twenty-import.settings';
 import { isObject, text } from './twenty-records';
+import { databaseUnavailable } from '../infra/prisma-errors';
 import { TwentyApiError } from './twenty.http';
 import { TWENTY_PORT, type TwentyApi, type TwentyConnection, type TwentyRecord } from './twenty.port';
 
@@ -359,7 +361,15 @@ export class TwentyImportRunner {
         const refs = records.flatMap((record) => referencesOf(object, record));
         const links = await this.rls.withWorkspace((tx) => loadLinks(tx, refs));
         const currency = await this.rls.withWorkspace((tx) => defaultCurrency(tx, state.context.workspaceId));
-        const mapped = records.map((record) => ({ record, result: this.map(object, record, links, currency) }));
+        // Mapping is pure, so anything it throws is this record's (#168): it is reported as failed,
+        // with the reason, and the page goes on.
+        const mapped = records.map((record) => {
+            try {
+                return { record, result: this.map(object, record, links, currency) };
+            } catch (error) {
+                return { record, result: { failed: failureText(error), custom: {} } };
+            }
+        });
         const definitions = await this.ensureDefinitions(
             object,
             mapped.map((m) => m.result.custom),
@@ -368,6 +378,11 @@ export class TwentyImportRunner {
             const events: DomainEvent[] = [];
             for (const { record, result } of mapped) {
                 entry.read += 1;
+                if ('failed' in result) {
+                    entry.failed += 1;
+                    recordError(entry, record.id, result.failed);
+                    continue;
+                }
                 if (isSkip(result)) {
                     entry.skipped += 1;
                     recordError(entry, record.id, result.skip);
@@ -381,9 +396,16 @@ export class TwentyImportRunner {
                     if (outcome === 'skipped' && result.note) recordError(entry, record.id, result.note);
                 } catch (error) {
                     await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT import_record');
-                    if (!(error instanceof HttpException)) throw error;
+                    // The database or Twenty failing is the run's to retry; anything else — a service's
+                    // refusal, a value the client rejects, a mapping the write cannot use — is this
+                    // record's (#168): reported as failed, with the reason, and the page goes on.
+                    if (databaseUnavailable(error) || error instanceof TwentyApiError) throw error;
                     entry.failed += 1;
-                    recordError(entry, record.id, refusalText(error));
+                    recordError(
+                        entry,
+                        record.id,
+                        error instanceof HttpException ? refusalText(error) : failureText(error),
+                    );
                 }
             }
             await this.events.recordAll(tx, events);
@@ -478,7 +500,7 @@ export class TwentyImportRunner {
         state: RunState,
         object: TwentyImportObject,
         record: TwentyRecord,
-        mapped: Exclude<MapResult, { skip: string }>,
+        mapped: Exclude<MapResult, { skip: string } | { failed: string }>,
         links: LinkIndex,
         definitions: FieldDefinition[],
         events: DomainEvent[],
@@ -838,7 +860,11 @@ interface RunState {
 }
 
 /** A mapped record on its way to a write: the service input (shape by object), its custom values, or why it is skipped. */
-type MapResult = { custom: InferredCustom; input: unknown; note?: string } | { skip: string; custom: InferredCustom };
+type MapResult =
+    | { custom: InferredCustom; input: unknown; note?: string }
+    | { skip: string; custom: InferredCustom }
+    // The mapper threw (#168): the record is reported as failed with what it said.
+    | { failed: string; custom: InferredCustom };
 
 function withCustom<I>(mapped: { input: I; custom: InferredCustom } | { skip: string }): MapResult {
     return 'skip' in mapped ? { skip: mapped.skip, custom: {} } : { custom: mapped.custom, input: mapped.input };
@@ -860,6 +886,20 @@ function reportEntry(report: TwentyImportObjectReport[], object: TwentyImportObj
 
 function recordError(entry: TwentyImportObjectReport, externalId: string, message: string): void {
     if (entry.errors.length < TWENTY_IMPORT_ERRORS_KEPT) entry.errors.push({ externalId, message });
+}
+
+/**
+ * What a thrown error says, as the report shows it (#168): its last line — a client's validation
+ * message ends with the point; the lines before quote the whole call — trimmed to a report's width.
+ */
+export function failureText(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    const last = message
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '')
+        .at(-1);
+    return (last ?? 'failed').slice(0, TWENTY_IMPORT_ERROR_MESSAGE_MAX);
 }
 
 /** What a service's refusal says, as the report shows it: the field errors when it names fields, else its message. */
