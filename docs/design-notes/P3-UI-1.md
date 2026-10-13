@@ -21,5 +21,8 @@ Screens for the P3-3 API (#139), per doc 50 §D.
 - **Person page**: a "Sequences" rail card with each enrolment's state line and Stop (optional note) / Resume
   (held) / Re-enrol (stopped — the only way back in after a stop).
 - Bundle: both pages are one lazy chunk; the first load moved 177.49 → 177.56 kB (the two route entries).
-- Not here: the task step (#136 adds it to the API; the builder renders step kinds from the API types, so it is a
-  small follow-up), per-step sent/replied counts (the API has none yet), the region-policy page (#141).
+- Not here at first: the task step — added in #158 once #136 landed in the API: **Add task** with a title, the row
+  saying when the task falls due ("due when this step runs → person's owner"), and each task the step made on the
+  enrolment's state line ("Task “…” · done 2 h ago" / "open, due today", `enrolmentTaskLine`), on the person's
+  Sequences card and the sequence's enrolment table alike. Per-step sent/replied counts (the API has none yet) and
+  the region-policy page (#141) stay out.

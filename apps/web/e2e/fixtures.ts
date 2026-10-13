@@ -1138,6 +1138,7 @@ export const enrolments: SequenceEnrolmentView[] = [
         enrolledAt: at(3),
         finishedAt: null,
         stoppedAt: null,
+        tasks: [],
     },
     {
         id: IDS.stoppedEnrolment,
@@ -1157,6 +1158,7 @@ export const enrolments: SequenceEnrolmentView[] = [
         enrolledAt: at(9),
         finishedAt: null,
         stoppedAt: at(5),
+        tasks: [],
     },
 ];
 

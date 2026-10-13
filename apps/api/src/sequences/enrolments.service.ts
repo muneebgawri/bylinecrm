@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Actor, DomainEvent, EnrolmentBatchResult, EnrolmentView } from '@bylinecrm/shared';
-import type { Prisma, SequenceEnrolment } from '@prisma/client';
+import type { Prisma, SequenceEnrolment, Task } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, StateConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -78,7 +78,11 @@ export class EnrolmentsService {
         return this.rls.withWorkspace(async (tx) => {
             await sequenceOrThrow(tx, sequenceId);
             return (
-                await tx.sequenceEnrolment.findMany({ where: { sequenceId }, orderBy: { enrolledAt: 'desc' } })
+                await tx.sequenceEnrolment.findMany({
+                    where: { sequenceId },
+                    orderBy: { enrolledAt: 'desc' },
+                    include: WITH_TASKS,
+                })
             ).map(view);
         });
     }
@@ -89,9 +93,13 @@ export class EnrolmentsService {
             if (!(await tx.person.findFirst({ where: { id: personId, deletedAt: null }, select: { id: true } }))) {
                 throw new NotFoundException('person not found');
             }
-            return (await tx.sequenceEnrolment.findMany({ where: { personId }, orderBy: { enrolledAt: 'desc' } })).map(
-                view,
-            );
+            return (
+                await tx.sequenceEnrolment.findMany({
+                    where: { personId },
+                    orderBy: { enrolledAt: 'desc' },
+                    include: WITH_TASKS,
+                })
+            ).map(view);
         });
     }
 
@@ -196,7 +204,7 @@ export class EnrolmentsService {
         return { enrolled: eligible.map((e) => e.personId), skipped, refused, warnings };
     }
 
-    private find(id: string): Promise<SequenceEnrolment> {
+    private find(id: string): Promise<EnrolmentRow> {
         return this.rls.withWorkspace((tx) => findIn(tx, id));
     }
 
@@ -213,8 +221,12 @@ async function sequenceOrThrow(tx: WorkspaceClient, id: string) {
     return sequence;
 }
 
-async function findIn(tx: WorkspaceClient, id: string): Promise<SequenceEnrolment> {
-    const row = await tx.sequenceEnrolment.findUnique({ where: { id } });
+/** The tasks its task steps made, in the order the steps ran (#158); a deleted task is gone from the view. */
+const WITH_TASKS = { tasks: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' as const } } } as const;
+type EnrolmentRow = SequenceEnrolment & { tasks: Task[] };
+
+async function findIn(tx: WorkspaceClient, id: string): Promise<EnrolmentRow> {
+    const row = await tx.sequenceEnrolment.findUnique({ where: { id }, include: WITH_TASKS });
     if (!row) throw new NotFoundException('enrolment not found');
     return row;
 }
@@ -237,7 +249,7 @@ function event(
     } as DomainEvent;
 }
 
-export function view(row: SequenceEnrolment): EnrolmentView {
+export function view(row: EnrolmentRow): EnrolmentView {
     return {
         id: row.id,
         sequenceId: row.sequenceId,
@@ -256,6 +268,15 @@ export function view(row: SequenceEnrolment): EnrolmentView {
         enrolledAt: row.enrolledAt.toISOString(),
         finishedAt: row.finishedAt?.toISOString() ?? null,
         stoppedAt: row.stoppedAt?.toISOString() ?? null,
+        tasks: row.tasks.map((t) => ({
+            id: t.id,
+            stepId: t.sequenceStepId!,
+            title: t.title,
+            status: t.status,
+            dueAt: t.dueAt?.toISOString() ?? null,
+            completedAt: t.completedAt?.toISOString() ?? null,
+            assigneeId: t.assigneeId,
+        })),
     };
 }
 

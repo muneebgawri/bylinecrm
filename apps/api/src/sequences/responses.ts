@@ -6,6 +6,7 @@ import {
     EXCLUSION_REASONS,
     REGION_CODES,
     SEQUENCE_STATUSES,
+    TASK_STATUSES,
     SEQUENCE_STEP_KINDS,
     type EnrolmentBatchResult,
     type EnrolmentView,
@@ -66,6 +67,19 @@ export const sequenceView = named(
     }),
 );
 
+const enrolmentTask = named(
+    'SequenceEnrolmentTask',
+    z.object({
+        id,
+        stepId: id.meta({ description: 'The task step that made it.' }),
+        title: z.string(),
+        status: z.enum(TASK_STATUSES),
+        dueAt: isoTime.nullable(),
+        completedAt: isoTime.nullable(),
+        assigneeId: id.nullable(),
+    }),
+);
+
 export const enrolmentView = named(
     'SequenceEnrolment',
     z.object({
@@ -90,6 +104,9 @@ export const enrolmentView = named(
         enrolledAt: isoTime,
         finishedAt: isoTime.nullable(),
         stoppedAt: isoTime.nullable(),
+        tasks: z.array(enrolmentTask).meta({
+            description: 'The tasks its task steps made, in step order (#158). Completing one drives nothing.',
+        }),
     }),
 );
 
