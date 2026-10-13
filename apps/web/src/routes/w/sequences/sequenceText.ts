@@ -1,5 +1,12 @@
 import type { BadgeProps } from '@bylinecrm/ui';
-import type { EnrolmentStatus, EnrolmentStopReason, SequenceStatus, SequenceWindow } from '../../../api/types';
+import type {
+    EnrolmentStatus,
+    EnrolmentStopReason,
+    SequenceEnrolmentView,
+    SequenceStatus,
+    SequenceWindow,
+} from '../../../api/types';
+import { formatWhen } from '../../../lib/format';
 
 /** One wording for each sequence state, everywhere it is shown (doc 50 §D). */
 export const SEQUENCE_STATUS_LABEL: Record<SequenceStatus, string> = {
@@ -84,4 +91,15 @@ export function describeWindow(window: SequenceWindow): string {
     const days = DAYS.filter((d) => window.days & (1 << d.bit)).map((d) => d.name);
     const weekdays = window.days === 0b0011111;
     return `${minuteToTime(window.startMinute)}–${minuteToTime(window.endMinute)} · ${weekdays ? 'Mon–Fri' : days.join(', ')}`;
+}
+
+/**
+ * A task a task step made, in one line (#158): its title and where it stands — done and when, in
+ * progress, or open and when it fell due. Completing it drives nothing; the line only says so.
+ */
+export function enrolmentTaskLine(task: SequenceEnrolmentView['tasks'][number]): string {
+    const title = `Task “${task.title}”`;
+    if (task.status === 'done') return `${title} · done${task.completedAt ? ` ${formatWhen(task.completedAt)}` : ''}`;
+    if (task.status === 'in_progress') return `${title} · in progress`;
+    return `${title} · open${task.dueAt ? `, due ${formatWhen(task.dueAt)}` : ''}`;
 }

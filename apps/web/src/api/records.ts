@@ -476,3 +476,11 @@ export const useTimeline = (workspaceId: string, target: RecordTarget, kinds: st
         initialPageParam: undefined as string | undefined,
         getNextPageParam: (page) => page.nextCursor ?? undefined,
     });
+
+/**
+ * The members a picker offers (#147): those in the workspace. A member who left stays in the summary
+ * so the rows they left behind keep their name, and is never offered as an owner or an assignee.
+ */
+export function currentMembers<M extends { leftAt: string | null }>(members: readonly M[] | undefined): M[] {
+    return (members ?? []).filter((m) => m.leftAt === null);
+}
