@@ -1,7 +1,7 @@
 import type { CustomFieldType, RecordObject } from '@bylinecrm/shared';
 import { Skeleton } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
-import { useCustomFields, useMembersSummary } from '../../../api/records';
+import { useCustomFields, useMembersSummary, currentMembers } from '../../../api/records';
 import type { CustomFieldView } from '../../../api/types';
 import { useMembership, usePermission } from '../../../auth/capabilities';
 import { formatDate } from '../../../lib/format';
@@ -224,7 +224,7 @@ export function OwnerControl({
     const write = usePermission('record:write');
     const members = useMembersSummary(workspaceId);
     const ownScoped = membership?.recordScope === 'own';
-    const options = (members.data ?? []).map((m) => ({ value: m.memberId, label: m.name ?? 'Unnamed member' }));
+    const options = currentMembers(members.data).map((m) => ({ value: m.memberId, label: m.name ?? 'Unnamed member' }));
     return (
         <InlineSelect
             id={id}

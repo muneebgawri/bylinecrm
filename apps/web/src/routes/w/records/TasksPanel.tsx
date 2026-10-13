@@ -18,7 +18,7 @@ import {
     type BadgeProps,
 } from '@bylinecrm/ui';
 import { useState } from 'react';
-import { useDeleteTask, useMembersSummary, useSaveTask, useTasks } from '../../../api/records';
+import { useDeleteTask, useMembersSummary, useSaveTask, useTasks, currentMembers } from '../../../api/records';
 import type { TaskView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatDate, formatWhen } from '../../../lib/format';
@@ -192,7 +192,7 @@ function TaskDialog({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">Unassigned</SelectItem>
-                                    {(members.data ?? []).map((m) => (
+                                    {currentMembers(members.data).map((m) => (
                                         <SelectItem key={m.memberId} value={m.memberId}>
                                             {m.name ?? 'Unnamed member'}
                                         </SelectItem>

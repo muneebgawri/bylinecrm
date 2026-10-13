@@ -546,4 +546,42 @@ describe('#104 a record’s sends', () => {
             .expect(200);
         expect(await stored(cancelled)).toBeNull();
     });
+
+    it('#147 a member who sent mail is removed: their sends keep their name, their access ends at once, another workspace cannot remove them', async () => {
+        const members = (await as(admin).get(w('/members'))).body as { id: string; email: string }[];
+        const repId = members.find((m) => m.email === repEmail)!.id;
+        const owned = await as(admin)
+            .post(w('/people'))
+            .send({
+                nameFirst: 'Owned',
+                nameLast: 'By rep',
+                ownerId: repId,
+                source: 'test list',
+                emails: { primary: `owned-by-rep-${stamp}@example.com`, additional: [] },
+            });
+        expect(owned.status, JSON.stringify(owned.body)).toBe(201);
+        const id = await schedule('By the rep', (owned.body as { id: string }).id, { who: rep });
+
+        expect((await as(otherAdmin).delete(w(`/members/${repId}`, otherWorkspace))).status).toBe(404);
+        await as(admin)
+            .delete(w(`/members/${repId}`))
+            .expect(204);
+
+        const listed = (await as(admin).get(w('/members'))).body as { id: string }[];
+        expect(listed.some((m) => m.id === repId)).toBe(false);
+        const summary = (await as(admin).get(w('/members/summary'))).body as {
+            memberId: string;
+            leftAt: string | null;
+        }[];
+        expect(summary.find((m) => m.memberId === repId)).toMatchObject({ leftAt: expect.any(String) });
+        // The send stands, and is still theirs.
+        const detail = await as(admin).get(w(`/mail/messages/${id}`));
+        expect(detail.status).toBe(200);
+        expect((detail.body as Outbound).senderMemberId).toBe(repId);
+        // Their session is dead, and the workspace refuses them from the next request.
+        expect((await http().get('/api/me').set('Cookie', rep.cookie)).status).toBe(401);
+        expect([401, 403]).toContain((await as(rep).get(w('/people'))).status);
+        // Removing them again, or changing their role, finds nobody.
+        expect((await as(admin).delete(w(`/members/${repId}`))).status).toBe(404);
+    });
 });
