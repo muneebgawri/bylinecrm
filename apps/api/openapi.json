@@ -15682,6 +15682,111 @@
                 "tags": ["twenty-import"]
             }
         },
+        "/api/w/{workspaceId}/import/twenty/missing": {
+            "get": {
+                "operationId": "twentyImport_missing",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "workspaceMembers",
+                                "companies",
+                                "people",
+                                "opportunities",
+                                "notes",
+                                "tasks",
+                                "leadLookups",
+                                "leadViews",
+                                "messageLists",
+                                "messageListMembers",
+                                "messageCampaigns"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TwentyImportMissingPage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["twenty-import"]
+            }
+        },
         "/api/w/{workspaceId}/import/twenty/preview": {
             "post": {
                 "operationId": "twentyImport_preview",
@@ -20261,7 +20366,7 @@
                     "mode": {
                         "default": "full",
                         "type": "string",
-                        "enum": ["full", "changes"]
+                        "enum": ["full", "changes", "reconcile"]
                     }
                 }
             },
@@ -21356,9 +21461,17 @@
                     "name": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "leftAt": {
+                        "nullable": true,
+                        "description": "When the member was removed (#147); null for a member in the workspace. A picker leaves a removed member out; a row they left behind still names them.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     }
                 },
-                "required": ["memberId", "name"]
+                "required": ["memberId", "name", "leftAt"]
             },
             "Role": {
                 "type": "object",
@@ -24691,6 +24804,51 @@
                     "updatedAt"
                 ]
             },
+            "SequenceEnrolmentTask": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "stepId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The task step that made it."
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["todo", "in_progress", "done"]
+                    },
+                    "dueAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "completedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "assigneeId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    }
+                },
+                "required": ["id", "stepId", "title", "status", "dueAt", "completedAt", "assigneeId"]
+            },
             "SequenceEnrolment": {
                 "type": "object",
                 "properties": {
@@ -24797,6 +24955,13 @@
                         "type": "string",
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SequenceEnrolmentTask"
+                        },
+                        "description": "The tasks its task steps made, in step order (#158). Completing one drives nothing."
                     }
                 },
                 "required": [
@@ -24816,7 +24981,8 @@
                     "countryUnknownAtEnrol",
                     "enrolledAt",
                     "finishedAt",
-                    "stoppedAt"
+                    "stoppedAt",
+                    "tasks"
                 ]
             },
             "EnrolmentBatchResult": {
@@ -25694,6 +25860,13 @@
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991
                     },
+                    "missingInSource": {
+                        "nullable": true,
+                        "description": "A reconcile pass (#156): mapped records of this object Twenty no longer returns, flagged for review; null for any other pass.",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
                     "errors": {
                         "type": "array",
                         "items": {
@@ -25722,8 +25895,70 @@
                     "skipped",
                     "failed",
                     "after",
+                    "missingInSource",
                     "errors"
                 ]
+            },
+            "TwentyImportMissing": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": [
+                            "workspaceMembers",
+                            "companies",
+                            "people",
+                            "opportunities",
+                            "notes",
+                            "tasks",
+                            "leadLookups",
+                            "leadViews",
+                            "messageLists",
+                            "messageListMembers",
+                            "messageCampaigns"
+                        ]
+                    },
+                    "externalId": {
+                        "type": "string",
+                        "description": "The Twenty id the record was mapped from."
+                    },
+                    "localType": {
+                        "type": "string"
+                    },
+                    "localId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "nullable": true,
+                        "description": "The local record’s name, or the link’s label.",
+                        "type": "string"
+                    },
+                    "missingSince": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["object", "externalId", "localType", "localId", "name", "missingSince"]
+            },
+            "TwentyImportMissingPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TwentyImportMissing"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
             },
             "TwentyImportRun": {
                 "type": "object",
@@ -25740,7 +25975,7 @@
                     },
                     "mode": {
                         "type": "string",
-                        "enum": ["full", "changes"]
+                        "enum": ["full", "changes", "reconcile"]
                     },
                     "since": {
                         "nullable": true,

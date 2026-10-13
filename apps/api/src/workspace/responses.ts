@@ -67,7 +67,17 @@ export const memberView = named(
     }),
 );
 
-export const memberSummaryView = named('MemberSummary', z.object({ memberId: id, name: z.string().nullable() }));
+export const memberSummaryView = named(
+    'MemberSummary',
+    z.object({
+        memberId: id,
+        name: z.string().nullable(),
+        leftAt: dateTime.nullable().meta({
+            description:
+                'When the member was removed (#147); null for a member in the workspace. A picker leaves a removed member out; a row they left behind still names them.',
+        }),
+    }),
+);
 
 export const roleView = named(
     'Role',

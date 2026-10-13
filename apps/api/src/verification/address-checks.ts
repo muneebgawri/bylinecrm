@@ -65,8 +65,9 @@ function isNullMx(exchanges: readonly string[]): boolean {
 /**
  * The verdict from the syntax and the domain's MX lookup (P3-5, FR-CRMS-14) — a pure judgement, so
  * the lookup happens elsewhere, outside any transaction. In order: not an address; no such domain;
- * a domain with no mail server; a null MX — each `invalid`. A disposable domain or a role address
- * is `risky`: mail may arrive, but not to a person. A lookup that failed is `unknown` — not valid.
+ * a domain with no mail server; a null MX; a disposable domain (#165: a throwaway inbox is never
+ * worth a cold email) — each `invalid`. A role address is `risky`: mail may arrive, but not to a
+ * person. A lookup that failed is `unknown` — not valid.
  */
 export function judgeAddress(raw: string, mx: MxLookup | 'failed'): EmailVerdict {
     const parsed = parseAddress(raw);
@@ -89,7 +90,7 @@ export function judgeAddress(raw: string, mx: MxLookup | 'failed'): EmailVerdict
     }
     if (isDisposableDomain(domain)) {
         return {
-            result: 'risky',
+            result: 'invalid',
             reason: 'disposable',
             message: `Disposable address: ${domain} hands out throwaway mailboxes`,
         };

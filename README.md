@@ -130,8 +130,8 @@ Never pass `DATABASE_URL` as a `--shadow-database-url`: a shadow database is res
 
 Before a person is enrolled in a sequence, and again before every email step, their address is verified without
 touching the recipient's mail server: syntax, the domain's MX records, the disposable-domain list, role-address
-detection. `valid` enrols; `invalid` is refused (and stops a running enrolment before its next email); `risky` (a
-role address, a disposable domain) enrols and is flagged in the preview; `unknown` (DNS did not answer) is not
+detection. `valid` enrols; `invalid` (no such domain, no mail server, a disposable domain) is refused (and stops a
+running enrolment before its next email); `risky` (a role address) enrols and is flagged in the preview; `unknown` (DNS did not answer) is not
 valid and does not enrol. A result stands for 90 days unless Settings → _Verification_ says otherwise, then is
 found again before the next send. The API is `/api/w/:id/outreach/verification` (the age) and
 `/api/w/:id/people/:personId/verification` (a person's result; `POST` re-runs it). Why each result is what it
@@ -162,8 +162,10 @@ and sets how long an answer stands (90 days unless set). Jobs run in a worker (`
 Settings → _Import from Twenty_ (an admin's): connect a Twenty workspace (its URL and an API key, sealed at rest),
 check it (Twenty's count per object beside what is mapped here), start a run and follow it. A run reads every object
 through Twenty's REST API a page at a time and maps each record by its Twenty id, so it can be run again: what changed
-is updated, what did not is left alone, and nothing is imported twice. What lands where, and why:
-`docs/design-notes/P4-4.md`. The API is `/api/w/:id/import/twenty` (`workspace:admin`).
+is updated, what did not is left alone, and nothing is imported twice. Twenty hides deleted records, so deletions
+are never mirrored: a _Reconcile with Twenty_ run writes nothing and flags the records here that Twenty no longer
+returns as missing in Twenty, listed on the screen for review — nothing is deleted on its own (#156, D-252). What
+lands where, and why: `docs/design-notes/P4-4.md`. The API is `/api/w/:id/import/twenty` (`workspace:admin`).
 
 ## Working against the mock
 

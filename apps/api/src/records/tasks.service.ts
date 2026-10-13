@@ -21,6 +21,8 @@ export interface TaskInput {
     dueAt?: string | null | undefined;
     assigneeId?: string | null | undefined;
     targets?: RecordTarget[] | undefined;
+    /** The sequence step making the task (#158): the runner's alone, never a request's. */
+    sequence?: { enrolmentId: string; stepId: string } | undefined;
 }
 
 export interface ListTasksQuery {
@@ -127,6 +129,8 @@ export class TasksService {
                 dueAt: input.dueAt ? new Date(input.dueAt) : null,
                 assigneeId: input.assigneeId ?? null,
                 completedAt: completedAtFor(status, undefined, new Date()),
+                sequenceEnrolmentId: input.sequence?.enrolmentId ?? null,
+                sequenceStepId: input.sequence?.stepId ?? null,
                 createdBy: actor,
                 targets: {
                     create: targetRows(context.workspaceId, targets),

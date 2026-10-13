@@ -20,8 +20,9 @@ export class MembershipService {
 
     find(userId: string, workspaceId: string): Promise<Membership | null> {
         return this.rls.withUser(userId, async (tx) => {
+            // A seat that was left (#147) is no seat: the guard refuses from this request on.
             const member = await tx.workspaceMember.findFirst({
-                where: { userId, workspaceId },
+                where: { userId, workspaceId, leftAt: null },
                 select: { id: true, roleId: true },
             });
             return member ? { memberId: member.id, roleId: member.roleId } : null;

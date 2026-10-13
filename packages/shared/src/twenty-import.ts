@@ -50,7 +50,12 @@ export const TWENTY_IMPORT_RUN_STATUSES = ['queued', 'running', 'succeeded', 'fa
 export type TwentyImportRunStatus = (typeof TWENTY_IMPORT_RUN_STATUSES)[number];
 
 /** A run reads everything (`full`), or only what Twenty changed since the last successful run (`changes`). */
-export const TWENTY_IMPORT_MODES = ['full', 'changes'] as const;
+/**
+ * `full` reads everything; `changes` what Twenty updated since the last successful run; `reconcile`
+ * (#156, D-252) writes no record — it reads every id Twenty still returns and flags the mapped records
+ * it no longer does as *missing in source*, for a person to review. Nothing is ever deleted on its own.
+ */
+export const TWENTY_IMPORT_MODES = ['full', 'changes', 'reconcile'] as const;
 export type TwentyImportMode = (typeof TWENTY_IMPORT_MODES)[number];
 
 /** `people.source` of an imported person, and `outreach_exclusions.source` of an imported lead lookup. */
@@ -60,6 +65,8 @@ export const TWENTY_LISTS_FIELD_KEY = 'lists';
 export const TWENTY_LIST_VIEW_PREFIX = 'List: ';
 /** How many per-record errors a run keeps per object; the count keeps counting. */
 export const TWENTY_IMPORT_ERRORS_KEPT = 25;
+/** The longest a thrown error's line is kept in a report entry (#168): a client's message quotes the whole call. */
+export const TWENTY_IMPORT_ERROR_MESSAGE_MAX = 300;
 /** Twenty's REST page ceiling. */
 export const TWENTY_PAGE_SIZE = 60;
 
@@ -88,6 +95,8 @@ export interface TwentyImportObjectReport {
     skipped: number;
     failed: number;
     after: number | null;
+    /** A `reconcile` pass: mapped records of this object Twenty no longer returns; null for any other pass. */
+    missingInSource: number | null;
     errors: TwentyImportRecordError[];
 }
 
@@ -142,6 +151,18 @@ export function emptyObjectReport(object: TwentyImportObject): TwentyImportObjec
         skipped: 0,
         failed: 0,
         after: null,
+        missingInSource: null,
         errors: [],
     };
+}
+
+/** A mapped record Twenty no longer returns (#156): which link, what it maps to here, since when. */
+export interface TwentyImportMissingView {
+    object: TwentyImportObject;
+    externalId: string;
+    localType: string;
+    localId: string;
+    /** The local record's name (or the link's label), for the review list. */
+    name: string | null;
+    missingSince: string;
 }

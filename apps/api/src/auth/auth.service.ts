@@ -286,13 +286,27 @@ export class AuthService {
                 if (!user.emailVerifiedAt) throw new EmailUnverified();
                 userId = user.id;
             }
-            await tx.workspaceMember
-                .create({
-                    data: { workspaceId: invite.workspaceId, userId, roleId: invite.roleId },
-                })
-                .catch((error: unknown) => {
-                    throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
+            // A seat the address left before (#147) comes back as the same seat, with the invited role,
+            // so what they did then stays theirs; a seat still held is already a member.
+            const seat = await tx.workspaceMember.findUnique({
+                where: { workspaceId_userId: { workspaceId: invite.workspaceId, userId } },
+                select: { id: true, leftAt: true },
+            });
+            if (seat && !seat.leftAt) throw new UniqueConflict('already a member');
+            if (seat) {
+                await tx.workspaceMember.update({
+                    where: { id: seat.id },
+                    data: { leftAt: null, roleId: invite.roleId },
                 });
+            } else {
+                await tx.workspaceMember
+                    .create({
+                        data: { workspaceId: invite.workspaceId, userId, roleId: invite.roleId },
+                    })
+                    .catch((error: unknown) => {
+                        throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
+                    });
+            }
             await tx.workspaceInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
             return { workspace: workspaceView(invite.workspace), userId };
         });

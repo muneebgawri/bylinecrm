@@ -154,7 +154,7 @@ describe('FR-CRMS-14 / FR-CRMS-16 email verification', () => {
         await app?.close();
     });
 
-    it('FR-CRMS-14: the one enrolment check refuses an invalid or unverifiable address, flags a risky one, and enrols a valid one', async () => {
+    it('FR-CRMS-14 (#165): the one enrolment check refuses an invalid, disposable or unverifiable address, flags a role address, and enrols a valid one', async () => {
         dns.setMx(`web-${stamp}.example`);
         dns.setMx(`null-${stamp}.example`, '.');
         dns.setMx('mailinator.com', 'mx.mailinator.com');
@@ -177,7 +177,7 @@ describe('FR-CRMS-14 / FR-CRMS-16 email verification', () => {
         // The preview is the decision the enrol makes.
         expect(enrolled.body).toEqual(result);
 
-        expect(result.enrolled.sort()).toEqual([valid, disposable, role].sort());
+        expect(result.enrolled.sort()).toEqual([valid, role].sort());
         const reason = (id: string) => result.refused.find((r) => r.personId === id);
         expect(reason(noDomain)).toMatchObject({
             code: 'email.invalid',
@@ -185,18 +185,19 @@ describe('FR-CRMS-14 / FR-CRMS-16 email verification', () => {
         });
         expect(reason(noMx)).toMatchObject({ code: 'email.invalid', message: expect.stringContaining('mail server') });
         expect(reason(nullMx)).toMatchObject({ code: 'email.invalid' });
+        // #165: a throwaway inbox is never worth a cold email — refused, not warned about.
+        expect(reason(disposable)).toMatchObject({
+            code: 'email.invalid',
+            message: expect.stringContaining('mailinator.com'),
+        });
         // `unknown` is not valid and does not enrol.
         expect(reason(unverifiable)).toMatchObject({
             code: 'email.unverified',
             message: expect.stringContaining('Could not verify'),
         });
-        expect(result.warnings).toEqual(
-            expect.arrayContaining([
-                { personId: disposable, code: 'email.risky', message: expect.stringContaining('Disposable') },
-                { personId: role, code: 'email.risky', message: expect.stringContaining('info@') },
-            ]),
-        );
-        expect(result.warnings).toHaveLength(2);
+        expect(result.warnings).toEqual([
+            { personId: role, code: 'email.risky', message: expect.stringContaining('info@') },
+        ]);
         expect(await stored(`jane-${stamp}@${good}`)).toMatchObject({ result: 'valid', source: 'free' });
     });
 

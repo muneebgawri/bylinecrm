@@ -162,6 +162,7 @@ export class SequenceRunner {
                         dueAt: now.toISOString(),
                         assigneeId: person.ownerId ?? e.enrolledByMemberId,
                         targets: [{ type: 'person', id: e.personId }],
+                        sequence: { enrolmentId: e.id, stepId: step.id },
                     },
                 );
                 await this.events.record(tx, task.event);

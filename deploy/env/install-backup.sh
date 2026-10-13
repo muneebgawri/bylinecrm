@@ -19,6 +19,15 @@ mkdir -p "$TOOLS"
 install -m 755 "$HERE/backup.sh" "$HERE/restore.sh" "$TOOLS/"
 install -m 644 "$HERE/lib.sh" "$TOOLS/"
 install -m 644 "$HERE/systemd/bylinecrm-backup@.service" "$HERE/systemd/bylinecrm-backup@.timer" "$UNITS/"
+# The offsite remote lives in $BYLINECRM_RUNTIME/backup.env now (#166, bootstrap-secrets.sh), read by
+# lib.sh for the unit and a manual run alike. A drop-in from before that is one more place to disagree:
+# gone, so the unit sees exactly what a manual run sees.
+DROPIN="$UNITS/bylinecrm-backup@$BYLINECRM_ENV.service.d"
+if [ -e "$DROPIN/remote.conf" ]; then
+    rm -f "$DROPIN/remote.conf"
+    rmdir "$DROPIN" 2>/dev/null || true
+    echo "install-backup: removed the systemd drop-in $DROPIN/remote.conf — the remote is read from $BYLINECRM_RUNTIME/backup.env" >&2
+fi
 if [ "${SKIP_SYSTEMCTL:-0}" != 1 ]; then
     systemctl daemon-reload
     systemctl enable --now "bylinecrm-backup@$BYLINECRM_ENV.timer"

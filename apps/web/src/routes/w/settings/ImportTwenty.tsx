@@ -17,6 +17,7 @@ import {
     toast,
 } from '@bylinecrm/ui';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { fieldErrorAt } from '../../../api/client';
 import {
@@ -29,6 +30,7 @@ import {
     useTwentyImportRun,
     useTwentyImportRuns,
     useTwentyPreview,
+    useTwentyImportMissing,
 } from '../../../api/importTwenty';
 import { keys } from '../../../api/queries';
 import type {
@@ -42,6 +44,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { paths } from '../../paths';
 
 /**
  * The importer screen (P4-UI-2, doc 48 §11): connect a Twenty workspace, see what it holds beside
@@ -344,7 +347,36 @@ const STATUS: Record<
 const MODES: readonly { value: TwentyImportMode; label: string }[] = [
     { value: 'full', label: 'Everything' },
     { value: 'changes', label: 'Changes since last run' },
+    { value: 'reconcile', label: 'Reconcile with Twenty' },
 ];
+
+/** How a count of each object reads: "1 company", "3 people". */
+const OBJECT_NOUN: Record<TwentyImportObject, { one: string; many: string }> = {
+    workspaceMembers: { one: 'owner', many: 'owners' },
+    companies: { one: 'company', many: 'companies' },
+    people: { one: 'person', many: 'people' },
+    opportunities: { one: 'opportunity', many: 'opportunities' },
+    notes: { one: 'note', many: 'notes' },
+    tasks: { one: 'task', many: 'tasks' },
+    leadLookups: { one: 'lead lookup', many: 'lead lookups' },
+    leadViews: { one: 'lead view', many: 'lead views' },
+    messageLists: { one: 'message list', many: 'message lists' },
+    messageListMembers: { one: 'list member', many: 'list members' },
+    messageCampaigns: { one: 'campaign', many: 'campaigns' },
+};
+
+const MODE_LABEL: Record<TwentyImportMode, string> = {
+    full: 'Everything',
+    changes: 'Changes',
+    reconcile: 'Reconcile',
+};
+
+const MODE_HELP: Record<TwentyImportMode, string> = {
+    full: 'Reads every record. One already here is updated where it differs and otherwise left alone.',
+    changes: 'Reads only what Twenty changed since the last successful run; without one, everything.',
+    reconcile:
+        'Writes nothing. Reads every id Twenty still has and flags the records here that it no longer returns as missing in Twenty, for you to review — nothing is deleted on its own.',
+};
 
 /** Start a run and follow the latest one; what earlier runs did is listed under it. */
 function Runs({ workspaceId, overview }: { workspaceId: string; overview: TwentyImportOverviewView }) {
@@ -404,11 +436,7 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                             value={mode}
                             onValueChange={setMode}
                         />
-                        <p className="m-0 text-[13px] text-text-muted">
-                            {mode === 'full'
-                                ? 'Reads every record. One already here is updated where it differs and otherwise left alone.'
-                                : 'Reads only what Twenty changed since the last successful run; without one, everything.'}
-                        </p>
+                        <p className="m-0 text-[13px] text-text-muted">{MODE_HELP[mode]}</p>
                         {startError && (
                             <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">
                                 {startError}
@@ -434,6 +462,7 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                     </div>
                 )}
             </Card>
+            <MissingCard workspaceId={workspaceId} latest={run} />
             <Card title="Previous runs">
                 {runs.isError ? (
                     <p role="alert" className="m-0 text-[13px] text-danger">
@@ -463,8 +492,9 @@ function RunSummary({ run }: { run: TwentyImportRunView }) {
             created: sum.created + r.created,
             updated: sum.updated + r.updated,
             failed: sum.failed + r.failed,
+            missing: sum.missing + (r.missingInSource ?? 0),
         }),
-        { created: 0, updated: 0, failed: 0 },
+        { created: 0, updated: 0, failed: 0, missing: 0 },
     );
     return (
         <div className="flex flex-col gap-1">
@@ -473,16 +503,108 @@ function RunSummary({ run }: { run: TwentyImportRunView }) {
                     {STATUS[run.status].label}
                 </Badge>
                 <span className="text-text-muted">
-                    {run.mode === 'changes' ? 'Changes' : 'Everything'} · started{' '}
-                    {formatDate(run.startedAt ?? run.queuedAt)}
+                    {MODE_LABEL[run.mode]} · started {formatDate(run.startedAt ?? run.queuedAt)}
                     {run.finishedAt ? `, finished ${formatDate(run.finishedAt)}` : ''}
                 </span>
                 <span className="text-text-muted">
-                    {count(totals.created)} created, {count(totals.updated)} updated, {count(totals.failed)} failed
+                    {run.mode === 'reconcile'
+                        ? `${count(totals.missing)} missing in Twenty`
+                        : `${count(totals.created)} created, ${count(totals.updated)} updated, ${count(totals.failed)} failed`}
                 </span>
             </div>
             {run.error && <p className="m-0 text-danger">{run.error}</p>}
         </div>
+    );
+}
+
+/** Where a flagged record lives here, by what it maps to; a link only for the record pages that exist. */
+function localPath(workspaceId: string, localType: string, localId: string): string | null {
+    switch (localType) {
+        case 'company':
+            return paths.company(workspaceId, localId);
+        case 'person':
+            return paths.person(workspaceId, localId);
+        case 'opportunity':
+            return paths.deal(workspaceId, localId);
+        default:
+            return null;
+    }
+}
+
+/**
+ * The cutover reconciliation report (#156, D-252): what a reconcile pass flagged as missing in Twenty,
+ * per object and record by record, for a person to review. Nothing here is deleted on its own; a run
+ * that sees a record in Twenty again clears its flag.
+ */
+function MissingCard({ workspaceId, latest }: { workspaceId: string; latest: TwentyImportRunView | null }) {
+    const missing = useTwentyImportMissing(workspaceId);
+    const items = missing.data?.items ?? [];
+    const reconciled = latest?.mode === 'reconcile' && isFinalRun(latest) ? latest : null;
+    if (items.length === 0 && !reconciled) return null;
+    const perObject = TWENTY_IMPORT_OBJECTS.map((object) => ({
+        object,
+        count: reconciled
+            ? (reconciled.report.find((r) => r.object === object)?.missingInSource ?? 0)
+            : items.filter((i) => i.object === object).length,
+    })).filter((o) => o.count > 0);
+    return (
+        <section
+            aria-label="Missing in Twenty"
+            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+        >
+            <h3 className="m-0 text-[14px] font-semibold text-text">Missing in Twenty</h3>
+            <p className="m-0 text-[13px] text-text-muted">
+                Records mapped from Twenty that it no longer returns — deleted there, or no longer visible to the key.
+                Nothing is deleted here on its own: review each and delete or keep it. A later run that finds the record
+                again clears the flag.
+            </p>
+            {perObject.length > 0 && (
+                <p className="m-0 text-[13px] text-text">
+                    {perObject
+                        .map(
+                            (o) =>
+                                `${count(o.count)} ${o.count === 1 ? OBJECT_NOUN[o.object].one : OBJECT_NOUN[o.object].many}`,
+                        )
+                        .join(' · ')}
+                </p>
+            )}
+            {missing.isError ? (
+                <p role="alert" className="m-0 text-[13px] text-danger">
+                    {failureText(missing.error)}
+                </p>
+            ) : !missing.data ? (
+                <LoadingRegion label="Loading missing records" />
+            ) : items.length === 0 ? (
+                <p className="m-0 text-[13px] text-text-muted">Nothing is missing.</p>
+            ) : (
+                <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[13px]">
+                    {items.map((item) => {
+                        const to = localPath(workspaceId, item.localType, item.localId);
+                        const name = item.name ?? item.externalId;
+                        return (
+                            <li key={`${item.object}:${item.externalId}`} className="flex flex-wrap items-center gap-2">
+                                {to ? (
+                                    <Link
+                                        to={to}
+                                        className="font-medium hover:underline max-md:min-h-touch max-md:content-center"
+                                    >
+                                        {name}
+                                    </Link>
+                                ) : (
+                                    <span className="font-medium">{name}</span>
+                                )}
+                                <span className="text-text-muted">
+                                    {label(item.object)} · missing since {formatDate(item.missingSince)}
+                                </span>
+                            </li>
+                        );
+                    })}
+                    {missing.data.nextCursor && (
+                        <li className="text-text-muted">The first 200 are listed; the run report has the counts.</li>
+                    )}
+                </ul>
+            )}
+        </section>
     );
 }
 
@@ -553,6 +675,13 @@ function ReportTable({ report }: { report: TwentyImportObjectReportView[] }) {
                             muted: true,
                             phone: 'hidden',
                             cell: (row: Row) => count(row.skipped),
+                        },
+                        {
+                            id: 'missing',
+                            header: 'Missing in Twenty',
+                            muted: true,
+                            phone: 'hidden',
+                            cell: (row: Row) => (row.missingInSource === null ? '—' : count(row.missingInSource)),
                         },
                         {
                             id: 'failed',

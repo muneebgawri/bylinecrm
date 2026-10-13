@@ -82,8 +82,15 @@ describe('FR-CRMS-14 address checks', () => {
             });
         });
 
-        it('is risky for a disposable domain and for a role address — deliverable, but not to a person', () => {
-            expect(judgeAddress('jane@mailinator.com', found)).toMatchObject({ result: 'risky', reason: 'disposable' });
+        it('#165 FR-CRMS-14: is invalid for a disposable domain — a throwaway inbox is never worth a cold email', () => {
+            expect(judgeAddress('jane@mailinator.com', found)).toMatchObject({
+                result: 'invalid',
+                reason: 'disposable',
+                message: expect.stringContaining('mailinator.com'),
+            });
+        });
+
+        it('is risky for a role address — deliverable, but not to a person', () => {
             expect(judgeAddress('info@example.com', found)).toMatchObject({
                 result: 'risky',
                 reason: 'role',
