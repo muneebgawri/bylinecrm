@@ -50,8 +50,12 @@ bylinecrm_env() {
     # The application's env file: staging keeps its historical name, so the pattern is <env>.env.
     BYLINECRM_APP_ENV="$BYLINECRM_RUNTIME/$env.env"
     BYLINECRM_PG_ENV="$BYLINECRM_RUNTIME/postgres.env"
-    # Backups (backup.sh): local copies, and the rclone remote the offsite copy goes to.
+    # Backups (backup.sh): local copies, and the rclone remote the offsite copy goes to. The remote
+    # and the rclone config may be set per environment in $BYLINECRM_RUNTIME/backup.env (#166),
+    # written by bootstrap-secrets.sh — one file the unit and a manual run both read, no systemd
+    # drop-in. A caller's value still wins; the defaults apply where neither says.
     : "${BYLINECRM_BACKUP_DIR:=/var/backups/bylinecrm-$env}"
+    bylinecrm_read_backup_env "$BYLINECRM_RUNTIME/backup.env"
     : "${BYLINECRM_BACKUP_REMOTE:=r2:bylinecrm-backups/$env}"
     : "${BYLINECRM_RCLONE_CONF:=/root/.config/rclone/rclone.conf}"
     export BYLINECRM_ENV BYLINECRM_PROJECT BYLINECRM_RUNTIME BYLINECRM_PUBLIC_HOST BYLINECRM_PUBLIC_URL \
@@ -59,6 +63,20 @@ bylinecrm_env() {
         BYLINECRM_VALKEY_MAXMEMORY BYLINECRM_WEB_MEM BYLINECRM_MIGRATE_MEM BYLINECRM_EDGE_CONF \
         BYLINECRM_WEB_ALIAS BYLINECRM_APP_ENV BYLINECRM_PG_ENV BYLINECRM_BACKUP_DIR \
         BYLINECRM_BACKUP_REMOTE BYLINECRM_RCLONE_CONF
+}
+
+# Reads BYLINECRM_BACKUP_REMOTE and BYLINECRM_RCLONE_CONF from the environment's backup.env (#166)
+# where the caller has not set them. The file is data, not a script: only those two keys are read,
+# by name, and nothing in it is executed.
+bylinecrm_read_backup_env() {
+    local file=$1 key value
+    [ -f "$file" ] || return 0
+    for key in BYLINECRM_BACKUP_REMOTE BYLINECRM_RCLONE_CONF; do
+        [ -z "${!key:-}" ] || continue
+        value=$(sed -n "s/^${key}=//p" "$file" | head -n 1)
+        [ -n "$value" ] && printf -v "$key" '%s' "$value"
+    done
+    return 0
 }
 
 # Every environment, for the few places that look across them (release pruning keeps each one's
