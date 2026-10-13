@@ -92,6 +92,8 @@ export const keys = {
     enrichment: (workspaceId: string, object: string, recordId: string) =>
         ['w', workspaceId, 'enrichment', object, recordId] as const,
     enrichmentSettings: (workspaceId: string) => ['w', workspaceId, 'enrichment', 'settings'] as const,
+    /** The short-link domain and its check (P3-4, FR-CRMS-8). */
+    trackingSettings: (workspaceId: string) => ['w', workspaceId, 'tracking', 'domain'] as const,
     suppressionList: (workspaceId: string, params: SuppressionListQuery) =>
         ['w', workspaceId, 'suppressions', params] as const,
     unsubscribeStatus: (token: string) => ['unsubscribe', token] as const,

@@ -1,4 +1,5 @@
 import type { Actor, TaskStatus } from './records.js';
+import type { TrackingCounts } from './tracking.js';
 
 /**
  * Sequences and the outreach compliance they enforce (P3-3, FR-CRMS-5, -10, -11, -12): what the API,
@@ -157,6 +158,8 @@ export interface SequenceStepView {
     businessDays: boolean;
     /** `task` steps (#136): the task created on the person, for their owner (else the enroller). */
     taskTitle: string | null;
+    /** `email` steps (P3-4): clicks and indicative opens across the step's sends; zeros elsewhere. */
+    tracking: TrackingCounts;
 }
 
 export interface SequenceCounts {

@@ -45,6 +45,40 @@ describe('wordsFor', () => {
         expect(sent).toMatchObject({ actor: 'Kate Morgan', action: 'sent “Intro”', family: 'mail' });
     });
 
+    it('FR-CRMS-8: reads a click as the link clicked, and an open as indicative', () => {
+        const clicked = wordsFor(
+            entry({
+                kind: 'linked-email.clicked',
+                actor: { kind: 'system', id: null },
+                properties: {
+                    linked: { type: 'email', id: 'send-1', name: 'The report' },
+                    tracking: { url: 'https://acme.example/report', indicative: false, sequenceStepId: null },
+                },
+            }),
+            names,
+        );
+        expect(clicked).toMatchObject({
+            actor: 'They',
+            action: 'clicked https://acme.example/report in “The report”',
+            family: 'mail',
+        });
+        const opened = wordsFor(
+            entry({
+                kind: 'linked-email.opened',
+                target: { type: 'person', id: 'p2' },
+                actor: { kind: 'system', id: null },
+                properties: {
+                    linked: { type: 'email', id: 'send-1', name: 'The report' },
+                    tracking: { url: null, indicative: true, sequenceStepId: null },
+                },
+            }),
+            names,
+        );
+        expect(opened.actor).toBe('Sam Okafor');
+        expect(opened.action).toBe('opened “The report” (indicative)');
+        expect(opened.detail?.[0]?.label).toMatch(/Indicative/);
+    });
+
     it('names the member and lists the changed fields of an update', () => {
         const words = wordsFor(entry({ properties: { diff: { nameFirst: {}, city: {} } } }), names);
         expect(words.actor).toBe('Kate Morgan');

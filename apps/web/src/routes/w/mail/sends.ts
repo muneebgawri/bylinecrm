@@ -2,7 +2,7 @@ import type { RecordTarget } from '@bylinecrm/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { useOutboundMessages, useRecordSends, useSessionSends, type SessionSend } from '../../../api/mail';
-import type { MailOutboundView } from '../../../api/types';
+import type { MailOutboundView, TrackingCountsView } from '../../../api/types';
 
 /**
  * A send on a record's timeline before (or instead of) the stored message: going now ("Sending…"
@@ -31,6 +31,8 @@ export interface PendingSend {
     threadId: string | null;
     /** This tab's own send, until the server has answered for it; null for one read from the server (#104). */
     session: SessionSend | null;
+    /** Clicks and indicative opens once sent (P3-4); zeros before. */
+    tracking: TrackingCountsView;
 }
 
 /** Whether this tab's send is about this record: its person, or the deal it was written from. */
@@ -94,6 +96,7 @@ export function usePendingSends(
                 mailMessageId,
                 threadId: view?.threadId ?? null,
                 session: own,
+                tracking: view?.tracking ?? { clicks: 0, uniqueClicks: 0, opens: 0 },
             });
         });
         return list;

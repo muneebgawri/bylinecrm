@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { TRACKING_CLICK_PATH, TRACKING_OPEN_PATH } from '@bylinecrm/shared';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
@@ -10,6 +11,17 @@ import { openApiDocument } from './openapi/document';
 
 /** Every route lives under this; the web app's dev proxy forwards it. */
 export const API_PREFIX = 'api';
+
+/**
+ * The routes served without the prefix: `/health`, where the deployer and the web app already look, and
+ * the tracking routes (P3-4), which a short-link domain serves — `https://go.example.com/r/<token>` is the
+ * whole link. Declared once: `configureApp` excludes them and the OpenAPI contract spec allows them.
+ */
+export const UNPREFIXED_PATHS: readonly string[] = [
+    'health',
+    `${TRACKING_CLICK_PATH}/:token`,
+    `${TRACKING_OPEN_PATH}/:token`,
+];
 
 /** How every application is created: Nest's own body parser off (see `configureApp`). */
 export const APP_OPTIONS = { bufferLogs: true, bodyParser: false } as const;
@@ -35,8 +47,7 @@ export function configureApp(app: NestExpressApplication): NestExpressApplicatio
     // The body parsers are installed here rather than by Nest, so a parser rejection reaches the
     // exception filter as a typed error (P1-1d, `body-parsing.ts`).
     app.use(...bodyParsers(), parserErrors);
-    // `/health` stays where the deployer and the web app already look for it.
-    app.setGlobalPrefix(API_PREFIX, { exclude: ['health'] });
+    app.setGlobalPrefix(API_PREFIX, { exclude: [...UNPREFIXED_PATHS] });
     app.use(cookieParser());
     // The client IP for rate limiting comes from the proxy's header once one is in front of us.
     app.set('trust proxy', 1);

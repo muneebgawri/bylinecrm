@@ -53,3 +53,4 @@ export * from './webhooks.js';
 export * from './twenty-import.js';
 export * from './verification.js';
 export * from './enrichment.js';
+export * from './tracking.js';

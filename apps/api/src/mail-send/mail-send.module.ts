@@ -5,6 +5,7 @@ import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
 import { MailSyncModule } from '../mail-sync/mail-sync.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { SuppressionModule } from '../suppression/suppression.module';
+import { TrackingModule } from '../tracking/tracking.module';
 import { TemplatesModule } from '../templates/templates.module';
 import {
     MAIL_SEND_JOB_ATTEMPTS,
@@ -34,6 +35,7 @@ import { MailSendSweep } from './sweep';
         SendingPoolModule,
         SuppressionModule,
         TemplatesModule,
+        TrackingModule,
         BullModule.registerQueue({
             name: MAIL_SEND_QUEUE,
             defaultJobOptions: {

@@ -51,6 +51,8 @@ export const paths = {
     settingsVerification: (workspaceId: string) => `/w/${workspaceId}/settings/verification`,
     /** Enrichment (P4-2): the free sources on or off, and how long an answer stands. */
     settingsEnrichment: (workspaceId: string) => `/w/${workspaceId}/settings/enrichment`,
+    /** Tracking (P3-4): the short-link domain, its CNAME and whether it is verified. */
+    settingsTracking: (workspaceId: string) => `/w/${workspaceId}/settings/tracking`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
     settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */

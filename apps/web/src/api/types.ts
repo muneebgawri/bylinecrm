@@ -178,6 +178,11 @@ export type EnrichmentAnswerView = Schemas['EnrichmentAnswer'];
 export type EnrichmentHistoryView = Schemas['EnrichmentHistory'];
 export type EnrichmentSettingsView = Schemas['EnrichmentSettings'];
 export type PutEnrichmentSettingsInput = Schemas['PutEnrichmentSettingsDto'];
+// ---- Tracking (P3-4) ---------------------------------------------------------------------------
+export type TrackingSettingsView = Schemas['TrackingSettings'];
+export type TrackingDomainView = NonNullable<TrackingSettingsView['domain']>;
+export type TrackingCountsView = Schemas['TrackingCounts'];
+export type PutTrackingDomainInput = Schemas['PutTrackingDomainDto'];
 export type SuppressionPage = Schemas['SuppressionPage'];
 export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
 export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;

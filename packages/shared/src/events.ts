@@ -3,6 +3,7 @@ import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
 import type { EmailBounce, MailboxPause } from './sending-pool.js';
 import type { EmailFailure, EnrolmentEventPayload } from './sequences.js';
+import type { EmailTrackingPayload } from './tracking.js';
 import type { SuppressionEventPayload } from './suppression.js';
 
 /**
@@ -106,6 +107,13 @@ export const DOMAIN_EVENT_TYPES = [
     // at a scheduled send's time. `recordId` is the send, `failure` why. No timeline entry (nothing was
     // sent); a sequence reads it to reschedule, hold or stop the step; webhooks deliver it.
     'email.failed',
+    // Tracking (P3-4, FR-CRMS-8): a tracked link in a sent message was followed, or its open pixel
+    // fetched. `recordId` is the send, `tracking` the link, the person and the step; `related` and
+    // `targets` the person — the timeline writes `linked-email.clicked` / `linked-email.opened` on
+    // them. A click may drive a stage rule like a reply; an open is indicative and never does. A
+    // scanner's hit (docs/design-notes/P3-4.md) is recorded as neither.
+    'email.clicked',
+    'email.opened',
     'meeting.booked',
     // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
     // writes nothing for these, webhooks deliver them.
@@ -199,6 +207,8 @@ interface DomainEventBase {
     failure?: EmailFailure;
     /** Present on `enrolment.*`. */
     enrolment?: EnrolmentEventPayload;
+    /** Present on `email.clicked` and `email.opened`: the send, the person, the link and the step. */
+    tracking?: EmailTrackingPayload;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

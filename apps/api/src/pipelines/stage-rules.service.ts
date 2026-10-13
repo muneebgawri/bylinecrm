@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { DomainEvent, EventActor, StageRuleEvent } from '@bylinecrm/shared';
+import { STAGE_RULE_EVENTS, type DomainEvent, type EventActor, type StageRuleEvent } from '@bylinecrm/shared';
 import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { storedRuleEvent } from './rule-events';
@@ -24,7 +24,7 @@ export class StageRulesService implements OutboxConsumer {
     ) {}
 
     accepts(event: DomainEvent): boolean {
-        return event.type === 'email.replied' || event.type === 'meeting.booked';
+        return isRuleEvent(event.type);
     }
 
     /**
@@ -37,7 +37,8 @@ export class StageRulesService implements OutboxConsumer {
 
     /** Applies every enabled rule for the event's type in its workspace; returns how many deals moved. */
     async apply(event: DomainEvent): Promise<number> {
-        if (event.type !== 'email.replied' && event.type !== 'meeting.booked') return 0;
+        // An `email.opened` is never here: opens are indicative (FR-CRMS-8) and move nothing.
+        if (!isRuleEvent(event.type)) return 0;
         const people = (event.related ?? []).filter((t) => t.type === 'person').map((t) => t.id);
         const companies = (event.related ?? []).filter((t) => t.type === 'company').map((t) => t.id);
         if (people.length === 0 && companies.length === 0) return 0;
@@ -82,4 +83,8 @@ export class StageRulesService implements OutboxConsumer {
         if (moved.length) this.log.log(`${event.type}: ${moved.length} deal(s) moved by rule in ${event.workspaceId}`);
         return moved.length;
     }
+}
+
+function isRuleEvent(type: DomainEvent['type']): type is StageRuleEvent {
+    return (STAGE_RULE_EVENTS as readonly string[]).includes(type);
 }

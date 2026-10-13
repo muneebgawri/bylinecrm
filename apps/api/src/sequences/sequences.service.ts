@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+    NO_TRACKING_COUNTS,
+    type TrackingCounts,
     SEQUENCE_WINDOW_DEFAULTS,
     type Actor,
     type DomainEvent,
@@ -17,6 +19,7 @@ import { readMailSettings } from '../templates/mail-settings.service';
 import type { CreateSequenceDto, StepInput, UpdateSequenceDto } from './dto';
 import { isTimeZone } from './schedule';
 import { SequenceRunner } from './sequence-runner';
+import { trackingCountsForSteps } from '../tracking/tracking-counts';
 
 type SequenceRow = Prisma.SequenceGetPayload<{ include: { steps: true } }>;
 
@@ -44,12 +47,26 @@ export class SequencesService {
                 tx,
                 rows.map((r) => r.id),
             );
-            return rows.map((r) => view(r, counts.get(r.id)));
+            const tracking = await trackingCountsForSteps(
+                tx,
+                rows.flatMap((r) => r.steps.map((s) => s.id)),
+            );
+            return rows.map((r) => view(r, counts.get(r.id), tracking));
         });
     }
 
     async get(id: string): Promise<SequenceView> {
-        return this.rls.withWorkspace(async (tx) => view(await find(tx, id), (await countsFor(tx, [id])).get(id)));
+        return this.rls.withWorkspace(async (tx) => {
+            const row = await find(tx, id);
+            return view(
+                row,
+                (await countsFor(tx, [id])).get(id),
+                await trackingCountsForSteps(
+                    tx,
+                    row.steps.map((s) => s.id),
+                ),
+            );
+        });
     }
 
     async create(input: CreateSequenceDto): Promise<SequenceView> {
@@ -357,7 +374,11 @@ async function countsFor(tx: WorkspaceClient, ids: readonly string[]): Promise<M
     return out;
 }
 
-export function view(row: SequenceRow, counts: SequenceCounts | undefined): SequenceView {
+export function view(
+    row: SequenceRow,
+    counts: SequenceCounts | undefined,
+    tracking: ReadonlyMap<string, TrackingCounts> = new Map(),
+): SequenceView {
     return {
         id: row.id,
         name: row.name,
@@ -377,6 +398,7 @@ export function view(row: SequenceRow, counts: SequenceCounts | undefined): Sequ
                 waitDays: s.waitDays,
                 businessDays: s.businessDays,
                 taskTitle: s.taskTitle,
+                tracking: tracking.get(s.id) ?? { ...NO_TRACKING_COUNTS },
             })),
         counts: counts ?? { enrolled: 0, active: 0, held: 0, finished: 0, stopped: 0 },
         createdBy: row.createdBy as unknown as Actor,

@@ -64,6 +64,10 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         return { ...base, action: title, family: 'external', ...(detail ? { detail } : {}) };
     }
 
+    if (entry.kind === 'linked-email.clicked' || entry.kind === 'linked-email.opened') {
+        return { ...base, ...trackingWords(entry, names), family: 'mail' };
+    }
+
     if (entry.kind.startsWith('linked-email.')) {
         return { ...base, ...emailWords(entry, names), family: 'mail' };
     }
@@ -120,6 +124,35 @@ function suppressionWords(entry: TimelineActivityView): Pick<TimelineWords, 'act
     return {
         action: entry.kind.endsWith('.removed') ? `lifted the suppression of ${address}` : `suppressed ${address}`,
         ...(detail.length ? { detail } : {}),
+    };
+}
+
+/**
+ * A click or an open on a sent email (P3-4, FR-CRMS-8): the person the entry is on did it (never the
+ * system, whose event it is). A click names the link; an open says it is indicative, because a mail
+ * client's prefetch looks the same as a read.
+ */
+function trackingWords(
+    entry: TimelineActivityView,
+    names: NameSources,
+): Pick<TimelineWords, 'actor' | 'action' | 'detail'> {
+    const tracking = isRecord(entry.properties['tracking']) ? entry.properties['tracking'] : {};
+    const linked = isRecord(entry.properties['linked']) ? entry.properties['linked'] : {};
+    const subject = typeof linked['name'] === 'string' && linked['name'] !== '' ? linked['name'] : null;
+    const actor =
+        names.recordNames?.get(entry.target.id) ??
+        (entry.target.type === names.own.type && entry.target.id === names.own.id ? 'They' : 'The recipient');
+    if (entry.kind === 'linked-email.opened') {
+        return {
+            actor,
+            action: `opened ${subject ? `“${subject}”` : 'an email'} (indicative)`,
+            detail: [{ label: 'Indicative: clients prefetch images' }],
+        };
+    }
+    const url = typeof tracking['url'] === 'string' ? tracking['url'] : null;
+    return {
+        actor,
+        action: `clicked ${url ?? 'a link'}${subject ? ` in “${subject}”` : ''}`,
     };
 }
 

@@ -157,6 +157,18 @@ record's _Enrichment_ card shows the answers and offers _Enrich now_; Settings �
 and sets how long an answer stands (90 days unless set). Jobs run in a worker (`ENRICHMENT_WORKER`). The API is
 `/api/w/:id/enrichment/...`. The rule per field type: `docs/design-notes/P4-2.md`.
 
+## Tracking (P3-4)
+
+Links in outreach email are shortened through a domain of the workspace's — Settings → _Tracking_ sets it and
+shows the CNAME to publish; `POST /api/w/:id/tracking/domain/check` verifies it through DNS — and only once it
+is verified: until then, links go out as written. A click on a short link (`GET /r/:token` on that domain)
+redirects to the original URL and is recorded on the person's timeline as `email.clicked`, which a stage rule
+may act on like a reply. Opens come from a pixel (`GET /o/:token`) and are **indicative** everywhere they are
+shown: mail clients prefetch images, so an open never moves a stage or stops a sequence. Hits from known link
+scanners, and any within two seconds of delivery, are kept out of every count. Personal 1:1 mail and
+unsubscribe links are never rewritten. The rules, the bot filter and the open questions (the edge must route
+the short-link hosts to the API): `docs/design-notes/P3-4.md`.
+
 ## Import from Twenty (P4-4)
 
 Settings → _Import from Twenty_ (an admin's): connect a Twenty workspace (its URL and an API key, sealed at rest),

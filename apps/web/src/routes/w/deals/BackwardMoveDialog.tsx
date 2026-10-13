@@ -60,5 +60,11 @@ export function BackwardMoveDialog({ request, busy, onCancel, onConfirm }: Backw
 
 /** The rule's trigger in the member's words — one wording for the dialog and the rules line. */
 export function ruleEventLabel(event: RuleView['event']): string {
-    return event === 'email.replied' ? 'Reply received' : event === 'meeting.booked' ? 'Meeting booked' : event;
+    return event === 'email.replied'
+        ? 'Reply received'
+        : event === 'meeting.booked'
+          ? 'Meeting booked'
+          : event === 'email.clicked'
+            ? 'Link clicked'
+            : event;
 }

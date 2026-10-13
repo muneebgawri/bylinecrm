@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useCancelMail, useRescheduleMail, useRetryMail } from '../../../api/mail';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
+import { hasTracking, trackingText } from '../../../lib/tracking';
 import { formatSendAt } from './schedule';
 import { SchedulePicker } from './SchedulePicker';
 import type { PendingSend } from './sends';
@@ -111,9 +112,14 @@ export function SendStatus({ workspaceId, send }: { workspaceId: string; send: P
     }
     if (send.status === 'sent') {
         return (
-            <Badge status="success" role="status">
-                Sent
-            </Badge>
+            <>
+                <Badge status="success" role="status">
+                    Sent
+                </Badge>
+                {hasTracking(send.tracking) && (
+                    <span className="text-xs text-text-muted">{trackingText(send.tracking)}</span>
+                )}
+            </>
         );
     }
     return (

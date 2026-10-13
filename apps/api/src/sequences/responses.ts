@@ -17,6 +17,7 @@ import {
 } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { actor, id, named } from '../openapi/responses';
+import { trackingCounts } from '../tracking/responses';
 
 /** Sequences and outreach compliance (P3-3), as the API returns them. */
 
@@ -35,6 +36,9 @@ const step = named(
         taskTitle: z.string().nullable().meta({
             description:
                 '`task` steps: a task on the person for their owner (else the enroller), due when the step runs.',
+        }),
+        tracking: trackingCounts.meta({
+            description: '`email` steps: clicks and indicative opens across its sends (P3-4).',
         }),
     }),
 );

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
+    NO_TRACKING_COUNTS,
+    type TrackingCounts,
     MAIL_SEND_HORIZON_DAYS,
     MAIL_SEND_MIN_LEAD_SECONDS,
     type DomainEvent,
@@ -31,6 +33,8 @@ import { RenderService } from '../templates/render.service';
 import { withUnsubscribeUrl } from '../templates/render/compose';
 import { TemplatesService } from '../templates/templates.service';
 import { UnsubscribeService } from '../suppression/unsubscribe.service';
+import { trackingCountsForSends } from '../tracking/tracking-counts';
+import { TrackingService } from '../tracking/tracking.service';
 import { afterCommit } from '../infra/transaction-scope';
 import { RolesService } from '../workspace/roles.service';
 import {
@@ -188,6 +192,7 @@ export class MailSendService {
         private readonly events: DomainEvents,
         private readonly pool: SendingPoolService,
         private readonly unsubscribes: UnsubscribeService,
+        private readonly tracking: TrackingService,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
         @InjectQueue(MAIL_SEND_QUEUE) private readonly queue: Queue,
     ) {}
@@ -428,6 +433,13 @@ export class MailSendService {
             outboundId: send.id,
         });
         const email = withUnsubscribeUrl(rendered, link.pageUrl);
+        // Tracked links and the open pixel (P3-4) — only while the workspace's short-link domain is
+        // verified, never the unsubscribe link, never the text part; personal mail is never rewritten.
+        const html = await this.tracking.trackOutreach(context.workspaceId, {
+            outboundId: send.id,
+            html: email.html,
+            exclude: [link.pageUrl],
+        });
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
             : [];
@@ -438,7 +450,7 @@ export class MailSendService {
             bcc: [],
             subject,
             text: email.text,
-            html: email.html,
+            html,
             messageId: send.rfc822MessageId,
             crmId: send.id,
             inReplyTo: parent?.rfc822MessageId ?? null,
@@ -586,8 +598,14 @@ export class MailSendService {
                     ...args,
                 }),
             );
+            const tracking = await trackingCountsForSends(
+                tx,
+                page.items.map((row) => row.id),
+            );
             return {
-                items: page.items.map((row) => view(row, row.mailMessage?.threadId ?? null, context)),
+                items: page.items.map((row) =>
+                    view(row, row.mailMessage?.threadId ?? null, context, tracking.get(row.id)),
+                ),
                 nextCursor: page.nextCursor,
             };
         });
@@ -689,7 +707,12 @@ export class MailSendService {
                 include: { mailMessage: { select: { threadId: true } } },
             });
             if (!row) throw new NotFoundException('message not found');
-            return view(row, row.mailMessage?.threadId ?? null, context);
+            return view(
+                row,
+                row.mailMessage?.threadId ?? null,
+                context,
+                (await trackingCountsForSends(tx, [id])).get(id),
+            );
         });
     }
 
@@ -1281,7 +1304,12 @@ async function sendsAbout(tx: WorkspaceClient, target: RecordTarget): Promise<Pr
     }
 }
 
-function view(row: OutboundRow, threadId: string | null, caller: SendAccessCaller): MailOutboundView {
+function view(
+    row: OutboundRow,
+    threadId: string | null,
+    caller: SendAccessCaller,
+    tracking: TrackingCounts | undefined = undefined,
+): MailOutboundView {
     const error = row.lastError as SendErrorRecord | null;
     return {
         id: row.id,
@@ -1316,5 +1344,6 @@ function view(row: OutboundRow, threadId: string | null, caller: SendAccessCalle
         cancelledAt: row.cancelledAt,
         createdAt: row.createdAt,
         sentAt: row.sentAt,
+        tracking: tracking ?? { ...NO_TRACKING_COUNTS },
     };
 }

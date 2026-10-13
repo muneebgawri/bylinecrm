@@ -83,6 +83,10 @@ model Workspace {
   twentyImportRuns     TwentyImportRun[]
   twentyImportLinks    TwentyImportLink[]
 
+  trackingDomain TrackingDomain?
+  trackingTokens TrackingToken[]
+  trackingHits   TrackingHit[]
+
   @@map("workspaces")
 }
 
@@ -469,6 +473,7 @@ model Person {
 
   suppressions       Suppression[]
   unsubscribeTokens  UnsubscribeToken[]
+  trackingHits       TrackingHit[]
   sequenceEnrolments SequenceEnrolment[]
 
   @@index([workspaceId, deletedAt])
@@ -592,6 +597,8 @@ enum StageHistoryReason {
 enum StageRuleEvent {
   email_replied  @map("email.replied")
   meeting_booked @map("meeting.booked")
+  /// A tracked link clicked (P3-4). An open is never here: opens are indicative (FR-CRMS-8).
+  email_clicked  @map("email.clicked")
 
   @@map("stage_rule_event")
 }
@@ -1207,6 +1214,8 @@ model MailOutbound {
   suppressions      Suppression[]
   unsubscribeTokens UnsubscribeToken[]
   bounces           MailBounce[]
+  trackingTokens    TrackingToken[]
+  trackingHits      TrackingHit[]
 
   sequenceEnrolment SequenceEnrolment? @relation("EnrolmentSends", fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
   sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
@@ -1842,7 +1851,8 @@ model SequenceStep {
   sequence  Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
   template  EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
   sends     MailOutbound[]
-  tasks     Task[]
+  trackingHits TrackingHit[]
+  tasks        Task[]
 
   @@unique([sequenceId, position])
   @@map("sequence_steps")
@@ -1883,6 +1893,7 @@ model SequenceEnrolment {
   enrolledByMember WorkspaceMember @relation("EnrolmentEnroller", fields: [enrolledByMemberId], references: [id])
   waitingSend      MailOutbound?   @relation("EnrolmentWaitingSend", fields: [waitingOutboundId], references: [id], onDelete: SetNull)
   sends            MailOutbound[]  @relation("EnrolmentSends")
+  trackingHits     TrackingHit[]
   tasks            Task[]
 
   @@unique([sequenceId, personId])
@@ -2083,4 +2094,83 @@ model EnrichmentSettings {
   updatedBy WorkspaceMember? @relation(fields: [updatedByMemberId], references: [id], onDelete: SetNull)
 
   @@map("enrichment_settings")
+}
+
+/// A workspace's short-link domain (P3-4, FR-CRMS-8): the host its tracked links and open pixels
+/// live on, a CNAME to the API. One per workspace, and one workspace per domain. Links are rewritten
+/// only while `status` is `pass`; the status is the same vocabulary as a sending domain's.
+model TrackingDomain {
+  workspaceId String              @id @map("workspace_id") @db.Uuid
+  /// Lower case; a host names one workspace's links.
+  domain      String              @unique
+  status      SendingDomainStatus @default(unchecked)
+  /// The last check: `{ outcome, message }`.
+  lastCheck   Json?               @map("last_check")
+  checkedAt   DateTime?           @map("checked_at") @db.Timestamptz
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("tracking_domains")
+}
+
+/// What a tracking token stands for: a link in the mail, or the mail's open pixel.
+enum TrackingKind {
+  click
+  open
+
+  @@map("tracking_kind")
+}
+
+/// One opaque token in one sent message (P3-4): a `click` token per distinct link, one `open` token
+/// per send. Stored hashed, like an unsubscribe token; the public routes resolve it to its workspace
+/// first and read everything else inside that workspace.
+model TrackingToken {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  outboundId  String       @map("outbound_id") @db.Uuid
+  kind        TrackingKind
+  tokenHash   String       @unique @map("token_hash")
+  /// The link's original URL; null for the open pixel.
+  url         String?
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outbound  MailOutbound @relation(fields: [outboundId], references: [id], onDelete: Cascade)
+  hits      TrackingHit[]
+
+  @@index([outboundId])
+  @@map("tracking_tokens")
+}
+
+/// One request to a tracking token (P3-4). A hit with a `botReason` is a scanner's: kept, so the rule
+/// can be audited, and counted nowhere; every other hit is a click or an (indicative) open, announced
+/// as `email.clicked` / `email.opened`. Never deleted by the app role.
+model TrackingHit {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  tokenId        String       @map("token_id") @db.Uuid
+  outboundId     String       @map("outbound_id") @db.Uuid
+  kind           TrackingKind
+  personId       String?      @map("person_id") @db.Uuid
+  sequenceStepId String?      @map("sequence_step_id") @db.Uuid
+  enrolmentId    String?      @map("enrolment_id") @db.Uuid
+  happenedAt     DateTime     @map("happened_at") @db.Timestamptz
+  userAgent      String?      @map("user_agent")
+  /// `TrackingBotReason` from @bylinecrm/shared; null for a person's hit.
+  botReason      String?      @map("bot_reason")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  token     TrackingToken      @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  outbound  MailOutbound       @relation(fields: [outboundId], references: [id], onDelete: Cascade)
+  person    Person?            @relation(fields: [personId], references: [id], onDelete: SetNull)
+  step      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
+  enrolment SequenceEnrolment? @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
+
+  @@index([outboundId, kind])
+  @@index([sequenceStepId, kind])
+  @@index([tokenId])
+  @@map("tracking_hits")
 }

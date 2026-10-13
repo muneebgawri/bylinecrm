@@ -2,7 +2,8 @@ import { DnsLookupFailed, type DnsPort, type MxLookup } from '../../src/sending-
 import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
 
 /**
- * In-memory DNS for the tests: TXT records by name and MX records by domain, never the network. A
+ * In-memory DNS for the tests: TXT records by name, MX records by domain and CNAMEs by name (P3-4),
+ * never the network. A
  * TXT name with no records answers as a real resolver does for NXDOMAIN / NODATA — no records. A
  * domain nothing was set for does not exist (`no_domain`); one set with no exchanges exists but has
  * no mail server (`no_records`); `failMx` makes its lookups fail, as a timeout would. Like the real
@@ -11,9 +12,11 @@ import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
 export class FakeDns implements DnsPort {
     private readonly txt = new Map<string, string[]>();
     private readonly mx = new Map<string, string[]>();
+    private readonly cname = new Map<string, string>();
     private readonly failing = new Set<string>();
     readonly lookups: string[] = [];
     readonly mxLookups: string[] = [];
+    readonly cnameLookups: string[] = [];
 
     set(name: string, ...records: string[]): void {
         this.txt.set(name.toLowerCase(), records);
@@ -24,6 +27,12 @@ export class FakeDns implements DnsPort {
         const name = domain.toLowerCase();
         this.mx.set(name, exchanges);
         this.failing.delete(name);
+    }
+
+    /** The name is a CNAME to the target (P3-4); `null` removes it. */
+    setCname(name: string, target: string | null): void {
+        if (target === null) this.cname.delete(name.toLowerCase());
+        else this.cname.set(name.toLowerCase(), target.toLowerCase());
     }
 
     /** The domain is gone: NXDOMAIN for its MX. */
@@ -49,6 +58,12 @@ export class FakeDns implements DnsPort {
         assertNoOpenTransaction('FakeDns.resolveTxt');
         this.lookups.push(name.toLowerCase());
         return Promise.resolve(this.txt.get(name.toLowerCase()) ?? []);
+    }
+
+    resolveCname(name: string): Promise<string | null> {
+        assertNoOpenTransaction('FakeDns.resolveCname');
+        this.cnameLookups.push(name.toLowerCase());
+        return Promise.resolve(this.cname.get(name.toLowerCase()) ?? null);
     }
 
     resolveMx(name: string): Promise<MxLookup> {

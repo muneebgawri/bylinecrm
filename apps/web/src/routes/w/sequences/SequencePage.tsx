@@ -35,6 +35,7 @@ import type { SequenceStepInput, SequenceView, SequenceWindow } from '../../../a
 import { useCan, usePermission } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
+import { trackingText } from '../../../lib/tracking';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
@@ -256,6 +257,11 @@ function StepsCard({
     const [draft, setDraft] = useState<DraftStep[] | null>(null);
     const saved = useMemo(() => toDraft(sequence), [sequence]);
     const steps = draft ?? saved;
+    // What each saved email step's sends did (P3-4): read from the sequence, never from the draft.
+    const trackingOf = useMemo(
+        () => new Map(sequence.steps.filter((s) => s.kind === 'email').map((s) => [s.id, s.tracking])),
+        [sequence.steps],
+    );
     const dirty = draft !== null;
     const change = (next: DraftStep[]) => setDraft(next);
     const update = (index: number, patch: Partial<DraftStep>) =>
@@ -386,6 +392,11 @@ function StepsCard({
                                                 ) : (
                                                     '—'
                                                 )}
+                                            </span>
+                                        )}
+                                        {step.id && trackingOf.has(step.id) && (
+                                            <span className="text-xs text-text-muted">
+                                                {trackingText(trackingOf.get(step.id)!)}
                                             </span>
                                         )}
                                         {emailNumber > 1 && (

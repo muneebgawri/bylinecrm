@@ -1,6 +1,7 @@
 import { MAIL_OUTBOUND_STATUSES } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { dateTime, id, named, page } from '../openapi/responses';
+import { trackingCounts } from '../tracking/responses';
 
 /** Sending (P2-3, P2-5) as the API returns it. */
 
@@ -79,6 +80,9 @@ export const mailOutboundView = named(
         cancelledAt: dateTime.nullable(),
         createdAt: dateTime,
         sentAt: dateTime.nullable(),
+        tracking: trackingCounts.meta({
+            description: 'Clicks and indicative opens on this send (P3-4); zeros until it is sent and tracked.',
+        }),
     }),
 );
 export type MailOutboundView = z.output<typeof mailOutboundView>;

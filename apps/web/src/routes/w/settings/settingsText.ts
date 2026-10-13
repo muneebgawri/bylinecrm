@@ -10,12 +10,14 @@ import type { Capability, StageColour, StageKind, StageRuleEvent } from '@byline
 export const RULE_EVENT_PHRASE: Record<StageRuleEvent, string> = {
     'email.replied': 'a reply arrives',
     'meeting.booked': 'a meeting is booked',
+    'email.clicked': 'a link is clicked',
 };
 
 /** The event's name in a picker. */
 export const RULE_EVENT_LABEL: Record<StageRuleEvent, string> = {
     'email.replied': 'A reply arrives',
     'meeting.booked': 'A meeting is booked',
+    'email.clicked': 'A link is clicked',
 };
 
 /** "When a reply arrives, move the deal to Replied" — what a rule does, as a person says it. */

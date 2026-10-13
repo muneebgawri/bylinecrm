@@ -29,6 +29,7 @@ const sequence = (over: Partial<SequenceView> = {}): SequenceView => ({
             waitDays: null,
             businessDays: false,
             taskTitle: null,
+            tracking: { clicks: 3, uniqueClicks: 2, opens: 9 },
         },
     ],
     counts: { enrolled: 12, active: 5, held: 1, finished: 4, stopped: 2 },
