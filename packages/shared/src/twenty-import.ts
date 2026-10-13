@@ -60,6 +60,8 @@ export const TWENTY_LISTS_FIELD_KEY = 'lists';
 export const TWENTY_LIST_VIEW_PREFIX = 'List: ';
 /** How many per-record errors a run keeps per object; the count keeps counting. */
 export const TWENTY_IMPORT_ERRORS_KEPT = 25;
+/** The longest a thrown error's line is kept in a report entry (#168): a client's message quotes the whole call. */
+export const TWENTY_IMPORT_ERROR_MESSAGE_MAX = 300;
 /** Twenty's REST page ceiling. */
 export const TWENTY_PAGE_SIZE = 60;
 
