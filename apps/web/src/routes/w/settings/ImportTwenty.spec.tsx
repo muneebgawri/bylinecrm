@@ -177,6 +177,46 @@ describe('P4-UI-2 (doc 48 §11): the importer screen', () => {
         },
     );
 
+    it('#156 D-252: a reconcile run offers itself, and what is missing in Twenty is listed for review, never deleted', async () => {
+        const reconciled = run('succeeded', {
+            id: 'run-2',
+            mode: 'reconcile',
+            report: TWENTY_IMPORT_OBJECTS.map((object) => ({
+                ...emptyObjectReport(object),
+                missingInSource: object === 'companies' ? 1 : 0,
+            })),
+        });
+        stubApi([
+            (r) => (r.url.endsWith('/import/twenty') ? json({ ...configured, latestRun: reconciled }) : undefined),
+            (r) =>
+                r.method === 'GET' && r.url.includes('/import/twenty/missing')
+                    ? json({
+                          items: [
+                              {
+                                  object: 'companies',
+                                  externalId: 'tw-c-2',
+                                  localType: 'company',
+                                  localId: 'c-2',
+                                  name: 'Northwind Traders',
+                                  missingSince: '2026-10-09T09:05:00.000Z',
+                              },
+                          ],
+                          nextCursor: null,
+                      })
+                    : undefined,
+            (r) => (r.url.endsWith('/import/twenty/runs') && r.method === 'GET' ? json([reconciled]) : undefined),
+        ]);
+        page(['workspace:admin']);
+        expect(await screen.findByRole('radio', { name: 'Reconcile with Twenty' })).toBeInTheDocument();
+        const missing = await screen.findByRole('region', { name: 'Missing in Twenty' });
+        expect(within(missing).getByRole('link', { name: 'Northwind Traders' })).toHaveAttribute(
+            'href',
+            `/w/${WS}/companies/c-2`,
+        );
+        expect(within(missing).getByText(/1 company/)).toBeInTheDocument();
+        expect(within(missing).getByText(/nothing is deleted/i)).toBeInTheDocument();
+    });
+
     it('a running import can be cancelled, and a failed one says why', async () => {
         const seen = stubApi([
             (r) =>

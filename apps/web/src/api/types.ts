@@ -236,5 +236,7 @@ export type TwentyImportSettingsView = Schemas['TwentyImportSettings'];
 export type TwentyImportRunView = Schemas['TwentyImportRun'];
 export type TwentyImportObjectReportView = Schemas['TwentyImportObjectReport'];
 export type TwentyImportPreviewView = Schemas['TwentyImportPreview'];
+export type TwentyImportMissingView = Schemas['TwentyImportMissing'];
+export type TwentyImportMissingPage = Schemas['TwentyImportMissingPage'];
 export type PutTwentyImportSettingsInput = Loose<Schemas['PutTwentyImportSettingsDto']>;
 export type StartTwentyImportInput = Loose<Schemas['StartTwentyImportDto']>;

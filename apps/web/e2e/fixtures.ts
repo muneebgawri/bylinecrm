@@ -209,8 +209,8 @@ export const members: MemberView[] = [
 ];
 
 export const membersSummary: MemberSummaryView[] = [
-    { memberId: IDS.member, name: 'Kate Morgan' },
-    { memberId: IDS.secondMember, name: 'Sam Okafor' },
+    { memberId: IDS.member, name: 'Kate Morgan', leftAt: null },
+    { memberId: IDS.secondMember, name: 'Sam Okafor', leftAt: null },
 ];
 
 export const apiKeys: ApiKeyView[] = [
@@ -1232,6 +1232,7 @@ export const twentyImportRun: TwentyImportRunView = {
             skipped,
             failed: 0,
             after: created + updated,
+            missingInSource: null,
             errors:
                 object === 'workspaceMembers'
                     ? [

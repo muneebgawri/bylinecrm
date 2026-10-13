@@ -211,12 +211,15 @@ model ExternalIdentity {
 
 /// A user's seat in a workspace, with the role that decides what they may do there.
 model WorkspaceMember {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  roleId      String   @map("role_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  roleId      String    @map("role_id") @db.Uuid
+  /// When the member was removed (#147): the row stays, so their sends, enrolments and timeline rows keep
+  /// their name; their access ended at this moment. Null for a member in the workspace.
+  leftAt      DateTime? @map("left_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1867,6 +1870,8 @@ enum TwentyImportRunStatus {
 enum TwentyImportMode {
   full
   changes
+  /// #156: flags mapped records Twenty no longer returns; writes no record.
+  reconcile
 
   @@map("twenty_import_mode")
 }
@@ -1915,11 +1920,16 @@ model TwentyImportLink {
   /// Twenty's `updatedAt` when the record was last read.
   externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz
   importedAt        DateTime  @default(now()) @map("imported_at") @db.Timestamptz
+  /// When a reconcile pass (#156) last saw the record in Twenty; null until one has.
+  checkedAt         DateTime? @map("checked_at") @db.Timestamptz
+  /// Set by a reconcile pass that no longer found the record in Twenty; cleared the moment any run sees it again.
+  missingSince      DateTime? @map("missing_since") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@id([workspaceId, object, externalId])
   @@index([workspaceId, localType, localId])
+  @@index([workspaceId, missingSince])
   @@map("twenty_import_links")
 }
 

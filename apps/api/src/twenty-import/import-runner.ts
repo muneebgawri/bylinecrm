@@ -2,6 +2,7 @@ import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import {
     TWENTY_IMPORT_ERRORS_KEPT,
     TWENTY_IMPORT_ERROR_MESSAGE_MAX,
+    type TwentyImportMode,
     TWENTY_IMPORT_OBJECTS,
     TWENTY_IMPORT_SOURCE,
     TWENTY_LIST_VIEW_PREFIX,
@@ -36,7 +37,16 @@ import { ExclusionsService } from '../sequences/exclusions.service';
 import { TemplatesService } from '../templates/templates.service';
 import { ViewsService } from '../views/views.service';
 import { customValuesFor, definitionsNeeded, type InferredCustom } from './custom-fields-sync';
-import { countLinks, loadLinks, writeLink, type LinkIndex, type LinkRef, type LocalType } from './links';
+import {
+    countLinks,
+    loadLinks,
+    writeLink,
+    type LinkIndex,
+    type LinkRef,
+    type LocalType,
+    flagLinksUnseen,
+    markLinksSeen,
+} from './links';
 import {
     isSkip,
     mapCompany,
@@ -217,7 +227,17 @@ export class TwentyImportRunner {
                 data: { status: 'running', startedAt: opened.run.startedAt ?? new Date(), error: null },
             }),
         );
-        const state: RunState = { runId, context, connection, cursors, report, since, stages: new Map() };
+        const state: RunState = {
+            runId,
+            context,
+            connection,
+            cursors,
+            report,
+            since,
+            stages: new Map(),
+            mode: opened.run.mode,
+            passStartedAt: opened.run.startedAt ?? new Date(),
+        };
         try {
             for (const object of TWENTY_IMPORT_OBJECTS) {
                 if (cursors[object] === null) continue;
@@ -276,15 +296,53 @@ export class TwentyImportRunner {
             }
             if (entry.remote === null) entry.remote = page.totalCount;
             const next = page.hasNextPage && page.records.length > 0 ? page.endCursor : null;
-            await this.writePage(state, object, page.records, entry, next === null ? null : next);
+            if (state.mode === 'reconcile') {
+                await this.reconcilePage(state, object, page.records, entry, next === null ? null : next);
+            } else {
+                await this.writePage(state, object, page.records, entry, next === null ? null : next);
+            }
             if (next === null) break;
             cursor = next;
             if (await this.cancelRequested(state.runId)) return false;
+        }
+        if (state.mode === 'reconcile') {
+            // Every page of the object was read: what no page named is missing in source (#156).
+            entry.missingInSource = await this.rls.withWorkspace((tx) =>
+                flagLinksUnseen(tx, object, state.passStartedAt, new Date()),
+            );
         }
         entry.after = await this.rls.withWorkspace((tx) => countLinks(tx, object));
         state.cursors[object] = null;
         await this.saveProgress(state);
         return true;
+    }
+
+    /**
+     * A reconcile pass's page (#156): nothing is mapped or written — the links of the ids Twenty still
+     * returns are marked seen, in one transaction with the run's progress, so a resumed pass loses
+     * nothing and a record that came back is no longer flagged.
+     */
+    private async reconcilePage(
+        state: RunState,
+        object: TwentyImportObject,
+        records: TwentyRecord[],
+        entry: TwentyImportObjectReport,
+        nextCursor: string | null,
+    ): Promise<void> {
+        const ids = records.map((record) => record.id);
+        entry.read += ids.length;
+        await this.rls.withWorkspace(async (tx) => {
+            await markLinksSeen(tx, object, ids, new Date());
+            state.cursors[object] = nextCursor === null ? '' : nextCursor;
+            await tx.twentyImportRun.update({
+                where: { id: state.runId },
+                data: {
+                    phase: object,
+                    cursor: state.cursors,
+                    report: state.report as unknown as Prisma.InputJsonValue,
+                },
+            });
+        });
     }
 
     /**
@@ -794,6 +852,9 @@ interface RunState {
     cursors: Cursors;
     report: TwentyImportObjectReport[];
     since: string | null;
+    mode: TwentyImportMode;
+    /** When this run first started: a reconcile pass flags what was not checked at or after it. */
+    passStartedAt: Date;
     phase?: TwentyImportObject;
     stages: Map<string, { id: string; kind: StageKind }>;
 }

@@ -65,7 +65,7 @@ const deal = (id: string, name: string, stageId: string, days = 2): OpportunityV
     company: null,
     pointOfContact: null,
     // The owner's name rides on the deal (P1-4a); the page never looks members up to name it.
-    owner: { memberId: 'm-1', name: 'Kate Morgan' },
+    owner: { memberId: 'm-1', name: 'Kate Morgan', leftAt: null },
     createdBy: { kind: 'member', id: 'm-1' },
     custom: {},
     deletedAt: null,
