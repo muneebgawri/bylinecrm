@@ -56,6 +56,7 @@ const enrolment = (over: Partial<SequenceEnrolmentView> = {}): SequenceEnrolment
     enrolledAt: '2026-10-11T10:00:00Z',
     finishedAt: null,
     stoppedAt: null,
+    tasks: [],
     ...over,
 });
 
@@ -162,6 +163,8 @@ describe('FR-CRMS-5 sequences UI (P3-UI-1)', { timeout: 30_000 }, () => {
         // An untitled task cannot be saved.
         expect(screen.getByRole('button', { name: 'Save steps' })).toBeDisabled();
         await userEvent.type(screen.getByRole('textbox', { name: 'Task title, step 2' }), 'Call if no reply');
+        // #158: the row says when the task falls due and whose it is.
+        expect(screen.getByText(/due when this step runs/)).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: 'Save steps' }));
         await waitFor(() => expect(seen.some((r) => r.method === 'PUT')).toBe(true));
         expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({
@@ -241,7 +244,28 @@ describe('FR-CRMS-5 sequences UI (P3-UI-1)', { timeout: 30_000 }, () => {
             (r) =>
                 r.method === 'GET' && r.url.endsWith('/people/p-1/enrolments')
                     ? json([
-                          enrolment(),
+                          enrolment({
+                              tasks: [
+                                  {
+                                      id: 't-1',
+                                      stepId: 'st-2',
+                                      title: 'Call if no reply',
+                                      status: 'done',
+                                      dueAt: '2026-10-11T10:00:00Z',
+                                      completedAt: '2026-10-11T11:00:00Z',
+                                      assigneeId: 'm-1',
+                                  },
+                                  {
+                                      id: 't-2',
+                                      stepId: 'st-3',
+                                      title: 'Send the deck',
+                                      status: 'todo',
+                                      dueAt: '2026-10-12T10:00:00Z',
+                                      completedAt: null,
+                                      assigneeId: 'm-1',
+                                  },
+                              ],
+                          }),
                           enrolment({
                               id: 'en-2',
                               status: 'stopped',
@@ -260,6 +284,9 @@ describe('FR-CRMS-5 sequences UI (P3-UI-1)', { timeout: 30_000 }, () => {
             ['sequence:enrol', 'record:read'],
         );
         expect(await screen.findByText('Stopped: reply received')).toBeInTheDocument();
+        // #158: a task step's task, with its state, on the enrolment.
+        expect(screen.getByText(/Task “Call if no reply” · done/)).toBeInTheDocument();
+        expect(screen.getByText(/Task “Send the deck” · open/)).toBeInTheDocument();
         await userEvent.click(screen.getAllByRole('button', { name: 'Stop' })[0]!);
         const confirm = await screen.findByRole('dialog');
         await userEvent.click(within(confirm).getByRole('button', { name: 'Stop enrolment' }));

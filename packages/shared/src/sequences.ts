@@ -1,4 +1,4 @@
-import type { Actor } from './records.js';
+import type { Actor, TaskStatus } from './records.js';
 
 /**
  * Sequences and the outreach compliance they enforce (P3-3, FR-CRMS-5, -10, -11, -12): what the API,
@@ -248,6 +248,17 @@ export interface EnrolmentBatchResult {
     warnings: EnrolmentWarning[];
 }
 
+/** A task a `task` step made for this enrolment (#158): which step, and where the task stands. */
+export interface EnrolmentTaskView {
+    id: string;
+    stepId: string;
+    title: string;
+    status: TaskStatus;
+    dueAt: string | null;
+    completedAt: string | null;
+    assigneeId: string | null;
+}
+
 export interface EnrolmentView {
     id: string;
     sequenceId: string;
@@ -270,6 +281,8 @@ export interface EnrolmentView {
     enrolledAt: string;
     finishedAt: string | null;
     stoppedAt: string | null;
+    /** The tasks its task steps made, in step order (#158). Completing one drives nothing. */
+    tasks: EnrolmentTaskView[];
 }
 
 /** What `enrolment.*` events carry. */

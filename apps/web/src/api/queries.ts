@@ -73,6 +73,8 @@ export const keys = {
     oauthClient: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client'] as const,
     twentyImport: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty'] as const,
     twentyImportRuns: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty', 'runs'] as const,
+    /** What a reconcile pass flagged as missing in Twenty (#156). */
+    twentyImportMissing: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty', 'missing'] as const,
     twentyImportRun: (workspaceId: string, runId: string) =>
         ['w', workspaceId, 'import', 'twenty', 'runs', runId] as const,
     oauthClientStatus: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client', 'status'] as const,

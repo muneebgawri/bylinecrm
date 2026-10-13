@@ -270,6 +270,49 @@ describe('auth flows', () => {
                 .expect(409);
         });
 
+        it('#147: a removed member keeps their rows and loses access at once; re-invited, the same seat returns', async () => {
+            const rows = (await http().get(`/api/w/${workspaceA}/members`).set('Cookie', a.cookie).expect(200))
+                .body as { id: string; email: string }[];
+            const memberId = rows.find((r) => r.email === emailM)!.id;
+            await http()
+                .delete(`/api/w/${workspaceA}/members/${memberId}`)
+                .set('Cookie', a.cookie)
+                .set(CSRF_HEADER, a.csrf)
+                .expect(204);
+            // Gone from the member list; still named, as "left", wherever their rows show them.
+            const after = (await http().get(`/api/w/${workspaceA}/members`).set('Cookie', a.cookie).expect(200))
+                .body as { id: string }[];
+            expect(after.some((r) => r.id === memberId)).toBe(false);
+            const summary = (
+                await http().get(`/api/w/${workspaceA}/members/summary`).set('Cookie', a.cookie).expect(200)
+            ).body as { memberId: string; leftAt: string | null }[];
+            expect(summary.find((s) => s.memberId === memberId)).toMatchObject({ leftAt: expect.any(String) });
+            // Their sessions are dead; signed in again, the workspace is not theirs.
+            await http().get('/api/me').set('Cookie', m.cookie).expect(401);
+            const again = browserFrom(
+                await http().post('/api/auth/login').send({ email: emailM, password }).expect(200),
+            );
+            expect([401, 403]).toContain(
+                (await http().get(`/api/w/${workspaceA}/roles`).set('Cookie', again.cookie)).status,
+            );
+            // Re-invited and accepting while signed in, the same seat comes back — history stays theirs.
+            const invite = await http()
+                .post(`/api/w/${workspaceA}/invites`)
+                .set('Cookie', a.cookie)
+                .set(CSRF_HEADER, a.csrf)
+                .send({ email: emailM, roleId: memberRoleId })
+                .expect(201);
+            const accepted = await http()
+                .post(`/api/auth/invites/${(invite.body as { token: string }).token}/accept`)
+                .set('Cookie', again.cookie)
+                .set(CSRF_HEADER, again.csrf);
+            expect([200, 201], JSON.stringify(accepted.body)).toContain(accepted.status);
+            const back = (await http().get(`/api/w/${workspaceA}/members`).set('Cookie', a.cookie).expect(200))
+                .body as { id: string; email: string }[];
+            expect(back.find((r) => r.email === emailM)?.id).toBe(memberId);
+            m = again;
+        });
+
         it('the admin role cannot be edited and system roles cannot be deleted', async () => {
             const roles = await http().get(`/api/w/${workspaceA}/roles`).set('Cookie', a.cookie).expect(200);
             const admin = (roles.body as { id: string; name: string }[]).find((r) => r.name === SYSTEM_ROLES.admin)!;

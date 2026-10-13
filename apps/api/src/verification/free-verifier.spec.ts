@@ -27,7 +27,7 @@ describe('FR-CRMS-14 the free verifier', () => {
         expect(dns.mxLookups).toEqual([]);
     });
 
-    it('reads no such domain, no mail server and a null MX as invalid, and a role or disposable address as risky', async () => {
+    it('#165 FR-CRMS-14: reads no such domain, no mail server, a null MX and a disposable domain as invalid, and a role address as risky', async () => {
         const dns = new FakeDns();
         dns.setMx('web.example');
         dns.setMx('nomail.example', '.');
@@ -39,7 +39,7 @@ describe('FR-CRMS-14 the free verifier', () => {
             reason: 'no_mail_server',
         });
         expect(await verifier.verify('jane@nomail.example')).toMatchObject({ result: 'invalid', reason: 'null_mx' });
-        expect(await verifier.verify('jane@mailinator.com')).toMatchObject({ result: 'risky', reason: 'disposable' });
+        expect(await verifier.verify('jane@mailinator.com')).toMatchObject({ result: 'invalid', reason: 'disposable' });
         dns.setMx('example.com', 'mx.example.com');
         expect(await verifier.verify('sales@example.com')).toMatchObject({ result: 'risky', reason: 'role' });
     });

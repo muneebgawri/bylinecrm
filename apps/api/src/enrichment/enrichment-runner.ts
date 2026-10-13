@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
     ENRICHMENT_FACTS,
     isBetterAnswer,
+    isPlaceholderCompanyName,
     type Emails,
     type EnrichmentFactKey,
     type EnrichmentObject,
@@ -219,7 +220,14 @@ export class EnrichmentRunner {
         for (const answer of candidates) {
             const field = answer.field as EnrichmentFactKey;
             const fact = ENRICHMENT_FACTS[field];
-            const value = fieldValue(current as Record<string, unknown>, fact.applies!);
+            const stored = fieldValue(current as Record<string, unknown>, fact.applies!);
+            // A company named by its domain, or not at all, has a placeholder, not a name (#170): the
+            // website's name fills it as it would an empty field. A name that is itself a bare host
+            // is no better than the placeholder.
+            const placeholder =
+                field === 'name' && isPlaceholderCompanyName(stored, (current as { domain?: string | null }).domain);
+            if (field === 'name' && isPlaceholderCompanyName(answer.value, null)) continue;
+            const value = placeholder ? null : stored;
             const last = wrote.get(field);
             const rank = last && last.value === value ? last.rank : null;
             const already = chosen.get(field);

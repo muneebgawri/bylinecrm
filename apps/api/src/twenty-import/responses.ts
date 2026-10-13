@@ -1,6 +1,6 @@
 import { TWENTY_IMPORT_MODES, TWENTY_IMPORT_OBJECTS, TWENTY_IMPORT_RUN_STATUSES } from '@bylinecrm/shared';
 import { z } from 'zod';
-import { id, named } from '../openapi/responses';
+import { id, named, page } from '../openapi/responses';
 
 /** The Twenty importer (P4-4), as the API returns it. Moments are ISO 8601 text: the rows hold them as JSON already. */
 const isoTime = z.iso.datetime();
@@ -31,9 +31,26 @@ export const twentyImportObjectReport = named(
         skipped: z.number().int(),
         failed: z.number().int(),
         after: z.number().int().nullable(),
+        missingInSource: z.number().int().nullable().meta({
+            description:
+                'A reconcile pass (#156): mapped records of this object Twenty no longer returns, flagged for review; null for any other pass.',
+        }),
         errors: z.array(z.object({ externalId: z.string(), message: z.string() })),
     }),
 );
+
+export const twentyImportMissing = named(
+    'TwentyImportMissing',
+    z.object({
+        object,
+        externalId: z.string().meta({ description: 'The Twenty id the record was mapped from.' }),
+        localType: z.string(),
+        localId: id,
+        name: z.string().nullable().meta({ description: 'The local record’s name, or the link’s label.' }),
+        missingSince: isoTime,
+    }),
+);
+export const twentyImportMissingPage = named('TwentyImportMissingPage', page(twentyImportMissing));
 
 export const twentyImportRun = named(
     'TwentyImportRun',
