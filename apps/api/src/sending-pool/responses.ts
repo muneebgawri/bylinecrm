@@ -1,4 +1,9 @@
-import { MAILBOX_PAUSE_CODES, MAILBOX_STATUSES } from '@bylinecrm/shared';
+import {
+    MAILBOX_PAUSE_CODES,
+    MAILBOX_STATUSES,
+    POSTMASTER_CONNECTION_STATUSES,
+    POSTMASTER_DOMAIN_STATUSES,
+} from '@bylinecrm/shared';
 import { z } from 'zod';
 import { id, named } from '../openapi/responses';
 
@@ -23,6 +28,35 @@ export const sendingDomainView = named(
         lastCheck: z.object({ spf: step, dkim: step, dmarc: step }).nullable(),
         checkedAt: isoTime.nullable(),
         nextCheckAt: isoTime,
+        spamRate: z
+            .object({
+                day: z.iso.date().meta({ description: 'The day the rate is for, UTC.' }),
+                rateBps: z.number().int().meta({ description: 'Basis points: 35 = 0.35%.' }),
+            })
+            .nullable()
+            .meta({
+                description:
+                    'The latest user-reported spam rate Postmaster Tools gave for the domain (#129); a failed lookup keeps the last one.',
+            }),
+        postmaster: z.object({
+            status: z.enum(POSTMASTER_DOMAIN_STATUSES).meta({
+                description:
+                    'What the last check learned from Postmaster Tools: nothing connected, the domain not verified there, a failed lookup, or an answer.',
+            }),
+            message: z.string().nullable(),
+        }),
+    }),
+);
+
+export const postmasterConnectionView = named(
+    'PostmasterConnection',
+    z.object({
+        email: z
+            .string()
+            .meta({ description: 'The Google account that verified the sending domains in Postmaster Tools.' }),
+        status: z.enum(POSTMASTER_CONNECTION_STATUSES),
+        connectedAt: isoTime,
+        lastError: z.string().nullable().meta({ description: 'Why it needs reconnecting, when it does.' }),
     }),
 );
 
@@ -36,7 +70,11 @@ export const mailboxPause = named(
             .int()
             .meta({ description: 'Basis points (1/100 of a percent) when the pause was decided.' }),
         thresholdBps: z.number().int(),
-        sends: z.number().int(),
+        sends: z
+            .number()
+            .int()
+            .nullable()
+            .meta({ description: 'Sends the rate was measured over; null for a domain rate from Postmaster Tools.' }),
         at: isoTime,
     }),
 );
@@ -80,5 +118,8 @@ export const sendingPoolView = named(
         settings: sendingPoolSettings,
         mailboxes: z.array(poolMailboxHealth),
         domains: z.array(sendingDomainView),
+        postmaster: postmasterConnectionView
+            .nullable()
+            .meta({ description: 'The Postmaster Tools account connected (#129), or null while none is.' }),
     }),
 );

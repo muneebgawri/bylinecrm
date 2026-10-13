@@ -20,15 +20,24 @@ import { useState, type FormEvent } from 'react';
 import { fieldErrorAt } from '../../../api/client';
 import {
     useCheckSendingDomain,
+    useConnectPostmaster,
+    useDisconnectPostmaster,
     useResumeMailbox,
     useSendingPool,
     useSetMailboxCap,
     useUpdatePoolSettings,
 } from '../../../api/sendingPool';
-import type { PoolMailboxHealthView, SendingDomainView, SendingPoolSettingsView } from '../../../api/types';
+import type {
+    PoolMailboxHealthView,
+    SendingDomainView,
+    SendingPoolSettingsView,
+    SendingPoolView,
+} from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
+import { leaveFor } from '../../../lib/leaveFor';
 
 const DOMAIN_STATUS: Record<SendingDomainView['status'], { label: string; tone: 'success' | 'danger' | 'neutral' }> = {
     pass: { label: 'Verified', tone: 'success' },
@@ -181,6 +190,7 @@ export function PoolHealthSection({ workspaceId }: { workspaceId: string }) {
                     onClose={() => setEditingSettings(false)}
                 />
             )}
+            {pool.data && <PostmasterCard workspaceId={workspaceId} connection={pool.data.postmaster} admin={admin} />}
         </section>
     );
 }
@@ -207,10 +217,115 @@ function DomainCell({ domain }: { domain: SendingDomainView | null }) {
                     ))}
                 </ul>
             )}
+            {domain.spamRate && (
+                <span className="block text-xs text-text-muted">
+                    Spam rate {percentText(domain.spamRate.rateBps)} on {domain.spamRate.day}
+                </span>
+            )}
+            {domain.postmaster.status !== 'not_connected' && domain.postmaster.message && (
+                <span
+                    className={`block text-xs ${domain.postmaster.status === 'ok' ? 'text-text-muted' : 'text-warning'}`}
+                >
+                    Postmaster Tools: {domain.postmaster.message}
+                </span>
+            )}
             {domain.checkedAt && (
                 <span className="block text-xs text-text-muted">Checked {formatRelative(domain.checkedAt)}</span>
             )}
         </div>
+    );
+}
+
+/** Basis points as the percent people read: 35 → 0.35%, 500 → 5%. */
+function percentText(bps: number): string {
+    return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
+}
+
+/**
+ * The Postmaster Tools account (#129): the one Google account that verified the pool's sending
+ * domains there, connected through the workspace's OAuth client so each domain check can read its
+ * user-reported spam rate. An admin connects it (the browser leaves for Google) or disconnects it;
+ * everyone who reads the pool sees whose it is.
+ */
+function PostmasterCard({
+    workspaceId,
+    connection,
+    admin,
+}: {
+    workspaceId: string;
+    connection: SendingPoolView['postmaster'];
+    admin: boolean;
+}) {
+    const connect = useConnectPostmaster(workspaceId);
+    const disconnect = useDisconnectPostmaster(workspaceId);
+    const [disconnecting, setDisconnecting] = useState(false);
+    const start = () =>
+        connect.mutate(undefined, {
+            onSuccess: (started) => leaveFor(started.authorizeUrl),
+            onError: (error) =>
+                toast({ title: 'Could not start the connect', description: failureText(error), tone: 'danger' }),
+        });
+    return (
+        <section
+            aria-labelledby="postmaster-title"
+            className="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-md bg-surface-raised px-3 py-2"
+        >
+            <div className="min-w-0 max-w-[65ch] text-[13px]">
+                <h3 id="postmaster-title" className="m-0 text-[13px] font-semibold">
+                    Postmaster Tools
+                </h3>
+                {connection ? (
+                    <p className="m-0 text-text-muted">
+                        Connected as <span className="font-medium text-text">{connection.email}</span>
+                        {connection.status === 'reconnect_needed' ? (
+                            <span className="block text-warning">
+                                Needs reconnecting: {connection.lastError ?? 'Google refused the stored access'}.
+                            </span>
+                        ) : (
+                            <span className="block">
+                                Each domain check reads yesterday’s user-reported spam rate; a domain at or past the
+                                complaint threshold pauses every pool mailbox on it.
+                            </span>
+                        )}
+                    </p>
+                ) : (
+                    <p className="m-0 text-text-muted">
+                        Not connected. Connect the Google account that owns the sending domains in Postmaster Tools so
+                        each check reads the domain’s spam rate as Google sees it
+                        {admin ? '' : ' — an admin does this'}.
+                    </p>
+                )}
+            </div>
+            {admin && (
+                <div className="flex gap-2">
+                    {connection && (
+                        <Button size="sm" shape="square" variant="ghost" onClick={() => setDisconnecting(true)}>
+                            Disconnect
+                        </Button>
+                    )}
+                    <Button size="sm" shape="square" onClick={start} disabled={connect.isPending}>
+                        {connection ? 'Connect again' : 'Connect Postmaster Tools'}
+                    </Button>
+                </div>
+            )}
+            <ConfirmDialog
+                open={disconnecting}
+                onOpenChange={setDisconnecting}
+                title="Disconnect Postmaster Tools?"
+                body="The CRM gives up the account’s access and stops reading spam rates. Rates already read stay on the domains."
+                confirm="Disconnect Postmaster Tools"
+                pending={disconnect.isPending}
+                error={disconnect.isError ? failureText(disconnect.error) : undefined}
+                onConfirm={() =>
+                    disconnect.mutate(undefined, {
+                        onSuccess: () => {
+                            toast({ title: 'Postmaster Tools disconnected', tone: 'success' });
+                            setDisconnecting(false);
+                        },
+                    })
+                }
+            />
+        </section>
     );
 }
 

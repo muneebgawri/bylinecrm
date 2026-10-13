@@ -3,6 +3,7 @@ import { request } from './client';
 import { workspacePath } from './endpoints';
 import { keys } from './queries';
 import type {
+    MailboxConnectStartView,
     PoolMailboxHealthView,
     ResumeMailboxInput,
     SendingDomainView,
@@ -37,6 +38,11 @@ export const sendingPool = {
         request<SendingDomainView>('PUT', workspacePath(workspaceId, `/sending-domains/${domainId}`), { body: input }),
     checkDomain: (workspaceId: string, domainId: string) =>
         request<SendingDomainView>('POST', workspacePath(workspaceId, `/sending-domains/${domainId}/check`)),
+    /** Starts connecting the Postmaster Tools account (#129): the answer's `authorizeUrl` is where the browser goes next. */
+    connectPostmaster: (workspaceId: string) =>
+        request<MailboxConnectStartView>('POST', workspacePath(workspaceId, '/sending-pool/postmaster/connect')),
+    disconnectPostmaster: (workspaceId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, '/sending-pool/postmaster')),
 };
 
 const poolKey = keys.sendingPool;
@@ -79,3 +85,10 @@ export const useUpdateSendingDomain = (workspaceId: string) =>
 
 export const useCheckSendingDomain = (workspaceId: string) =>
     usePoolWrite(workspaceId, (domainId: string) => sendingPool.checkDomain(workspaceId, domainId));
+
+/** Starts the Postmaster Tools connect; the caller sends the browser to the answer's `authorizeUrl`. */
+export const useConnectPostmaster = (workspaceId: string) =>
+    useMutation({ mutationFn: () => sendingPool.connectPostmaster(workspaceId) });
+
+export const useDisconnectPostmaster = (workspaceId: string) =>
+    usePoolWrite(workspaceId, () => sendingPool.disconnectPostmaster(workspaceId));

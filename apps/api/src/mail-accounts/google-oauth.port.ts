@@ -59,6 +59,9 @@ export interface GoogleOAuthPort {
     /** The mailbox's address, from Gmail's profile (needs `gmail.readonly`). */
     mailboxAddress(accessToken: string): Promise<string>;
 
+    /** The Google account's address, from OpenID userinfo (needs `userinfo.email`; a Postmaster grant has no Gmail scope). */
+    accountEmail(accessToken: string): Promise<string>;
+
     /** The scopes an access token carries now, from Google's token information. */
     grantedScopes(accessToken: string): Promise<string[]>;
 

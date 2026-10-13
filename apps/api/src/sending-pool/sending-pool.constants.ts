@@ -18,3 +18,10 @@ export const SENDING_DOMAIN_CHECK_BATCH = 50;
 
 /** The longest a resume note may be. */
 export const MAILBOX_RESUME_NOTE_MAX = 500;
+
+/** The Postmaster Tools API (#129). The HTTP adapter is the only code that calls it. */
+export const POSTMASTER_ENDPOINT = 'https://gmailpostmastertools.googleapis.com/v1';
+/** One Postmaster request may take this long before it is abandoned. */
+export const POSTMASTER_HTTP_TIMEOUT_MS = 10_000;
+/** Redis key for the one process refreshing a workspace's Postmaster token at a time. */
+export const POSTMASTER_TOKEN_LOCK_KEY_PREFIX = 'postmaster-token-lock:';

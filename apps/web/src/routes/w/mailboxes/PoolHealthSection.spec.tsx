@@ -3,12 +3,16 @@ import { toasts } from '@bylinecrm/ui';
 import { Toaster } from '@bylinecrm/ui/toaster';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoolMailboxHealthView, SendingDomainView, SendingPoolView } from '../../../api/types';
 import { json, renderAt, route, stubApi } from '../settings/settingsTestKit';
 import { PoolHealthSection } from './PoolHealthSection';
 
+const leaveFor = vi.hoisted(() => vi.fn());
+vi.mock('../../../lib/leaveFor', () => ({ leaveFor }));
+
 const WS = 'ws-1';
+const AUTHORIZE = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=y';
 
 const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     id: 'd-1',
@@ -22,6 +26,8 @@ const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     },
     checkedAt: '2026-10-12T08:00:00.000Z',
     nextCheckAt: '2026-10-12T14:00:00.000Z',
+    spamRate: null,
+    postmaster: { status: 'not_connected', message: null },
     ...over,
 });
 
@@ -85,6 +91,38 @@ const VIEW: SendingPoolView = {
     },
     mailboxes: [health(), PAUSED, FAILING],
     domains: [domain(), FAILING.domain!],
+    postmaster: null,
+};
+
+/** Postmaster Tools connected (#129): one domain with yesterday's rate, one the account has not verified. */
+const WITH_POSTMASTER: SendingPoolView = {
+    ...VIEW,
+    mailboxes: [
+        health({
+            domain: domain({
+                spamRate: { day: '2026-10-11', rateBps: 35 },
+                postmaster: { status: 'ok', message: null },
+            }),
+        }),
+        health({
+            mailboxId: 'mb-4',
+            email: 'pool-d@other.example',
+            domain: domain({
+                id: 'd-3',
+                domain: 'other.example',
+                postmaster: {
+                    status: 'not_verified',
+                    message: 'other.example is not verified in Postmaster Tools for ops@acme.example',
+                },
+            }),
+        }),
+    ],
+    postmaster: {
+        email: 'ops@acme.example',
+        status: 'connected',
+        connectedAt: '2026-10-10T09:00:00.000Z',
+        lastError: null,
+    },
 };
 
 const OUTREACH: Capability[] = ['mailbox:read', 'outreach:write', 'record:read'];
@@ -106,6 +144,7 @@ const section = (capabilities: Capability[]) =>
     );
 
 describe('FR-CRMS-6 / FR-CRMS-13: the sending pool’s health', () => {
+    beforeEach(() => leaveFor.mockReset());
     afterEach(() => {
         vi.unstubAllGlobals();
         toasts.clear();
@@ -192,5 +231,48 @@ describe('FR-CRMS-6 / FR-CRMS-13: the sending pool’s health', () => {
                 complaintPauseBps: 20,
             }),
         );
+    });
+
+    it('#129 shows each domain’s spam rate from Postmaster Tools, which account is connected, and lets an admin disconnect it', async () => {
+        const seen = stubApi([
+            (r) => (r.method === 'DELETE' && r.url.endsWith('/sending-pool/postmaster') ? json(null, 204) : undefined),
+            (r) => (r.url.endsWith('/sending-pool') ? json(WITH_POSTMASTER) : undefined),
+        ]);
+        const user = userEvent.setup();
+        section(ADMIN);
+        const first = (await screen.findAllByText('pool-a@out.example'))[0]!.closest('tr')!;
+        expect(within(first).getByText('Spam rate 0.35% on 2026-10-11')).toBeInTheDocument();
+        const other = (await screen.findAllByText('pool-d@other.example'))[0]!.closest('tr')!;
+        expect(within(other).getByText(/not verified in Postmaster Tools for ops@acme\.example/)).toBeInTheDocument();
+
+        const card = screen.getByRole('region', { name: 'Postmaster Tools' });
+        expect(within(card).getByText('ops@acme.example')).toBeInTheDocument();
+        await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+        await user.click(await screen.findByRole('button', { name: 'Disconnect Postmaster Tools' }));
+        await waitFor(() =>
+            expect(seen.some((r) => r.method === 'DELETE' && r.url.endsWith('/sending-pool/postmaster'))).toBe(true),
+        );
+    });
+
+    it('#129 sends an admin to Google to connect Postmaster Tools, and shows a member only that none is connected', async () => {
+        const seen = stubApi([
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/sending-pool/postmaster/connect')
+                    ? json({ authorizeUrl: AUTHORIZE, expiresAt: '2026-10-12T09:10:00.000Z' }, 201)
+                    : undefined,
+            (r) => (r.url.endsWith('/sending-pool') ? json(VIEW) : undefined),
+        ]);
+        const user = userEvent.setup();
+        const view = section(ADMIN);
+        const card = await screen.findByRole('region', { name: 'Postmaster Tools' });
+        await user.click(within(card).getByRole('button', { name: 'Connect Postmaster Tools' }));
+        await waitFor(() => expect(leaveFor).toHaveBeenCalledWith(AUTHORIZE));
+        expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/sending-pool/postmaster/connect'))).toBe(true);
+        view.unmount();
+
+        section(OUTREACH);
+        const read = await screen.findByRole('region', { name: 'Postmaster Tools' });
+        expect(within(read).getByText(/Not connected/)).toBeInTheDocument();
+        expect(within(read).queryByRole('button')).not.toBeInTheDocument();
     });
 });

@@ -142,8 +142,13 @@ daily set for 14 days, Sunday's set for 8 weeks — locally and offsite alike. T
   which release directories are kept) and enables `bylinecrm-backup@production.timer` (02:47 UTC,
   after NewswireOS's own 02:17 backup; `Persistent=true`, so a run missed while the box was down
   happens at boot). Re-run it after a change to `backup.sh` lands.
-- **Offsite:** the same rclone config NewswireOS uses (`/root/.config/rclone/rclone.conf`, remote
-  `[r2]`); create the bucket `bylinecrm-backups` once in Cloudflare R2. If the remote is missing the
+- **Offsite:** by default the same rclone config NewswireOS uses (`/root/.config/rclone/rclone.conf`, remote
+  `[r2]`); production and staging upload through the bucket-scoped `r2-bylinecrm` remote instead, set per
+  environment in `/opt/bylinecrm-<env>-runtime/backup.env` (#166): `BYLINECRM_BACKUP_REMOTE=r2-bylinecrm:bylinecrm-backups/<env>`
+  and, if the config is elsewhere, `BYLINECRM_RCLONE_CONF=…`. Write it once with
+  `BYLINECRM_BACKUP_REMOTE=… bash <rel>/bootstrap-secrets.sh <env>` (kept on every later run); `lib.sh` reads it
+  for the timer's unit and a manual `backup.sh` alike, so the two never disagree — no systemd drop-in, and
+  `install-backup.sh` removes one left from before. Create the bucket `bylinecrm-backups` once in Cloudflare R2. If the remote is missing the
   local backup still runs and the unit **fails** (exit 1, visible in `systemctl list-timers` and
   `journalctl -u bylinecrm-backup@production`) — a missing credential must never turn the job into
   a silent no-op.

@@ -66,8 +66,12 @@ export function warmupDay(startedAt: Date, now: Date): number {
     return Math.floor((now.getTime() - startedAt.getTime()) / SENDING_POOL_WINDOW_MS) + 1;
 }
 
-/** Why a mailbox was paused: the rate that crossed its threshold. */
-export const MAILBOX_PAUSE_CODES = ['bounce_rate', 'complaint_rate'] as const;
+/**
+ * Why a mailbox was paused: the rate that crossed its threshold — its own bounce or complaint rate
+ * over the window, or (`domain_spam_rate`, #129) its sending domain's user-reported spam rate in
+ * Postmaster Tools, which pauses every pool mailbox on the domain at once.
+ */
+export const MAILBOX_PAUSE_CODES = ['bounce_rate', 'complaint_rate', 'domain_spam_rate'] as const;
 export type MailboxPauseCode = (typeof MAILBOX_PAUSE_CODES)[number];
 
 export interface MailboxPause {
@@ -76,8 +80,8 @@ export interface MailboxPause {
     /** Basis points, over the window, when the pause was decided. */
     rateBps: number;
     thresholdBps: number;
-    /** Sends in the window the rate was measured over. */
-    sends: number;
+    /** Sends in the window the rate was measured over; null for a domain rate, which Postmaster reports without counts. */
+    sends: number | null;
     /** ISO 8601. */
     at: string;
 }
@@ -105,6 +109,28 @@ export interface DomainCheck {
 
 export type SendingDomainStatus = 'unchecked' | 'pass' | 'fail';
 
+/**
+ * What the last check learned from Postmaster Tools about the domain (#129): nothing is connected;
+ * the domain is not verified in Postmaster Tools for the connected account; the lookup failed
+ * (`message` says how); or it answered (`ok` — with a rate, or a message when Google had no data
+ * for the day, which it keeps back for low traffic).
+ */
+export const POSTMASTER_DOMAIN_STATUSES = ['not_connected', 'not_verified', 'ok', 'failed'] as const;
+export type PostmasterDomainStatus = (typeof POSTMASTER_DOMAIN_STATUSES)[number];
+
+export interface SendingDomainPostmaster {
+    status: PostmasterDomainStatus;
+    message: string | null;
+}
+
+/** The latest user-reported spam rate Postmaster Tools gave for the domain, and the day it is for. */
+export interface SendingDomainSpamRate {
+    /** `YYYY-MM-DD`, UTC — Postmaster publishes a day once it is over. */
+    day: string;
+    /** Basis points: 35 = 0.35%. */
+    rateBps: number;
+}
+
 export interface SendingDomainView {
     id: string;
     domain: string;
@@ -113,6 +139,23 @@ export interface SendingDomainView {
     lastCheck: DomainCheck | null;
     checkedAt: string | null;
     nextCheckAt: string;
+    /** The latest rate Postmaster Tools reported; a failed lookup keeps the last one, it is never a zero. */
+    spamRate: SendingDomainSpamRate | null;
+    postmaster: SendingDomainPostmaster;
+}
+
+/** The Postmaster Tools account a workspace connected (#129), as the pool reports it: never a token. */
+export const POSTMASTER_CONNECTION_STATUSES = ['connected', 'reconnect_needed'] as const;
+export type PostmasterConnectionStatus = (typeof POSTMASTER_CONNECTION_STATUSES)[number];
+
+export interface PostmasterConnectionView {
+    /** The Google account's address: the one that verified the domains in Postmaster Tools. */
+    email: string;
+    status: PostmasterConnectionStatus;
+    /** ISO 8601. */
+    connectedAt: string;
+    /** Why it needs reconnecting, when it does. */
+    lastError: string | null;
 }
 
 /** One pool mailbox's health, as `GET /sending-pool` reports it. */
@@ -141,4 +184,6 @@ export interface SendingPoolView {
     settings: SendingPoolSettings;
     mailboxes: PoolMailboxHealth[];
     domains: SendingDomainView[];
+    /** The Postmaster Tools account connected, or null while none is. */
+    postmaster: PostmasterConnectionView | null;
 }

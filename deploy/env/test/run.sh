@@ -4,7 +4,7 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 status=0
-for t in release-preflight backup; do
+for t in release-preflight backup backup-env; do
     bash "$HERE/$t.test.sh" || status=1
 done
 exit $status
