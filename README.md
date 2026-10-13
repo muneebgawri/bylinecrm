@@ -153,8 +153,10 @@ and sets how long an answer stands (90 days unless set). Jobs run in a worker (`
 Settings → _Import from Twenty_ (an admin's): connect a Twenty workspace (its URL and an API key, sealed at rest),
 check it (Twenty's count per object beside what is mapped here), start a run and follow it. A run reads every object
 through Twenty's REST API a page at a time and maps each record by its Twenty id, so it can be run again: what changed
-is updated, what did not is left alone, and nothing is imported twice. What lands where, and why:
-`docs/design-notes/P4-4.md`. The API is `/api/w/:id/import/twenty` (`workspace:admin`).
+is updated, what did not is left alone, and nothing is imported twice. Twenty hides deleted records, so deletions
+are never mirrored: a _Reconcile with Twenty_ run writes nothing and flags the records here that Twenty no longer
+returns as missing in Twenty, listed on the screen for review — nothing is deleted on its own (#156, D-252). What
+lands where, and why: `docs/design-notes/P4-4.md`. The API is `/api/w/:id/import/twenty` (`workspace:admin`).
 
 ## Working against the mock
 

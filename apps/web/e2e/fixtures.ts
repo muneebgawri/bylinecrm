@@ -1215,6 +1215,7 @@ export const twentyImportRun: TwentyImportRunView = {
             skipped,
             failed: 0,
             after: created + updated,
+            missingInSource: null,
             errors:
                 object === 'workspaceMembers'
                     ? [
