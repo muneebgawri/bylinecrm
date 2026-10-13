@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Suppression } from '@prisma/client';
 import {
     isLiftable,
-    normaliseSuppressionAddress,
+    normaliseEmail,
     type Actor,
     type DomainEvent,
     type SuppressionReason,
@@ -70,7 +70,7 @@ export class SuppressionService {
      * entry; records `suppression.added` only when it wrote one.
      */
     async suppress(workspaceId: string, input: SuppressInput, actor: Actor = SYSTEM): Promise<SuppressionView> {
-        const address = normaliseSuppressionAddress(input.address);
+        const address = normaliseEmail(input.address);
         if (!address)
             throw new ValidationFailed('not an email address', [{ path: 'address', message: 'not an email address' }]);
         const { row } = await this.writeOnce(workspaceId, address, input, actor);
@@ -100,7 +100,7 @@ export class SuppressionService {
     /** A member suppresses an address by hand: reason `manual`. An address already live is a conflict. */
     async add(input: { address: string; note?: string | undefined }): Promise<SuppressionView> {
         const context = this.current();
-        const address = normaliseSuppressionAddress(input.address);
+        const address = normaliseEmail(input.address);
         if (!address) {
             throw new ValidationFailed('not an email address', [
                 { path: 'address', message: 'enter an address like someone@example.com' },

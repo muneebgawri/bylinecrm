@@ -1,4 +1,4 @@
-import { minorDigits, type Link, type Phone } from '@bylinecrm/shared';
+import { minorDigits, type Link, type Phone, normaliseEmail } from '@bylinecrm/shared';
 
 /**
  * How Twenty spells the composite values its records carry (PAR-001/005/007, as the instance
@@ -43,8 +43,8 @@ export function isoDate(value: unknown): string | null {
 
 /** An email address, lower-cased, when it has the shape of one. */
 export function emailOf(value: unknown): string | null {
-    const s = text(value)?.toLowerCase() ?? null;
-    return s && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
+    const s = text(value);
+    return s ? normaliseEmail(s) : null;
 }
 
 /** A URL with a scheme (`https://` added when the value is a bare host or path), or null. */

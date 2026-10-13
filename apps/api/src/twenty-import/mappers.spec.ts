@@ -386,6 +386,12 @@ describe('P4-4 (doc 48 §11) / FR-CRMS-10: a lead lookup says who works an addre
         });
         expect(mapLeadLookup({ ...base, email: 'not an address', status: 'Assigned' })).toEqual({ skip: 'no address' });
     });
+
+    it('#180: an address the one email rule refuses is skipped as no address, not written as an empty exclusion', () => {
+        expect(mapLeadLookup({ ...base, email: 'joe@acme_corp.com', status: 'Assigned' })).toEqual({
+            skip: 'no address',
+        });
+    });
 });
 
 describe('P4-4 (doc 48 §11): a lead view adds the Lead Engine fields to its person', () => {

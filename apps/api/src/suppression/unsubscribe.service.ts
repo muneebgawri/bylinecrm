@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { UNSUBSCRIBE_API_PATH, UNSUBSCRIBE_PAGE_PATH, normaliseSuppressionAddress } from '@bylinecrm/shared';
+import { UNSUBSCRIBE_API_PATH, UNSUBSCRIBE_PAGE_PATH, normaliseEmail } from '@bylinecrm/shared';
 import { hashToken, randomToken } from '../auth/tokens';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
@@ -41,7 +41,7 @@ export class UnsubscribeService {
         workspaceId: string,
         input: { address: string; personId: string | null; outboundId: string | null },
     ): Promise<UnsubscribeLink> {
-        const address = normaliseSuppressionAddress(input.address);
+        const address = normaliseEmail(input.address);
         if (!address) throw new Error(`issue: not an email address`);
         const token = randomToken(UNSUBSCRIBE_TOKEN_BYTES);
         await this.rls.withWorkspace(workspaceId, (tx) =>
