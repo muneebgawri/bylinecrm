@@ -1,5 +1,5 @@
 import { lookup as dnsLookup } from 'node:dns';
-import { isIP } from 'node:net';
+import { isIP, type LookupFunction } from 'node:net';
 import { BadRequestException } from '@nestjs/common';
 import { Agent, type Dispatcher } from 'undici';
 import { WEBHOOK_REQUEST_TIMEOUT_MS } from './webhooks.constants';
@@ -84,8 +84,6 @@ export async function assertWebhookUrl(raw: string, options: UrlGuardOptions): P
     return url;
 }
 
-type LookupCallback = (err: NodeJS.ErrnoException | null, address: string, family: number) => void;
-
 /**
  * The HTTP client every delivery goes out through: timeouts from the constants, and a lookup
  * that refuses a private answer at connect time, so the address checked is the address used.
@@ -96,7 +94,9 @@ export function createWebhookDispatcher(options: UrlGuardOptions): Dispatcher {
         bodyTimeout: WEBHOOK_REQUEST_TIMEOUT_MS,
         connect: {
             timeout: WEBHOOK_REQUEST_TIMEOUT_MS,
-            lookup: (hostname: string, _opts: unknown, callback: LookupCallback) => {
+            // Node's happy-eyeballs connect asks for `all: true` and needs the list back; answering one
+            // address there fails every connection with ERR_INVALID_IP_ADDRESS (production 2026-10-14).
+            lookup: ((hostname, opts, callback) => {
                 dnsLookup(hostname, { all: true }, (error, list) => {
                     if (error) return callback(error, '', 0);
                     const first = list[0];
@@ -108,9 +108,10 @@ export function createWebhookDispatcher(options: UrlGuardOptions): Dispatcher {
                             0,
                         );
                     }
+                    if (opts?.all) return callback(null, list);
                     callback(null, first.address, first.family);
                 });
-            },
+            }) satisfies LookupFunction,
         },
     });
 }
