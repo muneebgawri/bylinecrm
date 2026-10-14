@@ -47,6 +47,8 @@ export function runView(row: TwentyImportRun): TwentyImportRunView {
         error: row.error,
         cancelRequested: row.cancelRequested,
         startedBy: row.startedById,
+        createMembers: row.createMembersRoleId ? { roleId: row.createMembersRoleId } : null,
+        accountsCreated: row.accountsCreated,
         queuedAt: row.queuedAt.toISOString(),
         startedAt: row.startedAt?.toISOString() ?? null,
         finishedAt: row.finishedAt?.toISOString() ?? null,

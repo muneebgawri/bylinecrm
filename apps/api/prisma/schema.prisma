@@ -220,6 +220,9 @@ model WorkspaceMember {
   /// When the member was removed (#147): the row stays, so their sends, enrolments and timeline rows keep
   /// their name; their access ended at this moment. Null for a member in the workspace.
   leftAt      DateTime? @map("left_at") @db.Timestamptz
+  /// How the seat came to be: `signup` (the workspace's first admin), `invite` (an accepted invitation),
+  /// `twenty-import` (#184, an account the importer made for a Twenty member). Null for seats from before the column.
+  source      String?
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -283,6 +286,7 @@ model Role {
   members     WorkspaceMember[]
   apiKeys     ApiKey[]
   invites     WorkspaceInvite[]
+  twentyImportRuns TwentyImportRun[]
 
   @@unique([workspaceId, name])
   @@map("roles")
@@ -1961,13 +1965,18 @@ model TwentyImportRun {
   error           String?
   cancelRequested Boolean               @default(false) @map("cancel_requested")
   startedById     String?               @map("started_by_id") @db.Uuid
+  /// #184: the role the run gives accounts it creates for Twenty members who are not here; null for a run without the option.
+  createMembersRoleId String?           @map("create_members_role_id") @db.Uuid
+  /// #184: accounts (user and seat) this run created.
+  accountsCreated Int                   @default(0) @map("accounts_created")
   queuedAt        DateTime              @default(now()) @map("queued_at") @db.Timestamptz
   startedAt       DateTime?             @map("started_at") @db.Timestamptz
   finishedAt      DateTime?             @map("finished_at") @db.Timestamptz
   updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  startedBy WorkspaceMember? @relation(fields: [startedById], references: [id], onDelete: SetNull)
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  startedBy         WorkspaceMember? @relation(fields: [startedById], references: [id], onDelete: SetNull)
+  createMembersRole Role?            @relation(fields: [createMembersRoleId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, queuedAt(sort: Desc)])
   @@map("twenty_import_runs")

@@ -20757,6 +20757,17 @@
                         "default": "full",
                         "type": "string",
                         "enum": ["full", "changes", "reconcile"]
+                    },
+                    "createMembers": {
+                        "type": "object",
+                        "properties": {
+                            "roleId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            }
+                        },
+                        "required": ["roleId"]
                     }
                 }
             },
@@ -21839,9 +21850,13 @@
                         "type": "string",
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "hasSignedIn": {
+                        "type": "boolean",
+                        "description": "False for an account the Twenty importer made (#184) that nobody has signed in to yet: it has no password and no verified address. An admin sends it the invitation from Members."
                     }
                 },
-                "required": ["id", "userId", "email", "displayName", "roleId", "roleName", "createdAt"]
+                "required": ["id", "userId", "email", "displayName", "roleId", "roleName", "createdAt", "hasSignedIn"]
             },
             "MemberSummary": {
                 "type": "object",
@@ -26514,6 +26529,26 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "createMembers": {
+                        "nullable": true,
+                        "description": "The accounts option the run was started with (#184): the role its accounts got.",
+                        "type": "object",
+                        "properties": {
+                            "roleId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                            }
+                        },
+                        "required": ["roleId"]
+                    },
+                    "accountsCreated": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Accounts (a user and a seat) this run made for Twenty members who were not here (#184)."
+                    },
                     "queuedAt": {
                         "type": "string",
                         "format": "date-time",
@@ -26542,6 +26577,8 @@
                     "error",
                     "cancelRequested",
                     "startedBy",
+                    "createMembers",
+                    "accountsCreated",
                     "queuedAt",
                     "startedAt",
                     "finishedAt"
@@ -26641,9 +26678,16 @@
                             },
                             "required": ["object", "remote", "linked", "error"]
                         }
+                    },
+                    "accountsToCreate": {
+                        "nullable": true,
+                        "description": "Twenty members with a usable address and no seat here (#184): what the accounts option would create; null when they could not be read.",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
                     }
                 },
-                "required": ["checkedAt", "objects"]
+                "required": ["checkedAt", "objects", "accountsToCreate"]
             },
             "WebhookEndpoint": {
                 "type": "object",

@@ -64,6 +64,10 @@ export const memberView = named(
         roleId: id,
         roleName: z.string(),
         createdAt: dateTime,
+        hasSignedIn: z.boolean().meta({
+            description:
+                'False for an account the Twenty importer made (#184) that nobody has signed in to yet: it has no password and no verified address. An admin sends it the invitation from Members.',
+        }),
     }),
 );
 
