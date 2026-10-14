@@ -23092,15 +23092,29 @@
                         "properties": {
                             "status": {
                                 "type": "string",
-                                "enum": ["not_connected", "not_verified", "ok", "failed"],
-                                "description": "What the last check learned from Postmaster Tools: nothing connected, the domain not verified there, a failed lookup, or an answer."
+                                "enum": [
+                                    "not_connected",
+                                    "not_verified",
+                                    "ok",
+                                    "rate_limited",
+                                    "unreachable",
+                                    "failed"
+                                ],
+                                "description": "What the last ask of Postmaster Tools came to: nothing connected, the domain not verified there, an answer, a rate limit or no answer (both transient, #183), or a refusal."
                             },
                             "message": {
                                 "nullable": true,
                                 "type": "string"
+                            },
+                            "nextReadAt": {
+                                "nullable": true,
+                                "description": "When the check asks Postmaster Tools again (#183); null while nothing is connected.",
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                             }
                         },
-                        "required": ["status", "message"]
+                        "required": ["status", "message", "nextReadAt"]
                     }
                 },
                 "required": [

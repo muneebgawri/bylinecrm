@@ -14,7 +14,9 @@
 export type TrafficStatsLookup =
     | { status: 'not_verified' }
     | { status: 'no_data'; day: string }
-    | { status: 'found'; day: string; spamRateBps: number | null };
+    | { status: 'found'; day: string; spamRateBps: number | null }
+    /** Google's quota said not now (a 429, #183): an answer, not a failure; `retryAfterS` from its Retry-After when it gave one. */
+    | { status: 'rate_limited'; retryAfterS: number | null };
 
 export interface PostmasterPort {
     /**

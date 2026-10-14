@@ -7,6 +7,7 @@ import { WorkspaceContext } from '../infra/workspace-context';
 import { domainCheckNames, evaluateDomain } from './domain-checks';
 import { DOMAIN_WITH_RATE, domainView, type DomainRow } from './domain-view';
 import { DNS_PORT, DnsLookupFailed, type DnsPort } from './dns.port';
+import { nextPostmasterReadAt } from './postmaster-schedule';
 import { PostmasterService } from './postmaster.service';
 import { SENDING_DOMAIN_CHECK_BATCH } from './sending-pool.constants';
 import { SendingPoolService } from './sending-pool.service';
@@ -18,7 +19,8 @@ import { SendingPoolService } from './sending-pool.service';
  * is ever asked inside a transaction. On demand, and again every `SENDING_DOMAIN_RECHECK_MS` from
  * the maintenance job. Until a domain passes DNS, the gate refuses every send from it. A lookup that
  * fails (timeout, SERVFAIL, a 5xx from Google) fails its step and says so: "could not check" is
- * never "passed", and never a rate of zero.
+ * never "passed", and never a rate of zero. Postmaster is asked at most once per domain per day,
+ * and a rate limit (#183) keeps the last reading and waits its turn.
  */
 @Injectable()
 export class SendingDomainsService {
@@ -107,9 +109,12 @@ export class SendingDomainsService {
         }
         const passed = check.spf.outcome === 'pass' && check.dkim.outcome === 'pass' && check.dmarc.outcome === 'pass';
         const now = new Date();
-        const reading = await this.postmaster.read(workspaceId, row.domain, now);
+        // Postmaster Tools is asked only when the domain is due for it (#183): a day's reading is read
+        // once, a rate limit waits its turn. A check before then keeps what the last ask learned.
+        const askPostmaster = !row.postmasterNextReadAt || row.postmasterNextReadAt <= now;
+        const reading = askPostmaster ? await this.postmaster.read(workspaceId, row.domain, now) : null;
         const updated = await this.rls.withWorkspace(workspaceId, async (tx) => {
-            if (reading.rate) {
+            if (reading?.rate) {
                 // One row per domain and day: a day read again is replaced, so the view shows the latest.
                 await tx.sendingDomainStat.upsert({
                     where: { domainId_day: { domainId: row.id, day: new Date(reading.rate.day) } },
@@ -131,12 +136,19 @@ export class SendingDomainsService {
                     lastCheck: check as unknown as Prisma.InputJsonValue,
                     checkedAt: now,
                     nextCheckAt: new Date(now.getTime() + SENDING_DOMAIN_RECHECK_MS),
-                    postmasterStatus: reading.status,
-                    postmasterMessage: reading.message,
+                    ...(reading
+                        ? {
+                              postmasterStatus: reading.status,
+                              postmasterMessage: reading.message,
+                              postmasterNextReadAt: nextPostmasterReadAt(reading, now, row.postmasterLimitedTimes),
+                              postmasterLimitedTimes:
+                                  reading.status === 'rate_limited' ? row.postmasterLimitedTimes + 1 : 0,
+                          }
+                        : {}),
                 },
             });
         });
-        if (reading.rate) await this.pool.evaluateDomain(workspaceId, row.domain, reading.rate, now);
+        if (reading?.rate) await this.pool.evaluateDomain(workspaceId, row.domain, reading.rate, now);
         return updated;
     }
 

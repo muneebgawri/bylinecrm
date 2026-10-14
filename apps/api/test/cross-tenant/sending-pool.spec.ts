@@ -13,6 +13,7 @@ import {
     type SendingDomainView,
     type SendingPoolView,
     POSTMASTER_SCOPES,
+    SENDING_DOMAIN_RECHECK_MS,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -552,6 +553,22 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             const callback = await as(who).get(`${MAIL_OAUTH_CALLBACK_PATH}?state=${state}&code=${code}`);
             return new URL(String(callback.headers['location'])).searchParams.get('connect');
         };
+        /** Makes the domain's Postmaster read due again (#183 reads a day once; a test asks sooner). */
+        const due = (name: string) =>
+            owner.sendingDomain.updateMany({
+                where: { workspaceId: workspace, domain: name },
+                data: { postmasterNextReadAt: null, postmasterLimitedTimes: 0 },
+            });
+        /** The next try is about `ms` from now (within the test's own running time). */
+        const expectAbout = (iso: string | null, ms: number) => {
+            const wait = new Date(iso ?? 0).getTime() - Date.now();
+            expect(wait, `next try in ${wait} ms, expected about ${ms}`).toBeGreaterThan(ms - 30_000);
+            expect(wait).toBeLessThanOrEqual(ms);
+        };
+        const nextUtcMidnight = () => {
+            const d = new Date();
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
+        };
 
         it('connects Postmaster Tools through the workspace’s OAuth client with its own scope — never Gmail’s — and shows the account on the pool', async () => {
             expect((await view()).postmaster).toBeNull();
@@ -576,7 +593,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             postmaster.setSpamRate(goodDomain, 35);
             const checked = await checkDomain(goodDomain);
             expect(checked.status).toBe('pass');
-            expect(checked.postmaster).toEqual({ status: 'ok', message: null });
+            expect(checked.postmaster).toEqual({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
             expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 35 });
             expect(postmaster.lookups.at(-1)).toMatchObject({ domain: goodDomain, day: yesterday });
             expect(
@@ -604,6 +621,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                     .expect(200);
             }
             postmaster.setSpamRate(goodDomain, 5);
+            await due(goodDomain);
             expect((await checkDomain(goodDomain)).spamRate).toEqual({ day: yesterday, rateBps: 5 });
             expect((await view()).mailboxes.every((m) => m.paused === null)).toBe(true);
             // The day's row was replaced, not added to.
@@ -613,14 +631,17 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
         });
 
         it('says when a domain is not verified in Postmaster Tools, when the lookup failed, and when nothing is connected; another workspace sees none of it', async () => {
+            await due(badDomain);
             postmaster.notVerified(badDomain);
             const unverified = await checkDomain(badDomain);
             expect(unverified.postmaster).toMatchObject({ status: 'not_verified' });
             expect(unverified.spamRate).toBeNull();
 
+            await due(goodDomain);
             postmaster.failNext();
             const failed = await checkDomain(goodDomain);
-            expect(failed.postmaster).toMatchObject({ status: 'failed', message: expect.stringContaining('503') });
+            // A 5xx is transient (#183): no warning, tried again at the check's cadence.
+            expect(failed.postmaster).toMatchObject({ status: 'unreachable', message: expect.stringContaining('503') });
             // The last known rate stays what it was: a failed lookup is not a zero.
             expect(failed.spamRate).toEqual({ day: yesterday, rateBps: 5 });
 
@@ -630,7 +651,78 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
 
             await as(admin).delete(w('/sending-pool/postmaster')).expect(204);
             expect((await view()).postmaster).toBeNull();
+            await due(goodDomain);
             expect((await checkDomain(goodDomain)).postmaster).toMatchObject({ status: 'not_connected' });
+        });
+
+        it('#183 reads Postmaster once per domain per day: a day’s reading is kept until the next day, UTC', async () => {
+            expect(await connectPostmaster()).toBe('connected');
+            await due(goodDomain);
+            postmaster.setSpamRate(goodDomain, 5);
+            const first = await checkDomain(goodDomain);
+            expect(first.postmaster).toEqual({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
+            expect(first.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+            // Checked again today: the reading stands, Postmaster is not asked.
+            const reads = postmaster.lookups.length;
+            const second = await checkDomain(goodDomain);
+            expect(postmaster.lookups).toHaveLength(reads);
+            expect(second.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+            expect(second.postmaster).toEqual(first.postmaster);
+            expect(second.status).toBe('pass');
+        });
+
+        it('#183 a 429 is a rate limit: the last reading stays, nothing is a warning, and the next try waits for Retry-After or backs off from the check’s cadence', async () => {
+            await log.reset();
+            await due(goodDomain);
+            postmaster.rateLimitNext(1, 120);
+            const limited = await checkDomain(goodDomain);
+            expect(limited.status).toBe('pass');
+            expect(limited.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+            expect(limited.postmaster.status).toBe('rate_limited');
+            expect(limited.postmaster.message).toMatch(/rate-limiting/);
+            expectAbout(limited.postmaster.nextReadAt, 120_000);
+            expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(0);
+            expect((await view()).mailboxes.every((m) => m.paused === null)).toBe(true);
+            // Not asked again before then.
+            const reads = postmaster.lookups.length;
+            expect((await checkDomain(goodDomain)).postmaster).toEqual(limited.postmaster);
+            expect(postmaster.lookups).toHaveLength(reads);
+            // Without a Retry-After: the check's cadence, doubled on each consecutive limit.
+            await due(goodDomain);
+            postmaster.rateLimitNext(1);
+            expectAbout((await checkDomain(goodDomain)).postmaster.nextReadAt, SENDING_DOMAIN_RECHECK_MS);
+            await owner.sendingDomain.updateMany({
+                where: { workspaceId: workspace, domain: goodDomain },
+                data: { postmasterNextReadAt: null },
+            });
+            postmaster.rateLimitNext(1);
+            expectAbout((await checkDomain(goodDomain)).postmaster.nextReadAt, 2 * SENDING_DOMAIN_RECHECK_MS);
+            // A reading ends the backoff: the day is read, and the next read waits for tomorrow.
+            await owner.sendingDomain.updateMany({
+                where: { workspaceId: workspace, domain: goodDomain },
+                data: { postmasterNextReadAt: null },
+            });
+            const back = await checkDomain(goodDomain);
+            expect(back.postmaster).toEqual({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
+            expect(
+                await owner.sendingDomain.findFirst({ where: { workspaceId: workspace, domain: goodDomain } }),
+            ).toMatchObject({
+                postmasterLimitedTimes: 0,
+            });
+        });
+
+        it('#183 no answer is transient too (tried again at the cadence, no warning); a refused token is the warning', async () => {
+            await due(goodDomain);
+            postmaster.failNext(1, 503);
+            const down = await checkDomain(goodDomain);
+            expect(down.postmaster).toMatchObject({ status: 'unreachable', message: expect.stringContaining('503') });
+            expectAbout(down.postmaster.nextReadAt, SENDING_DOMAIN_RECHECK_MS);
+            expect(down.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+            await due(goodDomain);
+            postmaster.failNext(1, 401);
+            const refused = await checkDomain(goodDomain);
+            expect(refused.postmaster).toMatchObject({ status: 'failed', message: expect.stringContaining('401') });
+            expectAbout(refused.postmaster.nextReadAt, SENDING_DOMAIN_RECHECK_MS);
         });
     });
 });

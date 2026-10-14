@@ -22,6 +22,10 @@ export function domainView(row: DomainRow): SendingDomainView {
         checkedAt: row.checkedAt?.toISOString() ?? null,
         nextCheckAt: row.nextCheckAt.toISOString(),
         spamRate: latest ? { day: latest.day.toISOString().slice(0, 10), rateBps: latest.spamRateBps } : null,
-        postmaster: { status: row.postmasterStatus, message: row.postmasterMessage },
+        postmaster: {
+            status: row.postmasterStatus,
+            message: row.postmasterMessage,
+            nextReadAt: row.postmasterNextReadAt?.toISOString() ?? null,
+        },
     };
 }

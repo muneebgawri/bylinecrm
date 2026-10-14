@@ -27,7 +27,7 @@ const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     checkedAt: '2026-10-12T08:00:00.000Z',
     nextCheckAt: '2026-10-12T14:00:00.000Z',
     spamRate: null,
-    postmaster: { status: 'not_connected', message: null },
+    postmaster: { status: 'not_connected', message: null, nextReadAt: null },
     ...over,
 });
 
@@ -101,7 +101,7 @@ const WITH_POSTMASTER: SendingPoolView = {
         health({
             domain: domain({
                 spamRate: { day: '2026-10-11', rateBps: 35 },
-                postmaster: { status: 'ok', message: null },
+                postmaster: { status: 'ok', message: null, nextReadAt: '2026-10-13T00:00:00.000Z' },
             }),
         }),
         health({
@@ -113,6 +113,22 @@ const WITH_POSTMASTER: SendingPoolView = {
                 postmaster: {
                     status: 'not_verified',
                     message: 'other.example is not verified in Postmaster Tools for ops@acme.example',
+                    nextReadAt: '2026-10-12T15:00:00.000Z',
+                },
+            }),
+        }),
+        // #183: Google's quota said no this time; the last reading stands and the next try is scheduled.
+        health({
+            mailboxId: 'mb-5',
+            email: 'pool-e@limited.example',
+            domain: domain({
+                id: 'd-4',
+                domain: 'limited.example',
+                spamRate: { day: '2026-10-10', rateBps: 12 },
+                postmaster: {
+                    status: 'rate_limited',
+                    message: 'Postmaster Tools is rate-limiting reads',
+                    nextReadAt: '2026-10-12T15:00:00.000Z',
                 },
             }),
         }),
@@ -243,7 +259,14 @@ describe('FR-CRMS-6 / FR-CRMS-13: the sending pool’s health', () => {
         const first = (await screen.findAllByText('pool-a@out.example'))[0]!.closest('tr')!;
         expect(within(first).getByText('Spam rate 0.35% on 2026-10-11')).toBeInTheDocument();
         const other = (await screen.findAllByText('pool-d@other.example'))[0]!.closest('tr')!;
-        expect(within(other).getByText(/not verified in Postmaster Tools for ops@acme\.example/)).toBeInTheDocument();
+        const warning = within(other).getByText(/not verified in Postmaster Tools for ops@acme\.example/);
+        expect(warning).toHaveClass('text-warning');
+        // #183: a rate limit is said calmly, with the next try, and the last reading stays shown.
+        const limited = (await screen.findAllByText('pool-e@limited.example'))[0]!.closest('tr')!;
+        expect(within(limited).getByText('Spam rate 0.12% on 2026-10-10')).toBeInTheDocument();
+        const calm = within(limited).getByText(/Postmaster Tools is rate-limiting reads; next try/);
+        expect(calm).toHaveClass('text-text-muted');
+        expect(calm).not.toHaveClass('text-warning');
 
         const card = screen.getByRole('region', { name: 'Postmaster Tools' });
         expect(within(card).getByText('ops@acme.example')).toBeInTheDocument();

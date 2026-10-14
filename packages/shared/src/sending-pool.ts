@@ -110,17 +110,33 @@ export interface DomainCheck {
 export type SendingDomainStatus = 'unchecked' | 'pass' | 'fail';
 
 /**
- * What the last check learned from Postmaster Tools about the domain (#129): nothing is connected;
- * the domain is not verified in Postmaster Tools for the connected account; the lookup failed
- * (`message` says how); or it answered (`ok` — with a rate, or a message when Google had no data
- * for the day, which it keeps back for low traffic).
+ * What the last check learned from Postmaster Tools about the domain (#129, #183): nothing is
+ * connected; the domain is not verified in Postmaster Tools for the connected account; it answered
+ * (`ok` — with a rate, or a message when Google had no data for the day, which it keeps back for
+ * low traffic); Google's quota said not now (`rate_limited`, a 429: transient, the last reading
+ * stands, tried again later); Google could not be reached or did not answer (`unreachable`, a 5xx
+ * or a timeout: transient too); or it refused the question (`failed`: a 401 or another refusal
+ * that will not pass on its own — the one warning).
  */
-export const POSTMASTER_DOMAIN_STATUSES = ['not_connected', 'not_verified', 'ok', 'failed'] as const;
+export const POSTMASTER_DOMAIN_STATUSES = [
+    'not_connected',
+    'not_verified',
+    'ok',
+    'rate_limited',
+    'unreachable',
+    'failed',
+] as const;
 export type PostmasterDomainStatus = (typeof POSTMASTER_DOMAIN_STATUSES)[number];
 
 export interface SendingDomainPostmaster {
     status: PostmasterDomainStatus;
     message: string | null;
+    /**
+     * When the check asks Postmaster Tools again (#183): the next day once a day's reading is in
+     * (the data is daily), Retry-After or a backoff from the check's cadence after a rate limit, the
+     * cadence after anything else. Null while nothing is connected.
+     */
+    nextReadAt: string | null;
 }
 
 /** The latest user-reported spam rate Postmaster Tools gave for the domain, and the day it is for. */

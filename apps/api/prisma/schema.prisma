@@ -281,11 +281,11 @@ model Role {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  permissions RolePermission[]
-  members     WorkspaceMember[]
-  apiKeys     ApiKey[]
-  invites     WorkspaceInvite[]
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions      RolePermission[]
+  members          WorkspaceMember[]
+  apiKeys          ApiKey[]
+  invites          WorkspaceInvite[]
   twentyImportRuns TwentyImportRun[]
 
   @@unique([workspaceId, name])
@@ -1573,6 +1573,10 @@ enum PostmasterDomainStatus {
   not_connected
   not_verified
   ok
+  /// #183: Google's quota said not now; the last reading stands.
+  rate_limited
+  /// #183: Google could not be reached or did not answer.
+  unreachable
   failed
 
   @@map("postmaster_domain_status")
@@ -1587,22 +1591,26 @@ enum PostmasterConnectionStatus {
 
 /// A pool mailbox's sending domain and its last DNS check (FR-CRMS-13). One row per domain per workspace.
 model SendingDomain {
-  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId       String                 @map("workspace_id") @db.Uuid
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                 @map("workspace_id") @db.Uuid
   /// Lower case.
-  domain            String
+  domain                 String
   /// The DKIM selector checked: `<selector>._domainkey.<domain>`.
-  dkimSelector      String                 @default("google") @map("dkim_selector")
-  status            SendingDomainStatus    @default(unchecked)
+  dkimSelector           String                 @default("google") @map("dkim_selector")
+  status                 SendingDomainStatus    @default(unchecked)
   /// The last check's per-step results: `{ spf, dkim, dmarc }`, each `{ outcome, message }`.
-  lastCheck         Json?                  @map("last_check")
-  checkedAt         DateTime?              @map("checked_at") @db.Timestamptz
-  nextCheckAt       DateTime               @default(now()) @map("next_check_at") @db.Timestamptz
+  lastCheck              Json?                  @map("last_check")
+  checkedAt              DateTime?              @map("checked_at") @db.Timestamptz
+  nextCheckAt            DateTime               @default(now()) @map("next_check_at") @db.Timestamptz
   /// What the last check learned from Postmaster Tools (#129), and why when it is not `ok`.
-  postmasterStatus  PostmasterDomainStatus @default(not_connected) @map("postmaster_status")
-  postmasterMessage String?                @map("postmaster_message")
-  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  postmasterStatus       PostmasterDomainStatus @default(not_connected) @map("postmaster_status")
+  postmasterMessage      String?                @map("postmaster_message")
+  /// #183: when the check asks Postmaster Tools again; a check before then keeps the last reading. Null: ask now.
+  postmasterNextReadAt   DateTime?              @map("postmaster_next_read_at") @db.Timestamptz
+  /// #183: consecutive rate limits, for the backoff; reset by any other answer.
+  postmasterLimitedTimes Int                    @default(0) @map("postmaster_limited_times")
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   stats     SendingDomainStat[]
@@ -1958,30 +1966,30 @@ enum TwentyImportMode {
 /// say where it is, `report` what it did per object (`TwentyImportObjectReport[]` from
 /// @bylinecrm/shared). At most one queued or running run per workspace (partial unique index).
 model TwentyImportRun {
-  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId     String                @map("workspace_id") @db.Uuid
-  status          TwentyImportRunStatus @default(queued)
-  mode            TwentyImportMode
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String                @map("workspace_id") @db.Uuid
+  status              TwentyImportRunStatus @default(queued)
+  mode                TwentyImportMode
   /// `changes` mode: records Twenty updated at or after this instant are read.
-  since           DateTime?             @db.Timestamptz
+  since               DateTime?             @db.Timestamptz
   /// The object being read, while running; null before and after.
-  phase           String?
+  phase               String?
   /// Per object, the cursor to continue from: `{ [object]: string | null }`; an object not present has not started, one mapped to `null` is done.
-  cursor          Json                  @default("{}")
-  report          Json                  @default("[]")
-  error           String?
-  cancelRequested Boolean               @default(false) @map("cancel_requested")
+  cursor              Json                  @default("{}")
+  report              Json                  @default("[]")
+  error               String?
+  cancelRequested     Boolean               @default(false) @map("cancel_requested")
   /// #185: started by the schedule, not a person.
-  scheduled       Boolean               @default(false)
-  startedById     String?               @map("started_by_id") @db.Uuid
+  scheduled           Boolean               @default(false)
+  startedById         String?               @map("started_by_id") @db.Uuid
   /// #184: the role the run gives accounts it creates for Twenty members who are not here; null for a run without the option.
-  createMembersRoleId String?           @map("create_members_role_id") @db.Uuid
+  createMembersRoleId String?               @map("create_members_role_id") @db.Uuid
   /// #184: accounts (user and seat) this run created.
-  accountsCreated Int                   @default(0) @map("accounts_created")
-  queuedAt        DateTime              @default(now()) @map("queued_at") @db.Timestamptz
-  startedAt       DateTime?             @map("started_at") @db.Timestamptz
-  finishedAt      DateTime?             @map("finished_at") @db.Timestamptz
-  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  accountsCreated     Int                   @default(0) @map("accounts_created")
+  queuedAt            DateTime              @default(now()) @map("queued_at") @db.Timestamptz
+  startedAt           DateTime?             @map("started_at") @db.Timestamptz
+  finishedAt          DateTime?             @map("finished_at") @db.Timestamptz
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   startedBy         WorkspaceMember? @relation(fields: [startedById], references: [id], onDelete: SetNull)

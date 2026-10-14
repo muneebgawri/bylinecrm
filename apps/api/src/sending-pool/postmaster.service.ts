@@ -1,5 +1,10 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { POSTMASTER_SCOPES, type PostmasterConnectionView, type SendingDomainSpamRate } from '@bylinecrm/shared';
+import {
+    POSTMASTER_SCOPES,
+    type PostmasterConnectionView,
+    type PostmasterDomainStatus,
+    type SendingDomainSpamRate,
+} from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { RedisService } from '../infra/redis.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -17,11 +22,15 @@ import { POSTMASTER_TOKEN_LOCK_KEY_PREFIX } from './sending-pool.constants';
 
 type ConnectionRow = Prisma.PostmasterConnectionGetPayload<object>;
 
-/** What one check learned from Postmaster Tools about a domain: what to store on the domain, and the day's rate when it gave one. */
+/**
+ * What one check learned from Postmaster Tools about a domain: what to store on the domain, the
+ * day's rate when it gave one, and — after a rate limit (#183) — how long Google asked to wait.
+ */
 export interface PostmasterReading {
-    status: 'not_connected' | 'not_verified' | 'ok' | 'failed';
+    status: PostmasterDomainStatus;
     message: string | null;
     rate: SendingDomainSpamRate | null;
+    retryAfterS?: number | null;
 }
 
 /** The connection cannot be used until an admin connects it again (Google refused the grant). */
@@ -61,8 +70,10 @@ export class PostmasterService {
 
     /**
      * Yesterday's user-reported spam rate for the domain, as the domain check asks for it. Never
-     * throws for what Google says: no connection, a domain the account has not verified, a failed
-     * request or a refused grant each become a reading the domain records and the pool shows.
+     * throws for what Google says: no connection, a domain the account has not verified, a rate
+     * limit (#183), no answer, a refused request or a refused grant each become a reading the
+     * domain records and the pool shows. Only a refusal is a warning; a limit and no answer are
+     * transient, and the last reading stands.
      */
     async read(workspaceId: string, domain: string, now = new Date()): Promise<PostmasterReading> {
         const connection = await this.rls.withWorkspace(workspaceId, (tx) => tx.postmasterConnection.findFirst());
@@ -78,13 +89,24 @@ export class PostmasterService {
                     rate: null,
                 };
             }
+            if (lookup.status === 'rate_limited') {
+                return {
+                    status: 'rate_limited',
+                    message: 'Postmaster Tools is rate-limiting reads',
+                    rate: null,
+                    retryAfterS: lookup.retryAfterS,
+                };
+            }
             if (lookup.status === 'no_data' || lookup.spamRateBps === null) {
                 return { status: 'ok', message: `no data for ${day}: too little traffic to report`, rate: null };
             }
             return { status: 'ok', message: null, rate: { day: lookup.day, rateBps: lookup.spamRateBps } };
         } catch (error) {
-            if (error instanceof PostmasterRequestFailed)
-                return { status: 'failed', message: error.message, rate: null };
+            if (error instanceof PostmasterRequestFailed) {
+                // No answer, or a server-side failure, passes on its own; a 4xx will not.
+                const transient = error.status === 0 || error.status >= 500;
+                return { status: transient ? 'unreachable' : 'failed', message: error.message, rate: null };
+            }
             if (error instanceof PostmasterReconnectNeeded) {
                 return { status: 'failed', message: error.reason, rate: null };
             }
