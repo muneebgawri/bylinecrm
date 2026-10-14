@@ -28,7 +28,10 @@ export class MembersService {
         return this.rls.withWorkspace(async (tx) => {
             const members = await tx.workspaceMember.findMany({
                 where: { leftAt: null },
-                include: { user: { select: { email: true, displayName: true } }, role: { select: { name: true } } },
+                include: {
+                    user: { select: { email: true, displayName: true, passwordHash: true, emailVerifiedAt: true } },
+                    role: { select: { name: true } },
+                },
                 orderBy: { createdAt: 'asc' },
             });
             return members.map((m) => ({
@@ -39,6 +42,9 @@ export class MembersService {
                 roleId: m.roleId,
                 roleName: m.role.name,
                 createdAt: m.createdAt,
+                // An account with neither a password nor a verified address has never signed in: the
+                // importer made it (#184) and nobody has used it yet.
+                hasSignedIn: m.user.passwordHash !== null || m.user.emailVerifiedAt !== null,
             }));
         });
     }

@@ -25,6 +25,11 @@ export interface TwentyListOptions {
     depth: 0 | 1;
     /** Only records Twenty updated at or after this instant (ISO 8601). */
     since?: string | null | undefined;
+    /**
+     * Only records Twenty has soft-deleted (`deletedAt` set): a list never returns them otherwise.
+     * The importer reads deactivated workspace members this way (#184).
+     */
+    deleted?: boolean | undefined;
 }
 
 export interface TwentyPage {

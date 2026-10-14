@@ -33,7 +33,7 @@ export function isTwentyImportObject(value: unknown): value is TwentyImportObjec
 
 /** How the importer screen names each object, and where its records land in BylineCRM. */
 export const TWENTY_IMPORT_OBJECT_LABELS: Readonly<Record<TwentyImportObject, { label: string; lands: string }>> = {
-    workspaceMembers: { label: 'Owners', lands: 'Members, matched by email' },
+    workspaceMembers: { label: 'Owners', lands: 'Members, matched by email (or created, #184)' },
     companies: { label: 'Companies', lands: 'Companies' },
     people: { label: 'People', lands: 'People' },
     opportunities: { label: 'Opportunities', lands: 'Deals in the default pipeline' },
@@ -100,6 +100,16 @@ export interface TwentyImportObjectReport {
     errors: TwentyImportRecordError[];
 }
 
+/**
+ * The run option that creates accounts for Twenty members who are not here (#184, P4-4e): each
+ * unmatched member with a usable address gets a user (no credential yet) and a seat with this role,
+ * so the records they own are theirs from the same run. Nothing is mailed; an admin sends the
+ * invitation from Members when they want to.
+ */
+export interface TwentyImportCreateMembers {
+    roleId: string;
+}
+
 export interface TwentyImportRunView {
     id: string;
     status: TwentyImportRunStatus;
@@ -112,6 +122,10 @@ export interface TwentyImportRunView {
     error: string | null;
     cancelRequested: boolean;
     startedBy: string | null;
+    /** The accounts option the run was started with (#184), or null. */
+    createMembers: TwentyImportCreateMembers | null;
+    /** Accounts (user and seat) this run created for Twenty members (#184). */
+    accountsCreated: number;
     queuedAt: string;
     startedAt: string | null;
     finishedAt: string | null;
@@ -136,6 +150,11 @@ export interface TwentyImportOverview {
 export interface TwentyImportPreview {
     checkedAt: string;
     objects: { object: TwentyImportObject; remote: number | null; linked: number; error: string | null }[];
+    /**
+     * Twenty members with a usable address who have no seat here (#184): what the accounts option
+     * would create. Null when Twenty's members could not be read.
+     */
+    accountsToCreate: number | null;
 }
 
 export function emptyObjectReport(object: TwentyImportObject): TwentyImportObjectReport {

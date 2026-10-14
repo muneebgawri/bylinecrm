@@ -268,15 +268,27 @@ export class AuthService {
             if (invite.expiresAt <= new Date()) throw new GoneException('invitation expired');
 
             let userId: string;
+            // An account with no credential yet (the importer made it, #184) takes the invitation's password
+            // and keeps the seat it already has: the invitation is how such an account comes to sign in.
+            let claimed = false;
             if ('signup' in actor) {
-                const created = await tx.user
-                    .create({
+                const existing = await tx.user.findUnique({
+                    where: { email: invite.email },
+                    include: { identities: { select: { id: true }, take: 1 } },
+                });
+                if (existing) {
+                    if (existing.passwordHash || existing.identities.length > 0) {
+                        throw new UniqueConflict('sign in to accept this invitation');
+                    }
+                    await tx.user.update({ where: { id: existing.id }, data: { passwordHash } });
+                    userId = existing.id;
+                    claimed = true;
+                } else {
+                    const created = await tx.user.create({
                         data: { email: invite.email, passwordHash, displayName: displayNameFor(invite.email) },
-                    })
-                    .catch((error: unknown) => {
-                        throw uniqueViolation(error) ? new UniqueConflict('sign in to accept this invitation') : error;
                     });
-                userId = created.id;
+                    userId = created.id;
+                }
                 const link = await this.links.issue(tx, 'email_verification', userId, invite.email);
                 await this.mail.verification(tx, invite.email, link);
             } else {
@@ -286,32 +298,54 @@ export class AuthService {
                 if (!user.emailVerifiedAt) throw new EmailUnverified();
                 userId = user.id;
             }
-            // A seat the address left before (#147) comes back as the same seat, with the invited role,
-            // so what they did then stays theirs; a seat still held is already a member.
-            const seat = await tx.workspaceMember.findUnique({
-                where: { workspaceId_userId: { workspaceId: invite.workspaceId, userId } },
-                select: { id: true, leftAt: true },
+            const seat = await takeSeat(tx, {
+                workspaceId: invite.workspaceId,
+                userId,
+                roleId: invite.roleId,
+                source: 'invite',
             });
-            if (seat && !seat.leftAt) throw new UniqueConflict('already a member');
-            if (seat) {
-                await tx.workspaceMember.update({
-                    where: { id: seat.id },
-                    data: { leftAt: null, roleId: invite.roleId },
-                });
-            } else {
-                await tx.workspaceMember
-                    .create({
-                        data: { workspaceId: invite.workspaceId, userId, roleId: invite.roleId },
-                    })
-                    .catch((error: unknown) => {
-                        throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
-                    });
-            }
+            if (seat.held && !claimed) throw new UniqueConflict('already a member');
             await tx.workspaceInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
             return { workspace: workspaceView(invite.workspace), userId };
         });
         this.mail.kick();
         return accepted;
+    }
+
+    /**
+     * An account and a seat for someone who is not here yet, made by the Twenty importer (#184) so the
+     * records they own are theirs: the user if absent — no password, unverified; a Google sign-in with
+     * the address or an invitation an admin sends later gives it a credential — and the seat with the
+     * role the admin chose, marked `twenty-import`. A seat they left (#147) comes back as the same seat;
+     * one still held is left as it is. Nothing is mailed. `leftAt` makes the seat a removed one from the
+     * start: a member deactivated in Twenty who still owns records (history attributed, no access).
+     */
+    async provisionMember(input: {
+        workspaceId: string;
+        email: string;
+        displayName: string | null;
+        roleId: string;
+        leftAt?: Date | null;
+    }): Promise<{ userId: string; memberId: string; createdUser: boolean; createdSeat: boolean }> {
+        const email = normaliseEmail(input.email);
+        return this.ownerPrisma.$transaction(async (tx) => {
+            let user = await tx.user.findUnique({ where: { email } });
+            let createdUser = false;
+            if (!user) {
+                user = await tx.user.create({
+                    data: { email, displayName: input.displayName?.trim() || displayNameFor(email) },
+                });
+                createdUser = true;
+            }
+            const seat = await takeSeat(tx, {
+                workspaceId: input.workspaceId,
+                userId: user.id,
+                roleId: input.roleId,
+                source: 'twenty-import',
+                leftAt: input.leftAt ?? null,
+            });
+            return { userId: user.id, memberId: seat.memberId, createdUser, createdSeat: seat.created };
+        });
     }
 
     /**
@@ -516,8 +550,50 @@ async function createWorkspaceShell(
 
 async function createWorkspaceWithAdmin(tx: OwnerTx, userId: string, name: string): Promise<WorkspaceView> {
     const { workspace, adminRoleId } = await createWorkspaceShell(tx, name);
-    await tx.workspaceMember.create({ data: { workspaceId: workspace.id, userId, roleId: adminRoleId } });
+    await tx.workspaceMember.create({
+        data: { workspaceId: workspace.id, userId, roleId: adminRoleId, source: 'signup' },
+    });
     return workspace;
+}
+
+/** How a seat came to be (`workspace_members.source`): the workspace's first admin, an accepted invitation, or the Twenty importer (#184). */
+export type SeatSource = 'signup' | 'invite' | 'twenty-import';
+
+/**
+ * The one way a user gets a seat in a workspace they are not in (#147, #184): a seat they left comes
+ * back as the same seat with this role, so what they did then stays theirs; a seat still held is
+ * returned as it is (`held`); none yet is created. `leftAt` makes a new or returning seat a removed one.
+ */
+export async function takeSeat(
+    tx: OwnerTx,
+    input: { workspaceId: string; userId: string; roleId: string; source: SeatSource; leftAt?: Date | null },
+): Promise<{ memberId: string; created: boolean; held: boolean }> {
+    const seat = await tx.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.userId } },
+        select: { id: true, leftAt: true },
+    });
+    if (seat && !seat.leftAt) return { memberId: seat.id, created: false, held: true };
+    if (seat) {
+        await tx.workspaceMember.update({
+            where: { id: seat.id },
+            data: { leftAt: input.leftAt ?? null, roleId: input.roleId, source: input.source },
+        });
+        return { memberId: seat.id, created: false, held: false };
+    }
+    const created = await tx.workspaceMember
+        .create({
+            data: {
+                workspaceId: input.workspaceId,
+                userId: input.userId,
+                roleId: input.roleId,
+                source: input.source,
+                leftAt: input.leftAt ?? null,
+            },
+        })
+        .catch((error: unknown) => {
+            throw uniqueViolation(error) ? new UniqueConflict('already a member') : error;
+        });
+    return { memberId: created.id, created: true, held: false };
 }
 
 /**
