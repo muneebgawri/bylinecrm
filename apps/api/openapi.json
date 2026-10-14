@@ -16166,6 +16166,146 @@
                 "tags": ["twenty-import"]
             }
         },
+        "/api/w/{workspaceId}/import/twenty/sync": {
+            "put": {
+                "operationId": "twentyImport_putSync",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutTwentyImportSyncDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TwentyImportSync"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["twenty-import"]
+            }
+        },
+        "/api/w/{workspaceId}/import/twenty/sync/cutover": {
+            "post": {
+                "operationId": "twentyImport_cutover",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TwentyImportSync"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["twenty-import"]
+            }
+        },
         "/api/w/{workspaceId}/import/twenty/preview": {
             "post": {
                 "operationId": "twentyImport_preview",
@@ -20749,6 +20889,16 @@
                     }
                 },
                 "required": ["baseUrl", "apiKey"]
+            },
+            "PutTwentyImportSyncDto": {
+                "type": "object",
+                "properties": {
+                    "interval": {
+                        "type": "string",
+                        "enum": ["off", "15m", "hourly", "daily"]
+                    }
+                },
+                "required": ["interval"]
             },
             "StartTwentyImportDto": {
                 "type": "object",
@@ -26375,6 +26525,31 @@
                             },
                             "required": ["externalId", "message"]
                         }
+                    },
+                    "conflicts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Records with a field edited in BylineCRM after Twenty last touched the record (#185): BylineCRM’s value was kept for those fields. Counted beside the outcomes, not instead of one."
+                    },
+                    "kept": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "externalId": {
+                                    "type": "string"
+                                },
+                                "fields": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": ["externalId", "fields"]
+                        },
+                        "description": "Which fields were kept, per record, for the first records of the pass."
                     }
                 },
                 "required": [
@@ -26390,8 +26565,44 @@
                     "failed",
                     "after",
                     "missingInSource",
-                    "errors"
+                    "errors",
+                    "conflicts",
+                    "kept"
                 ]
+            },
+            "TwentyImportSync": {
+                "type": "object",
+                "properties": {
+                    "interval": {
+                        "type": "string",
+                        "enum": ["off", "15m", "hourly", "daily"]
+                    },
+                    "nextRunAt": {
+                        "nullable": true,
+                        "description": "When the schedule next starts a run; null while off.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "failures": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Scheduled runs failed in a row; 0 after a success."
+                    },
+                    "lastError": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "cutoverAt": {
+                        "nullable": true,
+                        "description": "When an admin stopped syncing for good; cleared once syncing is turned back on.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["interval", "nextRunAt", "failures", "lastError", "cutoverAt"]
             },
             "TwentyImportMissing": {
                 "type": "object",
@@ -26507,6 +26718,10 @@
                     "cancelRequested": {
                         "type": "boolean"
                     },
+                    "scheduled": {
+                        "type": "boolean",
+                        "description": "Started by the automatic sync (#185), not a person."
+                    },
                     "startedBy": {
                         "nullable": true,
                         "type": "string",
@@ -26541,6 +26756,7 @@
                     "report",
                     "error",
                     "cancelRequested",
+                    "scheduled",
                     "startedBy",
                     "queuedAt",
                     "startedAt",
@@ -26590,9 +26806,12 @@
                             },
                             "required": ["object", "count"]
                         }
+                    },
+                    "sync": {
+                        "$ref": "#/components/schemas/TwentyImportSync"
                     }
                 },
-                "required": ["settings", "latestRun", "linked"]
+                "required": ["settings", "latestRun", "linked", "sync"]
             },
             "TwentyImportPreview": {
                 "type": "object",

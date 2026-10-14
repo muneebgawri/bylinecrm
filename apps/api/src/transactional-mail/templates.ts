@@ -123,3 +123,23 @@ export function signupInvitationMail(url: string): RenderedMail {
         footer: `This invitation works once and expires in ${lifetime(INVITE_TTL_S)}. If you were not expecting it, ignore this message.`,
     });
 }
+
+/** The workspace's automatic Twenty sync has failed several times in a row (#185): told to each admin, once per streak. */
+export function twentySyncFailingMail(input: {
+    workspaceName: string;
+    failures: number;
+    error: string;
+    url: string;
+}): RenderedMail {
+    const name = input.workspaceName;
+    return render(`Automatic Twenty sync is failing in ${name}`, {
+        heading: `Twenty sync has failed ${input.failures} times in a row`,
+        paragraphs: [
+            `${PRODUCT} could not sync ${name} from Twenty. The last run said: ${input.error}`,
+            'The schedule keeps trying, less often each time, until a run succeeds. Check the Twenty connection and the last runs on the import screen.',
+        ],
+        action: 'Open the import screen',
+        url: input.url,
+        footer: `You receive this because you are an admin of ${name} on ${PRODUCT}.`,
+    });
+}

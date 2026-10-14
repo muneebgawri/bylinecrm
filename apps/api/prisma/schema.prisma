@@ -237,13 +237,13 @@ model WorkspaceMember {
   assignedTasks          Task[]
   authoredAttachments    Attachment[]
   savedViews             SavedView[]
-  resumedMailboxes       Mailbox[]           @relation("MailboxResumedBy")
+  resumedMailboxes       Mailbox[]              @relation("MailboxResumedBy")
   configuredOAuthClients GoogleOAuthClient[]
   postmasterConnections  PostmasterConnection[]
   mailboxes              Mailbox[]
   mailParticipations     MailParticipant[]
-  blocklistEntries       BlocklistEntry[]    @relation("BlocklistOwner")
-  createdBlocklist       BlocklistEntry[]    @relation("BlocklistCreator")
+  blocklistEntries       BlocklistEntry[]       @relation("BlocklistOwner")
+  createdBlocklist       BlocklistEntry[]       @relation("BlocklistCreator")
 
   mailOutbound MailOutbound[] @relation("MailOutboundSender")
 
@@ -1583,22 +1583,22 @@ enum PostmasterConnectionStatus {
 
 /// A pool mailbox's sending domain and its last DNS check (FR-CRMS-13). One row per domain per workspace.
 model SendingDomain {
-  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId  String              @map("workspace_id") @db.Uuid
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId       String                 @map("workspace_id") @db.Uuid
   /// Lower case.
-  domain       String
+  domain            String
   /// The DKIM selector checked: `<selector>._domainkey.<domain>`.
-  dkimSelector String              @default("google") @map("dkim_selector")
-  status       SendingDomainStatus @default(unchecked)
+  dkimSelector      String                 @default("google") @map("dkim_selector")
+  status            SendingDomainStatus    @default(unchecked)
   /// The last check's per-step results: `{ spf, dkim, dmarc }`, each `{ outcome, message }`.
-  lastCheck    Json?               @map("last_check")
-  checkedAt    DateTime?           @map("checked_at") @db.Timestamptz
-  nextCheckAt  DateTime            @default(now()) @map("next_check_at") @db.Timestamptz
+  lastCheck         Json?                  @map("last_check")
+  checkedAt         DateTime?              @map("checked_at") @db.Timestamptz
+  nextCheckAt       DateTime               @default(now()) @map("next_check_at") @db.Timestamptz
   /// What the last check learned from Postmaster Tools (#129), and why when it is not `ok`.
   postmasterStatus  PostmasterDomainStatus @default(not_connected) @map("postmaster_status")
   postmasterMessage String?                @map("postmaster_message")
-  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   stats     SendingDomainStat[]
@@ -1847,10 +1847,10 @@ model SequenceStep {
   createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  sequence  Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  template  EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  sends     MailOutbound[]
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sequence     Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template     EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  sends        MailOutbound[]
   trackingHits TrackingHit[]
   tasks        Task[]
 
@@ -1911,12 +1911,19 @@ model SequenceEnrolment {
 /// The Twenty workspace an import reads: its REST base URL and an API key, sealed with `SecretBox`.
 /// One per workspace; absent until an admin connects one.
 model TwentyImportSettings {
-  workspaceId      String   @id @map("workspace_id") @db.Uuid
-  baseUrl          String   @map("base_url")
-  apiKeyCiphertext String   @map("api_key_ciphertext")
-  apiKeyLast4      String   @map("api_key_last4")
-  configuredById   String?  @map("configured_by_id") @db.Uuid
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  workspaceId      String    @id @map("workspace_id") @db.Uuid
+  baseUrl          String    @map("base_url")
+  apiKeyCiphertext String    @map("api_key_ciphertext")
+  apiKeyLast4      String    @map("api_key_last4")
+  configuredById   String?   @map("configured_by_id") @db.Uuid
+  /// #185: how often the importer runs its `changes` mode on its own — `off`, `15m`, `hourly` or `daily` (checked by the database).
+  syncInterval     String    @default("off") @map("sync_interval")
+  /// Scheduled runs failed in a row; the schedule backs off by it and tells the admins at the third.
+  syncFailures     Int       @default(0) @map("sync_failures")
+  syncLastError    String?   @map("sync_last_error")
+  /// When an admin stopped syncing for good (the cutover); cleared when syncing is turned back on.
+  cutoverAt        DateTime? @map("cutover_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   configuredBy WorkspaceMember? @relation(fields: [configuredById], references: [id], onDelete: SetNull)
@@ -1960,6 +1967,8 @@ model TwentyImportRun {
   report          Json                  @default("[]")
   error           String?
   cancelRequested Boolean               @default(false) @map("cancel_requested")
+  /// #185: started by the schedule, not a person.
+  scheduled       Boolean               @default(false)
   startedById     String?               @map("started_by_id") @db.Uuid
   queuedAt        DateTime              @default(now()) @map("queued_at") @db.Timestamptz
   startedAt       DateTime?             @map("started_at") @db.Timestamptz
@@ -2136,8 +2145,8 @@ model TrackingToken {
   url         String?
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  outbound  MailOutbound @relation(fields: [outboundId], references: [id], onDelete: Cascade)
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outbound  MailOutbound  @relation(fields: [outboundId], references: [id], onDelete: Cascade)
   hits      TrackingHit[]
 
   @@index([outboundId])

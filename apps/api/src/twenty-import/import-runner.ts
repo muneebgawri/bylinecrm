@@ -63,8 +63,11 @@ import {
     type MappedLeadView,
     type MappedOpportunity,
 } from './mappers';
+import { fieldsEditedAfter } from '../timeline/timeline.service';
 import { TWENTY_RELEASE_NOTE } from './twenty-import.constants';
 import { readConnection } from './twenty-import.settings';
+import { withoutLocalEdits } from './twenty-sync';
+import { TwentySyncService } from './twenty-sync.service';
 import { isObject, text } from './twenty-records';
 import { databaseUnavailable } from '../infra/prisma-errors';
 import { TwentyApiError } from './twenty.http';
@@ -186,6 +189,7 @@ export class TwentyImportRunner {
         private readonly exclusions: ExclusionsService,
         private readonly views: ViewsService,
         private readonly templates: TemplatesService,
+        private readonly sync: TwentySyncService,
     ) {}
 
     /** Runs `runId` to its end — succeeded, failed, cancelled — or throws so the queue retries it from its cursor. */
@@ -203,9 +207,18 @@ export class TwentyImportRunner {
 
     /** The queue gave up on the run's job: it is failed, with the last error, unless it finished meanwhile. */
     async abandon(runId: string, error: string): Promise<void> {
-        await this.ownerPrisma.twentyImportRun.updateMany({
-            where: { id: runId, status: { in: ['queued', 'running'] } },
-            data: { status: 'failed', error, finishedAt: new Date(), phase: null },
+        const head = await this.ownerPrisma.twentyImportRun.findUnique({
+            where: { id: runId },
+            select: { workspaceId: true },
+        });
+        if (!head) return;
+        await this.rls.withWorkspace(head.workspaceId, async (tx) => {
+            const { count } = await tx.twentyImportRun.updateMany({
+                where: { id: runId, status: { in: ['queued', 'running'] } },
+                data: { status: 'failed', error, finishedAt: new Date(), phase: null },
+            });
+            if (count === 0) return;
+            await this.sync.recordOutcome(tx, await tx.twentyImportRun.findUniqueOrThrow({ where: { id: runId } }));
         });
     }
 
@@ -390,10 +403,22 @@ export class TwentyImportRunner {
                 }
                 await tx.$executeRawUnsafe('SAVEPOINT import_record');
                 try {
-                    const outcome = await this.write(tx, state, object, record, result, links, definitions, events);
+                    const kept: string[] = [];
+                    const outcome = await this.write(
+                        tx,
+                        state,
+                        object,
+                        record,
+                        result,
+                        links,
+                        definitions,
+                        events,
+                        kept,
+                    );
                     await tx.$executeRawUnsafe('RELEASE SAVEPOINT import_record');
                     entry[outcome] += 1;
                     if (outcome === 'skipped' && result.note) recordError(entry, record.id, result.note);
+                    if (kept.length > 0) recordKept(entry, record.id, kept);
                 } catch (error) {
                     await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT import_record');
                     // The database or Twenty failing is the run's to retry; anything else — a service's
@@ -504,10 +529,27 @@ export class TwentyImportRunner {
         links: LinkIndex,
         definitions: FieldDefinition[],
         events: DomainEvent[],
+        kept: string[],
     ): Promise<Outcome> {
         const { context } = state;
         const workspaceId = context.workspaceId;
         const custom = customValuesFor(mapped.custom, definitions);
+        /**
+         * The precedence rule (#185) for a record mapped already: Twenty is the source for the fields
+         * it maps, except one edited here after Twenty last touched the record — that keeps its value,
+         * and the run report says so. A record Twenty gives no `updatedAt` for keeps every local edit.
+         */
+        const localEdits = async <I extends object>(type: RecordObject, localId: string, input: I): Promise<I> => {
+            const touched = text(record.updatedAt);
+            const edited = await fieldsEditedAfter(
+                tx,
+                { type, id: localId },
+                touched ? new Date(touched) : new Date(0),
+            );
+            const result = withoutLocalEdits(input, edited);
+            kept.push(...result.kept);
+            return result.input;
+        };
         const link = (localType: LocalType, localId: string, label: string | null = null) =>
             writeLink(tx, workspaceId, {
                 object,
@@ -530,7 +572,8 @@ export class TwentyImportRunner {
             case 'companies': {
                 const input = { ...(mapped.input as Parameters<CompaniesService['createIn']>[2]), custom };
                 if (existing) {
-                    const result = await this.companies.updateIn(tx, context, existing.localId, input);
+                    const patch = await localEdits('company', existing.localId, input);
+                    const result = await this.companies.updateIn(tx, context, existing.localId, patch);
                     if (result.event) events.push(result.event);
                     await link('company', existing.localId);
                     return result.event ? 'updated' : 'unchanged';
@@ -556,7 +599,8 @@ export class TwentyImportRunner {
                 const authoritative = object === 'people';
                 const target = existing?.localId ?? lead?.personId ?? null;
                 if (target) {
-                    const result = await this.updatePerson(tx, context, target, input, authoritative, events);
+                    const patch = existing && authoritative ? await localEdits('person', target, input) : input;
+                    const result = await this.updatePerson(tx, context, target, patch, authoritative, events);
                     await link('person', target);
                     return result;
                 }
@@ -580,10 +624,13 @@ export class TwentyImportRunner {
                 const actor = actorOf(context);
                 const close = stage && stage.kind !== 'open' ? { lostReason: deal.lostReason ?? undefined } : undefined;
                 if (existing) {
-                    const result = await this.opportunities.updateIn(tx, context, existing.localId, input);
+                    // The stage is a move, not a column: an edit here is `stageId` on the timeline.
+                    const patch = await localEdits('opportunity', existing.localId, { ...input, stageId: stage?.id });
+                    const { stageId: wantedStage, ...columns } = patch;
+                    const result = await this.opportunities.updateIn(tx, context, existing.localId, columns);
                     if (result.event) events.push(result.event);
                     let moved = false;
-                    if (stage && result.after.stageId !== stage.id) {
+                    if (stage && wantedStage && result.after.stageId !== stage.id) {
                         const outcome = await this.moves.move(tx, result.after, stage.id, actor, {
                             reason: 'import',
                             allowBackward: true,
@@ -828,8 +875,8 @@ export class TwentyImportRunner {
         error?: string,
         state?: RunState,
     ): Promise<void> {
-        await this.rls.withWorkspace((tx) =>
-            tx.twentyImportRun.update({
+        await this.rls.withWorkspace(async (tx) => {
+            const row = await tx.twentyImportRun.update({
                 where: { id: runId },
                 data: {
                     status,
@@ -840,8 +887,10 @@ export class TwentyImportRunner {
                         ? { cursor: state.cursors, report: state.report as unknown as Prisma.InputJsonValue }
                         : {}),
                 },
-            }),
-        );
+            });
+            // A scheduled run's end is the schedule's record (#185): the streak, and the admins' notice.
+            await this.sync.recordOutcome(tx, row);
+        });
     }
 }
 
@@ -886,6 +935,12 @@ function reportEntry(report: TwentyImportObjectReport[], object: TwentyImportObj
 
 function recordError(entry: TwentyImportObjectReport, externalId: string, message: string): void {
     if (entry.errors.length < TWENTY_IMPORT_ERRORS_KEPT) entry.errors.push({ externalId, message });
+}
+
+/** A record whose BylineCRM values were kept over Twenty's (#185): counted, and named while the list has room. */
+function recordKept(entry: TwentyImportObjectReport, externalId: string, fields: string[]): void {
+    entry.conflicts += 1;
+    if (entry.kept.length < TWENTY_IMPORT_ERRORS_KEPT) entry.kept.push({ externalId, fields });
 }
 
 /**

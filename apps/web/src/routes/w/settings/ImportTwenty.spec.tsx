@@ -4,6 +4,7 @@ import {
     type TwentyImportOverview,
     type TwentyImportPreview,
     type TwentyImportRunView,
+    type TwentyImportSyncView,
 } from '@bylinecrm/shared';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -15,9 +16,18 @@ import { apiError, json, renderAt, route, stubApi } from './settingsTestKit';
 const WS = 'ws-1';
 const KEY = 'twenty-api-key-value-1a2b';
 
+const sync = (overrides: Partial<TwentyImportSyncView> = {}): TwentyImportSyncView => ({
+    interval: 'off',
+    nextRunAt: null,
+    failures: 0,
+    lastError: null,
+    cutoverAt: null,
+    ...overrides,
+});
 const unconfigured: TwentyImportOverview = {
     settings: { configured: false, baseUrl: null, apiKeyLast4: null, configuredBy: null, updatedAt: null },
     latestRun: null,
+    sync: sync(),
     linked: TWENTY_IMPORT_OBJECTS.map((object) => ({ object, count: 0 })),
 };
 const configured: TwentyImportOverview = {
@@ -58,6 +68,7 @@ const run = (
     })),
     error: null,
     cancelRequested: false,
+    scheduled: false,
     startedBy: 'm-1',
     queuedAt: '2026-10-09T09:00:00.000Z',
     startedAt: status === 'queued' ? null : '2026-10-09T09:00:01.000Z',
@@ -249,6 +260,93 @@ describe('P4-UI-2 (doc 48 §11): the importer screen', () => {
         await userEvent.type(screen.getByLabelText(/API key/), KEY);
         await userEvent.click(screen.getByRole('button', { name: 'Save connection' }));
         expect(await screen.findByRole('alert')).toHaveTextContent(/must use https/);
+    });
+
+    it('#185 automatic sync: the interval is a workspace setting with the next run shown, failures in a row are shown with their error, and Stop syncing (cutover) turns it off and records the moment', async () => {
+        let state = sync({
+            interval: 'hourly',
+            nextRunAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+            failures: 3,
+            lastError: 'Twenty refused the API key',
+        });
+        const seen = stubApi([
+            (r) => {
+                if (r.method === 'PUT' && r.url.endsWith('/import/twenty/sync')) {
+                    state = sync({ ...state, interval: (r.body as TwentyImportSyncView).interval });
+                    return json(state);
+                }
+                return undefined;
+            },
+            (r) => {
+                if (r.method === 'POST' && r.url.endsWith('/import/twenty/sync/cutover')) {
+                    state = sync({ cutoverAt: '2026-10-09T10:00:00.000Z' });
+                    return json(state);
+                }
+                return undefined;
+            },
+            (r) => (r.url.endsWith('/import/twenty') ? json({ ...configured, sync: state }) : undefined),
+            (r) =>
+                r.url.endsWith('/import/twenty/runs') && r.method === 'GET'
+                    ? json([
+                          run('failed', {
+                              id: 'run-9',
+                              mode: 'changes',
+                              scheduled: true,
+                              startedBy: null,
+                              error: 'Twenty refused the API key',
+                          }),
+                      ])
+                    : undefined,
+        ]);
+        page(['workspace:admin']);
+        const select = await screen.findByRole('combobox', { name: 'Automatic sync' });
+        expect(select).toHaveTextContent('Hourly');
+        expect(screen.getByText(/next sync/i)).toBeInTheDocument();
+        const failing = screen.getByText(/3 automatic syncs in a row failed/);
+        expect(failing).toHaveTextContent('Twenty refused the API key');
+        expect(failing).toHaveTextContent(/admins have been emailed/i);
+        // An automatic run is listed as one.
+        expect(await screen.findByText(/Automatic · Changes/)).toBeInTheDocument();
+
+        await userEvent.click(select);
+        await userEvent.click(await screen.findByRole('option', { name: 'Daily' }));
+        await waitFor(() =>
+            expect(seen.find((r) => r.method === 'PUT' && r.url.endsWith('/import/twenty/sync'))?.body).toEqual({
+                interval: 'daily',
+            }),
+        );
+        expect(await screen.findByRole('combobox', { name: 'Automatic sync' })).toHaveTextContent('Daily');
+
+        await userEvent.click(screen.getByRole('button', { name: 'Stop syncing (cutover)' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Stop syncing' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/import/twenty/sync/cutover'))).toBe(true));
+        expect(await screen.findByText(/syncing stopped/i)).toBeInTheDocument();
+        expect(screen.getByRole('combobox', { name: 'Automatic sync' })).toHaveTextContent('Off');
+        expect(screen.queryByRole('button', { name: 'Stop syncing (cutover)' })).not.toBeInTheDocument();
+    });
+
+    it('#185 a run report counts the records whose edits here were kept over Twenty’s as conflicts, and names the fields', async () => {
+        const kept = run('succeeded', {
+            id: 'run-3',
+            mode: 'changes',
+            scheduled: true,
+            report: TWENTY_IMPORT_OBJECTS.map((object) => ({
+                ...emptyObjectReport(object),
+                ...(object === 'people'
+                    ? { read: 2, updated: 2, conflicts: 1, kept: [{ externalId: 'tw-p-1', fields: ['jobTitle'] }] }
+                    : {}),
+            })),
+        });
+        stubApi([
+            (r) => (r.url.endsWith('/import/twenty') ? json({ ...configured, latestRun: kept }) : undefined),
+            (r) => (r.url.endsWith('/import/twenty/runs') && r.method === 'GET' ? json([kept]) : undefined),
+        ]);
+        page(['workspace:admin']);
+        const report = await screen.findByLabelText('Run report');
+        expect(within(report).getByText('Conflicts')).toBeInTheDocument();
+        const details = within(report).getByText(/1 record kept BylineCRM’s value/);
+        await userEvent.click(details);
+        expect(within(report).getByText(/tw-p-1/)).toHaveTextContent('jobTitle');
     });
 });
 

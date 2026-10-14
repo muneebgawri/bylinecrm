@@ -10,6 +10,7 @@ import {
     TWENTY_IMPORT_OBJECTS,
     TWENTY_IMPORT_SOURCE,
     TWENTY_LIST_VIEW_PREFIX,
+    TWENTY_SYNC_INTERVAL_MS,
     type TwentyImportMode,
     type TwentyImportObject,
     type TwentyImportObjectReport,
@@ -17,8 +18,11 @@ import {
     type TwentyImportPreview,
     type TwentyImportRunView,
     type TwentyImportSettingsView,
+    type TwentyImportSyncView,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
@@ -26,10 +30,12 @@ import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { TwentyImportRunner } from '../../src/twenty-import/import-runner';
+import { TWENTY_IMPORT_QUEUE } from '../../src/twenty-import/twenty-import.constants';
+import { TwentyImportWorkers } from '../../src/twenty-import/twenty-import.workers';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { FakeTwenty } from '../support/fake-twenty';
-import { verifyAddress } from '../support/mail';
+import { deliverMail, mailTo, verifyAddress } from '../support/mail';
 import { eventLog, settle, type EventLog } from '../support/outbox';
 
 interface Browser {
@@ -119,6 +125,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         put: (path: string) => http().put(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const err = (res: Response) => res.body as ApiError;
@@ -932,6 +939,221 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             expect(runs.length).toBeGreaterThanOrEqual(4);
             expect(runs.map((r) => r.queuedAt)).toEqual([...runs.map((r) => r.queuedAt)].sort().reverse());
             expect((await as(member).get(w('/import/twenty/runs'))).status).toBe(403);
+        });
+    });
+
+    /**
+     * Scheduled sync (#185, P4-4f): a workspace setting makes the importer run its `changes` mode on
+     * its own — one BullMQ scheduler per workspace, never two runs of one workspace, each run from
+     * the last successful run's start — with the failures told to the admins after three in a row,
+     * Twenty the source for the fields it maps unless a person edited one here more recently, and a
+     * cutover that stops it for good.
+     */
+    describe('#185 P4-4f scheduled sync', () => {
+        const DAY = 24 * 60 * 60 * 1000;
+        let queue: Queue;
+        let workers: TwentyImportWorkers;
+        const schedulerId = (ws: string) => `sync:${ws}`;
+        const overview = async (who = admin, ws = workspace) => {
+            const res = await as(who).get(w('/import/twenty', ws));
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            return res.body as TwentyImportOverview;
+        };
+        const setSync = async (interval: string, who = admin, ws = workspace) =>
+            as(who).put(w('/import/twenty/sync', ws)).send({ interval });
+        const runOf = async (runId: string) => {
+            const res = await as(admin).get(w(`/import/twenty/runs/${runId}`));
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            return res.body as TwentyImportRunView;
+        };
+        const lastSuccessStart = async () => {
+            const runs = (await as(admin).get(w('/import/twenty/runs'))).body as TwentyImportRunView[];
+            return runs.find((r) => r.status === 'succeeded')!.startedAt!;
+        };
+        /** The last run finished long ago, as far as the schedule's backoff is concerned. */
+        const ageLastRun = (runId: string) =>
+            owner.twentyImportRun.update({
+                where: { id: runId },
+                data: { finishedAt: new Date(Date.now() - 2 * DAY) },
+            });
+
+        beforeAll(() => {
+            queue = app.get<Queue>(getQueueToken(TWENTY_IMPORT_QUEUE));
+            workers = app.get(TwentyImportWorkers);
+        });
+
+        it('is a workspace setting, off by default: one scheduler per workspace at the interval — replaced, never added — and none when off', async () => {
+            expect((await overview()).sync).toEqual({
+                interval: 'off',
+                nextRunAt: null,
+                failures: 0,
+                lastError: null,
+                cutoverAt: null,
+            } satisfies TwentyImportSyncView);
+            expect(await queue.getJobScheduler(schedulerId(workspace))).toBeUndefined();
+
+            const on = await setSync('15m');
+            expect(on.status, JSON.stringify(on.body)).toBe(200);
+            const view = on.body as TwentyImportSyncView;
+            expect(view).toMatchObject({ interval: '15m', failures: 0, cutoverAt: null });
+            // The first tick is at once (BullMQ runs an `every` scheduler's first job immediately), then every interval.
+            const wait = Date.parse(view.nextRunAt!) - Date.now();
+            expect(wait).toBeGreaterThan(-10_000);
+            expect(wait).toBeLessThanOrEqual(TWENTY_SYNC_INTERVAL_MS['15m']);
+            expect(await queue.getJobScheduler(schedulerId(workspace))).toMatchObject({
+                every: TWENTY_SYNC_INTERVAL_MS['15m'],
+                template: { data: { workspaceId: workspace } },
+            });
+
+            // A new interval replaces the scheduler; the workspace never has two.
+            expect((await setSync('hourly')).body).toMatchObject({ interval: 'hourly' });
+            expect(await queue.getJobScheduler(schedulerId(workspace))).toMatchObject({
+                every: TWENTY_SYNC_INTERVAL_MS.hourly,
+            });
+            const mine = (await queue.getJobSchedulers(0, -1)).filter((s) => s.key.includes(workspace));
+            expect(mine).toHaveLength(1);
+            expect((await overview()).sync).toMatchObject({ interval: 'hourly' });
+
+            // Off: no scheduler, nothing next.
+            expect((await setSync('off')).body).toMatchObject({ interval: 'off', nextRunAt: null });
+            expect(await queue.getJobScheduler(schedulerId(workspace))).toBeUndefined();
+
+            expect((await setSync('weekly')).status).toBe(400);
+            // Without a connection there is nothing to sync: a 422 at the key, as a run start says.
+            const elsewhere = await setSync('15m', otherAdmin, otherWorkspace);
+            expect(elsewhere.status).toBe(422);
+            expect(err(elsewhere).fieldErrors).toEqual([{ path: 'apiKey', message: expect.any(String) }]);
+            expect((await setSync('15m', member)).status).toBe(403);
+        });
+
+        it('a tick starts one changes run from the last successful run’s start, marked automatic — and never a second while one is queued or running', async () => {
+            expect((await setSync('hourly')).status).toBe(200);
+            const since = await lastSuccessStart();
+            const runId = await workers.tick(workspace);
+            expect(runId).toBeTruthy();
+            expect(await runOf(runId!)).toMatchObject({
+                status: 'queued',
+                mode: 'changes',
+                scheduled: true,
+                since,
+                startedBy: null,
+            });
+            // The run lock the importer has: a second tick starts nothing, a person's start is refused.
+            expect(await workers.tick(workspace)).toBeNull();
+            expect((await as(admin).post(w('/import/twenty/runs')).send({ mode: 'changes' })).status).toBe(409);
+            await runner.run(runId!);
+            expect((await runOf(runId!)).status).toBe('succeeded');
+            expect((await overview()).sync).toMatchObject({ failures: 0, lastError: null });
+        });
+
+        it('a run that fails keeps the cursor and the schedule backs off; three failures in a row tell the admins once; a success resets', async () => {
+            const since = await lastSuccessStart();
+            const failOnce = async () => {
+                twenty.failNext(401, 1);
+                const runId = (await workers.tick(workspace))!;
+                expect(runId).toBeTruthy();
+                await runner.run(runId);
+                const run = await runOf(runId);
+                expect(run).toMatchObject({ status: 'failed', scheduled: true, since });
+                expect(run.error).toBeTruthy();
+                return run;
+            };
+            // Due now: the last scheduled run is old.
+            const previous = (await as(admin).get(w('/import/twenty/runs'))).body as TwentyImportRunView[];
+            await ageLastRun(previous[0]!.id);
+            let last = await failOnce();
+            expect((await overview()).sync).toMatchObject({ failures: 1, lastError: last.error });
+            // Backing off: the next try waits twice the interval after the failed run — not now.
+            expect(await workers.tick(workspace)).toBeNull();
+            await ageLastRun(last.id);
+            last = await failOnce();
+            expect((await overview()).sync).toMatchObject({ failures: 2 });
+            await deliverMail(app);
+            expect(mailTo(adminEmail, 'twenty_sync_failing')).toHaveLength(0);
+            await ageLastRun(last.id);
+            last = await failOnce();
+            expect((await overview()).sync).toMatchObject({ failures: 3, lastError: last.error });
+            await deliverMail(app);
+            // The third failure in a row tells every admin of the workspace — once — and nobody else.
+            const notices = mailTo(adminEmail, 'twenty_sync_failing');
+            expect(notices).toHaveLength(1);
+            expect(notices[0]!.text).toContain(last.error);
+            expect(notices[0]!.text).toContain(`/w/${workspace}/settings/import-twenty`);
+            expect(mailTo(memberEmail, 'twenty_sync_failing')).toHaveLength(0);
+            expect(mailTo(otherEmail, 'twenty_sync_failing')).toHaveLength(0);
+            // It keeps trying, and a fourth failure is not a second notice.
+            await ageLastRun(last.id);
+            last = await failOnce();
+            expect((await overview()).sync).toMatchObject({ failures: 4 });
+            await deliverMail(app);
+            expect(mailTo(adminEmail, 'twenty_sync_failing')).toHaveLength(1);
+            // Twenty answers again: the run resumes from the last successful run's start, and the streak ends.
+            await ageLastRun(last.id);
+            const runId = (await workers.tick(workspace))!;
+            await runner.run(runId);
+            expect(await runOf(runId)).toMatchObject({ status: 'succeeded', since });
+            expect((await overview()).sync).toMatchObject({ failures: 0, lastError: null });
+        });
+
+        it('precedence: Twenty is the source for the fields it maps, but a field edited here after Twenty last touched the record keeps BylineCRM’s value and counts as a conflict — until Twenty changes the record again', async () => {
+            const matthew = (await people()).find((p) => p.emails.primary === 'matthew.croteau@roberthalf.com')!;
+            twenty.update('people', ids.p1!, { city: 'Lyon' }, new Date().toISOString());
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            const edited = await as(admin)
+                .patch(w(`/people/${matthew.id}`))
+                .send({ jobTitle: 'Head of Growth' });
+            expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+            await settle(app);
+
+            const previous = (await as(admin).get(w('/import/twenty/runs'))).body as TwentyImportRunView[];
+            await ageLastRun(previous[0]!.id);
+            const runId = (await workers.tick(workspace))!;
+            await runner.run(runId);
+            const run = await runOf(runId);
+            expect(run.status, JSON.stringify(run.report)).toBe('succeeded');
+            const report = reportOf(run, 'people');
+            expect(counts(report)).toEqual({ ...zero, read: 1, updated: 1 });
+            expect(report.conflicts).toBe(1);
+            expect(report.kept).toEqual([{ externalId: ids.p1, fields: ['jobTitle'] }]);
+            let person = (await people()).find((p) => p.id === matthew.id)!;
+            expect(person.jobTitle).toBe('Head of Growth');
+            expect((person as unknown as { city: string | null }).city).toBe('Lyon');
+
+            // Twenty changes the record after the edit here: Twenty's value applies, nothing is kept.
+            twenty.update('people', ids.p1!, { jobTitle: 'CMO' }, new Date().toISOString());
+            await ageLastRun(runId);
+            const again = (await workers.tick(workspace))!;
+            await runner.run(again);
+            const second = reportOf(await runOf(again), 'people');
+            expect(counts(second)).toEqual({ ...zero, read: 1, updated: 1 });
+            expect(second.conflicts).toBe(0);
+            expect(second.kept).toEqual([]);
+            person = (await people()).find((p) => p.id === matthew.id)!;
+            expect(person.jobTitle).toBe('CMO');
+        });
+
+        it('Stop syncing (cutover) disables the schedule and records the moment; a tick after it starts nothing; another workspace has no schedule to see or stop', async () => {
+            const before = ((await as(admin).get(w('/import/twenty/runs'))).body as TwentyImportRunView[]).length;
+            const stop = await as(admin).post(w('/import/twenty/sync/cutover'));
+            expect(stop.status, JSON.stringify(stop.body)).toBe(200);
+            const view = stop.body as TwentyImportSyncView;
+            expect(view).toMatchObject({ interval: 'off', nextRunAt: null });
+            expect(Date.now() - Date.parse(view.cutoverAt!)).toBeLessThan(10_000);
+            expect(await queue.getJobScheduler(schedulerId(workspace))).toBeUndefined();
+            expect(await workers.tick(workspace)).toBeNull();
+            expect(((await as(admin).get(w('/import/twenty/runs'))).body as TwentyImportRunView[]).length).toBe(before);
+            expect((await overview()).sync).toMatchObject({ interval: 'off', cutoverAt: view.cutoverAt });
+            // Syncing again is a decision that undoes the cutover.
+            expect((await setSync('daily')).body).toMatchObject({ interval: 'daily', cutoverAt: null });
+            expect((await setSync('off')).body).toMatchObject({ interval: 'off', cutoverAt: null });
+
+            expect((await overview(otherAdmin, otherWorkspace)).sync).toMatchObject({
+                interval: 'off',
+                cutoverAt: null,
+                failures: 0,
+            });
+            expect((await as(otherAdmin).post(w('/import/twenty/sync/cutover', otherWorkspace))).status).toBe(422);
+            expect((await as(member).post(w('/import/twenty/sync/cutover'))).status).toBe(403);
         });
     });
 
