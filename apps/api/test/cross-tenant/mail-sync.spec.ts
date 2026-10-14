@@ -401,6 +401,14 @@ describe('mail sync', () => {
             expect(await timeline(`person:${danaId}`)).toHaveLength(before + 1);
         });
 
+        it('#2c: skips a message Gmail listed but no longer has (404), and the run still succeeds', async () => {
+            const { id } = gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Gone', text: 'g' });
+            gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Still here', text: 's' });
+            gmail.vanish(adminEmail, id);
+            const run = await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(run).toMatchObject({ mode: 'incremental', imported: 1, vanished: 1 });
+        });
+
         it('stores a message Gmail reports twice only once', async () => {
             const { id } = gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Repeat', text: 'r' });
             gmail.repeatInHistory(adminEmail, id);

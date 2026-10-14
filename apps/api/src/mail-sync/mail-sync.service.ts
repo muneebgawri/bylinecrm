@@ -40,6 +40,8 @@ export interface SyncRunResult {
     skippedByLabel: number;
     /** Every outside participant blocklisted. */
     blocked: number;
+    /** Listed by Gmail, gone by the time it was read (404): skipped, not a failure. */
+    vanished: number;
 }
 
 /** Why the last run stopped, as kept on the sync state. Never a token or a raw Google body. */
@@ -85,7 +87,14 @@ export class MailSyncService {
 
     /** One run for one mailbox. Throws on a failure worth retrying (the job is retried); records every outcome. */
     async syncMailbox(workspaceId: string, mailboxId: string, retry: RetryOptions = {}): Promise<SyncRunResult> {
-        const skipped: SyncRunResult = { mode: 'skipped', imported: 0, duplicates: 0, skippedByLabel: 0, blocked: 0 };
+        const skipped: SyncRunResult = {
+            mode: 'skipped',
+            imported: 0,
+            duplicates: 0,
+            skippedByLabel: 0,
+            blocked: 0,
+            vanished: 0,
+        };
         const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: mailboxId } }),
         );
@@ -225,16 +234,25 @@ export class MailSyncService {
      * writes of one run race each other.
      */
     private async importIds(run: Run, ids: readonly string[]): Promise<Omit<SyncRunResult, 'mode'>> {
-        const totals = { imported: 0, duplicates: 0, skippedByLabel: 0, blocked: 0 };
+        const totals = { imported: 0, duplicates: 0, skippedByLabel: 0, blocked: 0, vanished: 0 };
         const blocklist = await this.blocklistFor(run.mailbox);
         for (let start = 0; start < ids.length; start += GMAIL_LIST_PAGE_SIZE) {
             const chunk = ids.slice(start, start + GMAIL_LIST_PAGE_SIZE);
             const known = await this.knownIds(run.mailbox, chunk);
             const fresh = chunk.filter((id) => !known.has(id));
             totals.duplicates += chunk.length - fresh.length;
-            const raws = await mapPool(fresh, GMAIL_FETCH_CONCURRENCY, (id) =>
-                run.call(GMAIL_UNITS.getMessage, (token) => this.gmail.getMessage(token, id)),
+            // A message listed a moment ago and gone by the time it is read (a deleted draft, a message
+            // emptied from Trash) answers 404: it no longer exists, so it is skipped, never a failed run.
+            const fetched = await mapPool(fresh, GMAIL_FETCH_CONCURRENCY, (id) =>
+                run
+                    .call(GMAIL_UNITS.getMessage, (token) => this.gmail.getMessage(token, id))
+                    .catch((error: unknown) => {
+                        if (error instanceof GmailApiError && error.status === 404) return null;
+                        throw error;
+                    }),
             );
+            const raws = fetched.filter((raw): raw is NonNullable<typeof raw> => raw !== null);
+            totals.vanished += fetched.length - raws.length;
             const incoming: Incoming[] = [];
             for (const raw of raws) {
                 const verdict = classify(run.mailbox, raw, blocklist);

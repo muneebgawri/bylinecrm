@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicAddress, parseWebhookUrl } from './url-guard';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { request } from 'undici';
+import { createWebhookDispatcher, isPublicAddress, parseWebhookUrl } from './url-guard';
 
 describe('webhook url guard', () => {
     it('knows which addresses no public host can own', () => {
@@ -53,5 +56,22 @@ describe('webhook url guard', () => {
         expect(parseWebhookUrl('http://127.0.0.1:4567/hook', dev).port).toBe('4567');
         expect(() => parseWebhookUrl('ftp://127.0.0.1/hook', dev)).toThrow(/https/);
         expect(() => parseWebhookUrl('http://u:p@127.0.0.1/hook', dev)).toThrow(/credentials/);
+    });
+});
+
+describe('the guarded dispatcher connects (production 2026-10-14)', () => {
+    it('answers a lookup that asks for every address, so a hostname connects instead of ERR_INVALID_IP_ADDRESS', async () => {
+        const server = createServer((_req, res) => res.end('ok')).listen(0, '127.0.0.1');
+        await new Promise((resolve) => server.once('listening', resolve));
+        const { port } = server.address() as AddressInfo;
+        const dispatcher = createWebhookDispatcher({ allowPrivate: true });
+        try {
+            const res = await request(`http://localhost:${port}/`, { dispatcher });
+            expect(res.statusCode).toBe(200);
+            expect(await res.body.text()).toBe('ok');
+        } finally {
+            await dispatcher.close();
+            server.close();
+        }
     });
 });

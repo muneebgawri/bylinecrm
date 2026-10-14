@@ -153,6 +153,16 @@ export class FakeGmail implements GmailPort {
     }
 
     /** Gmail forgets all history so far: a start id from before now answers 404. */
+    /**
+     * The message is deleted (a draft discarded, Trash emptied) after Gmail logged it in history: it
+     * is gone from the mailbox and its listings, so reading it answers 404, but history still names it.
+     */
+    vanish(email: string, messageId: string): void {
+        const box = this.box(email);
+        box.messages.delete(messageId);
+        box.order = box.order.filter((id) => id !== messageId);
+    }
+
     expireHistory(email: string): void {
         const box = this.box(email);
         box.historyId += 1;
