@@ -55,7 +55,14 @@ export class TwentySyncService {
                 if (last?.finishedAt && last.finishedAt.getTime() + wait > Date.now()) return null;
             }
             try {
-                const run = await queueRun(tx, { workspaceId, mode: 'changes', startedById: null, scheduled: true });
+                // The accounts option (#184) as last chosen at a start: the workspace's choice, with its role.
+                const run = await queueRun(tx, {
+                    workspaceId,
+                    mode: 'changes',
+                    startedById: null,
+                    scheduled: true,
+                    createMembersRoleId: settings.createMembersRoleId,
+                });
                 return run.id;
             } catch (error) {
                 // A person started one between the check and the insert: theirs runs.

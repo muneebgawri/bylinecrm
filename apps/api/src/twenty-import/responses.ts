@@ -19,6 +19,10 @@ export const twentyImportSettings = named(
         apiKeyLast4: z.string().nullable().meta({ description: 'The key itself is never returned.' }),
         configuredBy: id.nullable(),
         updatedAt: isoTime.nullable(),
+        createMembers: z.object({ roleId: id }).nullable().meta({
+            description:
+                'The accounts option as last chosen at a start (#184): the workspace’s saved choice, which a scheduled run (#185) uses. Null for off.',
+        }),
     }),
 );
 

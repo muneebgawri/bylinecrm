@@ -27,13 +27,23 @@ export async function readConnection(
 }
 
 export function settingsView(row: TwentyImportSettings | null): TwentyImportSettingsView {
-    if (!row) return { configured: false, baseUrl: null, apiKeyLast4: null, configuredBy: null, updatedAt: null };
+    if (!row) {
+        return {
+            configured: false,
+            baseUrl: null,
+            apiKeyLast4: null,
+            configuredBy: null,
+            updatedAt: null,
+            createMembers: null,
+        };
+    }
     return {
         configured: true,
         baseUrl: row.baseUrl,
         apiKeyLast4: row.apiKeyLast4,
         configuredBy: row.configuredById,
         updatedAt: row.updatedAt.toISOString(),
+        createMembers: row.createMembersRoleId ? { roleId: row.createMembersRoleId } : null,
     };
 }
 

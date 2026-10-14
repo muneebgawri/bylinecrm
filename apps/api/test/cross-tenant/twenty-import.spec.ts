@@ -450,6 +450,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             expect(res.status, JSON.stringify(res.body)).toBe(200);
             const overview = res.body as TwentyImportOverview;
             expect(overview.settings).toEqual({
+                createMembers: null,
                 configured: false,
                 baseUrl: null,
                 apiKeyLast4: null,
@@ -1392,6 +1393,63 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             const spaces = await as(browserFrom(login)).get('/api/me/workspaces');
             expect((spaces.body as { id: string }[]).map((s) => s.id)).toEqual([workspace]);
             expect((await memberRows()).find((m) => m.email === patEmail)).toMatchObject({ hasSignedIn: true });
+        });
+
+        it('#185: a scheduled run uses the workspace’s saved accounts choice and role — the last start’s — and never mails; a start without the option turns it off for the schedule too', async () => {
+            const workers = app.get(TwentyImportWorkers);
+            const samEmail = `sam-${stamp}@example.com`;
+            const sueEmail = `sue-${stamp}@example.com`;
+            const saved = async () =>
+                ((await as(admin).get(w('/import/twenty'))).body as TwentyImportOverview).settings.createMembers;
+            // The last start chose the account-manager role: that is the workspace's choice.
+            expect(await saved()).toEqual({ roleId: amRoleId });
+            // Seeded as just added in Twenty, so the schedule's changes run reads them.
+            const [sam] = twenty.seed('workspaceMembers', [
+                { name: { firstName: 'Sam', lastName: 'Scheduled' }, userEmail: samEmail },
+            ]);
+            twenty.update('workspaceMembers', sam!.id, {}, new Date().toISOString());
+            expect((await as(admin).put(w('/import/twenty/sync')).send({ interval: 'hourly' })).status).toBe(200);
+            const runId = (await workers.tick(workspace))!;
+            expect(runId).toBeTruthy();
+            await runner.run(runId);
+            const run = (await as(admin).get(w(`/import/twenty/runs/${runId}`))).body as TwentyImportRunView;
+            expect(run, run.error ?? JSON.stringify(reportOf(run, 'workspaceMembers'))).toMatchObject({
+                status: 'succeeded',
+                scheduled: true,
+                createMembers: { roleId: amRoleId },
+                accountsCreated: 1,
+            });
+            const seat = await seatOf(samEmail);
+            expect(seat!.role.id).toBe(amRoleId);
+            expect(seat!.user).toMatchObject({
+                passwordHash: null,
+                emailVerifiedAt: null,
+                displayName: 'Sam Scheduled',
+            });
+            await deliverMail(app);
+            expect(mailTo(samEmail)).toEqual([]);
+
+            // A start without the option is the new choice: the schedule creates none either.
+            const plain = await runWith({ mode: 'changes' });
+            expect(plain.status).toBe('succeeded');
+            expect(plain.createMembers).toBeNull();
+            expect(await saved()).toBeNull();
+            const [sue] = twenty.seed('workspaceMembers', [
+                { name: { firstName: 'Sue', lastName: 'Later' }, userEmail: sueEmail },
+            ]);
+            twenty.update('workspaceMembers', sue!.id, {}, new Date().toISOString());
+            const second = (await workers.tick(workspace))!;
+            expect(second).toBeTruthy();
+            await runner.run(second);
+            const read = (await as(admin).get(w(`/import/twenty/runs/${second}`))).body as TwentyImportRunView;
+            expect(read).toMatchObject({
+                status: 'succeeded',
+                scheduled: true,
+                createMembers: null,
+                accountsCreated: 0,
+            });
+            expect(await owner.user.count({ where: { email: sueEmail } })).toBe(0);
+            expect((await as(admin).put(w('/import/twenty/sync')).send({ interval: 'off' })).status).toBe(200);
         });
 
         it('another workspace sees none of it', async () => {

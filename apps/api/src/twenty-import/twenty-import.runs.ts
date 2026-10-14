@@ -18,7 +18,7 @@ export async function queueRun(
         mode: TwentyImportMode;
         startedById: string | null;
         scheduled: boolean;
-        /** The accounts option (#184): the role created members get; a scheduled run has none. */
+        /** The accounts option (#184): the role created members get; a scheduled run uses the workspace's saved choice. */
         createMembersRoleId?: string | null;
     },
 ): Promise<TwentyImportRun> {

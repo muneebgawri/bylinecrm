@@ -1269,6 +1269,7 @@ export const twentyImport: TwentyImportOverviewView = {
         apiKeyLast4: '7f3a',
         configuredBy: IDS.member,
         updatedAt: at(30),
+        createMembers: null,
     },
     latestRun: twentyImportRun,
     linked: twentyImportRun.report.map((r) => ({ object: r.object, count: r.after ?? 0 })),

@@ -169,6 +169,11 @@ export interface TwentyImportSettingsView {
     apiKeyLast4: string | null;
     configuredBy: string | null;
     updatedAt: string | null;
+    /**
+     * The accounts option as last chosen at a start (#184), the workspace's saved choice: what the
+     * screen offers next time, and what a scheduled run (#185) uses. Null for off.
+     */
+    createMembers: TwentyImportCreateMembers | null;
 }
 
 /** The workspace's automatic sync (#185): its interval, when it next runs, how it has been going, and whether it was cut over. */

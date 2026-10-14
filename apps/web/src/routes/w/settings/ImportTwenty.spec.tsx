@@ -25,7 +25,14 @@ const sync = (overrides: Partial<TwentyImportSyncView> = {}): TwentyImportSyncVi
     ...overrides,
 });
 const unconfigured: TwentyImportOverview = {
-    settings: { configured: false, baseUrl: null, apiKeyLast4: null, configuredBy: null, updatedAt: null },
+    settings: {
+        configured: false,
+        baseUrl: null,
+        apiKeyLast4: null,
+        configuredBy: null,
+        updatedAt: null,
+        createMembers: null,
+    },
     latestRun: null,
     sync: sync(),
     linked: TWENTY_IMPORT_OBJECTS.map((object) => ({ object, count: 0 })),
@@ -38,6 +45,7 @@ const configured: TwentyImportOverview = {
         apiKeyLast4: '1a2b',
         configuredBy: 'm-1',
         updatedAt: '2026-10-09T09:00:00.000Z',
+        createMembers: null,
     },
 };
 const preview: TwentyImportPreview = {
@@ -254,6 +262,25 @@ describe('P4-UI-2 (doc 48 §11): the importer screen', () => {
             expect(await screen.findByText('32 accounts created', {}, { timeout: 6_000 })).toBeInTheDocument();
         },
     );
+
+    it('#185: the accounts option starts as the workspace’s saved choice — what a scheduled run uses', async () => {
+        stubApi([
+            (r) => (r.url.endsWith('/roles') ? json(roles) : undefined),
+            (r) =>
+                r.url.endsWith('/import/twenty')
+                    ? json({ ...configured, settings: { ...configured.settings, createMembers: { roleId: 'r-am' } } })
+                    : undefined,
+            (r) => (r.url.endsWith('/import/twenty/runs') && r.method === 'GET' ? json([]) : undefined),
+        ]);
+        page(['workspace:admin']);
+        expect(
+            await screen.findByRole('checkbox', { name: /Create accounts for Twenty members who aren’t here/ }),
+        ).toBeChecked();
+        expect(await screen.findByRole('combobox', { name: 'Role for created accounts' })).toHaveTextContent(
+            'Account manager',
+        );
+        expect(screen.getByText(/A scheduled sync creates accounts as last chosen here/)).toBeInTheDocument();
+    });
 
     it('#156 D-252: a reconcile run offers itself, and what is missing in Twenty is listed for review, never deleted', async () => {
         const reconciled = run('succeeded', {

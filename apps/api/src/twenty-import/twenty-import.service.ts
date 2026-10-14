@@ -215,6 +215,7 @@ export class TwentyImportService {
      * Queues a run: the connection must exist and Twenty must accept its key now (one read, so a
      * dead key fails here, at the person, rather than in the worker). `changes` reads from the
      * last successful run's start; with none, it reads everything. One run at a time per workspace.
+     * The accounts option (#184) goes with the run and is saved as the workspace's choice.
      */
     async start(mode: TwentyImportMode, createMembers?: TwentyImportCreateMembers): Promise<TwentyImportRunView> {
         const context = this.current();
@@ -228,6 +229,14 @@ export class TwentyImportService {
             if (createMembers) {
                 const role = await tx.role.findUnique({ where: { id: createMembers.roleId }, select: { id: true } });
                 if (!role) throw new UnknownReference('roleId', 'no such role in this workspace');
+            }
+            // The option as chosen is the workspace's choice from now on: what the screen offers next
+            // time, and what a scheduled run (#185) uses. A reconcile pass offers no option and changes none.
+            if (mode !== 'reconcile') {
+                await tx.twentyImportSettings.update({
+                    where: { workspaceId: context.workspaceId },
+                    data: { createMembersRoleId: createMembers?.roleId ?? null },
+                });
             }
             const created = await queueRun(tx, {
                 workspaceId: context.workspaceId,

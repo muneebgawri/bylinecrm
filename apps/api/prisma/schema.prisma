@@ -281,12 +281,13 @@ model Role {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  permissions      RolePermission[]
-  members          WorkspaceMember[]
-  apiKeys          ApiKey[]
-  invites          WorkspaceInvite[]
-  twentyImportRuns TwentyImportRun[]
+  workspace            Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions          RolePermission[]
+  members              WorkspaceMember[]
+  apiKeys              ApiKey[]
+  invites              WorkspaceInvite[]
+  twentyImportRuns     TwentyImportRun[]
+  twentyImportSettings TwentyImportSettings[] @relation("TwentyImportSettingsRole")
 
   @@unique([workspaceId, name])
   @@map("roles")
@@ -1923,22 +1924,25 @@ model SequenceEnrolment {
 /// The Twenty workspace an import reads: its REST base URL and an API key, sealed with `SecretBox`.
 /// One per workspace; absent until an admin connects one.
 model TwentyImportSettings {
-  workspaceId      String    @id @map("workspace_id") @db.Uuid
-  baseUrl          String    @map("base_url")
-  apiKeyCiphertext String    @map("api_key_ciphertext")
-  apiKeyLast4      String    @map("api_key_last4")
-  configuredById   String?   @map("configured_by_id") @db.Uuid
+  workspaceId         String    @id @map("workspace_id") @db.Uuid
+  baseUrl             String    @map("base_url")
+  apiKeyCiphertext    String    @map("api_key_ciphertext")
+  apiKeyLast4         String    @map("api_key_last4")
+  configuredById      String?   @map("configured_by_id") @db.Uuid
   /// #185: how often the importer runs its `changes` mode on its own — `off`, `15m`, `hourly` or `daily` (checked by the database).
-  syncInterval     String    @default("off") @map("sync_interval")
+  syncInterval        String    @default("off") @map("sync_interval")
   /// Scheduled runs failed in a row; the schedule backs off by it and tells the admins at the third.
-  syncFailures     Int       @default(0) @map("sync_failures")
-  syncLastError    String?   @map("sync_last_error")
+  syncFailures        Int       @default(0) @map("sync_failures")
+  syncLastError       String?   @map("sync_last_error")
   /// When an admin stopped syncing for good (the cutover); cleared when syncing is turned back on.
-  cutoverAt        DateTime? @map("cutover_at") @db.Timestamptz
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  cutoverAt           DateTime? @map("cutover_at") @db.Timestamptz
+  /// The accounts option as last chosen at a start (#184): the role Twenty members who are not here get; null for off. A scheduled run (#185) uses it.
+  createMembersRoleId String?   @map("create_members_role_id") @db.Uuid
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  configuredBy WorkspaceMember? @relation(fields: [configuredById], references: [id], onDelete: SetNull)
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy      WorkspaceMember? @relation(fields: [configuredById], references: [id], onDelete: SetNull)
+  createMembersRole Role?            @relation("TwentyImportSettingsRole", fields: [createMembersRoleId], references: [id], onDelete: SetNull)
 
   @@map("twenty_import_settings")
 }

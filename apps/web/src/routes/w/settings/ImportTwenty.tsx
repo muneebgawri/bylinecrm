@@ -513,7 +513,10 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
     const cancel = useCancelTwentyImport(workspaceId);
     const runs = useTwentyImportRuns(workspaceId);
     const [mode, setMode] = useState<TwentyImportMode>('full');
-    const [createMembers, setCreateMembers] = useState<TwentyImportCreateMembers | null>(null);
+    // The option starts as the workspace's saved choice (the last start's), which a scheduled sync uses too.
+    const [createMembers, setCreateMembers] = useState<TwentyImportCreateMembers | null>(
+        overview.settings.createMembers,
+    );
     const [stopping, setStopping] = useState<string | null>(null);
     const latestId = overview.latestRun?.id ?? null;
     const latest = useTwentyImportRun(workspaceId, latestId, overview.latestRun);
@@ -663,7 +666,8 @@ function CreateMembersOption({
                     <span className="block text-text-muted">
                         Each gets an account with no password and a seat with the role below, so the records they own
                         are theirs. Nothing is emailed: send invitations from Members when you want them to sign in, or
-                        they sign in with Google using that address.
+                        they sign in with Google using that address. A scheduled sync creates accounts as last chosen
+                        here, with this role.
                     </span>
                 </label>
             </div>
