@@ -11,11 +11,14 @@ import {
     DropdownMenuItem,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuSeparator,
     EmptyState,
+    toast,
 } from '@bylinecrm/ui';
 import { useMemo, useState } from 'react';
 import { useMe } from '../../../api/queries';
-import { useMembers, useRemoveMember, useRoles, useSetMemberRole } from '../../../api/team';
+import { useCreateInvite, useMembers, useRemoveMember, useRoles, useSetMemberRole } from '../../../api/team';
+import { failureText } from '../../../lib/errors';
 import type { MemberView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
 import { formatDate } from './SettingsLayout';
@@ -27,6 +30,17 @@ export function Members() {
     const roles = useRoles(workspaceId);
     const setRole = useSetMemberRole(workspaceId);
     const remove = useRemoveMember(workspaceId);
+    // An account the Twenty importer made (#184) signs in through the same invitation anyone gets.
+    const invite = useCreateInvite(workspaceId);
+    const sendInvitation = (m: MemberView) =>
+        invite.mutate(
+            { email: m.email, roleId: m.roleId },
+            {
+                onSuccess: () => toast({ title: `Invitation sent to ${m.email}`, tone: 'success' }),
+                onError: (error) =>
+                    toast({ title: 'The invitation was not sent', description: failureText(error), tone: 'danger' }),
+            },
+        );
     const [q, setQ] = useState('');
     const [removing, setRemoving] = useState<MemberView | null>(null);
 
@@ -75,6 +89,11 @@ export function Members() {
                                             You
                                         </Badge>
                                     )}
+                                    {!m.hasSignedIn && (
+                                        <Badge className="ml-2" status="warning">
+                                            Not signed in yet
+                                        </Badge>
+                                    )}
                                 </>
                             ),
                         },
@@ -95,6 +114,14 @@ export function Members() {
                                         </DropdownMenuRadioItem>
                                     ))}
                                 </DropdownMenuRadioGroup>
+                                {!m.hasSignedIn && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onSelect={() => sendInvitation(m)}>
+                                            Send invitation
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
                                 <DropdownMenuItem
                                     destructive
                                     disabled={m.userId === me.data?.id}

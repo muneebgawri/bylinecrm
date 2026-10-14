@@ -1,6 +1,8 @@
 import {
+    SYSTEM_ROLES,
     TWENTY_IMPORT_OBJECT_LABELS,
     TWENTY_IMPORT_OBJECTS,
+    type TwentyImportCreateMembers,
     type TwentyImportMode,
     type TwentyImportObject,
     type TwentyImportRunStatus,
@@ -8,11 +10,17 @@ import {
 import {
     Badge,
     Button,
+    Checkbox,
     DataTableChrome,
     Field,
     Input,
     LoadingRegion,
     SegmentedControl,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Skeleton,
     toast,
 } from '@bylinecrm/ui';
@@ -33,6 +41,7 @@ import {
     useTwentyImportMissing,
 } from '../../../api/importTwenty';
 import { keys } from '../../../api/queries';
+import { useRoles } from '../../../api/team';
 import type {
     TwentyImportObjectReportView,
     TwentyImportOverviewView,
@@ -172,6 +181,13 @@ function Connection({ workspaceId, overview }: { workspaceId: string; overview: 
                     </p>
                 )}
                 {preview.data && <PreviewTable preview={preview.data} />}
+                {preview.data && preview.data.accountsToCreate !== null && (
+                    <p className="m-0 mt-2 text-[13px] text-text-muted">
+                        {preview.data.accountsToCreate === 0
+                            ? 'Every Twenty member with an address is here already.'
+                            : `${count(preview.data.accountsToCreate)} ${preview.data.accountsToCreate === 1 ? 'account' : 'accounts'} would be created for Twenty members who aren’t here, with the import option on.`}
+                    </p>
+                )}
             </div>
             <ConfirmDialog
                 open={removing}
@@ -385,6 +401,7 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
     const cancel = useCancelTwentyImport(workspaceId);
     const runs = useTwentyImportRuns(workspaceId);
     const [mode, setMode] = useState<TwentyImportMode>('full');
+    const [createMembers, setCreateMembers] = useState<TwentyImportCreateMembers | null>(null);
     const [stopping, setStopping] = useState<string | null>(null);
     const latestId = overview.latestRun?.id ?? null;
     const latest = useTwentyImportRun(workspaceId, latestId, overview.latestRun);
@@ -437,6 +454,13 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                             onValueChange={setMode}
                         />
                         <p className="m-0 text-[13px] text-text-muted">{MODE_HELP[mode]}</p>
+                        {mode !== 'reconcile' && (
+                            <CreateMembersOption
+                                workspaceId={workspaceId}
+                                value={createMembers}
+                                onChange={setCreateMembers}
+                            />
+                        )}
                         {startError && (
                             <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">
                                 {startError}
@@ -448,7 +472,12 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                                 shape="square"
                                 data-primary-action
                                 loading={start.isPending}
-                                onClick={() => start.mutate({ mode })}
+                                onClick={() =>
+                                    start.mutate({
+                                        mode,
+                                        ...(createMembers && mode !== 'reconcile' ? { createMembers } : {}),
+                                    })
+                                }
                             >
                                 Start import
                             </Button>
@@ -486,6 +515,66 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
     );
 }
 
+/**
+ * The accounts option (#184): create a user and a seat for each Twenty member who is not here, with a
+ * role of the workspace's (`member` unless chosen otherwise), so the records they own are theirs
+ * from this run. Nothing is mailed; an admin sends the invitation from Members later.
+ */
+function CreateMembersOption({
+    workspaceId,
+    value,
+    onChange,
+}: {
+    workspaceId: string;
+    value: TwentyImportCreateMembers | null;
+    onChange: (value: TwentyImportCreateMembers | null) => void;
+}) {
+    const roles = useRoles(workspaceId);
+    const memberRole = roles.data?.find((r) => r.isSystem && r.name === SYSTEM_ROLES.member) ?? roles.data?.[0];
+    const on = value !== null;
+    return (
+        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+            <div className="flex items-start gap-2 text-[13px]">
+                <Checkbox
+                    id="import-create-members"
+                    aria-labelledby="import-create-members-label"
+                    checked={on}
+                    disabled={!memberRole}
+                    onCheckedChange={(checked) =>
+                        onChange(checked === true && memberRole ? { roleId: memberRole.id } : null)
+                    }
+                />
+                <label htmlFor="import-create-members" className="cursor-pointer">
+                    <span id="import-create-members-label" className="font-medium">
+                        Create accounts for Twenty members who aren’t here
+                    </span>
+                    <span className="block text-text-muted">
+                        Each gets an account with no password and a seat with the role below, so the records they own
+                        are theirs. Nothing is emailed: send invitations from Members when you want them to sign in, or
+                        they sign in with Google using that address.
+                    </span>
+                </label>
+            </div>
+            {on && (
+                <Field label="Role for created accounts" className="max-w-xs">
+                    <Select value={value.roleId} onValueChange={(roleId) => onChange({ roleId })}>
+                        <SelectTrigger aria-label="Role for created accounts">
+                            <SelectValue placeholder="Choose a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {(roles.data ?? []).map((r) => (
+                                <SelectItem key={r.id} value={r.id}>
+                                    {r.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </Field>
+            )}
+        </div>
+    );
+}
+
 function RunSummary({ run }: { run: TwentyImportRunView }) {
     const totals = run.report.reduce(
         (sum, r) => ({
@@ -511,6 +600,11 @@ function RunSummary({ run }: { run: TwentyImportRunView }) {
                         ? `${count(totals.missing)} missing in Twenty`
                         : `${count(totals.created)} created, ${count(totals.updated)} updated, ${count(totals.failed)} failed`}
                 </span>
+                {run.accountsCreated > 0 && (
+                    <span className="text-text-muted">
+                        {`${count(run.accountsCreated)} ${run.accountsCreated === 1 ? 'account' : 'accounts'} created`}
+                    </span>
+                )}
             </div>
             {run.error && <p className="m-0 text-danger">{run.error}</p>}
         </div>
