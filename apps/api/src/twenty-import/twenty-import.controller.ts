@@ -93,7 +93,7 @@ export class TwentyImportController {
     @Post('runs')
     @Returns(twentyImportRun)
     start(@Body() body: StartTwentyImportDto): Promise<TwentyImportRunView> {
-        return this.importer.start(body.mode);
+        return this.importer.start(body.mode, body.createMembers);
     }
 
     @Requires('workspace:admin')

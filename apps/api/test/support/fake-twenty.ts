@@ -21,7 +21,8 @@ const PAGE_MAX = 60;
 /**
  * An in-process stand-in for a Twenty workspace's REST API (doc 48 §11): the read grammar the
  * importer uses — `GET /rest/<objects>` with a bearer key, `limit` (at most 60), cursor paging
- * with `starting_after`, `order_by`, `depth`, and `filter=updatedAt[gte]:"<iso>"` — over records a
+ * with `starting_after`, `order_by`, `depth`, `filter=updatedAt[gte]:"<iso>"` and the deleted-records
+ * filter `deletedAt[is]:NOT_NULL` (#184: deactivated members) — over records a
  * spec seeds, answered the way Twenty answers: `{ data: { <objects>: [...] }, pageInfo, totalCount }`,
  * `401` for a wrong key, `400` for an object it does not have. Nothing here is Twenty's code: it is
  * the shape of its answers, as the parity ledger records them (PAR-066).
@@ -130,11 +131,13 @@ export class FakeTwenty {
         const objects = match[1]!;
         const limit = Math.min(Number(url.searchParams.get('limit') ?? PAGE_MAX) || PAGE_MAX, PAGE_MAX);
         const after = url.searchParams.get('starting_after');
-        const since = sinceOf(url.searchParams.get('filter'));
+        const filter = url.searchParams.get('filter');
+        const since = sinceOf(filter);
+        const deleted = filter?.includes('deletedAt[is]:NOT_NULL') === true;
         const depth = Number(url.searchParams.get('depth') ?? '1');
 
         const live = table
-            .filter((r) => r.deletedAt === null && (!since || r.updatedAt >= since))
+            .filter((r) => (deleted ? r.deletedAt !== null : r.deletedAt === null) && (!since || r.updatedAt >= since))
             .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         const afterId = after ? Buffer.from(after, 'base64url').toString('utf8') : null;
         const start = afterId ? live.findIndex((r) => r.id === afterId) + 1 : 0;
@@ -159,10 +162,10 @@ function cursorOf(id: string): string {
     return Buffer.from(id, 'utf8').toString('base64url');
 }
 
-/** `updatedAt[gte]:"<iso>"` → the instant; any other filter is ignored by this fake. */
+/** `updatedAt[gte]:"<iso>"` (alone or inside `and(…)`) → the instant; any other filter is ignored by this fake. */
 function sinceOf(filter: string | null): string | null {
     if (!filter) return null;
-    const match = /^updatedAt\[gte\]:"([^"]+)"$/.exec(filter);
+    const match = /updatedAt\[gte\]:"([^"]+)"/.exec(filter);
     return match ? match[1]! : null;
 }
 

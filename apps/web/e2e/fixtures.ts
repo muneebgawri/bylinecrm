@@ -196,6 +196,7 @@ export const members: MemberView[] = [
         roleId: IDS.adminRole,
         roleName: SYSTEM_ROLES.admin,
         createdAt: at(24 * 30),
+        hasSignedIn: true,
     },
     {
         id: IDS.secondMember,
@@ -205,6 +206,7 @@ export const members: MemberView[] = [
         roleId: IDS.memberRole,
         roleName: SYSTEM_ROLES.member,
         createdAt: at(24 * 12),
+        hasSignedIn: true,
     },
 ];
 
@@ -1253,6 +1255,8 @@ export const twentyImportRun: TwentyImportRunView = {
     cancelRequested: false,
     scheduled: false,
     startedBy: IDS.member,
+    createMembers: null,
+    accountsCreated: 0,
     queuedAt: at(26),
     startedAt: at(26),
     finishedAt: at(23),

@@ -13,7 +13,14 @@ import type { WorkspaceClient } from '../infra/rls-prisma.service';
  */
 export async function queueRun(
     tx: WorkspaceClient,
-    input: { workspaceId: string; mode: TwentyImportMode; startedById: string | null; scheduled: boolean },
+    input: {
+        workspaceId: string;
+        mode: TwentyImportMode;
+        startedById: string | null;
+        scheduled: boolean;
+        /** The accounts option (#184): the role created members get; a scheduled run has none. */
+        createMembersRoleId?: string | null;
+    },
 ): Promise<TwentyImportRun> {
     const last = await tx.twentyImportRun.findFirst({
         where: { status: 'succeeded', startedAt: { not: null } },
@@ -28,6 +35,7 @@ export async function queueRun(
                 since: input.mode === 'changes' ? (last?.startedAt ?? null) : null,
                 startedById: input.startedById,
                 scheduled: input.scheduled,
+                createMembersRoleId: input.createMembersRoleId ?? null,
             },
         });
     } catch (error) {

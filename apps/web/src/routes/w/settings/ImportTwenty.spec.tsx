@@ -48,7 +48,13 @@ const preview: TwentyImportPreview = {
         linked: object === 'people' ? 12 : 0,
         error: null,
     })),
+    accountsToCreate: 32,
 };
+const roles = [
+    { id: 'r-admin', name: 'admin', isSystem: true, recordScope: 'all', capabilities: [] },
+    { id: 'r-member', name: 'member', isSystem: true, recordScope: 'all', capabilities: ['record:read'] },
+    { id: 'r-am', name: 'Account manager', isSystem: false, recordScope: 'all', capabilities: ['outreach:write'] },
+];
 const run = (
     status: TwentyImportRunView['status'],
     overrides: Partial<TwentyImportRunView> = {},
@@ -70,6 +76,8 @@ const run = (
     cancelRequested: false,
     scheduled: false,
     startedBy: 'm-1',
+    createMembers: null,
+    accountsCreated: 0,
     queuedAt: '2026-10-09T09:00:00.000Z',
     startedAt: status === 'queued' ? null : '2026-10-09T09:00:01.000Z',
     finishedAt:
@@ -185,6 +193,65 @@ describe('P4-UI-2 (doc 48 §11): the importer screen', () => {
             const peopleRow = within(report).getByText('People').closest('[data-row], tr, li')!;
             expect(peopleRow.textContent).toContain('2');
             expect(within(report).getAllByText(/merged/i).length).toBeGreaterThan(0);
+        },
+    );
+
+    it(
+        '#184 P4-4e: offers to create accounts for Twenty members who are not here, with a role from the workspace’s, and says how many',
+        { timeout: 15_000 },
+        async () => {
+            const seen = stubApi([
+                (r) => (r.method === 'POST' && r.url.endsWith('/import/twenty/preview') ? json(preview) : undefined),
+                (r) =>
+                    r.method === 'POST' && r.url.endsWith('/import/twenty/runs')
+                        ? json(run('queued', { createMembers: { roleId: 'r-am' } }), 202)
+                        : undefined,
+                // Each run is over on its first read, so the card offers the option again.
+                (r) =>
+                    r.method === 'GET' && r.url.endsWith('/import/twenty/runs/run-1')
+                        ? json(run('succeeded', { createMembers: { roleId: 'r-am' }, accountsCreated: 32 }))
+                        : undefined,
+                (r) => (r.url.endsWith('/roles') ? json(roles) : undefined),
+                (r) => (r.url.endsWith('/import/twenty') ? json(configured) : undefined),
+                (r) => (r.url.endsWith('/import/twenty/runs') && r.method === 'GET' ? json([]) : undefined),
+            ]);
+            page(['workspace:admin']);
+            const user = userEvent.setup();
+            const option = await screen.findByRole('checkbox', {
+                name: /Create accounts for Twenty members who aren’t here/,
+            });
+            expect(option).not.toBeChecked();
+            // Off by default, so a start sends no option…
+            await user.click(await screen.findByRole('button', { name: 'Start import' }));
+            await waitFor(() =>
+                expect(seen.find((r) => r.method === 'POST' && r.url.endsWith('/import/twenty/runs'))?.body).toEqual({
+                    mode: 'full',
+                }),
+            );
+            seen.length = 0;
+            // …and on, the chosen role goes with it; the role picker lists the workspace's roles, member first.
+            // (The card re-renders around a start, so the option is found again.)
+            const again = await screen.findByRole('checkbox', {
+                name: /Create accounts for Twenty members who aren’t here/,
+            });
+            await waitFor(() => expect(again).toBeEnabled());
+            await user.click(again);
+            await waitFor(() => expect(again).toBeChecked());
+            const role = screen.getByRole('combobox', { name: 'Role for created accounts' });
+            expect(role).toHaveTextContent('member');
+            await user.click(role);
+            await user.click(await screen.findByRole('option', { name: 'Account manager' }));
+            await user.click(await screen.findByRole('button', { name: 'Check connection' }));
+            expect(await screen.findByText(/32 accounts would be created/)).toBeInTheDocument();
+            await user.click(await screen.findByRole('button', { name: 'Start import' }));
+            await waitFor(() =>
+                expect(seen.find((r) => r.method === 'POST' && r.url.endsWith('/import/twenty/runs'))?.body).toEqual({
+                    mode: 'full',
+                    createMembers: { roleId: 'r-am' },
+                }),
+            );
+            // The finished run says what it made.
+            expect(await screen.findByText('32 accounts created', {}, { timeout: 6_000 })).toBeInTheDocument();
         },
     );
 

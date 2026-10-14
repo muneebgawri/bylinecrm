@@ -57,7 +57,10 @@ export class TwentyHttp implements TwentyApi {
             order_by: 'id[AscNullsFirst]',
         });
         if (options.cursor) params.set('starting_after', options.cursor);
-        if (options.since) params.set('filter', `updatedAt[gte]:"${options.since}"`);
+        const filters: string[] = [];
+        if (options.since) filters.push(`updatedAt[gte]:"${options.since}"`);
+        if (options.deleted) filters.push('deletedAt[is]:NOT_NULL');
+        if (filters.length > 0) params.set('filter', filters.length === 1 ? filters[0]! : `and(${filters.join(',')})`);
         const body = await this.get(connection, objects, params);
         return {
             records: recordsOf(body, objects),

@@ -16,9 +16,16 @@ export class PutTwentyImportSettingsDto extends createZodDto(
     }),
 ) {}
 
-/** `POST /import/twenty/runs` — everything, only what Twenty changed since the last successful run, or a reconcile pass (#156). */
+/**
+ * `POST /import/twenty/runs` — everything, only what Twenty changed since the last successful run, or
+ * a reconcile pass (#156); with `createMembers`, accounts for Twenty members who are not here, with
+ * that role (#184).
+ */
 export class StartTwentyImportDto extends createZodDto(
-    z.object({ mode: z.enum(TWENTY_IMPORT_MODES).default('full') }),
+    z.object({
+        mode: z.enum(TWENTY_IMPORT_MODES).default('full'),
+        createMembers: z.object({ roleId: z.uuid() }).optional(),
+    }),
 ) {}
 
 /** `GET /import/twenty/missing` — the records a reconcile pass flagged, one object or all, paged. */

@@ -90,6 +90,13 @@ export const twentyImportRun = named(
         cancelRequested: z.boolean(),
         scheduled: z.boolean().meta({ description: 'Started by the automatic sync (#185), not a person.' }),
         startedBy: id.nullable(),
+        createMembers: z
+            .object({ roleId: id })
+            .nullable()
+            .meta({ description: 'The accounts option the run was started with (#184): the role its accounts got.' }),
+        accountsCreated: z.number().int().meta({
+            description: 'Accounts (a user and a seat) this run made for Twenty members who were not here (#184).',
+        }),
         queuedAt: isoTime,
         startedAt: isoTime.nullable(),
         finishedAt: isoTime.nullable(),
@@ -118,5 +125,9 @@ export const twentyImportPreview = named(
                 error: z.string().nullable(),
             }),
         ),
+        accountsToCreate: z.number().int().nullable().meta({
+            description:
+                'Twenty members with a usable address and no seat here (#184): what the accounts option would create; null when they could not be read.',
+        }),
     }),
 );

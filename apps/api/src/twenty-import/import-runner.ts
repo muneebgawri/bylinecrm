@@ -16,6 +16,7 @@ import {
     type TwentyImportObjectReport,
 } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
+import { AuthService } from '../auth/auth.service';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
 import { PrismaService } from '../infra/prisma.service';
@@ -71,7 +72,7 @@ import { TwentySyncService } from './twenty-sync.service';
 import { isObject, text } from './twenty-records';
 import { databaseUnavailable } from '../infra/prisma-errors';
 import { TwentyApiError } from './twenty.http';
-import { TWENTY_PORT, type TwentyApi, type TwentyConnection, type TwentyRecord } from './twenty.port';
+import { TWENTY_PORT, type TwentyApi, type TwentyConnection, type TwentyPage, type TwentyRecord } from './twenty.port';
 
 /** What the runner may do in a workspace: write outreach templates and shared views for what it imports. */
 const JOB_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
@@ -190,6 +191,7 @@ export class TwentyImportRunner {
         private readonly views: ViewsService,
         private readonly templates: TemplatesService,
         private readonly sync: TwentySyncService,
+        private readonly auth: AuthService,
     ) {}
 
     /** Runs `runId` to its end — succeeded, failed, cancelled — or throws so the queue retries it from its cursor. */
@@ -250,8 +252,16 @@ export class TwentyImportRunner {
             stages: new Map(),
             mode: opened.run.mode,
             passStartedAt: opened.run.startedAt ?? new Date(),
+            membersRoleId: opened.run.createMembersRoleId,
+            accountsCreated: opened.run.accountsCreated,
+            deactivated: new Map(),
         };
         try {
+            // Members deactivated in Twenty are no longer listed, but records can still be theirs (#184):
+            // read once per run (again on a resume), so an owner no page names can still be made.
+            if (state.membersRoleId && state.mode !== 'reconcile') {
+                state.deactivated = await this.readDeactivatedMembers(connection);
+            }
             for (const object of TWENTY_IMPORT_OBJECTS) {
                 if (cursors[object] === null) continue;
                 const done = await this.readObject(state, object);
@@ -372,6 +382,13 @@ export class TwentyImportRunner {
         nextCursor: string | null,
     ): Promise<void> {
         const refs = records.flatMap((record) => referencesOf(object, record));
+        if (state.membersRoleId) {
+            // Accounts for Twenty members who are not here (#184), made through the account service —
+            // outside the page's transaction (the users table is the owner's) and before it, so the
+            // member pass links them and a record's owner resolves on this same run.
+            if (object === 'workspaceMembers') await this.provisionMembers(state, records);
+            await this.provisionDeactivatedOwners(state, refs);
+        }
         const links = await this.rls.withWorkspace((tx) => loadLinks(tx, refs));
         const currency = await this.rls.withWorkspace((tx) => defaultCurrency(tx, state.context.workspaceId));
         // Mapping is pure, so anything it throws is this record's (#168): it is reported as failed,
@@ -441,6 +458,7 @@ export class TwentyImportRunner {
                     phase: object,
                     cursor: state.cursors,
                     report: state.report as unknown as Prisma.InputJsonValue,
+                    accountsCreated: state.accountsCreated,
                 },
             });
         });
@@ -846,6 +864,102 @@ export class TwentyImportRunner {
         return resolved;
     }
 
+    /** Every member Twenty has deactivated (soft-deleted), by id: a candidate account only when a record is theirs. */
+    private async readDeactivatedMembers(connection: TwentyConnection): Promise<Map<string, TwentyRecord>> {
+        const found = new Map<string, TwentyRecord>();
+        let cursor: string | null = null;
+        for (;;) {
+            let page: TwentyPage;
+            try {
+                page = await this.twenty.list(connection, 'workspaceMembers', { cursor, depth: 0, deleted: true });
+            } catch (error) {
+                // A Twenty that will not list deleted members has, for the import, none.
+                if (
+                    error instanceof TwentyApiError &&
+                    error.permanent &&
+                    error.status !== 401 &&
+                    error.status !== 403
+                ) {
+                    return found;
+                }
+                throw error;
+            }
+            for (const record of page.records) found.set(record.id, record);
+            if (!page.hasNextPage || page.records.length === 0 || !page.endCursor) return found;
+            cursor = page.endCursor;
+        }
+    }
+
+    /**
+     * The member pass with the accounts option (#184): a Twenty member with a usable address and no
+     * seat here (held or left) gets a user and a seat with the run's role. The pass's write then
+     * matches them by address and links them like any member.
+     */
+    private async provisionMembers(state: RunState, records: TwentyRecord[]): Promise<void> {
+        for (const record of records) {
+            const email = memberEmailOf(record);
+            if (!email) continue;
+            const seat = await this.rls.withWorkspace((tx) =>
+                tx.workspaceMember.findFirst({ where: { user: { email } }, select: { id: true } }),
+            );
+            if (seat) continue;
+            const made = await this.auth.provisionMember({
+                workspaceId: state.context.workspaceId,
+                email,
+                displayName: memberNameOf(record),
+                roleId: state.membersRoleId!,
+            });
+            if (made.createdSeat) state.accountsCreated += 1;
+        }
+    }
+
+    /**
+     * A page refers to members Twenty deactivated (#184): each one not mapped yet gets an account and
+     * a seat already left (`left_at`: history attributed, no access), linked here so the page's
+     * records resolve their owner. A deactivated member no record names is never made.
+     */
+    private async provisionDeactivatedOwners(state: RunState, refs: readonly LinkRef[]): Promise<void> {
+        const wanted = [
+            ...new Set(
+                refs
+                    .filter((ref) => ref.object === 'workspaceMembers' && state.deactivated.has(ref.externalId))
+                    .map((ref) => ref.externalId),
+            ),
+        ];
+        if (wanted.length === 0) return;
+        const linked = await this.rls.withWorkspace((tx) =>
+            loadLinks(
+                tx,
+                wanted.map((externalId) => ({ object: 'workspaceMembers' as const, externalId })),
+            ),
+        );
+        for (const externalId of wanted) {
+            if (linked.link('workspaceMembers', externalId)) continue;
+            const record = state.deactivated.get(externalId)!;
+            const email = memberEmailOf(record);
+            if (!email) continue;
+            const leftAt = text(record.deletedAt) ? new Date(text(record.deletedAt)!) : new Date();
+            const made = await this.auth.provisionMember({
+                workspaceId: state.context.workspaceId,
+                email,
+                displayName: memberNameOf(record),
+                roleId: state.membersRoleId!,
+                leftAt,
+            });
+            if (made.createdSeat) state.accountsCreated += 1;
+            await this.rls.withWorkspace((tx) =>
+                writeLink(tx, state.context.workspaceId, {
+                    object: 'workspaceMembers',
+                    externalId,
+                    localType: 'member',
+                    localId: made.memberId,
+                    label: null,
+                    externalUpdatedAt: text(record.updatedAt) ?? undefined,
+                }),
+            );
+        }
+    }
+
     private cancelRequested(runId: string): Promise<boolean> {
         return this.rls.withWorkspace(async (tx) => {
             const row = await tx.twentyImportRun.findUnique({
@@ -864,6 +978,7 @@ export class TwentyImportRunner {
                     phase: state.phase ?? null,
                     cursor: state.cursors,
                     report: state.report as unknown as Prisma.InputJsonValue,
+                    accountsCreated: state.accountsCreated,
                 },
             }),
         );
@@ -884,7 +999,11 @@ export class TwentyImportRunner {
                     finishedAt: new Date(),
                     phase: null,
                     ...(state
-                        ? { cursor: state.cursors, report: state.report as unknown as Prisma.InputJsonValue }
+                        ? {
+                              cursor: state.cursors,
+                              report: state.report as unknown as Prisma.InputJsonValue,
+                              accountsCreated: state.accountsCreated,
+                          }
                         : {}),
                 },
             });
@@ -906,6 +1025,18 @@ interface RunState {
     passStartedAt: Date;
     phase?: TwentyImportObject;
     stages: Map<string, { id: string; kind: StageKind }>;
+    /** #184: the role for accounts the run makes for Twenty members who are not here; null without the option. */
+    membersRoleId: string | null;
+    accountsCreated: number;
+    /** #184: members Twenty deactivated, by id — made here only when a record of this run is theirs. */
+    deactivated: Map<string, TwentyRecord>;
+}
+
+/** A Twenty member's display name, as their account here starts with it: first and last name, or none. */
+function memberNameOf(record: TwentyRecord): string | null {
+    const name = isObject(record.name) ? record.name : null;
+    const full = [text(name?.firstName), text(name?.lastName)].filter((part) => part).join(' ');
+    return full || null;
 }
 
 /** A mapped record on its way to a write: the service input (shape by object), its custom values, or why it is skipped. */

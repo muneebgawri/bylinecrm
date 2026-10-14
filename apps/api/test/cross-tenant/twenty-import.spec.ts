@@ -26,6 +26,9 @@ import type { Queue } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
+import type { VerifiedIdentity } from '../../src/auth/auth.service';
+import { OidcService } from '../../src/auth/oidc.service';
+import { ENV, parseEnv, type Env } from '../../src/config/env';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
@@ -34,7 +37,7 @@ import { TWENTY_IMPORT_QUEUE } from '../../src/twenty-import/twenty-import.const
 import { TwentyImportWorkers } from '../../src/twenty-import/twenty-import.workers';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
-import { FakeTwenty } from '../support/fake-twenty';
+import { FakeTwenty, type FakeTwentyRecord } from '../support/fake-twenty';
 import { deliverMail, mailTo, verifyAddress } from '../support/mail';
 import { eventLog, settle, type EventLog } from '../support/outbox';
 
@@ -106,6 +109,18 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
     const twenty = new FakeTwenty();
+    /** The configuration, mutable so a test can close sign-up (#184). */
+    let env: Env;
+    /** The identity the fake provider answers the next callback with (#184: a member's first Google sign-in). */
+    let nextIdentity: VerifiedIdentity | null = null;
+    const fakeOidc: Pick<OidcService, 'available' | 'start' | 'finish'> = {
+        available: () => ['fake'],
+        start: () => Promise.resolve(new URL('https://idp.example/authorize')),
+        finish: () => {
+            if (!nextIdentity) throw new Error('no identity queued for the fake provider');
+            return Promise.resolve(nextIdentity);
+        },
+    };
 
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
@@ -178,7 +193,12 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
 
     beforeAll(async () => {
         await twenty.start();
+        env = { ...parseEnv(process.env), SIGNUP_MODE: 'open' };
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+            .overrideProvider(ENV)
+            .useValue(env)
+            .overrideProvider(OidcService)
+            .useValue(fakeOidc)
             .overrideProvider(GOOGLE_OAUTH_PORT)
             .useValue(google)
             .overrideProvider(GMAIL_PORT)
@@ -1201,6 +1221,187 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
                 ((await as(otherAdmin).get(w('/import/twenty', otherWorkspace))).body as TwentyImportOverview).settings
                     .configured,
             ).toBe(false);
+        });
+    });
+
+    describe('#184 P4-4e accounts for Twenty members who are not here yet', () => {
+        const nobodyEmail = `nobody-${stamp}@example.com`;
+        const patEmail = `pat-${stamp}@example.com`;
+        const goneEmail = `gone-${stamp}@example.com`;
+        const idleEmail = `idle-${stamp}@example.com`;
+        let amRoleId: string;
+        let gone: FakeTwentyRecord;
+        const runWith = async (body: Record<string, unknown>): Promise<TwentyImportRunView> => {
+            const res = await as(admin).post(w('/import/twenty/runs')).send(body);
+            expect(res.status, JSON.stringify(res.body)).toBe(202);
+            const queued = res.body as TwentyImportRunView;
+            await runner.run(queued.id);
+            const read = await as(admin).get(w(`/import/twenty/runs/${queued.id}`));
+            return read.body as TwentyImportRunView;
+        };
+        const seatOf = (email: string) =>
+            owner.workspaceMember.findFirst({
+                where: { workspaceId: workspace, user: { email } },
+                include: { user: true, role: true },
+            });
+        const memberRows = async () =>
+            (await as(admin).get(w('/members'))).body as { id: string; email: string; hasSignedIn: boolean }[];
+        const companyOwner = async (name: string) =>
+            (
+                await owner.company.findFirstOrThrow({
+                    where: { workspaceId: workspace, name },
+                    select: { ownerId: true },
+                })
+            ).ownerId;
+
+        it('previews how many accounts the option would create, and takes only a role of this workspace', async () => {
+            const [, g, idle] = twenty.seed('workspaceMembers', [
+                { name: { firstName: 'Pat', lastName: 'Manager' }, userEmail: patEmail },
+                { name: { firstName: 'Gone', lastName: 'Owner' }, userEmail: goneEmail },
+                { name: { firstName: 'Idle', lastName: 'Nobody' }, userEmail: idleEmail },
+            ]);
+            gone = g!;
+            twenty.seed('companies', [
+                { name: 'Gone Co', domainName: link(`https://gone-${stamp}.example`), accountOwnerId: gone.id },
+            ]);
+            // Deactivated in Twenty: one still owns a company, one owns nothing.
+            twenty.remove('workspaceMembers', gone.id);
+            twenty.remove('workspaceMembers', idle!.id);
+
+            const preview = await as(admin).post(w('/import/twenty/preview'));
+            expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+            // Nobody Here and Pat Manager; the admin is here already, the deactivated two are no accounts to create.
+            expect((preview.body as TwentyImportPreview).accountsToCreate).toBe(2);
+
+            const role = await as(admin)
+                .post(w('/roles'))
+                .send({ name: 'Account manager', capabilities: ['record:read', 'record:write', 'outreach:write'] });
+            expect(role.status, JSON.stringify(role.body)).toBe(201);
+            amRoleId = (role.body as { id: string }).id;
+
+            const foreign = (
+                (await as(otherAdmin).get(w('/roles', otherWorkspace))).body as { id: string; name: string }[]
+            ).find((r) => r.name === SYSTEM_ROLES.member)!.id;
+            const refused = await as(admin)
+                .post(w('/import/twenty/runs'))
+                .send({ mode: 'full', createMembers: { roleId: foreign } });
+            expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+            expect(err(refused).fieldErrors?.[0]?.path).toBe('roleId');
+        });
+
+        it('creates each account (no password, unverified) and its seat with the chosen role, sends no mail, and attributes owners on the same run', async () => {
+            const run = await runWith({ mode: 'full', createMembers: { roleId: amRoleId } });
+            expect(run.status, run.error ?? JSON.stringify(run.report)).toBe('succeeded');
+            expect(run.createMembers).toEqual({ roleId: amRoleId });
+            // Nobody Here, Pat Manager, and Gone Owner (deactivated, but a company is theirs); not Idle Nobody.
+            expect(run.accountsCreated).toBe(3);
+            expect(counts(reportOf(run, 'workspaceMembers'))).toEqual({ ...zero, read: 3, created: 2, unchanged: 1 });
+
+            for (const [email, name] of [
+                [nobodyEmail, 'Nobody Here'],
+                [patEmail, 'Pat Manager'],
+            ] as const) {
+                const seat = await seatOf(email);
+                expect(seat, email).not.toBeNull();
+                expect(seat!.user).toMatchObject({ passwordHash: null, emailVerifiedAt: null, displayName: name });
+                expect(seat!).toMatchObject({ roleId: amRoleId, leftAt: null, source: 'twenty-import' });
+                expect(
+                    await owner.twentyImportLink.findFirst({
+                        where: { workspaceId: workspace, object: 'workspaceMembers', localId: seat!.id },
+                    }),
+                ).toMatchObject({ localType: 'member' });
+            }
+            // The deactivated owner exists for the record's sake and has left: history is theirs, access is not.
+            const left = await seatOf(goneEmail);
+            expect(left!.leftAt).not.toBeNull();
+            expect(left!.source).toBe('twenty-import');
+            expect(await companyOwner('Gone Co')).toBe(left!.id);
+            expect(await owner.user.count({ where: { email: idleEmail } })).toBe(0);
+            // Owners resolve on the same run: a company the first import left unowned is theirs now.
+            expect(await companyOwner('How 2 Media')).toBe((await seatOf(nobodyEmail))!.id);
+
+            // The import sends nothing; the admin invites later, from Members.
+            await deliverMail(app);
+            for (const email of [nobodyEmail, patEmail, goneEmail]) expect(mailTo(email), email).toEqual([]);
+
+            const rows = await memberRows();
+            expect(rows.find((m) => m.email === nobodyEmail)).toMatchObject({ hasSignedIn: false });
+            expect(rows.find((m) => m.email === patEmail)).toMatchObject({ hasSignedIn: false });
+            expect(rows.find((m) => m.email === adminEmail)).toMatchObject({ hasSignedIn: true });
+            expect(rows.find((m) => m.email === goneEmail)).toBeUndefined();
+            const summary = (await as(admin).get(w('/members/summary'))).body as {
+                memberId: string;
+                leftAt: string | null;
+            }[];
+            expect(summary.find((m) => m.memberId === left!.id)?.leftAt).not.toBeNull();
+        });
+
+        it('is idempotent: a second run creates nothing twice, and a member who is here is matched, never duplicated', async () => {
+            const again = await runWith({ mode: 'full', createMembers: { roleId: amRoleId } });
+            expect(again.status, again.error ?? '').toBe('succeeded');
+            expect(again.accountsCreated).toBe(0);
+            expect(counts(reportOf(again, 'workspaceMembers'))).toEqual({ ...zero, read: 3, unchanged: 3 });
+            expect(await owner.user.count({ where: { email: { in: [nobodyEmail, patEmail, goneEmail] } } })).toBe(3);
+            expect(
+                await owner.workspaceMember.count({
+                    where: {
+                        workspaceId: workspace,
+                        user: { email: { in: [nobodyEmail, patEmail, goneEmail, adminEmail] } },
+                    },
+                }),
+            ).toBe(4);
+        });
+
+        it('a Google sign-in by an imported member lands in the workspace while sign-up is closed', async () => {
+            env.SIGNUP_MODE = 'closed';
+            try {
+                nextIdentity = { provider: 'fake', subject: `sub-${nobodyEmail}`, email: nobodyEmail.toUpperCase() };
+                const res = await http().get('/api/auth/oidc/fake/callback?code=c&state=s').expect(302);
+                expect(res.headers.location).toBe(env.WEB_URL);
+                const signedIn = browserFrom(res);
+                const spaces = await as(signedIn).get('/api/me/workspaces');
+                expect(spaces.status, JSON.stringify(spaces.body)).toBe(200);
+                expect((spaces.body as { id: string }[]).map((s) => s.id)).toEqual([workspace]);
+                const user = await owner.user.findUniqueOrThrow({ where: { email: nobodyEmail } });
+                expect(user.emailVerifiedAt).not.toBeNull();
+                expect(await owner.user.count({ where: { email: nobodyEmail } })).toBe(1);
+                expect((await memberRows()).find((m) => m.email === nobodyEmail)).toMatchObject({ hasSignedIn: true });
+            } finally {
+                env.SIGNUP_MODE = 'open';
+            }
+        });
+
+        it('an admin sends the invitation later; accepting it sets a password on the account the import made, the same seat', async () => {
+            const invite = await as(admin).post(w('/invites')).send({ email: patEmail, roleId: amRoleId });
+            expect(invite.status, JSON.stringify(invite.body)).toBe(201);
+            await deliverMail(app);
+            expect(mailTo(patEmail, 'workspace_invitation')).toHaveLength(1);
+            const seatBefore = (await seatOf(patEmail))!.id;
+
+            const token = (invite.body as { token: string }).token;
+            const accepted = await http().post(`/api/auth/invites/${token}/signup`).send({ password });
+            expect(accepted.status, JSON.stringify(accepted.body)).toBe(201);
+            const seat = await seatOf(patEmail);
+            expect(seat!.id).toBe(seatBefore);
+            expect(seat!.user.passwordHash).not.toBeNull();
+            expect(await owner.user.count({ where: { email: patEmail } })).toBe(1);
+
+            await verifyAddress(app, http, patEmail);
+            const login = await http().post('/api/auth/login').send({ email: patEmail, password });
+            expect(login.status, JSON.stringify(login.body)).toBe(200);
+            const spaces = await as(browserFrom(login)).get('/api/me/workspaces');
+            expect((spaces.body as { id: string }[]).map((s) => s.id)).toEqual([workspace]);
+            expect((await memberRows()).find((m) => m.email === patEmail)).toMatchObject({ hasSignedIn: true });
+        });
+
+        it('another workspace sees none of it', async () => {
+            expect(
+                await owner.workspaceMember.count({
+                    where: { workspaceId: otherWorkspace, user: { email: { in: [nobodyEmail, patEmail, goneEmail] } } },
+                }),
+            ).toBe(0);
+            const rows = (await as(otherAdmin).get(w('/members', otherWorkspace))).body as { email: string }[];
+            expect(rows.map((m) => m.email)).toEqual([otherEmail]);
         });
     });
 });

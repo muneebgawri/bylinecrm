@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
+    type TwentyImportCreateMembers,
     type TwentyImportMissingView,
     type TwentyImportObject,
     TWENTY_IMPORT_OBJECTS,
@@ -21,6 +22,7 @@ import { assertWebhookUrl } from '../webhooks/url-guard';
 import { personName } from '../records/summaries';
 import type { Page } from '../records/list-query';
 import { countLinks } from './links';
+import { memberEmailOf } from './mappers';
 import { TWENTY_API_KEY_SHOWN_CHARS, TWENTY_IMPORT_RUNS_SHOWN } from './twenty-import.constants';
 import { queueRun } from './twenty-import.runs';
 import { readConnection, runView, settingsView } from './twenty-import.settings';
@@ -170,7 +172,43 @@ export class TwentyImportService {
                 throw keyRefused(error);
             }
         }
-        return { checkedAt: new Date().toISOString(), objects };
+        return {
+            checkedAt: new Date().toISOString(),
+            objects,
+            accountsToCreate: await this.accountsToCreate(connection),
+        };
+    }
+
+    /**
+     * What the accounts option would create (#184): Twenty's members with a usable address who have
+     * no seat here, held or left. Twenty is read outside any transaction; null when it could not be.
+     */
+    private async accountsToCreate(connection: TwentyConnection): Promise<number | null> {
+        const emails = new Set<string>();
+        let cursor: string | null = null;
+        try {
+            for (;;) {
+                const page = await this.twenty.list(connection, 'workspaceMembers', { cursor, depth: 0 });
+                for (const record of page.records) {
+                    const email = memberEmailOf(record);
+                    if (email) emails.add(email);
+                }
+                if (!page.hasNextPage || page.records.length === 0 || !page.endCursor) break;
+                cursor = page.endCursor;
+            }
+        } catch (error) {
+            if (error instanceof TwentyApiError) return null;
+            throw error;
+        }
+        if (emails.size === 0) return 0;
+        const seated = await this.rls.withWorkspace((tx) =>
+            tx.workspaceMember.findMany({
+                where: { user: { email: { in: [...emails] } } },
+                select: { user: { select: { email: true } } },
+            }),
+        );
+        for (const seat of seated) emails.delete(seat.user.email);
+        return emails.size;
     }
 
     /**
@@ -178,7 +216,7 @@ export class TwentyImportService {
      * dead key fails here, at the person, rather than in the worker). `changes` reads from the
      * last successful run's start; with none, it reads everything. One run at a time per workspace.
      */
-    async start(mode: TwentyImportMode): Promise<TwentyImportRunView> {
+    async start(mode: TwentyImportMode, createMembers?: TwentyImportCreateMembers): Promise<TwentyImportRunView> {
         const context = this.current();
         const connection = await this.rls.withWorkspace(
             async (tx) => (await readConnection(tx, this.secrets))?.connection ?? null,
@@ -186,11 +224,17 @@ export class TwentyImportService {
         if (!connection) throw noConnection();
         await this.probe(connection);
         const row = await this.rls.withWorkspace(async (tx) => {
+            // Looked up inside the workspace (#184): the foreign key alone would accept another workspace's role.
+            if (createMembers) {
+                const role = await tx.role.findUnique({ where: { id: createMembers.roleId }, select: { id: true } });
+                if (!role) throw new UnknownReference('roleId', 'no such role in this workspace');
+            }
             const created = await queueRun(tx, {
                 workspaceId: context.workspaceId,
                 mode,
                 startedById: context.memberId ?? null,
                 scheduled: false,
+                createMembersRoleId: createMembers?.roleId ?? null,
             });
             afterCommit('TwentyImportService.start', () => {
                 void this.workers.enqueue({ workspaceId: context.workspaceId, runId: created.id });
