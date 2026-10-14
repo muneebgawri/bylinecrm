@@ -800,7 +800,7 @@ export const sendingPool: SendingPoolView = {
                 checkedAt: at(1),
                 nextCheckAt: at(-5),
                 spamRate: null,
-                postmaster: { status: 'not_connected', message: null },
+                postmaster: { status: 'not_connected', message: null, nextReadAt: null },
             },
             canSend: false,
         },
