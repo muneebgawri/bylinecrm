@@ -1,5 +1,6 @@
-import type {
-    TwentyImportMode,
+import {
+    emptyObjectReport,
+    type TwentyImportMode,
     TwentyImportObject,
     TwentyImportObjectReport,
     TwentyImportRunStatus,
@@ -26,13 +27,23 @@ export async function readConnection(
 }
 
 export function settingsView(row: TwentyImportSettings | null): TwentyImportSettingsView {
-    if (!row) return { configured: false, baseUrl: null, apiKeyLast4: null, configuredBy: null, updatedAt: null };
+    if (!row) {
+        return {
+            configured: false,
+            baseUrl: null,
+            apiKeyLast4: null,
+            configuredBy: null,
+            updatedAt: null,
+            createMembers: null,
+        };
+    }
     return {
         configured: true,
         baseUrl: row.baseUrl,
         apiKeyLast4: row.apiKeyLast4,
         configuredBy: row.configuredById,
         updatedAt: row.updatedAt.toISOString(),
+        createMembers: row.createMembersRoleId ? { roleId: row.createMembersRoleId } : null,
     };
 }
 
@@ -43,9 +54,14 @@ export function runView(row: TwentyImportRun): TwentyImportRunView {
         mode: row.mode as TwentyImportMode,
         since: row.since?.toISOString() ?? null,
         phase: (row.phase as TwentyImportObject | null) ?? null,
-        report: row.report as unknown as TwentyImportObjectReport[],
+        // A report written before a counter existed reads as zero of it (#185 added `conflicts`).
+        report: (row.report as unknown as TwentyImportObjectReport[]).map((entry) => ({
+            ...emptyObjectReport(entry.object),
+            ...entry,
+        })),
         error: row.error,
         cancelRequested: row.cancelRequested,
+        scheduled: row.scheduled,
         startedBy: row.startedById,
         createMembers: row.createMembersRoleId ? { roleId: row.createMembersRoleId } : null,
         accountsCreated: row.accountsCreated,

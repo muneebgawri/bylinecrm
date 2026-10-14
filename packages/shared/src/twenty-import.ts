@@ -70,6 +70,22 @@ export const TWENTY_IMPORT_ERROR_MESSAGE_MAX = 300;
 /** Twenty's REST page ceiling. */
 export const TWENTY_PAGE_SIZE = 60;
 
+/**
+ * Scheduled sync (#185, P4-4f): how often a workspace's importer runs its `changes` mode on its own.
+ * Off by default; a workspace turns it on while the team still works in Twenty, and turns it off for
+ * good with a cutover.
+ */
+export const TWENTY_SYNC_INTERVALS = ['off', '15m', 'hourly', 'daily'] as const;
+export type TwentySyncInterval = (typeof TWENTY_SYNC_INTERVALS)[number];
+export type TwentySyncEvery = Exclude<TwentySyncInterval, 'off'>;
+export const TWENTY_SYNC_INTERVAL_MS: Readonly<Record<TwentySyncEvery, number>> = {
+    '15m': 15 * 60_000,
+    hourly: 60 * 60_000,
+    daily: 24 * 60 * 60_000,
+};
+/** After this many scheduled runs failed in a row, the workspace's admins are told (once per streak). */
+export const TWENTY_SYNC_FAILURES_BEFORE_NOTICE = 3;
+
 export interface TwentyImportRecordError {
     externalId: string;
     message: string;
@@ -98,6 +114,20 @@ export interface TwentyImportObjectReport {
     /** A `reconcile` pass: mapped records of this object Twenty no longer returns; null for any other pass. */
     missingInSource: number | null;
     errors: TwentyImportRecordError[];
+    /**
+     * Records with a field edited in BylineCRM after Twenty last touched the record (#185): BylineCRM's
+     * value was kept for those fields and Twenty's applied to the rest. Counted beside the outcomes,
+     * never instead of one: such a record is still `updated` or `unchanged`.
+     */
+    conflicts: number;
+    /** Which fields were kept, per record, for the first `TWENTY_IMPORT_ERRORS_KEPT` records. */
+    kept: TwentyImportKeptFields[];
+}
+
+/** A record whose BylineCRM values were kept over Twenty's (#185), and for which fields. */
+export interface TwentyImportKeptFields {
+    externalId: string;
+    fields: string[];
 }
 
 /**
@@ -121,6 +151,8 @@ export interface TwentyImportRunView {
     report: TwentyImportObjectReport[];
     error: string | null;
     cancelRequested: boolean;
+    /** Started by the schedule (#185), not a person. */
+    scheduled: boolean;
     startedBy: string | null;
     /** The accounts option the run was started with (#184), or null. */
     createMembers: TwentyImportCreateMembers | null;
@@ -137,13 +169,32 @@ export interface TwentyImportSettingsView {
     apiKeyLast4: string | null;
     configuredBy: string | null;
     updatedAt: string | null;
+    /**
+     * The accounts option as last chosen at a start (#184), the workspace's saved choice: what the
+     * screen offers next time, and what a scheduled run (#185) uses. Null for off.
+     */
+    createMembers: TwentyImportCreateMembers | null;
 }
 
-/** What the importer screen opens on: the connection, the latest run, and what is mapped so far. */
+/** The workspace's automatic sync (#185): its interval, when it next runs, how it has been going, and whether it was cut over. */
+export interface TwentyImportSyncView {
+    interval: TwentySyncInterval;
+    /** When the schedule next starts a run; null while off. */
+    nextRunAt: string | null;
+    /** Scheduled runs failed in a row; 0 after a success. */
+    failures: number;
+    /** What the last failed scheduled run said; null after a success. */
+    lastError: string | null;
+    /** When an admin stopped syncing for good; null until then, and again once syncing is turned back on. */
+    cutoverAt: string | null;
+}
+
+/** What the importer screen opens on: the connection, the latest run, what is mapped so far, and the automatic sync. */
 export interface TwentyImportOverview {
     settings: TwentyImportSettingsView;
     latestRun: TwentyImportRunView | null;
     linked: { object: TwentyImportObject; count: number }[];
+    sync: TwentyImportSyncView;
 }
 
 /** Twenty's counts per object, read now, beside what is mapped already: the "before" of a run. */
@@ -172,6 +223,8 @@ export function emptyObjectReport(object: TwentyImportObject): TwentyImportObjec
         after: null,
         missingInSource: null,
         errors: [],
+        conflicts: 0,
+        kept: [],
     };
 }
 

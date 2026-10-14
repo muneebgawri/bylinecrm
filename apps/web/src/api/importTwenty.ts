@@ -4,12 +4,14 @@ import { workspacePath } from './endpoints';
 import { keys } from './queries';
 import type {
     PutTwentyImportSettingsInput,
+    PutTwentyImportSyncInput,
     StartTwentyImportInput,
     TwentyImportMissingPage,
     TwentyImportOverviewView,
     TwentyImportPreviewView,
     TwentyImportRunView,
     TwentyImportSettingsView,
+    TwentyImportSyncView,
 } from './types';
 
 /**
@@ -39,6 +41,10 @@ export const twentyImport = {
         request<TwentyImportMissingPage>('GET', workspacePath(workspaceId, '/import/twenty/missing?limit=200'), {
             signal,
         }),
+    putSync: (workspaceId: string, input: PutTwentyImportSyncInput) =>
+        request<TwentyImportSyncView>('PUT', workspacePath(workspaceId, '/import/twenty/sync'), { body: input }),
+    cutover: (workspaceId: string) =>
+        request<TwentyImportSyncView>('POST', workspacePath(workspaceId, '/import/twenty/sync/cutover')),
 };
 
 const POLL_FIRST_MS = 1_000;
@@ -133,5 +139,31 @@ export function useCancelTwentyImport(workspaceId: string) {
     return useMutation({
         mutationFn: (runId: string) => twentyImport.cancel(workspaceId, runId),
         onSuccess: (run) => client.setQueryData(keys.twentyImportRun(workspaceId, run.id), run),
+    });
+}
+
+/** The automatic sync's interval (#185); the answer is the sync as it now is, put on the overview. */
+export function usePutTwentySync(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: PutTwentyImportSyncInput) => twentyImport.putSync(workspaceId, input),
+        onSuccess: (sync) => {
+            client.setQueryData<TwentyImportOverviewView>(keys.twentyImport(workspaceId), (current) =>
+                current ? { ...current, sync } : current,
+            );
+        },
+    });
+}
+
+/** Stop syncing (cutover, #185): off for good, with the moment recorded. */
+export function useTwentyCutover(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => twentyImport.cutover(workspaceId),
+        onSuccess: (sync) => {
+            client.setQueryData<TwentyImportOverviewView>(keys.twentyImport(workspaceId), (current) =>
+                current ? { ...current, sync } : current,
+            );
+        },
     });
 }

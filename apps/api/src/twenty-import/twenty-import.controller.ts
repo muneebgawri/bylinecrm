@@ -6,17 +6,24 @@ import type {
     TwentyImportPreview,
     TwentyImportRunView,
     TwentyImportSettingsView,
+    TwentyImportSyncView,
 } from '@bylinecrm/shared';
 import type { Page } from '../records/list-query';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
-import { ListTwentyImportMissingDto, PutTwentyImportSettingsDto, StartTwentyImportDto } from './dto';
+import {
+    ListTwentyImportMissingDto,
+    PutTwentyImportSettingsDto,
+    PutTwentyImportSyncDto,
+    StartTwentyImportDto,
+} from './dto';
 import {
     twentyImportMissingPage,
     twentyImportOverview,
     twentyImportPreview,
     twentyImportRun,
     twentyImportSettings,
+    twentyImportSync,
 } from './responses';
 import { TwentyImportService } from './twenty-import.service';
 
@@ -53,6 +60,23 @@ export class TwentyImportController {
     @Delete('settings')
     removeSettings(): Promise<void> {
         return this.importer.removeSettings();
+    }
+
+    /** The automatic sync (#185): off, every 15 minutes, hourly or daily. Turning it on undoes a cutover. */
+    @Requires('workspace:admin')
+    @Put('sync')
+    @Returns(twentyImportSync)
+    putSync(@Body() body: PutTwentyImportSyncDto): Promise<TwentyImportSyncView> {
+        return this.importer.putSync(body.interval);
+    }
+
+    /** Stop syncing (cutover, #185): the schedule is off for good and the moment is recorded. */
+    @Requires('workspace:admin')
+    @HttpCode(200)
+    @Post('sync/cutover')
+    @Returns(twentyImportSync)
+    cutover(): Promise<TwentyImportSyncView> {
+        return this.importer.cutover();
     }
 
     /** Reads Twenty now: its count per object beside what is mapped here. A refused key is a `422` at `apiKey`. */

@@ -1238,6 +1238,8 @@ export const twentyImportRun: TwentyImportRunView = {
             failed: 0,
             after: created + updated,
             missingInSource: null,
+            conflicts: 0,
+            kept: [],
             errors:
                 object === 'workspaceMembers'
                     ? [
@@ -1251,6 +1253,7 @@ export const twentyImportRun: TwentyImportRunView = {
     }),
     error: null,
     cancelRequested: false,
+    scheduled: false,
     startedBy: IDS.member,
     createMembers: null,
     accountsCreated: 0,
@@ -1266,9 +1269,11 @@ export const twentyImport: TwentyImportOverviewView = {
         apiKeyLast4: '7f3a',
         configuredBy: IDS.member,
         updatedAt: at(30),
+        createMembers: null,
     },
     latestRun: twentyImportRun,
     linked: twentyImportRun.report.map((r) => ({ object: r.object, count: r.after ?? 0 })),
+    sync: { interval: 'off', nextRunAt: null, failures: 0, lastError: null, cutoverAt: null },
 };
 
 export const twentyImportRuns: TwentyImportRunView[] = [twentyImportRun];

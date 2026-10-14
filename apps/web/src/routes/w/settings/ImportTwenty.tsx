@@ -2,10 +2,12 @@ import {
     SYSTEM_ROLES,
     TWENTY_IMPORT_OBJECT_LABELS,
     TWENTY_IMPORT_OBJECTS,
+    TWENTY_SYNC_FAILURES_BEFORE_NOTICE,
     type TwentyImportCreateMembers,
     type TwentyImportMode,
     type TwentyImportObject,
     type TwentyImportRunStatus,
+    type TwentySyncInterval,
 } from '@bylinecrm/shared';
 import {
     Badge,
@@ -32,8 +34,10 @@ import {
     isFinalRun,
     useCancelTwentyImport,
     usePutTwentySettings,
+    usePutTwentySync,
     useRemoveTwentySettings,
     useStartTwentyImport,
+    useTwentyCutover,
     useTwentyImport,
     useTwentyImportRun,
     useTwentyImportRuns,
@@ -47,11 +51,12 @@ import type {
     TwentyImportOverviewView,
     TwentyImportPreviewView,
     TwentyImportRunView,
+    TwentyImportSyncView,
 } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
-import { formatDate } from '../../../lib/format';
+import { formatDate, formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 
@@ -97,7 +102,12 @@ function AdminImporter({ workspaceId }: { workspaceId: string }) {
     return (
         <div className="flex flex-col gap-4">
             <Connection workspaceId={workspaceId} overview={overview.data} />
-            {overview.data.settings.configured && <Runs workspaceId={workspaceId} overview={overview.data} />}
+            {overview.data.settings.configured && (
+                <>
+                    <SyncCard workspaceId={workspaceId} sync={overview.data.sync} />
+                    <Runs workspaceId={workspaceId} overview={overview.data} />
+                </>
+            )}
         </div>
     );
 }
@@ -302,6 +312,108 @@ const number = new Intl.NumberFormat();
 const count = (n: number | null | undefined) => (n === null || n === undefined ? '—' : number.format(n));
 const label = (object: TwentyImportObject) => TWENTY_IMPORT_OBJECT_LABELS[object].label;
 
+const SYNC_INTERVALS: readonly { value: TwentySyncInterval; label: string }[] = [
+    { value: 'off', label: 'Off' },
+    { value: '15m', label: 'Every 15 minutes' },
+    { value: 'hourly', label: 'Hourly' },
+    { value: 'daily', label: 'Daily' },
+];
+
+/**
+ * The automatic sync (#185): its interval, when it next runs, how it has been going, and the one
+ * way to stop it for good. The failures of the runs themselves are in the run list below.
+ */
+function SyncCard({ workspaceId, sync }: { workspaceId: string; sync: TwentyImportSyncView }) {
+    const put = usePutTwentySync(workspaceId);
+    const cutover = useTwentyCutover(workspaceId);
+    const [stopping, setStopping] = useState(false);
+    const on = sync.interval !== 'off';
+    const error = put.isError ? failureText(put.error) : undefined;
+    return (
+        <Card title="Automatic sync">
+            <div className="flex flex-col gap-3 text-[13px]">
+                <p className="m-0 text-text-muted">
+                    Runs “Changes since last run” on a schedule while the team still works in Twenty. Twenty is the
+                    source for the fields it maps; a field edited here after Twenty last touched the record keeps its
+                    value and is counted as a conflict in the run report. Nothing is deleted on its own.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="w-56">
+                        <Select
+                            value={sync.interval}
+                            onValueChange={(value) => put.mutate({ interval: value as TwentySyncInterval })}
+                            disabled={put.isPending}
+                        >
+                            <SelectTrigger aria-label="Automatic sync">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {SYNC_INTERVALS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {on && sync.nextRunAt && (
+                        <span className="text-text-muted">Next sync {formatWhen(sync.nextRunAt)}</span>
+                    )}
+                    {on && (
+                        <Button
+                            shape="square"
+                            size="sm"
+                            variant="ghost"
+                            className="text-danger max-md:h-touch"
+                            onClick={() => {
+                                cutover.reset();
+                                setStopping(true);
+                            }}
+                        >
+                            Stop syncing (cutover)
+                        </Button>
+                    )}
+                </div>
+                {error && (
+                    <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-danger">
+                        {error}
+                    </p>
+                )}
+                {sync.failures > 0 && (
+                    <p
+                        className={`m-0 ${sync.failures >= TWENTY_SYNC_FAILURES_BEFORE_NOTICE ? 'text-danger' : 'text-warning'}`}
+                    >
+                        {`${sync.failures} automatic sync${sync.failures === 1 ? '' : 's'} in a row failed: ${sync.lastError ?? 'the run failed'}. `}
+                        {sync.failures >= TWENTY_SYNC_FAILURES_BEFORE_NOTICE
+                            ? 'Admins have been emailed; the schedule keeps trying, less often each time.'
+                            : 'The schedule tries again, less often each time.'}
+                    </p>
+                )}
+                {!on && sync.cutoverAt && (
+                    <p className="m-0 text-text-muted">{`Syncing stopped ${formatDate(sync.cutoverAt)} (cutover).`}</p>
+                )}
+            </div>
+            <ConfirmDialog
+                open={stopping}
+                onOpenChange={setStopping}
+                title="Stop syncing with Twenty?"
+                body="The schedule is turned off for good and this moment is recorded as the cutover. What was imported stays, and an import can still be run by hand."
+                confirm="Stop syncing"
+                pending={cutover.isPending}
+                error={cutover.isError ? failureText(cutover.error) : undefined}
+                onConfirm={() =>
+                    cutover.mutate(undefined, {
+                        onSuccess: () => {
+                            setStopping(false);
+                            toast({ title: 'Syncing with Twenty stopped' });
+                        },
+                    })
+                }
+            />
+        </Card>
+    );
+}
+
 function PreviewTable({ preview }: { preview: TwentyImportPreviewView }) {
     type Row = TwentyImportPreviewView['objects'][number];
     return (
@@ -401,7 +513,10 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
     const cancel = useCancelTwentyImport(workspaceId);
     const runs = useTwentyImportRuns(workspaceId);
     const [mode, setMode] = useState<TwentyImportMode>('full');
-    const [createMembers, setCreateMembers] = useState<TwentyImportCreateMembers | null>(null);
+    // The option starts as the workspace's saved choice (the last start's), which a scheduled sync uses too.
+    const [createMembers, setCreateMembers] = useState<TwentyImportCreateMembers | null>(
+        overview.settings.createMembers,
+    );
     const [stopping, setStopping] = useState<string | null>(null);
     const latestId = overview.latestRun?.id ?? null;
     const latest = useTwentyImportRun(workspaceId, latestId, overview.latestRun);
@@ -551,7 +666,8 @@ function CreateMembersOption({
                     <span className="block text-text-muted">
                         Each gets an account with no password and a seat with the role below, so the records they own
                         are theirs. Nothing is emailed: send invitations from Members when you want them to sign in, or
-                        they sign in with Google using that address.
+                        they sign in with Google using that address. A scheduled sync creates accounts as last chosen
+                        here, with this role.
                     </span>
                 </label>
             </div>
@@ -581,9 +697,10 @@ function RunSummary({ run }: { run: TwentyImportRunView }) {
             created: sum.created + r.created,
             updated: sum.updated + r.updated,
             failed: sum.failed + r.failed,
+            conflicts: sum.conflicts + r.conflicts,
             missing: sum.missing + (r.missingInSource ?? 0),
         }),
-        { created: 0, updated: 0, failed: 0, missing: 0 },
+        { created: 0, updated: 0, failed: 0, conflicts: 0, missing: 0 },
     );
     return (
         <div className="flex flex-col gap-1">
@@ -592,13 +709,14 @@ function RunSummary({ run }: { run: TwentyImportRunView }) {
                     {STATUS[run.status].label}
                 </Badge>
                 <span className="text-text-muted">
-                    {MODE_LABEL[run.mode]} · started {formatDate(run.startedAt ?? run.queuedAt)}
+                    {`${run.scheduled ? 'Automatic · ' : ''}${MODE_LABEL[run.mode]} · started ${formatDate(run.startedAt ?? run.queuedAt)}`}
                     {run.finishedAt ? `, finished ${formatDate(run.finishedAt)}` : ''}
                 </span>
                 <span className="text-text-muted">
                     {run.mode === 'reconcile'
                         ? `${count(totals.missing)} missing in Twenty`
-                        : `${count(totals.created)} created, ${count(totals.updated)} updated, ${count(totals.failed)} failed`}
+                        : `${count(totals.created)} created, ${count(totals.updated)} updated, ${count(totals.failed)} failed` +
+                          (totals.conflicts > 0 ? `, ${count(totals.conflicts)} kept here` : '')}
                 </span>
                 {run.accountsCreated > 0 && (
                     <span className="text-text-muted">
@@ -709,6 +827,8 @@ function ReportTable({ report }: { report: TwentyImportObjectReportView[] }) {
         (r): r is Row => r !== undefined,
     );
     const errors = rows.flatMap((r) => r.errors.map((e) => ({ object: r.object, ...e })));
+    const kept = rows.flatMap((r) => r.kept.map((k) => ({ object: r.object, ...k })));
+    const conflicts = rows.reduce((sum, r) => sum + r.conflicts, 0);
     return (
         <section aria-label="Run report" className="flex flex-col gap-2">
             <DataTableChrome
@@ -771,6 +891,13 @@ function ReportTable({ report }: { report: TwentyImportObjectReportView[] }) {
                             cell: (row: Row) => count(row.skipped),
                         },
                         {
+                            id: 'conflicts',
+                            header: 'Conflicts',
+                            muted: true,
+                            phone: 'hidden',
+                            cell: (row: Row) => count(row.conflicts),
+                        },
+                        {
                             id: 'missing',
                             header: 'Missing in Twenty',
                             muted: true,
@@ -798,6 +925,24 @@ function ReportTable({ report }: { report: TwentyImportObjectReportView[] }) {
                     ],
                 }}
             />
+            {conflicts > 0 && (
+                <details className="text-[13px]">
+                    <summary className="flex min-h-touch cursor-pointer items-center text-text-muted md:min-h-0">
+                        {`${conflicts} record${conflicts === 1 ? '' : 's'} kept BylineCRM’s value for a field edited here after Twenty last touched it`}
+                    </summary>
+                    <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
+                        {kept.map((k, i) => (
+                            <li key={`${k.object}-${k.externalId}-${i}`} className="break-all">
+                                <span className="text-text-muted">{label(k.object)}</span> {k.externalId}:{' '}
+                                {k.fields.join(', ')}
+                            </li>
+                        ))}
+                        {kept.length < conflicts && (
+                            <li className="text-text-muted">{`…and ${conflicts - kept.length} more`}</li>
+                        )}
+                    </ul>
+                </details>
+            )}
             {errors.length > 0 && (
                 <details className="text-[13px]">
                     <summary className="flex min-h-touch cursor-pointer items-center text-text-muted md:min-h-0">

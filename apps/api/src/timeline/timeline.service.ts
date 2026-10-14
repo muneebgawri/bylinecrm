@@ -181,6 +181,29 @@ export class TimelineService {
     }
 }
 
+/**
+ * The fields of a record that someone other than the import changed after `after` (#185): the
+ * `diff` keys of the record's own entries (not a note's or a task's on it) with any actor but the
+ * import's, later than that moment. What the Twenty sync's precedence rule asks the timeline.
+ */
+export async function fieldsEditedAfter(
+    tx: WorkspaceClient,
+    target: { type: RecordObject; id: string },
+    after: Date,
+): Promise<Set<string>> {
+    const rows = await tx.timelineActivity.findMany({
+        where: { targetType: target.type, targetId: target.id, linkedType: null, happenedAt: { gt: after } },
+        select: { actor: true, properties: true },
+    });
+    const fields = new Set<string>();
+    for (const row of rows) {
+        if (stored<TimelineActor>(row.actor).kind === 'import') continue;
+        const diff = stored<{ diff?: Record<string, unknown> }>(row.properties).diff;
+        for (const field of Object.keys(diff ?? {})) fields.add(field);
+    }
+    return fields;
+}
+
 /** The rows one event leaves, by the shape of its object: a record's own entry, or one per target. */
 async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[]> {
     const kind = timelineKindOf(event);

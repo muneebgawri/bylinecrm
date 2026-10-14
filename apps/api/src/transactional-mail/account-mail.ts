@@ -1,7 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { invitationUrl, mailedLinkUrl, RESET_PASSWORD_PAGE, VERIFY_EMAIL_PAGE } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
-import { passwordResetMail, signupInvitationMail, verificationMail, workspaceInvitationMail } from './templates';
+import {
+    passwordResetMail,
+    signupInvitationMail,
+    twentySyncFailingMail,
+    verificationMail,
+    workspaceInvitationMail,
+} from './templates';
 import { MailOutbox, type MailTransaction } from './mail-outbox';
 
 /**
@@ -73,6 +79,35 @@ export class AccountMail {
             idempotencyKey: `signup-invite-${input.inviteId}`,
             ...signupInvitationMail(url),
         });
+    }
+
+    /**
+     * The workspace's automatic Twenty sync has failed several times in a row (#185): one message
+     * per admin per run, recorded against the workspace in the transaction that ended the run.
+     */
+    twentySyncFailing(
+        tx: MailTransaction,
+        input: {
+            workspaceId: string;
+            to: string;
+            memberId: string;
+            runId: string;
+            workspaceName: string;
+            failures: number;
+            error: string;
+            url: string;
+        },
+    ): Promise<void> {
+        return this.outbox.record(
+            tx,
+            {
+                kind: 'twenty_sync_failing',
+                to: input.to,
+                idempotencyKey: `twenty-sync-${input.runId}-${input.memberId}`,
+                ...twentySyncFailingMail(input),
+            },
+            input.workspaceId,
+        );
     }
 
     /** Wakes the relay after an owner transaction that recorded mail has committed. */

@@ -1,4 +1,10 @@
-import { LIST_LIMIT_DEFAULT, LIST_LIMIT_MAX, TWENTY_IMPORT_MODES, TWENTY_IMPORT_OBJECTS } from '@bylinecrm/shared';
+import {
+    LIST_LIMIT_DEFAULT,
+    LIST_LIMIT_MAX,
+    TWENTY_IMPORT_MODES,
+    TWENTY_IMPORT_OBJECTS,
+    TWENTY_SYNC_INTERVALS,
+} from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -30,3 +36,6 @@ export class ListTwentyImportMissingDto extends createZodDto(
         cursor: z.string().optional(),
     }),
 ) {}
+
+/** `PUT /import/twenty/sync` — how often the importer runs its `changes` mode on its own (#185); `off` stops it. */
+export class PutTwentyImportSyncDto extends createZodDto(z.object({ interval: z.enum(TWENTY_SYNC_INTERVALS) })) {}

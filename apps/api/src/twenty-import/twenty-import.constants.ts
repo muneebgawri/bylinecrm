@@ -5,6 +5,9 @@
 
 /** The queue an import run is driven on; a job's id is the run's, so one run has at most one job. */
 export const TWENTY_IMPORT_QUEUE = 'twenty-import';
+/** The schedule's job (#185): one BullMQ job scheduler per workspace, on the same queue, under this id. */
+export const TWENTY_SYNC_JOB = 'sync';
+export const twentySyncSchedulerId = (workspaceId: string): string => `sync:${workspaceId}`;
 /** A run whose job threw (the database, Redis, Twenty down for good) is retried from its cursor this many times. */
 export const TWENTY_IMPORT_JOB_ATTEMPTS = 3;
 export const TWENTY_IMPORT_JOB_BACKOFF_MS = 30_000;

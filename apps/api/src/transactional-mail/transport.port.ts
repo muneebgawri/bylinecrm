@@ -1,5 +1,6 @@
 /** What a transactional mail is about (#93); the job name, the log line and the test filter. */
-export type MailKind = 'email_verification' | 'password_reset' | 'workspace_invitation' | 'signup_invitation';
+export type MailKind =
+    'email_verification' | 'password_reset' | 'workspace_invitation' | 'signup_invitation' | 'twenty_sync_failing';
 
 /** One message, rendered and addressed, as a transport sends it. */
 export interface OutgoingMail {

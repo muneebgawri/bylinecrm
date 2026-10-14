@@ -9,10 +9,11 @@ import {
     type TwentyImportPreview,
     type TwentyImportRunView,
     type TwentyImportSettingsView,
+    type TwentyImportSyncView,
+    type TwentySyncInterval,
 } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
-import { ApiException, StateConflict, UnknownReference } from '../infra/errors/api-errors';
-import { uniqueViolation } from '../infra/prisma-errors';
+import { ApiException, UnknownReference } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { afterCommit } from '../infra/transaction-scope';
@@ -23,8 +24,10 @@ import type { Page } from '../records/list-query';
 import { countLinks } from './links';
 import { memberEmailOf } from './mappers';
 import { TWENTY_API_KEY_SHOWN_CHARS, TWENTY_IMPORT_RUNS_SHOWN } from './twenty-import.constants';
+import { queueRun } from './twenty-import.runs';
 import { readConnection, runView, settingsView } from './twenty-import.settings';
 import { TwentyImportWorkers } from './twenty-import.workers';
+import { TwentySyncService } from './twenty-sync.service';
 import { TwentyApiError, TwentyHttp } from './twenty.http';
 import { TWENTY_PORT, type TwentyApi, type TwentyConnection } from './twenty.port';
 
@@ -46,13 +49,14 @@ export class TwentyImportService {
         private readonly secrets: SecretBox,
         @Inject(TWENTY_PORT) private readonly twenty: TwentyApi,
         private readonly workers: TwentyImportWorkers,
+        private readonly sync: TwentySyncService,
     ) {
         this.allowPrivate = env.WEBHOOK_ALLOW_PRIVATE_TARGETS;
     }
 
-    overview(): Promise<TwentyImportOverview> {
-        this.current();
-        return this.rls.withWorkspace(async (tx) => {
+    async overview(): Promise<TwentyImportOverview> {
+        const { workspaceId } = this.current();
+        const { settings, latest, counts } = await this.rls.withWorkspace(async (tx) => {
             const [settings, latest, counts] = await Promise.all([
                 tx.twentyImportSettings.findFirst(),
                 tx.twentyImportRun.findFirst({ orderBy: { queuedAt: 'desc' } }),
@@ -60,8 +64,57 @@ export class TwentyImportService {
                     TWENTY_IMPORT_OBJECTS.map(async (object) => ({ object, count: await countLinks(tx, object) })),
                 ),
             ]);
-            return { settings: settingsView(settings), latestRun: latest ? runView(latest) : null, linked: counts };
+            return { settings, latest, counts };
         });
+        return {
+            settings: settingsView(settings),
+            latestRun: latest ? runView(latest) : null,
+            linked: counts,
+            sync: await this.syncView(workspaceId, settings),
+        };
+    }
+
+    /**
+     * The automatic sync's interval (#185): a setting on the connection — there is nothing to sync
+     * without one — put into effect as the workspace's job scheduler once the row is committed.
+     * Turning it on is a fresh start: the failure streak and a cutover are cleared.
+     */
+    async putSync(interval: TwentySyncInterval): Promise<TwentyImportSyncView> {
+        const { workspaceId } = this.current();
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const existing = await tx.twentyImportSettings.findFirst();
+            if (!existing) throw noConnection();
+            const updated = await tx.twentyImportSettings.update({
+                where: { workspaceId },
+                data:
+                    interval === 'off'
+                        ? { syncInterval: interval }
+                        : { syncInterval: interval, syncFailures: 0, syncLastError: null, cutoverAt: null },
+            });
+            afterCommit('TwentyImportService.putSync', () => {
+                void this.workers.schedule(workspaceId, interval);
+            });
+            return updated;
+        });
+        return this.syncView(workspaceId, row);
+    }
+
+    /** Stop syncing (cutover, #185): off for good — the schedule goes and the moment is recorded. */
+    async cutover(): Promise<TwentyImportSyncView> {
+        const { workspaceId } = this.current();
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const existing = await tx.twentyImportSettings.findFirst();
+            if (!existing) throw noConnection();
+            const updated = await tx.twentyImportSettings.update({
+                where: { workspaceId },
+                data: { syncInterval: 'off', cutoverAt: new Date() },
+            });
+            afterCommit('TwentyImportService.cutover', () => {
+                void this.workers.schedule(workspaceId, 'off');
+            });
+            return updated;
+        });
+        return this.syncView(workspaceId, row);
     }
 
     async putSettings(input: { baseUrl: string; apiKey: string }): Promise<TwentyImportSettingsView> {
@@ -162,6 +215,7 @@ export class TwentyImportService {
      * Queues a run: the connection must exist and Twenty must accept its key now (one read, so a
      * dead key fails here, at the person, rather than in the worker). `changes` reads from the
      * last successful run's start; with none, it reads everything. One run at a time per workspace.
+     * The accounts option (#184) goes with the run and is saved as the workspace's choice.
      */
     async start(mode: TwentyImportMode, createMembers?: TwentyImportCreateMembers): Promise<TwentyImportRunView> {
         const context = this.current();
@@ -176,29 +230,25 @@ export class TwentyImportService {
                 const role = await tx.role.findUnique({ where: { id: createMembers.roleId }, select: { id: true } });
                 if (!role) throw new UnknownReference('roleId', 'no such role in this workspace');
             }
-            const last = await tx.twentyImportRun.findFirst({
-                where: { status: 'succeeded', startedAt: { not: null } },
-                orderBy: { startedAt: 'desc' },
-                select: { startedAt: true },
-            });
-            try {
-                const created = await tx.twentyImportRun.create({
-                    data: {
-                        workspaceId: context.workspaceId,
-                        mode,
-                        since: mode === 'changes' ? (last?.startedAt ?? null) : null,
-                        startedById: context.memberId ?? null,
-                        createMembersRoleId: createMembers?.roleId ?? null,
-                    },
+            // The option as chosen is the workspace's choice from now on: what the screen offers next
+            // time, and what a scheduled run (#185) uses. A reconcile pass offers no option and changes none.
+            if (mode !== 'reconcile') {
+                await tx.twentyImportSettings.update({
+                    where: { workspaceId: context.workspaceId },
+                    data: { createMembersRoleId: createMembers?.roleId ?? null },
                 });
-                afterCommit('TwentyImportService.start', () => {
-                    void this.workers.enqueue({ workspaceId: context.workspaceId, runId: created.id });
-                });
-                return created;
-            } catch (error) {
-                if (uniqueViolation(error)) throw new StateConflict('an import is already queued or running');
-                throw error;
             }
+            const created = await queueRun(tx, {
+                workspaceId: context.workspaceId,
+                mode,
+                startedById: context.memberId ?? null,
+                scheduled: false,
+                createMembersRoleId: createMembers?.roleId ?? null,
+            });
+            afterCommit('TwentyImportService.start', () => {
+                void this.workers.enqueue({ workspaceId: context.workspaceId, runId: created.id });
+            });
+            return created;
         });
         return runView(row);
     }
@@ -292,6 +342,15 @@ export class TwentyImportService {
             }
             throw keyRefused(error);
         }
+    }
+
+    /** The sync view, with the scheduler's next firing read from Redis — outside any transaction. */
+    private async syncView(
+        workspaceId: string,
+        settings: Parameters<TwentySyncService['view']>[0],
+    ): Promise<TwentyImportSyncView> {
+        const next = settings && settings.syncInterval !== 'off' ? await this.workers.nextSyncAt(workspaceId) : null;
+        return this.sync.view(settings, next);
     }
 
     private current(): WorkspaceRunContext {
