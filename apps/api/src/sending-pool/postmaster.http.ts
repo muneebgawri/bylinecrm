@@ -27,10 +27,25 @@ export function spamRateBpsOf(record: { userReportedSpamRatio?: unknown }): numb
 const trafficStats = z.object({ userReportedSpamRatio: z.number().optional() }).passthrough();
 
 /**
+ * A `Retry-After` header as the seconds to wait (#183): a number of seconds, or an HTTP date (how
+ * far it is from `now`, never less than zero). Anything else, or no header, is no advice.
+ */
+export function retryAfterSecondsOf(header: string | null, now: Date): number | null {
+    if (header === null) return null;
+    const value = header.trim();
+    // A delta in seconds, or an HTTP date; a negative delta (or a bare number parsed as a year) is neither.
+    if (/^-?\d+$/.test(value)) return value.startsWith('-') ? null : Number(value);
+    const at = Date.parse(value);
+    if (Number.isNaN(at)) return null;
+    return Math.max(0, Math.round((at - now.getTime()) / 1000));
+}
+
+/**
  * The port, over HTTPS to the Postmaster Tools API (`GET /v1/domains/{domain}/trafficStats/{YYYYMMDD}`).
  * One request per check, with a timeout; a reply Google's documentation gives a meaning to (403 —
- * not verified, 404 — no data for the day) is a lookup result; anything else is a failure that
- * names the status and nothing Google wrote (its error text is free form and stays out of logs).
+ * not verified, 404 — no data for the day, 429 — the quota is spent for now, #183) is a lookup
+ * result; anything else is a failure that names the status and nothing Google wrote (its error
+ * text is free form and stays out of logs).
  */
 @Injectable()
 export class PostmasterHttp implements PostmasterPort {
@@ -48,6 +63,12 @@ export class PostmasterHttp implements PostmasterPort {
         }
         if (res.status === 403) return { status: 'not_verified' };
         if (res.status === 404) return { status: 'no_data', day };
+        if (res.status === 429) {
+            return {
+                status: 'rate_limited',
+                retryAfterS: retryAfterSecondsOf(res.headers.get('retry-after'), new Date()),
+            };
+        }
         if (!res.ok) throw new PostmasterRequestFailed(domain, res.status, 'the request was refused');
         let body: unknown;
         try {

@@ -36,7 +36,7 @@ import type {
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
-import { formatRelative } from '../../../lib/format';
+import { formatRelative, formatWhen } from '../../../lib/format';
 import { leaveFor } from '../../../lib/leaveFor';
 
 const DOMAIN_STATUS: Record<SendingDomainView['status'], { label: string; tone: 'success' | 'danger' | 'neutral' }> = {
@@ -222,18 +222,45 @@ function DomainCell({ domain }: { domain: SendingDomainView | null }) {
                     Spam rate {percentText(domain.spamRate.rateBps)} on {domain.spamRate.day}
                 </span>
             )}
-            {domain.postmaster.status !== 'not_connected' && domain.postmaster.message && (
-                <span
-                    className={`block text-xs ${domain.postmaster.status === 'ok' ? 'text-text-muted' : 'text-warning'}`}
-                >
-                    Postmaster Tools: {domain.postmaster.message}
-                </span>
-            )}
+            {postmasterLine(domain.postmaster)}
             {domain.checkedAt && (
                 <span className="block text-xs text-text-muted">Checked {formatRelative(domain.checkedAt)}</span>
             )}
         </div>
     );
+}
+
+/**
+ * What the last ask of Postmaster Tools came to (#129, #183), under the domain: a refusal is the one
+ * warning; a rate limit or no answer is said calmly, with the next try, because the last reading
+ * stands and the check tries again on its own.
+ */
+function postmasterLine(postmaster: SendingDomainView['postmaster']) {
+    const next = postmaster.nextReadAt ? `next try ${formatWhen(postmaster.nextReadAt)}` : null;
+    switch (postmaster.status) {
+        case 'not_connected':
+            return null;
+        case 'rate_limited':
+            return (
+                <span className="block text-xs text-text-muted">
+                    Postmaster Tools is rate-limiting reads{next ? `; ${next}` : ''}
+                </span>
+            );
+        case 'unreachable':
+            return (
+                <span className="block text-xs text-text-muted">
+                    Postmaster Tools did not answer{next ? `; ${next}` : ''}
+                </span>
+            );
+        case 'ok':
+            return postmaster.message ? (
+                <span className="block text-xs text-text-muted">Postmaster Tools: {postmaster.message}</span>
+            ) : null;
+        default:
+            return postmaster.message ? (
+                <span className="block text-xs text-warning">Postmaster Tools: {postmaster.message}</span>
+            ) : null;
+    }
 }
 
 /** Basis points as the percent people read: 35 → 0.35%, 500 → 5%. */

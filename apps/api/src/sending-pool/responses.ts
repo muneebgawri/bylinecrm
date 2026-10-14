@@ -41,9 +41,12 @@ export const sendingDomainView = named(
         postmaster: z.object({
             status: z.enum(POSTMASTER_DOMAIN_STATUSES).meta({
                 description:
-                    'What the last check learned from Postmaster Tools: nothing connected, the domain not verified there, a failed lookup, or an answer.',
+                    'What the last ask of Postmaster Tools came to: nothing connected, the domain not verified there, an answer, a rate limit or no answer (both transient, #183), or a refusal.',
             }),
             message: z.string().nullable(),
+            nextReadAt: isoTime.nullable().meta({
+                description: 'When the check asks Postmaster Tools again (#183); null while nothing is connected.',
+            }),
         }),
     }),
 );

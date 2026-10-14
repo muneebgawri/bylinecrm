@@ -1573,6 +1573,10 @@ enum PostmasterDomainStatus {
   not_connected
   not_verified
   ok
+  /// #183: Google's quota said not now; the last reading stands.
+  rate_limited
+  /// #183: Google could not be reached or did not answer.
+  unreachable
   failed
 
   @@map("postmaster_domain_status")
@@ -1601,6 +1605,10 @@ model SendingDomain {
   /// What the last check learned from Postmaster Tools (#129), and why when it is not `ok`.
   postmasterStatus  PostmasterDomainStatus @default(not_connected) @map("postmaster_status")
   postmasterMessage String?                @map("postmaster_message")
+  /// #183: when the check asks Postmaster Tools again; a check before then keeps the last reading. Null: ask now.
+  postmasterNextReadAt   DateTime? @map("postmaster_next_read_at") @db.Timestamptz
+  /// #183: consecutive rate limits, for the backoff; reset by any other answer.
+  postmasterLimitedTimes Int       @default(0) @map("postmaster_limited_times")
   createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
