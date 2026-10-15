@@ -1,17 +1,21 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { hashToken } from '../../auth/tokens';
-import { ApiException } from '../../infra/errors/api-errors';
+import { RateLimiter } from '../../auth/rate-limiter.service';
+import { ApiException, RateLimited } from '../../infra/errors/api-errors';
 import { PrismaService } from '../../infra/prisma.service';
 import { RlsPrismaService, type WorkspaceClient } from '../../infra/rls-prisma.service';
 import { SecretBox } from '../../infra/secret-box';
-import type { WorkspaceRunContext } from '../../infra/workspace-context';
-import { entriesFor } from '../../mail-sync/blocklist-rule';
 import { membersByAddress } from '../../mail-sync/matching';
-import { MeetingStore, type CopyOrigin } from '../meeting-store';
+import { insidersFor, MeetingStore, type CopyKey, type CopyOrigin, type WriteScope } from '../meeting-store';
 import type { SlotlineHookResult } from './responses';
 import { parseSlotlineDelivery } from './slotline-booking';
-import { SLOTLINE_LEAD_SOURCE } from './slotline.constants';
+import {
+    SLOTLINE_HOOK_FAILURE_LIMIT,
+    SLOTLINE_HOOK_FAILURE_WINDOW_S,
+    SLOTLINE_LEAD_SOURCE,
+    slotlineHookRateKey,
+} from './slotline.constants';
 
 /** The 401 a delivery with a wrong or missing signature gets: nothing about why. */
 class BadSignature extends ApiException {
@@ -40,6 +44,7 @@ export class SlotlineHookService {
         private readonly rls: RlsPrismaService,
         private readonly secrets: SecretBox,
         private readonly meetings: MeetingStore,
+        private readonly limiter: RateLimiter,
     ) {}
 
     async receive(
@@ -47,15 +52,20 @@ export class SlotlineHookService {
         rawBody: Buffer | undefined,
         signature: string | undefined,
         body: unknown,
+        clientIp: string,
     ): Promise<SlotlineHookResult> {
         const settings = await this.ownerPrisma.slotlineSettings.findUnique({
             where: { hookTokenHash: hashToken(token) },
             select: { id: true, workspaceId: true, secretCiphertext: true },
         });
-        if (!settings) throw new NotFoundException('not found');
+        if (!settings) {
+            await this.refused(clientIp);
+            throw new NotFoundException('not found');
+        }
         const { workspaceId } = settings;
         if (!rawBody || !signed(rawBody, signature, this.secrets.open(settings.secretCiphertext))) {
             await this.record(workspaceId, 'bad_signature');
+            await this.refused(clientIp);
             throw new BadSignature();
         }
 
@@ -65,69 +75,74 @@ export class SlotlineHookService {
             return { result: delivery.kind };
         }
 
-        const origin = await this.originFor(workspaceId, settings.id, delivery.organizer);
-        if (!origin) {
-            await this.record(workspaceId, 'unmatched', delivery.organizer);
-            this.logger.log(`workspace ${workspaceId}: a Slotline booking organised by no member`);
-            return { result: 'unmatched' };
-        }
-
+        const scope: WriteScope = {
+            workspaceId,
+            context: { workspaceId, capabilities: new Set(), actor: { kind: 'sync', id: settings.id } },
+        };
         if (delivery.kind === 'cancel') {
-            await this.meetings.store(origin, (tx) =>
-                this.meetings.cancel(tx, origin, delivery.providerEventId, { identityKey: delivery.providerEventId }),
+            // A cancellation needs no member: the booking's identity finds the meeting, so it still lands after
+            // the organiser has left, or for a booking whose organiser was never matched (it then finds nothing).
+            const key: CopyKey = { ...scope, source: 'slotline', mailboxId: null };
+            await this.meetings.store(scope, (tx) =>
+                this.meetings.cancel(tx, key, delivery.providerEventId, { identityKey: delivery.providerEventId }),
             );
             await this.record(workspaceId, 'cancelled');
             return { result: 'cancelled' };
         }
 
-        await this.meetings.store(origin, async (tx) => {
+        const origin = await this.originFor(scope, delivery.organizer);
+        if (!origin) {
+            await this.record(workspaceId, 'unmatched', delivery.organizer);
+            this.logger.log(`workspace ${workspaceId}: a Slotline booking organised by no member`);
+            return { result: 'unmatched' };
+        }
+        await this.meetings.store(scope, async (tx) => {
             // A reschedule of a booking that had no iCalendar UID cannot be told from a new one but by the uid it
             // replaces: that one is called off, so the meeting is not counted twice.
             if (delivery.replaces) {
                 await this.meetings.cancel(tx, origin, delivery.replaces, { identityKey: delivery.replaces });
             }
-            await this.meetings.writeMeeting(tx, origin, delivery.meeting, { slotlineUid: delivery.uid });
+            await this.meetings.writeMeeting(tx, origin, delivery.meeting, {
+                slotlineUid: delivery.uid,
+                mayReopen: delivery.rescheduled,
+            });
         });
         await this.record(workspaceId, 'stored');
         return { result: 'stored' };
     }
 
     /**
+     * Counts a refused delivery (no such hook, or a wrong signature) against the caller's address, and answers
+     * `429` once there are too many. Only refusals count: Slotline's own server sends every booking from one
+     * address and never retries, so a burst of real bookings must never be throttled.
+     */
+    private async refused(clientIp: string): Promise<void> {
+        const over = await this.limiter.hit(
+            slotlineHookRateKey(clientIp),
+            SLOTLINE_HOOK_FAILURE_LIMIT,
+            SLOTLINE_HOOK_FAILURE_WINDOW_S,
+        );
+        if (over) throw new RateLimited('too many refused deliveries; try again later');
+    }
+
+    /**
      * The organiser's member: by sign-in address, else by a connected personal mailbox's address. A member who
      * has left is no one's KPI any more. With them, everything the store's rules need about the workspace.
      */
-    private originFor(workspaceId: string, settingsId: string, organizer: string): Promise<CopyOrigin | null> {
-        return this.rls.withWorkspace(workspaceId, async (tx) => {
+    private originFor(scope: WriteScope, organizer: string): Promise<CopyOrigin | null> {
+        return this.rls.withWorkspace(scope.workspaceId, async (tx) => {
             const memberId = await memberFor(tx, organizer);
             if (!memberId) return null;
-            const [members, mailboxes, entries] = await Promise.all([
-                tx.workspaceMember.findMany({ select: { user: { select: { email: true } } } }),
-                tx.mailbox.findMany({ select: { email: true } }),
-                tx.blocklistEntry.findMany({
-                    where: { OR: [{ memberId: null }, { memberId }] },
-                    select: { value: true, memberId: true },
-                }),
-            ]);
-            const context: WorkspaceRunContext = {
-                workspaceId,
-                capabilities: new Set(),
-                actor: { kind: 'sync', id: settingsId },
-            };
+            const { insiders, blocklist } = await insidersFor(tx, { memberId, address: organizer });
             return {
+                ...scope,
                 source: 'slotline',
-                workspaceId,
                 memberId,
                 mailboxId: null,
                 ownerAddress: organizer,
-                insiders: new Set([
-                    organizer,
-                    ...members.map((m) => m.user.email.toLowerCase()),
-                    ...mailboxes.map((m) => m.email.toLowerCase()),
-                ]),
-                // The blocklist that applies to the member's own mail applies to their bookings.
-                blocklist: entriesFor({ email: organizer, ownerMemberId: memberId, purpose: 'personal' }, entries),
+                insiders,
+                blocklist,
                 leadSource: SLOTLINE_LEAD_SOURCE,
-                context,
             };
         });
     }

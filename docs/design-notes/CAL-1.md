@@ -99,7 +99,7 @@ member's is `403`, and an API key without the admin role is `403`. KPIs per memb
   calendar and Slotline both hold counts once — CAL-2);
 - **cancelled** — meetings they host called off in the period;
 - **peopleMet** — distinct outside people in their held meetings;
-- **newLeads** — people calendar sync created for them in the period.
+- **newLeads** — people calendar sync created for them, dated by the person's creation (an attendee row may be older than the lead it brought in), each once.
 
 `GET /mailboxes/:id/calendar` (whether the grant reads it, the sync state) and `POST …/calendar/sync` (owner or
 admin) mirror P2-2's mail sync routes.
@@ -126,6 +126,9 @@ runs against `FakeGoogleCalendar`.
   produce leads. The blocklist is the way out; there is no per-member "don't create leads" switch yet.
 - Only the primary calendar is read. A meeting moved beyond the horizon, or edited more than 2 days after it
   started, keeps its last known time. A meeting made private after it was stored stays stored.
+- **Connect calendar** is offered on a mailbox to its owner only: a connect signs in to the Google account of
+  whoever starts it. (The existing **Reconnect** action has the same trait for an admin acting on another member's
+  mailbox; unchanged here.)
 - Attendees are not re-announced on the timeline when a person is created for an address later (attendees are
   re-matched; mail's `email.linked` has no meeting counterpart).
 - The Team page lists the first 50 meetings of a period, no paging; KPI periods are the browser's local weeks

@@ -1,24 +1,7 @@
-import {
-    Body,
-    Controller,
-    Delete,
-    Get,
-    Headers,
-    HttpCode,
-    Injectable,
-    Param,
-    Post,
-    Put,
-    Req,
-    UseGuards,
-    type CanActivate,
-    type ExecutionContext,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public, Requires, TenantController } from '../../auth/decorators';
-import { RateLimiter } from '../../auth/rate-limiter.service';
-import { RateLimited } from '../../infra/errors/api-errors';
 import type { RequestWithRawBody } from '../../infra/errors/body-parsing';
 import { Returns } from '../../openapi/responses';
 import { PutSlotlineSettingsDto } from './dto';
@@ -30,13 +13,7 @@ import {
 } from './responses';
 import { SlotlineHookService } from './slotline-hook.service';
 import { SlotlineSettingsService } from './slotline-settings.service';
-import {
-    SLOTLINE_HOOK_PATH,
-    SLOTLINE_HOOK_RATE_LIMIT,
-    SLOTLINE_HOOK_RATE_WINDOW_S,
-    SLOTLINE_SIGNATURE_HEADER,
-    slotlineHookRateKey,
-} from './slotline.constants';
+import { SLOTLINE_HOOK_PATH, SLOTLINE_SIGNATURE_HEADER } from './slotline.constants';
 
 /** The workspace's Slotline booking site (CAL-2): an admin's. */
 @ApiTags('calendar')
@@ -77,28 +54,13 @@ export class SlotlineSettingsController {
     }
 }
 
-/** The public hook's brake: `SLOTLINE_HOOK_RATE_LIMIT` requests per client IP per window. */
-@Injectable()
-export class SlotlineHookRateGuard implements CanActivate {
-    constructor(private readonly limiter: RateLimiter) {}
-
-    async canActivate(ctx: ExecutionContext): Promise<boolean> {
-        const req = ctx.switchToHttp().getRequest<Request>();
-        const over = await this.limiter.hit(
-            slotlineHookRateKey(req.ip ?? ''),
-            SLOTLINE_HOOK_RATE_LIMIT,
-            SLOTLINE_HOOK_RATE_WINDOW_S,
-        );
-        if (over) throw new RateLimited('too many requests; try again in a minute');
-        return true;
-    }
-}
-
-/** Where Slotline posts its bookings: public, the token in the path names the workspace, the signature proves it. */
+/**
+ * Where Slotline posts its bookings: public, the token in the path names the workspace, the signature proves it.
+ * Refused deliveries are rate-limited per client address in the service; accepted ones never are.
+ */
 @ApiTags('calendar')
 @Controller(SLOTLINE_HOOK_PATH.replace(/^\/api\//, ''))
 @Public()
-@UseGuards(SlotlineHookRateGuard)
 export class SlotlineHookController {
     constructor(private readonly hook: SlotlineHookService) {}
 
@@ -112,6 +74,6 @@ export class SlotlineHookController {
         @Req() req: Request & RequestWithRawBody,
         @Body() body: unknown,
     ): Promise<SlotlineHookResult> {
-        return this.hook.receive(token, req.rawBody, signature, body);
+        return this.hook.receive(token, req.rawBody, signature, body, req.ip ?? '');
     }
 }

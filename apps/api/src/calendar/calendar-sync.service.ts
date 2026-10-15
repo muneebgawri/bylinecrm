@@ -4,7 +4,6 @@ import { Prisma } from '@prisma/client';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { MailboxTokens, MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
-import { entriesFor } from '../mail-sync/blocklist-rule';
 import { gmailRetryDelayMs, type RetryOptions } from '../mail-sync/retry';
 import {
     CALENDAR_HORIZON_DAYS,
@@ -16,7 +15,7 @@ import {
     CALENDAR_WINDOW_READ_EVERY_MS,
 } from './calendar.constants';
 import { GOOGLE_CALENDAR_PORT, GoogleCalendarError, type GoogleCalendarPort } from './google-calendar.port';
-import { MeetingStore, type CopyOrigin } from './meeting-store';
+import { insidersFor, MeetingStore, type CopyOrigin } from './meeting-store';
 import { parseGoogleEvent } from './parse-event';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
@@ -214,18 +213,10 @@ export class CalendarSyncService {
     /** Everyone inside the workspace (members' sign-in addresses, its mailboxes) and the blocklist that applies. */
     private async prepare(mailbox: MailboxRow, retry: RetryOptions): Promise<Run> {
         return this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
-            const [members, mailboxes, entries] = await Promise.all([
-                tx.workspaceMember.findMany({ select: { user: { select: { email: true } } } }),
-                tx.mailbox.findMany({ select: { email: true } }),
-                tx.blocklistEntry.findMany({
-                    where: { OR: [{ memberId: null }, { memberId: mailbox.ownerMemberId }] },
-                    select: { value: true, memberId: true },
-                }),
-            ]);
-            const insiders = new Set([
-                ...members.map((m) => m.user.email.toLowerCase()),
-                ...mailboxes.map((m) => m.email.toLowerCase()),
-            ]);
+            const { insiders, blocklist } = await insidersFor(tx, {
+                memberId: mailbox.ownerMemberId,
+                address: mailbox.email,
+            });
             const context: WorkspaceRunContext = {
                 workspaceId: mailbox.workspaceId,
                 capabilities: new Set(),
@@ -238,7 +229,7 @@ export class CalendarSyncService {
                 mailboxId: mailbox.id,
                 ownerAddress: mailbox.email,
                 insiders,
-                blocklist: entriesFor(mailbox, entries),
+                blocklist,
                 leadSource: CALENDAR_LEAD_SOURCE,
                 context,
             };

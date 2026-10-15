@@ -67,6 +67,12 @@ interface KpiRow {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** The suite's requests come from loopback, as IPv4, IPv4-in-IPv6 or IPv6 depending on the host. */
+async function clearHookLimit(app: INestApplication): Promise<void> {
+    for (const ip of ['127.0.0.1', '::ffff:127.0.0.1', '::1'])
+        await app.get(RateLimiter).clear(slotlineHookRateKey(ip));
+}
 const SECRET = 'slotline-webhook-secret-for-tests';
 
 /**
@@ -109,6 +115,7 @@ describe('Slotline bookings', () => {
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         put: (path: string) => http().put(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
@@ -186,7 +193,7 @@ describe('Slotline bookings', () => {
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         owner = app.get(PrismaService);
         log = await eventLog(app, 'meeting.*', 'person.created');
-        await app.get(RateLimiter).clear(slotlineHookRateKey('::ffff:127.0.0.1'));
+        await clearHookLimit(app);
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -387,6 +394,31 @@ describe('Slotline bookings', () => {
             expect(await kpiRow(adminMemberId)).toMatchObject({ upcoming: 0, cancelled: 1 });
         });
 
+        it('a late or replayed creation never reopens a cancelled booking; a reschedule does', async () => {
+            expect((await deliver(hookPath, booking('BOOKING_CREATED'))).body).toEqual({ result: 'stored' });
+            expect((await meetings())[0]).toMatchObject({ status: 'cancelled' });
+            const res = await deliver(hookPath, booking('BOOKING_RESCHEDULED', { uid: `uid3-${stamp}` }));
+            expect(res.body).toEqual({ result: 'stored' });
+            expect((await meetings())[0]).toMatchObject({ status: 'confirmed' });
+            // Back to the cancelled state the later tests count on.
+            await deliver(hookPath, booking('BOOKING_CANCELLED', { uid: `uid3-${stamp}` }));
+            expect((await meetings())[0]).toMatchObject({ status: 'cancelled' });
+        });
+
+        it('takes a booking far larger than an ordinary request body (long answers to its questions)', async () => {
+            const res = await deliver(
+                hookPath,
+                booking('BOOKING_CREATED', {
+                    uid: `uid-big-${stamp}`,
+                    iCalUID: `ical-big-${stamp}@Slotline`,
+                    attendees: [{ email: `big@client-${stamp}.example`, name: 'Big Answers' }],
+                    responses: { notes: 'x'.repeat(300_000) },
+                }),
+            );
+            expect(res.status).toBe(200);
+            expect(res.body).toEqual({ result: 'stored' });
+        });
+
         it('a member is found by their personal mailbox’s address when Slotline knows them by it', async () => {
             const res = await deliver(
                 hookPath,
@@ -420,6 +452,52 @@ describe('Slotline bookings', () => {
                     where: { workspaceId: workspace, icalUid: `ical-x-${stamp}@Slotline` },
                 }),
             ).toBe(0);
+        });
+    });
+
+    describe('refusals and departures', () => {
+        it('stops a caller after too many refused deliveries, but never throttles signed ones', async () => {
+            const clear = () => clearHookLimit(app);
+            await clear();
+            try {
+                let last = 0;
+                for (let i = 0; i < 31; i += 1) {
+                    last = (await deliver(hookPath, { triggerEvent: 'PING', payload: {} }, 'a-wrong-secret-entirely'))
+                        .status;
+                }
+                expect(last).toBe(429);
+                for (let i = 0; i < 5; i += 1) {
+                    expect((await deliver(hookPath, { triggerEvent: 'PING', payload: {} })).status).toBe(200);
+                }
+            } finally {
+                await clear();
+            }
+        });
+
+        it('a cancellation still lands after its organiser has left the workspace', async () => {
+            const ical = `ical-left-${stamp}@Slotline`;
+            const made = await deliver(
+                hookPath,
+                booking('BOOKING_CREATED', {
+                    uid: `uid-left-${stamp}`,
+                    iCalUID: ical,
+                    organizer: { email: memberMailboxEmail },
+                    attendees: [{ email: `left@client-${stamp}.example`, name: 'Left Client' }],
+                }),
+            );
+            expect(made.body).toEqual({ result: 'stored' });
+            expect((await as(admin).delete(w(`/members/${memberMemberId}`))).status).toBe(204);
+            const res = await deliver(
+                hookPath,
+                booking('BOOKING_CANCELLED', {
+                    uid: `uid-left-${stamp}`,
+                    iCalUID: ical,
+                    organizer: { email: memberMailboxEmail },
+                }),
+            );
+            expect(res.body).toEqual({ result: 'cancelled' });
+            const row = await owner.calendarEvent.findFirst({ where: { workspaceId: workspace, icalUid: ical } });
+            expect(row?.status).toBe('cancelled');
         });
     });
 

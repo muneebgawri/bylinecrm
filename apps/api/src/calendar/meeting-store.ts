@@ -7,6 +7,7 @@ import { UniqueConflict } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { entriesFor } from '../mail-sync/blocklist-rule';
 import { membersByAddress, personsByAddress, recordTargetsForPeople } from '../mail-sync/matching';
 import { PeopleService } from '../records/people.service';
 import { CALENDAR_MAX_ATTENDEES, CALENDAR_STORE_ATTEMPTS } from './calendar.constants';
@@ -17,16 +18,56 @@ type EventRow = Prisma.CalendarEventGetPayload<object>;
 type CopyRow = Prisma.CalendarEventCopyGetPayload<object>;
 
 /**
- * Whose copy of a meeting a write is (CAL-1, CAL-2): a member's Google Calendar, read through their mailbox,
- * or a Slotline booking they organised. Everything the rules need to know about where it came from.
+ * Who is inside the workspace, for a member: every member's sign-in address and every connected mailbox's (plus
+ * the member's own address on the invitation), and the blocklist entries that apply to the member's own mail
+ * (`entriesFor`, as for their personal mailbox). One read, used by every source's copies alike.
  */
-export interface CopyOrigin {
-    source: MeetingSource;
+export async function insidersFor(
+    tx: WorkspaceClient,
+    member: { memberId: string; address: string },
+): Promise<{ insiders: Set<string>; blocklist: string[] }> {
+    const [members, mailboxes, entries] = await Promise.all([
+        tx.workspaceMember.findMany({ select: { user: { select: { email: true } } } }),
+        tx.mailbox.findMany({ select: { email: true } }),
+        tx.blocklistEntry.findMany({
+            where: { OR: [{ memberId: null }, { memberId: member.memberId }] },
+            select: { value: true, memberId: true },
+        }),
+    ]);
+    return {
+        insiders: new Set([
+            member.address,
+            ...members.map((m) => m.user.email.toLowerCase()),
+            ...mailboxes.map((m) => m.email.toLowerCase()),
+        ]),
+        blocklist: entriesFor({ email: member.address, ownerMemberId: member.memberId, purpose: 'personal' }, entries),
+    };
+}
+
+/** The scope a write runs in: the workspace, no member, and the sync as the actor. */
+export interface WriteScope {
     workspaceId: string;
-    /** The member the copy is — the calendar's owner, or the booking's organiser. */
-    memberId: string;
+    context: WorkspaceRunContext;
+}
+
+/**
+ * Which copy of a meeting a call is about (CAL-1, CAL-2): a Google copy by its mailbox and Google's id, a
+ * Slotline copy by the booking's iCalendar UID. Enough to find it and call it off — no member needed, so a
+ * cancellation still lands after its organiser has left.
+ */
+export interface CopyKey extends WriteScope {
+    source: MeetingSource;
     /** The mailbox a Google copy is read through; null for a Slotline copy. */
     mailboxId: string | null;
+}
+
+/**
+ * Whose copy of a meeting a write is: a member's Google Calendar, read through their mailbox, or a Slotline
+ * booking they organised. Everything the rules need to know about where it came from.
+ */
+export interface CopyOrigin extends CopyKey {
+    /** The member the copy is — the calendar's owner, or the booking's organiser. */
+    memberId: string;
     /** The member's own address on the invitation (never an outside attendee). */
     ownerAddress: string;
     /** Members' sign-in addresses and the workspace's mailboxes, lower case. */
@@ -35,8 +76,16 @@ export interface CopyOrigin {
     blocklist: readonly string[];
     /** `source` of the people created from outside attendees (FR-CRMS-11). */
     leadSource: string;
-    /** The scope every write runs in: the workspace, no member, and the sync as the actor. */
-    context: WorkspaceRunContext;
+}
+
+/** What a Slotline booking adds to its copy: the booking's uid (for a link), and whether it may reopen a meeting. */
+export interface BookingFacts {
+    slotlineUid: string;
+    /**
+     * A reschedule may bring a cancelled booking back; a creation never does — a late or replayed
+     * `BOOKING_CREATED` arriving after the cancellation must not undo it.
+     */
+    mayReopen: boolean;
 }
 
 export type WriteOutcome = { outcome: 'stored' | 'updated' | 'unchanged' | 'passed_over'; leads: number };
@@ -70,7 +119,7 @@ export class MeetingStore {
      * it). Two members' runs — or a calendar read and a Slotline delivery — may store the first copy of one
      * meeting (or the same new lead) at once: the loser of the race finds the winner's rows on its second attempt.
      */
-    async store<T>(origin: CopyOrigin, write: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
+    async store<T>(origin: WriteScope, write: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
         for (let attempt = 1; ; attempt += 1) {
             try {
                 return await this.scope.run(origin.context, () => this.rls.withWorkspace(origin.workspaceId, write));
@@ -90,7 +139,7 @@ export class MeetingStore {
         tx: WorkspaceClient,
         origin: CopyOrigin,
         parsed: ParsedMeeting,
-        booking?: { slotlineUid: string },
+        booking?: BookingFacts,
     ): Promise<WriteOutcome> {
         const owner = origin.memberId;
         const copy = await this.findCopy(tx, origin, parsed.providerEventId);
@@ -139,7 +188,7 @@ export class MeetingStore {
                 },
             });
         } else {
-            const reopened = known.status === 'cancelled' && reopens(known, origin, parsed);
+            const reopened = known.status === 'cancelled' && reopens(known, origin, parsed, booking);
             const status: CalendarEventStatus = known.status === 'cancelled' && !reopened ? 'cancelled' : parsed.status;
             const data = {
                 ...details,
@@ -168,13 +217,16 @@ export class MeetingStore {
         } else if (
             copy.responseStatus !== parsed.own.responseStatus ||
             copy.isOrganizer !== parsed.own.isOrganizer ||
-            copy.eventId !== event.id
+            copy.eventId !== event.id ||
+            copy.memberId !== owner
         ) {
             changed = true;
             await tx.calendarEventCopy.update({
                 where: { id: copy.id },
                 data: {
                     eventId: event.id,
+                    // A booking reassigned to another organiser, or a mailbox connected again by another member.
+                    memberId: owner,
                     responseStatus: parsed.own.responseStatus,
                     isOrganizer: parsed.own.isOrganizer,
                 },
@@ -236,7 +288,7 @@ export class MeetingStore {
      */
     async cancel(
         tx: WorkspaceClient,
-        origin: CopyOrigin,
+        origin: CopyKey,
         providerEventId: string,
         authoritative?: { identityKey: string },
     ): Promise<boolean> {
@@ -288,7 +340,7 @@ export class MeetingStore {
     }
 
     /** The origin's copy with this provider id: per mailbox for Google, per workspace for Slotline. */
-    private findCopy(tx: WorkspaceClient, origin: CopyOrigin, providerEventId: string): Promise<CopyRow | null> {
+    private findCopy(tx: WorkspaceClient, origin: CopyKey, providerEventId: string): Promise<CopyRow | null> {
         if (origin.source === 'google_calendar') {
             return tx.calendarEventCopy.findUnique({
                 where: { mailboxId_providerEventId: { mailboxId: origin.mailboxId!, providerEventId } },
@@ -420,13 +472,14 @@ export class MeetingStore {
 }
 
 /**
- * Whether a copy brings a cancelled meeting back: one the member has not declined — and, for a meeting booked
- * through Slotline, only Slotline itself (a rescheduled booking). Slotline is the system of record for its
- * bookings: the Google event it wrote may still be in a calendar for a moment after the booking is cancelled.
+ * Whether a copy brings a cancelled meeting back: one the member has not declined. A Slotline delivery reopens
+ * only as a reschedule (`mayReopen`). A meeting booked through Slotline is reopened only by Slotline: it is the
+ * system of record for its bookings, and the Google event it wrote may linger in a calendar after a cancellation.
  */
-function reopens(known: EventRow, origin: CopyOrigin, parsed: ParsedMeeting): boolean {
+function reopens(known: EventRow, origin: CopyOrigin, parsed: ParsedMeeting, booking?: BookingFacts): boolean {
     if (parsed.own.responseStatus === 'declined') return false;
-    return known.bookedVia !== 'slotline' || origin.source === 'slotline';
+    if (origin.source === 'slotline') return booking?.mayReopen === true;
+    return known.bookedVia !== 'slotline';
 }
 
 /** A meeting as its events describe it. */

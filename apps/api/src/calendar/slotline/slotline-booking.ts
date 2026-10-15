@@ -17,6 +17,8 @@ export type SlotlineDelivery =
           meeting: ParsedMeeting;
           /** A reschedule of a booking with no iCalendar UID: the booking it replaces. */
           replaces: string | null;
+          /** A reschedule — the only delivery that may bring a cancelled booking back. */
+          rescheduled: boolean;
       }
     | { kind: 'cancel'; uid: string; organizer: string; providerEventId: string }
     | { kind: 'ping' }
@@ -93,6 +95,7 @@ export function parseSlotlineDelivery(body: unknown): SlotlineDelivery {
         uid,
         organizer,
         replaces: !text(payload['iCalUID']) && rescheduled ? `slotline:${rescheduled}` : null,
+        rescheduled: trigger === 'BOOKING_RESCHEDULED',
         meeting: {
             kind: 'meeting',
             providerEventId: icalUid,

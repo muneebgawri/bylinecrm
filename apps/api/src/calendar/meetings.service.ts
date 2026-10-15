@@ -211,9 +211,12 @@ async function kpiCounts(
               JOIN calendar_event_participants p ON p.event_id = a.event_id
               WHERE a.member_id = m.member_id AND a.starts_at < LEAST(${to}::timestamptz, now())
                 AND p.member_id IS NULL AND p.person_id IS NOT NULL)::int AS people_met,
-            (SELECT count(*) FROM calendar_event_participants p
+            -- A lead counts when the person was created (an attendee row may be older than its lead), once.
+            (SELECT count(DISTINCT COALESCE(p.person_id::text, p.id::text)) FROM calendar_event_participants p
+              LEFT JOIN people pe ON pe.id = p.person_id
               WHERE p.lead_created_for_member_id = m.member_id
-                AND p.created_at >= ${from} AND p.created_at < ${to})::int AS new_leads
+                AND COALESCE(pe.created_at, p.created_at) >= ${from}
+                AND COALESCE(pe.created_at, p.created_at) < ${to})::int AS new_leads
         FROM m`;
     return new Map(rows.map((r) => [r.member_id, r]));
 }

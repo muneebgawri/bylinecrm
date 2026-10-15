@@ -239,7 +239,7 @@ function actorName(entry: TimelineActivityView, names: NameSources): string {
         case 'import':
             return 'An import';
         case 'sync':
-            return 'Google sync';
+            return 'Sync';
         case 'external':
             return entry.actor.id ?? 'An integration';
         case 'system':

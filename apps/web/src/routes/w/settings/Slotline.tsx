@@ -180,6 +180,7 @@ function SlotlineForm({ workspaceId, settings }: { workspaceId: string; settings
                             </span>
                         </li>
                         <li>Secret: the same one as above.</li>
+                        <li>Leave the custom payload template empty: the CRM reads Slotline’s own format.</li>
                         <li>
                             Events: <span className="font-mono text-xs">{settings.triggers.join(', ')}</span>.
                         </li>

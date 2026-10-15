@@ -289,10 +289,14 @@ function MailboxTable({
                                                         Read calendar now
                                                     </DropdownMenuItem>
                                                 ) : (
-                                                    // Connecting again asks Google for the calendar too; the mail stays as it is.
-                                                    <DropdownMenuItem onSelect={() => reconnect('personal')}>
-                                                        Connect calendar
-                                                    </DropdownMenuItem>
+                                                    // Connecting again asks Google for the calendar too; the mail stays as
+                                                    // it is. Only its owner: the connect signs in to the Google account of
+                                                    // whoever starts it, so an admin would connect their own.
+                                                    m.ownerMemberId === membership?.memberId && (
+                                                        <DropdownMenuItem onSelect={() => reconnect('personal')}>
+                                                            Connect calendar
+                                                        </DropdownMenuItem>
+                                                    )
                                                 ))}
                                         </>
                                     )}

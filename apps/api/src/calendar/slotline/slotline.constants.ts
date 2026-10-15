@@ -25,7 +25,10 @@ export const SLOTLINE_SECRET_MIN = 16;
 export const SLOTLINE_SECRET_MAX = 200;
 export const SLOTLINE_BASE_URL_MAX = 200;
 
-/** The public hook's brake, per client IP: Slotline delivers one request per booking change. */
-export const SLOTLINE_HOOK_RATE_LIMIT = 120;
-export const SLOTLINE_HOOK_RATE_WINDOW_S = 60;
+/**
+ * The public hook's brake, per client IP — on refused deliveries only (no such hook, a wrong signature): a
+ * guesser is stopped, while Slotline's real bookings, all from one server that never retries, are never throttled.
+ */
+export const SLOTLINE_HOOK_FAILURE_LIMIT = 30;
+export const SLOTLINE_HOOK_FAILURE_WINDOW_S = 600;
 export const slotlineHookRateKey = (ip: string) => `slotline-hook:${ip}`;

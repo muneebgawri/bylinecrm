@@ -12,11 +12,7 @@ import { GoogleCalendarHttp } from './google-calendar.http';
 import { GOOGLE_CALENDAR_PORT } from './google-calendar.port';
 import { MeetingStore } from './meeting-store';
 import { MeetingsService } from './meetings.service';
-import {
-    SlotlineHookController,
-    SlotlineHookRateGuard,
-    SlotlineSettingsController,
-} from './slotline/slotline.controllers';
+import { SlotlineHookController, SlotlineSettingsController } from './slotline/slotline.controllers';
 import { SlotlineHookService } from './slotline/slotline-hook.service';
 import { SlotlineSettingsService } from './slotline/slotline-settings.service';
 
@@ -53,7 +49,6 @@ import { SlotlineSettingsService } from './slotline/slotline-settings.service';
         MeetingsService,
         SlotlineSettingsService,
         SlotlineHookService,
-        SlotlineHookRateGuard,
     ],
 })
 export class CalendarModule {}
