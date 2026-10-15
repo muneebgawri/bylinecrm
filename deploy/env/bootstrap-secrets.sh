@@ -122,6 +122,7 @@ WEBHOOK_WORKER=1
 WEBHOOK_ALLOW_PRIVATE_TARGETS=0
 MAIL_SYNC_WORKER=1
 MAIL_SEND_WORKER=1
+CALENDAR_SYNC_WORKER=1
 OUTBOX_RELAY=1
 DB_QUERY_EVENTS=0
 # The URL is public: sign-up stays closed; platform admins create workspaces (P0-14). Never open.

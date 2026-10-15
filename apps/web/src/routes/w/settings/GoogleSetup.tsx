@@ -34,8 +34,9 @@ export function GoogleSetup() {
                 Google
             </h2>
             <p className="m-0 mb-5 text-[13px] text-text-muted">
-                Mail is read and sent through this workspace’s own Google OAuth client. Nothing is shared with other
-                workspaces, and the app only ever asks Google for send and read access.
+                Mail is read and sent, and members’ calendars read for meetings, through this workspace’s own Google
+                OAuth client. Nothing is shared with other workspaces, and the app only ever asks Google for mail send
+                and read access and read-only calendar access.
             </p>
             {admin ? <AdminSetup workspaceId={workspaceId} /> : <MemberStatus workspaceId={workspaceId} />}
         </section>
@@ -70,7 +71,7 @@ function AdminSetup({ workspaceId }: { workspaceId: string }) {
         <ol className="m-0 flex list-none flex-col gap-4 p-0">
             <Step number={1} title="Create an OAuth client in Google Cloud">
                 <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[13px]">
-                    <li>Turn on the Gmail API in your Google Cloud project.</li>
+                    <li>Turn on the Gmail API and the Google Calendar API in your Google Cloud project.</li>
                     <li>
                         Set the OAuth consent screen’s user type to <strong>Internal</strong>, so only your
                         organisation’s accounts can connect and Google needs no app review.

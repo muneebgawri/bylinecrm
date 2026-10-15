@@ -1,5 +1,5 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import { Building2, LayoutDashboard, BarChart3, Users, UsersRound } from 'lucide-react';
+import { Building2, LayoutDashboard, BarChart3, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 import { CREATE_PARAM } from '../paths';
@@ -54,14 +54,6 @@ const PAGES = {
         body: 'A company is created from a person’s work domain or added by hand.',
         action: { label: 'Add company', requires: 'record:write' },
         coming: 'P1-UI-2',
-    },
-    team: {
-        title: 'Team',
-        subtitle: 'Account managers, their portfolios and results.',
-        icon: <UsersRound />,
-        empty: 'No portfolio data yet',
-        body: 'Results appear once deals are won and mail is sent.',
-        coming: 'Phase 3',
     },
 } as const satisfies Record<string, PageSpec>;
 

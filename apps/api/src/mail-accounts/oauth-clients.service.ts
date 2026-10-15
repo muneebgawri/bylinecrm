@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { GMAIL_SCOPES, type OAuthCheckOutcome } from '@bylinecrm/shared';
+import { PERSONAL_MAILBOX_SCOPES, type OAuthCheckOutcome } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { ENV, type Env } from '../config/env';
 import { ApiException } from '../infra/errors/api-errors';
@@ -63,7 +63,7 @@ export class OAuthClientsService {
                 configured: row !== null,
                 verified: row?.verifiedAt != null,
                 redirectUri: this.redirectUri(),
-                scopes: [...GMAIL_SCOPES],
+                scopes: [...PERSONAL_MAILBOX_SCOPES],
             };
         });
     }
@@ -214,7 +214,7 @@ export class OAuthClientsService {
             clientId: row?.clientId ?? null,
             clientSecretLast4: row?.clientSecretLast4 ?? null,
             redirectUri: this.redirectUri(),
-            scopes: [...GMAIL_SCOPES],
+            scopes: [...PERSONAL_MAILBOX_SCOPES],
             verifiedAt: row?.verifiedAt ?? null,
             lastCheck: row?.lastCheck ? readCheck(row.lastCheck) : null,
             liveMailboxes: live,

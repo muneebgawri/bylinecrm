@@ -163,4 +163,33 @@ describe('wordsFor', () => {
         expect(fieldLabel('nameFirst')).toBe('first name');
         expect(fieldLabel('custom.lastOutlet')).toBe('last outlet');
     });
+
+    it('reads a meeting from a calendar as booked by its member, with when it is — never its description', () => {
+        const meeting = {
+            linked: { type: 'meeting', id: 'mt1', name: 'Acme intro' },
+            meeting: {
+                title: 'Acme intro',
+                startsAt: '2026-10-20T13:00:00Z',
+                endsAt: '2026-10-20T13:30:00Z',
+                allDay: false,
+                conferenceUrl: 'https://meet.google.com/abc',
+                hostMemberId: 'm1',
+            },
+        };
+        const booked = wordsFor(
+            entry({ kind: 'linked-meeting.booked', actor: { kind: 'sync', id: null }, properties: meeting }),
+            names,
+        );
+        expect(booked).toMatchObject({ actor: 'Kate Morgan', family: 'meeting' });
+        expect(booked.action).toMatch(/^booked “Acme intro” for /);
+        const cancelled = wordsFor(
+            entry({ kind: 'linked-meeting.cancelled', actor: { kind: 'sync', id: null }, properties: meeting }),
+            names,
+        );
+        expect(cancelled).toMatchObject({
+            actor: 'Kate Morgan',
+            action: 'had “Acme intro” cancelled',
+            family: 'meeting',
+        });
+    });
 });

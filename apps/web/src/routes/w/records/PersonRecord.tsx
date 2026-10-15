@@ -388,7 +388,7 @@ export function sourceLabel(kind: PersonView['createdBy']['kind']): string {
         case 'import':
             return 'Import';
         case 'sync':
-            return 'Mail sync';
+            return 'Google sync';
         case 'system':
             return 'System';
     }

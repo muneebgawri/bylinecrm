@@ -98,6 +98,13 @@ export const envSchema = z
          * steps itself.
          */
         SEQUENCE_WORKER: flag('1'),
+        /**
+         * Whether this process runs calendar sync (CAL-1): the every-few-minutes read of each personal
+         * mailbox's Google Calendar, and the first read when one connects. On by default; a separate worker
+         * process sets `1` there and `0` on the API. The cross-tenant suite sets `0`: it drives calendar
+         * sync directly against a fake Google Calendar, and no worker may reach the real one.
+         */
+        CALENDAR_SYNC_WORKER: flag('1'),
         /** Whether this process drives Twenty import runs (P4-4); `0` leaves them to a worker process. */
         TWENTY_IMPORT_WORKER: flag('1'),
         /** Whether this process runs enrichment jobs and their sweep (P4-2); `0` leaves them to a worker process. */

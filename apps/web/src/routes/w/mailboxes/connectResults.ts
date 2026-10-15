@@ -88,6 +88,18 @@ export const CONNECT_RESULT_MESSAGES: Record<MailboxConnectResult, ConnectResult
  * The same callback finishes a Postmaster Tools connect (#129, `?for=postmaster`): the results that
  * read differently for it — the rest (declined, expired, wrong person…) say the same for both.
  */
+/**
+ * A personal mailbox's connect asks for its Google Calendar too (CAL-1): connected, its meetings with
+ * people outside the workspace are read as well — when the person left the calendar box ticked.
+ */
+const PERSONAL_RESULT_MESSAGES: Partial<Record<MailboxConnectResult, ConnectResultMessage>> = {
+    connected: {
+        title: 'Mailbox connected',
+        body: 'Its last 30 days of mail are being imported now; new mail follows every few minutes. If you allowed the calendar, your meetings with people outside the workspace count towards your KPIs and their attendees become your leads.',
+        tone: 'success',
+    },
+};
+
 const POSTMASTER_RESULT_MESSAGES: Partial<Record<MailboxConnectResult, ConnectResultMessage>> = {
     connected: {
         title: 'Postmaster Tools connected',
@@ -108,7 +120,11 @@ const POSTMASTER_RESULT_MESSAGES: Partial<Record<MailboxConnectResult, ConnectRe
 
 /** What the person reads for a result, given what the connect was for (`?for=`). */
 export function connectMessage(result: MailboxConnectResult, purpose: string | null): ConnectResultMessage {
-    return (purpose === 'postmaster' && POSTMASTER_RESULT_MESSAGES[result]) || CONNECT_RESULT_MESSAGES[result];
+    return (
+        (purpose === 'postmaster' && POSTMASTER_RESULT_MESSAGES[result]) ||
+        (purpose === 'personal' && PERSONAL_RESULT_MESSAGES[result]) ||
+        CONNECT_RESULT_MESSAGES[result]
+    );
 }
 
 /** The result in a query-string value, when it is one the API reports; anything else is ignored. */

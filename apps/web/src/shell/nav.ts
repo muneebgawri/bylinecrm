@@ -92,7 +92,7 @@ export const NAV: readonly NavGroup[] = [
     {
         label: 'Workspace',
         items: [
-            { id: 'team', label: 'Team', icon: UsersRound, to: paths.team, requires: 'workspace:admin' },
+            { id: 'team', label: 'Team', icon: UsersRound, to: paths.team, requires: 'record:read' },
             {
                 id: 'settings',
                 label: 'Settings',

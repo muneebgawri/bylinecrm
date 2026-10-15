@@ -55,8 +55,11 @@ export async function rematchAddresses(tx: WorkspaceClient, addresses: readonly 
     return [...new Set(rows.map((r) => r.message_id))];
 }
 
-/** The subquery choosing an address's person: primary first, then the earliest additional. */
-const PERSON_FOR_ADDRESS = Prisma.sql`
+/**
+ * The subquery choosing an address's person: primary first, then the earliest additional. Over a row
+ * source `a(address)`; calendar sync (CAL-1) re-matches meeting attendees with it too.
+ */
+export const PERSON_FOR_ADDRESS = Prisma.sql`
     SELECT p.id FROM people p
     WHERE p.deleted_at IS NULL
       AND (p.email_primary = a.address

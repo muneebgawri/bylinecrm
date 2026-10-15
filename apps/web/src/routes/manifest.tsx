@@ -78,6 +78,9 @@ const sequences = {
     builder: () => import('./w/sequences/SequencePage').then((m) => ({ Component: m.SequencePage })),
 };
 
+/** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
+const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
+
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
 
@@ -139,7 +142,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('templates', templates.list, 'Templates'),
         lazyPage('templates/:templateId', templates.editor, 'Template'),
         lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),
-        page('team', 'team', 'Team'),
+        lazyPage('team', teamPage, 'Team'),
         lazyPage('settings', settings.layout, 'Settings', [
             { index: true, element: <Navigate to="members" replace /> },
             lazyPage('members', settings.members, 'Members'),

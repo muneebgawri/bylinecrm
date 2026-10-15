@@ -17854,6 +17854,356 @@
                 },
                 "tags": ["webhooks"]
             }
+        },
+        "/api/w/{workspaceId}/meetings": {
+            "get": {
+                "operationId": "meetings_list",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": false,
+                        "in": "query",
+                        "description": "One member’s meetings. Anyone but an admin sees only their own.",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "required": false,
+                        "in": "query",
+                        "description": "Meetings starting at or after this.",
+                        "schema": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "required": false,
+                        "in": "query",
+                        "description": "Meetings starting before this.",
+                        "schema": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 30,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MeetingPage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
+        },
+        "/api/w/{workspaceId}/meetings/kpis": {
+            "get": {
+                "operationId": "meetings_kpis",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "required": true,
+                        "in": "query",
+                        "description": "The period’s start (inclusive).",
+                        "schema": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "required": true,
+                        "in": "query",
+                        "description": "The period’s end (exclusive).",
+                        "schema": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MeetingKpis"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
+        },
+        "/api/w/{workspaceId}/mailboxes/{mailboxId}/calendar": {
+            "get": {
+                "operationId": "calendarSync_state",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CalendarSync"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
+        },
+        "/api/w/{workspaceId}/mailboxes/{mailboxId}/calendar/sync": {
+            "post": {
+                "operationId": "calendarSync_trigger",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CalendarSyncTriggered"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
         }
     },
     "info": {
@@ -21311,7 +21661,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 57,
+                        "maxItems": 58,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -21358,6 +21708,7 @@
                                 "email.clicked",
                                 "email.opened",
                                 "meeting.booked",
+                                "meeting.cancelled",
                                 "mailbox.connected",
                                 "mailbox.disconnected",
                                 "mailbox.reconnect_needed",
@@ -21397,7 +21748,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 57,
+                        "maxItems": 58,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -21444,6 +21795,7 @@
                                 "email.clicked",
                                 "email.opened",
                                 "meeting.booked",
+                                "meeting.cancelled",
                                 "mailbox.connected",
                                 "mailbox.disconnected",
                                 "mailbox.reconnect_needed",
@@ -22189,31 +22541,6 @@
                 },
                 "required": ["invite", "token"]
             },
-            "HealthStatus": {
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "enum": ["ok", "degraded"]
-                    },
-                    "db": {
-                        "type": "string",
-                        "enum": ["ok", "down"]
-                    },
-                    "redis": {
-                        "type": "string",
-                        "enum": ["ok", "down"]
-                    },
-                    "rls": {
-                        "type": "string",
-                        "enum": ["ok", "misconfigured"]
-                    },
-                    "version": {
-                        "type": "string"
-                    }
-                },
-                "required": ["status", "db", "redis", "rls", "version"]
-            },
             "GoogleOAuthClientCheck": {
                 "type": "object",
                 "properties": {
@@ -22526,6 +22853,1590 @@
                     "purpose_mismatch",
                     "exchange_failed"
                 ]
+            },
+            "RecordSummary": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["id", "name"]
+            },
+            "Person": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "nameFirst": {
+                        "type": "string"
+                    },
+                    "nameLast": {
+                        "type": "string"
+                    },
+                    "emails": {
+                        "$ref": "#/components/schemas/Emails"
+                    },
+                    "phones": {
+                        "$ref": "#/components/schemas/Phones"
+                    },
+                    "jobTitle": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "city": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "source": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "country": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "links": {
+                        "$ref": "#/components/schemas/Links"
+                    },
+                    "avatarUrl": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "companyId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "ownerId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "company": {
+                        "nullable": true,
+                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "nameFirst",
+                    "nameLast",
+                    "emails",
+                    "phones",
+                    "jobTitle",
+                    "city",
+                    "source",
+                    "country",
+                    "links",
+                    "avatarUrl",
+                    "position",
+                    "companyId",
+                    "ownerId",
+                    "company",
+                    "owner",
+                    "createdBy",
+                    "custom",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "PersonPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Person"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
+            "Company": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "logoUrl": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "employeeCount": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "arr": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ]
+                    },
+                    "address": {
+                        "$ref": "#/components/schemas/Address"
+                    },
+                    "links": {
+                        "$ref": "#/components/schemas/Links"
+                    },
+                    "icp": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "ownerId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "domain",
+                    "logoUrl",
+                    "employeeCount",
+                    "arr",
+                    "address",
+                    "links",
+                    "icp",
+                    "position",
+                    "ownerId",
+                    "owner",
+                    "createdBy",
+                    "custom",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "CompanyPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Company"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
+            "Opportunity": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "pipelineId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "stageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "stageEnteredAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "description": "When the deal entered its current stage.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "daysInStage": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Whole days since `stageEnteredAt`, at read time."
+                    },
+                    "closedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lostReason": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "amount": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Money"
+                            }
+                        ]
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "closeDate": {
+                        "nullable": true,
+                        "description": "A calendar date, `YYYY-MM-DD`.",
+                        "example": "2026-10-31",
+                        "type": "string"
+                    },
+                    "probability": {
+                        "nullable": true,
+                        "type": "number"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "ownerId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "pointOfContactId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "companyId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "pointOfContact": {
+                        "nullable": true,
+                        "description": "The point of contact, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
+                    "company": {
+                        "nullable": true,
+                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "pipelineId",
+                    "stageId",
+                    "stageEnteredAt",
+                    "daysInStage",
+                    "closedAt",
+                    "lostReason",
+                    "amount",
+                    "currency",
+                    "closeDate",
+                    "probability",
+                    "position",
+                    "ownerId",
+                    "pointOfContactId",
+                    "companyId",
+                    "owner",
+                    "pointOfContact",
+                    "company",
+                    "createdBy",
+                    "custom",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "OpportunityPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Opportunity"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
+            "Note": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "body": {
+                        "$ref": "#/components/schemas/RichText"
+                    },
+                    "bodyText": {
+                        "type": "string"
+                    },
+                    "targets": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecordTarget"
+                        }
+                    },
+                    "authorId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "title",
+                    "body",
+                    "bodyText",
+                    "targets",
+                    "authorId",
+                    "createdBy",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "NotePage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Note"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
+            },
+            "Task": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "body": {
+                        "$ref": "#/components/schemas/RichText"
+                    },
+                    "bodyText": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["todo", "in_progress", "done"]
+                    },
+                    "dueAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "assigneeId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "completedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "targets": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecordTarget"
+                        }
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "title",
+                    "body",
+                    "bodyText",
+                    "status",
+                    "dueAt",
+                    "assigneeId",
+                    "completedAt",
+                    "targets",
+                    "createdBy",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "TaskPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Task"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
+            },
+            "Attachment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "mime": {
+                        "type": "string"
+                    },
+                    "sizeBytes": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "target": {
+                        "$ref": "#/components/schemas/RecordTarget"
+                    },
+                    "authorId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "mime",
+                    "sizeBytes",
+                    "target",
+                    "authorId",
+                    "createdBy",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "CustomField": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "key": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "text",
+                            "number",
+                            "boolean",
+                            "date",
+                            "datetime",
+                            "select",
+                            "multiselect",
+                            "url",
+                            "email",
+                            "phone"
+                        ]
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "required": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "archivedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "object",
+                    "key",
+                    "label",
+                    "type",
+                    "options",
+                    "required",
+                    "position",
+                    "archivedAt",
+                    "createdAt",
+                    "updatedAt"
+                ]
+            },
+            "BulkResult": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "ok": {
+                                            "type": "boolean",
+                                            "enum": [true]
+                                        },
+                                        "unchanged": {
+                                            "description": "Already as asked: nothing written, no event.",
+                                            "type": "boolean",
+                                            "enum": [true]
+                                        }
+                                    },
+                                    "required": ["id", "ok"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "ok": {
+                                            "type": "boolean",
+                                            "enum": [false]
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "enum": ["not_found"],
+                                            "description": "not_found: not visible to the caller in this state — whether or not it exists elsewhere."
+                                        }
+                                    },
+                                    "required": ["id", "ok", "error"]
+                                }
+                            ]
+                        }
+                    },
+                    "succeeded": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    }
+                },
+                "required": ["results", "succeeded", "failed"]
+            },
+            "Stage": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "pipelineId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "probability": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["open", "won", "lost"]
+                    },
+                    "daysThreshold": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "colour": {
+                        "type": "string",
+                        "enum": ["neutral", "accent", "info", "ok", "warn", "bad"]
+                    }
+                },
+                "required": ["id", "pipelineId", "name", "position", "probability", "kind", "daysThreshold", "colour"]
+            },
+            "Pipeline": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "isDefault": {
+                        "type": "boolean"
+                    },
+                    "position": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "stages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Stage"
+                        }
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["id", "name", "isDefault", "position", "stages", "createdAt", "updatedAt"]
+            },
+            "StageRule": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "pipelineId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "event": {
+                        "type": "string",
+                        "enum": ["email.replied", "meeting.booked", "email.clicked"]
+                    },
+                    "toStageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "allowBackward": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["id", "pipelineId", "event", "toStageId", "allowBackward", "enabled"]
+            },
+            "EventActor": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["member", "api_key", "import", "sync", "system"]
+                            },
+                            "id": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                            }
+                        },
+                        "required": ["kind", "id"]
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["rule"]
+                            },
+                            "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                            }
+                        },
+                        "required": ["kind", "id"]
+                    }
+                ]
+            },
+            "StageHistoryEntry": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "fromStageId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "fromStageName": {
+                        "nullable": true,
+                        "description": "The stage’s name when the move happened; it may since have been renamed or deleted.",
+                        "type": "string"
+                    },
+                    "toStageId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "toStageName": {
+                        "type": "string",
+                        "description": "The stage’s name when the move happened; it may since have been renamed or deleted."
+                    },
+                    "enteredAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "actor": {
+                        "$ref": "#/components/schemas/EventActor"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "enum": ["manual", "rule", "import", "close", "stage_deleted"]
+                    }
+                },
+                "required": [
+                    "id",
+                    "fromStageId",
+                    "fromStageName",
+                    "toStageId",
+                    "toStageName",
+                    "enteredAt",
+                    "actor",
+                    "reason"
+                ]
+            },
+            "MoveResult": {
+                "type": "object",
+                "properties": {
+                    "deal": {
+                        "$ref": "#/components/schemas/Opportunity"
+                    },
+                    "rulesThatMayMoveItForward": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StageRule"
+                        },
+                        "description": "On a backward move: the enabled rules of the pipeline that could move it forward again."
+                    }
+                },
+                "required": ["deal", "rulesThatMayMoveItForward"]
+            },
+            "BoardColumn": {
+                "type": "object",
+                "properties": {
+                    "stage": {
+                        "$ref": "#/components/schemas/Stage"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Deals in the stage under the filter and the caller's scope."
+                    },
+                    "amountMinorByCurrency": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                        }
+                    },
+                    "deals": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Opportunity"
+                        }
+                    },
+                    "hasMore": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["stage", "count", "amountMinorByCurrency", "deals", "hasMore"]
+            },
+            "Board": {
+                "type": "object",
+                "properties": {
+                    "pipeline": {
+                        "$ref": "#/components/schemas/Pipeline"
+                    },
+                    "columns": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BoardColumn"
+                        }
+                    }
+                },
+                "required": ["pipeline", "columns"]
+            },
+            "Group": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "description": "The field's value for this group; `null` groups the unset rows."
+                    },
+                    "count": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "sum": {
+                        "description": "The object's money field summed in minor units; absent for people.",
+                        "type": "object",
+                        "properties": {
+                            "amountMinor": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "field": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["amountMinor", "field"]
+                    }
+                },
+                "required": ["value", "count"]
+            },
+            "SearchHit": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "subtitle": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["object", "id", "title", "subtitle"]
+            },
+            "SearchResults": {
+                "type": "object",
+                "properties": {
+                    "person": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    },
+                    "company": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    },
+                    "opportunity": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchHit"
+                        }
+                    }
+                },
+                "required": ["person", "company", "opportunity"]
+            },
+            "Meeting": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "startsAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "endsAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "allDay": {
+                        "type": "boolean"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["confirmed", "tentative", "cancelled"]
+                    },
+                    "location": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "conferenceUrl": {
+                        "nullable": true,
+                        "description": "The Meet (or other video) link.",
+                        "type": "string"
+                    },
+                    "hostMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The member the meeting counts for as booked."
+                    },
+                    "bookedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "description": "When the meeting was put in the calendar.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "cancelledAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "members": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "memberId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "responseStatus": {
+                                    "type": "string",
+                                    "enum": ["needs_action", "accepted", "tentative", "declined"],
+                                    "description": "The member's own answer."
+                                },
+                                "isOrganizer": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": ["memberId", "responseStatus", "isOrganizer"]
+                        },
+                        "description": "The members whose calendars hold it, and each one's answer."
+                    },
+                    "attendees": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "address": {
+                                    "type": "string"
+                                },
+                                "displayName": {
+                                    "type": "string"
+                                },
+                                "responseStatus": {
+                                    "type": "string",
+                                    "enum": ["needs_action", "accepted", "tentative", "declined"]
+                                },
+                                "isOrganizer": {
+                                    "type": "boolean"
+                                },
+                                "personId": {
+                                    "nullable": true,
+                                    "description": "The person this attendee is, when they are one.",
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "memberId": {
+                                    "nullable": true,
+                                    "description": "The workspace member this attendee is, when they are one.",
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "leadCreated": {
+                                    "type": "boolean",
+                                    "description": "Calendar sync created the person for this attendee."
+                                }
+                            },
+                            "required": [
+                                "address",
+                                "displayName",
+                                "responseStatus",
+                                "isOrganizer",
+                                "personId",
+                                "memberId",
+                                "leadCreated"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "id",
+                    "title",
+                    "startsAt",
+                    "endsAt",
+                    "allDay",
+                    "status",
+                    "location",
+                    "conferenceUrl",
+                    "hostMemberId",
+                    "bookedAt",
+                    "cancelledAt",
+                    "members",
+                    "attendees"
+                ]
+            },
+            "MeetingPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Meeting"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
+            },
+            "MeetingKpiRow": {
+                "type": "object",
+                "properties": {
+                    "member": {
+                        "$ref": "#/components/schemas/MemberSummary"
+                    },
+                    "booked": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Meetings the member booked in the period (a recurring meeting once): they host them."
+                    },
+                    "held": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Meetings in the period that have started, not cancelled and not declined by the member."
+                    },
+                    "upcoming": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Meetings in the period still to come, not cancelled or declined."
+                    },
+                    "cancelled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Meetings the member hosts that were called off in the period."
+                    },
+                    "peopleMet": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Different people outside the workspace in the held meetings."
+                    },
+                    "newLeads": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "People created from the attendees of their meetings in the period."
+                    }
+                },
+                "required": ["member", "booked", "held", "upcoming", "cancelled", "peopleMet", "newLeads"]
+            },
+            "MeetingKpis": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "to": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MeetingKpiRow"
+                        },
+                        "description": "One row per member the caller may see: every member for an admin, else the caller alone."
+                    }
+                },
+                "required": ["from", "to", "rows"]
+            },
+            "CalendarSync": {
+                "type": "object",
+                "properties": {
+                    "mailboxId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "granted": {
+                        "type": "boolean",
+                        "description": "The mailbox's Google connection includes the calendar. False: connect it again and allow it."
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["idle", "syncing", "failed"]
+                    },
+                    "lastSyncedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "windowReadAt": {
+                        "nullable": true,
+                        "description": "The last full read of the window.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastError": {
+                        "nullable": true,
+                        "description": "Why the last run stopped or was skipped.",
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string"
+                            },
+                            "message": {
+                                "type": "string"
+                            },
+                            "at": {
+                                "example": "2026-10-09T09:30:00.000Z",
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                        },
+                        "required": ["code", "message", "at"]
+                    }
+                },
+                "required": ["mailboxId", "granted", "status", "lastSyncedAt", "windowReadAt", "lastError"]
+            },
+            "CalendarSyncTriggered": {
+                "type": "object",
+                "properties": {
+                    "sync": {
+                        "$ref": "#/components/schemas/CalendarSync"
+                    },
+                    "queued": {
+                        "type": "boolean",
+                        "description": "False when a run for this calendar is already queued or running."
+                    }
+                },
+                "required": ["sync", "queued"]
+            },
+            "HealthStatus": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["ok", "degraded"]
+                    },
+                    "db": {
+                        "type": "string",
+                        "enum": ["ok", "down"]
+                    },
+                    "redis": {
+                        "type": "string",
+                        "enum": ["ok", "down"]
+                    },
+                    "rls": {
+                        "type": "string",
+                        "enum": ["ok", "misconfigured"]
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                },
+                "required": ["status", "db", "redis", "rls", "version"]
             },
             "MailThreadSummary": {
                 "type": "object",
@@ -23959,1259 +25870,6 @@
                 },
                 "required": ["items", "nextCursor"]
             },
-            "RecordSummary": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "type": "string"
-                    }
-                },
-                "required": ["id", "name"]
-            },
-            "Person": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "nameFirst": {
-                        "type": "string"
-                    },
-                    "nameLast": {
-                        "type": "string"
-                    },
-                    "emails": {
-                        "$ref": "#/components/schemas/Emails"
-                    },
-                    "phones": {
-                        "$ref": "#/components/schemas/Phones"
-                    },
-                    "jobTitle": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "city": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "source": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "country": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "links": {
-                        "$ref": "#/components/schemas/Links"
-                    },
-                    "avatarUrl": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "position": {
-                        "type": "number"
-                    },
-                    "companyId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "ownerId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "company": {
-                        "nullable": true,
-                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/RecordSummary"
-                            }
-                        ]
-                    },
-                    "owner": {
-                        "nullable": true,
-                        "description": "The owner, by name; null when the record has none.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/MemberSummary"
-                            }
-                        ]
-                    },
-                    "createdBy": {
-                        "$ref": "#/components/schemas/Actor"
-                    },
-                    "custom": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "deletedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "nameFirst",
-                    "nameLast",
-                    "emails",
-                    "phones",
-                    "jobTitle",
-                    "city",
-                    "source",
-                    "country",
-                    "links",
-                    "avatarUrl",
-                    "position",
-                    "companyId",
-                    "ownerId",
-                    "company",
-                    "owner",
-                    "createdBy",
-                    "custom",
-                    "deletedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "PersonPage": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Person"
-                        }
-                    },
-                    "nextCursor": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "total": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991,
-                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
-                    },
-                    "totalIsExact": {
-                        "type": "boolean"
-                    }
-                },
-                "required": ["items", "nextCursor", "total", "totalIsExact"]
-            },
-            "Company": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "domain": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "logoUrl": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "employeeCount": {
-                        "nullable": true,
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "arr": {
-                        "nullable": true,
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/Money"
-                            }
-                        ]
-                    },
-                    "address": {
-                        "$ref": "#/components/schemas/Address"
-                    },
-                    "links": {
-                        "$ref": "#/components/schemas/Links"
-                    },
-                    "icp": {
-                        "type": "boolean"
-                    },
-                    "position": {
-                        "type": "number"
-                    },
-                    "ownerId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "owner": {
-                        "nullable": true,
-                        "description": "The owner, by name; null when the record has none.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/MemberSummary"
-                            }
-                        ]
-                    },
-                    "createdBy": {
-                        "$ref": "#/components/schemas/Actor"
-                    },
-                    "custom": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "deletedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "name",
-                    "domain",
-                    "logoUrl",
-                    "employeeCount",
-                    "arr",
-                    "address",
-                    "links",
-                    "icp",
-                    "position",
-                    "ownerId",
-                    "owner",
-                    "createdBy",
-                    "custom",
-                    "deletedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "CompanyPage": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Company"
-                        }
-                    },
-                    "nextCursor": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "total": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991,
-                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
-                    },
-                    "totalIsExact": {
-                        "type": "boolean"
-                    }
-                },
-                "required": ["items", "nextCursor", "total", "totalIsExact"]
-            },
-            "Opportunity": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "pipelineId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "stageId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "stageEnteredAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "description": "When the deal entered its current stage.",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "daysInStage": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991,
-                        "description": "Whole days since `stageEnteredAt`, at read time."
-                    },
-                    "closedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "lostReason": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "amount": {
-                        "nullable": true,
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/Money"
-                            }
-                        ]
-                    },
-                    "currency": {
-                        "type": "string"
-                    },
-                    "closeDate": {
-                        "nullable": true,
-                        "description": "A calendar date, `YYYY-MM-DD`.",
-                        "example": "2026-10-31",
-                        "type": "string"
-                    },
-                    "probability": {
-                        "nullable": true,
-                        "type": "number"
-                    },
-                    "position": {
-                        "type": "number"
-                    },
-                    "ownerId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "pointOfContactId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "companyId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "owner": {
-                        "nullable": true,
-                        "description": "The owner, by name; null when the record has none.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/MemberSummary"
-                            }
-                        ]
-                    },
-                    "pointOfContact": {
-                        "nullable": true,
-                        "description": "The point of contact, by name; null when none, trashed or not visible to the caller.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/RecordSummary"
-                            }
-                        ]
-                    },
-                    "company": {
-                        "nullable": true,
-                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/RecordSummary"
-                            }
-                        ]
-                    },
-                    "createdBy": {
-                        "$ref": "#/components/schemas/Actor"
-                    },
-                    "custom": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "deletedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "name",
-                    "pipelineId",
-                    "stageId",
-                    "stageEnteredAt",
-                    "daysInStage",
-                    "closedAt",
-                    "lostReason",
-                    "amount",
-                    "currency",
-                    "closeDate",
-                    "probability",
-                    "position",
-                    "ownerId",
-                    "pointOfContactId",
-                    "companyId",
-                    "owner",
-                    "pointOfContact",
-                    "company",
-                    "createdBy",
-                    "custom",
-                    "deletedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "OpportunityPage": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Opportunity"
-                        }
-                    },
-                    "nextCursor": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "total": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991,
-                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
-                    },
-                    "totalIsExact": {
-                        "type": "boolean"
-                    }
-                },
-                "required": ["items", "nextCursor", "total", "totalIsExact"]
-            },
-            "Note": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "body": {
-                        "$ref": "#/components/schemas/RichText"
-                    },
-                    "bodyText": {
-                        "type": "string"
-                    },
-                    "targets": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/RecordTarget"
-                        }
-                    },
-                    "authorId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "createdBy": {
-                        "$ref": "#/components/schemas/Actor"
-                    },
-                    "deletedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "title",
-                    "body",
-                    "bodyText",
-                    "targets",
-                    "authorId",
-                    "createdBy",
-                    "deletedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "NotePage": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Note"
-                        }
-                    },
-                    "nextCursor": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["items", "nextCursor"]
-            },
-            "Task": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "body": {
-                        "$ref": "#/components/schemas/RichText"
-                    },
-                    "bodyText": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["todo", "in_progress", "done"]
-                    },
-                    "dueAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "assigneeId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "completedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "targets": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/RecordTarget"
-                        }
-                    },
-                    "createdBy": {
-                        "$ref": "#/components/schemas/Actor"
-                    },
-                    "deletedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "title",
-                    "body",
-                    "bodyText",
-                    "status",
-                    "dueAt",
-                    "assigneeId",
-                    "completedAt",
-                    "targets",
-                    "createdBy",
-                    "deletedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "TaskPage": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Task"
-                        }
-                    },
-                    "nextCursor": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["items", "nextCursor"]
-            },
-            "Attachment": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "mime": {
-                        "type": "string"
-                    },
-                    "sizeBytes": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "target": {
-                        "$ref": "#/components/schemas/RecordTarget"
-                    },
-                    "authorId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "createdBy": {
-                        "$ref": "#/components/schemas/Actor"
-                    },
-                    "deletedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "name",
-                    "mime",
-                    "sizeBytes",
-                    "target",
-                    "authorId",
-                    "createdBy",
-                    "deletedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "CustomField": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "key": {
-                        "type": "string"
-                    },
-                    "label": {
-                        "type": "string"
-                    },
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "text",
-                            "number",
-                            "boolean",
-                            "date",
-                            "datetime",
-                            "select",
-                            "multiselect",
-                            "url",
-                            "email",
-                            "phone"
-                        ]
-                    },
-                    "options": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    },
-                    "required": {
-                        "type": "boolean"
-                    },
-                    "position": {
-                        "type": "number"
-                    },
-                    "archivedAt": {
-                        "nullable": true,
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "object",
-                    "key",
-                    "label",
-                    "type",
-                    "options",
-                    "required",
-                    "position",
-                    "archivedAt",
-                    "createdAt",
-                    "updatedAt"
-                ]
-            },
-            "BulkResult": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "anyOf": [
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {
-                                            "type": "string",
-                                            "format": "uuid",
-                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                                        },
-                                        "ok": {
-                                            "type": "boolean",
-                                            "enum": [true]
-                                        },
-                                        "unchanged": {
-                                            "description": "Already as asked: nothing written, no event.",
-                                            "type": "boolean",
-                                            "enum": [true]
-                                        }
-                                    },
-                                    "required": ["id", "ok"]
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {
-                                            "type": "string",
-                                            "format": "uuid",
-                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                                        },
-                                        "ok": {
-                                            "type": "boolean",
-                                            "enum": [false]
-                                        },
-                                        "error": {
-                                            "type": "string",
-                                            "enum": ["not_found"],
-                                            "description": "not_found: not visible to the caller in this state — whether or not it exists elsewhere."
-                                        }
-                                    },
-                                    "required": ["id", "ok", "error"]
-                                }
-                            ]
-                        }
-                    },
-                    "succeeded": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "failed": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    }
-                },
-                "required": ["results", "succeeded", "failed"]
-            },
-            "Stage": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "pipelineId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "position": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "probability": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "kind": {
-                        "type": "string",
-                        "enum": ["open", "won", "lost"]
-                    },
-                    "daysThreshold": {
-                        "nullable": true,
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "colour": {
-                        "type": "string",
-                        "enum": ["neutral", "accent", "info", "ok", "warn", "bad"]
-                    }
-                },
-                "required": ["id", "pipelineId", "name", "position", "probability", "kind", "daysThreshold", "colour"]
-            },
-            "Pipeline": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "isDefault": {
-                        "type": "boolean"
-                    },
-                    "position": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "stages": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Stage"
-                        }
-                    },
-                    "createdAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "updatedAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": ["id", "name", "isDefault", "position", "stages", "createdAt", "updatedAt"]
-            },
-            "StageRule": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "pipelineId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "event": {
-                        "type": "string",
-                        "enum": ["email.replied", "meeting.booked", "email.clicked"]
-                    },
-                    "toStageId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "allowBackward": {
-                        "type": "boolean"
-                    },
-                    "enabled": {
-                        "type": "boolean"
-                    }
-                },
-                "required": ["id", "pipelineId", "event", "toStageId", "allowBackward", "enabled"]
-            },
-            "EventActor": {
-                "anyOf": [
-                    {
-                        "type": "object",
-                        "properties": {
-                            "kind": {
-                                "type": "string",
-                                "enum": ["member", "api_key", "import", "sync", "system"]
-                            },
-                            "id": {
-                                "nullable": true,
-                                "type": "string",
-                                "format": "uuid",
-                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                            }
-                        },
-                        "required": ["kind", "id"]
-                    },
-                    {
-                        "type": "object",
-                        "properties": {
-                            "kind": {
-                                "type": "string",
-                                "enum": ["rule"]
-                            },
-                            "id": {
-                                "type": "string",
-                                "format": "uuid",
-                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                            }
-                        },
-                        "required": ["kind", "id"]
-                    }
-                ]
-            },
-            "StageHistoryEntry": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "fromStageId": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "fromStageName": {
-                        "nullable": true,
-                        "description": "The stage’s name when the move happened; it may since have been renamed or deleted.",
-                        "type": "string"
-                    },
-                    "toStageId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "toStageName": {
-                        "type": "string",
-                        "description": "The stage’s name when the move happened; it may since have been renamed or deleted."
-                    },
-                    "enteredAt": {
-                        "example": "2026-10-09T09:30:00.000Z",
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "actor": {
-                        "$ref": "#/components/schemas/EventActor"
-                    },
-                    "reason": {
-                        "type": "string",
-                        "enum": ["manual", "rule", "import", "close", "stage_deleted"]
-                    }
-                },
-                "required": [
-                    "id",
-                    "fromStageId",
-                    "fromStageName",
-                    "toStageId",
-                    "toStageName",
-                    "enteredAt",
-                    "actor",
-                    "reason"
-                ]
-            },
-            "MoveResult": {
-                "type": "object",
-                "properties": {
-                    "deal": {
-                        "$ref": "#/components/schemas/Opportunity"
-                    },
-                    "rulesThatMayMoveItForward": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/StageRule"
-                        },
-                        "description": "On a backward move: the enabled rules of the pipeline that could move it forward again."
-                    }
-                },
-                "required": ["deal", "rulesThatMayMoveItForward"]
-            },
-            "BoardColumn": {
-                "type": "object",
-                "properties": {
-                    "stage": {
-                        "$ref": "#/components/schemas/Stage"
-                    },
-                    "count": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991,
-                        "description": "Deals in the stage under the filter and the caller's scope."
-                    },
-                    "amountMinorByCurrency": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                        }
-                    },
-                    "deals": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Opportunity"
-                        }
-                    },
-                    "hasMore": {
-                        "type": "boolean"
-                    }
-                },
-                "required": ["stage", "count", "amountMinorByCurrency", "deals", "hasMore"]
-            },
-            "Board": {
-                "type": "object",
-                "properties": {
-                    "pipeline": {
-                        "$ref": "#/components/schemas/Pipeline"
-                    },
-                    "columns": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/BoardColumn"
-                        }
-                    }
-                },
-                "required": ["pipeline", "columns"]
-            },
-            "Group": {
-                "type": "object",
-                "properties": {
-                    "value": {
-                        "description": "The field's value for this group; `null` groups the unset rows."
-                    },
-                    "count": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                    },
-                    "sum": {
-                        "description": "The object's money field summed in minor units; absent for people.",
-                        "type": "object",
-                        "properties": {
-                            "amountMinor": {
-                                "type": "integer",
-                                "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
-                            },
-                            "field": {
-                                "type": "string"
-                            }
-                        },
-                        "required": ["amountMinor", "field"]
-                    }
-                },
-                "required": ["value", "count"]
-            },
-            "SearchHit": {
-                "type": "object",
-                "properties": {
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "subtitle": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["object", "id", "title", "subtitle"]
-            },
-            "SearchResults": {
-                "type": "object",
-                "properties": {
-                    "person": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    },
-                    "company": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    },
-                    "opportunity": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SearchHit"
-                        }
-                    }
-                },
-                "required": ["person", "company", "opportunity"]
-            },
             "EmailVerification": {
                 "type": "object",
                 "properties": {
@@ -26171,7 +26829,7 @@
                         "properties": {
                             "type": {
                                 "type": "string",
-                                "enum": ["note", "task", "attachment", "email", "suppression"]
+                                "enum": ["note", "task", "attachment", "email", "suppression", "meeting"]
                             },
                             "id": {
                                 "type": "string",

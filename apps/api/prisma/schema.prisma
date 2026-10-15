@@ -87,6 +87,11 @@ model Workspace {
   trackingTokens TrackingToken[]
   trackingHits   TrackingHit[]
 
+  calendarEvents       CalendarEvent[]
+  calendarEventCopies  CalendarEventCopy[]
+  calendarParticipants CalendarEventParticipant[]
+  calendarSyncStates   CalendarSyncState[]
+
   @@map("workspaces")
 }
 
@@ -261,6 +266,11 @@ model WorkspaceMember {
   configuredTwentyImports TwentyImportSettings[]
   startedTwentyImports    TwentyImportRun[]
   sequenceEnrolments      SequenceEnrolment[]    @relation("EnrolmentEnroller")
+
+  hostedMeetings        CalendarEvent[]
+  calendarEventCopies   CalendarEventCopy[]
+  meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
+  leadsFromMeetings     CalendarEventParticipant[] @relation("CalendarParticipantLeadFor")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -480,6 +490,8 @@ model Person {
   unsubscribeTokens  UnsubscribeToken[]
   trackingHits       TrackingHit[]
   sequenceEnrolments SequenceEnrolment[]
+
+  meetingParticipations CalendarEventParticipant[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -859,6 +871,7 @@ enum LinkedObject {
   attachment
   email
   suppression
+  meeting
 
   @@map("linked_object")
 }
@@ -1056,6 +1069,9 @@ model Mailbox {
   syncState MailboxSyncState?
 
   outbound MailOutbound[]
+
+  calendarCopies    CalendarEventCopy[]
+  calendarSyncState CalendarSyncState?
 
   @@unique([workspaceId, email])
   @@index([workspaceId, ownerMemberId])
@@ -2203,4 +2219,141 @@ model TrackingHit {
   @@index([sequenceStepId, kind])
   @@index([tokenId])
   @@map("tracking_hits")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calendar sync (CAL-1): meetings with people outside the workspace, from each member's Google
+// Calendar, read through their personal mailbox's connection. They count towards the member's KPIs,
+// and every outside attendee is a person — a lead the member owns.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A meeting as Google reports it.
+enum CalendarEventStatus {
+  confirmed
+  tentative
+  cancelled
+
+  @@map("calendar_event_status")
+}
+
+/// An attendee's answer to the invitation.
+enum CalendarResponseStatus {
+  needs_action
+  accepted
+  tentative
+  declined
+
+  @@map("calendar_response_status")
+}
+
+/// A meeting, once per workspace however many members' calendars hold it, keyed by `identityKey`:
+/// Google's iCalendar UID, and for one occurrence of a recurring meeting that occurrence's original
+/// start as well. Only meetings with someone outside the workspace are kept. Never its description.
+model CalendarEvent {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId      String              @map("workspace_id") @db.Uuid
+  identityKey      String              @map("identity_key")
+  /// Shared by every occurrence of a recurring meeting: a series is booked once.
+  icalUid          String              @map("ical_uid")
+  title            String              @default("")
+  location         String?
+  conferenceUrl    String?             @map("conference_url")
+  startsAt         DateTime            @map("starts_at") @db.Timestamptz
+  endsAt           DateTime            @map("ends_at") @db.Timestamptz
+  allDay           Boolean             @default(false) @map("all_day")
+  status           CalendarEventStatus
+  /// Lower case (the database checks).
+  organizerAddress String?             @map("organizer_address")
+  /// Who the meeting counts for as booked: its organiser when they are a member whose calendar holds
+  /// it, else the member whose calendar it was found in first.
+  hostMemberId     String              @map("host_member_id") @db.Uuid
+  /// When the meeting was put in the calendar: Google's creation time.
+  bookedAt         DateTime            @map("booked_at") @db.Timestamptz
+  cancelledAt      DateTime?           @map("cancelled_at") @db.Timestamptz
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  host         WorkspaceMember            @relation(fields: [hostMemberId], references: [id])
+  copies       CalendarEventCopy[]
+  participants CalendarEventParticipant[]
+
+  @@unique([workspaceId, identityKey])
+  @@index([workspaceId, startsAt])
+  @@index([workspaceId, hostMemberId, bookedAt])
+  @@map("calendar_events")
+}
+
+/// One member's calendar's copy of a meeting: Google's id for it there, and that member's own answer.
+/// Unique per mailbox and Google id — sync's dedupe key.
+model CalendarEventCopy {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String                 @map("workspace_id") @db.Uuid
+  eventId         String                 @map("event_id") @db.Uuid
+  mailboxId       String                 @map("mailbox_id") @db.Uuid
+  /// The mailbox's owner when the copy was stored: the member the meeting counts for as held.
+  memberId        String                 @map("member_id") @db.Uuid
+  providerEventId String                 @map("provider_event_id")
+  responseStatus  CalendarResponseStatus @map("response_status")
+  isOrganizer     Boolean                @default(false) @map("is_organizer")
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  event     CalendarEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  mailbox   Mailbox         @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  member    WorkspaceMember @relation(fields: [memberId], references: [id])
+
+  @@unique([mailboxId, providerEventId])
+  @@index([eventId])
+  @@index([workspaceId, memberId])
+  @@map("calendar_event_copies")
+}
+
+/// One attendee of one meeting, matched to a person and/or a member when it can be.
+model CalendarEventParticipant {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                 @map("workspace_id") @db.Uuid
+  eventId                String                 @map("event_id") @db.Uuid
+  /// Lower case (the database checks).
+  address                String
+  displayName            String                 @default("") @map("display_name")
+  responseStatus         CalendarResponseStatus @map("response_status")
+  isOrganizer            Boolean                @default(false) @map("is_organizer")
+  personId               String?                @map("person_id") @db.Uuid
+  memberId               String?                @map("member_id") @db.Uuid
+  /// Set when calendar sync created the person for this attendee: the member the new lead went to.
+  leadCreatedForMemberId String?                @map("lead_created_for_member_id") @db.Uuid
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  event          CalendarEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person         Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  member         WorkspaceMember? @relation("CalendarParticipantMember", fields: [memberId], references: [id], onDelete: SetNull)
+  leadCreatedFor WorkspaceMember? @relation("CalendarParticipantLeadFor", fields: [leadCreatedForMemberId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, address])
+  @@index([workspaceId, address])
+  @@index([workspaceId, personId])
+  @@index([workspaceId, leadCreatedForMemberId, createdAt])
+  @@map("calendar_event_participants")
+}
+
+/// Where a mailbox's calendar sync stands: the last run, the last full read of the window, why it stopped.
+model CalendarSyncState {
+  mailboxId    String         @id @map("mailbox_id") @db.Uuid
+  workspaceId  String         @map("workspace_id") @db.Uuid
+  status       MailSyncStatus @default(idle)
+  lastSyncedAt DateTime?      @map("last_synced_at") @db.Timestamptz
+  /// The last run that read the whole window rather than only what changed since the run before.
+  windowReadAt DateTime?      @map("window_read_at") @db.Timestamptz
+  /// `{ code, message, at }` while the last run failed or was skipped; null after a clean run.
+  lastError    Json?          @map("last_error")
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mailbox   Mailbox   @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("calendar_sync_states")
 }

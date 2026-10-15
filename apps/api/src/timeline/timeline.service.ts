@@ -4,6 +4,7 @@ import {
     type DomainEvent,
     type EmailSummary,
     type EmailTrackingPayload,
+    type MeetingSummary,
     type SuppressionEventPayload,
     type LinkedObject,
     type Money,
@@ -233,6 +234,7 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
             ...(event.email ? { email: emailEntry(event.email) } : {}),
             ...(event.suppression ? { suppression: suppressionEntry(event.suppression) } : {}),
             ...(event.tracking ? { tracking: trackingEntry(event.tracking) } : {}),
+            ...(event.meeting ? { meeting: meetingEntry(event.meeting) } : {}),
         });
         return targets.map((t) => ({
             ...base,
@@ -264,12 +266,26 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
             );
         case 'suppression':
             return (await tx.suppression.findUnique({ where: { id }, select: { address: true } }))?.address ?? null;
+        case 'meeting':
+            return (await tx.calendarEvent.findUnique({ where: { id }, select: { title: true } }))?.title ?? null;
     }
 }
 
 /** What a click or an open shows (P3-4): the link, and that an open is indicative — never the client. */
 function trackingEntry(tracking: EmailTrackingPayload) {
     return { url: tracking.url, indicative: tracking.indicative, sequenceStepId: tracking.sequenceStepId };
+}
+
+/** What a meeting's entry shows (CAL-1): when it is, whose it is, and how to join — never its description. */
+function meetingEntry(meeting: MeetingSummary) {
+    return {
+        title: meeting.title,
+        startsAt: meeting.startsAt,
+        endsAt: meeting.endsAt,
+        allDay: meeting.allDay,
+        conferenceUrl: meeting.conferenceUrl,
+        hostMemberId: meeting.hostMemberId,
+    };
 }
 
 /** What a suppression's entry shows (#114): why the address is on the list, by whom, and the note. */

@@ -158,6 +158,13 @@ export type MailboxDisconnectedView = Schemas['MailboxDisconnected'];
 export type MailboxCheckView = Schemas['MailboxCheck'];
 export type MailboxSyncView = Schemas['MailboxSync'];
 export type MailboxSyncTriggeredView = Schemas['MailboxSyncTriggered'];
+// ---- Calendar sync (CAL-1) -------------------------------------------------------------------
+export type CalendarSyncView = Schemas['CalendarSync'];
+export type CalendarSyncTriggeredView = Schemas['CalendarSyncTriggered'];
+export type MeetingView = Schemas['Meeting'];
+export type MeetingPage = Schemas['MeetingPage'];
+export type MeetingKpisView = Schemas['MeetingKpis'];
+export type MeetingKpiRowView = Schemas['MeetingKpiRow'];
 export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */
 export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];
