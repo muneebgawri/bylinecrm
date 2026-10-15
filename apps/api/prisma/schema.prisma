@@ -91,6 +91,7 @@ model Workspace {
   calendarEventCopies  CalendarEventCopy[]
   calendarParticipants CalendarEventParticipant[]
   calendarSyncStates   CalendarSyncState[]
+  slotlineSettings     SlotlineSettings?
 
   @@map("workspaces")
 }
@@ -268,6 +269,7 @@ model WorkspaceMember {
   sequenceEnrolments      SequenceEnrolment[]    @relation("EnrolmentEnroller")
 
   hostedMeetings        CalendarEvent[]
+  configuredSlotline    SlotlineSettings[]
   calendarEventCopies   CalendarEventCopy[]
   meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
   leadsFromMeetings     CalendarEventParticipant[] @relation("CalendarParticipantLeadFor")
@@ -2236,6 +2238,14 @@ enum CalendarEventStatus {
   @@map("calendar_event_status")
 }
 
+/// Where a meeting reached the CRM from (CAL-2): a member's Google Calendar, or a booking on Slotline.
+enum MeetingSource {
+  google_calendar
+  slotline
+
+  @@map("meeting_source")
+}
+
 /// An attendee's answer to the invitation.
 enum CalendarResponseStatus {
   needs_action
@@ -2269,6 +2279,10 @@ model CalendarEvent {
   hostMemberId     String              @map("host_member_id") @db.Uuid
   /// When the meeting was put in the calendar: Google's creation time.
   bookedAt         DateTime            @map("booked_at") @db.Timestamptz
+  /// Booked through Slotline (CAL-2) once any Slotline booking is this meeting; else found in a calendar.
+  bookedVia        MeetingSource       @default(google_calendar) @map("booked_via")
+  /// The Slotline booking's current uid, for a link to it; null for a meeting Slotline never saw.
+  slotlineUid      String?             @map("slotline_uid")
   cancelledAt      DateTime?           @map("cancelled_at") @db.Timestamptz
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz
@@ -2284,13 +2298,16 @@ model CalendarEvent {
   @@map("calendar_events")
 }
 
-/// One member's calendar's copy of a meeting: Google's id for it there, and that member's own answer.
-/// Unique per mailbox and Google id — sync's dedupe key.
+/// One member's copy of a meeting: from their Google Calendar (Google's id for it there, unique per mailbox —
+/// sync's dedupe key), or from Slotline (CAL-2: no mailbox; the booking's iCalendar UID, unique per workspace
+/// among Slotline copies), with that member's own answer.
 model CalendarEventCopy {
   id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId     String                 @map("workspace_id") @db.Uuid
   eventId         String                 @map("event_id") @db.Uuid
-  mailboxId       String                 @map("mailbox_id") @db.Uuid
+  source          MeetingSource          @default(google_calendar)
+  /// The member's Google mailbox the copy was read through; null for a Slotline copy (the database checks).
+  mailboxId       String?                @map("mailbox_id") @db.Uuid
   /// The mailbox's owner when the copy was stored: the member the meeting counts for as held.
   memberId        String                 @map("member_id") @db.Uuid
   providerEventId String                 @map("provider_event_id")
@@ -2301,7 +2318,7 @@ model CalendarEventCopy {
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   event     CalendarEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  mailbox   Mailbox         @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  mailbox   Mailbox?        @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
   member    WorkspaceMember @relation(fields: [memberId], references: [id])
 
   @@unique([mailboxId, providerEventId])
@@ -2356,4 +2373,31 @@ model CalendarSyncState {
 
   @@index([workspaceId])
   @@map("calendar_sync_states")
+}
+
+/// The workspace's Slotline booking site (CAL-2): bookings on it reach the CRM as a signed webhook. The hook
+/// URL names the workspace by an unguessable token — looked up by its SHA-256, and held encrypted so an admin
+/// can read the URL again; the secret the deliveries are signed with is the one entered in Slotline, encrypted.
+model SlotlineSettings {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String    @unique @map("workspace_id") @db.Uuid
+  /// Where the booking site is, for links to a booking: `https://bookings.example.com`.
+  baseUrl                String    @map("base_url")
+  hookTokenHash          String    @unique @map("hook_token_hash")
+  hookTokenCiphertext    String    @map("hook_token_ciphertext")
+  secretCiphertext       String    @map("secret_ciphertext")
+  configuredById         String    @map("configured_by_id") @db.Uuid
+  lastDeliveryAt         DateTime? @map("last_delivery_at") @db.Timestamptz
+  /// How the last delivery went: `stored`, `cancelled`, `ignored`, `unmatched`, `ping`, `bad_signature`.
+  lastDeliveryResult     String?   @map("last_delivery_result")
+  /// Bookings whose organiser is no member (by sign-in address or personal mailbox), and the last such address.
+  unmatchedOrganizers    Int       @default(0) @map("unmatched_organizers")
+  lastUnmatchedOrganizer String?   @map("last_unmatched_organizer")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
+
+  @@map("slotline_settings")
 }

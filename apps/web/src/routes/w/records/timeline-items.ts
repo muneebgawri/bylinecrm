@@ -125,9 +125,10 @@ function meetingWords(
     const startsAt = typeof meeting['startsAt'] === 'string' ? meeting['startsAt'] : null;
     const when = startsAt ? (meeting['allDay'] === true ? formatDay(startsAt) : formatDate(startsAt)) : null;
     const cancelled = entry.kind === 'linked-meeting.cancelled';
+    const where = meeting['bookedVia'] === 'slotline' ? ' on Slotline' : '';
     return {
         actor: host ?? 'A member',
-        action: cancelled ? `had ${title} cancelled` : `booked ${title}${when ? ` for ${when}` : ''}`,
+        action: cancelled ? `had ${title} cancelled` : `booked ${title}${where}${when ? ` for ${when}` : ''}`,
         ...(cancelled && when ? { detail: [{ label: when }] } : {}),
     };
 }

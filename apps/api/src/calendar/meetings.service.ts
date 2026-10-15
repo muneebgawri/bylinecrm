@@ -21,6 +21,7 @@ type MeetingRow = Prisma.CalendarEventGetPayload<{ include: typeof meetingInclud
 interface KpiCounts {
     member_id: string;
     booked: number;
+    booked_via_slotline: number;
     held: number;
     upcoming: number;
     cancelled: number;
@@ -72,7 +73,11 @@ export class MeetingsService {
                     ...args,
                 }),
             );
-            return { items: page.items.map(meetingView), nextCursor: page.nextCursor };
+            const slotline = await tx.slotlineSettings.findFirst({ select: { baseUrl: true } });
+            return {
+                items: page.items.map((row) => meetingView(row, slotline?.baseUrl ?? null)),
+                nextCursor: page.nextCursor,
+            };
         });
     }
 
@@ -111,6 +116,7 @@ export class MeetingsService {
                 return {
                     member: memberSummaryOf(member),
                     booked: c?.booked ?? 0,
+                    bookedViaSlotline: c?.booked_via_slotline ?? 0,
                     held: c?.held ?? 0,
                     upcoming: c?.upcoming ?? 0,
                     cancelled: c?.cancelled ?? 0,
@@ -176,7 +182,8 @@ async function kpiCounts(
 ): Promise<Map<string, KpiCounts>> {
     if (memberIds.length === 0) return new Map();
     // "Held" is up to now (or the period's end, if sooner); "upcoming" from then. Every count is the
-    // member's own: the meetings they host (booked, cancelled), or whose copy is in their calendar.
+    // member's own: the meetings they host (booked, cancelled), or of which they hold a copy — a meeting
+    // both their Google Calendar and Slotline hold counts once (`DISTINCT event_id`).
     const rows = await tx.$queryRaw<KpiCounts[]>`
         WITH m AS (SELECT unnest(${[...memberIds]}::uuid[]) AS member_id),
         attended AS (
@@ -190,9 +197,12 @@ async function kpiCounts(
         SELECT m.member_id::text AS member_id,
             (SELECT count(DISTINCT e.ical_uid) FROM calendar_events e
               WHERE e.host_member_id = m.member_id AND e.booked_at >= ${from} AND e.booked_at < ${to})::int AS booked,
-            (SELECT count(*) FROM attended a
+            (SELECT count(DISTINCT e.ical_uid) FROM calendar_events e
+              WHERE e.host_member_id = m.member_id AND e.booked_via = 'slotline'
+                AND e.booked_at >= ${from} AND e.booked_at < ${to})::int AS booked_via_slotline,
+            (SELECT count(DISTINCT a.event_id) FROM attended a
               WHERE a.member_id = m.member_id AND a.starts_at < LEAST(${to}::timestamptz, now()))::int AS held,
-            (SELECT count(*) FROM attended a
+            (SELECT count(DISTINCT a.event_id) FROM attended a
               WHERE a.member_id = m.member_id AND a.starts_at >= now())::int AS upcoming,
             (SELECT count(*) FROM calendar_events e
               WHERE e.host_member_id = m.member_id AND e.status = 'cancelled'
@@ -208,7 +218,25 @@ async function kpiCounts(
     return new Map(rows.map((r) => [r.member_id, r]));
 }
 
-function meetingView(row: MeetingRow): MeetingView {
+/** A member's answer across their copies: any copy that is not a "no" is the answer; a "no" only if all are. */
+function membersOf(copies: MeetingRow['copies']): MeetingView['members'] {
+    const byMember = new Map<string, MeetingView['members'][number]>();
+    for (const c of copies) {
+        const seen = byMember.get(c.memberId);
+        if (!seen || seen.responseStatus === 'declined') {
+            byMember.set(c.memberId, {
+                memberId: c.memberId,
+                responseStatus: c.responseStatus,
+                isOrganizer: c.isOrganizer || (seen?.isOrganizer ?? false),
+            });
+        } else if (c.isOrganizer) {
+            seen.isOrganizer = true;
+        }
+    }
+    return [...byMember.values()];
+}
+
+function meetingView(row: MeetingRow, slotlineBaseUrl: string | null): MeetingView {
     return {
         id: row.id,
         title: row.title,
@@ -220,12 +248,13 @@ function meetingView(row: MeetingRow): MeetingView {
         conferenceUrl: row.conferenceUrl,
         hostMemberId: row.hostMemberId,
         bookedAt: row.bookedAt,
+        bookedVia: row.bookedVia,
+        slotlineUrl:
+            row.slotlineUid && slotlineBaseUrl
+                ? `${slotlineBaseUrl}/booking/${encodeURIComponent(row.slotlineUid)}`
+                : null,
         cancelledAt: row.cancelledAt,
-        members: row.copies.map((c) => ({
-            memberId: c.memberId,
-            responseStatus: c.responseStatus,
-            isOrganizer: c.isOrganizer,
-        })),
+        members: membersOf(row.copies),
         attendees: row.participants.map((p) => ({
             address: p.address,
             displayName: p.displayName,

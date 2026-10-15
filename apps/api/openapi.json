@@ -18204,6 +18204,328 @@
                 },
                 "tags": ["calendar"]
             }
+        },
+        "/api/w/{workspaceId}/integrations/slotline": {
+            "get": {
+                "operationId": "slotlineSettings_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SlotlineSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            },
+            "put": {
+                "operationId": "slotlineSettings_put",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutSlotlineSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SlotlineSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            },
+            "delete": {
+                "operationId": "slotlineSettings_remove",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/slotline/rotate": {
+            "post": {
+                "operationId": "slotlineSettings_rotate",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SlotlineSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
+        },
+        "/api/hooks/slotline/{token}": {
+            "post": {
+                "operationId": "slotlineHook_receive",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SlotlineHookResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["calendar"]
+            }
         }
     },
     "info": {
@@ -21819,6 +22141,24 @@
                     }
                 }
             },
+            "PutSlotlineSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "baseUrl": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "format": "uri",
+                        "description": "The booking site’s address, `https://bookings.example.com`."
+                    },
+                    "secret": {
+                        "description": "The secret entered on the webhook in Slotline. Leave out to keep the current one.",
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 200
+                    }
+                },
+                "required": ["baseUrl"]
+            },
             "Actor": {
                 "type": "object",
                 "properties": {
@@ -24156,10 +24496,21 @@
                     },
                     "bookedAt": {
                         "example": "2026-10-09T09:30:00.000Z",
-                        "description": "When the meeting was put in the calendar.",
+                        "description": "When the meeting was put in the calendar, or booked on Slotline.",
                         "type": "string",
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "bookedVia": {
+                        "type": "string",
+                        "enum": ["google_calendar", "slotline"],
+                        "description": "Booked through the workspace’s Slotline booking site, or found in a member’s Google Calendar."
+                    },
+                    "slotlineUrl": {
+                        "nullable": true,
+                        "description": "The booking on Slotline, when it is one.",
+                        "type": "string",
+                        "format": "uri"
                     },
                     "cancelledAt": {
                         "nullable": true,
@@ -24190,7 +24541,7 @@
                             },
                             "required": ["memberId", "responseStatus", "isOrganizer"]
                         },
-                        "description": "The members whose calendars hold it, and each one's answer."
+                        "description": "The members it is for — whose calendar holds it, or who organised the Slotline booking — once each, with each one's answer."
                     },
                     "attendees": {
                         "type": "array",
@@ -24254,6 +24605,8 @@
                     "conferenceUrl",
                     "hostMemberId",
                     "bookedAt",
+                    "bookedVia",
+                    "slotlineUrl",
                     "cancelledAt",
                     "members",
                     "attendees"
@@ -24293,6 +24646,12 @@
                         "maximum": 9007199254740991,
                         "description": "Meetings in the period that have started, not cancelled and not declined by the member."
                     },
+                    "bookedViaSlotline": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Of those booked, the ones booked through the workspace’s Slotline booking site (CAL-2)."
+                    },
                     "upcoming": {
                         "type": "integer",
                         "minimum": -9007199254740991,
@@ -24318,7 +24677,16 @@
                         "description": "People created from the attendees of their meetings in the period."
                     }
                 },
-                "required": ["member", "booked", "held", "upcoming", "cancelled", "peopleMet", "newLeads"]
+                "required": [
+                    "member",
+                    "booked",
+                    "held",
+                    "bookedViaSlotline",
+                    "upcoming",
+                    "cancelled",
+                    "peopleMet",
+                    "newLeads"
+                ]
             },
             "MeetingKpis": {
                 "type": "object",
@@ -24412,6 +24780,74 @@
                     }
                 },
                 "required": ["sync", "queued"]
+            },
+            "SlotlineSettings": {
+                "type": "object",
+                "properties": {
+                    "configured": {
+                        "type": "boolean"
+                    },
+                    "baseUrl": {
+                        "nullable": true,
+                        "description": "The booking site, for links to a booking.",
+                        "type": "string"
+                    },
+                    "hookUrl": {
+                        "nullable": true,
+                        "description": "Paste this as the subscriber URL of the webhook in Slotline, with the same secret.",
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "triggers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "The booking events to subscribe the webhook to."
+                    },
+                    "lastDeliveryAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastDeliveryResult": {
+                        "nullable": true,
+                        "description": "`stored`, `cancelled`, `ignored`, `unmatched` (no member organised it), `ping` or `bad_signature`.",
+                        "type": "string"
+                    },
+                    "unmatchedOrganizers": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Bookings whose organiser is no member, by sign-in address or personal mailbox."
+                    },
+                    "lastUnmatchedOrganizer": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "configured",
+                    "baseUrl",
+                    "hookUrl",
+                    "triggers",
+                    "lastDeliveryAt",
+                    "lastDeliveryResult",
+                    "unmatchedOrganizers",
+                    "lastUnmatchedOrganizer"
+                ]
+            },
+            "SlotlineHookResult": {
+                "type": "object",
+                "properties": {
+                    "result": {
+                        "type": "string",
+                        "enum": ["stored", "cancelled", "ignored", "unmatched", "ping"]
+                    }
+                },
+                "required": ["result"]
             },
             "HealthStatus": {
                 "type": "object",

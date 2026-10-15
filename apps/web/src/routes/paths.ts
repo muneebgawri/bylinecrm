@@ -53,6 +53,8 @@ export const paths = {
     settingsEnrichment: (workspaceId: string) => `/w/${workspaceId}/settings/enrichment`,
     /** Tracking (P3-4): the short-link domain, its CNAME and whether it is verified. */
     settingsTracking: (workspaceId: string) => `/w/${workspaceId}/settings/tracking`,
+    /** Slotline (CAL-2): the booking site whose bookings count as meetings, and the hook it posts them to. */
+    settingsSlotline: (workspaceId: string) => `/w/${workspaceId}/settings/slotline`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
     settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */

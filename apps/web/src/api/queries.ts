@@ -90,6 +90,8 @@ export const keys = {
         ['w', workspaceId, 'meetings', 'list', params] as const,
     meetingKpis: (workspaceId: string, params: { from: string; to: string }) =>
         ['w', workspaceId, 'meetings', 'kpis', params] as const,
+    /** The workspace's Slotline booking site and its hook (CAL-2). */
+    slotlineSettings: (workspaceId: string) => ['w', workspaceId, 'integrations', 'slotline'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
     suppressions: (workspaceId: string) => ['w', workspaceId, 'suppressions'] as const,
     sendingPool: (workspaceId: string) => ['w', workspaceId, 'sending-pool'] as const,

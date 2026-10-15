@@ -12,7 +12,22 @@ export const UNPARSABLE_BODY_MESSAGE = 'the request body is not valid JSON';
  * `SyntaxError` into a bare 400 carrying the parser's text, with nothing left to tell it apart.
  */
 export function bodyParsers(): RequestHandler[] {
-    return [express.json(), express.urlencoded({ extended: true })];
+    return [express.json({ verify: keepRawBody }), express.urlencoded({ extended: true })];
+}
+
+/**
+ * Inbound hooks (CAL-2's Slotline hook) are signed over the exact bytes sent, which the parsed body cannot
+ * give back: under `RAW_BODY_PATH_PREFIX` the parser keeps them on the request as `rawBody`. Nowhere else, so
+ * no other request carries its body twice.
+ */
+export const RAW_BODY_PATH_PREFIX = '/api/hooks/';
+
+export interface RequestWithRawBody {
+    rawBody?: Buffer;
+}
+
+function keepRawBody(req: { url?: string | undefined }, _res: unknown, buffer: Buffer): void {
+    if (req.url?.startsWith(RAW_BODY_PATH_PREFIX)) (req as RequestWithRawBody).rawBody = buffer;
 }
 
 /** Turns a parser rejection into the typed error the exception filter renders; passes anything else on. */

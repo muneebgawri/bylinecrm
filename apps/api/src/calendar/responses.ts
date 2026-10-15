@@ -1,4 +1,9 @@
-import { CALENDAR_EVENT_STATUSES, CALENDAR_RESPONSE_STATUSES, MAIL_SYNC_STATUSES } from '@bylinecrm/shared';
+import {
+    CALENDAR_EVENT_STATUSES,
+    CALENDAR_RESPONSE_STATUSES,
+    MAIL_SYNC_STATUSES,
+    MEETING_SOURCES,
+} from '@bylinecrm/shared';
 import { z } from 'zod';
 import { dateTime, id, named, page } from '../openapi/responses';
 import { memberSummaryView } from '../workspace/responses';
@@ -33,11 +38,17 @@ export const meetingView = named(
         location: z.string().nullable(),
         conferenceUrl: z.string().nullable().meta({ description: 'The Meet (or other video) link.' }),
         hostMemberId: id.meta({ description: 'The member the meeting counts for as booked.' }),
-        bookedAt: dateTime.meta({ description: 'When the meeting was put in the calendar.' }),
+        bookedAt: dateTime.meta({ description: 'When the meeting was put in the calendar, or booked on Slotline.' }),
+        bookedVia: z.enum(MEETING_SOURCES).meta({
+            description:
+                'Booked through the workspace’s Slotline booking site, or found in a member’s Google Calendar.',
+        }),
+        slotlineUrl: z.url().nullable().meta({ description: 'The booking on Slotline, when it is one.' }),
         cancelledAt: dateTime.nullable(),
-        members: z
-            .array(memberCopy)
-            .meta({ description: "The members whose calendars hold it, and each one's answer." }),
+        members: z.array(memberCopy).meta({
+            description:
+                "The members it is for — whose calendar holds it, or who organised the Slotline booking — once each, with each one's answer.",
+        }),
         attendees: z.array(attendee),
     }),
 );
@@ -53,6 +64,9 @@ export const meetingKpiRow = named(
         }),
         held: z.number().int().meta({
             description: 'Meetings in the period that have started, not cancelled and not declined by the member.',
+        }),
+        bookedViaSlotline: z.number().int().meta({
+            description: 'Of those booked, the ones booked through the workspace’s Slotline booking site (CAL-2).',
         }),
         upcoming: z
             .number()

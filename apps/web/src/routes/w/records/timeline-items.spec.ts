@@ -186,6 +186,15 @@ describe('wordsFor', () => {
             entry({ kind: 'linked-meeting.cancelled', actor: { kind: 'sync', id: null }, properties: meeting }),
             names,
         );
+        const viaSlotline = wordsFor(
+            entry({
+                kind: 'linked-meeting.booked',
+                actor: { kind: 'sync', id: null },
+                properties: { meeting: { ...meeting.meeting, bookedVia: 'slotline' } },
+            }),
+            names,
+        );
+        expect(viaSlotline.action).toMatch(/^booked “Acme intro” on Slotline for /);
         expect(cancelled).toMatchObject({
             actor: 'Kate Morgan',
             action: 'had “Acme intro” cancelled',

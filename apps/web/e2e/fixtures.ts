@@ -37,6 +37,7 @@ import type {
     MailboxView,
     MeetingKpisView,
     MeetingPage,
+    SlotlineSettingsView,
     MailOutboundView,
     MailThreadView,
     MailSettingsView,
@@ -763,6 +764,18 @@ export function mailboxSync(mailboxId: string): MailboxSyncView {
           };
 }
 
+/** The booking site, connected and receiving (CAL-2). */
+export const slotlineSettings: SlotlineSettingsView = {
+    configured: true,
+    baseUrl: 'https://bookings.example.com',
+    hookUrl: 'https://crm.example.com/api/hooks/slotline/4fJt0cT2b9wVq1sLx8mPz3RkYd6NhUe5gAoBiC7nQsE',
+    triggers: ['BOOKING_CREATED', 'BOOKING_REQUESTED', 'BOOKING_RESCHEDULED', 'BOOKING_CANCELLED', 'BOOKING_REJECTED'],
+    lastDeliveryAt: at(2),
+    lastDeliveryResult: 'stored',
+    unmatchedOrganizers: 0,
+    lastUnmatchedOrganizer: null,
+};
+
 /** Kate's calendar (CAL-1): read a few minutes ago. */
 export function calendarSync(mailboxId: string): CalendarSyncView {
     return {
@@ -792,6 +805,8 @@ export const meetings: MeetingPage = {
             conferenceUrl: 'https://meet.google.com/abc-defg-hij',
             hostMemberId: IDS.secondMember,
             bookedAt: at(30),
+            bookedVia: 'slotline',
+            slotlineUrl: 'https://bookings.example.com/booking/bk-initech',
             cancelledAt: null,
             members: [{ memberId: IDS.secondMember, responseStatus: 'accepted', isOrganizer: true }],
             attendees: [
@@ -817,6 +832,8 @@ export const meetings: MeetingPage = {
             conferenceUrl: 'https://meet.google.com/xyz-abcd-efg',
             hostMemberId: IDS.member,
             bookedAt: at(72),
+            bookedVia: 'google_calendar',
+            slotlineUrl: null,
             cancelledAt: null,
             members: [{ memberId: IDS.member, responseStatus: 'accepted', isOrganizer: true }],
             attendees: [
@@ -842,6 +859,7 @@ export const meetingKpis: MeetingKpisView = {
         {
             member: membersSummary[0]!,
             booked: 4,
+            bookedViaSlotline: 1,
             held: 3,
             upcoming: 1,
             cancelled: 0,
@@ -851,6 +869,7 @@ export const meetingKpis: MeetingKpisView = {
         {
             member: membersSummary[1]!,
             booked: 2,
+            bookedViaSlotline: 2,
             held: 1,
             upcoming: 2,
             cancelled: 1,

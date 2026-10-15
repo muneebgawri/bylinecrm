@@ -94,8 +94,9 @@ meetings already held (forward only, as every rule). Webhooks deliver both.
 member's is `403`, and an API key without the admin role is `403`. KPIs per member over `[from, to)`:
 
 - **booked** — meetings they host booked in the period, a recurring series once (distinct iCalUID);
-- **held** / **upcoming** — meetings starting in the period, before / after now, not cancelled, not declined by
-  them (counted for every member who attended, so a meeting two reps held counts for both);
+- **held** / **upcoming** — distinct meetings starting in the period, before / after now, not cancelled, not
+  declined by them (counted for every member who attended, so a meeting two reps held counts for both; one their
+  calendar and Slotline both hold counts once — CAL-2);
 - **cancelled** — meetings they host called off in the period;
 - **peopleMet** — distinct outside people in their held meetings;
 - **newLeads** — people calendar sync created for them in the period.

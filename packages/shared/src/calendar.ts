@@ -31,6 +31,10 @@ export function calendarGranted(grantedScopes: readonly string[]): boolean {
 export const CALENDAR_EVENT_STATUSES = ['confirmed', 'tentative', 'cancelled'] as const;
 export type CalendarEventStatus = (typeof CALENDAR_EVENT_STATUSES)[number];
 
+/** Where a meeting reached the CRM from: a member's Google Calendar, or a booking on Slotline (CAL-2). */
+export const MEETING_SOURCES = ['google_calendar', 'slotline'] as const;
+export type MeetingSource = (typeof MEETING_SOURCES)[number];
+
 /** An attendee's answer to the invitation, as Google reports it. */
 export const CALENDAR_RESPONSE_STATUSES = ['needs_action', 'accepted', 'tentative', 'declined'] as const;
 export type CalendarResponseStatus = (typeof CALENDAR_RESPONSE_STATUSES)[number];
@@ -51,8 +55,10 @@ export type MeetingSummary = {
     conferenceUrl: string | null;
     /** The member whose calendar it was found in, who the meeting counts for. */
     hostMemberId: string;
-    /** ISO 8601, UTC: when the meeting was put in the calendar (Google's creation time). */
+    /** ISO 8601, UTC: when the meeting was put in the calendar (Google's creation time), or booked on Slotline. */
     bookedAt: string;
+    /** Booked through the workspace's Slotline booking site (CAL-2), or found in a member's calendar. */
+    bookedVia: MeetingSource;
 };
 
 /** The KPI periods the Team page offers; the API takes any `from`/`to` within the limit. */

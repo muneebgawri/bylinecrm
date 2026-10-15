@@ -135,6 +135,13 @@ function KpiTable({ workspaceId, rows }: { workspaceId: string; rows: MeetingKpi
                         ),
                     },
                     { id: 'booked', header: 'Booked', phone: 'secondary', cell: count('booked') },
+                    {
+                        id: 'slotline',
+                        header: 'Via Slotline',
+                        phone: 'meta',
+                        muted: true,
+                        cell: count('bookedViaSlotline'),
+                    },
                     { id: 'held', header: 'Held', phone: 'secondary', cell: count('held') },
                     { id: 'upcoming', header: 'To come', phone: 'meta', muted: true, cell: count('upcoming') },
                     { id: 'cancelled', header: 'Cancelled', phone: 'meta', muted: true, cell: count('cancelled') },
@@ -144,8 +151,9 @@ function KpiTable({ workspaceId, rows }: { workspaceId: string; rows: MeetingKpi
             }}
             footer={
                 <p className="m-0 px-4 py-3 text-xs text-text-muted">
-                    Booked counts a meeting once, for whoever organised it. Held and to come count it for every member
-                    who did not decline it. A member’s calendar is read once they connect it on{' '}
+                    Booked counts a meeting once, for whoever organised it — in their Google Calendar or as a booking on
+                    Slotline. Held and to come count it once for every member who did not decline it, even when both
+                    their calendar and Slotline hold it. A member’s calendar is read once they connect it on{' '}
                     <Link className="text-accent underline" to={paths.mailboxes(workspaceId)}>
                         Mailboxes
                     </Link>
@@ -186,7 +194,30 @@ function MeetingTable({ workspaceId, meetings }: { workspaceId: string; meetings
                         id: 'meeting',
                         header: 'Meeting',
                         phone: 'primary',
-                        cell: (m) => <span className="font-medium">{m.title || 'Untitled meeting'}</span>,
+                        cell: (m) => (
+                            <span>
+                                <span className="font-medium">{m.title || 'Untitled meeting'}</span>
+                                {m.bookedVia === 'slotline' && (
+                                    <>
+                                        {' '}
+                                        {m.slotlineUrl ? (
+                                            <a
+                                                className="text-xs text-accent underline"
+                                                href={m.slotlineUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                            >
+                                                Slotline
+                                            </a>
+                                        ) : (
+                                            <Badge status="neutral" shape="pill">
+                                                Slotline
+                                            </Badge>
+                                        )}
+                                    </>
+                                )}
+                            </span>
+                        ),
                     },
                     {
                         id: 'when',

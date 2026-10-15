@@ -285,6 +285,7 @@ function meetingEntry(meeting: MeetingSummary) {
         allDay: meeting.allDay,
         conferenceUrl: meeting.conferenceUrl,
         hostMemberId: meeting.hostMemberId,
+        bookedVia: meeting.bookedVia,
     };
 }
 
