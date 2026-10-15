@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GoogleRawEvent } from './google-calendar.port';
+import { leadIsClear } from './meeting-store';
 import { nameFromDisplay, outsideAttendees } from './outside';
 import { identityKeyOf, parseGoogleEvent, type ParsedAttendee, type ParsedMeeting } from './parse-event';
 
@@ -186,5 +187,39 @@ describe('nameFromDisplay (CAL-1)', () => {
         expect(nameFromDisplay('Dana', 'd@x.example')).toEqual({ nameFirst: 'Dana', nameLast: '' });
         expect(nameFromDisplay('d@x.example', 'd@x.example')).toEqual({ nameFirst: '', nameLast: '' });
         expect(nameFromDisplay('', 'd@x.example')).toEqual({ nameFirst: '', nameLast: '' });
+    });
+});
+
+describe('leadIsClear (CAL-3)', () => {
+    const attendee = (address: string): ParsedAttendee => ({
+        address,
+        displayName: '',
+        responseStatus: 'accepted',
+        isOrganizer: false,
+        resource: false,
+        self: false,
+    });
+    const origin = (source: 'google_calendar' | 'slotline') => ({ source }) as Parameters<typeof leadIsClear>[0];
+    const meetingOwnedBy = (isOrganizer: boolean) =>
+        parsed(
+            isOrganizer
+                ? meeting()
+                : meeting({
+                      organizer: { email: 'v@x.example' },
+                      attendees: [
+                          { email: 'sam@pinion.example', self: true, responseStatus: 'accepted' },
+                          { email: 'v@x.example', organizer: true, responseStatus: 'accepted' },
+                      ],
+                  }),
+        );
+
+    it('is clear for someone at a work domain the owner invited, and for anyone who booked on Slotline', () => {
+        expect(leadIsClear(origin('google_calendar'), meetingOwnedBy(true), attendee('dana@acme.example'))).toBe(true);
+        expect(leadIsClear(origin('slotline'), meetingOwnedBy(true), attendee('pat@gmail.com'))).toBe(true);
+    });
+
+    it('is only a suggestion when the owner was invited, or the attendee is at a free-mail domain', () => {
+        expect(leadIsClear(origin('google_calendar'), meetingOwnedBy(false), attendee('v@x.example'))).toBe(false);
+        expect(leadIsClear(origin('google_calendar'), meetingOwnedBy(true), attendee('pat@gmail.com'))).toBe(false);
     });
 });

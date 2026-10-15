@@ -62,7 +62,7 @@ A meeting's description is never read or stored.
 - **Attendees.** Brought in line with each copy, except that only the **organiser's** copy removes attendees
   (a guest's calendar hides the other guests when the organiser turned guest visibility off), and a row that
   brought in a lead is never removed (the member's KPI keeps it).
-- **Leads.** For a meeting that counts, each outside attendee who is no one in the CRM becomes a person through
+- **Leads** (amended by CAL-3: only clear leads are made; the others are suggested). For a meeting that counts, each outside attendee who is no one in the CRM becomes a person through
   `PeopleService.createIn` — announced as `person.created` like any person (enrichment follows), actor
   `{ kind: 'sync', id: mailbox }`, source `Google Calendar`, owner the calendar's owner, company the workspace's
   company at their domain if there is one (none is created), name from the invitation's display name. An outside
@@ -88,6 +88,9 @@ booked → Meeting"): note that the first read's past 30 days are announced too,
 meetings already held (forward only, as every rule). Webhooks deliver both.
 
 ## Reading: meetings and KPIs
+
+(CAL-3: every count below takes only meetings with a person outside the workspace whom the member owns; see
+`CAL-3.md`.)
 
 `GET /w/:id/meetings` (newest first; `from`, `to`, `memberId`) and `GET /w/:id/meetings/kpis?from&to` (at most
 366 days), both `record:read`. An admin reads every member's (or one, `memberId`); anyone else their own — another
@@ -122,8 +125,9 @@ runs against `FakeGoogleCalendar`.
 - Admins see every member's external meetings (titles and outside attendees). Private/confidential events are
   excluded; anything else in a member's primary calendar with an outside guest is visible to admins. A team-lead
   scope (doc 13's `kpi:view_team`) does not exist in this CRM yet.
-- Personal meetings with outside guests (a dinner invitation to a friend) and vendor pitches a member accepts
-  produce leads. The blocklist is the way out; there is no per-member "don't create leads" switch yet.
+- ~~Personal meetings with outside guests and vendor pitches a member accepts produce leads~~ — **CAL-3**: only
+  clear leads are made (someone at a work domain the member invited); the rest are suggested, and a meeting counts
+  only once a person on it is the member's.
 - Only the primary calendar is read. A meeting moved beyond the horizon, or edited more than 2 days after it
   started, keeps its last known time. A meeting made private after it was stored stays stored.
 - **Connect calendar** is offered on a mailbox to its owner only: a connect signs in to the Google account of

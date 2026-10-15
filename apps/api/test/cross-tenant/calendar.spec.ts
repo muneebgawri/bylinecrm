@@ -55,15 +55,24 @@ interface Person {
 }
 interface Meeting {
     id: string;
+    countsFor: string[];
     title: string;
     status: string;
     hostMemberId: string;
     conferenceUrl: string | null;
     members: { memberId: string; responseStatus: string }[];
-    attendees: { address: string; personId: string | null; memberId: string | null; leadCreated: boolean }[];
+    attendees: {
+        address: string;
+        personId: string | null;
+        memberId: string | null;
+        leadCreated: boolean;
+        leadSuggested: boolean;
+    }[];
 }
 interface KpiRow {
     member: { memberId: string };
+    awaitingCustomer: number;
+    suggestedLeads: number;
     booked: number;
     held: number;
     upcoming: number;
@@ -109,6 +118,7 @@ describe('calendar sync', () => {
     const dana = `dana@${acme}`;
     const riley = `riley@${acme}`;
     const prospect = `prospect.${stamp}@gmail.com`;
+    const vendor = `val@supplier-${stamp}.example`;
 
     let admin: Browser;
     let member: Browser;
@@ -127,6 +137,7 @@ describe('calendar sync', () => {
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
@@ -364,6 +375,14 @@ describe('calendar sync', () => {
                 start: new Date(Date.now() + 5 * DAY),
                 guests: [{ email: prospect, displayName: 'Pat Prospect' }],
             });
+            // A supplier's call the admin accepted: they were invited, so the supplier is only suggested.
+            calendar.put(adminEmail, {
+                id: 'vendor-call',
+                summary: 'Vendor call',
+                start: new Date(Date.now() + 4 * DAY),
+                organizer: vendor,
+                guests: [{ email: vendor, displayName: 'Val Vendor' }],
+            });
             calendar.put(adminEmail, {
                 id: 'old',
                 summary: 'Long ago',
@@ -375,12 +394,18 @@ describe('calendar sync', () => {
         });
 
         it('stores the meetings with someone outside the workspace, once, and passes over the rest', async () => {
-            expect(result).toMatchObject({ mode: 'window', stored: 2, leadsCreated: 2, cancelled: 0 });
+            expect(result).toMatchObject({
+                mode: 'window',
+                stored: 3,
+                leadsCreated: 1,
+                leadsSuggested: 2,
+                cancelled: 0,
+            });
             // The standup (colleagues only), the webinar (too big), the out-of-office block, the private
             // interview and the declined pitch.
             expect(result.passedOver).toBe(5);
             const list = await meetings();
-            expect(list.map((m) => m.title)).toEqual(['Demo', 'Acme intro']);
+            expect(list.map((m) => m.title)).toEqual(['Demo', 'Vendor call', 'Acme intro']);
             const intro = list.find((m) => m.title === 'Acme intro')!;
             expect(intro).toMatchObject({
                 status: 'confirmed',
@@ -391,7 +416,7 @@ describe('calendar sync', () => {
             expect(intro.attendees.find((a) => a.address === adminEmail)?.memberId).toBe(adminMemberId);
         });
 
-        it('makes each outside attendee who is no one yet a lead the calendar’s owner owns, at their company', async () => {
+        it('makes a clear lead — someone at a work domain the owner invited — a person the owner owns, at their company', async () => {
             const lead = await personByEmail(riley);
             expect(lead).toMatchObject({
                 nameFirst: 'Riley',
@@ -400,12 +425,14 @@ describe('calendar sync', () => {
                 ownerId: adminMemberId,
                 companyId: acmeId,
             });
-            const free = await personByEmail(prospect);
-            expect(free).toMatchObject({
-                nameFirst: 'Pat',
-                nameLast: 'Prospect',
-                ownerId: adminMemberId,
-                companyId: null,
+            // At a free-mail domain, or someone who invited the owner: only suggested, not made people.
+            expect(await personByEmail(prospect)).toBeUndefined();
+            expect(await personByEmail(vendor)).toBeUndefined();
+            const demo = (await meetings()).find((m) => m.title === 'Demo')!;
+            expect(demo.attendees.find((a) => a.address === prospect)).toMatchObject({
+                personId: null,
+                leadCreated: false,
+                leadSuggested: true,
             });
             // A colleague, a room and the declined pitch's seller never become people.
             expect(await personByEmail(`lee@${home}`)).toBeUndefined();
@@ -429,7 +456,7 @@ describe('calendar sync', () => {
 
         it('announces each meeting once, on the timeline of every record it concerns, and moves the deal by the rule', async () => {
             const booked = (await log.read()).filter((e) => e.type === 'meeting.booked');
-            expect(booked).toHaveLength(2);
+            expect(booked).toHaveLength(3);
             const timeline = await as(admin).get(w(`/timeline?target=person:${danaId}&kinds=linked-meeting`));
             const items = (timeline.body as { items: Activity[] }).items;
             expect(items).toHaveLength(1);
@@ -448,25 +475,32 @@ describe('calendar sync', () => {
 
         it('a second run reads only what changed, and stores nothing twice', async () => {
             const again = await sync.syncCalendar(workspace, adminMailbox, noWait);
-            expect(again).toMatchObject({ mode: 'changes', stored: 0, updated: 0, leadsCreated: 0 });
+            expect(again).toMatchObject({ mode: 'changes', stored: 0, updated: 0, leadsCreated: 0, leadsSuggested: 0 });
             expect(calendar.calls.at(-1)?.updatedMin).not.toBeNull();
-            expect(await owner.calendarEvent.count({ where: { workspaceId: workspace } })).toBe(2);
+            expect(await owner.calendarEvent.count({ where: { workspaceId: workspace } })).toBe(3);
         });
     });
 
     describe('KPIs', () => {
-        it('counts each member’s meetings booked, held and to come, the people met and the leads brought in', async () => {
+        it('counts only meetings with a customer of the member’s — a person outside they own — and says what waits', async () => {
             const res = await kpis(admin);
             expect(res.status, JSON.stringify(res.body)).toBe(200);
+            // The intro counts (Dana and Riley are the admin's); the demo and the vendor call have no customer yet.
             expect(rowOf(res, adminMemberId)).toMatchObject({
-                booked: 2,
+                booked: 1,
                 held: 1,
-                upcoming: 1,
+                upcoming: 0,
                 cancelled: 0,
                 peopleMet: 2,
-                newLeads: 2,
+                newLeads: 1,
+                awaitingCustomer: 2,
+                suggestedLeads: 2,
             });
             expect(rowOf(res, memberMemberId)).toMatchObject({ booked: 0, held: 0, newLeads: 0 });
+            const demo = (await meetings()).find((m) => m.title === 'Demo')!;
+            expect(demo.countsFor).toEqual([]);
+            const intro = (await meetings()).find((m) => m.title === 'Acme intro')!;
+            expect(intro.countsFor).toEqual([adminMemberId]);
         });
 
         it('a member sees only their own row and meetings; asking for another member’s is refused', async () => {
@@ -487,6 +521,72 @@ describe('calendar sync', () => {
                 (await as(admin).get(w(`/meetings/kpis?from=${encodeURIComponent(long)}&to=${encodeURIComponent(at)}`)))
                     .status,
             ).toBe(400);
+        });
+    });
+
+    describe('suggested leads', () => {
+        interface Suggestion {
+            memberId: string;
+            address: string;
+            displayName: string;
+            meetings: { title: string }[];
+        }
+        const suggestions = async (who: Browser = admin, query = '') =>
+            (await as(who).get(w(`/meetings/lead-suggestions${query}`))).body as Suggestion[];
+
+        it('lists the member’s suggestions, one per address with the meetings; nobody else’s', async () => {
+            const mine = await suggestions();
+            expect(mine.map((s) => [s.address, s.displayName, s.meetings.map((m) => m.title)]).sort()).toEqual(
+                [
+                    [prospect, 'Pat Prospect', ['Demo']],
+                    [vendor, 'Val Vendor', ['Vendor call']],
+                ].sort(),
+            );
+            expect(await suggestions(member)).toEqual([]);
+            expect((await as(member).get(w(`/meetings/lead-suggestions?memberId=${adminMemberId}`))).status).toBe(403);
+            const theirs = await as(member)
+                .post(w('/meetings/lead-suggestions/accept'))
+                .send({ address: prospect, memberId: adminMemberId });
+            expect(theirs.status).toBe(403);
+        });
+
+        it('adding one makes the person the member’s — and the meeting with them counts', async () => {
+            const res = await as(admin).post(w('/meetings/lead-suggestions/accept')).send({ address: prospect });
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            const person = await personByEmail(prospect);
+            expect(person).toMatchObject({
+                id: (res.body as { personId: string }).personId,
+                nameFirst: 'Pat',
+                ownerId: adminMemberId,
+                source: 'Google Calendar',
+            });
+            expect(rowOf(await kpis(admin), adminMemberId)).toMatchObject({
+                booked: 2,
+                upcoming: 1,
+                newLeads: 2,
+                awaitingCustomer: 1,
+                suggestedLeads: 1,
+            });
+            expect(
+                (await as(admin).post(w('/meetings/lead-suggestions/accept')).send({ address: prospect })).status,
+            ).toBe(404);
+        });
+
+        it('“not a lead” is remembered: the address is not suggested again, and its meetings do not count', async () => {
+            const res = await as(admin).post(w('/meetings/lead-suggestions/dismiss')).send({ address: vendor });
+            expect(res.status).toBe(204);
+            calendar.put(adminEmail, {
+                id: 'vendor-call-2',
+                summary: 'Vendor follow-up',
+                start: new Date(Date.now() + 6 * DAY),
+                organizer: vendor,
+                guests: [{ email: vendor, displayName: 'Val Vendor' }],
+            });
+            const run = await sync.syncCalendar(workspace, adminMailbox, noWait);
+            expect(run).toMatchObject({ stored: 1, leadsCreated: 0, leadsSuggested: 0 });
+            expect(await suggestions()).toEqual([]);
+            expect(await personByEmail(vendor)).toBeUndefined();
+            expect(rowOf(await kpis(admin), adminMemberId)).toMatchObject({ awaitingCustomer: 2, suggestedLeads: 0 });
         });
     });
 
@@ -515,8 +615,8 @@ describe('calendar sync', () => {
             ).toBe(1);
             expect((await log.read()).filter((e) => e.type === 'meeting.booked')).toEqual([]);
             const res = await kpis(admin);
-            // Held by both; booked by the organiser alone.
-            expect(rowOf(res, memberMemberId)).toMatchObject({ booked: 0, held: 1, peopleMet: 2 });
+            // Attended by both, but Dana and Riley are the admin's customers: it counts for the admin alone.
+            expect(rowOf(res, memberMemberId)).toMatchObject({ booked: 0, held: 0, peopleMet: 0, awaitingCustomer: 1 });
             expect(rowOf(res, adminMemberId)).toMatchObject({ booked: 2, held: 1 });
             expect((await meetings(member)).map((m) => m.title)).toEqual(['Acme intro']);
         });
@@ -527,6 +627,17 @@ describe('calendar sync', () => {
             const intro = (await meetings()).find((m) => m.title === 'Acme intro')!;
             expect(intro.attendees.map((a) => a.address)).toEqual(expect.arrayContaining([dana, riley]));
             expect(rowOf(await kpis(admin), adminMemberId)).toMatchObject({ newLeads: 2, peopleMet: 2 });
+        });
+
+        it('assigning a customer to the member moves the meeting’s credit to them', async () => {
+            const moved = await as(admin)
+                .patch(w(`/people/${danaId}`))
+                .send({ ownerId: memberMemberId });
+            expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+            const res = await kpis(admin);
+            expect(rowOf(res, memberMemberId)).toMatchObject({ held: 1, peopleMet: 1, awaitingCustomer: 0 });
+            // Riley is still the admin's: the intro counts for both now.
+            expect(rowOf(res, adminMemberId)).toMatchObject({ held: 1, peopleMet: 1 });
         });
     });
 
@@ -541,8 +652,8 @@ describe('calendar sync', () => {
             expect(cancelled).toHaveLength(1);
             const lead = await personByEmail(prospect);
             const timeline = await as(admin).get(w(`/timeline?target=person:${lead!.id}&kinds=linked-meeting`));
-            expect((timeline.body as { items: Activity[] }).items.map((a) => a.kind).sort()).toEqual([
-                'linked-meeting.booked',
+            // Pat became a person after the demo was booked: the cancellation is on their timeline.
+            expect((timeline.body as { items: Activity[] }).items.map((a) => a.kind)).toEqual([
                 'linked-meeting.cancelled',
             ]);
             expect(rowOf(await kpis(admin), adminMemberId)).toMatchObject({ upcoming: 0, cancelled: 1 });

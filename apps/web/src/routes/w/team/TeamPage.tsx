@@ -2,19 +2,28 @@ import {
     Badge,
     Button,
     DataTableChrome,
+    DropdownMenuItem,
     EmptyState,
     KpiCard,
     LoadingRegion,
     PageHeader,
     SegmentedControl,
     Skeleton,
+    toast,
 } from '@bylinecrm/ui';
 import { CalendarCheck, CalendarDays, CalendarPlus, UserPlus, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { useMeetingKpis, useMeetings } from '../../../api/meetings';
+import {
+    useAcceptSuggestion,
+    useDismissSuggestion,
+    useLeadSuggestions,
+    useMeetingKpis,
+    useMeetings,
+} from '../../../api/meetings';
 import { useMembersById } from '../../../api/records';
-import type { MeetingKpiRowView, MeetingView } from '../../../api/types';
+import type { LeadSuggestionView, MeetingKpiRowView, MeetingView } from '../../../api/types';
+import { failureText } from '../../../lib/errors';
 import { can, useMembership } from '../../../auth/capabilities';
 import { formatDate, formatDay } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
@@ -101,6 +110,8 @@ export function TeamPage() {
             )}
             <h2 className="m-0 mb-2 text-sm font-semibold">{admin ? 'By member' : 'Your numbers'}</h2>
             <KpiTable workspaceId={workspaceId} rows={rows} />
+            <h2 className="m-0 mt-6 mb-2 text-sm font-semibold">Suggested leads</h2>
+            <SuggestionTable workspaceId={workspaceId} admin={admin} />
             <h2 className="m-0 mt-6 mb-2 text-sm font-semibold">Meetings</h2>
             <MeetingTable workspaceId={workspaceId} meetings={list.data?.items} />
         </div>
@@ -147,13 +158,22 @@ function KpiTable({ workspaceId, rows }: { workspaceId: string; rows: MeetingKpi
                     { id: 'cancelled', header: 'Cancelled', phone: 'meta', muted: true, cell: count('cancelled') },
                     { id: 'people', header: 'People met', phone: 'meta', cell: count('peopleMet') },
                     { id: 'leads', header: 'New leads', phone: 'meta', cell: count('newLeads') },
+                    {
+                        id: 'awaiting',
+                        header: 'Awaiting customer',
+                        phone: 'meta',
+                        muted: true,
+                        cell: count('awaitingCustomer'),
+                    },
                 ],
             }}
             footer={
                 <p className="m-0 px-4 py-3 text-xs text-text-muted">
-                    Booked counts a meeting once, for whoever organised it — in their Google Calendar or as a booking on
-                    Slotline. Held and to come count it once for every member who did not decline it, even when both
-                    their calendar and Slotline hold it. A member’s calendar is read once they connect it on{' '}
+                    A meeting counts for a member once one of the people outside it is in the CRM and theirs — awaiting
+                    customer are the meetings that do not count yet. Booked counts a meeting once, for whoever organised
+                    it — in their Google Calendar or as a booking on Slotline. Held and to come count it once for every
+                    member it counts for, even when both their calendar and Slotline hold it. A member’s calendar is
+                    read once they connect it on{' '}
                     <Link className="text-accent underline" to={paths.mailboxes(workspaceId)}>
                         Mailboxes
                     </Link>
@@ -240,6 +260,14 @@ function MeetingTable({ workspaceId, meetings }: { workspaceId: string; meetings
                         cell: (m) =>
                             m.status === 'cancelled' ? (
                                 <Badge status="neutral">Cancelled</Badge>
+                            ) : m.countsFor.length === 0 ? (
+                                // Counts once a person outside it is the member's: added from a suggestion, or assigned.
+                                <Badge
+                                    status="warning"
+                                    title="None of the people outside it is a member’s customer yet"
+                                >
+                                    Not counted
+                                </Badge>
                             ) : new Date(m.startsAt).getTime() > Date.now() ? (
                                 <Badge status="info">To come</Badge>
                             ) : (
@@ -274,5 +302,89 @@ function MeetingPeople({ workspaceId, meeting }: { workspaceId: string; meeting:
                 </span>
             ))}
         </span>
+    );
+}
+
+/**
+ * Meeting attendees suggested as leads (CAL-3): people sync did not add on its own — the member was invited by
+ * someone outside, or they are at a free-mail domain. Adding one makes them the member's, and their meetings
+ * count; "Not a lead" dismisses them for good.
+ */
+function SuggestionTable({ workspaceId, admin }: { workspaceId: string; admin: boolean }) {
+    const suggestions = useLeadSuggestions(workspaceId);
+    const accept = useAcceptSuggestion(workspaceId);
+    const dismiss = useDismissSuggestion(workspaceId);
+    const names = useMembersById(workspaceId);
+    const membership = useMembership();
+    if (suggestions.isError) throw suggestions.error;
+    const decide = (s: LeadSuggestionView, add: boolean) => {
+        const input = { address: s.address, ...(s.memberId !== membership?.memberId ? { memberId: s.memberId } : {}) };
+        const name = s.displayName || s.address;
+        const options = {
+            onSuccess: () => toast({ title: add ? `${name} added as a lead` : `${name} will not be suggested again` }),
+            onError: (e: unknown) =>
+                toast({ title: 'That did not work', description: failureText(e), tone: 'danger' as const }),
+        };
+        if (add) accept.mutate(input, options);
+        else dismiss.mutate(input, options);
+    };
+    return (
+        <DataTableChrome
+            data={{
+                label: 'Suggested leads',
+                loading: suggestions.data === undefined,
+                rows: suggestions.data ?? [],
+                getRowId: (s) => `${s.memberId}:${s.address}`,
+                empty: (
+                    <EmptyState
+                        className="m-4"
+                        title="No suggestions"
+                        body="People from meetings who may or may not be leads appear here to add or dismiss."
+                    />
+                ),
+                columns: [
+                    {
+                        id: 'person',
+                        header: 'Person',
+                        phone: 'primary',
+                        cell: (s) => (
+                            <span>
+                                <span className="font-medium">{s.displayName || s.address}</span>
+                                {s.displayName && <span className="text-text-muted"> · {s.address}</span>}
+                            </span>
+                        ),
+                    },
+                    {
+                        id: 'meetings',
+                        header: 'Meetings',
+                        phone: 'secondary',
+                        muted: true,
+                        cell: (s) => s.meetings.map((m) => m.title || 'Untitled meeting').join(', '),
+                    },
+                    ...(admin
+                        ? [
+                              {
+                                  id: 'for',
+                                  header: 'For',
+                                  phone: 'secondary' as const,
+                                  cell: (s: LeadSuggestionView) =>
+                                      s.memberId === membership?.memberId
+                                          ? 'You'
+                                          : (names.get(s.memberId) ?? 'A member'),
+                              },
+                          ]
+                        : []),
+                ],
+                rowActions: {
+                    label: (s) => s.displayName || s.address,
+                    items: (s) => (
+                        <>
+                            <DropdownMenuItem onSelect={() => decide(s, true)}>Add as lead</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => decide(s, false)}>Not a lead</DropdownMenuItem>
+                        </>
+                    ),
+                },
+            }}
+        />
     );
 }

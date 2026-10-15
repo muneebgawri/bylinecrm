@@ -18,6 +18,9 @@ const attendee = z.object({
     personId: id.nullable().meta({ description: 'The person this attendee is, when they are one.' }),
     memberId: id.nullable().meta({ description: 'The workspace member this attendee is, when they are one.' }),
     leadCreated: z.boolean().meta({ description: 'Calendar sync created the person for this attendee.' }),
+    leadSuggested: z.boolean().meta({
+        description: 'Suggested to a member as a lead, waiting for them to add or dismiss (CAL-3).',
+    }),
 });
 
 const memberCopy = z.object({
@@ -49,6 +52,10 @@ export const meetingView = named(
             description:
                 "The members it is for — whose calendar holds it, or who organised the Slotline booking — once each, with each one's answer.",
         }),
+        countsFor: z.array(id).meta({
+            description:
+                'The members the meeting counts towards: those it is for, one of whose customers — a person outside the workspace they own — is on it.',
+        }),
         attendees: z.array(attendee),
     }),
 );
@@ -60,7 +67,8 @@ export const meetingKpiRow = named(
     z.object({
         member: memberSummaryView,
         booked: z.number().int().meta({
-            description: 'Meetings the member booked in the period (a recurring meeting once): they host them.',
+            description:
+                'Meetings the member booked in the period (a recurring meeting once): they host them. Every count but newLeads, awaitingCustomer and suggestedLeads takes only meetings with a person outside the workspace whom the member owns.',
         }),
         held: z.number().int().meta({
             description: 'Meetings in the period that have started, not cancelled and not declined by the member.',
@@ -80,6 +88,13 @@ export const meetingKpiRow = named(
             .number()
             .int()
             .meta({ description: 'Different people outside the workspace in the held meetings.' }),
+        awaitingCustomer: z.number().int().meta({
+            description:
+                'Meetings in the period the member attended that do not count: none of the people outside is a person they own yet.',
+        }),
+        suggestedLeads: z.number().int().meta({
+            description: 'Attendees suggested to the member as leads, waiting for them to add or dismiss.',
+        }),
         newLeads: z
             .number()
             .int()
@@ -122,6 +137,28 @@ export const calendarSyncTriggered = named(
     }),
 );
 
+const suggestedMeeting = z.object({ id, title: z.string(), startsAt: dateTime });
+
+export const leadSuggestionView = named(
+    'LeadSuggestion',
+    z.object({
+        memberId: id.meta({ description: 'The member the lead would be — and whose meetings would count.' }),
+        address: z.string(),
+        displayName: z.string(),
+        meetings: z
+            .array(suggestedMeeting)
+            .meta({ description: 'The meetings they were on, latest first (up to five).' }),
+        suggestedAt: dateTime,
+    }),
+);
+
+export const leadSuggestionAccepted = named(
+    'LeadSuggestionAccepted',
+    z.object({ personId: id.meta({ description: 'The person the member now owns.' }) }),
+);
+
+export type LeadSuggestionView = z.output<typeof leadSuggestionView>;
+export type LeadSuggestionAccepted = z.output<typeof leadSuggestionAccepted>;
 export type MeetingView = z.output<typeof meetingView>;
 export type MeetingKpiRow = z.output<typeof meetingKpiRow>;
 export type MeetingKpis = z.output<typeof meetingKpis>;

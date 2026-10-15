@@ -90,6 +90,8 @@ export const keys = {
         ['w', workspaceId, 'meetings', 'list', params] as const,
     meetingKpis: (workspaceId: string, params: { from: string; to: string }) =>
         ['w', workspaceId, 'meetings', 'kpis', params] as const,
+    /** Meeting attendees suggested as leads (CAL-3); under `meetings`, so a decision refreshes the KPIs too. */
+    leadSuggestions: (workspaceId: string) => ['w', workspaceId, 'meetings', 'lead-suggestions'] as const,
     /** The workspace's Slotline booking site and its hook (CAL-2). */
     slotlineSettings: (workspaceId: string) => ['w', workspaceId, 'integrations', 'slotline'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,

@@ -35,6 +35,7 @@ import type {
     InviteView,
     MailboxSyncView,
     MailboxView,
+    LeadSuggestionView,
     MeetingKpisView,
     MeetingPage,
     SlotlineSettingsView,
@@ -809,6 +810,7 @@ export const meetings: MeetingPage = {
             slotlineUrl: 'https://bookings.example.com/booking/bk-initech',
             cancelledAt: null,
             members: [{ memberId: IDS.secondMember, responseStatus: 'accepted', isOrganizer: true }],
+            countsFor: [IDS.secondMember],
             attendees: [
                 {
                     address: 'sam@initech.example',
@@ -818,6 +820,7 @@ export const meetings: MeetingPage = {
                     personId: IDS.secondPerson,
                     memberId: null,
                     leadCreated: false,
+                    leadSuggested: false,
                 },
             ],
         },
@@ -836,6 +839,7 @@ export const meetings: MeetingPage = {
             slotlineUrl: null,
             cancelledAt: null,
             members: [{ memberId: IDS.member, responseStatus: 'accepted', isOrganizer: true }],
+            countsFor: [IDS.member],
             attendees: [
                 {
                     address: 'dana@acme.example',
@@ -845,12 +849,24 @@ export const meetings: MeetingPage = {
                     personId: IDS.person,
                     memberId: null,
                     leadCreated: true,
+                    leadSuggested: false,
                 },
             ],
         },
     ],
     nextCursor: null,
 };
+
+/** One attendee waiting for Kate's word (CAL-3): she was invited to a supplier's call. */
+export const leadSuggestions: LeadSuggestionView[] = [
+    {
+        memberId: IDS.member,
+        address: 'val@supplier.example',
+        displayName: 'Val Vendor',
+        meetings: [{ id: IDS.meeting, title: 'Supplier call', startsAt: at(-50) }],
+        suggestedAt: at(5),
+    },
+];
 
 export const meetingKpis: MeetingKpisView = {
     from: '2026-10-05T00:00:00.000Z',
@@ -865,6 +881,8 @@ export const meetingKpis: MeetingKpisView = {
             cancelled: 0,
             peopleMet: 5,
             newLeads: 2,
+            awaitingCustomer: 1,
+            suggestedLeads: 1,
         },
         {
             member: membersSummary[1]!,
@@ -875,6 +893,8 @@ export const meetingKpis: MeetingKpisView = {
             cancelled: 1,
             peopleMet: 1,
             newLeads: 1,
+            awaitingCustomer: 0,
+            suggestedLeads: 0,
         },
     ],
 };

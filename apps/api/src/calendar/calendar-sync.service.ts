@@ -36,6 +36,8 @@ export interface CalendarRunResult {
     passedOver: number;
     /** People created from outside attendees: new leads, owned by the calendar's owner. */
     leadsCreated: number;
+    /** Outside attendees suggested to the calendar's owner as leads instead (CAL-3). */
+    leadsSuggested: number;
 }
 
 /** Why the last run stopped, as kept on the sync state. Never a token or a raw Google body. */
@@ -87,6 +89,7 @@ export class CalendarSyncService {
             cancelled: 0,
             passedOver: 0,
             leadsCreated: 0,
+            leadsSuggested: 0,
         };
         const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: mailboxId } }),
@@ -144,6 +147,7 @@ export class CalendarSyncService {
                             this.meetings.writeMeeting(tx, origin, parsed),
                         );
                         totals.leadsCreated += written.leads;
+                        totals.leadsSuggested += written.suggested;
                         if (written.outcome === 'stored') totals.stored += 1;
                         else if (written.outcome === 'updated') totals.updated += 1;
                         else if (written.outcome === 'passed_over') totals.passedOver += 1;

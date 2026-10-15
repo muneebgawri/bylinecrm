@@ -92,6 +92,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/mailboxes/${ID}/sync$`), (m) => data.mailboxSync(m[1] ?? '')],
     [new RegExp(`^${W}/mailboxes/${ID}/calendar$`), (m) => data.calendarSync(m[1] ?? '')],
     [new RegExp(`^${W}/meetings/kpis$`), () => data.meetingKpis],
+    [new RegExp(`^${W}/meetings/lead-suggestions$`), () => data.leadSuggestions],
     [new RegExp(`^${W}/meetings$`), () => data.meetings],
     [new RegExp(`^${W}/integrations/slotline$`), () => data.slotlineSettings],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],

@@ -166,6 +166,8 @@ export type MeetingPage = Schemas['MeetingPage'];
 export type MeetingKpisView = Schemas['MeetingKpis'];
 export type MeetingKpiRowView = Schemas['MeetingKpiRow'];
 export type SlotlineSettingsView = Schemas['SlotlineSettings'];
+export type LeadSuggestionView = Schemas['LeadSuggestion'];
+export type LeadSuggestionDecisionInput = Loose<Schemas['LeadSuggestionDecisionDto']>;
 export type PutSlotlineSettingsInput = Loose<Schemas['PutSlotlineSettingsDto']>;
 export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */

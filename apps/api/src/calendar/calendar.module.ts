@@ -10,6 +10,7 @@ import { CalendarSyncSubscriber } from './calendar-sync.subscriber';
 import { CalendarSyncWorkers } from './calendar-sync.workers';
 import { GoogleCalendarHttp } from './google-calendar.http';
 import { GOOGLE_CALENDAR_PORT } from './google-calendar.port';
+import { LeadSuggestionsService } from './lead-suggestions.service';
 import { MeetingStore } from './meeting-store';
 import { MeetingsService } from './meetings.service';
 import { SlotlineHookController, SlotlineSettingsController } from './slotline/slotline.controllers';
@@ -47,6 +48,7 @@ import { SlotlineSettingsService } from './slotline/slotline-settings.service';
         CalendarSyncWorkers,
         CalendarSyncSubscriber,
         MeetingsService,
+        LeadSuggestionsService,
         SlotlineSettingsService,
         SlotlineHookService,
     ],

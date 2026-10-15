@@ -88,7 +88,13 @@ export interface BookingFacts {
     mayReopen: boolean;
 }
 
-export type WriteOutcome = { outcome: 'stored' | 'updated' | 'unchanged' | 'passed_over'; leads: number };
+export type WriteOutcome = {
+    outcome: 'stored' | 'updated' | 'unchanged' | 'passed_over';
+    /** People created as leads. */
+    leads: number;
+    /** Attendees suggested to the member as leads instead (CAL-3). */
+    suggested: number;
+};
 
 /**
  * The one writer of meetings (CAL-1), whichever source a copy comes from — as mail sync has one writer for
@@ -161,7 +167,7 @@ export class MeetingStore {
             parsed.attendees.length <= CALENDAR_MAX_ATTENDEES &&
             parsed.own.responseStatus !== 'declined';
         // Nothing stored and nothing to store: someone's own event, a colleagues-only meeting, a webinar.
-        if (!known && !counts) return { outcome: 'passed_over', leads: 0 };
+        if (!known && !counts) return { outcome: 'passed_over', leads: 0, suggested: 0 };
 
         const details = {
             title: parsed.title,
@@ -238,19 +244,29 @@ export class MeetingStore {
             tx,
             parsed.attendees.map((a) => a.address),
         );
-        // Leads come only from meetings that count: an outside attendee who is no one yet becomes a person
-        // the member owns; one who is a person nobody owns is given to them.
+        // Leads come only from meetings that are kept, and only on a clear sign (`leadIsClear`): an outside
+        // attendee who is no one yet becomes a person the member owns; one who is a person nobody owns is given to
+        // them. Anyone else is only suggested to the member (CAL-3) — unless they dismissed that address before.
         const leadsFor = new Set<string>();
+        const suggestFor = new Set<string>();
         if (counts) {
-            for (const attendee of outside) {
+            const clear = outside.filter((a) => leadIsClear(origin, parsed, a));
+            const unclear = outside.filter((a) => !clear.includes(a) && !people.has(a.address));
+            const dismissed = await dismissedBy(
+                tx,
+                owner,
+                unclear.map((a) => a.address),
+            );
+            for (const attendee of unclear) if (!dismissed.has(attendee.address)) suggestFor.add(attendee.address);
+            for (const attendee of clear) {
                 if (people.has(attendee.address)) continue;
-                const created = await this.createLead(tx, origin, attendee);
+                const created = await this.createLead(tx, origin.context, attendee, owner, origin.leadSource);
                 if (!created) continue;
                 people.set(attendee.address, created.id);
                 leadsFor.add(attendee.address);
                 recorded.push(created.event);
             }
-            const outsideIds = outside.map((a) => people.get(a.address)).filter((id): id is string => !!id);
+            const outsideIds = clear.map((a) => people.get(a.address)).filter((id): id is string => !!id);
             const unowned = await tx.person.findMany({
                 where: { id: { in: outsideIds }, ownerId: null, deletedAt: null },
                 select: { id: true },
@@ -268,15 +284,26 @@ export class MeetingStore {
             // Only the organiser's copy is sure to list every guest: a guest's calendar may hide the others.
             mayPrune: parsed.own.isOrganizer,
         };
-        if (await this.reconcileParticipants(tx, participants, parsed.attendees, people, leadsFor, owner))
-            changed = true;
+        const reconciled = await this.reconcileParticipants(
+            tx,
+            participants,
+            parsed.attendees,
+            people,
+            { leadsFor, suggestFor },
+            owner,
+        );
+        if (reconciled.changed) changed = true;
 
         if (!known) {
             const outsideIds = outside.map((a) => people.get(a.address)).filter((id): id is string => !!id);
             recorded.push(await this.meetingEvent(tx, 'meeting.booked', event, outsideIds, event.bookedAt));
         }
         await this.events.recordAll(tx, recorded);
-        return { outcome: !copy ? 'stored' : changed ? 'updated' : 'unchanged', leads: leadsFor.size };
+        return {
+            outcome: !copy ? 'stored' : changed ? 'updated' : 'unchanged',
+            leads: leadsFor.size,
+            suggested: reconciled.suggested,
+        };
     }
 
     /**
@@ -350,13 +377,16 @@ export class MeetingStore {
     }
 
     /**
-     * A new person for an outside attendee, owned by the member; nothing when a deleted person holds the
-     * address (someone took them out of the CRM; a meeting does not bring them back).
+     * A new person for an outside attendee, owned by `ownerId`; nothing when a deleted person holds the address
+     * (someone took them out of the CRM; a meeting does not bring them back). Sync makes them for clear leads;
+     * a member adding a suggested lead (CAL-3) makes them the same way, in their own scope.
      */
-    private async createLead(
+    async createLead(
         tx: WorkspaceClient,
-        origin: CopyOrigin,
-        attendee: ParsedAttendee,
+        context: WorkspaceRunContext,
+        attendee: Pick<ParsedAttendee, 'address' | 'displayName'>,
+        ownerId: string,
+        leadSource: string,
     ): Promise<{ id: string; event: DomainEvent } | null> {
         const deleted = await tx.person.findFirst({ where: { emailPrimary: attendee.address }, select: { id: true } });
         if (deleted) return null;
@@ -369,11 +399,11 @@ export class MeetingStore {
                       orderBy: { createdAt: 'asc' },
                   })
                 : null;
-        const { row, event } = await this.people.createIn(tx, origin.context, {
+        const { row, event } = await this.people.createIn(tx, context, {
             ...nameFromDisplay(attendee.displayName, attendee.address),
             emails: { primary: attendee.address, additional: [] },
-            source: origin.leadSource,
-            ownerId: origin.memberId,
+            source: leadSource,
+            ownerId,
             companyId: company?.id ?? null,
         });
         return { id: row.id, event };
@@ -382,16 +412,17 @@ export class MeetingStore {
     /**
      * Brings the meeting's attendee rows in line with the invitation: new ones added, answers and matches
      * followed. Those taken off are removed only as the organiser's copy shows it (a guest's calendar may hide
-     * the other guests), and never a row that brought in a lead — the member's KPI keeps it. True if any changed.
+     * the other guests), and never a row that brought in a lead — the member's KPI keeps it. Says whether any
+     * changed, and how many attendees were suggested as leads for the first time.
      */
     private async reconcileParticipants(
         tx: WorkspaceClient,
         { eventId, workspaceId, mayPrune }: { eventId: string; workspaceId: string; mayPrune: boolean },
         attendees: readonly ParsedAttendee[],
         people: ReadonlyMap<string, string>,
-        leadsFor: ReadonlySet<string>,
+        { leadsFor, suggestFor }: { leadsFor: ReadonlySet<string>; suggestFor: ReadonlySet<string> },
         owner: string,
-    ): Promise<boolean> {
+    ): Promise<{ changed: boolean; suggested: number }> {
         const [existing, members] = await Promise.all([
             tx.calendarEventParticipant.findMany({ where: { eventId } }),
             membersByAddress(
@@ -401,6 +432,7 @@ export class MeetingStore {
         ]);
         const byAddress = new Map(existing.map((p) => [p.address, p]));
         let changed = false;
+        let suggested = 0;
         for (const attendee of attendees) {
             const row = byAddress.get(attendee.address);
             const data = {
@@ -412,6 +444,7 @@ export class MeetingStore {
             };
             if (!row) {
                 changed = true;
+                if (suggestFor.has(attendee.address)) suggested += 1;
                 await tx.calendarEventParticipant.create({
                     data: {
                         ...data,
@@ -419,6 +452,7 @@ export class MeetingStore {
                         eventId,
                         address: attendee.address,
                         leadCreatedForMemberId: leadsFor.has(attendee.address) ? owner : null,
+                        leadSuggestedForMemberId: suggestFor.has(attendee.address) ? owner : null,
                     },
                 });
             } else if (
@@ -427,24 +461,41 @@ export class MeetingStore {
                 row.isOrganizer !== data.isOrganizer ||
                 row.personId !== data.personId ||
                 row.memberId !== data.memberId ||
-                (leadsFor.has(attendee.address) && row.leadCreatedForMemberId === null)
+                (leadsFor.has(attendee.address) && row.leadCreatedForMemberId === null) ||
+                (suggestFor.has(attendee.address) && row.leadSuggestedForMemberId === null)
             ) {
                 changed = true;
+                if (suggestFor.has(attendee.address) && row.leadSuggestedForMemberId === null) suggested += 1;
                 await tx.calendarEventParticipant.update({
                     where: { id: row.id },
-                    data: { ...data, ...(leadsFor.has(attendee.address) ? { leadCreatedForMemberId: owner } : {}) },
+                    data: {
+                        ...data,
+                        ...(leadsFor.has(attendee.address) ? { leadCreatedForMemberId: owner } : {}),
+                        // A suggestion already made (and perhaps dismissed) is left as it is.
+                        ...(suggestFor.has(attendee.address) && row.leadSuggestedForMemberId === null
+                            ? { leadSuggestedForMemberId: owner }
+                            : {}),
+                    },
                 });
             }
         }
         const present = new Set(attendees.map((a) => a.address));
+        // Never a row that brought in a lead, or holds a member's decision on a suggestion.
         const gone = mayPrune
-            ? existing.filter((p) => !present.has(p.address) && p.leadCreatedForMemberId === null).map((p) => p.id)
+            ? existing
+                  .filter(
+                      (p) =>
+                          !present.has(p.address) &&
+                          p.leadCreatedForMemberId === null &&
+                          p.leadSuggestedForMemberId === null,
+                  )
+                  .map((p) => p.id)
             : [];
         if (gone.length > 0) {
             changed = true;
             await tx.calendarEventParticipant.deleteMany({ where: { id: { in: gone } } });
         }
-        return changed;
+        return { changed, suggested };
     }
 
     /** A `meeting.*` event on the records the meeting's outside people concern. */
@@ -480,6 +531,29 @@ function reopens(known: EventRow, origin: CopyOrigin, parsed: ParsedMeeting, boo
     if (parsed.own.responseStatus === 'declined') return false;
     if (origin.source === 'slotline') return booking?.mayReopen === true;
     return known.bookedVia !== 'slotline';
+}
+
+/**
+ * Whether an outside attendee is clearly a lead, so sync makes them one (CAL-3): someone who booked the member on
+ * Slotline, or someone at a work domain the member invited themselves. Not clear — so only suggested — when the
+ * member was invited by someone outside (a vendor's pitch, a partner's call), or the attendee is at a free-mail
+ * domain (as likely a friend as a client).
+ */
+export function leadIsClear(origin: CopyOrigin, parsed: ParsedMeeting, attendee: ParsedAttendee): boolean {
+    if (origin.source === 'slotline') return true;
+    const domain = domainOf(attendee.address);
+    return parsed.own.isOrganizer && domain !== null && !isFreeMailDomain(domain);
+}
+
+/** The addresses among `addresses` this member said "not a lead" to before. */
+async function dismissedBy(tx: WorkspaceClient, memberId: string, addresses: readonly string[]): Promise<Set<string>> {
+    if (addresses.length === 0) return new Set();
+    const rows = await tx.calendarEventParticipant.findMany({
+        where: { leadSuggestedForMemberId: memberId, leadDismissedAt: { not: null }, address: { in: [...addresses] } },
+        select: { address: true },
+        distinct: ['address'],
+    });
+    return new Set(rows.map((r) => r.address));
 }
 
 /** A meeting as its events describe it. */

@@ -25,3 +25,18 @@ export class MeetingKpisQueryDto extends createZodDto(
         to: instant.meta({ description: 'The period’s end (exclusive).' }),
     }),
 ) {}
+
+/** `GET /meetings/lead-suggestions` — the suggestions waiting for a member (an admin: any, or every member's). */
+export class ListLeadSuggestionsQueryDto extends createZodDto(
+    z.object({
+        memberId: z.uuid().optional().meta({ description: 'One member’s. Anyone but an admin sees only their own.' }),
+    }),
+) {}
+
+/** Add a suggested lead, or dismiss it: by address, for the caller (or, an admin, the member named). */
+export class LeadSuggestionDecisionDto extends createZodDto(
+    z.object({
+        address: z.email().max(254),
+        memberId: z.uuid().optional(),
+    }),
+) {}
