@@ -5,6 +5,8 @@ import { keys } from './queries';
 import type {
     BlocklistEntryCreatedView,
     BlocklistEntryView,
+    CalendarSyncTriggeredView,
+    CalendarSyncView,
     ConnectMailboxInput,
     CreateBlocklistEntryInput,
     CreateSuppressionInput,
@@ -71,6 +73,11 @@ export const mailboxes = {
         request<MailboxSyncView>('GET', workspacePath(workspaceId, `/mailboxes/${mailboxId}/sync`), { signal }),
     sync: (workspaceId: string, mailboxId: string) =>
         request<MailboxSyncTriggeredView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/sync`)),
+    /** A personal mailbox's calendar sync (CAL-1): whether the grant reads the calendar, and how its reads go. */
+    calendarState: (workspaceId: string, mailboxId: string, signal?: AbortSignal) =>
+        request<CalendarSyncView>('GET', workspacePath(workspaceId, `/mailboxes/${mailboxId}/calendar`), { signal }),
+    calendarSync: (workspaceId: string, mailboxId: string) =>
+        request<CalendarSyncTriggeredView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/calendar/sync`)),
 };
 
 /** Addresses and domains whose mail is never imported, and removed when added (P2-2). */
@@ -182,6 +189,25 @@ export function useMailboxSyncs(workspaceId: string, list: readonly MailboxView[
             queryFn: ({ signal }: { signal: AbortSignal }) => mailboxes.syncState(workspaceId, mailbox.id, signal),
             enabled: mailbox.status !== 'disconnected',
         })),
+    });
+}
+
+/** Each connected personal mailbox's calendar sync (CAL-1); a pool mailbox has no calendar the CRM reads. */
+export function useCalendarSyncs(workspaceId: string, list: readonly MailboxView[]) {
+    return useQueries({
+        queries: list.map((mailbox) => ({
+            queryKey: keys.calendarSync(workspaceId, mailbox.id),
+            queryFn: ({ signal }: { signal: AbortSignal }) => mailboxes.calendarState(workspaceId, mailbox.id, signal),
+            enabled: mailbox.purpose === 'personal' && mailbox.status === 'connected',
+        })),
+    });
+}
+
+export function useSyncCalendar(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (mailboxId: string) => mailboxes.calendarSync(workspaceId, mailboxId),
+        onSuccess: (result, mailboxId) => client.setQueryData(keys.calendarSync(workspaceId, mailboxId), result.sync),
     });
 }
 

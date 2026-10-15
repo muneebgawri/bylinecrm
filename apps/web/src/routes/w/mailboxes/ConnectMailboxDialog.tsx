@@ -67,7 +67,8 @@ export function ConnectMailboxDialog({
             <DialogContent>
                 <DialogTitle>Connect a mailbox</DialogTitle>
                 <DialogDescription>
-                    You sign in to Google next and allow send and read access — nothing broader.
+                    You sign in to Google next and allow send and read access — nothing broader. A personal mailbox also
+                    asks to read your calendar, so your meetings count towards your KPIs.
                 </DialogDescription>
                 <form onSubmit={submit}>
                     <DialogBody className="flex flex-col gap-4">

@@ -1,4 +1,4 @@
-import type { MailboxPurpose } from '@bylinecrm/shared';
+import { calendarGranted, type MailboxPurpose } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -13,16 +13,18 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
+    useCalendarSyncs,
     useCheckMailbox,
     useConnectMailbox,
     useDisconnectMailbox,
     useMailboxSyncs,
     useMailboxes,
     useOAuthClientStatus,
+    useSyncCalendar,
     useSyncMailbox,
 } from '../../../api/mailAdmin';
 import { useMembersById } from '../../../api/records';
-import type { MailboxCheckView, MailboxSyncView, MailboxView } from '../../../api/types';
+import type { CalendarSyncView, MailboxCheckView, MailboxSyncView, MailboxView } from '../../../api/types';
 import { can, useMembership } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { GoogleStatus } from '../../../components/GoogleStatus';
@@ -49,7 +51,8 @@ const CHECK_PROBLEM: Record<NonNullable<MailboxCheckView['problem']>, string> = 
 
 /**
  * The workspace's Google mailboxes (doc 50 §E, FR-CRMS-1, FR-CRMS-2): where each stands, its sync,
- * the actions its owner (or an admin) may take, and — for people who run outreach — the sending
+ * its calendar's (CAL-1: a personal mailbox's Google Calendar, read for meetings and leads), the
+ * actions its owner (or an admin) may take, and — for people who run outreach — the sending
  * pool's health (P3-2): allowance, warm-up, sending domain and pauses.
  */
 export function MailboxesPage() {
@@ -150,7 +153,10 @@ function MailboxTable({
     // useQueries answers with a new array every render, so this lookup is rebuilt with it (a handful of rows).
     const syncQueries = useMailboxSyncs(workspaceId, rows);
     const syncs = new Map(rows.map((m, i) => [m.id, syncQueries[i]?.data] as const));
+    const calendarQueries = useCalendarSyncs(workspaceId, rows);
+    const calendars = new Map(rows.map((m, i) => [m.id, calendarQueries[i]?.data] as const));
     const sync = useSyncMailbox(workspaceId);
+    const syncCalendar = useSyncCalendar(workspaceId);
     const check = useCheckMailbox(workspaceId);
     const connect = useConnectMailbox(workspaceId);
     const disconnect = useDisconnectMailbox(workspaceId);
@@ -177,6 +183,17 @@ function MailboxTable({
                     tone: 'success',
                 }),
             onError: failed('Sync did not start'),
+        });
+    const readCalendarNow = (m: MailboxView) =>
+        syncCalendar.mutate(m.id, {
+            onSuccess: (r) =>
+                toast({
+                    title: r.queued
+                        ? `Reading the calendar of ${m.email}`
+                        : `${m.email}’s calendar is already being read`,
+                    tone: 'success',
+                }),
+            onError: failed('The calendar read did not start'),
         });
     const checkNow = (m: MailboxView) =>
         check.mutate(m.id, {
@@ -241,6 +258,13 @@ function MailboxTable({
                             cell: (m) => <SyncState mailbox={m} sync={syncs.get(m.id)} />,
                         },
                         {
+                            id: 'calendar',
+                            header: 'Calendar',
+                            phone: 'secondary',
+                            muted: true,
+                            cell: (m) => <CalendarState mailbox={m} sync={calendars.get(m.id)} />,
+                        },
+                        {
                             id: 'purpose',
                             header: 'Purpose',
                             phone: 'secondary',
@@ -259,6 +283,21 @@ function MailboxTable({
                                             <DropdownMenuItem onSelect={() => checkNow(m)}>
                                                 Check connection
                                             </DropdownMenuItem>
+                                            {m.purpose === 'personal' &&
+                                                (calendarGranted(m.grantedScopes) ? (
+                                                    <DropdownMenuItem onSelect={() => readCalendarNow(m)}>
+                                                        Read calendar now
+                                                    </DropdownMenuItem>
+                                                ) : (
+                                                    // Connecting again asks Google for the calendar too; the mail stays as
+                                                    // it is. Only its owner: the connect signs in to the Google account of
+                                                    // whoever starts it, so an admin would connect their own.
+                                                    m.ownerMemberId === membership?.memberId && (
+                                                        <DropdownMenuItem onSelect={() => reconnect('personal')}>
+                                                            Connect calendar
+                                                        </DropdownMenuItem>
+                                                    )
+                                                ))}
                                         </>
                                     )}
                                     {m.status !== 'connected' && (
@@ -347,5 +386,25 @@ function SyncState({ mailbox, sync }: { mailbox: MailboxView; sync: MailboxSyncV
         <span>Synced {formatRelative(sync.lastSyncedAt)}</span>
     ) : (
         <span>Waiting for the first sync</span>
+    );
+}
+
+/**
+ * A personal mailbox's calendar (CAL-1): not connected until the mailbox's Google access includes it
+ * (connecting the mailbox again asks for it), then when it was last read for meetings.
+ */
+function CalendarState({ mailbox, sync }: { mailbox: MailboxView; sync: CalendarSyncView | undefined }) {
+    if (mailbox.purpose !== 'personal' || mailbox.status === 'disconnected') return <span>—</span>;
+    if (mailbox.status === 'reconnect_needed') return <span>Paused</span>;
+    if (!calendarGranted(mailbox.grantedScopes)) return <span>Not connected</span>;
+    if (!sync) return <span>Checking…</span>;
+    if (sync.status === 'syncing') return <span>Reading now</span>;
+    if (sync.status === 'failed') {
+        return <span className="text-danger">Read failed{sync.lastError ? `: ${sync.lastError.message}` : ''}</span>;
+    }
+    return sync.lastSyncedAt ? (
+        <span>Read {formatRelative(sync.lastSyncedAt)}</span>
+    ) : (
+        <span>Waiting for the first read</span>
     );
 }

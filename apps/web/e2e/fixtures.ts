@@ -26,6 +26,7 @@ import type {
     UnsubscribeStatusView,
     AttachmentView,
     BoardView,
+    CalendarSyncView,
     CompanyView,
     CustomFieldView,
     EmailTemplateView,
@@ -34,6 +35,10 @@ import type {
     InviteView,
     MailboxSyncView,
     MailboxView,
+    LeadSuggestionView,
+    MeetingKpisView,
+    MeetingPage,
+    SlotlineSettingsView,
     MailOutboundView,
     MailThreadView,
     MailSettingsView,
@@ -101,6 +106,8 @@ export const IDS = {
     suppressedBounce: '0b1e0000-0000-4000-8000-0000000009a2',
     suppressedManual: '0b1e0000-0000-4000-8000-0000000009a3',
     thread: '0b1e0000-0000-4000-8000-0000000008c1',
+    meeting: '0b1e0000-0000-4000-8000-0000000008e1',
+    secondMeeting: '0b1e0000-0000-4000-8000-0000000008e2',
     mailMessage: '0b1e0000-0000-4000-8000-0000000008c2',
     secondMailMessage: '0b1e0000-0000-4000-8000-0000000008c3',
     scheduledSend: '0b1e0000-0000-4000-8000-0000000008d1',
@@ -687,6 +694,8 @@ export const mailSettings: MailSettingsView = {
 
 const REDIRECT_URI = 'https://crm.example.com/api/mail/oauth/callback';
 const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly'];
+/** A personal mailbox's connect also asks for the calendar, read-only (CAL-1). */
+const PERSONAL_SCOPES = [...GMAIL_SCOPES, 'https://www.googleapis.com/auth/calendar.events.readonly'];
 
 /** The admin's view: configured, last checked, the redirect URI not yet proven by a sign-in. */
 export const oauthClient: GoogleOAuthClientView = {
@@ -694,7 +703,7 @@ export const oauthClient: GoogleOAuthClientView = {
     clientId: '123456789012-abc123def456.apps.googleusercontent.com',
     clientSecretLast4: '1a2b',
     redirectUri: REDIRECT_URI,
-    scopes: GMAIL_SCOPES,
+    scopes: PERSONAL_SCOPES,
     verifiedAt: at(20),
     lastCheck: {
         checkedAt: at(21),
@@ -711,7 +720,7 @@ export const oauthClientStatus: GoogleOAuthClientStatusView = {
     configured: true,
     verified: true,
     redirectUri: REDIRECT_URI,
-    scopes: GMAIL_SCOPES,
+    scopes: PERSONAL_SCOPES,
 };
 
 /** One personal mailbox working, one shared outreach mailbox Google stopped accepting. */
@@ -723,7 +732,7 @@ export const mailboxes: MailboxView[] = [
         label: null,
         purpose: 'personal',
         status: 'connected',
-        grantedScopes: GMAIL_SCOPES,
+        grantedScopes: PERSONAL_SCOPES,
         lastError: null,
         connectedAt: at(20),
         createdAt: at(20),
@@ -755,6 +764,140 @@ export function mailboxSync(mailboxId: string): MailboxSyncView {
               lastError: { code: 'reconnect_needed', message: 'The mailbox needs reconnecting.', at: at(3) },
           };
 }
+
+/** The booking site, connected and receiving (CAL-2). */
+export const slotlineSettings: SlotlineSettingsView = {
+    configured: true,
+    baseUrl: 'https://bookings.example.com',
+    hookUrl: 'https://crm.example.com/api/hooks/slotline/4fJt0cT2b9wVq1sLx8mPz3RkYd6NhUe5gAoBiC7nQsE',
+    triggers: ['BOOKING_CREATED', 'BOOKING_REQUESTED', 'BOOKING_RESCHEDULED', 'BOOKING_CANCELLED', 'BOOKING_REJECTED'],
+    lastDeliveryAt: at(2),
+    lastDeliveryResult: 'stored',
+    unmatchedOrganizers: 0,
+    lastUnmatchedOrganizer: null,
+};
+
+/** Kate's calendar (CAL-1): read a few minutes ago. */
+export function calendarSync(mailboxId: string): CalendarSyncView {
+    return {
+        mailboxId,
+        granted: mailboxId === IDS.mailbox,
+        status: 'idle',
+        lastSyncedAt: at(0.1),
+        windowReadAt: at(6),
+        lastError: null,
+    };
+}
+
+/**
+ * Meetings from members' calendars (CAL-1): Kate's intro with Dana, held yesterday, which brought in a new
+ * lead; and Sam's demo with Initech, still to come.
+ */
+export const meetings: MeetingPage = {
+    items: [
+        {
+            id: IDS.secondMeeting,
+            title: 'Initech demo',
+            startsAt: at(-26),
+            endsAt: at(-26.5),
+            allDay: false,
+            status: 'confirmed',
+            location: null,
+            conferenceUrl: 'https://meet.google.com/abc-defg-hij',
+            hostMemberId: IDS.secondMember,
+            bookedAt: at(30),
+            bookedVia: 'slotline',
+            slotlineUrl: 'https://bookings.example.com/booking/bk-initech',
+            cancelledAt: null,
+            members: [{ memberId: IDS.secondMember, responseStatus: 'accepted', isOrganizer: true }],
+            countsFor: [IDS.secondMember],
+            attendees: [
+                {
+                    address: 'sam@initech.example',
+                    displayName: 'Sam Okafor',
+                    responseStatus: 'accepted',
+                    isOrganizer: false,
+                    personId: IDS.secondPerson,
+                    memberId: null,
+                    leadCreated: false,
+                    leadSuggested: false,
+                },
+            ],
+        },
+        {
+            id: IDS.meeting,
+            title: 'Acme intro',
+            startsAt: at(20),
+            endsAt: at(19.5),
+            allDay: false,
+            status: 'confirmed',
+            location: null,
+            conferenceUrl: 'https://meet.google.com/xyz-abcd-efg',
+            hostMemberId: IDS.member,
+            bookedAt: at(72),
+            bookedVia: 'google_calendar',
+            slotlineUrl: null,
+            cancelledAt: null,
+            members: [{ memberId: IDS.member, responseStatus: 'accepted', isOrganizer: true }],
+            countsFor: [IDS.member],
+            attendees: [
+                {
+                    address: 'dana@acme.example',
+                    displayName: 'Dana Reyes',
+                    responseStatus: 'accepted',
+                    isOrganizer: false,
+                    personId: IDS.person,
+                    memberId: null,
+                    leadCreated: true,
+                    leadSuggested: false,
+                },
+            ],
+        },
+    ],
+    nextCursor: null,
+};
+
+/** One attendee waiting for Kate's word (CAL-3): she was invited to a supplier's call. */
+export const leadSuggestions: LeadSuggestionView[] = [
+    {
+        memberId: IDS.member,
+        address: 'val@supplier.example',
+        displayName: 'Val Vendor',
+        meetings: [{ id: IDS.meeting, title: 'Supplier call', startsAt: at(-50) }],
+        suggestedAt: at(5),
+    },
+];
+
+export const meetingKpis: MeetingKpisView = {
+    from: '2026-10-05T00:00:00.000Z',
+    to: '2026-10-12T00:00:00.000Z',
+    rows: [
+        {
+            member: membersSummary[0]!,
+            booked: 4,
+            bookedViaSlotline: 1,
+            held: 3,
+            upcoming: 1,
+            cancelled: 0,
+            peopleMet: 5,
+            newLeads: 2,
+            awaitingCustomer: 1,
+            suggestedLeads: 1,
+        },
+        {
+            member: membersSummary[1]!,
+            booked: 2,
+            bookedViaSlotline: 2,
+            held: 1,
+            upcoming: 2,
+            cancelled: 1,
+            peopleMet: 1,
+            newLeads: 1,
+            awaitingCustomer: 0,
+            suggestedLeads: 0,
+        },
+    ],
+};
 
 export const blocklist: BlocklistEntryView[] = [
     { id: IDS.blockedDomain, value: '@newsletters.example', scope: 'workspace', createdAt: at(30) },

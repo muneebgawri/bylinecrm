@@ -388,7 +388,8 @@ export function sourceLabel(kind: PersonView['createdBy']['kind']): string {
         case 'import':
             return 'Import';
         case 'sync':
-            return 'Mail sync';
+            // Mail, calendar or Slotline: the person's `source` says which.
+            return 'Sync';
         case 'system':
             return 'System';
     }

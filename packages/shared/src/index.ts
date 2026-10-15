@@ -35,6 +35,7 @@ export const APP_DB_ROLE = 'bylinecrm_app';
 export const WORKSPACE_SETTING = 'app.workspace_id';
 
 export * from './auth.js';
+export * from './calendar.js';
 export * from './capabilities.js';
 export * from './errors.js';
 export * from './events.js';

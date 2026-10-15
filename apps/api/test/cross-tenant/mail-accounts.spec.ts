@@ -8,6 +8,7 @@ import {
     GMAIL_BROAD_SCOPE,
     GMAIL_READONLY_SCOPE,
     GMAIL_SCOPES,
+    PERSONAL_MAILBOX_SCOPES,
     GMAIL_SEND_SCOPE,
     MEMBER_DEFAULT_CAPABILITIES,
     SESSION_COOKIE,
@@ -196,7 +197,7 @@ describe('mail accounts', () => {
     });
 
     describe('the OAuth client', () => {
-        it('shows an admin the redirect URI and the two scopes before anything is configured; members get 403', async () => {
+        it('shows an admin the redirect URI and the scopes (Gmail’s two, the calendar’s read-only one) before anything is configured; members get 403', async () => {
             const res = track(await as(admin).get(w('/mail/oauth-client')));
             expect(res.status).toBe(200);
             const view = res.body as ClientView;
@@ -206,7 +207,7 @@ describe('mail accounts', () => {
                 clientSecretLast4: null,
                 liveMailboxes: 0,
             });
-            expect(view.scopes).toEqual([...GMAIL_SCOPES]);
+            expect(view.scopes).toEqual([...PERSONAL_MAILBOX_SCOPES]);
             expect(view.scopes).not.toContain(GMAIL_BROAD_SCOPE);
             expect(new URL(view.redirectUri).pathname).toBe(MAIL_OAUTH_CALLBACK_PATH);
             redirectUri = view.redirectUri;
@@ -237,7 +238,12 @@ describe('mail accounts', () => {
         it('any member may see whether Google is set up — never the client ID; another workspace may not', async () => {
             const res = track(await as(member).get(w('/mail/oauth-client/status')));
             expect(res.status).toBe(200);
-            expect(res.body).toEqual({ configured: true, verified: false, redirectUri, scopes: [...GMAIL_SCOPES] });
+            expect(res.body).toEqual({
+                configured: true,
+                verified: false,
+                redirectUri,
+                scopes: [...PERSONAL_MAILBOX_SCOPES],
+            });
             expect(res.text).not.toContain(clientId);
             expect(res.text).not.toContain('WXYZ');
 
@@ -280,7 +286,7 @@ describe('mail accounts', () => {
     });
 
     describe('connecting', () => {
-        it('an admin connects a personal mailbox with exactly the narrow scopes, and the client is proven', async () => {
+        it('an admin connects a personal mailbox asking for exactly the narrow scopes (and the calendar’s, optional), and the client is proven', async () => {
             await events.reset();
             const { result, location, authorizeUrl } = await connect(admin, 'personal', {
                 email: `Admin.${stamp}@Example.com`,
@@ -288,7 +294,8 @@ describe('mail accounts', () => {
             });
             expect(result).toBe('connected');
             expect(location.pathname).toBe(`/w/${workspace}/mailboxes`);
-            expect(authorizeUrl.searchParams.get('scope')?.split(' ')).toEqual([...GMAIL_SCOPES]);
+            // The calendar's read-only scope is asked for too (CAL-1); a grant without it is still a mailbox.
+            expect(authorizeUrl.searchParams.get('scope')?.split(' ')).toEqual([...PERSONAL_MAILBOX_SCOPES]);
             expect(authorizeUrl.searchParams.get('access_type')).toBe('offline');
             expect(authorizeUrl.searchParams.get('code_challenge_method')).toBe('S256');
             expect(authorizeUrl.searchParams.get('redirect_uri')).toBe(redirectUri);

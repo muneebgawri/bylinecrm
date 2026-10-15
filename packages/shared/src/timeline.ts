@@ -18,9 +18,10 @@ import { ACTOR_KINDS, RECORD_OBJECTS, type Actor, type RecordObject } from './re
  * a message is on every record it concerns, so `email.received` leaves `linked-email.received` on
  * each (doc 50 §A: mail is a timeline entry, one list). A suppression entry (P3-1) is another: an
  * address of a person put on or lifted from the list leaves `linked-suppression.added|removed` on
- * that person, with the reason and the note (#114).
+ * that person, with the reason and the note (#114). A meeting from a member's calendar (CAL-1) is a
+ * third: it leaves `linked-meeting.booked|cancelled` on every record its outside attendees concern.
  */
-export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email', 'suppression'] as const;
+export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email', 'suppression', 'meeting'] as const;
 export type LinkedObject = (typeof LINKED_OBJECTS)[number];
 
 export function isLinkedObject(value: unknown): value is LinkedObject {

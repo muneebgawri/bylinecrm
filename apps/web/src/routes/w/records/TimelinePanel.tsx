@@ -12,7 +12,7 @@ import {
     type Tone,
 } from '@bylinecrm/ui';
 import { useQueries } from '@tanstack/react-query';
-import { ArrowRightLeft, DollarSign, FileText, Mail, Paperclip, Pencil, SquareCheck } from 'lucide-react';
+import { ArrowRightLeft, CalendarDays, DollarSign, FileText, Mail, Paperclip, Pencil, SquareCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { people } from '../../../api/records';
@@ -34,6 +34,7 @@ const FILTERS = [
     { id: 'stages', label: 'Stages', kinds: 'deal.,opportunity.' },
     { id: 'external', label: 'External', kinds: 'external.' },
     { id: 'emails', label: 'Emails', kinds: 'linked-email' },
+    { id: 'meetings', label: 'Meetings', kinds: 'linked-meeting' },
 ] as const;
 
 const ICON: Record<TimelineWords['family'], { icon: React.ReactNode; tone: Tone }> = {
@@ -44,6 +45,7 @@ const ICON: Record<TimelineWords['family'], { icon: React.ReactNode; tone: Tone 
     stage: { icon: <ArrowRightLeft />, tone: 'accent' },
     external: { icon: <DollarSign />, tone: 'success' },
     mail: { icon: <Mail />, tone: 'accent' },
+    meeting: { icon: <CalendarDays />, tone: 'info' },
 };
 
 /**

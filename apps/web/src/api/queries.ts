@@ -81,6 +81,19 @@ export const keys = {
     mailboxes: (workspaceId: string) => ['w', workspaceId, 'mailboxes'] as const,
     mailboxSync: (workspaceId: string, mailboxId: string) =>
         ['w', workspaceId, 'mailboxes', mailboxId, 'sync'] as const,
+    /** A personal mailbox's calendar sync (CAL-1). */
+    calendarSync: (workspaceId: string, mailboxId: string) =>
+        ['w', workspaceId, 'mailboxes', mailboxId, 'calendar'] as const,
+    /** Meetings and meeting KPIs (CAL-1); one prefix so a calendar read refreshes both. */
+    meetings: (workspaceId: string) => ['w', workspaceId, 'meetings'] as const,
+    meetingList: (workspaceId: string, params: { from: string; to: string }) =>
+        ['w', workspaceId, 'meetings', 'list', params] as const,
+    meetingKpis: (workspaceId: string, params: { from: string; to: string }) =>
+        ['w', workspaceId, 'meetings', 'kpis', params] as const,
+    /** Meeting attendees suggested as leads (CAL-3); under `meetings`, so a decision refreshes the KPIs too. */
+    leadSuggestions: (workspaceId: string) => ['w', workspaceId, 'meetings', 'lead-suggestions'] as const,
+    /** The workspace's Slotline booking site and its hook (CAL-2). */
+    slotlineSettings: (workspaceId: string) => ['w', workspaceId, 'integrations', 'slotline'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
     suppressions: (workspaceId: string) => ['w', workspaceId, 'suppressions'] as const,
     sendingPool: (workspaceId: string) => ['w', workspaceId, 'sending-pool'] as const,

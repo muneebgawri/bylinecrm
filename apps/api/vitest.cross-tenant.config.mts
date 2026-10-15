@@ -13,8 +13,9 @@ export default defineConfig({
         passWithNoTests: false,
         environment: 'node',
         // The list query-budget test (no N+1) counts statements; the client emits them only when asked.
-        // No mail-sync or mail-send worker: the suite drives sync and sending directly against a fake
-        // Gmail, and a worker started by any spec's application would call the real Gmail with a fake token.
+        // No mail-sync, mail-send or calendar-sync worker: the suite drives sync and sending directly against a
+        // fake Gmail and Calendar, and a worker started by any spec's application would call the real Google
+        // with a fake token.
         // No transactional-mail relay (#93): a spec sends recorded mail itself (`test/support/mail.ts`)
         // into the in-process memory transport, so it knows when the mail has arrived.
         // Sign-up open (P0-14): nearly every spec makes its tenants through `/api/auth/signup`; the
@@ -23,6 +24,7 @@ export default defineConfig({
             DB_QUERY_EVENTS: '1',
             MAIL_SYNC_WORKER: '0',
             MAIL_SEND_WORKER: '0',
+            CALENDAR_SYNC_WORKER: '0',
             SEQUENCE_WORKER: '0',
             TWENTY_IMPORT_WORKER: '0',
             ENRICHMENT_WORKER: '0',

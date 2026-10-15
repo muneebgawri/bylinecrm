@@ -1,3 +1,4 @@
+import type { MeetingSummary } from './calendar.js';
 import type { EmailReply, EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
@@ -114,7 +115,14 @@ export const DOMAIN_EVENT_TYPES = [
     // scanner's hit (docs/design-notes/P3-4.md) is recorded as neither.
     'email.clicked',
     'email.opened',
+    // A meeting with someone outside the workspace found in a member's Google Calendar (CAL-1):
+    // `recordId` is the meeting, `meeting` what it is, `targets` the records it concerns — each outside
+    // attendee who is a person, their company and their open deals — so the timeline writes a
+    // `linked-meeting.*` entry on each; `related` the people and companies, so a stage rule moves their
+    // deals. Once per meeting however many members' calendars hold it; `meeting.cancelled` once when
+    // it is called off.
     'meeting.booked',
+    'meeting.cancelled',
     // A connected Google mailbox (P2-1); `recordId` is the mailbox. Not a record: the timeline
     // writes nothing for these, webhooks deliver them.
     'mailbox.connected',
@@ -209,6 +217,8 @@ interface DomainEventBase {
     enrolment?: EnrolmentEventPayload;
     /** Present on `email.clicked` and `email.opened`: the send, the person, the link and the step. */
     tracking?: EmailTrackingPayload;
+    /** Present on `meeting.*`: the meeting, without its description. */
+    meeting?: MeetingSummary;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

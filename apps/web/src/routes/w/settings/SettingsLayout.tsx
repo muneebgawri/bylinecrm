@@ -29,6 +29,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'enrichment', label: 'Enrichment', to: paths.settingsEnrichment, requires: 'record:read' },
     // The short-link domain tracked links go through (P3-4): read with outreach rights; an admin sets it.
     { id: 'tracking', label: 'Tracking', to: paths.settingsTracking, requires: 'outreach:write' },
+    // The booking site whose bookings count as members' meetings (CAL-2): its hook's URL and secret are an admin's.
+    { id: 'slotline', label: 'Slotline', to: paths.settingsSlotline, requires: 'workspace:admin' },
     // The Twenty importer (P4-4): it writes every object the workspace has, so an admin's.
     { id: 'import-twenty', label: 'Import from Twenty', to: paths.settingsImportTwenty, requires: 'workspace:admin' },
 ];

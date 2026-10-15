@@ -1,5 +1,6 @@
 import type { RecordObject, SuppressionReason } from '@bylinecrm/shared';
 import type { TimelineActivityView } from '../../../api/types';
+import { formatDate, formatDay } from '../../../lib/format';
 import { formatMoney } from '../../../lib/money';
 import { SUPPRESSION_REASON_LABEL } from '../../../lib/suppression';
 import { fieldLabel } from './fields';
@@ -18,7 +19,7 @@ export interface TimelineWords {
     /** "updated the record", "added a note", "paid an order" */
     action: string;
     /** `note`, `task`, `attachment`, `stage`, `external`, `record` — the marker's icon family. */
-    family: 'record' | 'note' | 'task' | 'attachment' | 'stage' | 'external' | 'mail';
+    family: 'record' | 'note' | 'task' | 'attachment' | 'stage' | 'external' | 'mail' | 'meeting';
     /** The entry's origin when it is shown on a merged (company) timeline. */
     origin?: string;
     /** Supporting chips: a field diff, a stage move, an amount. */
@@ -76,6 +77,10 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         return { ...base, ...suppressionWords(entry), family: 'mail' };
     }
 
+    if (entry.kind.startsWith('linked-meeting.')) {
+        return { ...base, ...meetingWords(entry, names), family: 'meeting' };
+    }
+
     if (entry.kind.startsWith('linked-')) {
         const [thing = '', action = ''] = entry.kind.slice(7).split('.');
         const name = typeof entry.properties['name'] === 'string' ? entry.properties['name'] : undefined;
@@ -102,6 +107,29 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         action: `${ACTIONS[action] ?? action} the ${OBJECT_LABEL[object as RecordObject]?.toLowerCase() ?? object}`,
         family: 'record',
         ...(detail && detail.length ? { detail } : {}),
+    };
+}
+
+/**
+ * A meeting from a member's Google Calendar (CAL-1): the member it counts for booked it (or it was called
+ * off), with its title and when it is — never its description.
+ */
+function meetingWords(
+    entry: TimelineActivityView,
+    names: NameSources,
+): Pick<TimelineWords, 'actor' | 'action' | 'detail'> {
+    const meeting = isRecord(entry.properties['meeting']) ? entry.properties['meeting'] : {};
+    const title =
+        typeof meeting['title'] === 'string' && meeting['title'] !== '' ? `“${meeting['title']}”` : 'a meeting';
+    const host = typeof meeting['hostMemberId'] === 'string' ? names.members.get(meeting['hostMemberId']) : undefined;
+    const startsAt = typeof meeting['startsAt'] === 'string' ? meeting['startsAt'] : null;
+    const when = startsAt ? (meeting['allDay'] === true ? formatDay(startsAt) : formatDate(startsAt)) : null;
+    const cancelled = entry.kind === 'linked-meeting.cancelled';
+    const where = meeting['bookedVia'] === 'slotline' ? ' on Slotline' : '';
+    return {
+        actor: host ?? 'A member',
+        action: cancelled ? `had ${title} cancelled` : `booked ${title}${where}${when ? ` for ${when}` : ''}`,
+        ...(cancelled && when ? { detail: [{ label: when }] } : {}),
     };
 }
 
@@ -211,7 +239,7 @@ function actorName(entry: TimelineActivityView, names: NameSources): string {
         case 'import':
             return 'An import';
         case 'sync':
-            return 'Mail sync';
+            return 'Sync';
         case 'external':
             return entry.actor.id ?? 'An integration';
         case 'system':

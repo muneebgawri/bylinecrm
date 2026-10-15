@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
     GMAIL_SCOPES,
     MAILBOX_PURPOSES,
+    PERSONAL_MAILBOX_SCOPES,
     POSTMASTER_SCOPES,
     type MailboxConnectResult,
     type MailboxPurpose,
@@ -241,7 +242,7 @@ export class MailboxesService {
                 redirectUri: this.clients.redirectUri(),
                 state,
                 codeChallenge: codeChallengeS256(codeVerifier),
-                scopes: purpose === 'postmaster' ? POSTMASTER_SCOPES : GMAIL_SCOPES,
+                scopes: scopesFor(purpose),
             }).toString(),
             expiresAt: new Date(Date.now() + CONNECT_STATE_TTL_S * 1000),
         };
@@ -434,6 +435,15 @@ export class MailboxesService {
         if (!context) throw new Error('mailboxes used outside a workspace context');
         return context;
     }
+}
+
+/**
+ * What a connect asks Google for: Postmaster's scopes; a pool mailbox's two Gmail scopes; a personal
+ * mailbox's two and its calendar's read-only scope (CAL-1) — optional, the mailbox works without it.
+ */
+function scopesFor(purpose: ConnectPurpose): readonly string[] {
+    if (purpose === 'postmaster') return POSTMASTER_SCOPES;
+    return purpose === 'personal' ? PERSONAL_MAILBOX_SCOPES : GMAIL_SCOPES;
 }
 
 function isAdmin(context: WorkspaceRunContext): boolean {

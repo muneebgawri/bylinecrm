@@ -104,8 +104,10 @@ describe('Sidebar', () => {
         renderSidebar(member);
         await screen.findByRole('link', { name: 'People' });
         expect(screen.queryByText('Outreach')).not.toBeInTheDocument();
-        expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
         expect(screen.getByText('CRM')).toBeInTheDocument();
+        // Workspace shows only what the member may use: Team (their own meeting KPIs, CAL-1), never Settings.
+        expect(screen.getByRole('link', { name: 'Team' })).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
     });
 
     it('keeps every link when collapsed, named for assistive tech', async () => {

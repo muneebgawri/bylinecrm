@@ -60,6 +60,7 @@ const settings = {
     verification: () => import('./w/settings/Verification').then((m) => ({ Component: m.Verification })),
     enrichment: () => import('./w/settings/Enrichment').then((m) => ({ Component: m.Enrichment })),
     tracking: () => import('./w/settings/Tracking').then((m) => ({ Component: m.Tracking })),
+    slotline: () => import('./w/settings/Slotline').then((m) => ({ Component: m.Slotline })),
     importTwenty: () => import('./w/settings/ImportTwenty').then((m) => ({ Component: m.ImportTwenty })),
 };
 
@@ -77,6 +78,9 @@ const sequences = {
     list: () => import('./w/sequences/SequencesPage').then((m) => ({ Component: m.SequencesPage })),
     builder: () => import('./w/sequences/SequencePage').then((m) => ({ Component: m.SequencePage })),
 };
+
+/** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
+const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
 
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
@@ -139,7 +143,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('templates', templates.list, 'Templates'),
         lazyPage('templates/:templateId', templates.editor, 'Template'),
         lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),
-        page('team', 'team', 'Team'),
+        lazyPage('team', teamPage, 'Team'),
         lazyPage('settings', settings.layout, 'Settings', [
             { index: true, element: <Navigate to="members" replace /> },
             lazyPage('members', settings.members, 'Members'),
@@ -156,6 +160,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('verification', settings.verification, 'Verification'),
             lazyPage('enrichment', settings.enrichment, 'Enrichment'),
             lazyPage('tracking', settings.tracking, 'Tracking'),
+            lazyPage('slotline', settings.slotline, 'Slotline'),
             lazyPage('import-twenty', settings.importTwenty, 'Import from Twenty'),
         ]),
     ],
