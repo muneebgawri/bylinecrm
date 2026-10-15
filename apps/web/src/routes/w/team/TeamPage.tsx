@@ -222,7 +222,7 @@ function MeetingTable({ workspaceId, meetings }: { workspaceId: string; meetings
                                         {' '}
                                         {m.slotlineUrl ? (
                                             <a
-                                                className="text-xs text-accent underline"
+                                                className="text-xs text-accent underline max-md:inline-flex max-md:min-h-touch max-md:min-w-touch max-md:items-center"
                                                 href={m.slotlineUrl}
                                                 target="_blank"
                                                 rel="noreferrer"
@@ -288,7 +288,10 @@ function MeetingPeople({ workspaceId, meeting }: { workspaceId: string; meeting:
         <span className="flex flex-wrap gap-x-2 gap-y-1">
             {people.map((a) => (
                 <span key={a.address}>
-                    <Link className="text-accent underline" to={paths.person(workspaceId, a.personId!)}>
+                    <Link
+                        className="text-accent underline max-md:inline-flex max-md:min-h-touch max-md:min-w-touch max-md:items-center"
+                        to={paths.person(workspaceId, a.personId!)}
+                    >
                         {a.displayName || a.address}
                     </Link>
                     {a.leadCreated && (
