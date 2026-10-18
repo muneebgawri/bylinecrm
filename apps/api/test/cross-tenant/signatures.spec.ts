@@ -32,9 +32,11 @@ import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
 import { MailSendService } from '../../src/mail-send/mail-send.service';
+import { SLOTLINE_API_PORT } from '../../src/calendar/slotline/slotline-api.port';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { FakeSlotlineApi } from '../support/fake-slotline-api';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -89,6 +91,7 @@ describe('#193 email signatures', () => {
     let send: MailSendService;
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
+    const slotlineApi = new FakeSlotlineApi();
 
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
@@ -178,6 +181,8 @@ describe('#193 email signatures', () => {
             .useValue(google)
             .overrideProvider(GMAIL_PORT)
             .useValue(gmail)
+            .overrideProvider(SLOTLINE_API_PORT)
+            .useValue(slotlineApi)
             .compile();
         app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
         await app.init();
@@ -672,6 +677,114 @@ describe('#193 email signatures', () => {
             expect(
                 (await as(otherAdmin).post(w(`/mailboxes/${memberMailbox}/signature/import`, otherWorkspace))).status,
             ).toBe(404);
+        });
+    });
+
+    describe('#196 a Slotline event type for the booking link', () => {
+        const miaKey = `cal_live_mia_${stamp}_k3y9`;
+        const mattKey = `cal_live_matt_${stamp}_x1x2`;
+        const type = (slug: string, title: string, hidden: boolean) => ({ slug, title, lengthInMinutes: 15, hidden });
+        const putKey = (id: string, apiKey: string, who = member, ws = workspace) =>
+            as(who).put(w(`/members/${id}/slotline-key`, ws)).send({ apiKey });
+        const eventTypes = (id: string, who = member, ws = workspace) =>
+            as(who).get(w(`/members/${id}/slotline/event-types`, ws));
+        const pick = (id: string, slug: string | null, who = member) =>
+            as(who).put(w(`/members/${id}/slotline-event`)).send({ slug });
+        const profileOf = async (id: string, who = member) =>
+            (await as(who).get(w(`/members/${id}/signature-profile`))).body as SignatureProfileView;
+
+        beforeAll(() => {
+            slotlineApi.addAccount(miaKey, {
+                username: 'mia',
+                eventTypes: [type('intro', 'Intro call', false), type('vip-15', 'VIP 15', true)],
+            });
+            slotlineApi.addAccount(mattKey, { username: 'matt', eventTypes: [type('chat', 'Chat', false)] });
+        });
+
+        it('a key Slotline refuses is not stored', async () => {
+            const res = await putKey(memberId, 'cal_live_wrong_key');
+            expect(res.status).toBe(422);
+            expect((await profileOf(memberId)).slotlineKey).toBeNull();
+        });
+
+        it('a key Slotline accepts is stored encrypted, shown by its last four only, and sets the username', async () => {
+            const res = await putKey(memberId, miaKey);
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            expect(res.body as SignatureProfileView).toMatchObject({
+                slotlineUsername: 'mia',
+                slotlineKey: { last4: 'k3y9' },
+            });
+            expect(JSON.stringify(res.body)).not.toContain(miaKey);
+            const row = await owner.workspaceMember.findUniqueOrThrow({ where: { id: memberId } });
+            expect(row.slotlineApiKeyCiphertext).toBeTruthy();
+            expect(row.slotlineApiKeyCiphertext).not.toContain(miaKey);
+            expect(slotlineApi.calls.at(-1)).toMatchObject({ method: 'me', baseUrl: slotline, keyLast4: 'k3y9' });
+        });
+
+        it('lists every event type on the account, hidden ones too, with their links', async () => {
+            const res = await eventTypes(memberId);
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            expect(res.body).toEqual([
+                { slug: 'intro', title: 'Intro call', lengthInMinutes: 15, hidden: false, bookingLink: `${slotline}/mia/intro` },
+                { slug: 'vip-15', title: 'VIP 15', lengthInMinutes: 15, hidden: true, bookingLink: `${slotline}/mia/vip-15` },
+            ]);
+        });
+
+        it('the picked one is what “Book a quick meeting” opens; one not on the account is refused', async () => {
+            expect((await pick(memberId, 'not-mine')).status).toBe(422);
+            const res = await pick(memberId, 'vip-15');
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            expect(res.body as SignatureProfileView).toMatchObject({
+                slotlineEvent: { slug: 'vip-15', title: 'VIP 15' },
+                bookingLink: `${slotline}/mia/vip-15`,
+            });
+            const preview = await as(member)
+                .post(w('/signatures/preview'))
+                .send({ mailboxId: memberMailbox, signature: doc(para(v('sender.bookingLink'))) });
+            expect((preview.body as RenderedSignature).html).toBe(
+                `<p><a href="${slotline}/mia/vip-15">${BOOKING_LINK_LABEL}</a></p>`,
+            );
+        });
+
+        it('a key, a list and a pick are the member’s own: not an admin’s, not another member’s, not another workspace’s', async () => {
+            expect((await putKey(memberId, mattKey, admin)).status).toBe(403);
+            expect((await eventTypes(memberId, admin)).status).toBe(403);
+            expect((await pick(memberId, 'intro', admin)).status).toBe(403);
+            expect((await putKey(adminMemberId, miaKey)).status).toBe(403);
+            expect((await eventTypes(adminMemberId)).status).toBe(403);
+            expect((await as(member).delete(w(`/members/${adminMemberId}/slotline-key`))).status).toBe(403);
+            expect((await eventTypes(memberId, otherAdmin)).status).toBe(403);
+            // The admin's own key lists the admin's account, never Mia's.
+            await putKey(adminMemberId, mattKey, admin).expect(200);
+            expect(((await eventTypes(adminMemberId, admin)).body as { slug: string }[]).map((e) => e.slug)).toEqual(['chat']);
+        });
+
+        it('while a key is set, the username is Slotline’s: it cannot be typed over', async () => {
+            const res = await putProfile(memberId, { jobTitle: 'Account manager', phone: null, slotlineUsername: 'someone-else' }, member);
+            expect(res.status).toBe(422);
+            await putProfile(memberId, { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' }, member).expect(200);
+        });
+
+        it('says so when Slotline does not answer, and changes nothing', async () => {
+            slotlineApi.goDown();
+            const res = await eventTypes(memberId);
+            expect(res.status).toBe(409);
+            expect((await profileOf(memberId)).slotlineEvent).toMatchObject({ slug: 'vip-15' });
+        });
+
+        it('a workspace without Slotline cannot take a key', async () => {
+            const otherMember = (
+                await owner.workspaceMember.findFirstOrThrow({ where: { workspaceId: otherWorkspace } })
+            ).id;
+            expect((await putKey(otherMember, mattKey, otherAdmin, otherWorkspace)).status).toBe(409);
+        });
+
+        it('removing the key keeps the link, and the list then asks for a key', async () => {
+            await pick(memberId, null).expect(200);
+            expect((await profileOf(memberId)).bookingLink).toBe(`${slotline}/mia`);
+            await as(member).delete(w(`/members/${memberId}/slotline-key`)).expect(204);
+            expect(await profileOf(memberId)).toMatchObject({ slotlineKey: null, slotlineUsername: 'mia' });
+            expect((await eventTypes(memberId)).status).toBe(409);
         });
     });
 });
