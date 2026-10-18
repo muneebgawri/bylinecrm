@@ -22,7 +22,10 @@ export function DomainPage() {
     const domain = useSendingDomain(workspaceId, domainId, admin);
     const check = useCheckSendingDomain(workspaceId);
     const back = (
-        <Link to={paths.mailboxes(workspaceId)} className="text-accent underline-offset-2 hover:underline">
+        <Link
+            to={paths.mailboxes(workspaceId)}
+            className="text-accent underline-offset-2 hover:underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
+        >
             Back to Mailboxes
         </Link>
     );
