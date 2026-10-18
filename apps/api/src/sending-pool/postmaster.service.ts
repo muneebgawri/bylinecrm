@@ -16,20 +16,29 @@ import { OAuthClientsService } from '../mail-accounts/oauth-clients.service';
 import { assessGrant } from '../mail-accounts/oauth-flow';
 import { tokenUnderLock } from '../mail-accounts/token-lock';
 import { postmasterConnectionView } from './postmaster-connection';
-import { postmasterDay } from './postmaster.http';
-import { POSTMASTER_PORT, PostmasterRequestFailed, type PostmasterPort } from './postmaster.port';
+import { postmasterRange } from './postmaster.http';
+import {
+    describeGoogleError,
+    POSTMASTER_PORT,
+    PostmasterRequestFailed,
+    type DayStats,
+    type PostmasterDomain,
+    type PostmasterPort,
+} from './postmaster.port';
 import { POSTMASTER_TOKEN_LOCK_KEY_PREFIX } from './sending-pool.constants';
 
 type ConnectionRow = Prisma.PostmasterConnectionGetPayload<object>;
 
 /**
- * What one check learned from Postmaster Tools about a domain: what to store on the domain, the
- * day's rate when it gave one, and — after a rate limit (#183) — how long Google asked to wait.
+ * What one check learned from Postmaster Tools about a domain: what to store on the domain, every
+ * day's statistics it gave over the range asked (#190), yesterday's spam rate — the one a pause is judged on — when
+ * it gave one, and — after a rate limit or a spent quota (#183, #190) — how long Google asked to wait.
  */
 export interface PostmasterReading {
     status: PostmasterDomainStatus;
     message: string | null;
     rate: SendingDomainSpamRate | null;
+    history: DayStats[];
     retryAfterS?: number | null;
 }
 
@@ -42,9 +51,9 @@ class PostmasterReconnectNeeded extends Error {
 }
 
 /**
- * The workspace's Postmaster Tools connection (P3-2b, #129, FR-CRMS-13): reading a sending
- * domain's user-reported spam rate for the domain check (`read`, never inside a transaction),
- * refreshing the grant like a mailbox's — one process at a time, through the workspace's own
+ * The workspace's Postmaster Tools connection (P3-2b, #129, #190, FR-CRMS-13): reading a sending
+ * domain's user-reported spam rates for the domain check (`read`) and the account's domains for
+ * the daily listing (`domains`), never inside a transaction; refreshing the grant like a mailbox's — one process at a time, through the workspace's own
  * client — and disconnecting it. Connecting runs through the mailbox connect flow (mail accounts)
  * with Postmaster's scopes; the one-time Google-side setup is in docs/design-notes/P3-2.md.
  */
@@ -69,47 +78,80 @@ export class PostmasterService {
     }
 
     /**
-     * Yesterday's user-reported spam rate for the domain, as the domain check asks for it. Never
-     * throws for what Google says: no connection, a domain the account has not verified, a rate
-     * limit (#183), no answer, a refused request or a refused grant each become a reading the
-     * domain records and the pool shows. Only a refusal is a warning; a limit and no answer are
-     * transient, and the last reading stands.
+     * The domain's user-reported spam and delivery-error rates over the last 30 days, as the
+     * domain check asks for them. Never throws for what Google says: no connection, a grant made
+     * before v2 (#190), a domain the account has not verified, a rate limit (#183), a spent quota
+     * (#190), no answer, a refused request or a refused grant each become a reading the domain
+     * records and the pool shows — with Google's own status and message when it gave them, which
+     * are logged too (never the token). A limit and no answer are transient, and the last reading
+     * stands; a spent quota is an admin's to raise.
      */
     async read(workspaceId: string, domain: string, now = new Date()): Promise<PostmasterReading> {
         const connection = await this.rls.withWorkspace(workspaceId, (tx) => tx.postmasterConnection.findFirst());
-        if (!connection) return { status: 'not_connected', message: null, rate: null };
-        const day = postmasterDay(now);
+        if (!connection) return { status: 'not_connected', message: null, rate: null, history: [] };
+        const { from, to } = postmasterRange(now);
         try {
             const token = await this.accessToken(workspaceId);
-            const lookup = await this.postmaster.trafficStats(token, domain, day);
+            const lookup = await this.postmaster.domainStats(token, domain, from, to);
             if (lookup.status === 'not_verified') {
+                const said = describeGoogleError(lookup.google);
                 return {
                     status: 'not_verified',
-                    message: `${domain} is not verified in Postmaster Tools for ${connection.email}`,
+                    message: `${domain} is not verified in Postmaster Tools for ${connection.email}${said ? ` (Google: ${said})` : ''}`,
                     rate: null,
+                    history: [],
                 };
             }
-            if (lookup.status === 'rate_limited') {
-                return {
-                    status: 'rate_limited',
-                    message: 'Postmaster Tools is rate-limiting reads',
-                    rate: null,
-                    retryAfterS: lookup.retryAfterS,
-                };
+            if (lookup.status === 'rate_limited' || lookup.status === 'quota_exhausted') {
+                const said = describeGoogleError(lookup.google);
+                const message =
+                    lookup.status === 'quota_exhausted'
+                        ? `Google’s Postmaster Tools API quota is used up (${said}): raise the Postmaster Tools API quota in Google Cloud`
+                        : `Postmaster Tools is rate-limiting reads${said ? ` (Google: ${said})` : ''}`;
+                this.logger.warn(
+                    `Postmaster Tools answered 429 for ${domain} in ${workspaceId}: ${said ?? 'no error body'}`,
+                );
+                return { status: lookup.status, message, rate: null, history: [], retryAfterS: lookup.retryAfterS };
             }
-            if (lookup.status === 'no_data' || lookup.spamRateBps === null) {
-                return { status: 'ok', message: `no data for ${day}: too little traffic to report`, rate: null };
-            }
-            return { status: 'ok', message: null, rate: { day: lookup.day, rateBps: lookup.spamRateBps } };
+            const yesterday = lookup.days.find((d) => d.day === to)?.spamRateBps ?? null;
+            const rate = yesterday === null ? null : { day: to, rateBps: yesterday };
+            return {
+                status: 'ok',
+                message: rate
+                    ? null
+                    : `no data for ${to}: Postmaster Tools reports only domains with substantial Gmail-bound traffic`,
+                rate,
+                history: lookup.days,
+            };
         } catch (error) {
             if (error instanceof PostmasterRequestFailed) {
+                this.logger.warn(`${error.message} (in ${workspaceId})`);
                 // No answer, or a server-side failure, passes on its own; a 4xx will not.
                 const transient = error.status === 0 || error.status >= 500;
-                return { status: transient ? 'unreachable' : 'failed', message: error.message, rate: null };
+                return {
+                    status: transient ? 'unreachable' : 'failed',
+                    message: error.message,
+                    rate: null,
+                    history: [],
+                };
             }
             if (error instanceof PostmasterReconnectNeeded) {
-                return { status: 'failed', message: error.reason, rate: null };
+                return { status: 'failed', message: error.reason, rate: null, history: [] };
             }
+            throw error;
+        }
+    }
+
+    /**
+     * Every domain the connected account holds in Postmaster Tools (#190), for the daily listing; null
+     * when nothing is connected or the connection needs reconnecting. Throws `PostmasterRequestFailed`
+     * when Google did not answer, which the listing logs and tries again later.
+     */
+    async domains(workspaceId: string): Promise<PostmasterDomain[] | null> {
+        try {
+            return await this.postmaster.domains(await this.accessToken(workspaceId));
+        } catch (error) {
+            if (error instanceof PostmasterReconnectNeeded) return null;
             throw error;
         }
     }
@@ -128,9 +170,11 @@ export class PostmasterService {
                 `Postmaster connection in ${context.workspaceId}: revoke not confirmed by Google (${error.error})`,
             );
         }
-        await this.rls.withWorkspace((tx) =>
-            tx.postmasterConnection.delete({ where: { workspaceId: row.workspaceId } }),
-        );
+        // Nothing is listed once nothing is connected (#190); the domains and their history stay.
+        await this.rls.withWorkspace(async (tx) => {
+            await tx.postmasterConnection.delete({ where: { workspaceId: row.workspaceId } });
+            await tx.sendingDomain.updateMany({ where: { inPostmaster: true }, data: { inPostmaster: false } });
+        });
     }
 
     // ── Internals ────────────────────────────────────────────────────────────────────────────
@@ -200,6 +244,14 @@ export class PostmasterService {
         if (!row) throw new PostmasterReconnectNeeded('no Postmaster Tools account is connected');
         if (row.status !== 'connected')
             throw new PostmasterReconnectNeeded(row.lastError ?? 'the connection needs reconnecting');
+        // A grant made for v1 (`postmaster.readonly`) is not accepted by v2 (#190): it is connected again.
+        const assessment = assessGrant(row.grantedScopes, POSTMASTER_SCOPES);
+        if (!assessment.ok) {
+            throw await this.markReconnectNeeded(
+                workspaceId,
+                `the Postmaster Tools API v2 needs access this grant does not hold (${assessment.detail}): connect Postmaster Tools again`,
+            );
+        }
         return row;
     }
 

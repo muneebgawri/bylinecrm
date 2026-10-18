@@ -27,8 +27,16 @@ export async function storePostmasterConnection(
     const { workspaceId, ...rest } = input;
     await tx.postmasterConnection.upsert({
         where: { workspaceId },
-        create: { workspaceId, ...rest, status: 'connected', lastError: null, connectedAt: now },
-        update: { ...rest, status: 'connected', lastError: null, connectedAt: now },
+        // The account's domains are listed at the next maintenance pass (#190), whoever it is now.
+        create: {
+            workspaceId,
+            ...rest,
+            status: 'connected',
+            lastError: null,
+            connectedAt: now,
+            domainsNextListAt: null,
+        },
+        update: { ...rest, status: 'connected', lastError: null, connectedAt: now, domainsNextListAt: null },
     });
 }
 

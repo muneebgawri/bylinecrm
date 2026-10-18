@@ -140,14 +140,16 @@ found again before the next send. The API is `/api/w/:id/outreach/verification` 
 `/api/w/:id/people/:personId/verification` (a person's result; `POST` re-runs it). Why each result is what it
 is: `docs/design-notes/P3-5.md`.
 
-## Postmaster Tools (#129)
+## Postmaster Tools (#129, #190)
 
-An admin connects, on the Mailboxes page, the Google account that owns the outreach sending domains in Postmaster
-Tools, through the workspace's own OAuth client (Postmaster's read scope only, never Gmail's). Every sending-domain
-check then reads the domain's user-reported spam rate for the day before and, at or past the pool's complaint
-threshold, pauses every pool mailbox on the domain. Nothing calls Google until the one-time step in
-`docs/design-notes/P3-2.md` (enable the Postmaster Tools API, add the scope to the consent screen, verify the
-domains at postmaster.google.com) is done: until then each domain reports "not connected" and nothing pauses.
+An admin connects, on the Mailboxes page, the Google account that owns the sending domains in Postmaster Tools,
+through the workspace's own OAuth client (the Postmaster Tools API v2's traffic and domain scopes, never Gmail's).
+Every sending domain — each connected mailbox's, pool or personal, and each domain the account lists — is then read
+for the last 30 days of user-reported spam rates (Mailboxes → Domain health); at or past the pool's complaint
+threshold a **pool** domain pauses every pool mailbox on it, a personal domain is only watched. Nothing calls Google
+until the one-time step in `docs/design-notes/P3-2.md` (enable the Postmaster Tools API, add its v2 scopes to the
+consent screen, verify the domains at postmaster.google.com) is done: until then each domain reports "not
+connected" and nothing pauses. A grant made before #190 (v1's `postmaster.readonly`) shows "connect again".
 
 ## Enrichment (P4-2)
 

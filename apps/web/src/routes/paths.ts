@@ -34,6 +34,8 @@ export const paths = {
     templates: (workspaceId: string) => `/w/${workspaceId}/templates`,
     template: (workspaceId: string, templateId: string) => `/w/${workspaceId}/templates/${templateId}`,
     mailboxes: (workspaceId: string) => `/w/${workspaceId}/mailboxes`,
+    /** One sending domain's health (#190): an admin's page. */
+    sendingDomain: (workspaceId: string, domainId: string) => `/w/${workspaceId}/mailboxes/domains/${domainId}`,
     team: (workspaceId: string) => `/w/${workspaceId}/team`,
     settings: (workspaceId: string) => `/w/${workspaceId}/settings`,
     settingsMembers: (workspaceId: string) => `/w/${workspaceId}/settings/members`,

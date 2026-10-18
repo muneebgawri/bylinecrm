@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
-import { type INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -14,9 +14,10 @@ import {
     type SendingPoolView,
     POSTMASTER_SCOPES,
     SENDING_DOMAIN_RECHECK_MS,
+    SYSTEM_ROLES,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
@@ -29,12 +30,13 @@ import { MailSyncService } from '../../src/mail-sync/mail-sync.service';
 import { DNS_PORT } from '../../src/sending-pool/dns.port';
 import { POSTMASTER_PORT } from '../../src/sending-pool/postmaster.port';
 import { postmasterDay } from '../../src/sending-pool/postmaster.http';
+import { SendingDomainsService } from '../../src/sending-pool/sending-domains.service';
 import { SendingPoolService } from '../../src/sending-pool/sending-pool.service';
 import { SuppressionService } from '../../src/suppression/suppression.service';
 import { FakeDns } from '../support/fake-dns';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
-import { FakePostmaster } from '../support/fake-postmaster';
+import { FakePostmaster, QUOTA_EXHAUSTED } from '../support/fake-postmaster';
 import { verifyAddress } from '../support/mail';
 import { eventLog, settle, type EventLog } from '../support/outbox';
 
@@ -593,9 +595,9 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             postmaster.setSpamRate(goodDomain, 35);
             const checked = await checkDomain(goodDomain);
             expect(checked.status).toBe('pass');
-            expect(checked.postmaster).toEqual({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
+            expect(checked.postmaster).toMatchObject({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
             expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 35 });
-            expect(postmaster.lookups.at(-1)).toMatchObject({ domain: goodDomain, day: yesterday });
+            expect(postmaster.lookups.at(-1)).toMatchObject({ domain: goodDomain, to: yesterday });
             expect(
                 await owner.sendingDomainStat.count({ where: { workspaceId: workspace, domainId: checked.id } }),
             ).toBe(1);
@@ -660,7 +662,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             await due(goodDomain);
             postmaster.setSpamRate(goodDomain, 5);
             const first = await checkDomain(goodDomain);
-            expect(first.postmaster).toEqual({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
+            expect(first.postmaster).toMatchObject({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
             expect(first.spamRate).toEqual({ day: yesterday, rateBps: 5 });
             // Checked again today: the reading stands, Postmaster is not asked.
             const reads = postmaster.lookups.length;
@@ -703,7 +705,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                 data: { postmasterNextReadAt: null },
             });
             const back = await checkDomain(goodDomain);
-            expect(back.postmaster).toEqual({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
+            expect(back.postmaster).toMatchObject({ status: 'ok', message: null, nextReadAt: nextUtcMidnight() });
             expect(
                 await owner.sendingDomain.findFirst({ where: { workspaceId: workspace, domain: goodDomain } }),
             ).toMatchObject({
@@ -723,6 +725,228 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             const refused = await checkDomain(goodDomain);
             expect(refused.postmaster).toMatchObject({ status: 'failed', message: expect.stringContaining('401') });
             expectAbout(refused.postmaster.nextReadAt, SENDING_DOMAIN_RECHECK_MS);
+        });
+
+        describe('#190 domain health for every sending domain', () => {
+            const personalDomain = `personal-${stamp}.example`;
+            const personalAddress = `am-${stamp}@${personalDomain}`;
+            const listedDomain = `listed-${stamp}.example`;
+            const memberEmail = `pool-member-${stamp}@example.com`;
+            let personalMailbox: string;
+            let member: Browser;
+            const domains = async (who = admin, ws = workspace): Promise<SendingDomainView[]> => {
+                const res = await as(who).get(w('/sending-domains', ws));
+                expect(res.status, JSON.stringify(res.body)).toBe(200);
+                return res.body as SendingDomainView[];
+            };
+            const named = async (name: string) => (await domains()).find((d) => d.domain === name);
+            const job = () => app.get(SendingDomainsService).checkDue();
+            /** Makes the account's Postmaster domain listing due again (it is read once a day). */
+            const listingDue = () =>
+                owner.postmasterConnection.updateMany({
+                    where: { workspaceId: workspace },
+                    data: { domainsNextListAt: null },
+                });
+
+            beforeAll(async () => {
+                personalMailbox = await connect(personalAddress, 'personal');
+                const roles = await as(admin).get(w('/roles'));
+                const memberRoleId = (roles.body as { id: string; name: string }[]).find(
+                    (r) => r.name === SYSTEM_ROLES.member,
+                )!.id;
+                const invite = await as(admin).post(w('/invites')).send({ email: memberEmail, roleId: memberRoleId });
+                const joined = await http()
+                    .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+                    .send({ password });
+                expect(joined.status).toBe(201);
+                await verifyAddress(app, http, memberEmail);
+                member = browserFrom(joined);
+            });
+
+            it('makes every connected mailbox’s domain a sending domain, used by pool or personal mail; a personal domain is monitored, never gated', async () => {
+                const personal = await named(personalDomain);
+                expect(personal).toMatchObject({ usedBy: ['personal'], gated: false, inPostmaster: false });
+                expect(await named(goodDomain)).toMatchObject({ usedBy: ['pool'], gated: true });
+                // Its DNS fails (no records at all) — and its mail still goes: the gate is the pool's.
+                const checked = await checkDomain(personalDomain);
+                expect(checked.status).toBe('fail');
+                const id = await queuePoolSend(personalMailbox, `personal-${stamp}@acme.example`);
+                expect(await send.deliver(workspace, id, noWait)).toBe('sent');
+                // Another workspace sees none of it.
+                expect((await domains(otherAdmin, otherWorkspace)).map((d) => d.domain)).not.toContain(personalDomain);
+                expect(
+                    (await as(otherAdmin).post(w(`/sending-domains/${checked.id}/check`, otherWorkspace))).status,
+                ).toBe(404);
+            });
+
+            it('reads a personal domain’s spam rate and pauses nothing for it', async () => {
+                await log.reset();
+                if ((await view()).postmaster?.status !== 'connected')
+                    expect(await connectPostmaster()).toBe('connected');
+                postmaster.setSpamRate(personalDomain, 50);
+                await due(personalDomain);
+                const checked = await checkDomain(personalDomain);
+                expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 50 });
+                expect(checked.postmaster).toMatchObject({ status: 'ok', readAt: expect.any(String) });
+                expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(0);
+                expect((await owner.mailbox.findUniqueOrThrow({ where: { id: personalMailbox } })).pausedAt).toBeNull();
+            });
+
+            it('reads the delivery-error rate alongside the spam rate, keeps each day of each, and pauses nothing for it', async () => {
+                await log.reset();
+                const before = (d: number) => {
+                    const x = new Date(`${yesterday}T00:00:00Z`);
+                    x.setUTCDate(x.getUTCDate() - d);
+                    return x.toISOString().slice(0, 10);
+                };
+                // A pool domain: errors well past anything, a spam rate under the threshold.
+                postmaster.setSpamRate(goodDomain, 5);
+                postmaster.setDeliveryErrorRate(goodDomain, 900);
+                postmaster.setDeliveryErrorRate(goodDomain, 300, before(3));
+                await due(goodDomain);
+                const checked = await checkDomain(goodDomain);
+                expect(checked.deliveryErrorRate).toEqual({ day: yesterday, rateBps: 900 });
+                expect(checked.deliveryErrorRates).toEqual([
+                    { day: before(3), rateBps: 300 },
+                    { day: yesterday, rateBps: 900 },
+                ]);
+                // A day with only delivery errors is no spam-rate day: never a zero.
+                expect(checked.spamRates.map((r) => r.day)).not.toContain(before(3));
+                expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+                expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(0);
+                expect((await view()).mailboxes.every((m) => m.paused === null)).toBe(true);
+                // Another workspace sees none of it.
+                expect(
+                    (await domains(otherAdmin, otherWorkspace)).every((d) => d.deliveryErrorRates.length === 0),
+                ).toBe(true);
+            });
+
+            it('lists every domain the connected Postmaster account holds, reads its 30-day history, once a day; another workspace sees none of it', async () => {
+                const day = (back: number) => {
+                    const d = new Date(`${yesterday}T00:00:00Z`);
+                    d.setUTCDate(d.getUTCDate() - back);
+                    return d.toISOString().slice(0, 10);
+                };
+                postmaster.addToAccount(listedDomain);
+                postmaster.addToAccount(personalDomain);
+                postmaster.setSpamRate(listedDomain, 9, day(20));
+                postmaster.setSpamRate(listedDomain, 4, day(1));
+                postmaster.setSpamRate(listedDomain, 6);
+                postmaster.setSpamRate(listedDomain, 99, day(40));
+                await listingDue();
+                const listings = postmaster.listings.length;
+                await job();
+                expect(postmaster.listings).toHaveLength(listings + 1);
+                const listed = await named(listedDomain);
+                expect(listed).toMatchObject({ usedBy: [], gated: false, inPostmaster: true });
+                // The job checked it too: the 30 days up to yesterday, oldest first; older days are not asked for.
+                expect(listed!.spamRate).toEqual({ day: yesterday, rateBps: 6 });
+                expect(listed!.spamRates).toEqual([
+                    { day: day(20), rateBps: 9 },
+                    { day: day(1), rateBps: 4 },
+                    { day: yesterday, rateBps: 6 },
+                ]);
+                expect(postmaster.lookups.at(-1)).toMatchObject({ domain: listedDomain, from: day(29), to: yesterday });
+                expect(await named(personalDomain)).toMatchObject({ usedBy: ['personal'], inPostmaster: true });
+                // Once a day: the next pass does not list again.
+                await job();
+                expect(postmaster.listings).toHaveLength(listings + 1);
+                // Another workspace: nothing listed, nothing read, nothing to open.
+                expect((await domains(otherAdmin, otherWorkspace)).map((d) => d.domain)).not.toContain(listedDomain);
+                expect(
+                    await owner.sendingDomain.count({ where: { workspaceId: otherWorkspace, inPostmaster: true } }),
+                ).toBe(0);
+                expect((await as(otherAdmin).get(w(`/sending-domains/${listed!.id}`, otherWorkspace))).status).toBe(
+                    404,
+                );
+                // Taken out of the account: still shown while a mailbox uses it, no longer marked as in Postmaster.
+                postmaster.removeFromAccount(personalDomain);
+                await listingDue();
+                await job();
+                expect(await named(personalDomain)).toMatchObject({ usedBy: ['personal'], inPostmaster: false });
+            });
+
+            it('opens one domain for an admin only', async () => {
+                const listed = (await named(listedDomain))!;
+                const res = await as(admin).get(w(`/sending-domains/${listed.id}`));
+                expect(res.status, JSON.stringify(res.body)).toBe(200);
+                expect(res.body).toEqual(listed);
+                // A member (who does not run outreach by default) opens neither the domain nor the panel's list.
+                expect((await as(member).get(w(`/sending-domains/${listed.id}`))).status).toBe(403);
+                expect((await as(member).get(w('/sending-domains'))).status).toBe(403);
+            });
+
+            it('records Google’s status and message on a 429, makes a spent quota an admin action, and never records or logs the token', async () => {
+                const warn = vi.spyOn(Logger.prototype, 'warn');
+                try {
+                    await due(goodDomain);
+                    postmaster.quotaExhaustedNext();
+                    const spent = await checkDomain(goodDomain);
+                    expect(spent.postmaster.status).toBe('quota_exhausted');
+                    expect(spent.postmaster.message).toContain('RESOURCE_EXHAUSTED');
+                    expect(spent.postmaster.message).toContain(QUOTA_EXHAUSTED.message!);
+                    expect(spent.postmaster.message).toContain('raise the Postmaster Tools API quota in Google Cloud');
+                    // The last reading stands; nothing is paused for a read that did not happen.
+                    expect(spent.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+                    expectAbout(spent.postmaster.nextReadAt, SENDING_DOMAIN_RECHECK_MS);
+
+                    await due(goodDomain);
+                    postmaster.rateLimitNext(1, null, {
+                        status: 'RESOURCE_EXHAUSTED',
+                        message: 'Too many requests, slow down',
+                        quotaLimit: null,
+                    });
+                    const limited = await checkDomain(goodDomain);
+                    expect(limited.postmaster.status).toBe('rate_limited');
+                    expect(limited.postmaster.message).toMatch(/rate-limiting/);
+                    expect(limited.postmaster.message).toContain('Too many requests, slow down');
+
+                    const logged = warn.mock.calls.map((c) => String(c[0])).join('\n');
+                    expect(logged).toContain(goodDomain);
+                    expect(logged).toContain(QUOTA_EXHAUSTED.message!);
+                    expect(logged).toContain('Too many requests, slow down');
+                    const rows = await owner.sendingDomain.findMany({ where: { workspaceId: workspace } });
+                    for (const secret of google.issued) {
+                        expect(logged).not.toContain(secret);
+                        for (const row of rows) expect(row.postmasterMessage ?? '').not.toContain(secret);
+                    }
+                } finally {
+                    warn.mockRestore();
+                }
+            });
+
+            it('a grant made for the retired v1 API is refused until an admin connects Postmaster Tools again', async () => {
+                await owner.postmasterConnection.update({
+                    where: { workspaceId: workspace },
+                    data: {
+                        grantedScopes: [
+                            'https://www.googleapis.com/auth/postmaster.readonly',
+                            'https://www.googleapis.com/auth/userinfo.email',
+                        ],
+                    },
+                });
+                await due(goodDomain);
+                const reads = postmaster.lookups.length;
+                const checked = await checkDomain(goodDomain);
+                expect(postmaster.lookups).toHaveLength(reads);
+                expect(checked.postmaster).toMatchObject({
+                    status: 'failed',
+                    message: expect.stringContaining('connect Postmaster Tools again'),
+                });
+                expect((await view()).postmaster).toMatchObject({ status: 'reconnect_needed' });
+                expect(await connectPostmaster()).toBe('connected');
+                await due(goodDomain);
+                expect((await checkDomain(goodDomain)).postmaster.status).toBe('ok');
+            });
+
+            it('disconnecting Postmaster Tools leaves no domain marked as in it', async () => {
+                await as(admin).delete(w('/sending-pool/postmaster')).expect(204);
+                expect(await owner.sendingDomain.count({ where: { workspaceId: workspace, inPostmaster: true } })).toBe(
+                    0,
+                );
+                // A domain only Postmaster brought in stays, with its history; it is no longer read.
+                expect(await named(listedDomain)).toMatchObject({ inPostmaster: false, usedBy: [] });
+            });
         });
     });
 });

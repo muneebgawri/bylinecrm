@@ -1595,6 +1595,8 @@ enum PostmasterDomainStatus {
   ok
   /// #183: Google's quota said not now; the last reading stands.
   rate_limited
+  /// #190: the project's Postmaster Tools API quota is spent (a 429, RESOURCE_EXHAUSTED naming it); an admin raises it.
+  quota_exhausted
   /// #183: Google could not be reached or did not answer.
   unreachable
   failed
@@ -1609,7 +1611,9 @@ enum PostmasterConnectionStatus {
   @@map("postmaster_connection_status")
 }
 
-/// A pool mailbox's sending domain and its last DNS check (FR-CRMS-13). One row per domain per workspace.
+/// A sending domain and its last DNS check (FR-CRMS-13): every connected mailbox's domain, pool or personal, and
+/// every domain the connected Postmaster Tools account lists (#190). One row per domain per workspace; what uses it
+/// is derived from the mailboxes, and only a pool mailbox's domain is gated.
 model SendingDomain {
   id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId            String                 @map("workspace_id") @db.Uuid
@@ -1629,6 +1633,10 @@ model SendingDomain {
   postmasterNextReadAt   DateTime?              @map("postmaster_next_read_at") @db.Timestamptz
   /// #183: consecutive rate limits, for the backoff; reset by any other answer.
   postmasterLimitedTimes Int                    @default(0) @map("postmaster_limited_times")
+  /// #190: when the check last asked Postmaster Tools, whatever it answered.
+  postmasterReadAt       DateTime?              @map("postmaster_read_at") @db.Timestamptz
+  /// #190: the connected Postmaster Tools account lists the domain (its daily `domains.list`).
+  inPostmaster           Boolean                @default(false) @map("in_postmaster")
   createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1640,17 +1648,20 @@ model SendingDomain {
   @@map("sending_domains")
 }
 
-/// A day's user-reported spam rate for a sending domain, as Postmaster Tools published it (#129):
-/// one row per domain and day, replaced when the day is read again, never deleted by the app.
+/// A day's statistics for a sending domain, as Postmaster Tools published them (#129, #190): the
+/// user-reported spam rate and the delivery-error rate, either null when Google gave none that day.
+/// One row per domain and day, replaced when the day is read again, never deleted by the app.
 model SendingDomainStat {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  domainId    String   @map("domain_id") @db.Uuid
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  domainId         String   @map("domain_id") @db.Uuid
   /// The day the rate is for, UTC.
-  day         DateTime @db.Date
+  day              DateTime @db.Date
   /// Basis points: 35 = 0.35%.
-  spamRateBps Int      @map("spam_rate_bps")
-  fetchedAt   DateTime @default(now()) @map("fetched_at") @db.Timestamptz
+  spamRateBps      Int?     @map("spam_rate_bps")
+  /// #190: rejects and temporary failures over what was sent, basis points.
+  deliveryErrorBps Int?     @map("delivery_error_bps")
+  fetchedAt        DateTime @default(now()) @map("fetched_at") @db.Timestamptz
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   domain    SendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
@@ -1675,6 +1686,8 @@ model PostmasterConnection {
   lastError              String?                    @map("last_error")
   connectedByMemberId    String                     @map("connected_by_member_id") @db.Uuid
   connectedAt            DateTime                   @map("connected_at") @db.Timestamptz
+  /// #190: when the account's domain list is read again (daily); null: at the next maintenance pass.
+  domainsNextListAt      DateTime?                  @map("domains_next_list_at") @db.Timestamptz
   updatedAt              DateTime                   @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

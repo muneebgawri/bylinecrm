@@ -4,7 +4,7 @@ import { RequireAuth } from '../auth/RequireAuth';
 import { AppShell } from '../shell/AppShell';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
-import { PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
+import { DOMAIN_PARAM, PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
 import { AuthSkeleton, Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
 import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
@@ -84,6 +84,8 @@ const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.T
 
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
+/** A sending domain's page is its own chunk: only admins open it (#190). */
+const sendingDomainPage = () => import('./w/mailboxes/DomainPage').then((m) => ({ Component: m.DomainPage }));
 
 /** The platform page is its own chunk: only platform admins ever load it (P0-14). */
 const platformWorkspacesPage = () =>
@@ -143,6 +145,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('templates', templates.list, 'Templates'),
         lazyPage('templates/:templateId', templates.editor, 'Template'),
         lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),
+        lazyPage(`mailboxes/domains/:${DOMAIN_PARAM}`, sendingDomainPage, 'Sending domain'),
         lazyPage('team', teamPage, 'Team'),
         lazyPage('settings', settings.layout, 'Settings', [
             { index: true, element: <Navigate to="members" replace /> },
