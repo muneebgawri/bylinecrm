@@ -95,7 +95,12 @@ export function HomePage() {
                                             )}
                                             <div className="min-w-0 flex-1">
                                                 <span className="block text-sm">{t.title}</span>
-                                                <span className="flex flex-wrap gap-x-2 text-xs text-text-muted">
+                                                {t.dueAt && (
+                                                    <span className="block text-xs text-text-muted">
+                                                        Due {formatWhen(t.dueAt)}
+                                                    </span>
+                                                )}
+                                                <span className="flex flex-wrap gap-x-3 text-xs">
                                                     {t.targets.map((target) => (
                                                         <Link
                                                             key={`${target.type}:${target.id}`}
@@ -105,7 +110,6 @@ export function HomePage() {
                                                             {target.label}
                                                         </Link>
                                                     ))}
-                                                    {t.dueAt && <span>Due {formatWhen(t.dueAt)}</span>}
                                                 </span>
                                             </div>
                                         </li>
