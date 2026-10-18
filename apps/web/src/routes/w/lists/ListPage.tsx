@@ -18,7 +18,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { useCustomFields, useMembersById, useViews } from '../../../api/records';
 import { useBulkChange, useRecordPages, useViewCounts, type ListCount } from '../../../api/lists';
 import { companies as companiesApi, people as peopleApi } from '../../../api/records';
-import { useMembership, usePermission } from '../../../auth/capabilities';
+import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useKeyedState } from '../../../lib/useKeyedState';
 import { saveFile } from '../../../lib/saveFile';
@@ -149,7 +149,7 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     };
 
     const [assigning, setAssigning] = useState<string[] | null>(null);
-    const enrol = usePermission('sequence:enrol');
+    const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState<EnrolPerson[] | null>(null);
     const [deleting, setDeleting] = useState<string[] | null>(null);
     const [creating, setCreating] = useState(false);
@@ -438,14 +438,14 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     discardLabel="Clear"
                     className="max-md:fixed max-md:inset-x-3 max-md:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:z-30 max-md:mx-0 max-md:w-auto max-md:flex-wrap max-md:justify-center"
                 >
-                    {object === 'person' && (
+                    {/* #192: offered only to a role that may enrol — no sequences to use, no button. */}
+                    {object === 'person' && enrol && (
                         <BulkBarAction
-                            disabled={!enrol.allowed || selected.size > SEQUENCE_LIMITS.enrolBatch}
+                            disabled={selected.size > SEQUENCE_LIMITS.enrolBatch}
                             title={
-                                enrol.reason ||
-                                (selected.size > SEQUENCE_LIMITS.enrolBatch
+                                selected.size > SEQUENCE_LIMITS.enrolBatch
                                     ? `At most ${SEQUENCE_LIMITS.enrolBatch} people at a time.`
-                                    : undefined)
+                                    : undefined
                             }
                             onClick={() =>
                                 setEnrolling(

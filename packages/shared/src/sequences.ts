@@ -170,6 +170,13 @@ export interface SequenceCounts {
     stopped: number;
 }
 
+/**
+ * Who sees a sequence (#192): `shared` — everyone who may enrol (every sequence before #192) — or
+ * `private` — its owner and the workspace's admins only. Only the owner or an admin changes it.
+ */
+export const SEQUENCE_VISIBILITIES = ['shared', 'private'] as const;
+export type SequenceVisibility = (typeof SEQUENCE_VISIBILITIES)[number];
+
 export interface SequenceView {
     id: string;
     name: string;
@@ -182,6 +189,9 @@ export interface SequenceView {
     /** Read from the enrolment rows, never a stored tally. */
     counts: SequenceCounts;
     createdBy: Actor;
+    /** The member whose sequence it is (#192): who made it, or whose API key did; null when neither is known. */
+    ownerMemberId: string | null;
+    visibility: SequenceVisibility;
     createdAt: string;
     updatedAt: string;
 }

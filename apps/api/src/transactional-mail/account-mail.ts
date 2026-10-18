@@ -4,6 +4,7 @@ import { ENV, type Env } from '../config/env';
 import {
     passwordResetMail,
     signupInvitationMail,
+    taskDigestMail,
     twentySyncFailingMail,
     verificationMail,
     workspaceInvitationMail,
@@ -105,6 +106,35 @@ export class AccountMail {
                 to: input.to,
                 idempotencyKey: `twenty-sync-${input.runId}-${input.memberId}`,
                 ...twentySyncFailingMail(input),
+            },
+            input.workspaceId,
+        );
+    }
+
+    /**
+     * A member's morning digest of tasks due and overdue (#192): one per member per UTC day, whatever
+     * runs the digest again that day.
+     */
+    taskDigest(
+        tx: MailTransaction,
+        input: {
+            workspaceId: string;
+            to: string;
+            memberId: string;
+            day: string;
+            workspaceName: string;
+            overdue: Parameters<typeof taskDigestMail>[0]['overdue'];
+            today: Parameters<typeof taskDigestMail>[0]['today'];
+            path: string;
+        },
+    ): Promise<void> {
+        return this.outbox.record(
+            tx,
+            {
+                kind: 'task_digest',
+                to: input.to,
+                idempotencyKey: `task-digest-${input.memberId}-${input.day}`,
+                ...taskDigestMail({ ...input, url: new URL(input.path, this.env.WEB_URL).toString() }),
             },
             input.workspaceId,
         );

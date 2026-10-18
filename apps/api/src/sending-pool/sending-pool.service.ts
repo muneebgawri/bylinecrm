@@ -16,7 +16,7 @@ import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
-import { DOMAIN_WITH_RATE, domainView } from './domain-view';
+import { DOMAIN_WITH_RATE, domainUsesIn, domainView } from './domain-view';
 import { sendingDomainOf } from './pool-mailbox';
 import { PostmasterService } from './postmaster.service';
 
@@ -318,7 +318,8 @@ export class SendingPoolService {
         return this.rls.withWorkspace(async (tx) => {
             const settings = await this.settingsIn(tx);
             const domains = await tx.sendingDomain.findMany({ ...DOMAIN_WITH_RATE, orderBy: { domain: 'asc' } });
-            const byDomain = new Map(domains.map((d) => [d.domain, domainView(d)]));
+            const uses = await domainUsesIn(tx);
+            const byDomain = new Map(domains.map((d) => [d.domain, domainView(d, uses, now)]));
             const mailboxes = await tx.mailbox.findMany({
                 where: { purpose: 'pool', status: { not: 'disconnected' } },
                 orderBy: { email: 'asc' },

@@ -57,3 +57,4 @@ export * from './twenty-import.js';
 export * from './verification.js';
 export * from './enrichment.js';
 export * from './tracking.js';
+export * from './notifications.js';

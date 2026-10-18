@@ -55,13 +55,21 @@ describe('tenant routes declare a capability', () => {
         expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
     });
 
-    it('the routes open to any member are exactly these: what the caller may do, and their own signature details', () => {
+    it('the routes open to any member are exactly the ones about the caller themselves', () => {
         const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
-        expect(open.sort()).toEqual([
-            // #193: a member's own; an admin's for anyone — the service checks which.
-            'SignatureProfileController.get',
-            'SignatureProfileController.put',
-            'WorkspaceMeController.standing',
-        ]);
+        // What the caller may do, (#192) the caller's own notifications, open tasks and notification settings,
+        // and (#193) the caller's own signature details — an admin's for anyone, the service checks which.
+        expect(open.sort()).toEqual(
+            [
+                'WorkspaceMeController.standing',
+                'NotificationsController.list',
+                'NotificationsController.read',
+                'MyTasksController.list',
+                'NotificationSettingsController.get',
+                'NotificationSettingsController.update',
+                'SignatureProfileController.get',
+                'SignatureProfileController.put',
+            ].sort(),
+        );
     });
 });

@@ -1,4 +1,4 @@
-import { SEQUENCE_LIMITS, SEQUENCE_WINDOW_DEFAULTS } from '@bylinecrm/shared';
+import { SEQUENCE_LIMITS, SEQUENCE_WINDOW_DEFAULTS, type SequenceVisibility } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -12,6 +12,7 @@ import {
     EmptyState,
     Field,
     Input,
+    RadioGroup,
     PageHeader,
 } from '@bylinecrm/ui';
 import { ListOrdered } from 'lucide-react';
@@ -26,6 +27,7 @@ import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { CREATE_PARAM, paths } from '../../paths';
 import { SEQUENCE_STATUS_LABEL, SEQUENCE_STATUS_TONE } from './sequenceText';
+import { VISIBILITY_LEGEND, VISIBILITY_OPTIONS } from './visibility';
 
 type Tab = 'current' | 'archived';
 
@@ -115,12 +117,15 @@ export function SequencesPage() {
                             header: 'Name',
                             className: 'font-medium',
                             cell: (s) => (
-                                <Link
-                                    to={paths.sequence(workspaceId, s.id)}
-                                    className="hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
-                                >
-                                    {s.name}
-                                </Link>
+                                <span className="flex flex-wrap items-center gap-2">
+                                    <Link
+                                        to={paths.sequence(workspaceId, s.id)}
+                                        className="hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
+                                    >
+                                        {s.name}
+                                    </Link>
+                                    {s.visibility === 'private' && <Badge status="neutral">Private</Badge>}
+                                </span>
                             ),
                         },
                         {
@@ -174,15 +179,17 @@ function NewSequenceDialog({
     const navigate = useNavigate();
     const create = useCreateSequence(workspaceId);
     const [name, setName] = useState('');
+    const [visibility, setVisibility] = useState<SequenceVisibility>('shared');
     const close = () => {
         setName('');
+        setVisibility('shared');
         create.reset();
         onClose();
     };
     const submit = (event: FormEvent) => {
         event.preventDefault();
         create.mutate(
-            { name: name.trim(), timeZone: browserZone(), window: { ...SEQUENCE_WINDOW_DEFAULTS } },
+            { name: name.trim(), timeZone: browserZone(), window: { ...SEQUENCE_WINDOW_DEFAULTS }, visibility },
             {
                 onSuccess: (created: SequenceView) => {
                     close();
@@ -211,6 +218,12 @@ function NewSequenceDialog({
                                 placeholder="Q4 agency outreach"
                             />
                         </Field>
+                        <RadioGroup
+                            legend={VISIBILITY_LEGEND}
+                            options={VISIBILITY_OPTIONS}
+                            value={visibility}
+                            onValueChange={setVisibility}
+                        />
                         {general && (
                             <p role="alert" className="m-0 text-xs text-danger">
                                 {general}

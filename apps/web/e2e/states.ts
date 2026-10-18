@@ -17,6 +17,7 @@ const RECORD_IDS: Record<string, string> = {
     template: IDS.outreachTemplate,
     sequence: IDS.sequence,
     settingsPipeline: IDS.pipeline,
+    sendingDomain: IDS.sendingDomain,
 };
 
 export interface RouteState {

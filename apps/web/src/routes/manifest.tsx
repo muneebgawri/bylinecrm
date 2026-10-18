@@ -4,7 +4,7 @@ import { RequireAuth } from '../auth/RequireAuth';
 import { AppShell } from '../shell/AppShell';
 import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
-import { PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
+import { DOMAIN_PARAM, PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
 import { AuthSkeleton, Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
 import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
@@ -80,11 +80,16 @@ const sequences = {
     builder: () => import('./w/sequences/SequencePage').then((m) => ({ Component: m.SequencePage })),
 };
 
+/** The dashboard is its own chunk: My tasks (#192). */
+const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.HomePage }));
+
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
 const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
 
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
+/** A sending domain's page is its own chunk: only admins open it (#190). */
+const sendingDomainPage = () => import('./w/mailboxes/DomainPage').then((m) => ({ Component: m.DomainPage }));
 
 /** The platform page is its own chunk: only platform admins ever load it (P0-14). */
 const platformWorkspacesPage = () =>
@@ -131,7 +136,7 @@ const workspaceRoutes: RouteObject = {
     errorElement: <RouteError />,
     children: [
         { index: true, element: <Navigate to="home" replace /> },
-        page('home', 'home', 'Dashboard'),
+        lazyPage('home', homePage, 'Dashboard'),
         page('reports', 'reports', 'Reports'),
         lazyPage('people', lists.people, 'People'),
         lazyPage('people/:personId', records.person, 'Person'),
@@ -144,6 +149,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('templates', templates.list, 'Templates'),
         lazyPage('templates/:templateId', templates.editor, 'Template'),
         lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),
+        lazyPage(`mailboxes/domains/:${DOMAIN_PARAM}`, sendingDomainPage, 'Sending domain'),
         lazyPage('team', teamPage, 'Team'),
         lazyPage('settings', settings.layout, 'Settings', [
             { index: true, element: <Navigate to="members" replace /> },

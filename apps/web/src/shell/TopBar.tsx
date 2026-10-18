@@ -9,10 +9,11 @@ import {
     focusRing,
     useIsNarrow,
 } from '@bylinecrm/ui';
-import { Bell, Building2, FileText, Handshake, ListTodo, Mail, PanelLeft, Plus, Search, Users } from 'lucide-react';
+import { Building2, FileText, Handshake, ListTodo, Mail, PanelLeft, Plus, Search, Users } from 'lucide-react';
 import { useMatches, useNavigate } from 'react-router';
 import { useCan } from '../auth/capabilities';
 import { formatShortcut } from '../commands/shortcuts';
+import { NotificationsBell } from './NotificationsBell';
 import { CREATE_PARAM, paths, withCreate } from '../routes/paths';
 
 /** A route declares its breadcrumb through `handle.crumb`; the top bar reads the deepest one. */
@@ -99,13 +100,7 @@ export function TopBar({ workspaceId, onToggleSidebar, sidebarCollapsed, onOpenP
                     </>
                 )}
             </button>
-            <Button variant="ghost" size="icon" shape="square" aria-label="Notifications" className="relative">
-                <Bell aria-hidden />
-                <span
-                    aria-hidden
-                    className="absolute top-1.75 right-1.75 size-1.75 rounded-full border-2 border-surface bg-danger"
-                />
-            </Button>
+            <NotificationsBell workspaceId={workspaceId} />
             <CreateMenu workspaceId={workspaceId} />
         </header>
     );
