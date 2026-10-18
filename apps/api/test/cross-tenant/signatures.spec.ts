@@ -818,4 +818,51 @@ describe('#193 email signatures', () => {
             expect((await eventTypes(memberId)).status).toBe(409);
         });
     });
+
+    describe('#193 social icons', () => {
+        const details = (socials: object) => ({ jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia', socials });
+
+        it('a member sets their profile links; each must be https on that network’s own site', async () => {
+            const saved = await putProfile(memberId, details({ linkedin: 'https://www.linkedin.com/in/mia', x: 'https://x.com/mia' }), member);
+            expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+            expect((saved.body as SignatureProfileView).socials).toEqual({
+                linkedin: 'https://www.linkedin.com/in/mia',
+                x: 'https://x.com/mia',
+            });
+            for (const bad of [
+                { linkedin: 'https://evil.example.com/in/mia' },
+                { facebook: 'http://facebook.com/mia' },
+                { myspace: 'https://myspace.com/mia' },
+            ]) {
+                expect((await putProfile(memberId, details(bad), member)).status, JSON.stringify(bad)).toBe(400);
+            }
+            // Left out, the links are kept.
+            await putProfile(memberId, { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' }, member).expect(200);
+            expect(((await as(member).get(w(`/members/${memberId}/signature-profile`))).body as SignatureProfileView).socials).toEqual({
+                linkedin: 'https://www.linkedin.com/in/mia',
+                x: 'https://x.com/mia',
+            });
+            // An admin may set them for a member; another member may not.
+            expect((await putProfile(adminMemberId, details({ x: 'https://x.com/matt' }), member)).status).toBe(403);
+            await putProfile(adminMemberId, { jobTitle: 'Founder', phone: '+92 300 1234567', slotlineUsername: 'matt', socials: { x: 'https://x.com/matt' } }).expect(200);
+        });
+
+        it('renders as linked icons the CRM serves itself, no sign-in needed', async () => {
+            const res = await as(member)
+                .post(w('/signatures/preview'))
+                .send({ mailboxId: memberMailbox, signature: doc(para(v('sender.socials'))) });
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            const html = (res.body as RenderedSignature).html;
+            const icon = /<a href="https:\/\/www\.linkedin\.com\/in\/mia"[^>]*><img src="(https?:\/\/[^"]+\/api\/public\/social-icons\/v1\/linkedin\.png)" alt="LinkedIn"/.exec(html);
+            expect(icon, html).not.toBeNull();
+            expect(html).toContain('/api/public/social-icons/v1/x.png');
+            const served = await http().get(new URL(icon![1]!).pathname);
+            expect(served.status).toBe(200);
+            expect(served.headers['content-type']).toBe('image/png');
+            expect(served.headers['cache-control']).toContain('public');
+            expect((await http().get('/api/public/social-icons/v1/myspace.png')).status).toBe(404);
+            expect((await http().get('/api/public/social-icons/v1/..%2F..%2Fpackage.json')).status).toBe(404);
+        });
+    });
 });
+

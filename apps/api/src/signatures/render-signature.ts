@@ -36,16 +36,33 @@ export interface SignatureValues {
 }
 
 const text = (value: string | null) => ({ html: value ? escapeHtml(value) : '', text: value ?? '' });
+const styled = (style: string, value: string | null) =>
+    value ? { html: `<span style="${style}">${escapeHtml(value)}</span>`, text: value } : text(null);
+
+/**
+ * How a signature looks in an email: inline styles only, which every mail client keeps — a table of tight
+ * rows in a system font, the name bold, the title grey, links in one colour without underline. Neutral
+ * colours: a signature sits under any message, in any workspace.
+ */
+export const SIGNATURE_STYLE = {
+    table: 'border-collapse:collapse;margin-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151',
+    row: 'padding:0 0 10px 0',
+    line: 'margin:0',
+    name: 'font-size:15px;font-weight:bold;color:#111827',
+    title: 'color:#6b7280',
+    link: 'color:#2563eb;text-decoration:none',
+    logo: 'display:block;border:0',
+} as const;
 
 function variable(path: SignatureVariablePath, values: SignatureValues): { html: string; text: string } {
     const { sender, workspace } = values;
     switch (path) {
         case 'sender.fullName':
-            return text(sender.fullName);
+            return styled(SIGNATURE_STYLE.name, sender.fullName);
         case 'sender.firstName':
             return text(sender.firstName);
         case 'sender.title':
-            return text(sender.title);
+            return styled(SIGNATURE_STYLE.title, sender.title);
         case 'sender.phone':
             return text(sender.phone);
         case 'workspace.name':
@@ -53,14 +70,21 @@ function variable(path: SignatureVariablePath, values: SignatureValues): { html:
         case SIGNATURE_BOOKING_VARIABLE:
             return sender.bookingLink
                 ? {
-                      html: `<a href="${escapeHtml(sender.bookingLink)}">${escapeHtml(BOOKING_LINK_LABEL)}</a>`,
+                      html: `<a href="${escapeHtml(sender.bookingLink)}" style="${SIGNATURE_STYLE.link}">${escapeHtml(BOOKING_LINK_LABEL)}</a>`,
                       text: `${BOOKING_LINK_LABEL}: ${sender.bookingLink}`,
                   }
                 : text(null);
         case SIGNATURE_LOGO_VARIABLE:
             return workspace.logo
                 ? {
-                      html: imageHtml(workspace.logo.url, workspace.name, workspace.logo.width, workspace.logo.height),
+                      // Stored at twice the size it is shown (`LOGO_WIDTH`): sharp on a high-density screen.
+                      html: imageHtml(
+                          workspace.logo.url,
+                          workspace.name,
+                          Math.round(workspace.logo.width / 2),
+                          Math.round(workspace.logo.height / 2),
+                          SIGNATURE_STYLE.logo,
+                      ),
                       text: '',
                   }
                 : text(null);
@@ -71,10 +95,22 @@ export function renderSignature(doc: RichText, values: SignatureValues): Rendere
     const out = renderRichText(
         doc,
         (path) => (isSignatureVariable(path) ? variable(path, values) : text(null)),
-        { images: true, dropEmptyLines: true },
+        {
+            images: true,
+            dropEmptyLines: true,
+            layout: {
+                block: (html) => `<tr><td style="${SIGNATURE_STYLE.row}">${html}</td></tr>`,
+                paragraph: SIGNATURE_STYLE.line,
+                link: SIGNATURE_STYLE.link,
+            },
+        },
         SIGNATURE_IMAGE_MAX_WIDTH,
     );
-    return { html: out.html, text: out.text };
+    if (out.html === '') return { html: '', text: out.text };
+    return {
+        html: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="${SIGNATURE_STYLE.table}">${out.html}</table>`,
+        text: out.text,
+    };
 }
 
 function imageProblems(node: RichTextNode, at: string): FieldError[] {

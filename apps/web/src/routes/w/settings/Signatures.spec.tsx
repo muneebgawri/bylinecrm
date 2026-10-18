@@ -30,6 +30,7 @@ const PROFILE: SignatureProfileView = {
     slotlineConfigured: true,
     slotlineKey: null,
     slotlineEvent: null,
+    socials: {},
 };
 const NONE: MailboxSignatureView = {
     mailboxId: 'mb-1',
@@ -85,6 +86,7 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
                 jobTitle: 'Account manager',
                 phone: '+92 300 1234567',
                 slotlineUsername: 'kate',
+                socials: {},
             }),
         );
         expect(await screen.findByRole('link', { name: 'https://bookings.example.com/kate' })).toBeInTheDocument();
@@ -182,6 +184,7 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
                 jobTitle: 'Partner',
                 phone: null,
                 slotlineUsername: 'sam',
+                socials: {},
             }),
         );
     });
@@ -252,5 +255,23 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
                 expect(seen.find((r) => r.url.endsWith('/slotline-event'))?.body).toEqual({ slug: 'vip-15' }),
             );
         });
+    });
+
+    it('#193 a member adds their social profiles, shown as icons in their signature', async () => {
+        const seen = open([
+            (r) =>
+                r.method === 'PUT' && r.url.endsWith('/members/m-1/signature-profile')
+                    ? json({ ...PROFILE, ...(r.body as object) })
+                    : undefined,
+        ]);
+        await userEvent.type(await screen.findByLabelText('LinkedIn'), 'https://www.linkedin.com/in/kate');
+        await userEvent.type(screen.getByLabelText('X'), 'https://x.com/kate');
+        await userEvent.click(screen.getByRole('button', { name: 'Save details' }));
+        await waitFor(() =>
+            expect((seen.find((r) => r.method === 'PUT')?.body as { socials: object }).socials).toEqual({
+                linkedin: 'https://www.linkedin.com/in/kate',
+                x: 'https://x.com/kate',
+            }),
+        );
     });
 });

@@ -66,14 +66,16 @@ export function isSignatureVariable(path: string): path is SignatureVariablePath
 const line = (...content: RichTextNode[]): RichTextNode => ({ type: 'paragraph', content });
 const variable = (path: SignatureVariablePath): RichTextNode => ({ type: 'variable', attrs: { path } });
 
-/** Where every signature starts — the workspace default and a member's own: name, title, phone, the booking link, the logo. */
+/**
+ * Where every signature starts — the workspace default and a member's own: name and title, the logo under
+ * them, then phone and the booking link together.
+ */
 export const SIGNATURE_STARTER: RichText = {
     type: 'doc',
     content: [
         line(variable('sender.fullName'), { type: 'hardBreak' }, variable('sender.title')),
-        line(variable('sender.phone')),
-        line(variable(SIGNATURE_BOOKING_VARIABLE)),
         line(variable(SIGNATURE_LOGO_VARIABLE)),
+        line(variable('sender.phone'), { type: 'hardBreak' }, variable(SIGNATURE_BOOKING_VARIABLE)),
     ],
 };
 
@@ -85,8 +87,8 @@ export const SIGNATURE_PROFILE_TEXT_MAX = 100;
 export const LOGO_MAX_BYTES = 200 * 1024;
 /** PNG or JPEG. SVG is not taken: rasterising it needs a library outside the licence allowlist (resvg, MPL-2.0). */
 export const LOGO_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
-/** Every logo is stored as a PNG at most this wide. */
-export const LOGO_WIDTH = 300;
+/** Every logo is stored as a PNG at most this wide; a signature shows it at half that, so it is sharp on a high-density screen. */
+export const LOGO_WIDTH = 360;
 /** A replaced logo's address keeps answering this long, for mail already sent. */
 export const LOGO_GRACE_DAYS = 30;
 /** Where a logo is served, on `APP_URL`: `/api/public/logos/<token>.png`. */

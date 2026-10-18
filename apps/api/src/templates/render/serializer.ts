@@ -48,6 +48,11 @@ export interface WalkOptions {
      * Absent: the variable renders as any other.
      */
     signature?: { at: RenderedSignature | null } | undefined;
+    /**
+     * Email layout with inline styles (a signature, #193): each top-level block wrapped (a table row),
+     * a paragraph's own style, a link's style. Absent: plain tags, as a template body is written.
+     */
+    layout?: { block: (html: string) => string; paragraph: string; link: string } | undefined;
 }
 
 const TEMPLATE_WALK: WalkOptions = { images: false, dropEmptyLines: false };
@@ -84,11 +89,18 @@ export function safeImageSrc(src: unknown): string | null {
 }
 
 /** `<img>` as an email carries it: source, alt text, and the size when known — nothing else. */
-export function imageHtml(src: string, alt: string, width?: number | null, height?: number | null): string {
+export function imageHtml(
+    src: string,
+    alt: string,
+    width?: number | null,
+    height?: number | null,
+    style?: string,
+): string {
     return (
         `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"` +
         (width ? ` width="${width}"` : '') +
         (height ? ` height="${height}"` : '') +
+        (style ? ` style="${style}"` : '') +
         '>'
     );
 }
@@ -153,8 +165,9 @@ class Walker {
         for (const node of nodes ?? []) {
             const out = this.block(node, depth);
             if (!out) continue;
-            html.push(out.html);
-            text.push(out.text);
+            html.push(depth === 0 && this.options.layout ? this.options.layout.block(out.html) : out.html);
+            // A block that shows only an image says nothing in the text part.
+            if (out.text !== '' || !this.options.dropEmptyLines) text.push(out.text);
         }
         return { html: html.join(''), text };
     }
@@ -168,7 +181,8 @@ class Walker {
                     return this.placeSignature(node.content ?? [], tag, this.options.signature.at);
                 }
                 const inline = this.lines(node.content);
-                return inline && { html: `<${tag}>${inline.html}</${tag}>`, text: inline.text };
+                const style = tag === 'p' && this.options.layout ? ` style="${this.options.layout.paragraph}"` : '';
+                return inline && { html: `<${tag}${style}>${inline.html}</${tag}>`, text: inline.text };
             }
             case 'bulletList':
             case 'orderedList': {
@@ -317,7 +331,11 @@ class Walker {
         const href = safeHref(marks.find((m) => m.type === 'link')?.attrs?.['href']);
         if (href === null) return { html, text: value };
         const shown = href === value || href === `mailto:${value}`;
-        return { html: `<a href="${escapeHtml(href)}">${html}</a>`, text: shown ? value : `${value} (${href})` };
+        const style = this.options.layout ? ` style="${this.options.layout.link}"` : '';
+        return {
+            html: `<a href="${escapeHtml(href)}"${style}>${html}</a>`,
+            text: shown ? value : `${value} (${href})`,
+        };
     }
 }
 
