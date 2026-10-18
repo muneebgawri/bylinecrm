@@ -113,7 +113,7 @@ function api(calls: Call[], total: { people?: number; exact?: boolean } = {}) {
     });
 }
 
-function renderAt(search: string) {
+function renderAt(search: string, member: MembershipSummary = membership) {
     const router = createMemoryRouter([{ path: '/w/:workspaceId/people', element: <PeopleListPage /> }], {
         initialEntries: [`/w/${WS}/people${search}`],
     });
@@ -121,7 +121,7 @@ function renderAt(search: string) {
         <ThemeProvider>
             <TooltipProvider>
                 <QueryClientProvider client={createQueryClient()}>
-                    <CapabilitiesProvider membership={membership}>
+                    <CapabilitiesProvider membership={member}>
                         <RouterProvider router={router} />
                     </CapabilitiesProvider>
                 </QueryClientProvider>
@@ -356,6 +356,25 @@ describe('People list', () => {
         vi.stubGlobal('fetch', api(calls));
         renderAt('');
         expect(await screen.findByRole('tablist', { name: 'Views' })).toHaveClass('scrollbar-hidden');
+    });
+
+    it('#192 offers no “Enrol in sequence” at all to a role that cannot enrol', async () => {
+        const user = userEvent.setup();
+        vi.stubGlobal('fetch', api([]));
+        renderAt('', { ...membership, capabilities: CAPABILITIES.filter((c) => c !== 'sequence:enrol') });
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Dana Reyes' }));
+        expect(await screen.findByRole('button', { name: 'Delete' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Enrol in sequence' })).toBeNull();
+    });
+
+    it('#192 offers it to a role that can', async () => {
+        const user = userEvent.setup();
+        vi.stubGlobal('fetch', api([]));
+        renderAt('');
+        await screen.findByRole('button', { name: 'Dana Reyes' });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Dana Reyes' }));
+        expect(await screen.findByRole('button', { name: 'Enrol in sequence' })).toBeEnabled();
     });
 
     it('exports a selection with one request whose filter names the ids', async () => {
