@@ -677,6 +677,7 @@ export const templateVariables: TemplateVariablesView = {
         { path: 'person.lastName', source: 'person', label: 'Last name', type: 'text', optional: false },
         { path: 'company.name', source: 'company', label: 'Company name', type: 'text', optional: false },
         { path: 'deal.amount', source: 'deal', label: 'Deal amount', type: 'money', optional: false },
+        { path: 'sender.signature', source: 'sender', label: 'Signature', type: 'text', optional: true },
     ],
     custom: [{ path: 'person.custom.beat', source: 'person', label: 'Beat', type: 'select', optional: false }],
 };
@@ -810,6 +811,7 @@ export function mailboxSignature(mailboxId: string): MailboxSignatureView {
 export function signatureProfile(memberId: string): SignatureProfileView {
     return {
         memberId,
+        name: membersSummary.find((m) => m.memberId === memberId)?.name ?? null,
         jobTitle: 'Account manager',
         phone: '+44 20 7946 0000',
         slotlineUsername: 'kate',

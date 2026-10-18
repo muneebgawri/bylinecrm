@@ -5,6 +5,7 @@ import {
     type MailboxSignatureView,
     type RichText,
     type SignatureLockable,
+    type SignatureProfileView,
     type SignatureSettingsView,
 } from '@bylinecrm/shared';
 import {
@@ -34,6 +35,7 @@ import {
     usePutSignatureProfile,
     usePutSignatureSettings,
     useSignatureProfile,
+    useSignatureProfiles,
     useSignatureSettings,
     useWorkspaceLogo,
 } from '../../../api/signatures';
@@ -82,6 +84,7 @@ export function Signatures() {
                 </p>
             </div>
             {memberId && <DetailsForm workspaceId={workspaceId} memberId={memberId} />}
+            {isAdmin && <MembersDetails workspaceId={workspaceId} selfId={memberId} />}
             {!settings.data || !mailboxes.data ? (
                 <LoadingRegion label="Loading signatures" className="h-24" />
             ) : (
@@ -120,12 +123,78 @@ function DetailsForm({ workspaceId, memberId }: { workspaceId: string; memberId:
     if (profile.isError) throw profile.error;
     if (!profile.data) return <LoadingRegion label="Loading your details" className="h-24" />;
     return (
-        <DetailsFields
-            key={JSON.stringify(profile.data)}
-            workspaceId={workspaceId}
-            memberId={memberId}
-            profile={profile.data}
-        />
+        <section aria-labelledby="signature-details-title" className="rounded-lg border border-border bg-surface p-4">
+            <h3 id="signature-details-title" className="m-0 mb-3 text-sm font-semibold">
+                Your details
+            </h3>
+            <DetailsFields
+                key={JSON.stringify(profile.data)}
+                workspaceId={workspaceId}
+                memberId={memberId}
+                profile={profile.data}
+                own
+            />
+        </section>
+    );
+}
+
+/** An admin's list of the other members' details (#193): to set a member's Slotline username for them. */
+function MembersDetails({ workspaceId, selfId }: { workspaceId: string; selfId: string | null }) {
+    const profiles = useSignatureProfiles(workspaceId);
+    const [open, setOpen] = useState<string | null>(null);
+    if (profiles.isError) throw profiles.error;
+    const others = (profiles.data ?? []).filter((p) => p.memberId !== selfId);
+    return (
+        <section aria-label="Members’ details" className="rounded-lg border border-border bg-surface p-4">
+            <h3 className="m-0 mb-1 text-sm font-semibold">Members’ details</h3>
+            <p className="m-0 mb-3 text-[13px] text-text-muted">
+                What each member’s signature reads of them. Set a Slotline username for a member who has not.
+            </p>
+            {!profiles.data ? (
+                <LoadingRegion label="Loading members’ details" className="h-16" />
+            ) : others.length === 0 ? (
+                <p className="m-0 text-[13px] text-text-muted">No other members yet.</p>
+            ) : (
+                <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
+                    {others.map((p) => {
+                        const name = p.name ?? 'A member';
+                        return (
+                            <li key={p.memberId} className="py-2.5 first:pt-0 last:pb-0">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <span className="min-w-0 flex-1 text-[13px] font-medium">{name}</span>
+                                    <span className="text-xs text-text-muted">
+                                        {p.slotlineUsername
+                                            ? `Slotline: ${p.slotlineUsername}`
+                                            : 'No Slotline username'}
+                                    </span>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        shape="square"
+                                        aria-expanded={open === p.memberId}
+                                        aria-label={`Edit ${name}’s details`}
+                                        onClick={() => setOpen((o) => (o === p.memberId ? null : p.memberId))}
+                                    >
+                                        {open === p.memberId ? 'Close' : 'Edit'}
+                                    </Button>
+                                </div>
+                                {open === p.memberId && (
+                                    <div className="mt-3">
+                                        <DetailsFields
+                                            key={JSON.stringify(p)}
+                                            workspaceId={workspaceId}
+                                            memberId={p.memberId}
+                                            profile={p}
+                                            own={false}
+                                        />
+                                    </div>
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </section>
     );
 }
 
@@ -133,10 +202,13 @@ function DetailsFields({
     workspaceId,
     memberId,
     profile,
+    own,
 }: {
     workspaceId: string;
     memberId: string;
-    profile: NonNullable<ReturnType<typeof useSignatureProfile>['data']>;
+    profile: SignatureProfileView;
+    /** The caller's own details, or a member's an admin sets. */
+    own: boolean;
 }) {
     const put = usePutSignatureProfile(workspaceId, memberId);
     const [jobTitle, setJobTitle] = useState(profile.jobTitle ?? '');
@@ -157,60 +229,60 @@ function DetailsFields({
         );
     };
     return (
-        <section aria-labelledby="signature-details-title" className="rounded-lg border border-border bg-surface p-4">
-            <h3 id="signature-details-title" className="m-0 mb-3 text-sm font-semibold">
-                Your details
-            </h3>
-            <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Job title" error={fieldErrorAt(put.error, 'jobTitle')}>
-                        <Input
-                            value={jobTitle}
-                            onChange={(e) => setJobTitle(e.target.value)}
-                            autoComplete="organization-title"
-                        />
-                    </Field>
-                    <Field label="Phone" error={fieldErrorAt(put.error, 'phone')}>
-                        <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
-                    </Field>
-                </div>
-                <Field
-                    label="Slotline username"
-                    hint={
-                        profile.slotlineConfigured
-                            ? 'Your booking page is the Slotline site followed by this. Without it, your signature leaves out “Book a quick meeting”.'
-                            : 'Slotline is not set up yet: an admin connects it under Settings → Slotline.'
-                    }
-                    error={fieldErrorAt(put.error, 'slotlineUsername')}
-                >
+        <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Job title" error={fieldErrorAt(put.error, 'jobTitle')}>
                     <Input
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className="max-w-[20rem]"
+                        value={jobTitle}
+                        onChange={(e) => setJobTitle(e.target.value)}
+                        autoComplete={own ? 'organization-title' : 'off'}
                     />
                 </Field>
-                {profile.bookingLink && (
-                    <p className="m-0 text-[13px] text-text-muted">
-                        Your booking link:{' '}
-                        <a
-                            href={profile.bookingLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="break-all text-accent underline-offset-2 hover:underline"
-                        >
-                            {profile.bookingLink}
-                        </a>
-                    </p>
-                )}
-                <div>
-                    <Button type="submit" shape="square" loading={put.isPending}>
-                        Save details
-                    </Button>
-                </div>
-            </form>
-        </section>
+                <Field label="Phone" error={fieldErrorAt(put.error, 'phone')}>
+                    <Input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        autoComplete={own ? 'tel' : 'off'}
+                    />
+                </Field>
+            </div>
+            <Field
+                label="Slotline username"
+                hint={
+                    profile.slotlineConfigured
+                        ? `${own ? 'Your' : 'Their'} booking page is the Slotline site followed by this. Without it, ${own ? 'your' : 'their'} signature leaves out “Book a quick meeting”.`
+                        : 'Slotline is not set up yet: an admin connects it under Settings → Slotline.'
+                }
+                error={fieldErrorAt(put.error, 'slotlineUsername')}
+            >
+                <Input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="max-w-[20rem]"
+                />
+            </Field>
+            {profile.bookingLink && (
+                <p className="m-0 text-[13px] text-text-muted">
+                    {own ? 'Your booking link:' : 'Booking link:'}{' '}
+                    <a
+                        href={profile.bookingLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-accent underline-offset-2 hover:underline"
+                    >
+                        {profile.bookingLink}
+                    </a>
+                </p>
+            )}
+            <div>
+                <Button type="submit" shape="square" loading={put.isPending}>
+                    Save details
+                </Button>
+            </div>
+        </form>
     );
 }
 

@@ -33,6 +33,7 @@ import {
     emptyVariablesText,
     isBlank,
     ownSendingMailboxes,
+    placesSignature,
     refusedVariables,
     sendInput,
     sendsAsTemplate,
@@ -402,16 +403,23 @@ function ComposerForm({
                         aria-label="Signature"
                         className="rounded-none border-0 [&_.rich-text]:min-h-0 [&_[role=toolbar]]:hidden focus-within:[&_[role=toolbar]]:flex"
                     />
-                    {!signatureLocked && (
-                        <div className="flex justify-end px-2 pb-1.5">
-                            <Button
-                                size="xs"
-                                shape="square"
-                                variant="ghost"
-                                onClick={() => setOwnSignature({ mailboxId, doc: null })}
-                            >
-                                Remove signature
-                            </Button>
+                    {(placesSignature(body) || !signatureLocked) && (
+                        <div className="flex items-center justify-end gap-2 px-2 pb-1.5">
+                            {placesSignature(body) && (
+                                <p className="m-0 mr-auto text-xs text-text-muted">
+                                    Goes where the message says {'{{sender.signature}}'}.
+                                </p>
+                            )}
+                            {!signatureLocked && (
+                                <Button
+                                    size="xs"
+                                    shape="square"
+                                    variant="ghost"
+                                    onClick={() => setOwnSignature({ mailboxId, doc: null })}
+                                >
+                                    Remove signature
+                                </Button>
+                            )}
                         </div>
                     )}
                 </div>

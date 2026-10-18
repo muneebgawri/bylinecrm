@@ -22,6 +22,7 @@ const keys = {
     settings: (workspaceId: string) => [...base(workspaceId), 'settings'] as const,
     mailbox: (workspaceId: string, mailboxId: string) => [...base(workspaceId), 'mailbox', mailboxId] as const,
     profile: (workspaceId: string, memberId: string) => [...base(workspaceId), 'profile', memberId] as const,
+    profiles: (workspaceId: string) => [...base(workspaceId), 'profiles'] as const,
 };
 
 export const signatures = {
@@ -46,6 +47,8 @@ export const signatures = {
         }),
     importFromGmail: (workspaceId: string, mailboxId: string) =>
         request<ImportedSignature>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/signature/import`)),
+    profiles: (workspaceId: string, signal?: AbortSignal) =>
+        request<SignatureProfileView[]>('GET', workspacePath(workspaceId, '/members/signature-profiles'), { signal }),
     profile: (workspaceId: string, memberId: string, signal?: AbortSignal) =>
         request<SignatureProfileView>('GET', workspacePath(workspaceId, `/members/${memberId}/signature-profile`), {
             signal,
@@ -115,10 +118,21 @@ export function useSignatureProfile(workspaceId: string, memberId: string | null
     });
 }
 
+/** Every member's details: an admin's list (#193). */
+export function useSignatureProfiles(workspaceId: string) {
+    return useQuery({
+        queryKey: keys.profiles(workspaceId),
+        queryFn: ({ signal }) => signatures.profiles(workspaceId, signal),
+    });
+}
+
 export function usePutSignatureProfile(workspaceId: string, memberId: string) {
     const client = useQueryClient();
     return useMutation({
         mutationFn: (input: SignatureProfileInput) => signatures.putProfile(workspaceId, memberId, input),
-        onSuccess: (saved) => client.setQueryData(keys.profile(workspaceId, memberId), saved),
+        onSuccess: (saved) => {
+            client.setQueryData(keys.profile(workspaceId, memberId), saved);
+            void client.invalidateQueries({ queryKey: keys.profiles(workspaceId) });
+        },
     });
 }

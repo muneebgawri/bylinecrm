@@ -43,6 +43,11 @@ export type SignatureVariablePath = (typeof SIGNATURE_VARIABLES)[number]['path']
 
 export const SIGNATURE_LOGO_VARIABLE = 'workspace.logo' satisfies SignatureVariablePath;
 export const SIGNATURE_BOOKING_VARIABLE = 'sender.bookingLink' satisfies SignatureVariablePath;
+/**
+ * A template's `{{sender.signature}}` (#193): where in the body the signature goes — then not again after
+ * it, so a P.S. can follow. In a body only; a subject cannot carry it.
+ */
+export const SIGNATURE_PLACEMENT_VARIABLE = 'sender.signature';
 /** How `{{sender.bookingLink}}` reads in an email. */
 export const BOOKING_LINK_LABEL = 'Book a quick meeting';
 
@@ -135,6 +140,8 @@ export interface MailboxSignatureInput {
 /** What the `sender.*` variables read for a member. */
 export interface SignatureProfileView {
     memberId: string;
+    /** The member's display name. */
+    name: string | null;
     jobTitle: string | null;
     phone: string | null;
     slotlineUsername: string | null;

@@ -25,8 +25,12 @@ is unchanged), and a scheduled send stores `signature` in its request only when 
 composer has no quoted text; a reply's signature therefore sits at the end, which is above where quoted text
 would be.
 
-`{{sender.signature}}`, the template variable P2-4 reserved, still renders empty: the signature is added by the
-renderer after the body, never through a variable, so a template that names it does not get a second one.
+**Placing it: `{{sender.signature}}`.** The variable P2-4 reserved now says where the signature goes. A body
+that names it gets the signature there — the block it sits in is split, the words either side kept as blocks
+of their own, the signature's own blocks between (`placeSignature` in the serializer, with `-- ` before it in
+the text part) — and not again after the body, so a template can end with a P.S. Where no signature applies it
+leaves nothing. A subject cannot carry it: saving one that does is refused (`400`, at `subject`). The composer
+says so under the signature when the message names it.
 
 ## Variables
 
@@ -36,7 +40,9 @@ existing `sender.fullName` (one name per thing). None blocks a send: an empty on
 it leaves with nothing on it is left out — a member with no booking link gets no "Book a quick meeting" line.
 `sender.*` reads the sending mailbox's member (a pool mailbox's owner, as P3-3 already speaks as).
 
-Title and phone are new `workspace_members` columns, set in Settings → Signatures by the member or an admin.
+Title and phone are new `workspace_members` columns, set in Settings → Signatures by the member, or by an admin
+from **Members’ details** there (`GET /members/signature-profiles`, an admin's: every current member's details
+by name), which is also where an admin sets a member's Slotline username for them.
 
 ## The two pre-fills (owner 2026-10-18)
 

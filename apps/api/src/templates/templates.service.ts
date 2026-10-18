@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import {
     CUSTOM_VARIABLE_SOURCES,
     TEMPLATE_NAME_MAX,
+    SIGNATURE_PLACEMENT_VARIABLE,
     TEMPLATE_VARIABLES,
     type Actor,
     type CustomVariableSource,
@@ -115,8 +116,7 @@ export class TemplatesService {
                 }
             }
             return {
-                // `sender.signature` is not offered (#193): the mailbox's signature follows every body by itself.
-                standard: TEMPLATE_VARIABLES.filter((v) => v.path !== 'sender.signature').map((v) => ({
+                standard: TEMPLATE_VARIABLES.map((v) => ({
                     path: v.path,
                     source: v.source,
                     label: v.label,
@@ -302,6 +302,10 @@ export class TemplatesService {
                 ],
                 custom as CustomKeys,
             ),
+            // A signature is placed in the body (#193); a subject line cannot carry one.
+            ...(subjectVariablePaths(template.subject).includes(SIGNATURE_PLACEMENT_VARIABLE)
+                ? [{ path: 'subject', message: '{{sender.signature}} goes in the body, not the subject' }]
+                : []),
         ];
         if (problems.length > 0) throw new ValidationFailed('the template is not valid', problems);
     }

@@ -58,6 +58,7 @@ export const signatureProfileView = named(
     'SignatureProfile',
     z.object({
         memberId: id,
+        name: z.string().nullable(),
         jobTitle: z.string().nullable(),
         phone: z.string().nullable(),
         slotlineUsername: z.string().nullable(),

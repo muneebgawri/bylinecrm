@@ -5844,6 +5844,74 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/members/signature-profiles": {
+            "get": {
+                "operationId": "signatureProfile_list",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/SignatureProfile"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/members/{memberId}/signature-profile": {
             "get": {
                 "operationId": "signatureProfile_get",
@@ -26773,6 +26841,10 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
                     },
+                    "name": {
+                        "nullable": true,
+                        "type": "string"
+                    },
                     "jobTitle": {
                         "nullable": true,
                         "type": "string"
@@ -26793,7 +26865,15 @@
                         "type": "boolean"
                     }
                 },
-                "required": ["memberId", "jobTitle", "phone", "slotlineUsername", "bookingLink", "slotlineConfigured"]
+                "required": [
+                    "memberId",
+                    "name",
+                    "jobTitle",
+                    "phone",
+                    "slotlineUsername",
+                    "bookingLink",
+                    "slotlineConfigured"
+                ]
             },
             "RenderedSignature": {
                 "type": "object",

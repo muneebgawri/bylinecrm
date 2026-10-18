@@ -35,6 +35,14 @@ import {
     slotlineBase,
 } from './signature-store';
 
+type ProfileRow = {
+    id: string;
+    jobTitle: string | null;
+    phone: string | null;
+    slotlineUsername: string | null;
+    user: { displayName: string | null };
+};
+
 const json = (doc: RichText | null) => (doc ? (doc as unknown as Prisma.InputJsonObject) : Prisma.DbNull);
 
 /**
@@ -190,8 +198,23 @@ export class SignaturesService {
             const saved = await tx.workspaceMember.update({
                 where: { id: memberId },
                 data: { jobTitle: input.jobTitle, phone: input.phone, slotlineUsername: input.slotlineUsername },
+                include: { user: { select: { displayName: true } } },
             });
             return this.profileView(tx, saved);
+        });
+    }
+
+    /** Every current member's details, by name — an admin's view, to set a member's booking link for them. */
+    profiles(): Promise<SignatureProfileView[]> {
+        this.current();
+        return this.rls.withWorkspace(async (tx) => {
+            const members = await tx.workspaceMember.findMany({
+                where: { leftAt: null },
+                include: { user: { select: { displayName: true } } },
+                orderBy: { createdAt: 'asc' },
+            });
+            const base = await slotlineBase(tx);
+            return members.map((m) => this.profileOf(m, base));
         });
     }
 
@@ -221,13 +244,14 @@ export class SignaturesService {
         };
     }
 
-    private async profileView(
-        tx: WorkspaceClient,
-        member: { id: string; jobTitle: string | null; phone: string | null; slotlineUsername: string | null },
-    ): Promise<SignatureProfileView> {
-        const base = await slotlineBase(tx);
+    private async profileView(tx: WorkspaceClient, member: ProfileRow): Promise<SignatureProfileView> {
+        return this.profileOf(member, await slotlineBase(tx));
+    }
+
+    private profileOf(member: ProfileRow, base: string | null): SignatureProfileView {
         return {
             memberId: member.id,
+            name: member.user.displayName,
             jobTitle: member.jobTitle,
             phone: member.phone,
             slotlineUsername: member.slotlineUsername,
@@ -241,7 +265,10 @@ export class SignaturesService {
     }
 
     private async member(tx: WorkspaceClient, memberId: string) {
-        const member = await tx.workspaceMember.findFirst({ where: { id: memberId, leftAt: null } });
+        const member = await tx.workspaceMember.findFirst({
+            where: { id: memberId, leftAt: null },
+            include: { user: { select: { displayName: true } } },
+        });
         if (!member) throw new NotFoundException('member not found');
         return member;
     }

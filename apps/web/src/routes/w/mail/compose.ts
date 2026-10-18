@@ -1,4 +1,4 @@
-import type { RichText, RichTextNode } from '@bylinecrm/shared';
+import { SIGNATURE_PLACEMENT_VARIABLE, type RichText, type RichTextNode } from '@bylinecrm/shared';
 import { ApiError } from '../../../api/client';
 import type { MailboxView, SendMailInput } from '../../../api/types';
 import { templateVariablePaths } from '../templates/preview';
@@ -30,6 +30,18 @@ export function isBlank(doc: RichText): boolean {
             (n) => (n.type === 'text' && (n.text ?? '').trim() !== '') || n.type === 'variable' || visible(n.content),
         );
     return !visible(doc.content);
+}
+
+/** Whether the body places the signature itself (`{{sender.signature}}`, #193) rather than taking it at the end. */
+export function placesSignature(body: RichText): boolean {
+    const names = (nodes: readonly RichTextNode[] | undefined): boolean =>
+        (nodes ?? []).some(
+            (n) =>
+                (n.type === 'variable' &&
+                    (n['attrs'] as { path?: unknown } | undefined)?.path === SIGNATURE_PLACEMENT_VARIABLE) ||
+                names(n.content),
+        );
+    return names(body.content);
 }
 
 /** The variables the draft uses that have no value for this person — what disables Send. */

@@ -136,6 +136,14 @@ export class SignaturePreviewController {
 export class SignatureProfileController {
     constructor(private readonly signatures: SignaturesService) {}
 
+    /** Every current member's details, by name: an admin sets a member's booking link from it. */
+    @Requires('workspace:admin')
+    @Get('signature-profiles')
+    @Returns([signatureProfileView])
+    list(): Promise<SignatureProfileView[]> {
+        return this.signatures.profiles();
+    }
+
     @AnyMember('a member’s own signature details; an admin’s for anyone — checked by the service')
     @Get(':memberId/signature-profile')
     @Returns(signatureProfileView)

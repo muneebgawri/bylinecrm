@@ -8,6 +8,7 @@ import {
     emptyVariablesText,
     isBlank,
     ownSendingMailboxes,
+    placesSignature,
     refusedVariables,
     sendInput,
     sendsAsTemplate,
@@ -151,5 +152,30 @@ describe('FR-CRMS-2: the request a draft sends', () => {
     it('never sends a reply as its template (the template’s subject would replace “Re:”)', () => {
         const fill = { templateId: 't-1', name: 'Follow-up', subject, body };
         expect(sendInput({ ...base, fill, replyToMessageId: 'msg-1' })).not.toHaveProperty('templateId');
+    });
+});
+
+describe('#193 placesSignature', () => {
+    const doc = (...content: object[]) => ({ type: 'doc', content }) as RichText;
+    it('is whether the body names {{sender.signature}}, anywhere in it', () => {
+        expect(placesSignature(doc({ type: 'paragraph', content: [{ type: 'text', text: 'Hi' }] }))).toBe(false);
+        expect(
+            placesSignature(
+                doc({
+                    type: 'bulletList',
+                    content: [
+                        {
+                            type: 'listItem',
+                            content: [
+                                {
+                                    type: 'paragraph',
+                                    content: [{ type: 'variable', attrs: { path: 'sender.signature' } }],
+                                },
+                            ],
+                        },
+                    ],
+                }),
+            ),
+        ).toBe(true);
     });
 });

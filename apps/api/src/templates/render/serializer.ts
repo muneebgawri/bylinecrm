@@ -1,4 +1,10 @@
-import { TEMPLATE_LINK_SCHEMES, type RichText, type RichTextNode } from '@bylinecrm/shared';
+import {
+    SIGNATURE_PLACEMENT_VARIABLE,
+    TEMPLATE_LINK_SCHEMES,
+    type RenderedSignature,
+    type RichText,
+    type RichTextNode,
+} from '@bylinecrm/shared';
 
 /**
  * A template body → an email's HTML and its plain-text alternative, from one walk of the document
@@ -36,6 +42,12 @@ export interface WalkOptions {
      * empty variable leaves no blank line behind (signatures, #193). A template keeps its lines as written.
      */
     dropEmptyLines: boolean;
+    /**
+     * A template body's `{{sender.signature}}` (#193): the block it sits in is split there and the
+     * signature goes between — its own blocks, never inside a line — or nothing, when none applies.
+     * Absent: the variable renders as any other.
+     */
+    signature?: { at: RenderedSignature | null } | undefined;
 }
 
 const TEMPLATE_WALK: WalkOptions = { images: false, dropEmptyLines: false };
@@ -45,6 +57,8 @@ export interface RenderedBody {
     text: string;
     /** Variable paths with no value, in the order they first appear. */
     missing: string[];
+    /** The body named `{{sender.signature}}`: the signature went there (#193), and goes nowhere else. */
+    placed: boolean;
 }
 
 const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -120,6 +134,7 @@ interface Inline {
 
 class Walker {
     private readonly missing = new Set<string>();
+    placed = false;
 
     constructor(
         private readonly render: VariableRenderer,
@@ -146,12 +161,12 @@ class Walker {
 
     private block(node: RichTextNode, depth: number): { html: string; text: string } | null {
         switch (node.type) {
-            case 'paragraph': {
-                const inline = this.lines(node.content);
-                return inline && { html: `<p>${inline.html}</p>`, text: inline.text };
-            }
+            case 'paragraph':
             case 'heading': {
-                const tag = headingTag(node);
+                const tag = node.type === 'paragraph' ? 'p' : headingTag(node);
+                if (this.options.signature && (node.content ?? []).some(isPlacement)) {
+                    return this.placeSignature(node.content ?? [], tag, this.options.signature.at);
+                }
                 const inline = this.lines(node.content);
                 return inline && { html: `<${tag}>${inline.html}</${tag}>`, text: inline.text };
             }
@@ -179,6 +194,42 @@ class Walker {
                 // Outside the subset (a script, a code block, a block-level image, …): dropped with its content.
                 return null;
         }
+    }
+
+    /**
+     * A block naming `{{sender.signature}}`, split there: the words before and after stay in blocks of
+     * their own (an empty side goes), and the signature — text after the conventional `-- ` line — sits
+     * between, once for each time it is named.
+     */
+    private placeSignature(
+        nodes: RichTextNode[],
+        tag: string,
+        signature: RenderedSignature | null,
+    ): { html: string; text: string } | null {
+        this.placed = true;
+        const html: string[] = [];
+        const text: string[] = [];
+        const side = (part: RichTextNode[]) => {
+            const inline = this.inline(part);
+            if (inline.text.trim() === '' && !inline.html.includes('<img')) return;
+            html.push(`<${tag}>${inline.html}</${tag}>`);
+            text.push(inline.text);
+        };
+        let part: RichTextNode[] = [];
+        for (const node of nodes) {
+            if (!isPlacement(node)) {
+                part.push(node);
+                continue;
+            }
+            side(part);
+            part = [];
+            if (signature) {
+                html.push(signature.html);
+                text.push(`-- \n${signature.text}`);
+            }
+        }
+        side(part);
+        return html.length ? { html: html.join(''), text: text.join('\n\n') } : null;
     }
 
     /**
@@ -270,16 +321,27 @@ class Walker {
     }
 }
 
-/** Renders a template body. `resolve` gives each variable its value. */
-export function renderBody(doc: RichText, resolve: VariableResolver): RenderedBody {
+/**
+ * Renders a template body. `resolve` gives each variable its value; `signature` is what its
+ * `{{sender.signature}}` places (#193) — `null` when none applies.
+ */
+export function renderBody(
+    doc: RichText,
+    resolve: VariableResolver,
+    signature: RenderedSignature | null = null,
+): RenderedBody {
     return renderRichText(
         doc,
         (path) => {
             const value = resolve(path);
             return value === null ? null : { html: escapeHtml(value), text: value };
         },
-        TEMPLATE_WALK,
+        { ...TEMPLATE_WALK, signature: { at: signature } },
     );
+}
+
+function isPlacement(node: RichTextNode): boolean {
+    return node.type === 'variable' && attrsOf(node)['path'] === SIGNATURE_PLACEMENT_VARIABLE;
 }
 
 /** The one walk, for a template body (`renderBody`) and a signature (`renderSignature`, #193). */
@@ -291,5 +353,10 @@ export function renderRichText(
 ): RenderedBody {
     const walker = new Walker(render, options, maxImageWidth);
     const out = walker.blocks(doc.content, 0);
-    return { html: out.html, text: out.text.join('\n\n').trim(), missing: walker.missingPaths() };
+    return {
+        html: out.html,
+        text: out.text.join('\n\n').trim(),
+        missing: walker.missingPaths(),
+        placed: walker.placed,
+    };
 }

@@ -407,9 +407,10 @@ describe('#193 email signatures', () => {
             );
             expect((await as(member).get(w('/members/signature-profiles'))).status).toBe(403);
             expect(
-                ((await as(otherAdmin).get(w('/members/signature-profiles', otherWorkspace))).body as SignatureProfileView[]).map(
-                    (p) => p.memberId,
-                ),
+                (
+                    (await as(otherAdmin).get(w('/members/signature-profiles', otherWorkspace)))
+                        .body as SignatureProfileView[]
+                ).map((p) => p.memberId),
             ).not.toContain(memberId);
             // Another workspace's admin reaches no member here.
             expect(
@@ -621,9 +622,16 @@ describe('#193 email signatures', () => {
         it('a subject cannot carry it: a signature belongs in the body', async () => {
             const res = await as(admin)
                 .post(w('/templates'))
-                .send({ name: `Subject ${stamp}`, kind: 'personal', subject: 'Hi {{sender.signature}}', body: doc(para(t('x'))) });
+                .send({
+                    name: `Subject ${stamp}`,
+                    kind: 'personal',
+                    subject: 'Hi {{sender.signature}}',
+                    body: doc(para(t('x'))),
+                });
             expect(res.status).toBe(400);
-            expect((res.body as { fieldErrors: { path: string }[] }).fieldErrors.map((f) => f.path)).toEqual(['subject']);
+            expect((res.body as { fieldErrors: { path: string }[] }).fieldErrors.map((f) => f.path)).toEqual([
+                'subject',
+            ]);
         });
     });
 

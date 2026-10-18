@@ -166,9 +166,7 @@ describe('#193 {{sender.signature}} places the signature', () => {
             settings,
             signature,
         );
-        expect(out.html).toBe(
-            '<p>Hello.</p><p>Mia Member<br>Account manager</p><p>P.S. See you Friday.</p>',
-        );
+        expect(out.html).toBe('<p>Hello.</p><p>Mia Member<br>Account manager</p><p>P.S. See you Friday.</p>');
         expect(out.text).toBe('Hello.\n\n-- \nMia Member\nAccount manager\n\nP.S. See you Friday.');
         expect(out.sendable).toBe(true);
     });

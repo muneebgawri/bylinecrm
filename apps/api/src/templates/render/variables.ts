@@ -98,8 +98,8 @@ function standardValue(path: StandardVariablePath, s: RenderSubjects): string | 
         case 'sender.fullName':
             return present(sender?.displayName);
         case 'sender.signature':
-            // Kept so templates that name it stay valid, and always empty: the signature (#193) is the
-            // mailbox's, added after the body by the renderer — never through a variable, never twice.
+            // Never a value: in a body the renderer puts the mailbox's signature where it is named
+            // (#193); a subject cannot carry it (refused on save), so there it is nothing.
             return '';
     }
 }

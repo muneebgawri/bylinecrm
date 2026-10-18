@@ -50,6 +50,7 @@ const reads: FakeRoute[] = [
     mailboxesRoute([mailbox({ id: 'mb-1', email: 'kate@example.com' })]),
     (r) => (r.method === 'GET' && r.url.endsWith('/settings/signatures') ? json(SETTINGS) : undefined),
     (r) => (r.method === 'GET' && r.url.endsWith('/members/m-1/signature-profile') ? json(PROFILE) : undefined),
+    (r) => (r.method === 'GET' && r.url.endsWith('/members/signature-profiles') ? json([PROFILE]) : undefined),
     (r) => (r.method === 'GET' && r.url.endsWith('/mailboxes/mb-1/signature') ? json(NONE) : undefined),
 ];
 
@@ -156,7 +157,10 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
         const sam: SignatureProfileView = { ...PROFILE, memberId: 'm-2', name: 'Sam Okafor', jobTitle: 'Partner' };
         const seen = open(
             [
-                (r) => (r.method === 'GET' && r.url.endsWith('/members/signature-profiles') ? json([PROFILE, sam]) : undefined),
+                (r) =>
+                    r.method === 'GET' && r.url.endsWith('/members/signature-profiles')
+                        ? json([PROFILE, sam])
+                        : undefined,
                 (r) =>
                     r.method === 'PUT' && r.url.endsWith('/members/m-2/signature-profile')
                         ? json({ ...sam, ...(r.body as object), bookingLink: 'https://bookings.example.com/sam' })
@@ -165,9 +169,10 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
             ADMIN,
         );
         const list = await screen.findByRole('region', { name: 'Members’ details' });
+        const edit = await within(list).findByRole('button', { name: 'Edit Sam Okafor’s details' });
         // The admin's own details are above, not repeated here.
         expect(within(list).queryByText('Kate Morgan')).not.toBeInTheDocument();
-        await userEvent.click(within(list).getByRole('button', { name: 'Edit Sam Okafor’s details' }));
+        await userEvent.click(edit);
         await userEvent.type(within(list).getByLabelText('Slotline username'), 'sam');
         await userEvent.click(within(list).getByRole('button', { name: 'Save details' }));
         await waitFor(() =>

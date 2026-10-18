@@ -20,8 +20,9 @@ import { escapeHtml, missingMarker, renderBody, type VariableResolver } from './
  * recipient) and the postal address (FR-CRMS-12). With no postal address set, the render names
  * `workspace.postal_address` as missing and is not sendable.
  *
- * A signature (#193), already rendered, follows the body and comes before that footer, which stays last:
- * in the text part after the conventional `-- ` line.
+ * A signature (#193), already rendered, follows the body — or sits where the body names
+ * `{{sender.signature}}` — and comes before that footer, which stays last: in the text part after the
+ * conventional `-- ` line.
  */
 
 export interface ComposedEmail {
@@ -66,10 +67,11 @@ export function composeEmail(
     signature: RenderedSignature | null = null,
 ): ComposedEmail {
     const subject = renderSubject(template.subject, resolve);
-    const body = renderBody(template.body, resolve);
+    const body = renderBody(template.body, resolve, signature);
     let { html, text } = body;
     const missing = [...subject.missing, ...body.missing];
-    if (signature) {
+    // Where the body names it, the signature is already there; otherwise it follows the body.
+    if (signature && !body.placed) {
         html += signature.html;
         text = text === '' ? `-- \n${signature.text}` : `${text}\n\n-- \n${signature.text}`;
     }
