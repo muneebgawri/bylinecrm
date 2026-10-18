@@ -54,7 +54,10 @@ describe('#196 SlotlineApiHttp (Slotline’s v2 API through the booking site’s
     });
 
     it('no answer is a status-less error', async () => {
-        vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('fetch failed'))));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() => Promise.reject(new TypeError('fetch failed'))),
+        );
         const error = await new SlotlineApiHttp().eventTypes(BASE, KEY).catch((e: unknown) => e);
         expect(error).toBeInstanceOf(SlotlineApiError);
         expect((error as SlotlineApiError).status).toBeNull();

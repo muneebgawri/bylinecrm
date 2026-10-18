@@ -6066,6 +6066,312 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/members/{memberId}/slotline-key": {
+            "put": {
+                "operationId": "slotlineAccount_putKey",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutSlotlineKeyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SignatureProfile"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            },
+            "delete": {
+                "operationId": "slotlineAccount_removeKey",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/members/{memberId}/slotline/event-types": {
+            "get": {
+                "operationId": "slotlineAccount_eventTypes",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/SlotlineEventType"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/members/{memberId}/slotline-event": {
+            "put": {
+                "operationId": "slotlineAccount_pickEvent",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutSlotlineEventDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SignatureProfile"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/public/logos/{file}": {
             "get": {
                 "operationId": "publicLogo_serve",
@@ -20549,6 +20855,32 @@
                 "required": ["jobTitle", "phone", "slotlineUsername"],
                 "additionalProperties": false
             },
+            "PutSlotlineKeyDto": {
+                "type": "object",
+                "properties": {
+                    "apiKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 200,
+                        "pattern": "^\\S+$",
+                        "description": "Created in Slotline under Settings → Developer → API keys. Never returned."
+                    }
+                },
+                "required": ["apiKey"],
+                "additionalProperties": false
+            },
+            "PutSlotlineEventDto": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                        "nullable": true
+                    }
+                },
+                "required": ["slug"],
+                "additionalProperties": false
+            },
             "CreateTemplateDto__schema0": {
                 "type": "object",
                 "properties": {
@@ -26863,6 +27195,31 @@
                     },
                     "slotlineConfigured": {
                         "type": "boolean"
+                    },
+                    "slotlineKey": {
+                        "nullable": true,
+                        "description": "The member’s own Slotline API key: set or not, and its last four only.",
+                        "type": "object",
+                        "properties": {
+                            "last4": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["last4"]
+                    },
+                    "slotlineEvent": {
+                        "nullable": true,
+                        "description": "The event type “Book a quick meeting” opens; null opens the member’s page.",
+                        "type": "object",
+                        "properties": {
+                            "slug": {
+                                "type": "string"
+                            },
+                            "title": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["slug", "title"]
                     }
                 },
                 "required": [
@@ -26872,8 +27229,35 @@
                     "phone",
                     "slotlineUsername",
                     "bookingLink",
-                    "slotlineConfigured"
+                    "slotlineConfigured",
+                    "slotlineKey",
+                    "slotlineEvent"
                 ]
+            },
+            "SlotlineEventType": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "lengthInMinutes": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "hidden": {
+                        "type": "boolean",
+                        "description": "Not on the member’s public page, but bookable by its link."
+                    },
+                    "bookingLink": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug", "title", "lengthInMinutes", "hidden", "bookingLink"]
             },
             "RenderedSignature": {
                 "type": "object",

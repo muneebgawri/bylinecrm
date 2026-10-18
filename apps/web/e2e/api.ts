@@ -72,6 +72,7 @@ const GETS: [RegExp, Handler][] = [
         () => data.membersSummary.map((m) => data.signatureProfile(m.memberId)),
     ],
     [new RegExp(`^${W}/members/${ID}/signature-profile$`), (m) => data.signatureProfile(m[1] ?? '')],
+    [new RegExp(`^${W}/members/${ID}/slotline/event-types$`), () => data.slotlineEventTypes],
     [new RegExp(`^${W}/mailboxes/${ID}/signature$`), (m) => data.mailboxSignature(m[1] ?? '')],
     [new RegExp(`^${W}/mail/oauth-client/status$`), () => data.oauthClientStatus],
     [new RegExp(`^${W}/mail/oauth-client$`), () => data.oauthClient],

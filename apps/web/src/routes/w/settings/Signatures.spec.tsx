@@ -203,13 +203,14 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
 
         it('connects the member’s Slotline account with their API key, shown by its last four after', async () => {
             const seen = open([
-                (r) =>
-                    r.method === 'PUT' && r.url.endsWith('/members/m-1/slotline-key') ? json(KEYED) : undefined,
+                (r) => (r.method === 'PUT' && r.url.endsWith('/members/m-1/slotline-key') ? json(KEYED) : undefined),
             ]);
             await userEvent.type(await screen.findByLabelText('Slotline API key'), 'cal_live_abc_k3y9');
             await userEvent.click(screen.getByRole('button', { name: 'Connect Slotline account' }));
             await waitFor(() =>
-                expect(seen.find((r) => r.url.endsWith('/slotline-key'))?.body).toEqual({ apiKey: 'cal_live_abc_k3y9' }),
+                expect(seen.find((r) => r.url.endsWith('/slotline-key'))?.body).toEqual({
+                    apiKey: 'cal_live_abc_k3y9',
+                }),
             );
             expect(await screen.findByText(/Key ending k3y9/)).toBeInTheDocument();
             expect(screen.queryByLabelText('Slotline API key')).not.toBeInTheDocument();

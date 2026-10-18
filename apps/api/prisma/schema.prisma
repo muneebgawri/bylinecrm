@@ -236,6 +236,12 @@ model WorkspaceMember {
   phone            String?
   /// The member's Slotline page is `{baseUrl}/{slotlineUsername}` (#193): set by them or an admin, never guessed.
   slotlineUsername String? @map("slotline_username")
+  /// The member's own Slotline API key (#196), encrypted (`SecretBox`); only its last four are ever shown.
+  slotlineApiKeyCiphertext String? @map("slotline_api_key_ciphertext")
+  slotlineApiKeyLast4      String? @map("slotline_api_key_last4")
+  /// The event type "Book a quick meeting" opens (#196): its slug and title on Slotline; null opens the member's page.
+  slotlineEventSlug        String? @map("slotline_event_slug")
+  slotlineEventTitle       String? @map("slotline_event_title")
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

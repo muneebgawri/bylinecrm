@@ -34,8 +34,11 @@ import {
     usePutMailboxSignature,
     usePutSignatureProfile,
     usePutSignatureSettings,
+    usePickSlotlineEvent,
     useSignatureProfile,
     useSignatureProfiles,
+    useSlotlineEventTypes,
+    useSlotlineKey,
     useSignatureSettings,
     useWorkspaceLogo,
 } from '../../../api/signatures';
@@ -44,6 +47,7 @@ import { useCan, useMembership } from '../../../auth/capabilities';
 import { RichTextEditor, type RichTextHandle } from '../../../components/rich-text/RichTextEditor';
 import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
+import { SelectField } from './fields';
 
 const APPLIES_TEXT: Record<MailboxSignatureView['applies'], string> = {
     own: 'Its own signature',
@@ -134,7 +138,139 @@ function DetailsForm({ workspaceId, memberId }: { workspaceId: string; memberId:
                 profile={profile.data}
                 own
             />
+            {profile.data.slotlineConfigured && (
+                <SlotlineAccount workspaceId={workspaceId} memberId={memberId} profile={profile.data} />
+            )}
         </section>
+    );
+}
+
+/** The value the picker gives "Your Slotline page": a Select item cannot have an empty value. */
+const PROFILE_PAGE = '__page';
+
+/**
+ * The member's own Slotline account (#196): their API key — kept once Slotline accepts it, shown by its last
+ * four after — and, with it, every event type on the account, hidden ones too, to choose what "Book a quick
+ * meeting" opens.
+ */
+function SlotlineAccount({
+    workspaceId,
+    memberId,
+    profile,
+}: {
+    workspaceId: string;
+    memberId: string;
+    profile: SignatureProfileView;
+}) {
+    const key = useSlotlineKey(workspaceId, memberId);
+    const pick = usePickSlotlineEvent(workspaceId, memberId);
+    const types = useSlotlineEventTypes(workspaceId, memberId, profile.slotlineKey !== null);
+    const [apiKey, setApiKey] = useState('');
+    const options =
+        types.data ??
+        (profile.slotlineEvent ? [{ ...profile.slotlineEvent, lengthInMinutes: null, hidden: false }] : []);
+    return (
+        <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
+            <h4 className="m-0 text-[13px] font-semibold">Slotline account</h4>
+            {profile.slotlineKey ? (
+                <>
+                    <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                        <span>
+                            Connected as {profile.slotlineUsername} · Key ending {profile.slotlineKey.last4}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            shape="square"
+                            loading={key.isPending}
+                            onClick={() =>
+                                key.mutate(null, {
+                                    onError: (e) =>
+                                        toast({
+                                            title: 'The key was not removed',
+                                            description: failureText(e),
+                                            tone: 'danger',
+                                        }),
+                                })
+                            }
+                        >
+                            Remove key
+                        </Button>
+                    </div>
+                    <SelectField
+                        label="Book a quick meeting opens"
+                        value={profile.slotlineEvent?.slug ?? PROFILE_PAGE}
+                        onValueChange={(value) =>
+                            pick.mutate(value === PROFILE_PAGE ? null : value, {
+                                onSuccess: () => toast({ title: 'Booking link saved', tone: 'success' }),
+                                onError: (e) =>
+                                    toast({
+                                        title: 'The booking link was not saved',
+                                        description: failureText(e),
+                                        tone: 'danger',
+                                    }),
+                            })
+                        }
+                        options={[
+                            { value: PROFILE_PAGE, label: 'Your Slotline page' },
+                            ...options.map((t) => ({
+                                value: t.slug,
+                                label: [
+                                    t.title,
+                                    t.lengthInMinutes ? `${t.lengthInMinutes} min` : null,
+                                    t.hidden ? 'hidden' : null,
+                                ]
+                                    .filter(Boolean)
+                                    .join(' · '),
+                            })),
+                        ]}
+                        hint={
+                            types.isError
+                                ? `Your event types could not be listed: ${failureText(types.error)}`
+                                : 'Every event type on your Slotline account, hidden ones too — a hidden one is bookable by its link.'
+                        }
+                    />
+                </>
+            ) : (
+                <form
+                    noValidate
+                    className="flex flex-wrap items-end gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        key.mutate(apiKey.trim(), {
+                            onSuccess: () => {
+                                setApiKey('');
+                                toast({ title: 'Slotline account connected', tone: 'success' });
+                            },
+                        });
+                    }}
+                >
+                    <Field
+                        label="Slotline API key"
+                        hint="Create one in Slotline under Settings → Developer → API keys. With it the CRM lists all your event types, hidden ones too; only its last four characters are shown again."
+                        error={key.error ? (fieldErrorAt(key.error, 'apiKey') ?? failureText(key.error)) : undefined}
+                        className="min-w-0 flex-1"
+                    >
+                        <Input
+                            type="password"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                        />
+                    </Field>
+                    <Button
+                        type="submit"
+                        variant="secondary"
+                        shape="square"
+                        loading={key.isPending}
+                        disabled={apiKey.trim() === ''}
+                    >
+                        Connect Slotline account
+                    </Button>
+                </form>
+            )}
+        </div>
     );
 }
 
@@ -250,15 +386,18 @@ function DetailsFields({
             <Field
                 label="Slotline username"
                 hint={
-                    profile.slotlineConfigured
-                        ? `${own ? 'Your' : 'Their'} booking page is the Slotline site followed by this. Without it, ${own ? 'your' : 'their'} signature leaves out “Book a quick meeting”.`
-                        : 'Slotline is not set up yet: an admin connects it under Settings → Slotline.'
+                    profile.slotlineKey
+                        ? 'From the connected Slotline account.'
+                        : profile.slotlineConfigured
+                          ? `${own ? 'Your' : 'Their'} booking page is the Slotline site followed by this. Without it, ${own ? 'your' : 'their'} signature leaves out “Book a quick meeting”.`
+                          : 'Slotline is not set up yet: an admin connects it under Settings → Slotline.'
                 }
                 error={fieldErrorAt(put.error, 'slotlineUsername')}
             >
                 <Input
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    readOnly={profile.slotlineKey !== null}
                     autoComplete="off"
                     spellCheck={false}
                     className="max-w-[20rem]"

@@ -55,12 +55,17 @@ describe('tenant routes declare a capability', () => {
         expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
     });
 
-    it('the routes open to any member are exactly these: what the caller may do, and their own signature details', () => {
+    it('the routes open to any member are exactly these: what the caller may do, their own signature details and Slotline account', () => {
         const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
         expect(open.sort()).toEqual([
             // #193: a member's own; an admin's for anyone — the service checks which.
             'SignatureProfileController.get',
             'SignatureProfileController.put',
+            // #196: a member's own Slotline account — the service refuses anyone else.
+            'SlotlineAccountController.eventTypes',
+            'SlotlineAccountController.pickEvent',
+            'SlotlineAccountController.putKey',
+            'SlotlineAccountController.removeKey',
             'WorkspaceMeController.standing',
         ]);
     });

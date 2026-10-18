@@ -6,6 +6,7 @@ import type {
     SignatureProfileView,
     SignatureSettingsInput,
     SignatureSettingsView,
+    SlotlineEventTypeView,
     WorkspaceLogoView,
 } from '@bylinecrm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,9 +24,28 @@ const keys = {
     mailbox: (workspaceId: string, mailboxId: string) => [...base(workspaceId), 'mailbox', mailboxId] as const,
     profile: (workspaceId: string, memberId: string) => [...base(workspaceId), 'profile', memberId] as const,
     profiles: (workspaceId: string) => [...base(workspaceId), 'profiles'] as const,
+    eventTypes: (workspaceId: string, memberId: string) => [...base(workspaceId), 'event-types', memberId] as const,
 };
 
 export const signatures = {
+    putSlotlineKey: (workspaceId: string, memberId: string, apiKey: string) =>
+        request<SignatureProfileView>('PUT', workspacePath(workspaceId, `/members/${memberId}/slotline-key`), {
+            body: { apiKey },
+        }),
+    removeSlotlineKey: (workspaceId: string, memberId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/members/${memberId}/slotline-key`)),
+    slotlineEventTypes: (workspaceId: string, memberId: string, signal?: AbortSignal) =>
+        request<SlotlineEventTypeView[]>(
+            'GET',
+            workspacePath(workspaceId, `/members/${memberId}/slotline/event-types`),
+            {
+                signal,
+            },
+        ),
+    pickSlotlineEvent: (workspaceId: string, memberId: string, slug: string | null) =>
+        request<SignatureProfileView>('PUT', workspacePath(workspaceId, `/members/${memberId}/slotline-event`), {
+            body: { slug },
+        }),
     settings: (workspaceId: string, signal?: AbortSignal) =>
         request<SignatureSettingsView>('GET', workspacePath(workspaceId, '/settings/signatures'), { signal }),
     putSettings: (workspaceId: string, input: SignatureSettingsInput) =>
@@ -134,5 +154,40 @@ export function usePutSignatureProfile(workspaceId: string, memberId: string) {
             client.setQueryData(keys.profile(workspaceId, memberId), saved);
             void client.invalidateQueries({ queryKey: keys.profiles(workspaceId) });
         },
+    });
+}
+
+/** Every event type on the member's own Slotline account, hidden ones too (#196); asked only while a key is set. */
+export function useSlotlineEventTypes(workspaceId: string, memberId: string, enabled: boolean) {
+    return useQuery({
+        queryKey: keys.eventTypes(workspaceId, memberId),
+        queryFn: ({ signal }) => signatures.slotlineEventTypes(workspaceId, memberId, signal),
+        enabled,
+        retry: false,
+    });
+}
+
+/** Connects (`apiKey`) or disconnects (`null`) the member's own Slotline account (#196). */
+export function useSlotlineKey(workspaceId: string, memberId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: async (apiKey: string | null) => {
+            if (apiKey !== null) return signatures.putSlotlineKey(workspaceId, memberId, apiKey);
+            await signatures.removeSlotlineKey(workspaceId, memberId);
+            return null;
+        },
+        onSuccess: (saved) => {
+            if (saved) client.setQueryData(keys.profile(workspaceId, memberId), saved);
+            else void client.invalidateQueries({ queryKey: keys.profile(workspaceId, memberId) });
+            void client.removeQueries({ queryKey: keys.eventTypes(workspaceId, memberId) });
+        },
+    });
+}
+
+export function usePickSlotlineEvent(workspaceId: string, memberId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (slug: string | null) => signatures.pickSlotlineEvent(workspaceId, memberId, slug),
+        onSuccess: (saved) => client.setQueryData(keys.profile(workspaceId, memberId), saved),
     });
 }

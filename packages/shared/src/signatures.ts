@@ -145,10 +145,37 @@ export interface SignatureProfileView {
     jobTitle: string | null;
     phone: string | null;
     slotlineUsername: string | null;
-    /** `{baseUrl}/{username}` while Slotline is set up and a username is set. */
+    /** `{baseUrl}/{username}`, or `/{slug}` after it for a picked event type, while Slotline is set up and a username is set. */
     bookingLink: string | null;
     slotlineConfigured: boolean;
+    /** The member's own Slotline API key (#196): set or not, and only its last four characters. */
+    slotlineKey: { last4: string } | null;
+    /** The event type "Book a quick meeting" opens (#196); null opens the member's Slotline page. */
+    slotlineEvent: { slug: string; title: string } | null;
 }
+
+/** An event type on the member's Slotline account (#196), for the picker. */
+export interface SlotlineEventTypeView {
+    slug: string;
+    title: string;
+    lengthInMinutes: number | null;
+    /** Not on the member's public page, but bookable by its link. */
+    hidden: boolean;
+    bookingLink: string;
+}
+
+/** `PUT /members/:memberId/slotline-key`: the member's own key, checked with Slotline before it is kept. */
+export interface SlotlineKeyInput {
+    apiKey: string;
+}
+
+/** `PUT /members/:memberId/slotline-event`: one of the account's event types, or null for the member's page. */
+export interface SlotlineEventInput {
+    slug: string | null;
+}
+
+export const SLOTLINE_API_KEY_MAX = 200;
+export const SLOTLINE_EVENT_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export interface SignatureProfileInput {
     jobTitle: string | null;

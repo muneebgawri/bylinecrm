@@ -10,6 +10,7 @@ import {
     type RichText,
     type SignatureProfileView,
     type SignatureSettingsView,
+    type SlotlineEventTypeView,
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
@@ -815,10 +816,30 @@ export function signatureProfile(memberId: string): SignatureProfileView {
         jobTitle: 'Account manager',
         phone: '+44 20 7946 0000',
         slotlineUsername: 'kate',
-        bookingLink: 'https://bookings.example.com/kate',
+        bookingLink: 'https://bookings.example.com/kate/intro',
         slotlineConfigured: true,
+        slotlineKey: { last4: 'k3y9' },
+        slotlineEvent: { slug: 'intro', title: 'Intro call' },
     };
 }
+
+/** Kate's Slotline account (#196): a public event type and a hidden one. */
+export const slotlineEventTypes: SlotlineEventTypeView[] = [
+    {
+        slug: 'intro',
+        title: 'Intro call',
+        lengthInMinutes: 30,
+        hidden: false,
+        bookingLink: 'https://bookings.example.com/kate/intro',
+    },
+    {
+        slug: 'vip-15',
+        title: 'VIP 15',
+        lengthInMinutes: 15,
+        hidden: true,
+        bookingLink: 'https://bookings.example.com/kate/vip-15',
+    },
+];
 
 /** The booking site, connected and receiving (CAL-2). */
 export const slotlineSettings: SlotlineSettingsView = {

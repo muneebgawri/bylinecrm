@@ -685,11 +685,15 @@ describe('#193 email signatures', () => {
         const mattKey = `cal_live_matt_${stamp}_x1x2`;
         const type = (slug: string, title: string, hidden: boolean) => ({ slug, title, lengthInMinutes: 15, hidden });
         const putKey = (id: string, apiKey: string, who = member, ws = workspace) =>
-            as(who).put(w(`/members/${id}/slotline-key`, ws)).send({ apiKey });
+            as(who)
+                .put(w(`/members/${id}/slotline-key`, ws))
+                .send({ apiKey });
         const eventTypes = (id: string, who = member, ws = workspace) =>
             as(who).get(w(`/members/${id}/slotline/event-types`, ws));
         const pick = (id: string, slug: string | null, who = member) =>
-            as(who).put(w(`/members/${id}/slotline-event`)).send({ slug });
+            as(who)
+                .put(w(`/members/${id}/slotline-event`))
+                .send({ slug });
         const profileOf = async (id: string, who = member) =>
             (await as(who).get(w(`/members/${id}/signature-profile`))).body as SignatureProfileView;
 
@@ -725,8 +729,20 @@ describe('#193 email signatures', () => {
             const res = await eventTypes(memberId);
             expect(res.status, JSON.stringify(res.body)).toBe(200);
             expect(res.body).toEqual([
-                { slug: 'intro', title: 'Intro call', lengthInMinutes: 15, hidden: false, bookingLink: `${slotline}/mia/intro` },
-                { slug: 'vip-15', title: 'VIP 15', lengthInMinutes: 15, hidden: true, bookingLink: `${slotline}/mia/vip-15` },
+                {
+                    slug: 'intro',
+                    title: 'Intro call',
+                    lengthInMinutes: 15,
+                    hidden: false,
+                    bookingLink: `${slotline}/mia/intro`,
+                },
+                {
+                    slug: 'vip-15',
+                    title: 'VIP 15',
+                    lengthInMinutes: 15,
+                    hidden: true,
+                    bookingLink: `${slotline}/mia/vip-15`,
+                },
             ]);
         });
 
@@ -756,13 +772,23 @@ describe('#193 email signatures', () => {
             expect((await eventTypes(memberId, otherAdmin)).status).toBe(403);
             // The admin's own key lists the admin's account, never Mia's.
             await putKey(adminMemberId, mattKey, admin).expect(200);
-            expect(((await eventTypes(adminMemberId, admin)).body as { slug: string }[]).map((e) => e.slug)).toEqual(['chat']);
+            expect(((await eventTypes(adminMemberId, admin)).body as { slug: string }[]).map((e) => e.slug)).toEqual([
+                'chat',
+            ]);
         });
 
         it('while a key is set, the username is Slotline’s: it cannot be typed over', async () => {
-            const res = await putProfile(memberId, { jobTitle: 'Account manager', phone: null, slotlineUsername: 'someone-else' }, member);
+            const res = await putProfile(
+                memberId,
+                { jobTitle: 'Account manager', phone: null, slotlineUsername: 'someone-else' },
+                member,
+            );
             expect(res.status).toBe(422);
-            await putProfile(memberId, { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' }, member).expect(200);
+            await putProfile(
+                memberId,
+                { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' },
+                member,
+            ).expect(200);
         });
 
         it('says so when Slotline does not answer, and changes nothing', async () => {
@@ -782,7 +808,9 @@ describe('#193 email signatures', () => {
         it('removing the key keeps the link, and the list then asks for a key', async () => {
             await pick(memberId, null).expect(200);
             expect((await profileOf(memberId)).bookingLink).toBe(`${slotline}/mia`);
-            await as(member).delete(w(`/members/${memberId}/slotline-key`)).expect(204);
+            await as(member)
+                .delete(w(`/members/${memberId}/slotline-key`))
+                .expect(204);
             expect(await profileOf(memberId)).toMatchObject({ slotlineKey: null, slotlineUsername: 'mia' });
             expect((await eventTypes(memberId)).status).toBe(409);
         });
