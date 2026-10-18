@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { SLOTLINE_USERNAME_PATTERN, type SignatureProfileView, type SlotlineEventTypeView } from '@bylinecrm/shared';
 import { SLOTLINE_API_PORT, SlotlineApiError, type SlotlineApiPort } from '../calendar/slotline/slotline-api.port';
 import { ApiException } from '../infra/errors/api-errors';
@@ -30,27 +31,8 @@ export class SlotlineAccountService {
         const base = await this.rls.withWorkspace((tx) => slotlineBase(tx));
         if (!base) throw notSetUp();
         const { username } = await this.call(() => this.api.me(base, apiKey), 'apiKey');
-        if (!SLOTLINE_USERNAME_PATTERN.test(username)) {
-            throw new ApiException(409, 'conflict', 'Slotline gave a username a booking link cannot carry');
-        }
-        await this.rls.withWorkspace(async (tx) => {
-            const before = await tx.workspaceMember.findUniqueOrThrow({
-                where: { id: memberId },
-                select: { slotlineUsername: true },
-            });
-            await tx.workspaceMember.update({
-                where: { id: memberId },
-                data: {
-                    slotlineApiKeyCiphertext: this.secrets.seal(apiKey),
-                    slotlineApiKeyLast4: apiKey.slice(-4),
-                    slotlineUsername: username,
-                    // Another account's event types are not this one's.
-                    ...(before.slotlineUsername === username
-                        ? {}
-                        : { slotlineEventSlug: null, slotlineEventTitle: null }),
-                },
-            });
-        });
+        if (!SLOTLINE_USERNAME_PATTERN.test(username)) throw unusableUsername();
+        await this.rls.withWorkspace((tx) => storeSlotlineKey(tx, this.secrets, memberId, apiKey, username));
         return this.signatures.profile(memberId);
     }
 
@@ -140,6 +122,38 @@ export class SlotlineAccountService {
         if (!context) throw new Error('SlotlineAccountService is used inside a workspace scope');
         return context;
     }
+}
+
+/**
+ * Keeps a key Slotline accepted for `username` (#196): sealed, its last four, and the username — clearing a
+ * picked event type that belonged to another account. The one write, for a member's own request and for the
+ * operator's `slotline-connect-member` CLI alike.
+ */
+export async function storeSlotlineKey(
+    tx: Pick<Prisma.TransactionClient, 'workspaceMember'>,
+    secrets: SecretBox,
+    memberId: string,
+    apiKey: string,
+    username: string,
+): Promise<void> {
+    const before = await tx.workspaceMember.findUniqueOrThrow({
+        where: { id: memberId },
+        select: { slotlineUsername: true },
+    });
+    await tx.workspaceMember.update({
+        where: { id: memberId },
+        data: {
+            slotlineApiKeyCiphertext: secrets.seal(apiKey),
+            slotlineApiKeyLast4: apiKey.slice(-4),
+            slotlineUsername: username,
+            // Another account's event types are not this one's.
+            ...(before.slotlineUsername === username ? {} : { slotlineEventSlug: null, slotlineEventTitle: null }),
+        },
+    });
+}
+
+export function unusableUsername(): ApiException {
+    return new ApiException(409, 'conflict', 'Slotline gave a username a booking link cannot carry');
 }
 
 function notSetUp(): ApiException {

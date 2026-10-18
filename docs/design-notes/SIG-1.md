@@ -89,6 +89,9 @@ their owner, so the member gives the CRM a personal Slotline API key.
   the account's list as Slotline gives it at that moment; the slug and title are kept, so a signature renders
   with no call to Slotline. `{{sender.bookingLink}}` is `{baseUrl}/{username}/{slug}`; with no pick, the
   member's page as before.
+- **The operator's path.** `node dist/cli/slotline-connect-member.js <workspace-slug> <email> < key` (in the api
+  container) connects a member with a key made for them in Slotline: the key on stdin only, checked with
+  Slotline, kept by the same `storeSlotlineKey` write as the member's own request; nothing prints it.
 - **Order of work.** Read (and decrypt) in one short transaction, call Slotline with none open, write in
   another. Slotline not answering is a `409` that changes nothing.
 
