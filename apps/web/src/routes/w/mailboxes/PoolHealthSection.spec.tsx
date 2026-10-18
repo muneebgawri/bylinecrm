@@ -31,6 +31,8 @@ const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     inPostmaster: false,
     spamRate: null,
     spamRates: [],
+    deliveryErrorRate: null,
+    deliveryErrorRates: [],
     postmaster: { status: 'not_connected', message: null, readAt: null, nextReadAt: null },
     ...over,
 });

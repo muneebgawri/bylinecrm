@@ -11,7 +11,7 @@ import { sendingDomainOf } from './pool-mailbox';
 import { postmasterRange } from './postmaster.http';
 
 /**
- * A sending domain is read with its latest Postmaster Tools rates (#129, #190): the newest
+ * A sending domain is read with its latest Postmaster Tools statistics (#129, #190): the newest
  * `sending_domain_stats` rows by day — a failed lookup keeps them, so the view never shows a zero
  * for "could not read".
  */
@@ -42,8 +42,17 @@ export async function domainUsesIn(tx: WorkspaceClient): Promise<DomainUses> {
 }
 
 export function domainView(row: DomainRow, uses: DomainUses, now = new Date()): SendingDomainView {
-    const latest = row.stats[0];
     const { from } = postmasterRange(now);
+    /** One statistic's days, newest first, then its latest and its last 30 days oldest first — a null day is no day. */
+    const series = (pick: (s: DomainRow['stats'][number]) => number | null) => {
+        const days = row.stats.flatMap((s) => {
+            const rateBps = pick(s);
+            return rateBps === null ? [] : [{ day: dayOf(s.day), rateBps }];
+        });
+        return { latest: days[0] ?? null, recent: days.filter((d) => d.day >= from).reverse() };
+    };
+    const spam = series((s) => s.spamRateBps);
+    const errors = series((s) => s.deliveryErrorBps);
     const usedBy = uses.get(row.domain) ?? [];
     return {
         id: row.id,
@@ -56,11 +65,10 @@ export function domainView(row: DomainRow, uses: DomainUses, now = new Date()): 
         usedBy,
         gated: usedBy.includes('pool'),
         inPostmaster: row.inPostmaster,
-        spamRate: latest ? { day: dayOf(latest.day), rateBps: latest.spamRateBps } : null,
-        spamRates: row.stats
-            .map((s) => ({ day: dayOf(s.day), rateBps: s.spamRateBps }))
-            .filter((s) => s.day >= from)
-            .reverse(),
+        spamRate: spam.latest,
+        spamRates: spam.recent,
+        deliveryErrorRate: errors.latest,
+        deliveryErrorRates: errors.recent,
         postmaster: {
             status: row.postmasterStatus,
             message: row.postmasterMessage,

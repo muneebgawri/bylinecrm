@@ -21,6 +21,7 @@ import {
     describeGoogleError,
     POSTMASTER_PORT,
     PostmasterRequestFailed,
+    type DayStats,
     type PostmasterDomain,
     type PostmasterPort,
 } from './postmaster.port';
@@ -30,14 +31,14 @@ type ConnectionRow = Prisma.PostmasterConnectionGetPayload<object>;
 
 /**
  * What one check learned from Postmaster Tools about a domain: what to store on the domain, every
- * day's rate it gave over the range asked (#190), yesterday's — the one a pause is judged on — when
+ * day's statistics it gave over the range asked (#190), yesterday's spam rate — the one a pause is judged on — when
  * it gave one, and — after a rate limit or a spent quota (#183, #190) — how long Google asked to wait.
  */
 export interface PostmasterReading {
     status: PostmasterDomainStatus;
     message: string | null;
     rate: SendingDomainSpamRate | null;
-    history: SendingDomainSpamRate[];
+    history: DayStats[];
     retryAfterS?: number | null;
 }
 
@@ -77,7 +78,7 @@ export class PostmasterService {
     }
 
     /**
-     * The domain's user-reported spam rates over the last 30 days, yesterday's among them, as the
+     * The domain's user-reported spam and delivery-error rates over the last 30 days, as the
      * domain check asks for them. Never throws for what Google says: no connection, a grant made
      * before v2 (#190), a domain the account has not verified, a rate limit (#183), a spent quota
      * (#190), no answer, a refused request or a refused grant each become a reading the domain
@@ -91,7 +92,7 @@ export class PostmasterService {
         const { from, to } = postmasterRange(now);
         try {
             const token = await this.accessToken(workspaceId);
-            const lookup = await this.postmaster.spamRates(token, domain, from, to);
+            const lookup = await this.postmaster.domainStats(token, domain, from, to);
             if (lookup.status === 'not_verified') {
                 const said = describeGoogleError(lookup.google);
                 return {
@@ -112,15 +113,15 @@ export class PostmasterService {
                 );
                 return { status: lookup.status, message, rate: null, history: [], retryAfterS: lookup.retryAfterS };
             }
-            const history = lookup.rates.map((r) => ({ day: r.day, rateBps: r.spamRateBps }));
-            const rate = history.find((r) => r.day === to) ?? null;
+            const yesterday = lookup.days.find((d) => d.day === to)?.spamRateBps ?? null;
+            const rate = yesterday === null ? null : { day: to, rateBps: yesterday };
             return {
                 status: 'ok',
                 message: rate
                     ? null
                     : `no data for ${to}: Postmaster Tools reports only domains with substantial Gmail-bound traffic`,
                 rate,
-                history,
+                history: lookup.days,
             };
         } catch (error) {
             if (error instanceof PostmasterRequestFailed) {

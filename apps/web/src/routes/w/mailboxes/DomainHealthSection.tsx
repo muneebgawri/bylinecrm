@@ -86,17 +86,26 @@ export function DomainHealthSection({ workspaceId }: { workspaceId: string }) {
                             id: 'spam',
                             header: 'Spam rate',
                             phone: 'meta',
-                            cell: (d) =>
-                                d.spamRate ? (
-                                    <div>
-                                        <span className="tabular-nums">
-                                            {percentText(d.spamRate.rateBps)} on {d.spamRate.day}
+                            cell: (d) => (
+                                <div>
+                                    {d.spamRate ? (
+                                        <>
+                                            <span className="tabular-nums">
+                                                {percentText(d.spamRate.rateBps)} on {d.spamRate.day}
+                                            </span>
+                                            <SpamRateSparkline rates={d.spamRates} />
+                                        </>
+                                    ) : (
+                                        <span className="text-text-muted">No rate reported</span>
+                                    )}
+                                    {d.deliveryErrorRate && (
+                                        <span className="block text-xs text-text-muted tabular-nums">
+                                            Delivery errors {percentText(d.deliveryErrorRate.rateBps)} on{' '}
+                                            {d.deliveryErrorRate.day}
                                         </span>
-                                        <SpamRateSparkline rates={d.spamRates} />
-                                    </div>
-                                ) : (
-                                    <span className="text-text-muted">No rate reported</span>
-                                ),
+                                    )}
+                                </div>
+                            ),
                         },
                         {
                             id: 'postmaster',

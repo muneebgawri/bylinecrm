@@ -12,6 +12,10 @@ ADD COLUMN     "postmaster_read_at" TIMESTAMPTZ;
 -- AlterTable
 ALTER TABLE "postmaster_connections" ADD COLUMN     "domains_next_list_at" TIMESTAMPTZ;
 
+-- AlterTable: a day may report a delivery-error rate without a spam rate (or the other way round).
+ALTER TABLE "sending_domain_stats" ADD COLUMN     "delivery_error_bps" INTEGER,
+ALTER COLUMN "spam_rate_bps" DROP NOT NULL;
+
 -- Every connected mailbox's domain, pool or personal, is a sending domain, due for its first check.
 INSERT INTO "sending_domains" ("workspace_id", "domain", "updated_at")
 SELECT DISTINCT "workspace_id", lower(substring("email" from position('@' in "email") + 1)), now()

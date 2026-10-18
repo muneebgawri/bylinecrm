@@ -954,6 +954,8 @@ export const sendingPool: SendingPoolView = {
                     { day: '2026-10-06', rateBps: 11 },
                     { day: '2026-10-08', rateBps: 8 },
                 ],
+                deliveryErrorRate: { day: '2026-10-08', rateBps: 25 },
+                deliveryErrorRates: [{ day: '2026-10-08', rateBps: 25 }],
                 postmaster: { status: 'ok', message: null, readAt: at(1), nextReadAt: at(-5) },
             },
             canSend: false,
@@ -989,6 +991,11 @@ export const sendingDomains: SendingDomainView[] = [
             { day: '2026-10-05', rateBps: 9 },
             { day: '2026-10-08', rateBps: 12 },
         ],
+        deliveryErrorRate: { day: '2026-10-08', rateBps: 140 },
+        deliveryErrorRates: [
+            { day: '2026-10-05', rateBps: 60 },
+            { day: '2026-10-08', rateBps: 140 },
+        ],
         postmaster: { status: 'ok', message: null, readAt: at(2), nextReadAt: at(-15) },
     },
     {
@@ -1008,6 +1015,8 @@ export const sendingDomains: SendingDomainView[] = [
         inPostmaster: true,
         spamRate: null,
         spamRates: [],
+        deliveryErrorRate: null,
+        deliveryErrorRates: [],
         postmaster: {
             status: 'ok',
             message:

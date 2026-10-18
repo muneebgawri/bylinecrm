@@ -185,6 +185,13 @@ export interface SendingDomainView {
     spamRate: SendingDomainSpamRate | null;
     /** Every rate Postmaster Tools reported over the last `SPAM_RATE_HISTORY_DAYS` days, oldest first; a day without data is absent. */
     spamRates: SendingDomainSpamRate[];
+    /**
+     * The latest delivery-error rate Postmaster Tools reported (#190): rejects and temporary failures
+     * over what was sent to Gmail that day. Shown, never acted on.
+     */
+    deliveryErrorRate: SendingDomainSpamRate | null;
+    /** Its days over the last `SPAM_RATE_HISTORY_DAYS` days, oldest first, as `spamRates`. */
+    deliveryErrorRates: SendingDomainSpamRate[];
     postmaster: SendingDomainPostmaster;
 }
 

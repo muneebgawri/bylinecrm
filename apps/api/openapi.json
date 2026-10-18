@@ -25875,6 +25875,48 @@
                         },
                         "description": "Every rate Postmaster Tools reported over the last 30 days, oldest first (#190); a day without data is absent, never a zero."
                     },
+                    "deliveryErrorRate": {
+                        "nullable": true,
+                        "description": "The latest delivery-error rate Postmaster Tools reported (#190): rejects and temporary failures over what was sent. Shown, never acted on.",
+                        "type": "object",
+                        "properties": {
+                            "day": {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                "description": "The day the rate is for, UTC."
+                            },
+                            "rateBps": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Basis points: 35 = 0.35%."
+                            }
+                        },
+                        "required": ["day", "rateBps"]
+                    },
+                    "deliveryErrorRates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "day": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                    "description": "The day the rate is for, UTC."
+                                },
+                                "rateBps": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Basis points: 35 = 0.35%."
+                                }
+                            },
+                            "required": ["day", "rateBps"]
+                        },
+                        "description": "Its days over the last 30 days, oldest first; a day without data is absent."
+                    },
                     "postmaster": {
                         "type": "object",
                         "properties": {
@@ -25927,6 +25969,8 @@
                     "inPostmaster",
                     "spamRate",
                     "spamRates",
+                    "deliveryErrorRate",
+                    "deliveryErrorRates",
                     "postmaster"
                 ]
             },

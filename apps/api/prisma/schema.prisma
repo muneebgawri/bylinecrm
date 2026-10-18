@@ -1648,17 +1648,20 @@ model SendingDomain {
   @@map("sending_domains")
 }
 
-/// A day's user-reported spam rate for a sending domain, as Postmaster Tools published it (#129):
-/// one row per domain and day, replaced when the day is read again, never deleted by the app.
+/// A day's statistics for a sending domain, as Postmaster Tools published them (#129, #190): the
+/// user-reported spam rate and the delivery-error rate, either null when Google gave none that day.
+/// One row per domain and day, replaced when the day is read again, never deleted by the app.
 model SendingDomainStat {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  domainId    String   @map("domain_id") @db.Uuid
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  domainId         String   @map("domain_id") @db.Uuid
   /// The day the rate is for, UTC.
-  day         DateTime @db.Date
+  day              DateTime @db.Date
   /// Basis points: 35 = 0.35%.
-  spamRateBps Int      @map("spam_rate_bps")
-  fetchedAt   DateTime @default(now()) @map("fetched_at") @db.Timestamptz
+  spamRateBps      Int?     @map("spam_rate_bps")
+  /// #190: rejects and temporary failures over what was sent, basis points.
+  deliveryErrorBps Int?     @map("delivery_error_bps")
+  fetchedAt        DateTime @default(now()) @map("fetched_at") @db.Timestamptz
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   domain    SendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)

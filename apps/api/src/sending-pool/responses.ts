@@ -57,6 +57,13 @@ export const sendingDomainView = named(
         spamRates: z.array(spamRate).meta({
             description: `Every rate Postmaster Tools reported over the last ${SPAM_RATE_HISTORY_DAYS} days, oldest first (#190); a day without data is absent, never a zero.`,
         }),
+        deliveryErrorRate: spamRate.nullable().meta({
+            description:
+                'The latest delivery-error rate Postmaster Tools reported (#190): rejects and temporary failures over what was sent. Shown, never acted on.',
+        }),
+        deliveryErrorRates: z.array(spamRate).meta({
+            description: `Its days over the last ${SPAM_RATE_HISTORY_DAYS} days, oldest first; a day without data is absent.`,
+        }),
         postmaster: z.object({
             status: z.enum(POSTMASTER_DOMAIN_STATUSES).meta({
                 description:

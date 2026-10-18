@@ -102,7 +102,7 @@ export function DomainPage() {
             </section>
             <section aria-labelledby="postmaster-days-title" className="mt-8">
                 <h2 id="postmaster-days-title" className="m-0 mb-1 text-base font-semibold">
-                    Spam rate in Postmaster Tools
+                    Postmaster Tools, by day
                 </h2>
                 <div className="mb-3 max-w-[65ch] text-[13px] text-text-muted">
                     {reads && <span className="block">{reads}</span>}
@@ -114,24 +114,30 @@ export function DomainPage() {
                 </div>
                 <DataTableChrome
                     data={{
-                        label: 'Spam rate by day',
+                        label: 'Spam and delivery-error rates by day',
                         loading: false,
-                        rows: [...d.spamRates].reverse(),
+                        rows: daysOf(d),
                         getRowId: (r) => r.day,
                         empty: (
                             <EmptyState
                                 className="m-4"
-                                title="No rate in the last 30 days"
+                                title="No rates in the last 30 days"
                                 body="Postmaster Tools reported nothing for this domain."
                             />
                         ),
                         columns: [
                             { id: 'day', header: 'Day', cell: (r) => r.day },
                             {
-                                id: 'rate',
+                                id: 'spam',
                                 header: 'Spam rate',
                                 phone: 'meta',
-                                cell: (r) => <span className="tabular-nums">{percentText(r.rateBps)}</span>,
+                                cell: (r) => <span className="tabular-nums">{rateText(r.spamBps)}</span>,
+                            },
+                            {
+                                id: 'errors',
+                                header: 'Delivery errors',
+                                phone: 'meta',
+                                cell: (r) => <span className="tabular-nums">{rateText(r.errorBps)}</span>,
                             },
                         ],
                     }}
@@ -139,6 +145,22 @@ export function DomainPage() {
             </section>
         </div>
     );
+}
+
+/**
+ * Each day Postmaster Tools reported either rate for, newest first (#190): a day with one rate and
+ * not the other shows a dash for the missing one, never a zero.
+ */
+function daysOf(d: SendingDomainView): { day: string; spamBps: number | null; errorBps: number | null }[] {
+    const days = new Map<string, { day: string; spamBps: number | null; errorBps: number | null }>();
+    const at = (day: string) => days.get(day) ?? days.set(day, { day, spamBps: null, errorBps: null }).get(day)!;
+    for (const r of d.spamRates) at(r.day).spamBps = r.rateBps;
+    for (const r of d.deliveryErrorRates) at(r.day).errorBps = r.rateBps;
+    return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+}
+
+function rateText(bps: number | null): string {
+    return bps === null ? '—' : percentText(bps);
 }
 
 /** What the pool's gate does with the domain (#190): the pool's are gated, personal mail is only watched. */

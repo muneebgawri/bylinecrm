@@ -194,12 +194,13 @@ export class SendingDomainsService {
         const updated = await this.rls.withWorkspace(workspaceId, async (tx) => {
             // One row per domain and day (#190: every day of the range Google answered for): a day
             // read again is replaced, so the view shows the latest.
-            for (const rate of reading?.history ?? []) {
-                const day = new Date(rate.day);
+            for (const stats of reading?.history ?? []) {
+                const day = new Date(stats.day);
+                const values = { spamRateBps: stats.spamRateBps, deliveryErrorBps: stats.deliveryErrorBps };
                 await tx.sendingDomainStat.upsert({
                     where: { domainId_day: { domainId: row.id, day } },
-                    create: { workspaceId, domainId: row.id, day, spamRateBps: rate.rateBps, fetchedAt: now },
-                    update: { spamRateBps: rate.rateBps, fetchedAt: now },
+                    create: { workspaceId, domainId: row.id, day, ...values, fetchedAt: now },
+                    update: { ...values, fetchedAt: now },
                 });
             }
             return tx.sendingDomain.update({

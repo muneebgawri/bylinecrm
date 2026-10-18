@@ -4,11 +4,11 @@ import { z } from 'zod';
 import { assertNoOpenTransaction } from '../infra/transaction-scope';
 import {
     PostmasterRequestFailed,
-    type DaySpamRate,
+    type DayStats,
+    type DomainStatsLookup,
     type GoogleErrorDetail,
     type PostmasterDomain,
     type PostmasterPort,
-    type SpamRatesLookup,
 } from './postmaster.port';
 import {
     POSTMASTER_ENDPOINT,
@@ -41,8 +41,9 @@ function utcDay(now: Date, offset: number): string {
 }
 
 /**
- * A user-reported spam rate, as basis points: Google's `SPAM_RATE` statistic is a fraction
- * (0.0035 = 0.35%), as v1's `userReportedSpamRatio` was. A value without a number has no rate.
+ * A rate statistic as basis points: Google's `SPAM_RATE` is a fraction (0.0035 = 0.35%), as v1's
+ * `userReportedSpamRatio` was, and `DELIVERY_ERROR_RATE` is read the same way (#190). A value
+ * without a number has no rate.
  */
 export function spamRateBpsOf(value: Record<string, unknown>): number | null {
     const ratio = value['doubleValue'] ?? value['floatValue'];
@@ -92,6 +93,7 @@ const domainStats = z.object({
     domainStats: z
         .array(
             z.object({
+                metric: z.string().optional(),
                 date: z.object({ year: z.number(), month: z.number(), day: z.number() }).optional(),
                 value: z.object({ doubleValue: z.number().optional(), floatValue: z.number().optional() }).optional(),
             }),
@@ -105,7 +107,15 @@ const domainList = z.object({
     nextPageToken: z.string().optional(),
 });
 
-const SPAM_RATE_METRIC = 'spam_rate';
+/** What the query asks for, by the names Google echoes back on each statistic. */
+const METRICS = [
+    { name: 'spam_rate', baseMetric: { standardMetric: 'SPAM_RATE' } },
+    { name: 'delivery_error_rate', baseMetric: { standardMetric: 'DELIVERY_ERROR_RATE' } },
+] as const;
+const FIELD_OF: Record<(typeof METRICS)[number]['name'], 'spamRateBps' | 'deliveryErrorBps'> = {
+    spam_rate: 'spamRateBps',
+    delivery_error_rate: 'deliveryErrorBps',
+};
 
 /** `YYYY-MM-DD` as Google's `Date` message. */
 function googleDate(day: string): { year: number; month: number; day: number } {
@@ -116,7 +126,7 @@ function googleDate(day: string): { year: number; month: number; day: number } {
 /**
  * The port, over HTTPS to the Postmaster Tools API v2 (#190; v1's `trafficStats` is being retired):
  * `GET /v2/domains` for the account's domains and `POST /v2/domains/{domain}/domainStats:query` for
- * a domain's daily `SPAM_RATE`, each with a timeout, every page followed. A reply Google's
+ * a domain's daily `SPAM_RATE` and `DELIVERY_ERROR_RATE` in one query, each with a timeout, every page followed. A reply Google's
  * documentation gives a meaning to (403/404 — not the account's domain, 429 — the quota said not
  * now, or is spent) is a lookup result; anything else is a failure. Google's error body is read for
  * its status and message (`googleErrorOf`); no header and never the token is kept.
@@ -144,15 +154,15 @@ export class PostmasterHttp implements PostmasterPort {
         return found;
     }
 
-    async spamRates(accessToken: string, domain: string, from: string, to: string): Promise<SpamRatesLookup> {
-        assertNoOpenTransaction('Postmaster spamRates');
+    async domainStats(accessToken: string, domain: string, from: string, to: string): Promise<DomainStatsLookup> {
+        assertNoOpenTransaction('Postmaster domainStats');
         const name = domain.toLowerCase();
         const url = `${POSTMASTER_ENDPOINT}/domains/${encodeURIComponent(name)}/domainStats:query`;
-        const rates: DaySpamRate[] = [];
+        const byDay = new Map<string, DayStats>();
         let pageToken: string | undefined;
         for (let page = 0; page < POSTMASTER_MAX_PAGES; page += 1) {
             const res = await this.call(name, url, accessToken, {
-                metricDefinitions: [{ name: SPAM_RATE_METRIC, baseMetric: { standardMetric: 'SPAM_RATE' } }],
+                metricDefinitions: METRICS,
                 timeQuery: { dateRanges: { dateRanges: [{ start: googleDate(from), end: googleDate(to) }] } },
                 aggregationGranularity: 'DAILY',
                 pageSize: POSTMASTER_PAGE_SIZE,
@@ -173,19 +183,22 @@ export class PostmasterHttp implements PostmasterPort {
             if (!parsed.success)
                 throw new PostmasterRequestFailed(name, res.status, 'the answer had an unexpected shape');
             for (const stat of parsed.data.domainStats ?? []) {
+                const field =
+                    stat.metric && Object.hasOwn(FIELD_OF, stat.metric)
+                        ? FIELD_OF[stat.metric as keyof typeof FIELD_OF]
+                        : undefined;
                 const bps = stat.value ? spamRateBpsOf(stat.value) : null;
-                if (!stat.date || bps === null) continue;
-                const { year, month, day } = stat.date;
-                rates.push({
-                    day: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-                    spamRateBps: bps,
-                });
+                if (!field || !stat.date || bps === null) continue;
+                const { year, month, day: date } = stat.date;
+                const day = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+                const stats = byDay.get(day) ?? { day, spamRateBps: null, deliveryErrorBps: null };
+                stats[field] = bps;
+                byDay.set(day, stats);
             }
             pageToken = parsed.data.nextPageToken || undefined;
             if (!pageToken) break;
         }
-        rates.sort((a, b) => a.day.localeCompare(b.day));
-        return { status: 'found', rates };
+        return { status: 'found', days: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)) };
     }
 
     // ── Internals ────────────────────────────────────────────────────────────────────────────

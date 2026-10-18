@@ -22,23 +22,28 @@ export interface PostmasterDomain {
     domain: string;
 }
 
-/** One day's user-reported spam rate: `YYYY-MM-DD`, UTC, in basis points. */
-export interface DaySpamRate {
+/**
+ * One day's statistics (`YYYY-MM-DD`, UTC), in basis points: the user-reported spam rate and the
+ * delivery-error rate (#190: every reject and temporary failure). Either is null when Google gave
+ * none for the day — never a zero.
+ */
+export interface DayStats {
     day: string;
-    spamRateBps: number;
+    spamRateBps: number | null;
+    deliveryErrorBps: number | null;
 }
 
 /**
- * What a domain's spam rates over a range say. `not_verified`: the connected account does not own
+ * What a domain's daily statistics over a range say. `not_verified`: the connected account does not own
  * the domain in Postmaster Tools (Google answers 403 or 404). `found`: the days Google published a
- * rate for, oldest first — none when it keeps data back under its traffic minimum. `rate_limited`:
+ * statistic for, oldest first — none when it keeps data back under its traffic minimum. `rate_limited`:
  * a 429 (#183), an answer, not a failure; `retryAfterS` from its Retry-After when it gave one.
  * `quota_exhausted`: a 429 whose body is RESOURCE_EXHAUSTED and names a quota limit (#190) — the
  * project's Postmaster Tools API quota is spent.
  */
-export type SpamRatesLookup =
+export type DomainStatsLookup =
     | { status: 'not_verified'; google: GoogleErrorDetail | null }
-    | { status: 'found'; rates: DaySpamRate[] }
+    | { status: 'found'; days: DayStats[] }
     | { status: 'rate_limited'; retryAfterS: number | null; google: GoogleErrorDetail | null }
     | { status: 'quota_exhausted'; retryAfterS: number | null; google: GoogleErrorDetail };
 
@@ -49,12 +54,12 @@ export interface PostmasterPort {
      */
     domains(accessToken: string): Promise<PostmasterDomain[]>;
     /**
-     * The domain's user-reported spam rate for each day from `from` to `to` (`YYYY-MM-DD`, UTC,
-     * inclusive), read with the connected account's access token. Throws `PostmasterRequestFailed`
+     * The domain's user-reported spam rate and delivery-error rate for each day from `from` to `to`
+     * (`YYYY-MM-DD`, UTC, inclusive), in one query, read with the connected account's access token. Throws `PostmasterRequestFailed`
      * when Google did not answer the question — a 5xx, a timeout, a refused token — so "could not
      * read" is never read as a rate.
      */
-    spamRates(accessToken: string, domain: string, from: string, to: string): Promise<SpamRatesLookup>;
+    domainStats(accessToken: string, domain: string, from: string, to: string): Promise<DomainStatsLookup>;
 }
 
 /** Google's status and message as one clause for a message or a log line, or nothing when it gave neither. */
