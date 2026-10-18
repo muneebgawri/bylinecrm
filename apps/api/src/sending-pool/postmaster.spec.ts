@@ -127,7 +127,7 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
         };
         afterEach(() => vi.unstubAllGlobals());
 
-        it('queries SPAM_RATE daily over the range and reads each day it answers', async () => {
+        it('queries SPAM_RATE and DELIVERY_ERROR_RATE daily over the range and reads each day it answers, by metric name', async () => {
             const fetch = stubFetch(
                 reply(200, {
                     domainStats: [
@@ -142,15 +142,26 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                             value: { doubleValue: 0.0035 },
                         },
                         { metric: 'spam_rate', date: { year: 2026, month: 10, day: 15 }, value: {} },
+                        {
+                            metric: 'delivery_error_rate',
+                            date: { year: 2026, month: 10, day: 17 },
+                            value: { doubleValue: 0.021 },
+                        },
+                        {
+                            metric: 'delivery_error_rate',
+                            date: { year: 2026, month: 10, day: 14 },
+                            value: { doubleValue: 0.004 },
+                        },
                     ],
                 }),
             );
-            const lookup = await http.spamRates(token, 'Pinionpartners.co', '2026-09-18', '2026-10-17');
+            const lookup = await http.domainStats(token, 'Pinionpartners.co', '2026-09-18', '2026-10-17');
             expect(lookup).toEqual({
                 status: 'found',
-                rates: [
-                    { day: '2026-10-16', spamRateBps: 12 },
-                    { day: '2026-10-17', spamRateBps: 35 },
+                days: [
+                    { day: '2026-10-14', spamRateBps: null, deliveryErrorBps: 40 },
+                    { day: '2026-10-16', spamRateBps: 12, deliveryErrorBps: null },
+                    { day: '2026-10-17', spamRateBps: 35, deliveryErrorBps: 210 },
                 ],
             });
             const [url, init] = fetch.mock.calls[0]!;
@@ -159,7 +170,10 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
             );
             expect(init?.method).toBe('POST');
             expect(JSON.parse(String(init?.body))).toEqual({
-                metricDefinitions: [{ name: 'spam_rate', baseMetric: { standardMetric: 'SPAM_RATE' } }],
+                metricDefinitions: [
+                    { name: 'spam_rate', baseMetric: { standardMetric: 'SPAM_RATE' } },
+                    { name: 'delivery_error_rate', baseMetric: { standardMetric: 'DELIVERY_ERROR_RATE' } },
+                ],
                 timeQuery: {
                     dateRanges: {
                         dateRanges: [
@@ -182,16 +196,16 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                 reply(200, { domainStats: [day(16, 0.001)], nextPageToken: 'p2' }),
                 reply(200, { domainStats: [day(17, 0.002)] }),
             );
-            const lookup = await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17');
-            expect(lookup).toMatchObject({ status: 'found', rates: [{ spamRateBps: 10 }, { spamRateBps: 20 }] });
+            const lookup = await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17');
+            expect(lookup).toMatchObject({ status: 'found', days: [{ spamRateBps: 10 }, { spamRateBps: 20 }] });
             expect(JSON.parse(String(fetch.mock.calls[1]![1]?.body))).toMatchObject({ pageToken: 'p2' });
         });
 
         it('a domain with no data is an answer with no days', async () => {
             stubFetch(reply(200, {}));
-            expect(await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17')).toEqual({
+            expect(await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17')).toEqual({
                 status: 'found',
-                rates: [],
+                days: [],
             });
         });
 
@@ -218,7 +232,7 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                 reply(429, { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Too many requests' } }),
                 reply(429, 'busy'),
             );
-            const quota = await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17');
+            const quota = await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17');
             expect(quota).toEqual({
                 status: 'quota_exhausted',
                 retryAfterS: 60,
@@ -228,13 +242,13 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                     quotaLimit: 'QueriesPerDay',
                 },
             });
-            const limited = await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17');
+            const limited = await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17');
             expect(limited).toEqual({
                 status: 'rate_limited',
                 retryAfterS: null,
                 google: { status: 'RESOURCE_EXHAUSTED', message: 'Too many requests', quotaLimit: null },
             });
-            expect(await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17')).toEqual({
+            expect(await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17')).toEqual({
                 status: 'rate_limited',
                 retryAfterS: null,
                 google: null,
@@ -249,7 +263,7 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                 }),
                 reply(404, { error: { code: 404, status: 'NOT_FOUND', message: 'Domain not found' } }),
             );
-            expect(await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17')).toEqual({
+            expect(await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17')).toEqual({
                 status: 'not_verified',
                 google: {
                     status: 'PERMISSION_DENIED',
@@ -257,7 +271,7 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                     quotaLimit: null,
                 },
             });
-            expect(await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17')).toMatchObject({
+            expect(await http.domainStats(token, 'x.example', '2026-10-16', '2026-10-17')).toMatchObject({
                 status: 'not_verified',
                 google: { status: 'NOT_FOUND' },
             });
@@ -265,7 +279,9 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
 
         it('any other refusal fails with the status and Google’s own status and message, never the token', async () => {
             stubFetch(reply(500, { error: { code: 500, status: 'INTERNAL', message: 'Internal error encountered.' } }));
-            const error = await http.spamRates(token, 'x.example', '2026-10-16', '2026-10-17').catch((e: unknown) => e);
+            const error = await http
+                .domainStats(token, 'x.example', '2026-10-16', '2026-10-17')
+                .catch((e: unknown) => e);
             expect(error).toBeInstanceOf(PostmasterRequestFailed);
             const failed = error as PostmasterRequestFailed;
             expect(failed.status).toBe(500);

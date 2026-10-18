@@ -24,6 +24,8 @@ const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     inPostmaster: true,
     spamRate: null,
     spamRates: [],
+    deliveryErrorRate: null,
+    deliveryErrorRates: [],
     postmaster: {
         status: 'ok',
         message: null,
@@ -51,6 +53,8 @@ const PERSONAL = domain({
         { day: '2026-10-16', rateBps: 8 },
         { day: '2026-10-17', rateBps: 12 },
     ],
+    deliveryErrorRate: { day: '2026-10-17', rateBps: 210 },
+    deliveryErrorRates: [{ day: '2026-10-17', rateBps: 210 }],
 });
 const LISTED = domain({
     id: 'd-3',
@@ -112,6 +116,8 @@ describe('#190 FR-CRMS-13: domain health for every sending domain', () => {
             within(personal).getByRole('img', { name: /Spam rate, last 30 days: 0\.04% to 0\.12%/ }),
         ).toBeInTheDocument();
         expect(within(personal).getByText(/Read .*next read/)).toBeInTheDocument();
+        // Delivery errors are shown beside the spam rate, for watching only.
+        expect(within(personal).getByText('Delivery errors 2.10% on 2026-10-17')).toBeInTheDocument();
 
         const listed = await row('news.example');
         expect(within(listed).getByText('In Postmaster Tools only')).toBeInTheDocument();

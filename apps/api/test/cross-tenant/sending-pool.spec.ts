@@ -792,6 +792,35 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                 expect((await owner.mailbox.findUniqueOrThrow({ where: { id: personalMailbox } })).pausedAt).toBeNull();
             });
 
+            it('reads the delivery-error rate alongside the spam rate, keeps each day of each, and pauses nothing for it', async () => {
+                await log.reset();
+                const before = (d: number) => {
+                    const x = new Date(`${yesterday}T00:00:00Z`);
+                    x.setUTCDate(x.getUTCDate() - d);
+                    return x.toISOString().slice(0, 10);
+                };
+                // A pool domain: errors well past anything, a spam rate under the threshold.
+                postmaster.setSpamRate(goodDomain, 5);
+                postmaster.setDeliveryErrorRate(goodDomain, 900);
+                postmaster.setDeliveryErrorRate(goodDomain, 300, before(3));
+                await due(goodDomain);
+                const checked = await checkDomain(goodDomain);
+                expect(checked.deliveryErrorRate).toEqual({ day: yesterday, rateBps: 900 });
+                expect(checked.deliveryErrorRates).toEqual([
+                    { day: before(3), rateBps: 300 },
+                    { day: yesterday, rateBps: 900 },
+                ]);
+                // A day with only delivery errors is no spam-rate day: never a zero.
+                expect(checked.spamRates.map((r) => r.day)).not.toContain(before(3));
+                expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 5 });
+                expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(0);
+                expect((await view()).mailboxes.every((m) => m.paused === null)).toBe(true);
+                // Another workspace sees none of it.
+                expect(
+                    (await domains(otherAdmin, otherWorkspace)).every((d) => d.deliveryErrorRates.length === 0),
+                ).toBe(true);
+            });
+
             it('lists every domain the connected Postmaster account holds, reads its 30-day history, once a day; another workspace sees none of it', async () => {
                 const day = (back: number) => {
                     const d = new Date(`${yesterday}T00:00:00Z`);

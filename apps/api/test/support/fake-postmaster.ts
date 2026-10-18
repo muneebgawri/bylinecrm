@@ -4,7 +4,7 @@ import {
     type GoogleErrorDetail,
     type PostmasterDomain,
     type PostmasterPort,
-    type SpamRatesLookup,
+    type DomainStatsLookup,
 } from '../../src/sending-pool/postmaster.port';
 
 /** What Google's body says when the project's Postmaster Tools API quota is spent (#190). */
@@ -17,7 +17,8 @@ export const QUOTA_EXHAUSTED: GoogleErrorDetail = {
 
 /**
  * In-memory Postmaster Tools, as its v2 API answers (P3-2b, #129, #190): the domains the connected
- * account has added (`domains.list`), and a user-reported spam rate per domain and day, answered
+ * account has added (`domains.list`), and a user-reported spam rate and a delivery-error rate per
+ * domain and day, answered
  * for the range asked, never the network. A domain nothing was set for is not verified for the
  * account (Google answers 403 for those). `failNext` makes the next asks fail, as a 5xx would;
  * `rateLimitNext` answers 429 (#183) and `quotaExhaustedNext` answers 429 with Google's
@@ -25,8 +26,8 @@ export const QUOTA_EXHAUSTED: GoogleErrorDetail = {
  * inside a database transaction.
  */
 export class FakePostmaster implements PostmasterPort {
-    /** domain → day (`YYYY-MM-DD`, or `latest` for the last day of any range asked) → basis points. */
-    private readonly rates = new Map<string, Map<string, number>>();
+    /** domain → day (`YYYY-MM-DD`, or `latest` for the last day of any range asked) → each rate, basis points. */
+    private readonly rates = new Map<string, Map<string, { spam?: number; deliveryError?: number }>>();
     private readonly account = new Set<string>();
     private failing: { left: number; status: number; google: GoogleErrorDetail | null } = {
         left: 0,
@@ -44,8 +45,18 @@ export class FakePostmaster implements PostmasterPort {
 
     /** The domain is verified and reports this rate, in basis points, for `day` — or for the last day of any range asked. */
     setSpamRate(domain: string, rateBps: number, day = 'latest'): void {
-        const days = this.rates.get(domain.toLowerCase()) ?? new Map<string, number>();
-        days.set(day, rateBps);
+        this.set(domain, day, { spam: rateBps });
+    }
+
+    /** The domain is verified and reports this delivery-error rate (#190), in basis points, for `day` or the latest. */
+    setDeliveryErrorRate(domain: string, rateBps: number, day = 'latest'): void {
+        this.set(domain, day, { deliveryError: rateBps });
+    }
+
+    private set(domain: string, day: string, rate: { spam?: number; deliveryError?: number }): void {
+        const days =
+            this.rates.get(domain.toLowerCase()) ?? new Map<string, { spam?: number; deliveryError?: number }>();
+        days.set(day, { ...days.get(day), ...rate });
         this.rates.set(domain.toLowerCase(), days);
     }
 
@@ -95,8 +106,8 @@ export class FakePostmaster implements PostmasterPort {
         return Promise.resolve([...this.account].map((domain) => ({ domain })));
     }
 
-    spamRates(accessToken: string, domain: string, from: string, to: string): Promise<SpamRatesLookup> {
-        assertNoOpenTransaction('FakePostmaster.spamRates');
+    domainStats(accessToken: string, domain: string, from: string, to: string): Promise<DomainStatsLookup> {
+        assertNoOpenTransaction('FakePostmaster.domainStats');
         this.lookups.push({ accessToken, domain: domain.toLowerCase(), from, to });
         if (this.failing.left > 0) {
             this.failing.left -= 1;
@@ -124,10 +135,14 @@ export class FakePostmaster implements PostmasterPort {
                 },
             });
         }
-        const rates = [...days]
-            .map(([day, spamRateBps]) => ({ day: day === 'latest' ? to : day, spamRateBps }))
+        const found = [...days]
+            .map(([day, rate]) => ({
+                day: day === 'latest' ? to : day,
+                spamRateBps: rate.spam ?? null,
+                deliveryErrorBps: rate.deliveryError ?? null,
+            }))
             .filter((r) => r.day >= from && r.day <= to)
             .sort((a, b) => a.day.localeCompare(b.day));
-        return Promise.resolve({ status: 'found', rates });
+        return Promise.resolve({ status: 'found', days: found });
     }
 }

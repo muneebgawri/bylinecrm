@@ -30,6 +30,11 @@ const DOMAIN: SendingDomainView = {
         { day: '2026-10-15', rateBps: 4 },
         { day: '2026-10-17', rateBps: 12 },
     ],
+    deliveryErrorRate: { day: '2026-10-17', rateBps: 210 },
+    deliveryErrorRates: [
+        { day: '2026-10-14', rateBps: 40 },
+        { day: '2026-10-17', rateBps: 210 },
+    ],
     postmaster: {
         status: 'ok',
         message: null,
@@ -73,7 +78,7 @@ describe('#190 FR-CRMS-13: one sending domain, for an admin', () => {
                 .getAllByRole('row')
                 .slice(1)
                 .map((r) => r.textContent),
-        ).toEqual(['2026-10-170.12%', '2026-10-150.04%']);
+        ).toEqual(['2026-10-170.12%2.10%', '2026-10-150.04%—', '2026-10-14—0.40%']);
     });
 
     it('checks the domain again on an admin’s word', async () => {
