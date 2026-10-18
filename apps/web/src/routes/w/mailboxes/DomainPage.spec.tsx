@@ -78,7 +78,11 @@ describe('#190 FR-CRMS-13: one sending domain, for an admin', () => {
                 .getAllByRole('row')
                 .slice(1)
                 .map((r) => r.textContent),
-        ).toEqual(['2026-10-170.12%2.10%', '2026-10-150.04%—', '2026-10-14—0.40%']);
+        ).toEqual([
+            '2026-10-17Spam 0.12%Delivery errors 2.10%',
+            '2026-10-15Spam 0.04%Delivery errors —',
+            '2026-10-14Spam —Delivery errors 0.40%',
+        ]);
     });
 
     it('checks the domain again on an admin’s word', async () => {

@@ -131,13 +131,24 @@ export function DomainPage() {
                                 id: 'spam',
                                 header: 'Spam rate',
                                 phone: 'meta',
-                                cell: (r) => <span className="tabular-nums">{rateText(r.spamBps)}</span>,
+                                // On a phone the row is a card without column headers: each number says what it is.
+                                cell: (r) => (
+                                    <span className="tabular-nums">
+                                        <span className="md:hidden">Spam </span>
+                                        {rateText(r.spamBps)}
+                                    </span>
+                                ),
                             },
                             {
                                 id: 'errors',
                                 header: 'Delivery errors',
                                 phone: 'meta',
-                                cell: (r) => <span className="tabular-nums">{rateText(r.errorBps)}</span>,
+                                cell: (r) => (
+                                    <span className="tabular-nums">
+                                        <span className="md:hidden">Delivery errors </span>
+                                        {rateText(r.errorBps)}
+                                    </span>
+                                ),
                             },
                         ],
                     }}
@@ -166,6 +177,6 @@ function rateText(bps: number | null): string {
 /** What the pool's gate does with the domain (#190): the pool's are gated, personal mail is only watched. */
 function gateText(d: SendingDomainView): string {
     if (d.gated)
-        return 'Gated: pool mailboxes send from it only while SPF, DKIM and DMARC pass, and pause at the spam-rate threshold.';
+        return 'Pool mailboxes send from it only while SPF, DKIM and DMARC pass, and pause at the spam-rate threshold.';
     return 'Monitored, never blocked: nothing is refused or paused for what its checks find.';
 }
