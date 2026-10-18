@@ -7,6 +7,7 @@ import {
     type GmailPort,
     type GmailProfile,
     type GmailRawMessage,
+    type GmailSendAs,
     type GmailSent,
 } from '../../src/mail-sync/gmail.port';
 import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
@@ -44,7 +45,8 @@ interface FakeMailbox {
     nextThread: number;
 }
 
-type Method = 'getProfile' | 'listMessages' | 'listHistory' | 'getMessage' | 'getMessageHeaders' | 'send';
+type Method =
+    'getProfile' | 'listMessages' | 'listHistory' | 'getMessage' | 'getMessageHeaders' | 'send' | 'listSendAs';
 
 /**
  * An in-memory Gmail for the tests: no network, ever. Access tokens are the fake OAuth's — a token
@@ -70,6 +72,8 @@ export class FakeGmail implements GmailPort {
      * our Message-ID hides exactly the bug real Gmail exposed.
      */
     private nextRewrittenId = 1;
+    /** Each mailbox's Gmail signature (HTML, as Gmail stores it), for `listSendAs` (#193). */
+    private readonly signatures = new Map<string, string>();
     /** Page sizes small enough that the tests exercise paging. */
     listPageSize = 3;
     historyPageSize = 2;
@@ -184,6 +188,11 @@ export class FakeGmail implements GmailPort {
         this.acceptThenFail.add(email);
     }
 
+    /** Sets the signature Gmail holds for the mailbox's own address. */
+    setSignature(email: string, html: string): void {
+        this.signatures.set(email, html);
+    }
+
     callsOf(method: Method, email: string): number {
         return this.calls.filter((c) => c.method === method && c.email === email).length;
     }
@@ -284,6 +293,15 @@ export class FakeGmail implements GmailPort {
             throw new GmailApiError(500, 'backendError', 'Gmail answered 500');
         }
         return { id, threadId };
+    }
+
+    async listSendAs(accessToken: string): Promise<GmailSendAs[]> {
+        const email = await this.enter('listSendAs', accessToken);
+        // Gmail lists an alias first, as it may: the mailbox's own address is found by its flag, not its place.
+        return [
+            { sendAsEmail: `alias-${email}`, isPrimary: false, signature: '<b>Not this one</b>' },
+            { sendAsEmail: email, isPrimary: true, signature: this.signatures.get(email) ?? '' },
+        ];
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────

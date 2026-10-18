@@ -1,4 +1,4 @@
-import type { Capability } from '@bylinecrm/shared';
+import type { Capability, MailboxSignatureView } from '@bylinecrm/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -249,5 +249,57 @@ describe('FR-CRMS-4: a reply', () => {
             reply: { messageId: 'msg-7', mailboxIds: ['mb-sam'], subject: 'Intro' },
         });
         expect(await screen.findByText(/in no mailbox of yours that can send/)).toBeInTheDocument();
+    });
+});
+
+describe('#193 the signature', () => {
+    const KATE: MailboxSignatureView = {
+        mailboxId: 'mb-mine',
+        own: null,
+        useDefault: true,
+        applies: 'default',
+        effective: {
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Kate · Pinion Partners' }] }],
+        },
+        bookingLink: null,
+        locked: { logo: false, bookingLink: false },
+    };
+    const routes = (): FakeRoute[] => [
+        mailboxesRoute(MAILBOXES),
+        (r) => (r.method === 'GET' && r.url.endsWith('/mailboxes/mb-mine/signature') ? json(KATE) : undefined),
+        (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined),
+    ];
+    const sent = async (seen: { url: string; body: unknown }[]) => {
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        return seen.find((r) => r.url.endsWith('/mail/send'))!.body as Record<string, unknown>;
+    };
+
+    it('shows the mailbox’s signature under the message, and leaves it to the mailbox when untouched', async () => {
+        const seen = composer(routes());
+        const signature = await screen.findByRole('textbox', { name: 'Signature' });
+        expect(signature).toHaveTextContent('Kate · Pinion Partners');
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        expect(await sent(seen)).not.toHaveProperty('signature');
+    });
+
+    it('sends without one once removed for this message', async () => {
+        const seen = composer(routes());
+        await screen.findByRole('textbox', { name: 'Signature' });
+        await userEvent.click(screen.getByRole('button', { name: 'Remove signature' }));
+        expect(screen.queryByRole('textbox', { name: 'Signature' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Add signature' })).toBeInTheDocument();
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        expect((await sent(seen))['signature']).toBeNull();
+    });
+
+    it('sends the signature as edited for this message', async () => {
+        const seen = composer(routes());
+        await userEvent.type(await screen.findByRole('textbox', { name: 'Signature' }), ' (on the road)');
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        expect(JSON.stringify((await sent(seen))['signature'])).toContain('(on the road)');
     });
 });
