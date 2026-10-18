@@ -89,7 +89,11 @@ export class PoolMailboxesController {
     }
 }
 
-/** Sending domains and their DNS checks (FR-CRMS-13). */
+/**
+ * Sending domains and their checks (FR-CRMS-13, #190): every connected mailbox's domain, pool or
+ * personal, and every domain the connected Postmaster Tools account lists. The list is for whoever
+ * reads the pool; one domain's page, its selector and a check on demand are an admin's.
+ */
 @ApiTags('sending-pool')
 @TenantController('sending-domains')
 export class SendingDomainsController {
@@ -100,6 +104,13 @@ export class SendingDomainsController {
     @Returns([sendingDomainView])
     list(): Promise<SendingDomainView[]> {
         return this.domains.list();
+    }
+
+    @Requires('workspace:admin')
+    @Get(':domainId')
+    @Returns(sendingDomainView)
+    get(@Param('domainId', ParseUUIDPipe) domainId: string): Promise<SendingDomainView> {
+        return this.domains.get(domainId);
     }
 
     @Requires('workspace:admin')

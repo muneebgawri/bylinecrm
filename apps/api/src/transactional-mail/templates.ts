@@ -143,3 +143,34 @@ export function twentySyncFailingMail(input: {
         footer: `You receive this because you are an admin of ${name} on ${PRODUCT}.`,
     });
 }
+
+/** One task as a digest lists it: its title, what it is about, and when it was due. */
+interface DigestTask {
+    title: string;
+    about: string[];
+    due: string;
+}
+
+/**
+ * A member's morning digest (#192): their tasks overdue and due today, in one message, so a
+ * sequence's "Call if no reply" is not left waiting on a record nobody opened.
+ */
+export function taskDigestMail(input: {
+    workspaceName: string;
+    overdue: DigestTask[];
+    today: DigestTask[];
+    url: string;
+}): RenderedMail {
+    const line = (t: DigestTask) => `• ${t.title}${t.about.length > 0 ? ` (${t.about.join(', ')})` : ''}, due ${t.due}`;
+    const count = input.overdue.length + input.today.length;
+    return render(`${count} ${count === 1 ? 'task' : 'tasks'} due in ${input.workspaceName}`, {
+        heading: 'Your tasks for today',
+        paragraphs: [
+            ...(input.overdue.length > 0 ? [`Overdue: ${input.overdue.length}`, ...input.overdue.map(line)] : []),
+            ...(input.today.length > 0 ? [`Due today: ${input.today.length}`, ...input.today.map(line)] : []),
+        ],
+        action: 'Open my tasks',
+        url: input.url,
+        footer: `You receive this because tasks in ${input.workspaceName} on ${PRODUCT} are assigned to you. Turn it off under Notifications (the bell) in ${PRODUCT}.`,
+    });
+}

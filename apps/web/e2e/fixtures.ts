@@ -26,6 +26,7 @@ import type {
     EnrichmentSettingsView,
     TrackingSettingsView,
     SuppressionView,
+    SendingDomainView,
     SendingPoolView,
     TwentyImportOverviewView,
     TwentyImportRunView,
@@ -70,6 +71,9 @@ import type {
     WorkspaceView,
     SequenceEnrolmentView,
     SequenceView,
+    MyTaskView,
+    NotificationSettingsView,
+    NotificationsView,
 } from '../src/api/types';
 
 /**
@@ -541,6 +545,59 @@ export const tasks: TaskView[] = [
         ...created(24 * 2),
     },
 ];
+
+/** My tasks (#192): the member's open tasks — one overdue on Dana, one today on a deal, one with no date. */
+export const myTasks: MyTaskView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-000000000a02',
+        title: 'Call if no reply',
+        status: 'todo',
+        dueAt: at(30),
+        targets: [{ type: 'person', id: IDS.person, label: 'Dana Reyes' }],
+    },
+    {
+        id: tasks[0]!.id,
+        title: tasks[0]!.title,
+        status: 'todo',
+        dueAt: at(-2),
+        targets: [{ type: 'person', id: IDS.person, label: 'Dana Reyes' }],
+    },
+    {
+        id: '0b1e0000-0000-4000-8000-000000000a03',
+        title: 'Check in after the launch',
+        status: 'in_progress',
+        dueAt: null,
+        targets: [{ type: 'opportunity', id: IDS.deal, label: 'Series B PR' }],
+    },
+];
+
+/** The bell (#192): one unread — a sequence's task assigned — and one read reminder. */
+export const notificationsInbox: NotificationsView = {
+    unread: 1,
+    items: [
+        {
+            id: '0b1e0000-0000-4000-8000-000000000a11',
+            kind: 'task_assigned',
+            createdAt: at(1),
+            readAt: null,
+            task: {
+                id: myTasks[0]!.id,
+                title: myTasks[0]!.title,
+                dueAt: myTasks[0]!.dueAt,
+                targets: myTasks[0]!.targets,
+            },
+        },
+        {
+            id: '0b1e0000-0000-4000-8000-000000000a12',
+            kind: 'task_due',
+            createdAt: at(26),
+            readAt: at(25),
+            task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },
+        },
+    ],
+};
+
+export const notificationSettings: NotificationSettingsView = { taskDigest: true };
 
 export const attachments: AttachmentView[] = [
     {
@@ -1020,8 +1077,18 @@ export const sendingPool: SendingPoolView = {
                 },
                 checkedAt: at(1),
                 nextCheckAt: at(-5),
-                spamRate: null,
-                postmaster: { status: 'not_connected', message: null, nextReadAt: null },
+                usedBy: ['pool'],
+                gated: true,
+                inPostmaster: true,
+                spamRate: { day: '2026-10-08', rateBps: 8 },
+                spamRates: [
+                    { day: '2026-10-04', rateBps: 4 },
+                    { day: '2026-10-06', rateBps: 11 },
+                    { day: '2026-10-08', rateBps: 8 },
+                ],
+                deliveryErrorRate: { day: '2026-10-08', rateBps: 25 },
+                deliveryErrorRates: [{ day: '2026-10-08', rateBps: 25 }],
+                postmaster: { status: 'ok', message: null, readAt: at(1), nextReadAt: at(-5) },
             },
             canSend: false,
         },
@@ -1029,7 +1096,69 @@ export const sendingPool: SendingPoolView = {
     domains: [],
     postmaster: null,
 };
-sendingPool.domains = sendingPool.mailboxes.map((m) => m.domain!);
+/**
+ * Every sending domain (#190): the pool's, a personal mailbox's (failing DKIM — monitored, never
+ * gated) and one only the Postmaster Tools account lists, which Google has no data for.
+ */
+export const sendingDomains: SendingDomainView[] = [
+    sendingPool.mailboxes[0]!.domain!,
+    {
+        id: '0b1e0000-0000-4000-8000-0000000008a4',
+        domain: 'partners.example',
+        dkimSelector: 'google',
+        status: 'fail',
+        lastCheck: {
+            spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },
+            dkim: { outcome: 'fail', message: 'no DKIM key at google._domainkey.partners.example' },
+            dmarc: { outcome: 'pass', message: 'DMARC policy none' },
+        },
+        checkedAt: at(2),
+        nextCheckAt: at(-4),
+        usedBy: ['personal'],
+        gated: false,
+        inPostmaster: true,
+        spamRate: { day: '2026-10-08', rateBps: 12 },
+        spamRates: [
+            { day: '2026-10-02', rateBps: 6 },
+            { day: '2026-10-05', rateBps: 9 },
+            { day: '2026-10-08', rateBps: 12 },
+        ],
+        deliveryErrorRate: { day: '2026-10-08', rateBps: 140 },
+        deliveryErrorRates: [
+            { day: '2026-10-05', rateBps: 60 },
+            { day: '2026-10-08', rateBps: 140 },
+        ],
+        postmaster: { status: 'ok', message: null, readAt: at(2), nextReadAt: at(-15) },
+    },
+    {
+        id: '0b1e0000-0000-4000-8000-0000000008a5',
+        domain: 'newsroom.example',
+        dkimSelector: 'google',
+        status: 'pass',
+        lastCheck: {
+            spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },
+            dkim: { outcome: 'pass', message: 'DKIM key found at google._domainkey.newsroom.example' },
+            dmarc: { outcome: 'pass', message: 'DMARC policy quarantine' },
+        },
+        checkedAt: at(2),
+        nextCheckAt: at(-4),
+        usedBy: [],
+        gated: false,
+        inPostmaster: true,
+        spamRate: null,
+        spamRates: [],
+        deliveryErrorRate: null,
+        deliveryErrorRates: [],
+        postmaster: {
+            status: 'ok',
+            message:
+                'no data for 2026-10-08: Postmaster Tools reports only domains with substantial Gmail-bound traffic',
+            readAt: at(2),
+            nextReadAt: at(-15),
+        },
+    },
+];
+sendingPool.domains = sendingDomains;
 
 /** The region policy (#141): the defaults, with Canada opened on a stated basis, and that change on record. */
 export const regionPolicy: RegionPolicyEntryView[] = [
@@ -1354,6 +1483,8 @@ export const sequences: SequenceView[] = [
         ],
         counts: { enrolled: 184, active: 61, held: 0, finished: 97, stopped: 26 },
         createdBy: member,
+        ownerMemberId: IDS.member,
+        visibility: 'shared',
         createdAt: at(10),
         updatedAt: at(2),
     },

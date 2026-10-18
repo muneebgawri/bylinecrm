@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
     NO_TRACKING_COUNTS,
     type TrackingCounts,
@@ -20,10 +20,12 @@ import type { CreateSequenceDto, StepInput, UpdateSequenceDto } from './dto';
 import { isTimeZone } from './schedule';
 import { SequenceRunner } from './sequence-runner';
 import { trackingCountsForSteps } from '../tracking/tracking-counts';
+import { callerMemberId } from '../infra/caller-member';
+import { mayChangeVisibility, sequenceVisibleWhere } from './visibility';
 
 type SequenceRow = Prisma.SequenceGetPayload<{ include: { steps: true } }>;
 
-const DIFF_FIELDS = ['name', 'status', 'pipelineId', 'stopOnPipelineExit', 'timeZone', 'window'] as const;
+const DIFF_FIELDS = ['name', 'status', 'pipelineId', 'stopOnPipelineExit', 'timeZone', 'window', 'visibility'] as const;
 
 /**
  * Sequences (P3-3, FR-CRMS-5): a workspace's drips — their steps and their lifecycle. A draft's steps
@@ -40,9 +42,15 @@ export class SequencesService {
         private readonly runner: SequenceRunner,
     ) {}
 
+    /** The sequences the caller may see (#192): every one for an admin, else the shared ones and their own. */
     async list(): Promise<SequenceView[]> {
+        const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const rows = await tx.sequence.findMany({ include: { steps: true }, orderBy: { createdAt: 'desc' } });
+            const rows = await tx.sequence.findMany({
+                where: await sequenceVisibleWhere(tx, context),
+                include: { steps: true },
+                orderBy: { createdAt: 'desc' },
+            });
             const counts = await countsFor(
                 tx,
                 rows.map((r) => r.id),
@@ -56,8 +64,9 @@ export class SequencesService {
     }
 
     async get(id: string): Promise<SequenceView> {
+        const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const row = await find(tx, id);
+            const row = await find(tx, id, context);
             return view(
                 row,
                 (await countsFor(tx, [id])).get(id),
@@ -87,6 +96,9 @@ export class SequencesService {
                     windowEndMinute: window.endMinute,
                     windowDays: window.days,
                     createdBy: actorOf(context) as unknown as Prisma.InputJsonValue,
+                    // #192: the maker's (or their API key's member's); shared unless they say private.
+                    ownerMemberId: await callerMemberId(tx, context),
+                    visibility: input.visibility ?? 'shared',
                 },
                 include: { steps: true },
             });
@@ -99,14 +111,22 @@ export class SequencesService {
         const context = this.current();
         if (patch.timeZone) assertZone(patch.timeZone);
         return this.rls.withWorkspace(async (tx) => {
-            const before = await find(tx, id);
+            const before = await find(tx, id, context);
             if (before.status === 'archived') throw new StateConflict('an archived sequence is read-only');
             if (patch.pipelineId) await assertPipeline(tx, patch.pipelineId);
+            if (
+                patch.visibility !== undefined &&
+                patch.visibility !== before.visibility &&
+                !mayChangeVisibility(context, await callerMemberId(tx, context), before)
+            ) {
+                throw new ForbiddenException('only the sequence’s owner or an admin changes who sees it');
+            }
             const data: Prisma.SequenceUncheckedUpdateInput = {};
             if (patch.name !== undefined) data.name = patch.name;
             if (patch.timeZone !== undefined) data.timeZone = patch.timeZone;
             if (patch.pipelineId !== undefined) data.pipelineId = patch.pipelineId;
             if (patch.stopOnPipelineExit !== undefined) data.stopOnPipelineExit = patch.stopOnPipelineExit;
+            if (patch.visibility !== undefined) data.visibility = patch.visibility;
             if (patch.window) {
                 data.windowStartMinute = patch.window.startMinute;
                 data.windowEndMinute = patch.window.endMinute;
@@ -130,7 +150,7 @@ export class SequencesService {
     async putSteps(id: string, steps: readonly StepInput[]): Promise<SequenceView> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const sequence = await find(tx, id);
+            const sequence = await find(tx, id, context);
             if (sequence.status === 'archived') throw new StateConflict('an archived sequence is read-only');
             await validateSteps(tx, steps);
             const existing = [...sequence.steps].sort((a, b) => a.position - b.position);
@@ -177,7 +197,7 @@ export class SequencesService {
             await this.announce(tx, context, 'sequence.updated', id, {
                 steps: { from: existing.length, to: steps.length },
             });
-            return view(await find(tx, id), (await countsFor(tx, [id])).get(id));
+            return view(await find(tx, id, context), (await countsFor(tx, [id])).get(id));
         });
     }
 
@@ -242,7 +262,7 @@ export class SequencesService {
     ): Promise<{ view: SequenceView; from: SequenceRow['status'] }> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const row = await find(tx, id);
+            const row = await find(tx, id, context);
             if (row.status === to) return { view: view(row, (await countsFor(tx, [id])).get(id)), from: row.status };
             if (!from.includes(row.status)) throw new StateConflict(`a ${row.status} sequence cannot become ${to}`);
             if (check) await check(tx, row);
@@ -254,7 +274,10 @@ export class SequencesService {
             await this.announce(tx, context, to === 'archived' ? 'sequence.archived' : 'sequence.updated', id, {
                 status: { from: row.status, to },
             });
-            return { view: view(await find(tx, id), (await countsFor(tx, [id])).get(id)), from: row.status };
+            return {
+                view: view(await find(tx, id, context), (await countsFor(tx, [id])).get(id)),
+                from: row.status,
+            };
         });
     }
 
@@ -294,8 +317,12 @@ export class SequencesService {
     }
 }
 
-async function find(tx: WorkspaceClient, id: string): Promise<SequenceRow> {
-    const row = await tx.sequence.findUnique({ where: { id }, include: { steps: true } });
+/** The sequence, if the caller may see it (#192): one they may not is not found, never forbidden. */
+async function find(tx: WorkspaceClient, id: string, context: WorkspaceRunContext): Promise<SequenceRow> {
+    const row = await tx.sequence.findFirst({
+        where: { id, ...(await sequenceVisibleWhere(tx, context)) },
+        include: { steps: true },
+    });
     if (!row) throw new NotFoundException('sequence not found');
     return row;
 }
@@ -402,6 +429,8 @@ export function view(
             })),
         counts: counts ?? { enrolled: 0, active: 0, held: 0, finished: 0, stopped: 0 },
         createdBy: row.createdBy as unknown as Actor,
+        ownerMemberId: row.ownerMemberId,
+        visibility: row.visibility,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
     };

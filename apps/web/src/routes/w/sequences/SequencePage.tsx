@@ -9,6 +9,7 @@ import {
     Input,
     LoadingRegion,
     PageHeader,
+    RadioGroup,
     Select,
     SelectContent,
     SelectItem,
@@ -31,8 +32,9 @@ import {
     type SequenceTransition,
 } from '../../../api/sequences';
 import { useTemplates } from '../../../api/templates';
+import { VISIBILITY_LEGEND, VISIBILITY_OPTIONS } from './visibility';
 import type { SequenceStepInput, SequenceView, SequenceWindow } from '../../../api/types';
-import { useCan, usePermission } from '../../../auth/capabilities';
+import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { trackingText } from '../../../lib/tracking';
@@ -193,6 +195,7 @@ function SequenceBuilder({ workspaceId, sequence }: { workspaceId: string; seque
 
             <StepsCard workspaceId={workspaceId} sequence={sequence} editable={editable} />
             <SettingsCard workspaceId={workspaceId} sequence={sequence} editable={editable} />
+            <VisibilityCard workspaceId={workspaceId} sequence={sequence} />
             <EnrolmentsCard workspaceId={workspaceId} sequence={sequence} />
 
             {enrolling && (
@@ -250,6 +253,14 @@ function StepsCard({
 }) {
     const templates = useTemplates(workspaceId, { kind: 'outreach' });
     const outreach = useMemo(() => templates.data?.pages.flatMap((p) => p.items) ?? [], [templates.data]);
+    // #192: a Personal template cannot send from a sequence (no unsubscribe footer); it is shown, unusable,
+    // so a template that "does not appear" explains itself.
+    const personalTemplates = useTemplates(workspaceId, { kind: 'personal' });
+    const personal = useMemo(
+        () => personalTemplates.data?.pages.flatMap((p) => p.items) ?? [],
+        [personalTemplates.data],
+    );
+    const noOutreach = templates.isSuccess && outreach.length === 0;
     const nameOf = new Map(outreach.map((t) => [t.id, t.name]));
     const put = usePutSequenceSteps(workspaceId, sequence.id);
     // An untouched builder shows the saved steps, so a save (or another member's) is followed;
@@ -342,6 +353,15 @@ function StepsCard({
                     {failureText(put.error)}
                 </p>
             )}
+            {editable && noOutreach && (
+                <p className="m-0 rounded-md bg-surface-raised px-3 py-2 text-[13px] text-text-muted">
+                    No outreach template yet. A sequence sends only Outreach templates — they end with the unsubscribe
+                    link and your postal address. Open a template and set its kind to Outreach.{' '}
+                    <Link to={paths.templates(workspaceId)} className="text-accent underline-offset-2 hover:underline">
+                        Open Templates
+                    </Link>
+                </p>
+            )}
             {steps.length === 0 ? (
                 <EmptyState
                     title="No steps yet"
@@ -376,6 +396,11 @@ function StepsCard({
                                                     {outreach.map((t) => (
                                                         <SelectItem key={t.id} value={t.id}>
                                                             {t.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                    {personal.map((t) => (
+                                                        <SelectItem key={t.id} value={t.id} disabled>
+                                                            {t.name} — Personal
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -515,6 +540,53 @@ function InlineSwitch({
             <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
             <label htmlFor={id}>{label}</label>
         </span>
+    );
+}
+
+/**
+ * Who sees the sequence (#192): its owner or an admin chooses, and the choice saves at once; anyone
+ * else reads it. Archived sequences keep what they had.
+ */
+function VisibilityCard({ workspaceId, sequence }: { workspaceId: string; sequence: SequenceView }) {
+    const membership = useMembership();
+    const admin = useCan('workspace:admin');
+    const update = useUpdateSequence(workspaceId, sequence.id);
+    const mine = membership?.memberId !== undefined && membership.memberId === sequence.ownerMemberId;
+    const may = (admin || mine) && sequence.status !== 'archived';
+    return (
+        <Card title={VISIBILITY_LEGEND}>
+            {may ? (
+                <RadioGroup
+                    legend={VISIBILITY_LEGEND}
+                    className="[&>legend]:sr-only"
+                    options={VISIBILITY_OPTIONS}
+                    value={sequence.visibility}
+                    disabled={update.isPending}
+                    onValueChange={(visibility) =>
+                        update.mutate(
+                            { visibility },
+                            {
+                                onSuccess: () =>
+                                    toast({
+                                        title: visibility === 'private' ? 'Only you and admins see it now' : 'Shared',
+                                    }),
+                            },
+                        )
+                    }
+                />
+            ) : (
+                <p className="m-0 text-sm text-text-muted">
+                    {sequence.visibility === 'private'
+                        ? 'Private: only its owner and the workspace’s admins see it.'
+                        : 'Shared with everyone who runs outreach. Its owner or an admin can make it private.'}
+                </p>
+            )}
+            {update.isError && (
+                <p role="alert" className="m-0 text-sm text-danger">
+                    {failureText(update.error)}
+                </p>
+            )}
+        </Card>
     );
 }
 

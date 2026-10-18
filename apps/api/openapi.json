@@ -4677,6 +4677,77 @@
             }
         },
         "/api/w/{workspaceId}/sending-domains/{domainId}": {
+            "get": {
+                "operationId": "sendingDomains_get",
+                "parameters": [
+                    {
+                        "name": "domainId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SendingDomain"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sending-pool"]
+            },
             "put": {
                 "operationId": "sendingDomains_update",
                 "parameters": [
@@ -16560,6 +16631,345 @@
                 "tags": ["verification"]
             }
         },
+        "/api/w/{workspaceId}/notifications": {
+            "get": {
+                "operationId": "notifications_list",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Notifications"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["notifications"]
+            }
+        },
+        "/api/w/{workspaceId}/notifications/read": {
+            "post": {
+                "operationId": "notifications_read",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MarkNotificationsReadDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["notifications"]
+            }
+        },
+        "/api/w/{workspaceId}/my-tasks": {
+            "get": {
+                "operationId": "myTasks_list",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/MyTask"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["notifications"]
+            }
+        },
+        "/api/w/{workspaceId}/notification-settings": {
+            "get": {
+                "operationId": "notificationSettings_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificationSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["notifications"]
+            },
+            "put": {
+                "operationId": "notificationSettings_update",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NotificationSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificationSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["notifications"]
+            }
+        },
         "/api/w/{workspaceId}/enrichment/settings": {
             "get": {
                 "operationId": "enrichment_getSettings",
@@ -22897,6 +23307,10 @@
                             }
                         },
                         "required": ["startMinute", "endMinute", "days"]
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "enum": ["shared", "private"]
                     }
                 },
                 "required": ["name"]
@@ -22943,6 +23357,10 @@
                             }
                         },
                         "required": ["startMinute", "endMinute", "days"]
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "enum": ["shared", "private"]
                     }
                 }
             },
@@ -23154,6 +23572,30 @@
                     }
                 },
                 "required": ["maxAgeDays"]
+            },
+            "MarkNotificationsReadDto": {
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "minItems": 1,
+                        "maxItems": 200,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                    }
+                }
+            },
+            "NotificationSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "taskDigest": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["taskDigest"]
             },
             "PutEnrichmentSettingsDto": {
                 "type": "object",
@@ -27396,7 +27838,7 @@
                     },
                     "domain": {
                         "type": "string",
-                        "description": "Lower case: what follows the @ of a pool mailbox."
+                        "description": "Lower case: what follows the @ of a connected mailbox, or a domain the connected Postmaster Tools account lists (#190)."
                     },
                     "dkimSelector": {
                         "type": "string",
@@ -27406,7 +27848,7 @@
                     "status": {
                         "type": "string",
                         "enum": ["unchecked", "pass", "fail"],
-                        "description": "A pool mailbox sends only while its domain is `pass` (FR-CRMS-13)."
+                        "description": "A pool mailbox sends only while its domain is `pass` (FR-CRMS-13); a personal domain is monitored, never blocked."
                     },
                     "lastCheck": {
                         "nullable": true,
@@ -27465,6 +27907,22 @@
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     },
+                    "usedBy": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["pool", "personal"]
+                        },
+                        "description": "What the workspace’s connected mailboxes use it for (#190), derived from them; empty when only Postmaster Tools lists it."
+                    },
+                    "gated": {
+                        "type": "boolean",
+                        "description": "Whether the pool’s gate refuses sends from it while it fails its check: a pool mailbox uses it."
+                    },
+                    "inPostmaster": {
+                        "type": "boolean",
+                        "description": "The connected Postmaster Tools account lists the domain (#190)."
+                    },
                     "spamRate": {
                         "nullable": true,
                         "description": "The latest user-reported spam rate Postmaster Tools gave for the domain (#129); a failed lookup keeps the last one.",
@@ -27485,6 +27943,70 @@
                         },
                         "required": ["day", "rateBps"]
                     },
+                    "spamRates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "day": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                    "description": "The day the rate is for, UTC."
+                                },
+                                "rateBps": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Basis points: 35 = 0.35%."
+                                }
+                            },
+                            "required": ["day", "rateBps"]
+                        },
+                        "description": "Every rate Postmaster Tools reported over the last 30 days, oldest first (#190); a day without data is absent, never a zero."
+                    },
+                    "deliveryErrorRate": {
+                        "nullable": true,
+                        "description": "The latest delivery-error rate Postmaster Tools reported (#190): rejects and temporary failures over what was sent. Shown, never acted on.",
+                        "type": "object",
+                        "properties": {
+                            "day": {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                "description": "The day the rate is for, UTC."
+                            },
+                            "rateBps": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Basis points: 35 = 0.35%."
+                            }
+                        },
+                        "required": ["day", "rateBps"]
+                    },
+                    "deliveryErrorRates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "day": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                                    "description": "The day the rate is for, UTC."
+                                },
+                                "rateBps": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Basis points: 35 = 0.35%."
+                                }
+                            },
+                            "required": ["day", "rateBps"]
+                        },
+                        "description": "Its days over the last 30 days, oldest first; a day without data is absent."
+                    },
                     "postmaster": {
                         "type": "object",
                         "properties": {
@@ -27495,14 +28017,23 @@
                                     "not_verified",
                                     "ok",
                                     "rate_limited",
+                                    "quota_exhausted",
                                     "unreachable",
                                     "failed"
                                 ],
-                                "description": "What the last ask of Postmaster Tools came to: nothing connected, the domain not verified there, an answer, a rate limit or no answer (both transient, #183), or a refusal."
+                                "description": "What the last ask of Postmaster Tools came to: nothing connected, the domain not verified there, an answer, a rate limit or no answer (both transient, #183), the project’s API quota spent (an admin raises it, #190), or a refusal."
                             },
                             "message": {
                                 "nullable": true,
+                                "description": "Why, with Google’s own error status and message when it gave them (#190).",
                                 "type": "string"
+                            },
+                            "readAt": {
+                                "nullable": true,
+                                "description": "When the check last asked Postmaster Tools (#190).",
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                             },
                             "nextReadAt": {
                                 "nullable": true,
@@ -27512,7 +28043,7 @@
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                             }
                         },
-                        "required": ["status", "message", "nextReadAt"]
+                        "required": ["status", "message", "readAt", "nextReadAt"]
                     }
                 },
                 "required": [
@@ -27523,7 +28054,13 @@
                     "lastCheck",
                     "checkedAt",
                     "nextCheckAt",
+                    "usedBy",
+                    "gated",
+                    "inPostmaster",
                     "spamRate",
+                    "spamRates",
+                    "deliveryErrorRate",
+                    "deliveryErrorRates",
                     "postmaster"
                 ]
             },
@@ -28357,6 +28894,137 @@
                 },
                 "required": ["items", "nextCursor"]
             },
+            "LabelledTarget": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "A person’s name, a company’s, a deal’s; a plain label when unreadable."
+                    }
+                },
+                "required": ["type", "id", "label"]
+            },
+            "Notifications": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "kind": {
+                                    "type": "string",
+                                    "enum": ["task_assigned", "task_due"],
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due."
+                                },
+                                "task": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "dueAt": {
+                                            "nullable": true,
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                        },
+                                        "targets": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/LabelledTarget"
+                                            }
+                                        }
+                                    },
+                                    "required": ["id", "title", "dueAt", "targets"]
+                                },
+                                "createdAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "readAt": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                }
+                            },
+                            "required": ["id", "kind", "task", "createdAt", "readAt"]
+                        }
+                    },
+                    "unread": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "How many of all your notifications are unread."
+                    }
+                },
+                "required": ["items", "unread"]
+            },
+            "MyTask": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "dueAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "targets": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/LabelledTarget"
+                        }
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["todo", "in_progress", "done"]
+                    }
+                },
+                "required": ["id", "title", "dueAt", "targets", "status"]
+            },
+            "NotificationSettings": {
+                "type": "object",
+                "properties": {
+                    "taskDigest": {
+                        "type": "boolean",
+                        "description": "The daily email of tasks due or overdue."
+                    }
+                },
+                "required": ["taskDigest"]
+            },
             "EmailVerification": {
                 "type": "object",
                 "properties": {
@@ -28596,6 +29264,19 @@
                     "createdBy": {
                         "$ref": "#/components/schemas/Actor"
                     },
+                    "ownerMemberId": {
+                        "nullable": true,
+                        "description": "Whose sequence it is (#192): who made it, or whose API key did; null when neither is known.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "enum": ["shared", "private"],
+                        "description": "`shared`: everyone who may enrol sees it. `private`: its owner and admins only; to anyone else it is not found (#192)."
+                    },
                     "createdAt": {
                         "type": "string",
                         "format": "date-time",
@@ -28618,6 +29299,8 @@
                     "steps",
                     "counts",
                     "createdBy",
+                    "ownerMemberId",
+                    "visibility",
                     "createdAt",
                     "updatedAt"
                 ]

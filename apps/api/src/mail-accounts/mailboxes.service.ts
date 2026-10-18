@@ -15,7 +15,7 @@ import { actorOf } from '../records/actor';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
-import { enrolPoolMailbox } from '../sending-pool/pool-mailbox';
+import { enrolMailbox } from '../sending-pool/pool-mailbox';
 import { storePostmasterConnection } from '../sending-pool/postmaster-connection';
 import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
@@ -335,7 +335,7 @@ export class MailboxesService {
                           purpose,
                       },
                   });
-            if (row.purpose === 'pool') await enrolPoolMailbox(tx, row);
+            await enrolMailbox(tx, row);
             await this.clients.markVerifiedIn(tx, client.rowId);
             await this.events.record(tx, {
                 type: 'mailbox.connected',

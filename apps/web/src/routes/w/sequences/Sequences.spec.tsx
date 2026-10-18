@@ -34,6 +34,8 @@ const sequence = (over: Partial<SequenceView> = {}): SequenceView => ({
     ],
     counts: { enrolled: 12, active: 5, held: 1, finished: 4, stopped: 2 },
     createdBy: actor,
+    ownerMemberId: 'm-1',
+    visibility: 'shared',
     createdAt: '2026-10-11T10:00:00Z',
     updatedAt: '2026-10-11T10:00:00Z',
     ...over,
@@ -61,28 +63,31 @@ const enrolment = (over: Partial<SequenceEnrolmentView> = {}): SequenceEnrolment
     ...over,
 });
 
+/** The templates list, filtered by `kind` as the API filters it: these are outreach templates. */
 const templatesList: FakeRoute = (r) =>
-    r.method === 'GET' && r.url.includes('/templates?')
-        ? json({
-              items: [
-                  {
-                      id: 'tp-1',
-                      name: 'Agency intro v3',
-                      kind: 'outreach',
-                      subject: 'Intro',
-                      updatedAt: '2026-10-10T00:00:00Z',
-                  },
-                  {
-                      id: 'tp-2',
-                      name: 'Agency follow-up',
-                      kind: 'outreach',
-                      subject: 'Re',
-                      updatedAt: '2026-10-10T00:00:00Z',
-                  },
-              ],
-              nextCursor: null,
-          })
-        : undefined;
+    r.method === 'GET' && r.url.includes('/templates?') && r.url.includes('kind=personal')
+        ? json({ items: [], nextCursor: null })
+        : r.method === 'GET' && r.url.includes('/templates?')
+          ? json({
+                items: [
+                    {
+                        id: 'tp-1',
+                        name: 'Agency intro v3',
+                        kind: 'outreach',
+                        subject: 'Intro',
+                        updatedAt: '2026-10-10T00:00:00Z',
+                    },
+                    {
+                        id: 'tp-2',
+                        name: 'Agency follow-up',
+                        kind: 'outreach',
+                        subject: 'Re',
+                        updatedAt: '2026-10-10T00:00:00Z',
+                    },
+                ],
+                nextCursor: null,
+            })
+          : undefined;
 const one =
     (s: SequenceView): FakeRoute =>
     (r) =>
@@ -294,5 +299,103 @@ describe('FR-CRMS-5 sequences UI (P3-UI-1)', { timeout: 30_000 }, () => {
         await waitFor(() => expect(seen.some((r) => r.url.endsWith('/enrolments/en-1/stop'))).toBe(true));
         await userEvent.click(screen.getByRole('button', { name: 'Re-enrol' }));
         await waitFor(() => expect(seen.some((r) => r.url.endsWith('/enrolments/en-2/reenrol'))).toBe(true));
+    });
+    describe('#192', () => {
+        it('explains an empty template picker — only Outreach templates send from a sequence — and shows Personal ones as unusable', async () => {
+            stubApi([
+                one(sequence({ steps: [] })),
+                noEnrolments,
+                (r) =>
+                    r.method === 'GET' && r.url.includes('/templates?')
+                        ? json({
+                              items: r.url.includes('kind=personal')
+                                  ? [
+                                        {
+                                            id: 'tp-9',
+                                            name: 'My intro',
+                                            kind: 'personal',
+                                            subject: 'Hi',
+                                            updatedAt: '2026-10-10T00:00:00Z',
+                                        },
+                                    ]
+                                  : [],
+                              nextCursor: null,
+                          })
+                        : undefined,
+            ]);
+            renderAt([route('/w/:workspaceId/sequences/:sequenceId', <SequencePage />)], `/w/${WS}/sequences/sq-1`, [
+                'sequence:write',
+                'sequence:enrol',
+            ]);
+            await userEvent.click(await screen.findByRole('button', { name: 'Add email' }));
+            expect(await screen.findByText(/No outreach template yet/)).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'Open Templates' })).toHaveAttribute('href', `/w/${WS}/templates`);
+            await userEvent.click(screen.getByRole('combobox', { name: 'Template for step 1' }));
+            const personal = await screen.findByRole('option', { name: /My intro — Personal/ });
+            expect(personal).toHaveAttribute('aria-disabled', 'true');
+        });
+
+        it('marks private sequences in the list, and creates one private when asked', async () => {
+            const seen = stubApi([
+                (r) =>
+                    r.method === 'GET' && r.url.endsWith('/sequences')
+                        ? json([sequence(), sequence({ id: 'sq-3', name: 'My own outreach', visibility: 'private' })])
+                        : undefined,
+                (r) =>
+                    r.method === 'POST' && r.url.endsWith('/sequences')
+                        ? json(sequence({ id: 'sq-2', name: 'Mine', steps: [], visibility: 'private' }), 201)
+                        : undefined,
+            ]);
+            renderAt(
+                [
+                    route('/w/:workspaceId/sequences', <SequencesPage />),
+                    route('/w/:workspaceId/sequences/:sequenceId', <p>builder</p>),
+                ],
+                `/w/${WS}/sequences`,
+                ['sequence:write', 'sequence:enrol'],
+            );
+            const row = (await screen.findByRole('link', { name: 'My own outreach' })).closest('tr') as HTMLElement;
+            expect(within(row).getByText('Private')).toBeInTheDocument();
+            const shared = (await screen.findByRole('link', { name: 'Q4 agency outreach' })).closest(
+                'tr',
+            ) as HTMLElement;
+            expect(within(shared).queryByText('Private')).toBeNull();
+            await userEvent.click(screen.getByRole('button', { name: 'New sequence' }));
+            const dialog = await screen.findByRole('dialog');
+            await userEvent.type(within(dialog).getByLabelText(/^Name/), 'Mine');
+            await userEvent.click(within(dialog).getByRole('radio', { name: /Only me/ }));
+            await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+            expect(await screen.findByText('builder')).toBeInTheDocument();
+            expect(seen.find((r) => r.method === 'POST')?.body).toMatchObject({ name: 'Mine', visibility: 'private' });
+        });
+
+        it('lets the owner switch who sees it; anyone else only reads it', async () => {
+            const seen = stubApi([
+                one(sequence()),
+                templatesList,
+                noEnrolments,
+                (r) =>
+                    r.method === 'PATCH' && r.url.endsWith('/sequences/sq-1')
+                        ? json(sequence({ visibility: 'private' }))
+                        : undefined,
+            ]);
+            const { unmount } = renderAt(
+                [route('/w/:workspaceId/sequences/:sequenceId', <SequencePage />)],
+                `/w/${WS}/sequences/sq-1`,
+                ['sequence:write', 'sequence:enrol'],
+            );
+            await userEvent.click(await screen.findByRole('radio', { name: /Only me/ }));
+            await waitFor(() => expect(seen.some((r) => r.method === 'PATCH')).toBe(true));
+            expect(seen.find((r) => r.method === 'PATCH')?.body).toEqual({ visibility: 'private' });
+            unmount();
+
+            stubApi([one(sequence({ ownerMemberId: 'm-2' })), templatesList, noEnrolments]);
+            renderAt([route('/w/:workspaceId/sequences/:sequenceId', <SequencePage />)], `/w/${WS}/sequences/sq-1`, [
+                'sequence:write',
+                'sequence:enrol',
+            ]);
+            expect(await screen.findByText(/Shared with everyone who runs outreach/)).toBeInTheDocument();
+            expect(screen.queryByRole('radio', { name: /Only me/ })).toBeNull();
+        });
     });
 });

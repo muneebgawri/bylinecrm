@@ -25,6 +25,7 @@ export default defineConfig({
             MAIL_SYNC_WORKER: '0',
             MAIL_SEND_WORKER: '0',
             CALENDAR_SYNC_WORKER: '0',
+            NOTIFICATIONS_WORKER: '0',
             SEQUENCE_WORKER: '0',
             TWENTY_IMPORT_WORKER: '0',
             ENRICHMENT_WORKER: '0',
