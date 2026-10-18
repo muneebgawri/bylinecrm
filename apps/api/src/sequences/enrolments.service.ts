@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Actor, DomainEvent, EnrolmentBatchResult, EnrolmentView } from '@bylinecrm/shared';
 import type { Prisma, SequenceEnrolment, Task } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
-import { ApiException, StateConflict, ValidationFailed } from '../infra/errors/api-errors';
+import { StateConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
 import { EnrolmentScreen } from './enrolment-screen';
 import { SequenceRunner } from './sequence-runner';
+import { requireCallerMember } from '../infra/caller-member';
+import { sequenceVisibleWhere } from './visibility';
 
 /**
  * Enrolments (P3-3): putting people in a sequence through the one screen (`EnrolmentScreen`), idempotent
@@ -38,7 +40,7 @@ export class EnrolmentsService {
         );
         const now = new Date();
         const inserted = await this.rls.withWorkspace(async (tx) => {
-            const enroller = await enrollerMemberId(tx, context);
+            const enroller = await requireCallerMember(tx, context);
             if (dealId && !(await tx.opportunity.findFirst({ where: { id: dealId, deletedAt: null } }))) {
                 throw new ValidationFailed('no such deal', [
                     { path: 'dealId', message: 'not a deal in this workspace' },
@@ -75,8 +77,9 @@ export class EnrolmentsService {
     }
 
     async list(sequenceId: string): Promise<EnrolmentView[]> {
+        const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            await sequenceOrThrow(tx, sequenceId);
+            await sequenceOrThrow(tx, context, sequenceId);
             return (
                 await tx.sequenceEnrolment.findMany({
                     where: { sequenceId },
@@ -135,7 +138,7 @@ export class EnrolmentsService {
                     finishedAt: null,
                     enrolledAt: now,
                     enrolledBy: actorOf(context) as unknown as Prisma.InputJsonValue,
-                    enrolledByMemberId: await enrollerMemberId(tx, context),
+                    enrolledByMemberId: await requireCallerMember(tx, context),
                 },
             });
             if (changed.count === 0) throw new StateConflict('the enrolment changed meanwhile; try again');
@@ -183,7 +186,7 @@ export class EnrolmentsService {
         const context = this.current();
         const unique = [...new Set(personIds)];
         const existing = await this.rls.withWorkspace(async (tx) => {
-            const sequence = await sequenceOrThrow(tx, sequenceId);
+            const sequence = await sequenceOrThrow(tx, context, sequenceId);
             if (forEnrol && sequence.status !== 'active' && sequence.status !== 'paused') {
                 throw new StateConflict(`a ${sequence.status} sequence takes no enrolments; activate it first`);
             }
@@ -215,8 +218,12 @@ export class EnrolmentsService {
     }
 }
 
-async function sequenceOrThrow(tx: WorkspaceClient, id: string) {
-    const sequence = await tx.sequence.findUnique({ where: { id }, select: { id: true, status: true } });
+/** The sequence, if the caller may see it (#192): a private one of someone else's is not found. */
+async function sequenceOrThrow(tx: WorkspaceClient, context: WorkspaceRunContext, id: string) {
+    const sequence = await tx.sequence.findFirst({
+        where: { id, ...(await sequenceVisibleWhere(tx, context)) },
+        select: { id: true, status: true },
+    });
     if (!sequence) throw new NotFoundException('sequence not found');
     return sequence;
 }
@@ -284,14 +291,3 @@ export function view(row: EnrolmentRow): EnrolmentView {
  * The member an enrolment belongs to (#144): the caller, or — for an API key — the member who created
  * the key. Every step's send is theirs to answer for; the pool mailbox only carries it.
  */
-async function enrollerMemberId(tx: WorkspaceClient, context: WorkspaceRunContext): Promise<string> {
-    if (context.memberId) return context.memberId;
-    if (context.apiKeyId) {
-        const key = await tx.apiKey.findUniqueOrThrow({
-            where: { id: context.apiKeyId },
-            select: { createdById: true },
-        });
-        return key.createdById;
-    }
-    throw new ApiException(403, 'forbidden', 'only a member or a member’s API key may enrol people');
-}

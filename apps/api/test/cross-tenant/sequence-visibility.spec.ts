@@ -141,7 +141,7 @@ describe('#192 sequence visibility: private or shared', () => {
             (
                 await as(ben)
                     .put(w(`/sequences/${mine.id}/steps`))
-                    .send({ steps: [] })
+                    .send({ steps: [{ kind: 'wait', waitDays: 2 }] })
             ).status,
         ).toBe(404);
         expect((await as(ben).post(w(`/sequences/${mine.id}/archive`))).status).toBe(404);

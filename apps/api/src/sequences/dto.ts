@@ -4,6 +4,7 @@ import {
     REGION_LAWFUL_BASIS_MAX,
     SEQUENCE_LIMITS,
     SEQUENCE_STEP_KINDS,
+    SEQUENCE_VISIBILITIES,
 } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -25,6 +26,8 @@ const sequenceFields = {
     pipelineId: uuid.nullable(),
     stopOnPipelineExit: z.boolean(),
     window,
+    /** #192: who sees it; only the owner or an admin changes it. */
+    visibility: z.enum(SEQUENCE_VISIBILITIES),
 };
 
 /** `POST /sequences` — a draft. `timeZone` is the one used when a recipient's cannot be inferred. */
@@ -35,6 +38,7 @@ export class CreateSequenceDto extends createZodDto(
         pipelineId: sequenceFields.pipelineId.optional(),
         stopOnPipelineExit: sequenceFields.stopOnPipelineExit.optional(),
         window: window.optional(),
+        visibility: sequenceFields.visibility.optional(),
     }),
 ) {}
 

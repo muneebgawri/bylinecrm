@@ -105,6 +105,12 @@ export const envSchema = z
          * sync directly against a fake Google Calendar, and no worker may reach the real one.
          */
         CALENDAR_SYNC_WORKER: flag('1'),
+        /**
+         * Whether this process runs the task notification jobs (#192): due reminders every 15 minutes and
+         * the morning digest. On by default; a separate worker process sets `1` there and `0` on the API.
+         * The cross-tenant suite sets `0` and runs them itself.
+         */
+        NOTIFICATIONS_WORKER: flag('1'),
         /** Whether this process drives Twenty import runs (P4-4); `0` leaves them to a worker process. */
         TWENTY_IMPORT_WORKER: flag('1'),
         /** Whether this process runs enrichment jobs and their sweep (P4-2); `0` leaves them to a worker process. */

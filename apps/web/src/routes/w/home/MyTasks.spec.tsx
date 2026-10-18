@@ -48,6 +48,7 @@ describe('#192 My tasks on the dashboard', () => {
         home(['record:read', 'task:write']);
         const section = (name: string) => screen.getByRole('region', { name });
         expect(await screen.findByRole('heading', { name: 'My tasks' })).toBeInTheDocument();
+        await screen.findByRole('region', { name: 'Overdue' });
         expect(within(section('Overdue')).getByText('Call if no reply')).toBeInTheDocument();
         expect(within(section('Due today')).getByText('Send the deck')).toBeInTheDocument();
         expect(within(section('Upcoming')).getByText('Check in after launch')).toBeInTheDocument();

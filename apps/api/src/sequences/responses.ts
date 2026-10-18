@@ -6,6 +6,7 @@ import {
     EXCLUSION_REASONS,
     REGION_CODES,
     SEQUENCE_STATUSES,
+    SEQUENCE_VISIBILITIES,
     TASK_STATUSES,
     SEQUENCE_STEP_KINDS,
     type EnrolmentBatchResult,
@@ -66,6 +67,13 @@ export const sequenceView = named(
             stopped: z.number().int(),
         }),
         createdBy: actor,
+        ownerMemberId: id.nullable().meta({
+            description: 'Whose sequence it is (#192): who made it, or whose API key did; null when neither is known.',
+        }),
+        visibility: z.enum(SEQUENCE_VISIBILITIES).meta({
+            description:
+                '`shared`: everyone who may enrol sees it. `private`: its owner and admins only; to anyone else it is not found (#192).',
+        }),
         createdAt: isoTime,
         updatedAt: isoTime,
     }),

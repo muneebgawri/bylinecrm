@@ -63,28 +63,31 @@ const enrolment = (over: Partial<SequenceEnrolmentView> = {}): SequenceEnrolment
     ...over,
 });
 
+/** The templates list, filtered by `kind` as the API filters it: these are outreach templates. */
 const templatesList: FakeRoute = (r) =>
-    r.method === 'GET' && r.url.includes('/templates?')
-        ? json({
-              items: [
-                  {
-                      id: 'tp-1',
-                      name: 'Agency intro v3',
-                      kind: 'outreach',
-                      subject: 'Intro',
-                      updatedAt: '2026-10-10T00:00:00Z',
-                  },
-                  {
-                      id: 'tp-2',
-                      name: 'Agency follow-up',
-                      kind: 'outreach',
-                      subject: 'Re',
-                      updatedAt: '2026-10-10T00:00:00Z',
-                  },
-              ],
-              nextCursor: null,
-          })
-        : undefined;
+    r.method === 'GET' && r.url.includes('/templates?') && r.url.includes('kind=personal')
+        ? json({ items: [], nextCursor: null })
+        : r.method === 'GET' && r.url.includes('/templates?')
+          ? json({
+                items: [
+                    {
+                        id: 'tp-1',
+                        name: 'Agency intro v3',
+                        kind: 'outreach',
+                        subject: 'Intro',
+                        updatedAt: '2026-10-10T00:00:00Z',
+                    },
+                    {
+                        id: 'tp-2',
+                        name: 'Agency follow-up',
+                        kind: 'outreach',
+                        subject: 'Re',
+                        updatedAt: '2026-10-10T00:00:00Z',
+                    },
+                ],
+                nextCursor: null,
+            })
+          : undefined;
 const one =
     (s: SequenceView): FakeRoute =>
     (r) =>

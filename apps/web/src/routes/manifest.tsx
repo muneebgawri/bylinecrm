@@ -79,6 +79,9 @@ const sequences = {
     builder: () => import('./w/sequences/SequencePage').then((m) => ({ Component: m.SequencePage })),
 };
 
+/** The dashboard is its own chunk: My tasks (#192). */
+const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.HomePage }));
+
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
 const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
 
@@ -130,7 +133,7 @@ const workspaceRoutes: RouteObject = {
     errorElement: <RouteError />,
     children: [
         { index: true, element: <Navigate to="home" replace /> },
-        page('home', 'home', 'Dashboard'),
+        lazyPage('home', homePage, 'Dashboard'),
         page('reports', 'reports', 'Reports'),
         lazyPage('people', lists.people, 'People'),
         lazyPage('people/:personId', records.person, 'Person'),
