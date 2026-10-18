@@ -12,16 +12,16 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 /**
- * A template body as the editor sends it. The shape is checked here; whether it stays inside the
+ * A template body (and a signature, #193) as the editor sends it. The shape is checked here; whether it stays inside the
  * template subset (`TEMPLATE_BODY_NODES`) is checked by the service, which can name each problem
  * at its path.
  */
-const node: z.ZodType<RichTextNode> = z.lazy(() =>
+export const richTextNode: z.ZodType<RichTextNode> = z.lazy(() =>
     z
         .object({
             type: z.string().min(1).max(64),
             text: z.string().optional(),
-            content: z.array(node).optional(),
+            content: z.array(richTextNode).optional(),
             attrs: z.record(z.string(), z.unknown()).optional(),
             marks: z
                 .array(
@@ -32,7 +32,7 @@ const node: z.ZodType<RichTextNode> = z.lazy(() =>
         .passthrough(),
 );
 export const templateBody = z
-    .object({ type: z.literal('doc'), content: z.array(node).optional() })
+    .object({ type: z.literal('doc'), content: z.array(richTextNode).optional() })
     .refine((doc) => JSON.stringify(doc).length <= TEMPLATE_BODY_MAX_CHARS, {
         message: `a template body is at most ${TEMPLATE_BODY_MAX_CHARS} characters of JSON`,
     });
@@ -80,6 +80,10 @@ export class PreviewTemplateDto extends createZodDto(
     z.object({
         personId: z.uuid(),
         dealId: z.uuid().optional(),
+        mailboxId: z.uuid().optional().meta({
+            description:
+                'The sending mailbox, for the signature that would follow (#193); left out, the workspace default.',
+        }),
     }),
 ) {}
 

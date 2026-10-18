@@ -98,8 +98,8 @@ function standardValue(path: StandardVariablePath, s: RenderSubjects): string | 
         case 'sender.fullName':
             return present(sender?.displayName);
         case 'sender.signature':
-            // The one optional variable: no signature is stored yet (a member profile adds it), and
-            // an email without one is a normal email — empty, never missing.
+            // Kept so templates that name it stay valid, and always empty: the signature (#193) is the
+            // mailbox's, added after the body by the renderer — never through a variable, never twice.
             return '';
     }
 }

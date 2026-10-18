@@ -94,7 +94,7 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
                     : undefined,
         ]);
         const card = await screen.findByRole('region', { name: 'kate@example.com' });
-        expect(within(card).getByText('No signature')).toBeInTheDocument();
+        expect(await within(card).findByText('No signature')).toBeInTheDocument();
         await userEvent.click(within(card).getByRole('button', { name: 'Write its own signature' }));
         const editor = within(card).getByRole('textbox', { name: 'Signature for kate@example.com' });
         expect(within(editor).getByLabelText('Variable workspace.logo')).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
                     : undefined,
         ]);
         const card = await screen.findByRole('region', { name: 'kate@example.com' });
-        await userEvent.click(within(card).getByRole('button', { name: 'Import from Gmail' }));
+        await userEvent.click(await within(card).findByRole('button', { name: 'Import from Gmail' }));
         const editor = await within(card).findByRole('textbox', { name: 'Signature for kate@example.com' });
         await waitFor(() => expect(editor).toHaveTextContent('Kate from Gmail'));
         expect(within(card).getByText('1 image not on https was left out.')).toBeInTheDocument();

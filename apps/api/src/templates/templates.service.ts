@@ -25,6 +25,7 @@ import { type Page, paginate } from '../records/list-query';
 import { bodyProblems, subjectVariablePaths, variablePathsOf } from './render/body-subset';
 import type { ComposedEmail } from './render/compose';
 import { unknownVariables, type CustomKeys } from './render/variables';
+import { signableMailbox } from '../signatures/signature-store';
 import { RenderService } from './render.service';
 import type { EmailTemplateView, TemplateVariablesView } from './responses';
 
@@ -114,7 +115,8 @@ export class TemplatesService {
                 }
             }
             return {
-                standard: TEMPLATE_VARIABLES.map((v) => ({
+                // `sender.signature` is not offered (#193): the mailbox's signature follows every body by itself.
+                standard: TEMPLATE_VARIABLES.filter((v) => v.path !== 'sender.signature').map((v) => ({
                     path: v.path,
                     source: v.source,
                     label: v.label,
@@ -255,10 +257,25 @@ export class TemplatesService {
     }
 
     /** The template rendered for one recipient (and deal), as the caller would send it. */
-    async preview(id: string, target: { personId: string; dealId?: string | undefined }): Promise<ComposedEmail> {
+    /**
+     * The template rendered for a person, with the signature that would follow it (#193): `mailboxId`'s,
+     * when one is named (one the caller may sign), else the workspace default.
+     */
+    async preview(
+        id: string,
+        target: { personId: string; dealId?: string | undefined; mailboxId?: string | undefined },
+    ): Promise<ComposedEmail> {
         const context = this.current();
         const template = await this.get(id);
-        return this.renderer.render(template, { ...target, senderMemberId: context.memberId });
+        const { mailboxId, ...rest } = target;
+        const mailbox = mailboxId
+            ? await this.rls.withWorkspace((tx) => signableMailbox(tx, context, mailboxId))
+            : null;
+        return this.renderer.render(template, {
+            ...rest,
+            senderMemberId: mailbox?.ownerMemberId ?? context.memberId,
+            signature: mailbox ? { from: 'mailbox', mailboxId: mailbox.id } : { from: 'default' },
+        });
     }
 
     /**

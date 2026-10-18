@@ -6,6 +6,7 @@ import {
     UNSUBSCRIBE_URL_PLACEHOLDER,
     type EmailTemplateBody,
     type MailSettings,
+    type RenderedSignature,
 } from '@bylinecrm/shared';
 import { escapeHtml, missingMarker, renderBody, type VariableResolver } from './serializer';
 
@@ -18,6 +19,9 @@ import { escapeHtml, missingMarker, renderBody, type VariableResolver } from './
  * (FR-CRMS-7; its URL is `UNSUBSCRIBE_URL_PLACEHOLDER` until the send path resolves it per
  * recipient) and the postal address (FR-CRMS-12). With no postal address set, the render names
  * `workspace.postal_address` as missing and is not sendable.
+ *
+ * A signature (#193), already rendered, follows the body and comes before that footer, which stays last:
+ * in the text part after the conventional `-- ` line.
  */
 
 export interface ComposedEmail {
@@ -59,11 +63,16 @@ export function composeEmail(
     template: Pick<EmailTemplateBody, 'kind' | 'subject' | 'body'>,
     resolve: VariableResolver,
     settings: MailSettings,
+    signature: RenderedSignature | null = null,
 ): ComposedEmail {
     const subject = renderSubject(template.subject, resolve);
     const body = renderBody(template.body, resolve);
     let { html, text } = body;
     const missing = [...subject.missing, ...body.missing];
+    if (signature) {
+        html += signature.html;
+        text = text === '' ? `-- \n${signature.text}` : `${text}\n\n-- \n${signature.text}`;
+    }
     if (template.kind === 'outreach') {
         const footer = outreachFooter(settings);
         html += footer.html;

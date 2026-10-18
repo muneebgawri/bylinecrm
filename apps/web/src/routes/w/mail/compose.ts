@@ -64,6 +64,11 @@ export interface Draft {
     body: RichText;
     fill: TemplateFill | null;
     replyToMessageId?: string | undefined;
+    /**
+     * This message's signature (#193) once the sender edits or removes it (`null`); left `undefined` while
+     * it is the mailbox's as shown, which the API then applies itself.
+     */
+    signature?: RichText | null | undefined;
     sendAt?: Date | undefined;
     timeZone: string;
 }
@@ -103,6 +108,7 @@ export function sendInput(draft: Draft): SendMailInput {
             ? { templateId: draft.fill.templateId }
             : { body: draft.body, ...(subject !== '' ? { subject } : {}) }),
         ...(draft.replyToMessageId ? { replyToMessageId: draft.replyToMessageId } : {}),
+        ...(draft.signature !== undefined ? { signature: draft.signature } : {}),
         ...(draft.sendAt ? { sendAt: draft.sendAt.toISOString(), timeZone: draft.timeZone } : {}),
     };
 }

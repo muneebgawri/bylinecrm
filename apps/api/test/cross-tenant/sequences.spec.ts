@@ -786,7 +786,10 @@ describe('FR-CRMS-5 sequences', () => {
                         .split('\r\n\r\n')[1]!
                         .replace(/\r\n/g, ''),
                     'base64',
-                ).toString('utf8');
+                )
+                    .toString('utf8')
+                    // The wire's CRLF line ends, as LF.
+                    .replace(/\r\n/g, '\n');
             const html = part('text/html');
             const text = part('text/plain');
             const signed = html.indexOf(`Signed ${stamp}`);

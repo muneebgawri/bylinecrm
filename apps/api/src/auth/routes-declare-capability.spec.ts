@@ -55,8 +55,13 @@ describe('tenant routes declare a capability', () => {
         expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
     });
 
-    it('the routes open to any member are exactly the ones that ask what the caller may do', () => {
+    it('the routes open to any member are exactly these: what the caller may do, and their own signature details', () => {
         const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
-        expect(open).toEqual(['WorkspaceMeController.standing']);
+        expect(open.sort()).toEqual([
+            // #193: a member's own; an admin's for anyone — the service checks which.
+            'SignatureProfileController.get',
+            'SignatureProfileController.put',
+            'WorkspaceMeController.standing',
+        ]);
     });
 });

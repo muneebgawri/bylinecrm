@@ -48,8 +48,9 @@ export interface TemplateVariable {
     label: string;
     /**
      * Renders empty when it has no value instead of blocking the send. Exactly one variable is
-     * optional — `sender.signature` — because a sender without a signature is a normal email; every
-     * other empty variable makes the render unsendable (FR-CRMS-3).
+     * optional — `sender.signature`, which always renders empty since the mailbox's signature is
+     * added after the body (#193) and is no longer offered; every other empty variable makes the
+     * render unsendable (FR-CRMS-3).
      */
     optional?: true;
 }

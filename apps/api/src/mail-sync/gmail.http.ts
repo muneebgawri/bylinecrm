@@ -7,6 +7,7 @@ import {
     type GmailProfile,
     type GmailRawMessage,
     type GmailMessageHeaders,
+    type GmailSendAs,
     type GmailSent,
 } from './gmail.port';
 import { GMAIL_API_BASE, GMAIL_HTTP_TIMEOUT_MS, GMAIL_LIST_PAGE_SIZE } from './mail-sync.constants';
@@ -17,6 +18,16 @@ import { GMAIL_API_BASE, GMAIL_HTTP_TIMEOUT_MS, GMAIL_LIST_PAGE_SIZE } from './m
  */
 @Injectable()
 export class GmailHttp implements GmailPort {
+    async listSendAs(accessToken: string): Promise<GmailSendAs[]> {
+        const body = await this.get(accessToken, '/settings/sendAs');
+        const list = Array.isArray(body['sendAs']) ? (body['sendAs'] as Record<string, unknown>[]) : [];
+        return list.map((s) => ({
+            sendAsEmail: str(s['sendAsEmail']),
+            isPrimary: s['isPrimary'] === true,
+            signature: typeof s['signature'] === 'string' ? s['signature'] : '',
+        }));
+    }
+
     async getProfile(accessToken: string): Promise<GmailProfile> {
         const body = await this.get(accessToken, '/profile');
         return { emailAddress: str(body['emailAddress']), historyId: str(body['historyId']) };

@@ -49,6 +49,7 @@ export * from './sequences.js';
 export * from './email.js';
 export * from './suppression.js';
 export * from './templates.js';
+export * from './signatures.js';
 export * from './views.js';
 export * from './timeline.js';
 export * from './webhooks.js';

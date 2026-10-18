@@ -19,6 +19,17 @@ const NODES = new Set<string>(TEMPLATE_BODY_NODES);
 const MARKS = new Set<string>(TEMPLATE_BODY_MARKS);
 const LEVELS = new Set<number>(TEMPLATE_HEADING_LEVELS);
 
+/** A subset to check a document against: its nodes, where it sits in the request, and checks of its own. */
+export interface Subset {
+    nodes: ReadonlySet<string>;
+    /** The request field the document is: `body` for a template, `signature` for a signature (#193). */
+    at: string;
+    /** Problems with one node the generic walk does not know about (a signature's image). */
+    node?: (node: RichTextNode, at: string) => FieldError[];
+}
+
+const TEMPLATE_SUBSET: Subset = { nodes: NODES, at: 'body' };
+
 function attrsOf(node: object): Record<string, unknown> {
     const attrs = (node as { attrs?: unknown }).attrs;
     return attrs && typeof attrs === 'object' ? (attrs as Record<string, unknown>) : {};
@@ -26,12 +37,19 @@ function attrsOf(node: object): Record<string, unknown> {
 
 /** Every way the body leaves the template subset; empty when it is inside it. */
 export function bodyProblems(doc: RichText): FieldError[] {
+    return subsetProblems(doc, TEMPLATE_SUBSET);
+}
+
+/** Every way a document leaves a subset: its nodes, heading levels, variables' paths, marks and links. */
+export function subsetProblems(doc: RichText, subset: Subset): FieldError[] {
     const problems: FieldError[] = [];
+    const what = subset.at === 'body' ? 'a template body' : `a ${subset.at}`;
     const walk = (node: RichTextNode, at: string): void => {
-        if (!NODES.has(node.type)) {
-            problems.push({ path: at, message: `a template body cannot contain "${node.type}"` });
+        if (!subset.nodes.has(node.type)) {
+            problems.push({ path: at, message: `${what} cannot contain "${node.type}"` });
             return;
         }
+        if (subset.node) problems.push(...subset.node(node, at));
         if (node.type === 'heading' && !LEVELS.has(Number(attrsOf(node)['level']))) {
             problems.push({ path: `${at}.attrs.level`, message: 'headings are level 2 or 3' });
         }
@@ -46,19 +64,19 @@ export function bodyProblems(doc: RichText): FieldError[] {
             const markAt = `${at}.marks.${i}`;
             const type = typeof mark.type === 'string' ? mark.type : '';
             if (!MARKS.has(type)) {
-                problems.push({ path: markAt, message: `a template body cannot use the mark "${type}"` });
+                problems.push({ path: markAt, message: `${what} cannot use the mark "${type}"` });
             } else if (type === 'link' && safeHref(attrsOf(mark)['href']) === null) {
                 problems.push({ path: `${markAt}.attrs.href`, message: 'a link must start with https: or mailto:' });
             }
         });
         (node.content ?? []).forEach((child, i) => walk(child, `${at}.content.${i}`));
     };
-    (doc.content ?? []).forEach((node, i) => walk(node, `body.content.${i}`));
+    (doc.content ?? []).forEach((node, i) => walk(node, `${subset.at}.content.${i}`));
     return problems;
 }
 
-/** The variables a body uses, each with where it sits in the request body. */
-export function variablePathsOf(doc: RichText): { path: string; at: string }[] {
+/** The variables a body uses, each with where it sits in the request body (`body`, or `signature`). */
+export function variablePathsOf(doc: RichText, field = 'body'): { path: string; at: string }[] {
     const found: { path: string; at: string }[] = [];
     const walk = (node: RichTextNode, at: string): void => {
         if (node.type === 'variable') {
@@ -67,7 +85,7 @@ export function variablePathsOf(doc: RichText): { path: string; at: string }[] {
         }
         (node.content ?? []).forEach((child, i) => walk(child, `${at}.content.${i}`));
     };
-    (doc.content ?? []).forEach((node, i) => walk(node, `body.content.${i}`));
+    (doc.content ?? []).forEach((node, i) => walk(node, `${field}.content.${i}`));
     return found;
 }
 

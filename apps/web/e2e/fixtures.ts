@@ -2,9 +2,14 @@ import {
     CAPABILITIES,
     DEFAULT_PIPELINE_NAME,
     DEFAULT_STAGES,
+    SIGNATURE_STARTER,
     SYSTEM_ROLES,
     type Capability,
+    type MailboxSignatureView,
     type RecordObject,
+    type RichText,
+    type SignatureProfileView,
+    type SignatureSettingsView,
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
@@ -672,7 +677,6 @@ export const templateVariables: TemplateVariablesView = {
         { path: 'person.lastName', source: 'person', label: 'Last name', type: 'text', optional: false },
         { path: 'company.name', source: 'company', label: 'Company name', type: 'text', optional: false },
         { path: 'deal.amount', source: 'deal', label: 'Deal amount', type: 'money', optional: false },
-        { path: 'sender.signature', source: 'sender', label: 'Signature', type: 'text', optional: true },
     ],
     custom: [{ path: 'person.custom.beat', source: 'person', label: 'Beat', type: 'select', optional: false }],
 };
@@ -763,6 +767,55 @@ export function mailboxSync(mailboxId: string): MailboxSyncView {
               fullSyncCompletedAt: at(47),
               lastError: { code: 'reconnect_needed', message: 'The mailbox needs reconnecting.', at: at(3) },
           };
+}
+
+// ---- Signatures (#193) ---------------------------------------------------------------------
+
+/** The workspace signature is the starter, nothing locked; no logo, so no image leaves the gate. */
+export const signatureSettings: SignatureSettingsView = {
+    defaultSignature: SIGNATURE_STARTER,
+    locked: { logo: false, bookingLink: false },
+    logo: null,
+    starter: SIGNATURE_STARTER,
+};
+
+const kateSignature: RichText = {
+    type: 'doc',
+    content: [
+        {
+            type: 'paragraph',
+            content: [
+                { type: 'variable', attrs: { path: 'sender.fullName' } },
+                { type: 'text', text: ' · Pinion Partners' },
+            ],
+        },
+        { type: 'paragraph', content: [{ type: 'variable', attrs: { path: 'sender.bookingLink' } }] },
+    ],
+};
+
+/** Kate's mailbox has its own signature; the pool mailbox carries the workspace's. */
+export function mailboxSignature(mailboxId: string): MailboxSignatureView {
+    const own = mailboxId === IDS.mailbox ? kateSignature : null;
+    return {
+        mailboxId,
+        own,
+        useDefault: true,
+        applies: own ? 'own' : 'default',
+        effective: own ?? SIGNATURE_STARTER,
+        bookingLink: mailboxId === IDS.poolMailbox ? 'https://bookings.example.com/team' : null,
+        locked: signatureSettings.locked,
+    };
+}
+
+export function signatureProfile(memberId: string): SignatureProfileView {
+    return {
+        memberId,
+        jobTitle: 'Account manager',
+        phone: '+44 20 7946 0000',
+        slotlineUsername: 'kate',
+        bookingLink: 'https://bookings.example.com/kate',
+        slotlineConfigured: true,
+    };
 }
 
 /** The booking site, connected and receiving (CAL-2). */

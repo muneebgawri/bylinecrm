@@ -61,13 +61,15 @@ const img = (src: string, width?: number): RichTextNode => ({
     attrs: { src, alt: 'Badge', ...(width ? { width } : {}) },
 });
 
-/** The decoded text and HTML parts of a message the CRM sent. */
+/** The decoded text and HTML parts of a message the CRM sent, with the wire's CRLF line ends as LF. */
 function partsOf(raw: string): { text: string; html: string } {
     const [, ...sections] = raw.split(/\r\n--bylinecrm-[0-9a-f]+(?:--)?\r\n?/);
     const decode = (contentType: string) => {
         const section = sections.find((s) => s.startsWith(`Content-Type: ${contentType}`));
         if (!section) throw new Error(`no ${contentType} part`);
-        return Buffer.from(section.split('\r\n\r\n')[1]!.replace(/\r\n/g, ''), 'base64').toString('utf8');
+        return Buffer.from(section.split('\r\n\r\n')[1]!.replace(/\r\n/g, ''), 'base64')
+            .toString('utf8')
+            .replace(/\r\n/g, '\n');
     };
     return { text: decode('text/plain'), html: decode('text/html') };
 }
@@ -147,15 +149,15 @@ describe('#193 email signatures', () => {
         as(who).post(w('/settings/signatures/logo', ws)).attach('file', bytes, { filename, contentType });
     const settings = async (who = admin, ws = workspace) =>
         (await as(who).get(w('/settings/signatures', ws))).body as SignatureSettingsView;
-    const putSettings = (body: unknown, who = admin, ws = workspace) =>
+    const putSettings = (body: object, who = admin, ws = workspace) =>
         as(who).put(w('/settings/signatures', ws)).send(body);
     const signatureOf = (mailbox: string, who = admin, ws = workspace) =>
         as(who).get(w(`/mailboxes/${mailbox}/signature`, ws));
-    const putSignature = (mailbox: string, body: unknown, who = admin, ws = workspace) =>
+    const putSignature = (mailbox: string, body: object, who = admin, ws = workspace) =>
         as(who)
             .put(w(`/mailboxes/${mailbox}/signature`, ws))
             .send(body);
-    const putProfile = (id: string, body: unknown, who = admin, ws = workspace) =>
+    const putProfile = (id: string, body: object, who = admin, ws = workspace) =>
         as(who)
             .put(w(`/members/${id}/signature-profile`, ws))
             .send(body);
@@ -273,7 +275,7 @@ describe('#193 email signatures', () => {
                 doc(para({ ...t('x'), marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] })),
             ]) {
                 const res = await putSettings({ defaultSignature: bad, locked: { logo: false, bookingLink: false } });
-                expect(res.status, JSON.stringify(bad)).toBe(422);
+                expect(res.status, JSON.stringify(bad)).toBe(400);
             }
         });
     });
@@ -559,6 +561,9 @@ describe('#193 email signatures', () => {
             expect(preview.status, JSON.stringify(preview.body)).toBe(200);
             const html = (preview.body as { html: string }).html;
             expect(html.indexOf('Template body')).toBeLessThan(html.indexOf('Pinion Partners'));
+            // The template editor no longer offers {{sender.signature}}: the signature follows every body by itself.
+            const offered = (await as(member).get(w('/templates/variables'))).body as { standard: { path: string }[] };
+            expect(offered.standard.map((v) => v.path)).not.toContain('sender.signature');
         });
     });
 

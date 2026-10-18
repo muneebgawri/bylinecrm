@@ -94,7 +94,9 @@ describe('#193 signatureProblems', () => {
                     para({ type: 'image', attrs: { src: 'http://x.example/a.png', alt: '' } }),
                     para({ type: 'image', attrs: { src: 'https://x.example/a.png', alt: 'a', width: 0 } }),
                 ),
-            ).map((p) => p.path),
+            )
+                .map((p) => p.path)
+                .sort(),
         ).toEqual([
             'signature.content.0',
             'signature.content.1.content.0.attrs.path',

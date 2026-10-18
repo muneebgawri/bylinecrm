@@ -27,6 +27,8 @@ export const GMAIL_UNITS = {
     listHistory: 2,
     getMessage: 5,
     send: 100,
+    /** `users.settings.sendAs.list` (#193). */
+    listSendAs: 1,
 } as const;
 /** Redis key prefix of a mailbox's per-second quota window. */
 export const GMAIL_QUOTA_KEY_PREFIX = 'mail-sync:quota:';
