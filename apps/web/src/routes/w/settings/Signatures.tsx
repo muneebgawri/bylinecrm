@@ -220,7 +220,7 @@ function LogoSection({ workspaceId, settings }: { workspaceId: string; settings:
     const pick = (file: File | undefined) => {
         if (!file) return;
         if (!(LOGO_MIME_TYPES as readonly string[]).includes(file.type)) {
-            toast({ title: 'Choose a PNG, JPEG or SVG file', tone: 'danger' });
+            toast({ title: 'Choose a PNG or JPEG file', tone: 'danger' });
             return;
         }
         if (file.size > LOGO_MAX_BYTES) {
@@ -259,14 +259,14 @@ function LogoSection({ workspaceId, settings }: { workspaceId: string; settings:
                     )}
                 >
                     {settings.logo ? 'Replace' : 'Upload a logo'}
-                    <span className="sr-only"> (PNG, JPEG or SVG, at most 200 KB)</span>
+                    <span className="sr-only"> (PNG or JPEG, at most 200 KB)</span>
                 </label>
                 <input
                     id={inputId}
                     type="file"
                     accept={LOGO_MIME_TYPES.join(',')}
                     className="sr-only"
-                    aria-label="Upload a logo (PNG, JPEG or SVG, at most 200 KB)"
+                    aria-label="Upload a logo (PNG or JPEG, at most 200 KB)"
                     disabled={logo.isPending}
                     onChange={(e) => {
                         pick(e.target.files?.[0]);

@@ -60,12 +60,11 @@ export class SignatureSettingsController {
         return this.signatures.putSettings(body);
     }
 
-    /** `multipart/form-data` with one `file` field: PNG, JPEG or SVG, at most LOGO_MAX_BYTES; stored as a PNG. */
+    /** `multipart/form-data` with one `file` field: PNG or JPEG, at most LOGO_MAX_BYTES; stored as a PNG. */
     @Requires('workspace:admin')
     @ApiConsumes('multipart/form-data')
     @ApiBody({
-        description:
-            'One `file` part: PNG, JPEG or SVG, at most LOGO_MAX_BYTES. Stored as a PNG at most LOGO_WIDTH wide.',
+        description: 'One `file` part: PNG or JPEG, at most LOGO_MAX_BYTES. Stored as a PNG at most LOGO_WIDTH wide.',
         schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } }, required: ['file'] },
     })
     @Post('logo')

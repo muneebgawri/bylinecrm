@@ -5420,7 +5420,7 @@
                 ],
                 "requestBody": {
                     "required": true,
-                    "description": "One `file` part: PNG, JPEG or SVG, at most LOGO_MAX_BYTES. Stored as a PNG at most LOGO_WIDTH wide.",
+                    "description": "One `file` part: PNG or JPEG, at most LOGO_MAX_BYTES. Stored as a PNG at most LOGO_WIDTH wide.",
                     "content": {
                         "multipart/form-data": {
                             "schema": {

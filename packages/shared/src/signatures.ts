@@ -78,7 +78,8 @@ export const SIGNATURE_PROFILE_TEXT_MAX = 100;
 
 /** The workspace logo (#193): uploaded once by an admin, served publicly so mail clients can show it. */
 export const LOGO_MAX_BYTES = 200 * 1024;
-export const LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'] as const;
+/** PNG or JPEG. SVG is not taken: rasterising it needs a library outside the licence allowlist (resvg, MPL-2.0). */
+export const LOGO_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
 /** Every logo is stored as a PNG at most this wide. */
 export const LOGO_WIDTH = 300;
 /** A replaced logo's address keeps answering this long, for mail already sent. */

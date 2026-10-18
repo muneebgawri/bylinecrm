@@ -45,8 +45,12 @@ signature starts: the workspace default when an admin first sets it, and a mailb
 writes one (from the default, when there is one). A workspace has no default until an admin saves one, so
 deploying this changes no mail anyone sends.
 
-- **Logo.** `workspace_logos`: an admin uploads PNG, JPEG or SVG of at most 200 KB; `sharp` reads it (SVG is
-  rasterised) and stores a PNG at most 300 px wide. It is served by `GET /api/public/logos/<token>.png` — public,
+- **Logo.** `workspace_logos`: an admin uploads a PNG or JPEG of at most 200 KB; `logo-image.ts` reads it by its
+  bytes (`pngjs`, MIT; `jpeg-js`, BSD-3-Clause), refuses more than 25 megapixels from the header before decoding,
+  scales it down to at most 300 px wide by area averaging and stores a PNG. **SVG is not taken:** the issue asks
+  for it rasterised, but the rasterisers there are, `sharp`'s libvips (LGPL-3.0) and resvg (MPL-2.0), are
+  outside the licence allowlist for runtime code; taking SVG waits on the owner granting one of them an exception.
+  It is served by `GET /api/public/logos/<token>.png` — public,
   `Cache-Control: public`, the 32-byte token the only key, found through the owner client as the unsubscribe
   page finds its token. A new upload retires the current one; a retired token answers for `LOGO_GRACE_DAYS` (30)
   for mail already sent, and its bytes are removed with the next upload after that. The bytes go to storage

@@ -2,15 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import {
-    LOGO_GRACE_DAYS,
-    LOGO_MAX_BYTES,
-    LOGO_MIME_TYPES,
-    LOGO_WIDTH,
-    type WorkspaceLogoView,
-} from '@bylinecrm/shared';
+import { LOGO_GRACE_DAYS, LOGO_MAX_BYTES, LOGO_MIME_TYPES, type WorkspaceLogoView } from '@bylinecrm/shared';
 import type { Request } from 'express';
-import sharp from 'sharp';
 import { randomToken } from '../auth/tokens';
 import { ENV, type Env } from '../config/env';
 import { ApiException } from '../infra/errors/api-errors';
@@ -19,6 +12,7 @@ import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { FILE_STORAGE, FileNotInStorage, type FileStorage } from '../infra/storage/file-storage';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { readUpload } from '../records/multipart';
+import { logoPng, UnreadableImage } from './logo-image';
 import { logoView } from './signature-store';
 
 /** A logo's token: 32 bytes, so its public address cannot be guessed. */
@@ -28,7 +22,7 @@ const GRACE_MS = LOGO_GRACE_DAYS * 86_400_000;
 const LOGO_FILE = /^([A-Za-z0-9_-]{32,64})\.png$/;
 
 /**
- * The workspace logo (#193): uploaded once by an admin, stored as a PNG at most `LOGO_WIDTH` wide, and
+ * The workspace logo (#193): uploaded once by an admin, stored as a PNG at most `LOGO_WIDTH` wide (`logo-image.ts`), and
  * served publicly at an unguessable address so recipients' mail clients show it with no sign-in. A new
  * logo gets a new address; the one it replaced keeps answering for `LOGO_GRACE_DAYS`, for mail already
  * sent, and its bytes are removed with the next upload after that. Bytes go to storage before the
@@ -52,14 +46,12 @@ export class LogosService {
         const context = this.current();
         const file = await readUpload(req, { maxBytes: LOGO_MAX_BYTES, mimeTypes: LOGO_MIME_TYPES });
         const bytes = await buffer(file.body);
-        let png: { data: Buffer; info: sharp.OutputInfo };
+        let png: ReturnType<typeof logoPng>;
         try {
-            png = await sharp(bytes, { limitInputPixels: 50_000_000 })
-                .resize({ width: LOGO_WIDTH, withoutEnlargement: true })
-                .png()
-                .toBuffer({ resolveWithObject: true });
-        } catch {
-            throw new ApiException(422, 'unprocessable', 'the file is not an image that can be read');
+            png = logoPng(bytes);
+        } catch (error) {
+            if (!(error instanceof UnreadableImage)) throw error;
+            throw new ApiException(422, 'unprocessable', `the file is not a logo that can be read: ${error.message}`);
         }
         const storageKey = `${context.workspaceId}/logos/${randomUUID()}`;
         await this.storage.put(storageKey, Readable.from(png.data));
@@ -76,8 +68,8 @@ export class LogosService {
                     workspaceId: context.workspaceId,
                     token: randomToken(LOGO_TOKEN_BYTES),
                     storageKey,
-                    width: png.info.width,
-                    height: png.info.height,
+                    width: png.width,
+                    height: png.height,
                     sizeBytes: png.data.length,
                     uploadedById: context.memberId ?? null,
                 },

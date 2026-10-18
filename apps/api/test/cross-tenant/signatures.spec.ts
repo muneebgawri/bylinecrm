@@ -22,7 +22,8 @@ import {
     type SignatureSettingsView,
     type WorkspaceLogoView,
 } from '@bylinecrm/shared';
-import sharp from 'sharp';
+import jpeg from 'jpeg-js';
+import { PNG } from 'pngjs';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
@@ -141,10 +142,19 @@ describe('#193 email signatures', () => {
         return partsOf(gmail.sent.at(-1)!.raw);
     }
 
-    const png = (width: number, height: number) =>
-        sharp({ create: { width, height, channels: 4, background: { r: 20, g: 80, b: 160, alpha: 1 } } })
-            .png()
-            .toBuffer();
+    const rgba = (width: number, height: number) => {
+        const data = Buffer.alloc(width * height * 4);
+        for (let i = 0; i < data.length; i += 4) data.set([20, 80, 160, 255], i);
+        return data;
+    };
+    const png = (width: number, height: number) => {
+        const image = new PNG({ width, height });
+        image.data = rgba(width, height);
+        return Promise.resolve(PNG.sync.write(image));
+    };
+    const jpg = (width: number, height: number) =>
+        Buffer.from(jpeg.encode({ width, height, data: rgba(width, height) }, 80).data);
+    const pngSize = (bytes: Buffer) => ({ width: PNG.sync.read(bytes).width, height: PNG.sync.read(bytes).height });
     const upload = (who: Browser, ws: string, bytes: Buffer, contentType: string, filename = 'logo.png') =>
         as(who).post(w('/settings/signatures/logo', ws)).attach('file', bytes, { filename, contentType });
     const settings = async (who = admin, ws = workspace) =>
@@ -295,22 +305,22 @@ describe('#193 email signatures', () => {
             expect(served.status).toBe(200);
             expect(served.headers['content-type']).toBe('image/png');
             expect(served.headers['cache-control']).toContain('public');
-            const meta = await sharp(served.body as Buffer).metadata();
-            expect(meta).toMatchObject({ format: 'png', width: LOGO_WIDTH });
+            expect(pngSize(served.body as Buffer)).toEqual({ width: LOGO_WIDTH, height: 100 });
             expect((await settings(member)).logo).toEqual(first);
         });
 
-        it('takes PNG, JPEG or SVG (rasterised to PNG), at most 200 KB', async () => {
-            const svg = Buffer.from(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="600" height="200" fill="#123"/></svg>',
-            );
+        it('takes PNG or JPEG (stored as PNG), at most 200 KB; SVG is refused', async () => {
             // An admin of another workspace is no member here.
-            expect((await upload(admin, otherWorkspace, svg, 'image/svg+xml', 'logo.svg')).status).toBe(403);
-            const theirs = await upload(otherAdmin, otherWorkspace, svg, 'image/svg+xml', 'logo.svg');
+            expect((await upload(admin, otherWorkspace, jpg(600, 200), 'image/jpeg', 'logo.jpg')).status).toBe(403);
+            const theirs = await upload(otherAdmin, otherWorkspace, jpg(600, 200), 'image/jpeg', 'logo.jpg');
             expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
             const served = await http().get(new URL((theirs.body as WorkspaceLogoView).url).pathname);
-            expect((await sharp(served.body as Buffer).metadata()).format).toBe('png');
+            expect(pngSize(served.body as Buffer)).toEqual({ width: LOGO_WIDTH, height: 100 });
 
+            const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"></svg>');
+            expect((await upload(admin, workspace, svg, 'image/svg+xml', 'logo.svg')).status).toBe(415);
+            // A file whose bytes are not what it says is not read as anything else.
+            expect((await upload(admin, workspace, svg, 'image/png')).status).toBe(422);
             expect((await upload(admin, workspace, Buffer.from('hello'), 'text/plain', 'x.txt')).status).toBe(415);
             const big = Buffer.alloc(LOGO_MAX_BYTES + 1, 1);
             expect((await upload(admin, workspace, big, 'image/png')).status).toBe(413);
