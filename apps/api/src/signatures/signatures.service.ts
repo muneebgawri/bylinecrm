@@ -40,6 +40,9 @@ type ProfileRow = {
     jobTitle: string | null;
     phone: string | null;
     slotlineUsername: string | null;
+    slotlineApiKeyLast4: string | null;
+    slotlineEventSlug: string | null;
+    slotlineEventTitle: string | null;
     user: { displayName: string | null };
 };
 
@@ -194,7 +197,13 @@ export class SignaturesService {
     putProfile(memberId: string, input: SignatureProfileInput): Promise<SignatureProfileView> {
         this.assertSelfOrAdmin(memberId);
         return this.rls.withWorkspace(async (tx) => {
-            await this.member(tx, memberId);
+            const member = await this.member(tx, memberId);
+            // With a Slotline key the username is the one Slotline gave for it (#196), never typed over.
+            if (member.slotlineApiKeyCiphertext && input.slotlineUsername !== member.slotlineUsername) {
+                throw new ApiException(422, 'unprocessable', 'the username comes from the Slotline key', [
+                    { path: 'slotlineUsername', message: 'set by the Slotline account the key belongs to' },
+                ]);
+            }
             const saved = await tx.workspaceMember.update({
                 where: { id: memberId },
                 data: { jobTitle: input.jobTitle, phone: input.phone, slotlineUsername: input.slotlineUsername },
@@ -255,8 +264,13 @@ export class SignaturesService {
             jobTitle: member.jobTitle,
             phone: member.phone,
             slotlineUsername: member.slotlineUsername,
-            bookingLink: bookingLinkOf(base, member.slotlineUsername),
+            bookingLink: bookingLinkOf(base, member.slotlineUsername, member.slotlineEventSlug),
             slotlineConfigured: base !== null,
+            slotlineKey: member.slotlineApiKeyLast4 ? { last4: member.slotlineApiKeyLast4 } : null,
+            slotlineEvent:
+                member.slotlineEventSlug && member.slotlineEventTitle
+                    ? { slug: member.slotlineEventSlug, title: member.slotlineEventTitle }
+                    : null,
         };
     }
 

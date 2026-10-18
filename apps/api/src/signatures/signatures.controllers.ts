@@ -19,12 +19,20 @@ import type {
     RenderedSignature,
     SignatureProfileView,
     SignatureSettingsView,
+    SlotlineEventTypeView,
     WorkspaceLogoView,
 } from '@bylinecrm/shared';
 import type { Request, Response } from 'express';
 import { AnyMember, Public, Requires, TenantController } from '../auth/decorators';
 import { Returns, ReturnsFile } from '../openapi/responses';
-import { PreviewSignatureDto, PutMailboxSignatureDto, PutSignatureProfileDto, PutSignatureSettingsDto } from './dto';
+import {
+    PreviewSignatureDto,
+    PutMailboxSignatureDto,
+    PutSignatureProfileDto,
+    PutSignatureSettingsDto,
+    PutSlotlineEventDto,
+    PutSlotlineKeyDto,
+} from './dto';
 import { LogosService } from './logos.service';
 import {
     importedSignature,
@@ -32,9 +40,11 @@ import {
     renderedSignature,
     signatureProfileView,
     signatureSettingsView,
+    slotlineEventTypeView,
     workspaceLogoView,
 } from './responses';
 import { SignaturesService } from './signatures.service';
+import { SlotlineAccountService } from './slotline-account.service';
 
 /** The workspace's signature settings (#193): every member reads them; an admin sets the default, the locks and the logo. */
 @ApiTags('mail')
@@ -159,6 +169,49 @@ export class SignatureProfileController {
         @Body() body: PutSignatureProfileDto,
     ): Promise<SignatureProfileView> {
         return this.signatures.putProfile(memberId, body);
+    }
+}
+
+/** A member's own Slotline account (#196): their key, their event types, the one their booking link opens. */
+@ApiTags('mail')
+@TenantController('members')
+export class SlotlineAccountController {
+    constructor(private readonly accounts: SlotlineAccountService) {}
+
+    /** Checked with Slotline before it is kept; the username becomes Slotline's. `422` for a key Slotline refuses. */
+    @AnyMember('a member’s own Slotline account — the service refuses anyone else')
+    @Put(':memberId/slotline-key')
+    @Returns(signatureProfileView)
+    putKey(
+        @Param('memberId', ParseUUIDPipe) memberId: string,
+        @Body() body: PutSlotlineKeyDto,
+    ): Promise<SignatureProfileView> {
+        return this.accounts.putKey(memberId, body.apiKey);
+    }
+
+    @AnyMember('a member’s own Slotline account — the service refuses anyone else')
+    @HttpCode(204)
+    @Delete(':memberId/slotline-key')
+    removeKey(@Param('memberId', ParseUUIDPipe) memberId: string): Promise<void> {
+        return this.accounts.removeKey(memberId);
+    }
+
+    /** Every event type on the account, hidden ones too. `409` without a key, or when Slotline does not answer. */
+    @AnyMember('a member’s own Slotline account — the service refuses anyone else')
+    @Get(':memberId/slotline/event-types')
+    @Returns([slotlineEventTypeView])
+    eventTypes(@Param('memberId', ParseUUIDPipe) memberId: string): Promise<SlotlineEventTypeView[]> {
+        return this.accounts.eventTypes(memberId);
+    }
+
+    @AnyMember('a member’s own Slotline account — the service refuses anyone else')
+    @Put(':memberId/slotline-event')
+    @Returns(signatureProfileView)
+    pickEvent(
+        @Param('memberId', ParseUUIDPipe) memberId: string,
+        @Body() body: PutSlotlineEventDto,
+    ): Promise<SignatureProfileView> {
+        return this.accounts.pickEvent(memberId, body.slug);
     }
 }
 

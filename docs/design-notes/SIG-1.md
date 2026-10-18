@@ -69,6 +69,32 @@ deploying this changes no mail anyone sends.
   one a message carries — must name the variable, and "no signature" is refused (`422`). The composer hides
   "Remove signature" while anything is locked.
 
+## A Slotline event type for the booking link (#196)
+
+Owner 2026-10-19: the CRM lists **every** event type on a member's Slotline account, hidden ones too, and the
+member picks the one "Book a quick meeting" opens. Slotline (a Cal.com fork) returns hidden event types only to
+their owner, so the member gives the CRM a personal Slotline API key.
+
+- **The port.** `SlotlineApiPort` (`me`, `eventTypes`), over HTTP by `SlotlineApiHttp` — Slotline's v2 API,
+  which the booking site forwards at `/api/v2/*` (live on bookings.pinionpartners.co): `GET /api/v2/me` and
+  `GET /api/v2/event-types` (`cal-api-version: 2024-06-14`) with the key as a bearer token, which with no
+  `username` returns every event type of the key's owner. The tests use `FakeSlotlineApi`, which also asserts
+  no transaction is open.
+- **The key** (`PUT /members/:id/slotline-key`): the member's own — an admin cannot set, read or use it. It is
+  checked with `me` before it is kept (`422` if Slotline refuses it), sealed with `SecretBox`, and shown by its
+  last four characters only. Slotline's answer sets the member's Slotline username, which then cannot be typed
+  over (`422`); a key for another account clears the picked event type. Removing it keeps the username and the
+  link.
+- **The pick** (`GET /members/:id/slotline/event-types`, `PUT /members/:id/slotline-event`): checked against
+  the account's list as Slotline gives it at that moment; the slug and title are kept, so a signature renders
+  with no call to Slotline. `{{sender.bookingLink}}` is `{baseUrl}/{username}/{slug}`; with no pick, the
+  member's page as before.
+- **The operator's path.** `node dist/cli/slotline-connect-member.js <workspace-slug> <email> < key` (in the api
+  container) connects a member with a key made for them in Slotline: the key on stdin only, checked with
+  Slotline, kept by the same `storeSlotlineKey` write as the member's own request; nothing prints it.
+- **Order of work.** Read (and decrypt) in one short transaction, call Slotline with none open, write in
+  another. Slotline not answering is a `409` that changes nothing.
+
 ## Import from Gmail
 
 `POST /mailboxes/:id/signature/import` reads `users.settings.sendAs.list` — Google's reference lists

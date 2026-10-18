@@ -28,6 +28,8 @@ const PROFILE: SignatureProfileView = {
     slotlineUsername: null,
     bookingLink: null,
     slotlineConfigured: true,
+    slotlineKey: null,
+    slotlineEvent: null,
 };
 const NONE: MailboxSignatureView = {
     mailboxId: 'mb-1',
@@ -189,5 +191,66 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
         await screen.findByRole('region', { name: 'kate@example.com' });
         expect(screen.queryByRole('region', { name: 'Members’ details' })).not.toBeInTheDocument();
         expect(seen.some((r) => r.url.endsWith('/members/signature-profiles'))).toBe(false);
+    });
+
+    describe('#196 a Slotline event type for the booking link', () => {
+        const KEYED: SignatureProfileView = {
+            ...PROFILE,
+            slotlineUsername: 'kate',
+            slotlineKey: { last4: 'k3y9' },
+            bookingLink: 'https://bookings.example.com/kate',
+        };
+
+        it('connects the member’s Slotline account with their API key, shown by its last four after', async () => {
+            const seen = open([
+                (r) => (r.method === 'PUT' && r.url.endsWith('/members/m-1/slotline-key') ? json(KEYED) : undefined),
+            ]);
+            await userEvent.type(await screen.findByLabelText('Slotline API key'), 'cal_live_abc_k3y9');
+            await userEvent.click(screen.getByRole('button', { name: 'Connect Slotline account' }));
+            await waitFor(() =>
+                expect(seen.find((r) => r.url.endsWith('/slotline-key'))?.body).toEqual({
+                    apiKey: 'cal_live_abc_k3y9',
+                }),
+            );
+            expect(await screen.findByText(/Key ending k3y9/)).toBeInTheDocument();
+            expect(screen.queryByLabelText('Slotline API key')).not.toBeInTheDocument();
+        });
+
+        it('offers every event type on the account, hidden ones marked, and saves the pick', async () => {
+            const seen = open([
+                (r) =>
+                    r.method === 'GET' && r.url.endsWith('/members/m-1/signature-profile') ? json(KEYED) : undefined,
+                (r) =>
+                    r.method === 'GET' && r.url.endsWith('/members/m-1/slotline/event-types')
+                        ? json([
+                              {
+                                  slug: 'intro',
+                                  title: 'Intro call',
+                                  lengthInMinutes: 30,
+                                  hidden: false,
+                                  bookingLink: 'https://bookings.example.com/kate/intro',
+                              },
+                              {
+                                  slug: 'vip-15',
+                                  title: 'VIP 15',
+                                  lengthInMinutes: 15,
+                                  hidden: true,
+                                  bookingLink: 'https://bookings.example.com/kate/vip-15',
+                              },
+                          ])
+                        : undefined,
+                (r) =>
+                    r.method === 'PUT' && r.url.endsWith('/members/m-1/slotline-event')
+                        ? json({ ...KEYED, slotlineEvent: { slug: 'vip-15', title: 'VIP 15' } })
+                        : undefined,
+            ]);
+            await userEvent.click(await screen.findByRole('combobox', { name: 'Book a quick meeting opens' }));
+            const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+            expect(options).toEqual(['Your Slotline page', 'Intro call · 30 min', 'VIP 15 · 15 min · hidden']);
+            await userEvent.click(screen.getByRole('option', { name: 'VIP 15 · 15 min · hidden' }));
+            await waitFor(() =>
+                expect(seen.find((r) => r.url.endsWith('/slotline-event'))?.body).toEqual({ slug: 'vip-15' }),
+            );
+        });
     });
 });

@@ -5,6 +5,7 @@ import {
     type RenderedSignature,
     type SignatureProfileView,
     type SignatureSettingsView,
+    type SlotlineEventTypeView,
     type WorkspaceLogoView,
 } from '@bylinecrm/shared';
 import { z } from 'zod';
@@ -64,6 +65,25 @@ export const signatureProfileView = named(
         slotlineUsername: z.string().nullable(),
         bookingLink: z.string().nullable(),
         slotlineConfigured: z.boolean(),
+        slotlineKey: z
+            .object({ last4: z.string() })
+            .nullable()
+            .meta({ description: 'The member’s own Slotline API key: set or not, and its last four only.' }),
+        slotlineEvent: z
+            .object({ slug: z.string(), title: z.string() })
+            .nullable()
+            .meta({ description: 'The event type “Book a quick meeting” opens; null opens the member’s page.' }),
+    }),
+);
+
+export const slotlineEventTypeView = named(
+    'SlotlineEventType',
+    z.object({
+        slug: z.string(),
+        title: z.string(),
+        lengthInMinutes: z.number().int().nullable(),
+        hidden: z.boolean().meta({ description: 'Not on the member’s public page, but bookable by its link.' }),
+        bookingLink: z.string(),
     }),
 );
 
@@ -87,4 +107,5 @@ export type SignatureTypeChecks = [
     Assert<Same<z.output<typeof signatureProfileView>, SignatureProfileView>>,
     Assert<Same<z.output<typeof renderedSignature>, RenderedSignature>>,
     Assert<Same<z.output<typeof importedSignature>, ImportedSignature>>,
+    Assert<Same<z.output<typeof slotlineEventTypeView>, SlotlineEventTypeView>>,
 ];

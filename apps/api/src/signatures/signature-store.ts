@@ -114,9 +114,14 @@ export async function slotlineBase(tx: WorkspaceClient): Promise<string | null> 
     return (await tx.slotlineSettings.findFirst({ select: { baseUrl: true } }))?.baseUrl ?? null;
 }
 
-/** A member's booking page: `{baseUrl}/{username}`, or null without either. */
-export function bookingLinkOf(base: string | null, username: string | null): string | null {
-    return base && username ? `${base.replace(/\/+$/, '')}/${encodeURIComponent(username)}` : null;
+/**
+ * A member's booking page: `{baseUrl}/{username}`, or that event type's page with `slug` (#196); null without
+ * a site or a username.
+ */
+export function bookingLinkOf(base: string | null, username: string | null, slug?: string | null): string | null {
+    if (!base || !username) return null;
+    const page = `${base.replace(/\/+$/, '')}/${encodeURIComponent(username)}`;
+    return slug ? `${page}/${encodeURIComponent(slug)}` : page;
 }
 
 /** Whether a link sits on the Slotline site (`base`, an https origin). */
@@ -147,6 +152,7 @@ export async function signatureValues(
                   jobTitle: true,
                   phone: true,
                   slotlineUsername: true,
+                  slotlineEventSlug: true,
                   user: { select: { displayName: true } },
               },
           })
@@ -167,7 +173,7 @@ export async function signatureValues(
             bookingLink:
                 mailbox?.purpose === 'pool'
                     ? mailbox.bookingLink
-                    : bookingLinkOf(base, member?.slotlineUsername ?? null),
+                    : bookingLinkOf(base, member?.slotlineUsername ?? null, member?.slotlineEventSlug),
         },
         workspace: {
             name: workspace?.name ?? '',

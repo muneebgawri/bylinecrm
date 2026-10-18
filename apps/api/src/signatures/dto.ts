@@ -1,4 +1,6 @@
 import {
+    SLOTLINE_API_KEY_MAX,
+    SLOTLINE_EVENT_SLUG_PATTERN,
     SIGNATURE_LOCKABLE,
     SIGNATURE_MAX_CHARS,
     SIGNATURE_PROFILE_TEXT_MAX,
@@ -77,4 +79,24 @@ export class PutSignatureProfileDto extends createZodDto(
 /** `POST /signatures/preview`: a signature as it would read, from a mailbox (or as the caller). */
 export class PreviewSignatureDto extends createZodDto(
     z.object({ signature: signatureDoc, mailboxId: z.uuid().optional() }).strict(),
+) {}
+
+/** `PUT /members/:memberId/slotline-key` (#196): the member's own Slotline API key. */
+export class PutSlotlineKeyDto extends createZodDto(
+    z
+        .object({
+            apiKey: z
+                .string()
+                .trim()
+                .min(8)
+                .max(SLOTLINE_API_KEY_MAX)
+                .regex(/^\S+$/, 'no spaces')
+                .meta({ description: 'Created in Slotline under Settings → Developer → API keys. Never returned.' }),
+        })
+        .strict(),
+) {}
+
+/** `PUT /members/:memberId/slotline-event` (#196): an event type on the member's account, or `null` for their page. */
+export class PutSlotlineEventDto extends createZodDto(
+    z.object({ slug: z.string().regex(SLOTLINE_EVENT_SLUG_PATTERN).nullable() }).strict(),
 ) {}

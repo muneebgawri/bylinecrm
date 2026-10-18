@@ -32,3 +32,7 @@ export const SLOTLINE_BASE_URL_MAX = 200;
 export const SLOTLINE_HOOK_FAILURE_LIMIT = 30;
 export const SLOTLINE_HOOK_FAILURE_WINDOW_S = 600;
 export const slotlineHookRateKey = (ip: string) => `slotline-hook:${ip}`;
+
+/** Slotline's v2 API (#196): how long a call may take, and the version event types are asked in. */
+export const SLOTLINE_API_TIMEOUT_MS = 10_000;
+export const SLOTLINE_API_EVENT_TYPES_VERSION = '2024-06-14';
