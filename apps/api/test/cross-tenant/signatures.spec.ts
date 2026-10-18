@@ -396,6 +396,21 @@ describe('#193 email signatures', () => {
                     )
                 ).status,
             ).toBe(400);
+            // An admin sees every member's details in one list, with their names; a member does not.
+            const list = await as(admin).get(w('/members/signature-profiles'));
+            expect(list.status, JSON.stringify(list.body)).toBe(200);
+            expect(list.body as SignatureProfileView[]).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ memberId, name: 'Mia Member', slotlineUsername: 'mia' }),
+                    expect.objectContaining({ memberId: adminMemberId, slotlineUsername: 'matt' }),
+                ]),
+            );
+            expect((await as(member).get(w('/members/signature-profiles'))).status).toBe(403);
+            expect(
+                ((await as(otherAdmin).get(w('/members/signature-profiles', otherWorkspace))).body as SignatureProfileView[]).map(
+                    (p) => p.memberId,
+                ),
+            ).not.toContain(memberId);
             // Another workspace's admin reaches no member here.
             expect(
                 (await putProfile(memberId, { jobTitle: 'x', phone: null, slotlineUsername: null }, otherAdmin)).status,
@@ -571,9 +586,44 @@ describe('#193 email signatures', () => {
             expect(preview.status, JSON.stringify(preview.body)).toBe(200);
             const html = (preview.body as { html: string }).html;
             expect(html.indexOf('Template body')).toBeLessThan(html.indexOf('Pinion Partners'));
-            // The template editor no longer offers {{sender.signature}}: the signature follows every body by itself.
+        });
+
+        it('{{sender.signature}} places it: where the template names it, once, and a P.S. can follow', async () => {
             const offered = (await as(member).get(w('/templates/variables'))).body as { standard: { path: string }[] };
-            expect(offered.standard.map((v) => v.path)).not.toContain('sender.signature');
+            expect(offered.standard.map((v) => v.path)).toContain('sender.signature');
+            const template = await as(admin)
+                .post(w('/templates'))
+                .send({
+                    name: `Placed ${stamp}`,
+                    kind: 'personal',
+                    subject: 'Hi',
+                    body: doc(para(t('Body first.')), para(v('sender.signature')), para(t('P.S. Friday works.'))),
+                });
+            expect(template.status, JSON.stringify(template.body)).toBe(201);
+            const preview = await as(member)
+                .post(w(`/templates/${(template.body as { id: string }).id}/preview`))
+                .send({ personId: danaId, mailboxId: memberMailbox });
+            const html = (preview.body as { html: string }).html;
+            expect(html.indexOf('Pinion Partners')).toBeGreaterThan(html.indexOf('Body first.'));
+            expect(html.indexOf('Pinion Partners')).toBeLessThan(html.indexOf('P.S. Friday works.'));
+            expect(html.split('Pinion Partners')).toHaveLength(2);
+
+            const sent = await sendAndDeliver(member, {
+                mailboxId: memberMailbox,
+                personId: danaId,
+                templateId: (template.body as { id: string }).id,
+            });
+            expect(sent.html.indexOf('Pinion Partners')).toBeLessThan(sent.html.indexOf('P.S. Friday works.'));
+            expect(sent.html.split('Pinion Partners')).toHaveLength(2);
+            expect(sent.text).toContain('-- \nMia Member');
+        });
+
+        it('a subject cannot carry it: a signature belongs in the body', async () => {
+            const res = await as(admin)
+                .post(w('/templates'))
+                .send({ name: `Subject ${stamp}`, kind: 'personal', subject: 'Hi {{sender.signature}}', body: doc(para(t('x'))) });
+            expect(res.status).toBe(400);
+            expect((res.body as { fieldErrors: { path: string }[] }).fieldErrors.map((f) => f.path)).toEqual(['subject']);
         });
     });
 

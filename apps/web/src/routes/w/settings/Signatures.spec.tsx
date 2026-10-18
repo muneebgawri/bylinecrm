@@ -22,6 +22,7 @@ const SETTINGS: SignatureSettingsView = {
 };
 const PROFILE: SignatureProfileView = {
     memberId: 'm-1',
+    name: 'Kate Morgan',
     jobTitle: null,
     phone: null,
     slotlineUsername: null,
@@ -149,5 +150,39 @@ describe('#193 Settings → Signatures', { timeout: 20_000 }, () => {
                 locked: { logo: true, bookingLink: false },
             }),
         );
+    });
+
+    it('an admin sets another member’s details — their Slotline username — from the members list', async () => {
+        const sam: SignatureProfileView = { ...PROFILE, memberId: 'm-2', name: 'Sam Okafor', jobTitle: 'Partner' };
+        const seen = open(
+            [
+                (r) => (r.method === 'GET' && r.url.endsWith('/members/signature-profiles') ? json([PROFILE, sam]) : undefined),
+                (r) =>
+                    r.method === 'PUT' && r.url.endsWith('/members/m-2/signature-profile')
+                        ? json({ ...sam, ...(r.body as object), bookingLink: 'https://bookings.example.com/sam' })
+                        : undefined,
+            ],
+            ADMIN,
+        );
+        const list = await screen.findByRole('region', { name: 'Members’ details' });
+        // The admin's own details are above, not repeated here.
+        expect(within(list).queryByText('Kate Morgan')).not.toBeInTheDocument();
+        await userEvent.click(within(list).getByRole('button', { name: 'Edit Sam Okafor’s details' }));
+        await userEvent.type(within(list).getByLabelText('Slotline username'), 'sam');
+        await userEvent.click(within(list).getByRole('button', { name: 'Save details' }));
+        await waitFor(() =>
+            expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({
+                jobTitle: 'Partner',
+                phone: null,
+                slotlineUsername: 'sam',
+            }),
+        );
+    });
+
+    it('a member sees no one else’s details', async () => {
+        const seen = open([]);
+        await screen.findByRole('region', { name: 'kate@example.com' });
+        expect(screen.queryByRole('region', { name: 'Members’ details' })).not.toBeInTheDocument();
+        expect(seen.some((r) => r.url.endsWith('/members/signature-profiles'))).toBe(false);
     });
 });

@@ -151,3 +151,57 @@ describe('FR-CRMS-7 the unsubscribe link, resolved per recipient', () => {
         expect(() => withUnsubscribeUrl({ html: '', text: '' }, 'javascript:alert(1)')).toThrow();
     });
 });
+
+describe('#193 {{sender.signature}} places the signature', () => {
+    const signature = { html: '<p>Mia Member<br>Account manager</p>', text: 'Mia Member\nAccount manager' };
+    const p = (...content: object[]) => ({ type: 'paragraph', content });
+    const t = (text: string) => ({ type: 'text', text });
+    const marker = { type: 'variable', attrs: { path: 'sender.signature' } };
+    const doc = (...content: object[]) => ({ type: 'doc', content }) as RichText;
+
+    it('goes where the body names it, once, and is not added again after the body', () => {
+        const out = composeEmail(
+            { kind: 'personal', subject: 'Hi', body: doc(p(t('Hello.')), p(marker), p(t('P.S. See you Friday.'))) },
+            resolve,
+            settings,
+            signature,
+        );
+        expect(out.html).toBe(
+            '<p>Hello.</p><p>Mia Member<br>Account manager</p><p>P.S. See you Friday.</p>',
+        );
+        expect(out.text).toBe('Hello.\n\n-- \nMia Member\nAccount manager\n\nP.S. See you Friday.');
+        expect(out.sendable).toBe(true);
+    });
+
+    it('splits a line it sits in, keeping the words either side', () => {
+        const out = composeEmail(
+            { kind: 'personal', subject: 'Hi', body: doc(p(t('Thanks, '), marker, t(' talk soon'))) },
+            resolve,
+            settings,
+            signature,
+        );
+        expect(out.html).toBe('<p>Thanks, </p><p>Mia Member<br>Account manager</p><p> talk soon</p>');
+    });
+
+    it('leaves nothing where it is named when no signature applies', () => {
+        const out = composeEmail(
+            { kind: 'personal', subject: 'Hi', body: doc(p(t('Hello.')), p(marker), p(t('P.S.'))) },
+            resolve,
+            settings,
+            null,
+        );
+        expect(out.html).toBe('<p>Hello.</p><p>P.S.</p>');
+        expect(out.text).toBe('Hello.\n\nP.S.');
+    });
+
+    it('in outreach stays above the locked footer, which stays last', () => {
+        const out = composeEmail(
+            { kind: 'outreach', subject: 'Hi', body: doc(p(marker), p(t('P.S.'))) },
+            resolve,
+            settings,
+            signature,
+        );
+        expect(out.html.indexOf('Mia Member')).toBeLessThan(out.html.indexOf('P.S.'));
+        expect(out.html.indexOf('P.S.')).toBeLessThan(out.html.indexOf('<hr>'));
+    });
+});
