@@ -1,6 +1,6 @@
 import { BOOKING_LINK_LABEL, SIGNATURE_STARTER, type RichText, type RichTextNode } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
-import { renderSignature, signatureProblems, type SignatureValues } from './render-signature';
+import { SIGNATURE_STYLE as S, renderSignature, signatureProblems, type SignatureValues } from './render-signature';
 
 const doc = (...content: RichTextNode[]): RichText => ({ type: 'doc', content });
 const para = (...content: RichTextNode[]): RichTextNode => ({ type: 'paragraph', content });
@@ -18,7 +18,7 @@ const FULL: SignatureValues = {
     },
     workspace: {
         name: 'Pinion <Partners>',
-        logo: { url: 'https://crm.example.com/api/public/logos/abc.png', width: 300, height: 100 },
+        logo: { url: 'https://crm.example.com/api/public/logos/abc.png', width: 360, height: 120 },
     },
 };
 const BARE: SignatureValues = {
@@ -27,28 +27,47 @@ const BARE: SignatureValues = {
 };
 
 describe('#193 renderSignature', () => {
-    it('renders the starter with every value: the booking link as a link, the logo as an image', () => {
+    const table = (...rows: string[]) =>
+        `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="${S.table}">` +
+        rows.map((r) => `<tr><td style="${S.row}"><p style="${S.line}">${r}</p></td></tr>`).join('') +
+        '</table>';
+
+    it('lays the starter out for email: name and title, the logo under them, then phone and booking link', () => {
         const out = renderSignature(SIGNATURE_STARTER, FULL);
         expect(out.html).toBe(
-            '<p>Mia Member<br>Account manager</p>' +
-                '<p>+92 300 1234567</p>' +
-                `<p><a href="https://bookings.example.com/mia">${BOOKING_LINK_LABEL}</a></p>` +
-                '<p><img src="https://crm.example.com/api/public/logos/abc.png" alt="Pinion &lt;Partners&gt;" width="300" height="100"></p>',
+            table(
+                `<span style="${S.name}">Mia Member</span><br><span style="${S.title}">Account manager</span>`,
+                `<img src="https://crm.example.com/api/public/logos/abc.png" alt="Pinion &lt;Partners&gt;" width="180" height="60" style="${S.logo}">`,
+                `+92 300 1234567<br><a href="https://bookings.example.com/mia" style="${S.link}">${BOOKING_LINK_LABEL}</a>`,
+            ),
         );
         expect(out.text).toBe(
-            `Mia Member\nAccount manager\n\n+92 300 1234567\n\n${BOOKING_LINK_LABEL}: https://bookings.example.com/mia`,
+            `Mia Member\nAccount manager\n\n+92 300 1234567\n${BOOKING_LINK_LABEL}: https://bookings.example.com/mia`,
         );
+    });
+
+    it('shows a logo at half its stored size, so it is sharp on high-density screens', () => {
+        const small = { ...FULL, workspace: { ...FULL.workspace, logo: { ...FULL.workspace.logo!, width: 120, height: 40 } } };
+        expect(renderSignature(doc(para(v('workspace.logo'))), small).html).toContain('width="60" height="20"');
     });
 
     it('leaves out a line with nothing on it, rather than showing it broken', () => {
         const out = renderSignature(SIGNATURE_STARTER, BARE);
-        expect(out.html).toBe('<p>Mia Member</p>');
+        expect(out.html).toBe(table(`<span style="${S.name}">Mia Member</span>`));
         expect(out.text).toBe('Mia Member');
     });
 
     it('keeps a line with text of its own when a variable on it is empty', () => {
         const out = renderSignature(doc(para(t('Call: '), v('sender.phone'))), BARE);
-        expect(out.html).toBe('<p>Call: </p>');
+        expect(out.html).toBe(table('Call: '));
+    });
+
+    it('styles a link written into the signature like the booking link', () => {
+        const out = renderSignature(
+            doc(para(t('site', [{ type: 'link', attrs: { href: 'https://pinionnewswire.com' } }]))),
+            BARE,
+        );
+        expect(out.html).toBe(table(`<a href="https://pinionnewswire.com" style="${S.link}">site</a>`));
     });
 
     it('renders an https image with its width capped, and never an image off https', () => {
@@ -59,7 +78,7 @@ describe('#193 renderSignature', () => {
             ),
             BARE,
         );
-        expect(out.html).toBe('<p><img src="https://cdn.example.com/b.png" alt="B&quot;" width="600"></p>');
+        expect(out.html).toBe(table('<img src="https://cdn.example.com/b.png" alt="B&quot;" width="600">'));
         expect(out.text).toBe('');
     });
 
