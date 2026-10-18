@@ -26,8 +26,12 @@ const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     },
     checkedAt: '2026-10-12T08:00:00.000Z',
     nextCheckAt: '2026-10-12T14:00:00.000Z',
+    usedBy: ['pool'],
+    gated: true,
+    inPostmaster: false,
     spamRate: null,
-    postmaster: { status: 'not_connected', message: null, nextReadAt: null },
+    spamRates: [],
+    postmaster: { status: 'not_connected', message: null, readAt: null, nextReadAt: null },
     ...over,
 });
 
@@ -101,7 +105,12 @@ const WITH_POSTMASTER: SendingPoolView = {
         health({
             domain: domain({
                 spamRate: { day: '2026-10-11', rateBps: 35 },
-                postmaster: { status: 'ok', message: null, nextReadAt: '2026-10-13T00:00:00.000Z' },
+                postmaster: {
+                    status: 'ok',
+                    message: null,
+                    readAt: '2026-10-12T09:00:00.000Z',
+                    nextReadAt: '2026-10-13T00:00:00.000Z',
+                },
             }),
         }),
         health({
@@ -113,6 +122,7 @@ const WITH_POSTMASTER: SendingPoolView = {
                 postmaster: {
                     status: 'not_verified',
                     message: 'other.example is not verified in Postmaster Tools for ops@acme.example',
+                    readAt: '2026-10-12T09:00:00.000Z',
                     nextReadAt: '2026-10-12T15:00:00.000Z',
                 },
             }),
@@ -128,6 +138,7 @@ const WITH_POSTMASTER: SendingPoolView = {
                 postmaster: {
                     status: 'rate_limited',
                     message: 'Postmaster Tools is rate-limiting reads',
+                    readAt: '2026-10-12T09:00:00.000Z',
                     nextReadAt: '2026-10-12T15:00:00.000Z',
                 },
             }),

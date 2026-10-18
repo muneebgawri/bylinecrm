@@ -3,6 +3,8 @@ import {
     MAILBOX_STATUSES,
     POSTMASTER_CONNECTION_STATUSES,
     POSTMASTER_DOMAIN_STATUSES,
+    SENDING_DOMAIN_USES,
+    SPAM_RATE_HISTORY_DAYS,
 } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { id, named } from '../openapi/responses';
@@ -14,36 +16,56 @@ const isoTime = z.iso.datetime();
 
 const step = z.object({ outcome: z.enum(['pass', 'fail']), message: z.string() });
 
+const spamRate = z.object({
+    day: z.iso.date().meta({ description: 'The day the rate is for, UTC.' }),
+    rateBps: z.number().int().meta({ description: 'Basis points: 35 = 0.35%.' }),
+});
+
 export const sendingDomainView = named(
     'SendingDomain',
     z.object({
         id,
-        domain: z.string().meta({ description: 'Lower case: what follows the @ of a pool mailbox.' }),
+        domain: z.string().meta({
+            description:
+                'Lower case: what follows the @ of a connected mailbox, or a domain the connected Postmaster Tools account lists (#190).',
+        }),
         dkimSelector: z
             .string()
             .meta({ description: 'Checked at `<selector>._domainkey.<domain>`.', example: 'google' }),
         status: z.enum(['unchecked', 'pass', 'fail']).meta({
-            description: 'A pool mailbox sends only while its domain is `pass` (FR-CRMS-13).',
+            description:
+                'A pool mailbox sends only while its domain is `pass` (FR-CRMS-13); a personal domain is monitored, never blocked.',
         }),
         lastCheck: z.object({ spf: step, dkim: step, dmarc: step }).nullable(),
         checkedAt: isoTime.nullable(),
         nextCheckAt: isoTime,
-        spamRate: z
-            .object({
-                day: z.iso.date().meta({ description: 'The day the rate is for, UTC.' }),
-                rateBps: z.number().int().meta({ description: 'Basis points: 35 = 0.35%.' }),
-            })
-            .nullable()
-            .meta({
-                description:
-                    'The latest user-reported spam rate Postmaster Tools gave for the domain (#129); a failed lookup keeps the last one.',
-            }),
+        usedBy: z.array(z.enum(SENDING_DOMAIN_USES)).meta({
+            description:
+                'What the workspace’s connected mailboxes use it for (#190), derived from them; empty when only Postmaster Tools lists it.',
+        }),
+        gated: z.boolean().meta({
+            description:
+                'Whether the pool’s gate refuses sends from it while it fails its check: a pool mailbox uses it.',
+        }),
+        inPostmaster: z
+            .boolean()
+            .meta({ description: 'The connected Postmaster Tools account lists the domain (#190).' }),
+        spamRate: spamRate.nullable().meta({
+            description:
+                'The latest user-reported spam rate Postmaster Tools gave for the domain (#129); a failed lookup keeps the last one.',
+        }),
+        spamRates: z.array(spamRate).meta({
+            description: `Every rate Postmaster Tools reported over the last ${SPAM_RATE_HISTORY_DAYS} days, oldest first (#190); a day without data is absent, never a zero.`,
+        }),
         postmaster: z.object({
             status: z.enum(POSTMASTER_DOMAIN_STATUSES).meta({
                 description:
-                    'What the last ask of Postmaster Tools came to: nothing connected, the domain not verified there, an answer, a rate limit or no answer (both transient, #183), or a refusal.',
+                    'What the last ask of Postmaster Tools came to: nothing connected, the domain not verified there, an answer, a rate limit or no answer (both transient, #183), the project’s API quota spent (an admin raises it, #190), or a refusal.',
             }),
-            message: z.string().nullable(),
+            message: z.string().nullable().meta({
+                description: 'Why, with Google’s own error status and message when it gave them (#190).',
+            }),
+            readAt: isoTime.nullable().meta({ description: 'When the check last asked Postmaster Tools (#190).' }),
             nextReadAt: isoTime.nullable().meta({
                 description: 'When the check asks Postmaster Tools again (#183); null while nothing is connected.',
             }),

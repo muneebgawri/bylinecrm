@@ -842,9 +842,9 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                 const res = await as(admin).get(w(`/sending-domains/${listed.id}`));
                 expect(res.status, JSON.stringify(res.body)).toBe(200);
                 expect(res.body).toEqual(listed);
+                // A member (who does not run outreach by default) opens neither the domain nor the panel's list.
                 expect((await as(member).get(w(`/sending-domains/${listed.id}`))).status).toBe(403);
-                // The panel itself is for whoever reads the pool.
-                expect((await as(member).get(w('/sending-domains'))).status).toBe(200);
+                expect((await as(member).get(w('/sending-domains'))).status).toBe(403);
             });
 
             it('records Google’s status and message on a 429, makes a spent quota an admin action, and never records or logs the token', async () => {

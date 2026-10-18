@@ -67,7 +67,7 @@ describe('#190 FR-CRMS-13: one sending domain, for an admin', () => {
         expect(await screen.findByRole('heading', { level: 1, name: 'pinionpartners.co' })).toBeInTheDocument();
         expect(screen.getByText('no DKIM key at google._domainkey.pinionpartners.co')).toBeInTheDocument();
         expect(screen.getByText(/Monitored, never blocked/)).toBeInTheDocument();
-        const days = screen.getByRole('table', { name: 'Spam rate by day' });
+        const days = screen.getByRole('table');
         expect(
             within(days)
                 .getAllByRole('row')

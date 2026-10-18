@@ -30,3 +30,12 @@ export function useUnsubscribeToken(): string {
     if (!value) throw new Error(`route has no :${UNSUBSCRIBE_TOKEN_PARAM} segment`);
     return value;
 }
+
+/** A sending domain's page segment (#190). */
+export const DOMAIN_PARAM = 'domainId';
+
+export function useDomainId(): string {
+    const value = useParams()[DOMAIN_PARAM];
+    if (!value) throw new Error(`route has no :${DOMAIN_PARAM} segment`);
+    return value;
+}

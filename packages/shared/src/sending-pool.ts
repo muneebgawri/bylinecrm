@@ -110,31 +110,40 @@ export interface DomainCheck {
 export type SendingDomainStatus = 'unchecked' | 'pass' | 'fail';
 
 /**
- * What the last check learned from Postmaster Tools about the domain (#129, #183): nothing is
- * connected; the domain is not verified in Postmaster Tools for the connected account; it answered
- * (`ok` — with a rate, or a message when Google had no data for the day, which it keeps back for
- * low traffic); Google's quota said not now (`rate_limited`, a 429: transient, the last reading
- * stands, tried again later); Google could not be reached or did not answer (`unreachable`, a 5xx
- * or a timeout: transient too); or it refused the question (`failed`: a 401 or another refusal
- * that will not pass on its own — the one warning).
+ * What the last check learned from Postmaster Tools about the domain (#129, #183, #190): nothing
+ * is connected; the domain is not verified in Postmaster Tools for the connected account; it
+ * answered (`ok` — with a rate, or a message when Google had no data for the day, which it keeps
+ * back for low traffic); Google's quota said not now (`rate_limited`, a 429: transient, the last
+ * reading stands, tried again later); the project's Postmaster Tools API quota is spent
+ * (`quota_exhausted`, a 429 whose RESOURCE_EXHAUSTED body names the quota: an admin raises it in
+ * Google Cloud); Google could not be reached or did not answer (`unreachable`, a 5xx or a timeout:
+ * transient too); or it refused the question (`failed`: a 401, a grant to connect again, or another
+ * refusal that will not pass on its own). The message carries Google's own status and message.
  */
 export const POSTMASTER_DOMAIN_STATUSES = [
     'not_connected',
     'not_verified',
     'ok',
     'rate_limited',
+    'quota_exhausted',
     'unreachable',
     'failed',
 ] as const;
 export type PostmasterDomainStatus = (typeof POSTMASTER_DOMAIN_STATUSES)[number];
 
+/** Where an admin raises the Postmaster Tools API quota in Google Cloud when it is spent (#190). */
+export const POSTMASTER_QUOTA_URL =
+    'https://console.cloud.google.com/apis/api/gmailpostmastertools.googleapis.com/quotas';
+
 export interface SendingDomainPostmaster {
     status: PostmasterDomainStatus;
     message: string | null;
+    /** When the check last asked Postmaster Tools (#190), whatever it answered; null before it ever has. */
+    readAt: string | null;
     /**
      * When the check asks Postmaster Tools again (#183): the next day once a day's reading is in
-     * (the data is daily), Retry-After or a backoff from the check's cadence after a rate limit, the
-     * cadence after anything else. Null while nothing is connected.
+     * (the data is daily), Retry-After or a backoff from the check's cadence after a rate limit or a
+     * spent quota, the cadence after anything else. Null while nothing is connected.
      */
     nextReadAt: string | null;
 }
@@ -147,6 +156,17 @@ export interface SendingDomainSpamRate {
     rateBps: number;
 }
 
+/**
+ * What a sending domain is used for (#190), derived from the workspace's connected mailboxes: a
+ * pool mailbox sends outreach from it (gated: it must pass SPF, DKIM and DMARC to send), a personal
+ * mailbox sends a member's own mail from it (monitored, never blocked).
+ */
+export const SENDING_DOMAIN_USES = ['pool', 'personal'] as const;
+export type SendingDomainUse = (typeof SENDING_DOMAIN_USES)[number];
+
+/** How many days of Postmaster Tools spam rates a domain shows, and each read asks for (#190). */
+export const SPAM_RATE_HISTORY_DAYS = 30;
+
 export interface SendingDomainView {
     id: string;
     domain: string;
@@ -155,8 +175,16 @@ export interface SendingDomainView {
     lastCheck: DomainCheck | null;
     checkedAt: string | null;
     nextCheckAt: string;
+    /** What the workspace's connected mailboxes use it for; empty when only Postmaster Tools lists it. */
+    usedBy: SendingDomainUse[];
+    /** Whether the pool's gate refuses sends from it while it fails its check: a pool mailbox uses it. */
+    gated: boolean;
+    /** The connected Postmaster Tools account lists the domain (`domains.list`). */
+    inPostmaster: boolean;
     /** The latest rate Postmaster Tools reported; a failed lookup keeps the last one, it is never a zero. */
     spamRate: SendingDomainSpamRate | null;
+    /** Every rate Postmaster Tools reported over the last `SPAM_RATE_HISTORY_DAYS` days, oldest first; a day without data is absent. */
+    spamRates: SendingDomainSpamRate[];
     postmaster: SendingDomainPostmaster;
 }
 

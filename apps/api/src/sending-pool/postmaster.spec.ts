@@ -274,7 +274,7 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
             expect(failed.message).not.toContain(token);
         });
 
-        it('lists the account’s domains, every page, with whether each is verified', async () => {
+        it('lists the account’s domains, every page', async () => {
             const fetch = stubFetch(
                 reply(200, {
                     domains: [
@@ -285,8 +285,8 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
                 reply(200, { domains: [{ name: 'domains/pinionnewswire.com', verificationState: 'UNVERIFIED' }] }),
             );
             expect(await http.domains(token)).toEqual([
-                { domain: 'pinionpartners.co', verified: true },
-                { domain: 'pinionnewswire.com', verified: false },
+                { domain: 'pinionpartners.co' },
+                { domain: 'pinionnewswire.com' },
             ]);
             expect(String(fetch.mock.calls[0]![0])).toBe(
                 'https://gmailpostmastertools.googleapis.com/v2/domains?pageSize=200',

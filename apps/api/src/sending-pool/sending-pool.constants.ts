@@ -19,9 +19,18 @@ export const SENDING_DOMAIN_CHECK_BATCH = 50;
 /** The longest a resume note may be. */
 export const MAILBOX_RESUME_NOTE_MAX = 500;
 
-/** The Postmaster Tools API (#129). The HTTP adapter is the only code that calls it. */
-export const POSTMASTER_ENDPOINT = 'https://gmailpostmastertools.googleapis.com/v1';
+/**
+ * The Postmaster Tools API (#129), v2 (#190: v1's `trafficStats` is being retired, and v2 is the
+ * API Google supports). The HTTP adapter is the only code that calls it.
+ */
+export const POSTMASTER_ENDPOINT = 'https://gmailpostmastertools.googleapis.com/v2';
 /** One Postmaster request may take this long before it is abandoned. */
 export const POSTMASTER_HTTP_TIMEOUT_MS = 10_000;
+/** Google's largest page (v2's `pageSize` maximum): 30 days of one statistic fit in one. */
+export const POSTMASTER_PAGE_SIZE = 200;
+/** Pages one ask follows at most, so a reply that always names a next page cannot loop for ever. */
+export const POSTMASTER_MAX_PAGES = 10;
+/** Google's error message, as recorded and logged, is cut to this many characters (#190). */
+export const POSTMASTER_ERROR_MESSAGE_MAX = 300;
 /** Redis key for the one process refreshing a workspace's Postmaster token at a time. */
 export const POSTMASTER_TOKEN_LOCK_KEY_PREFIX = 'postmaster-token-lock:';

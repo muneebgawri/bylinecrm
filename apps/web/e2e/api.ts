@@ -84,6 +84,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/sequences$`), () => data.sequences],
     [new RegExp(`^${W}/people/${ID}/enrolments$`), (m) => data.enrolments.filter((e) => e.personId === m[1])],
     [new RegExp(`^${W}/sending-pool$`), () => data.sendingPool],
+    [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
+    [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],
     [new RegExp(`^${W}/import/twenty/missing`), () => ({ items: [], nextCursor: null })],
     [new RegExp(`^${W}/import/twenty/runs$`), () => data.twentyImportRuns],

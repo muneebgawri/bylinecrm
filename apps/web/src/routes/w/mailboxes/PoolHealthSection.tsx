@@ -36,16 +36,9 @@ import type {
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
-import { formatRelative, formatWhen } from '../../../lib/format';
+import { formatRelative } from '../../../lib/format';
 import { leaveFor } from '../../../lib/leaveFor';
-
-const DOMAIN_STATUS: Record<SendingDomainView['status'], { label: string; tone: 'success' | 'danger' | 'neutral' }> = {
-    pass: { label: 'Verified', tone: 'success' },
-    fail: { label: 'Failing', tone: 'danger' },
-    unchecked: { label: 'Not checked yet', tone: 'neutral' },
-};
-
-const STEP_LABEL: Record<keyof DomainCheck, string> = { spf: 'SPF', dkim: 'DKIM', dmarc: 'DMARC' };
+import { DOMAIN_STATUS, percentText, postmasterLine, STEP_LABEL } from './domainHealth';
 
 /**
  * The sending pool's health (P3-2, FR-CRMS-6, FR-CRMS-13): for each pool mailbox, what it may still
@@ -231,44 +224,6 @@ function DomainCell({ domain }: { domain: SendingDomainView | null }) {
 }
 
 /**
- * What the last ask of Postmaster Tools came to (#129, #183), under the domain: a refusal is the one
- * warning; a rate limit or no answer is said calmly, with the next try, because the last reading
- * stands and the check tries again on its own.
- */
-function postmasterLine(postmaster: SendingDomainView['postmaster']) {
-    const next = postmaster.nextReadAt ? `next try ${formatWhen(postmaster.nextReadAt)}` : null;
-    switch (postmaster.status) {
-        case 'not_connected':
-            return null;
-        case 'rate_limited':
-            return (
-                <span className="block text-xs text-text-muted">
-                    Postmaster Tools is rate-limiting reads{next ? `; ${next}` : ''}
-                </span>
-            );
-        case 'unreachable':
-            return (
-                <span className="block text-xs text-text-muted">
-                    Postmaster Tools did not answer{next ? `; ${next}` : ''}
-                </span>
-            );
-        case 'ok':
-            return postmaster.message ? (
-                <span className="block text-xs text-text-muted">Postmaster Tools: {postmaster.message}</span>
-            ) : null;
-        default:
-            return postmaster.message ? (
-                <span className="block text-xs text-warning">Postmaster Tools: {postmaster.message}</span>
-            ) : null;
-    }
-}
-
-/** Basis points as the percent people read: 35 → 0.35%, 500 → 5%. */
-function percentText(bps: number): string {
-    return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
-}
-
-/**
  * The Postmaster Tools account (#129): the one Google account that verified the pool's sending
  * domains there, connected through the workspace's OAuth client so each domain check can read its
  * user-reported spam rate. An admin connects it (the browser leaves for Google) or disconnects it;
@@ -310,8 +265,9 @@ function PostmasterCard({
                             </span>
                         ) : (
                             <span className="block">
-                                Each domain check reads yesterday’s user-reported spam rate; a domain at or past the
-                                complaint threshold pauses every pool mailbox on it.
+                                Each domain check reads the last 30 days of user-reported spam rates, for the account’s
+                                own domains too; a pool domain at or past the complaint threshold pauses every pool
+                                mailbox on it.
                             </span>
                         )}
                     </p>

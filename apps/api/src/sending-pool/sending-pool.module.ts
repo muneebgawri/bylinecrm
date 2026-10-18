@@ -15,8 +15,9 @@ import { SendingPoolService } from './sending-pool.service';
 /**
  * The sending pool (P3-2, FR-CRMS-6, -13): the gate every pool send passes (`SendingPoolService.claim`,
  * called by sending), rotation and spacing for sequences (`pick`, `nextSendAt`), bounce and complaint
- * handling and auto-pause (the outbox consumer), sending domains and their DNS checks. A pool mailbox
- * is enrolled when it connects (`enrolPoolMailbox`, inside mail accounts' transaction) and its bounce
+ * handling and auto-pause (the outbox consumer), sending domains and their DNS checks. A mailbox's
+ * sending domain is enrolled when it connects (`enrolMailbox`, inside mail accounts' transaction;
+ * every mailbox's since #190, gated only for the pool) and a pool mailbox's bounce
  * reports are recorded by sync's writer (`recordBounces`) — both plain functions, so neither module
  * depends on this one. The domain re-check runs on sending's maintenance queue. The DNS port is the
  * application's one (verification reads MX records through it, P3-5), so it is exported. Postmaster

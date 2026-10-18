@@ -27,7 +27,7 @@ export const QUOTA_EXHAUSTED: GoogleErrorDetail = {
 export class FakePostmaster implements PostmasterPort {
     /** domain → day (`YYYY-MM-DD`, or `latest` for the last day of any range asked) → basis points. */
     private readonly rates = new Map<string, Map<string, number>>();
-    private readonly account = new Map<string, boolean>();
+    private readonly account = new Set<string>();
     private failing: { left: number; status: number; google: GoogleErrorDetail | null } = {
         left: 0,
         status: 503,
@@ -60,8 +60,8 @@ export class FakePostmaster implements PostmasterPort {
     }
 
     /** The connected account has added the domain in Postmaster Tools (`domains.list` names it). */
-    addToAccount(domain: string, verified = true): void {
-        this.account.set(domain.toLowerCase(), verified);
+    addToAccount(domain: string): void {
+        this.account.add(domain.toLowerCase());
     }
 
     removeFromAccount(domain: string): void {
@@ -92,7 +92,7 @@ export class FakePostmaster implements PostmasterPort {
                 new PostmasterRequestFailed('the account', this.failing.status, 'backend error', this.failing.google),
             );
         }
-        return Promise.resolve([...this.account].map(([domain, verified]) => ({ domain, verified })));
+        return Promise.resolve([...this.account].map((domain) => ({ domain })));
     }
 
     spamRates(accessToken: string, domain: string, from: string, to: string): Promise<SpamRatesLookup> {
