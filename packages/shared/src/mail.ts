@@ -16,14 +16,17 @@ export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.reado
 export const GMAIL_SCOPES = [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE] as const;
 
 /**
- * Postmaster Tools (P3-2b, #129, FR-CRMS-13): a workspace connects one Google account that owns
- * its sending domains in Postmaster Tools, through the same OAuth client, so the sending-domain
- * check can read each domain's user-reported spam rate. Its own two scopes — read-only Postmaster
- * data, and the account's address so the pool can say whose grant it holds — and nothing of Gmail.
+ * Postmaster Tools (P3-2b, #129, #190, FR-CRMS-13): a workspace connects one Google account that
+ * owns its sending domains in Postmaster Tools, through the same OAuth client, so the sending-domain
+ * check can read each domain's user-reported spam rate. The Postmaster Tools API v2's scopes — its
+ * traffic statistics (read only), its domain list (`domains.list` needs `postmaster.domain`; Google
+ * offers no read-only scope for it) — and the account's address so the pool can say whose grant it
+ * holds; nothing of Gmail. v1's `postmaster.readonly` is not among them: v2 does not accept it.
  */
-export const POSTMASTER_SCOPE = 'https://www.googleapis.com/auth/postmaster.readonly';
+export const POSTMASTER_TRAFFIC_SCOPE = 'https://www.googleapis.com/auth/postmaster.traffic.readonly';
+export const POSTMASTER_DOMAIN_SCOPE = 'https://www.googleapis.com/auth/postmaster.domain';
 export const GOOGLE_EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
-export const POSTMASTER_SCOPES = [POSTMASTER_SCOPE, GOOGLE_EMAIL_SCOPE] as const;
+export const POSTMASTER_SCOPES = [POSTMASTER_TRAFFIC_SCOPE, POSTMASTER_DOMAIN_SCOPE, GOOGLE_EMAIL_SCOPE] as const;
 
 /**
  * Full mailbox access — read, write, delete and settings. The service never asks for it, and a

@@ -36,6 +36,12 @@ export const sendingPool = {
         }),
     updateDomain: (workspaceId: string, domainId: string, input: UpdateSendingDomainInput) =>
         request<SendingDomainView>('PUT', workspacePath(workspaceId, `/sending-domains/${domainId}`), { body: input }),
+    /** Every sending domain (#190): each connected mailbox's, pool or personal, and the Postmaster account's. */
+    domains: (workspaceId: string, signal?: AbortSignal) =>
+        request<SendingDomainView[]>('GET', workspacePath(workspaceId, '/sending-domains'), { signal }),
+    /** One sending domain, for an admin (#190). */
+    domain: (workspaceId: string, domainId: string, signal?: AbortSignal) =>
+        request<SendingDomainView>('GET', workspacePath(workspaceId, `/sending-domains/${domainId}`), { signal }),
     checkDomain: (workspaceId: string, domainId: string) =>
         request<SendingDomainView>('POST', workspacePath(workspaceId, `/sending-domains/${domainId}/check`)),
     /** Starts connecting the Postmaster Tools account (#129): the answer's `authorizeUrl` is where the browser goes next. */
@@ -46,11 +52,30 @@ export const sendingPool = {
 };
 
 const poolKey = keys.sendingPool;
+/** Under the pool's key, so every pool write (a check, a selector, Postmaster connected) refreshes them too. */
+const domainsKey = (workspaceId: string) => [...poolKey(workspaceId), 'domains'] as const;
+const domainKey = (workspaceId: string, domainId: string) => [...domainsKey(workspaceId), domainId] as const;
 
 export function useSendingPool(workspaceId: string, enabled = true) {
     return useQuery({
         queryKey: poolKey(workspaceId),
         queryFn: ({ signal }) => sendingPool.view(workspaceId, signal),
+        enabled,
+    });
+}
+
+export function useSendingDomains(workspaceId: string, enabled = true) {
+    return useQuery({
+        queryKey: domainsKey(workspaceId),
+        queryFn: ({ signal }) => sendingPool.domains(workspaceId, signal),
+        enabled,
+    });
+}
+
+export function useSendingDomain(workspaceId: string, domainId: string, enabled = true) {
+    return useQuery({
+        queryKey: domainKey(workspaceId, domainId),
+        queryFn: ({ signal }) => sendingPool.domain(workspaceId, domainId, signal),
         enabled,
     });
 }

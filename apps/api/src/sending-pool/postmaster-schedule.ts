@@ -8,8 +8,9 @@ const POSTMASTER_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
  *
  * - `ok` — the day's reading is in (the data is daily): the next UTC day, so an on-demand check
  *   never asks more than once per domain per day.
- * - `rate_limited` — Google's quota said not now: its Retry-After when it gave one, else the
- *   check's cadence doubled per consecutive limit (`limitedBefore`), at most a day.
+ * - `rate_limited`, `quota_exhausted` (#190) — Google's quota said not now, or is spent: its
+ *   Retry-After when it gave one, else the check's cadence doubled per consecutive limit
+ *   (`limitedBefore`), at most a day — so a spent quota is not asked into again every pass.
  * - anything else that answered or did not (`unreachable`, `failed`, `not_verified`): the check's
  *   cadence, as the next scheduled check would.
  * - `not_connected` — nothing to ask: null, and the first check after connecting asks at once.
@@ -23,8 +24,9 @@ export function nextPostmasterReadAt(
         case 'not_connected':
             return null;
         case 'ok':
-            return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-        case 'rate_limited': {
+            return nextUtcDay(now);
+        case 'rate_limited':
+        case 'quota_exhausted': {
             if (reading.retryAfterS !== null && reading.retryAfterS !== undefined) {
                 return new Date(now.getTime() + reading.retryAfterS * 1000);
             }
@@ -34,4 +36,9 @@ export function nextPostmasterReadAt(
         default:
             return new Date(now.getTime() + SENDING_DOMAIN_RECHECK_MS);
     }
+}
+
+/** The start of the next UTC day: Postmaster's data is daily, so a day's reading or listing holds until then. */
+export function nextUtcDay(now: Date): Date {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
 }

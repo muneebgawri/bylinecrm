@@ -34,6 +34,7 @@ import { leaveFor } from '../../../lib/leaveFor';
 import { useWorkspaceId } from '../../params';
 import { CREATE_PARAM } from '../../paths';
 import { BlocklistSection } from './BlocklistSection';
+import { DomainHealthSection } from './DomainHealthSection';
 import { PoolHealthSection } from './PoolHealthSection';
 import { ConnectMailboxDialog, PURPOSE_LABEL } from './ConnectMailboxDialog';
 import {
@@ -53,7 +54,8 @@ const CHECK_PROBLEM: Record<NonNullable<MailboxCheckView['problem']>, string> = 
  * The workspace's Google mailboxes (doc 50 §E, FR-CRMS-1, FR-CRMS-2): where each stands, its sync,
  * its calendar's (CAL-1: a personal mailbox's Google Calendar, read for meetings and leads), the
  * actions its owner (or an admin) may take, and — for people who run outreach — the sending
- * pool's health (P3-2): allowance, warm-up, sending domain and pauses.
+ * pool's health (P3-2): allowance, warm-up, sending domain and pauses — and every sending domain's
+ * health (#190): checks, spam rate and Postmaster reads, pool or personal.
  */
 export function MailboxesPage() {
     const workspaceId = useWorkspaceId();
@@ -123,6 +125,7 @@ export function MailboxesPage() {
                 }
             />
             <PoolHealthSection workspaceId={workspaceId} />
+            <DomainHealthSection workspaceId={workspaceId} />
             <BlocklistSection workspaceId={workspaceId} />
             {manage && (
                 <ConnectMailboxDialog workspaceId={workspaceId} open={connecting} onOpenChange={setConnecting} />
