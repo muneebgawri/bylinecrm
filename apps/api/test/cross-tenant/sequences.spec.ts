@@ -758,4 +758,51 @@ describe('FR-CRMS-5 sequences', () => {
             expect((list.body as SequenceView[]).map((s) => s.id)).not.toContain(seq.id);
         });
     });
+
+    describe('#193 the pool mailbox’s signature', () => {
+        it('goes after the step’s body and above the locked unsubscribe-and-address footer, which stays last', async () => {
+            const signature = {
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: `Signed ${stamp}` }] }],
+            };
+            await as(admin)
+                .put(w(`/mailboxes/${poolMailbox}/signature`))
+                .send({ own: signature, useDefault: false })
+                .expect(200);
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const pat = await person({ nameFirst: 'Pat', emails: { primary: address('signed'), additional: [] } });
+            expect(((await enrol(seq.id, [pat])).body as EnrolmentBatchResult).enrolled).toEqual([pat]);
+            await runner.run(workspace, (await enrolment(seq.id, pat)).id, new Date());
+            const outboundId = (await enrolment(seq.id, pat)).waitingOutboundId!;
+            expect(await send.deliver(workspace, outboundId, noWait, Date.now() + 1000)).toBe('sent');
+
+            const raw = gmail.sent.at(-1)!.raw;
+            const [, ...sections] = raw.split(/\r\n--bylinecrm-[0-9a-f]+(?:--)?\r\n?/);
+            const part = (type: string) =>
+                Buffer.from(
+                    sections
+                        .find((x) => x.startsWith(`Content-Type: ${type}`))!
+                        .split('\r\n\r\n')[1]!
+                        .replace(/\r\n/g, ''),
+                    'base64',
+                )
+                    .toString('utf8')
+                    // The wire's CRLF line ends, as LF.
+                    .replace(/\r\n/g, '\n');
+            const html = part('text/html');
+            const text = part('text/plain');
+            const signed = html.indexOf(`Signed ${stamp}`);
+            expect(signed).toBeGreaterThan(html.indexOf('Hi Pat.'));
+            expect(signed).toBeLessThan(html.indexOf('<hr>'));
+            expect(html.lastIndexOf('Unsubscribe')).toBeGreaterThan(signed);
+            expect(text.indexOf(`-- \nSigned ${stamp}`)).toBeGreaterThan(-1);
+            expect(text.indexOf(`Signed ${stamp}`)).toBeLessThan(text.lastIndexOf('\n--\n'));
+
+            await as(admin)
+                .put(w(`/mailboxes/${poolMailbox}/signature`))
+                .send({ own: null, useDefault: true })
+                .expect(200);
+        });
+    });
 });

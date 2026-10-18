@@ -18,6 +18,7 @@ import { Link } from 'react-router';
 import { templates } from '../../../api/templates';
 import { useSendMail } from '../../../api/mail';
 import { useMailboxes } from '../../../api/mailAdmin';
+import { useMailboxSignature } from '../../../api/signatures';
 import { useTemplates } from '../../../api/templates';
 import type { EmailTemplateView, MailboxView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
@@ -32,6 +33,7 @@ import {
     emptyVariablesText,
     isBlank,
     ownSendingMailboxes,
+    placesSignature,
     refusedVariables,
     sendInput,
     sendsAsTemplate,
@@ -209,6 +211,13 @@ function ComposerForm({
     const subjectRef = useRef<RichTextHandle>(null);
     const bodyRef = useRef<RichTextHandle>(null);
     const send = useSendMail(workspaceId);
+    // The signature (#193): the mailbox's as shown, until the sender edits or removes it for this message —
+    // then this message's own, for that mailbox only; choosing another mailbox shows its signature.
+    const mailboxSignature = useMailboxSignature(workspaceId, mailboxId);
+    const [ownSignature, setOwnSignature] = useState<{ mailboxId: string; doc: RichText | null } | null>(null);
+    const signatureTouched = ownSignature?.mailboxId === mailboxId;
+    const signature = signatureTouched ? ownSignature.doc : (mailboxSignature.data?.effective ?? null);
+    const signatureLocked = Object.values(mailboxSignature.data?.locked ?? {}).some(Boolean);
 
     useImperativeHandle(
         formHandle,
@@ -266,6 +275,7 @@ function ComposerForm({
             body,
             fill,
             replyToMessageId: reply?.messageId,
+            signature: signatureTouched ? signature : undefined,
             sendAt,
             timeZone: timeZone ?? senderTimeZone(),
         });
@@ -283,6 +293,7 @@ function ComposerForm({
         setFill(null);
         setMissing([]);
         setAlsoTo([]);
+        setOwnSignature(null);
         setGeneration((g) => g + 1);
         onSent?.();
     };
@@ -382,6 +393,46 @@ function ComposerForm({
                     className="rounded-none border-0 [&_.rich-text]:min-h-28"
                 />
             </div>
+            {signature ? (
+                <div className="border-t border-dashed border-border bg-surface">
+                    <RichTextEditor
+                        key={`signature-${mailboxId}-${generation}`}
+                        profile="signature"
+                        value={signature}
+                        onChange={(doc) => setOwnSignature({ mailboxId, doc })}
+                        aria-label="Signature"
+                        className="rounded-none border-0 [&_.rich-text]:min-h-0 [&_[role=toolbar]]:hidden focus-within:[&_[role=toolbar]]:flex"
+                    />
+                    {(placesSignature(body) || !signatureLocked) && (
+                        <div className="flex items-center justify-end gap-2 px-2 pb-1.5">
+                            {placesSignature(body) && (
+                                <p className="m-0 mr-auto text-xs text-text-muted">
+                                    Goes where the message says {'{{sender.signature}}'}.
+                                </p>
+                            )}
+                            {!signatureLocked && (
+                                <Button
+                                    size="xs"
+                                    shape="square"
+                                    variant="ghost"
+                                    onClick={() => setOwnSignature({ mailboxId, doc: null })}
+                                >
+                                    Remove signature
+                                </Button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                signatureTouched &&
+                mailboxSignature.data?.effective && (
+                    <div className="flex border-t border-dashed border-border bg-surface px-2 py-1.5">
+                        <Button size="xs" shape="square" variant="ghost" onClick={() => setOwnSignature(null)}>
+                            Add signature
+                        </Button>
+                    </div>
+                )
+            )}
             <div className="flex flex-wrap items-center gap-2 border-t border-border px-3.5 py-2.5">
                 {why && (
                     <p

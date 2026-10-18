@@ -91,6 +91,13 @@ export class GmailApiError extends Error {
     }
 }
 
+/** One of a mailbox's send-as addresses (`users.settings.sendAs`), with the signature Gmail holds for it (HTML). */
+export interface GmailSendAs {
+    sendAsEmail: string;
+    isPrimary: boolean;
+    signature: string;
+}
+
 export interface GmailPort {
     getProfile(accessToken: string): Promise<GmailProfile>;
 
@@ -116,6 +123,12 @@ export interface GmailPort {
      * Gmail replaces the Message-ID a sender sets, so that cannot be searched for.
      */
     send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent>;
+
+    /**
+     * The mailbox's send-as addresses and their signatures (#193), for importing a signature. Google lists
+     * `gmail.readonly` among the scopes `users.settings.sendAs.list` accepts, which every mailbox holds.
+     */
+    listSendAs(accessToken: string): Promise<GmailSendAs[]>;
 }
 
 /** Injection token for the port. */

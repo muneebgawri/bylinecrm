@@ -48,8 +48,8 @@ export interface TemplateVariable {
     label: string;
     /**
      * Renders empty when it has no value instead of blocking the send. Exactly one variable is
-     * optional — `sender.signature` — because a sender without a signature is a normal email; every
-     * other empty variable makes the render unsendable (FR-CRMS-3).
+     * optional — `sender.signature`, which places the sending mailbox's signature (#193) and is
+     * nothing when none applies; every other empty variable makes the render unsendable (FR-CRMS-3).
      */
     optional?: true;
 }
@@ -68,7 +68,7 @@ export const TEMPLATE_VARIABLES = [
     { path: 'deal.amount', source: 'deal', type: 'money', label: 'Deal amount' },
     { path: 'sender.firstName', source: 'sender', type: 'text', label: 'Your first name' },
     { path: 'sender.fullName', source: 'sender', type: 'text', label: 'Your full name' },
-    { path: 'sender.signature', source: 'sender', type: 'text', label: 'Your signature', optional: true },
+    { path: 'sender.signature', source: 'sender', type: 'text', label: 'Your signature (placed here)', optional: true },
 ] as const satisfies readonly TemplateVariable[];
 export type StandardVariablePath = (typeof TEMPLATE_VARIABLES)[number]['path'];
 

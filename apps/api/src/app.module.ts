@@ -14,6 +14,7 @@ import { PipelinesModule } from './pipelines/pipelines.module';
 import { SendingPoolModule } from './sending-pool/sending-pool.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SequencesModule } from './sequences/sequences.module';
+import { SignaturesModule } from './signatures/signatures.module';
 import { EnrichmentModule } from './enrichment/enrichment.module';
 import { VerificationModule } from './verification/verification.module';
 import { SuppressionModule } from './suppression/suppression.module';
@@ -42,6 +43,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         SuppressionModule,
         SendingPoolModule,
         SequencesModule,
+        SignaturesModule,
         NotificationsModule,
         VerificationModule,
         EnrichmentModule,

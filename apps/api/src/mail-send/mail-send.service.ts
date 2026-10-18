@@ -29,6 +29,7 @@ import { paginate } from '../records/list-query';
 import { readableTargets } from '../records/targets';
 import { assertCanChangeSend, canChangeSend, readableSends, type SendAccessCaller } from './send-access';
 import { recordWhere } from '../records/record-scope';
+import { SignaturesService } from '../signatures/signatures.service';
 import { RenderService } from '../templates/render.service';
 import { withUnsubscribeUrl } from '../templates/render/compose';
 import { TemplatesService } from '../templates/templates.service';
@@ -69,6 +70,11 @@ export interface SendInput {
     subject?: string | undefined;
     body?: RichText | undefined;
     replyToMessageId?: string | undefined;
+    /**
+     * This message's signature (#193), as the composer shows it: a signature in place of the mailbox's,
+     * or `null` for none. Absent, the mailbox's signature applies.
+     */
+    signature?: RichText | null | undefined;
     /** Send later (P2-5): ISO 8601 with an offset. Absent: send now. */
     sendAt?: string | undefined;
     /** The sender's IANA zone, echoed back; never used to compute `sendAt`. */
@@ -193,6 +199,7 @@ export class MailSendService {
         private readonly pool: SendingPoolService,
         private readonly unsubscribes: UnsubscribeService,
         private readonly tracking: TrackingService,
+        private readonly signatures: SignaturesService,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
         @InjectQueue(MAIL_SEND_QUEUE) private readonly queue: Queue,
     ) {}
@@ -342,10 +349,16 @@ export class MailSendService {
             draft = { kind: 'personal', subject: input.subject ?? '', body: input.body! };
             await this.templates.validateDraft(draft);
         }
+        // The signature follows the body (#193): the mailbox's, or this message's as the composer sent it.
+        if (input.signature !== undefined) await this.signatures.assertMessageSignature(input.signature);
         const rendered = await this.renderer.render(draft, {
             personId: input.personId,
             dealId: input.dealId,
             senderMemberId: memberId,
+            signature:
+                input.signature === undefined
+                    ? { from: 'mailbox', mailboxId: mailbox.id }
+                    : { from: 'message', mailboxId: mailbox.id, signature: input.signature },
         });
         if (!rendered.sendable) throw new Unsendable(rendered.missing);
         // A reply with no subject of its own takes the parent's, as written — never rendered, so
@@ -419,9 +432,15 @@ export class MailSendService {
                 { path: 'templateId', message: 'not an outreach template' },
             ]);
         }
+        // The pool mailbox's signature (#193) goes after the body, above the locked footer.
         const rendered = await this.renderer.render(
             { kind: 'outreach', subject: template.subject, body: template.body },
-            { personId: input.personId, dealId: input.dealId, senderMemberId: mailbox.ownerMemberId },
+            {
+                personId: input.personId,
+                dealId: input.dealId,
+                senderMemberId: mailbox.ownerMemberId,
+                signature: { from: 'mailbox', mailboxId: mailbox.id },
+            },
         );
         if (!rendered.sendable) throw new Unsendable(rendered.missing);
         const subject = parent && template.subject.trim() === '' ? replySubject(parent.subject) : rendered.subject;

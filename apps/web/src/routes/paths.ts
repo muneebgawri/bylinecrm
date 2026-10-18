@@ -46,6 +46,7 @@ export const paths = {
     settingsPipeline: (workspaceId: string, pipelineId: string) => `/w/${workspaceId}/settings/pipelines/${pipelineId}`,
     settingsCustomFields: (workspaceId: string) => `/w/${workspaceId}/settings/custom-fields`,
     settingsMail: (workspaceId: string) => `/w/${workspaceId}/settings/mail`,
+    settingsSignatures: (workspaceId: string) => `/w/${workspaceId}/settings/signatures`,
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
     settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
     settingsRegionPolicy: (workspaceId: string) => `/w/${workspaceId}/settings/region-policy`,

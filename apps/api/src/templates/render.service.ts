@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { EmailTemplateBody, Emails } from '@bylinecrm/shared';
+import { ENV, type Env } from '../config/env';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { recordWhere } from '../records/record-scope';
+import { renderChoice, type SignatureChoice } from '../signatures/signature-store';
 import { readMailSettings } from './mail-settings.service';
 import { composeEmail, type ComposedEmail } from './render/compose';
 import { resolverFor, type RenderSubjects } from './render/variables';
@@ -13,19 +15,22 @@ export interface RenderTarget {
     dealId?: string | undefined;
     /** Absent for a caller who is not a member (an API key): the `sender.*` variables are then missing. */
     senderMemberId?: string | undefined;
+    /** The signature that follows the body (#193); absent, none does. */
+    signature?: SignatureChoice | undefined;
 }
 
 /**
  * The one place a template becomes an email (P2-4): preview today, the send path (P2-3) and
  * sequences (P3) later. It reads the recipient, their company, the deal and the sender under the
  * caller's policies — a person or deal the caller cannot see is `404`, exactly as reading it would
- * be — and composes the email from them and the workspace's mail settings.
+ * be — and composes the email from them, the workspace's mail settings and the signature (#193).
  */
 @Injectable()
 export class RenderService {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
+        @Inject(ENV) private readonly env: Env,
     ) {}
 
     render(
@@ -36,7 +41,13 @@ export class RenderService {
         return this.rls.withWorkspace(async (tx) => {
             const subjects = await loadSubjects(tx, context, target);
             const settings = await readMailSettings(tx);
-            return composeEmail(template, resolverFor(subjects), settings);
+            const signature = target.signature
+                ? await renderChoice(tx, this.env.APP_URL, target.signature, {
+                      workspaceId: context.workspaceId,
+                      memberId: target.senderMemberId,
+                  })
+                : null;
+            return composeEmail(template, resolverFor(subjects), settings, signature);
         });
     }
 

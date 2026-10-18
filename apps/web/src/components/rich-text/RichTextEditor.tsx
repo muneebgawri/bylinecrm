@@ -1,5 +1,6 @@
 import type { RichText } from '@bylinecrm/shared';
 import { Button, cn, focusRing } from '@bylinecrm/ui';
+import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { EditorContent, Node, useEditor, type AnyExtension, type Editor, type JSONContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -17,8 +18,10 @@ import { MissingVariables, VARIABLE_TRIGGER_EVENT, Variable, missingVariablesKey
  * - `template`: exactly the API's template subset (P2-4: paragraphs, h2/h3, bold, italic, lists,
  *   line breaks, `https:`/`mailto:` links) plus variable chips.
  * - `subject`: one line of text and variable chips; no marks, no blocks.
+ * - `signature` (#193): the template subset's paragraphs, line breaks, bold, italic and links, variable
+ *   chips, and images linked by https URL (a Gmail import's, or the logo's chip).
  */
-export type RichTextProfile = 'note' | 'template' | 'subject';
+export type RichTextProfile = 'note' | 'template' | 'subject' | 'signature';
 
 export interface RichTextHandle {
     /** Inserts a variable chip at the caret (template and subject profiles). */
@@ -73,6 +76,12 @@ export const PROFILES: Record<RichTextProfile, ProfileSpec> = {
     },
     // One line, but still a finger's 44px on a phone whatever the font's metrics (FR-CRMS-UI-12).
     subject: { tools: [], singleLine: true, minHeightClass: 'max-md:min-h-touch' },
+    signature: {
+        tools: ['bold', 'italic', 'link'],
+        linkSchemes: ['https', 'mailto'],
+        singleLine: false,
+        minHeightClass: 'min-h-16',
+    },
 };
 
 /** A document with exactly one paragraph: the subject line. */
@@ -104,7 +113,17 @@ function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension
             ...link,
         ];
     }
-    if (profile === 'template') {
+    if (profile === 'template' || profile === 'signature') {
+        const images =
+            profile === 'signature'
+                ? [
+                      Image.configure({
+                          inline: true,
+                          allowBase64: false,
+                          HTMLAttributes: { class: 'inline max-w-full h-auto' },
+                      }),
+                  ]
+                : [];
         return [
             StarterKit.configure({
                 heading: { levels: [2, 3] },
@@ -118,6 +137,7 @@ function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension
             }),
             ...link,
             ...variables,
+            ...images,
         ];
     }
     return [
@@ -265,9 +285,9 @@ export function RichTextEditor({
                         e.preventDefault();
                         if (!linkAllowed(profile, linkHref)) {
                             setLinkError(
-                                profile === 'template'
-                                    ? 'Use an https:// or mailto: address.'
-                                    : 'Use an http:// or https:// address.',
+                                profile === 'note'
+                                    ? 'Use an http:// or https:// address.'
+                                    : 'Use an https:// or mailto: address.',
                             );
                             return;
                         }
@@ -283,7 +303,7 @@ export function RichTextEditor({
                         inputMode="url"
                         aria-label="Link address"
                         aria-invalid={linkError ? true : undefined}
-                        placeholder={profile === 'template' ? 'https:// or mailto:' : 'https://'}
+                        placeholder={profile === 'note' ? 'https://' : 'https:// or mailto:'}
                         value={linkHref}
                         onChange={(e) => setLinkHref(e.target.value)}
                         className={cn(

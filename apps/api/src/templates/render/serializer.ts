@@ -1,4 +1,10 @@
-import { TEMPLATE_LINK_SCHEMES, type RichText, type RichTextNode } from '@bylinecrm/shared';
+import {
+    SIGNATURE_PLACEMENT_VARIABLE,
+    TEMPLATE_LINK_SCHEMES,
+    type RenderedSignature,
+    type RichText,
+    type RichTextNode,
+} from '@bylinecrm/shared';
 
 /**
  * A template body → an email's HTML and its plain-text alternative, from one walk of the document
@@ -9,7 +15,9 @@ import { TEMPLATE_LINK_SCHEMES, type RichText, type RichTextNode } from '@byline
  * `mailto:` — and everything else is dropped. Attributes are never copied from the document; the
  * only attribute the output carries is a link's `href`, escaped. Text and variable values are
  * escaped. The API also refuses bodies outside the subset on save, so dropping here is the second
- * line, not the first.
+ * line, not the first. A signature (#193) is the same walk with two additions, both opt-in: images by
+ * `https:` URL (source, alt text and a capped width are the only attributes copied), and empty lines
+ * left out.
  *
  * A variable whose value is missing is never rendered blank: it is named in `missing`, marked in
  * the HTML (`data-missing-variable`, which the editor's preview highlights) and kept as its
@@ -19,11 +27,38 @@ import { TEMPLATE_LINK_SCHEMES, type RichText, type RichTextNode } from '@byline
 /** A variable's value, or `null` when it has none. An optional variable resolves to `''`, never `null`. */
 export type VariableResolver = (path: string) => string | null;
 
+/**
+ * How a variable renders, as HTML and text; `null` when it has none. A template's variables are text
+ * (`renderBody` escapes the resolver's value); a signature's logo and booking link are an image and a link.
+ */
+export type VariableRenderer = (path: string) => { html: string; text: string } | null;
+
+/** What a walk may render beyond the template subset. */
+export interface WalkOptions {
+    /** `image` nodes by `https:` URL, width capped (signatures, #193). */
+    images: boolean;
+    /**
+     * A line — a block, or a stretch between line breaks — with nothing visible on it is left out, so an
+     * empty variable leaves no blank line behind (signatures, #193). A template keeps its lines as written.
+     */
+    dropEmptyLines: boolean;
+    /**
+     * A template body's `{{sender.signature}}` (#193): the block it sits in is split there and the
+     * signature goes between — its own blocks, never inside a line — or nothing, when none applies.
+     * Absent: the variable renders as any other.
+     */
+    signature?: { at: RenderedSignature | null } | undefined;
+}
+
+const TEMPLATE_WALK: WalkOptions = { images: false, dropEmptyLines: false };
+
 export interface RenderedBody {
     html: string;
     text: string;
     /** Variable paths with no value, in the order they first appear. */
     missing: string[];
+    /** The body named `{{sender.signature}}`: the signature went there (#193), and goes nowhere else. */
+    placed: boolean;
 }
 
 const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -36,6 +71,26 @@ export function escapeHtml(value: string): string {
 export function missingMarker(path: string): string {
     const token = `{{${path}}}`;
     return `<span data-missing-variable="${escapeHtml(path)}">${escapeHtml(token)}</span>`;
+}
+
+/** An image source a signature may carry: an absolute `https:` URL, as written; `null` for anything else. */
+export function safeImageSrc(src: unknown): string | null {
+    if (typeof src !== 'string' || src.trim() !== src || src === '') return null;
+    try {
+        return new URL(src).protocol === 'https:' ? src : null;
+    } catch {
+        return null;
+    }
+}
+
+/** `<img>` as an email carries it: source, alt text, and the size when known — nothing else. */
+export function imageHtml(src: string, alt: string, width?: number | null, height?: number | null): string {
+    return (
+        `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"` +
+        (width ? ` width="${width}"` : '') +
+        (height ? ` height="${height}"` : '') +
+        '>'
+    );
 }
 
 /** A link target the subset allows, normalised; `null` for anything else. */
@@ -72,10 +127,20 @@ function headingTag(node: RichTextNode): 'h2' | 'h3' {
     return Number.isFinite(level) && level <= 2 ? 'h2' : 'h3';
 }
 
+interface Inline {
+    html: string;
+    text: string;
+}
+
 class Walker {
     private readonly missing = new Set<string>();
+    placed = false;
 
-    constructor(private readonly resolve: VariableResolver) {}
+    constructor(
+        private readonly render: VariableRenderer,
+        private readonly options: WalkOptions,
+        private readonly maxImageWidth: number,
+    ) {}
 
     missingPaths(): string[] {
         return [...this.missing];
@@ -96,14 +161,14 @@ class Walker {
 
     private block(node: RichTextNode, depth: number): { html: string; text: string } | null {
         switch (node.type) {
-            case 'paragraph': {
-                const inline = this.inline(node.content);
-                return { html: `<p>${inline.html}</p>`, text: inline.text };
-            }
+            case 'paragraph':
             case 'heading': {
-                const tag = headingTag(node);
-                const inline = this.inline(node.content);
-                return { html: `<${tag}>${inline.html}</${tag}>`, text: inline.text };
+                const tag = node.type === 'paragraph' ? 'p' : headingTag(node);
+                if (this.options.signature && (node.content ?? []).some(isPlacement)) {
+                    return this.placeSignature(node.content ?? [], tag, this.options.signature.at);
+                }
+                const inline = this.lines(node.content);
+                return inline && { html: `<${tag}>${inline.html}</${tag}>`, text: inline.text };
             }
             case 'bulletList':
             case 'orderedList': {
@@ -121,16 +186,74 @@ class Walker {
                     const [first = '', ...rest] = inner.text.join('\n').split('\n');
                     lines.push(`${indent}${bullet}${first}`, ...rest.map((line) => `${indent}  ${line}`.trimEnd()));
                 }
+                if (items.length === 0 && this.options.dropEmptyLines) return null;
                 const tag = ordered ? 'ol' : 'ul';
                 return { html: `<${tag}>${items.join('')}</${tag}>`, text: lines.join('\n') };
             }
             default:
-                // Outside the subset (a script, an image, a code block, …): dropped with its content.
+                // Outside the subset (a script, a code block, a block-level image, …): dropped with its content.
                 return null;
         }
     }
 
-    private inline(nodes: RichTextNode[] | undefined): { html: string; text: string } {
+    /**
+     * A block naming `{{sender.signature}}`, split there: the words before and after stay in blocks of
+     * their own (an empty side goes), and the signature — text after the conventional `-- ` line — sits
+     * between, once for each time it is named.
+     */
+    private placeSignature(
+        nodes: RichTextNode[],
+        tag: string,
+        signature: RenderedSignature | null,
+    ): { html: string; text: string } | null {
+        this.placed = true;
+        const html: string[] = [];
+        const text: string[] = [];
+        const side = (part: RichTextNode[]) => {
+            const inline = this.inline(part);
+            if (inline.text.trim() === '' && !inline.html.includes('<img')) return;
+            html.push(`<${tag}>${inline.html}</${tag}>`);
+            text.push(inline.text);
+        };
+        let part: RichTextNode[] = [];
+        for (const node of nodes) {
+            if (!isPlacement(node)) {
+                part.push(node);
+                continue;
+            }
+            side(part);
+            part = [];
+            if (signature) {
+                html.push(signature.html);
+                text.push(`-- \n${signature.text}`);
+            }
+        }
+        side(part);
+        return html.length ? { html: html.join(''), text: text.join('\n\n') } : null;
+    }
+
+    /**
+     * A block's inline content. With `dropEmptyLines`, each stretch between line breaks that shows
+     * nothing — no text, no image — is left out, and a block left with no line is `null`.
+     */
+    private lines(nodes: RichTextNode[] | undefined): Inline | null {
+        if (!this.options.dropEmptyLines) return this.inline(nodes);
+        const kept: Inline[] = [];
+        let line: RichTextNode[] = [];
+        for (const node of [...(nodes ?? []), { type: 'hardBreak' }]) {
+            if (node.type !== 'hardBreak') {
+                line.push(node);
+                continue;
+            }
+            const out = this.inline(line);
+            if (out.text.trim() !== '' || out.html.includes('<img')) kept.push(out);
+            line = [];
+        }
+        if (kept.length === 0) return null;
+        return { html: kept.map((l) => l.html).join('<br>'), text: kept.map((l) => l.text).join('\n') };
+    }
+
+    private inline(nodes: RichTextNode[] | undefined): Inline {
         let html = '';
         let text = '';
         for (const node of nodes ?? []) {
@@ -145,15 +268,29 @@ class Walker {
                 case 'variable': {
                     const path = attrsOf(node)['path'];
                     if (typeof path !== 'string' || path === '') break;
-                    const value = this.resolve(path);
+                    const value = this.render(path);
                     if (value === null) {
                         this.missing.add(path);
                         html += missingMarker(path);
                         text += `{{${path}}}`;
                     } else {
-                        html += escapeHtml(value);
-                        text += value;
+                        html += value.html;
+                        text += value.text;
                     }
+                    break;
+                }
+                case 'image': {
+                    if (!this.options.images) break;
+                    const attrs = attrsOf(node);
+                    const src = safeImageSrc(attrs['src']);
+                    if (src === null) break;
+                    const alt = typeof attrs['alt'] === 'string' ? attrs['alt'] : '';
+                    const width = Number(attrs['width']);
+                    html += imageHtml(
+                        src,
+                        alt,
+                        Number.isInteger(width) && width > 0 ? Math.min(width, this.maxImageWidth) : null,
+                    );
                     break;
                 }
                 case 'hardBreak':
@@ -184,9 +321,42 @@ class Walker {
     }
 }
 
-/** Renders a template body. `resolve` gives each variable its value. */
-export function renderBody(doc: RichText, resolve: VariableResolver): RenderedBody {
-    const walker = new Walker(resolve);
+/**
+ * Renders a template body. `resolve` gives each variable its value; `signature` is what its
+ * `{{sender.signature}}` places (#193) — `null` when none applies.
+ */
+export function renderBody(
+    doc: RichText,
+    resolve: VariableResolver,
+    signature: RenderedSignature | null = null,
+): RenderedBody {
+    return renderRichText(
+        doc,
+        (path) => {
+            const value = resolve(path);
+            return value === null ? null : { html: escapeHtml(value), text: value };
+        },
+        { ...TEMPLATE_WALK, signature: { at: signature } },
+    );
+}
+
+function isPlacement(node: RichTextNode): boolean {
+    return node.type === 'variable' && attrsOf(node)['path'] === SIGNATURE_PLACEMENT_VARIABLE;
+}
+
+/** The one walk, for a template body (`renderBody`) and a signature (`renderSignature`, #193). */
+export function renderRichText(
+    doc: RichText,
+    render: VariableRenderer,
+    options: WalkOptions,
+    maxImageWidth = 0,
+): RenderedBody {
+    const walker = new Walker(render, options, maxImageWidth);
     const out = walker.blocks(doc.content, 0);
-    return { html: out.html, text: out.text.join('\n\n').trim(), missing: walker.missingPaths() };
+    return {
+        html: out.html,
+        text: out.text.join('\n\n').trim(),
+        missing: walker.missingPaths(),
+        placed: walker.placed,
+    };
 }

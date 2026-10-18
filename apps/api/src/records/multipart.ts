@@ -14,6 +14,15 @@ export interface UploadedFile {
     body: Readable;
 }
 
+/** What an upload may be: its largest size and the content types it may declare. */
+export interface UploadPolicy {
+    maxBytes: number;
+    mimeTypes: readonly string[];
+}
+
+/** An attachment's (PAR-016). */
+export const ATTACHMENT_UPLOAD: UploadPolicy = { maxBytes: ATTACHMENT_MAX_BYTES, mimeTypes: ATTACHMENT_MIME_ALLOWLIST };
+
 /**
  * Reads the one file of a multipart request as a stream, so the bytes go to storage without
  * ever being held in memory. The size cap is the parser's own limit: when it trips, the stream
@@ -21,11 +30,11 @@ export interface UploadedFile {
  * what the client declared — the allowlist is a policy on that declaration, not a sniff of the
  * bytes; a sniff would be a later addition in one place, here.
  */
-export function readUpload(req: Request): Promise<UploadedFile> {
+export function readUpload(req: Request, policy: UploadPolicy = ATTACHMENT_UPLOAD): Promise<UploadedFile> {
     return new Promise((resolve, reject) => {
         let parser: busboy.Busboy;
         try {
-            parser = busboy({ headers: req.headers, limits: { files: 1, fileSize: ATTACHMENT_MAX_BYTES } });
+            parser = busboy({ headers: req.headers, limits: { files: 1, fileSize: policy.maxBytes } });
         } catch {
             reject(new BadRequestException('expected a multipart/form-data body'));
             return;
@@ -38,14 +47,14 @@ export function readUpload(req: Request): Promise<UploadedFile> {
             }
             found = true;
             const mime = info.mimeType.toLowerCase();
-            if (!(ATTACHMENT_MIME_ALLOWLIST as readonly string[]).includes(mime)) {
+            if (!policy.mimeTypes.includes(mime)) {
                 stream.resume();
                 reject(new UnsupportedMediaTypeException(`content type ${mime} is not accepted`));
                 return;
             }
             const body = new PassThrough();
             stream.on('limit', () =>
-                body.destroy(new PayloadTooLargeException(`a file is at most ${ATTACHMENT_MAX_BYTES} bytes`)),
+                body.destroy(new PayloadTooLargeException(`a file is at most ${policy.maxBytes} bytes`)),
             );
             stream.on('error', (error) => body.destroy(error));
             stream.pipe(body);

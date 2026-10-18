@@ -57,7 +57,8 @@ describe('tenant routes declare a capability', () => {
 
     it('the routes open to any member are exactly the ones about the caller themselves', () => {
         const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
-        // What the caller may do, and (#192) the caller's own notifications, open tasks and notification settings.
+        // What the caller may do, (#192) the caller's own notifications, open tasks and notification settings,
+        // and (#193) the caller's own signature details — an admin's for anyone, the service checks which.
         expect(open.sort()).toEqual(
             [
                 'WorkspaceMeController.standing',
@@ -66,6 +67,8 @@ describe('tenant routes declare a capability', () => {
                 'MyTasksController.list',
                 'NotificationSettingsController.get',
                 'NotificationSettingsController.update',
+                'SignatureProfileController.get',
+                'SignatureProfileController.put',
             ].sort(),
         );
     });

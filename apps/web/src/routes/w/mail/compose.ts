@@ -1,4 +1,4 @@
-import type { RichText, RichTextNode } from '@bylinecrm/shared';
+import { SIGNATURE_PLACEMENT_VARIABLE, type RichText, type RichTextNode } from '@bylinecrm/shared';
 import { ApiError } from '../../../api/client';
 import type { MailboxView, SendMailInput } from '../../../api/types';
 import { templateVariablePaths } from '../templates/preview';
@@ -30,6 +30,18 @@ export function isBlank(doc: RichText): boolean {
             (n) => (n.type === 'text' && (n.text ?? '').trim() !== '') || n.type === 'variable' || visible(n.content),
         );
     return !visible(doc.content);
+}
+
+/** Whether the body places the signature itself (`{{sender.signature}}`, #193) rather than taking it at the end. */
+export function placesSignature(body: RichText): boolean {
+    const names = (nodes: readonly RichTextNode[] | undefined): boolean =>
+        (nodes ?? []).some(
+            (n) =>
+                (n.type === 'variable' &&
+                    (n['attrs'] as { path?: unknown } | undefined)?.path === SIGNATURE_PLACEMENT_VARIABLE) ||
+                names(n.content),
+        );
+    return names(body.content);
 }
 
 /** The variables the draft uses that have no value for this person — what disables Send. */
@@ -64,6 +76,11 @@ export interface Draft {
     body: RichText;
     fill: TemplateFill | null;
     replyToMessageId?: string | undefined;
+    /**
+     * This message's signature (#193) once the sender edits or removes it (`null`); left `undefined` while
+     * it is the mailbox's as shown, which the API then applies itself.
+     */
+    signature?: RichText | null | undefined;
     sendAt?: Date | undefined;
     timeZone: string;
 }
@@ -103,6 +120,7 @@ export function sendInput(draft: Draft): SendMailInput {
             ? { templateId: draft.fill.templateId }
             : { body: draft.body, ...(subject !== '' ? { subject } : {}) }),
         ...(draft.replyToMessageId ? { replyToMessageId: draft.replyToMessageId } : {}),
+        ...(draft.signature !== undefined ? { signature: draft.signature } : {}),
         ...(draft.sendAt ? { sendAt: draft.sendAt.toISOString(), timeZone: draft.timeZone } : {}),
     };
 }

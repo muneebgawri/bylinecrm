@@ -1,6 +1,7 @@
 import { MAIL_OUTBOUND_STATUSES, MAIL_SEND_RECIPIENTS_MAX } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { signatureDoc } from '../signatures/dto';
 import { templateBody, templateSubject } from '../templates/dto';
 import {
     MAIL_RECORD_SENDS_LIMIT_DEFAULT,
@@ -59,6 +60,10 @@ export class SendMailDto extends createZodDto(
             subject: templateSubject.optional(),
             body: templateBody.optional(),
             replyToMessageId: z.uuid().optional(),
+            signature: signatureDoc.nullable().optional().meta({
+                description:
+                    'This message’s signature (#193), in place of the mailbox’s; `null` for none. Left out, the mailbox’s applies.',
+            }),
             sendAt: sendAt.optional(),
             timeZone: timeZone.optional(),
         })

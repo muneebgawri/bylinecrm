@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import {
     CUSTOM_VARIABLE_SOURCES,
     TEMPLATE_NAME_MAX,
+    SIGNATURE_PLACEMENT_VARIABLE,
     TEMPLATE_VARIABLES,
     type Actor,
     type CustomVariableSource,
@@ -25,6 +26,7 @@ import { type Page, paginate } from '../records/list-query';
 import { bodyProblems, subjectVariablePaths, variablePathsOf } from './render/body-subset';
 import type { ComposedEmail } from './render/compose';
 import { unknownVariables, type CustomKeys } from './render/variables';
+import { signableMailbox } from '../signatures/signature-store';
 import { RenderService } from './render.service';
 import type { EmailTemplateView, TemplateVariablesView } from './responses';
 
@@ -255,10 +257,25 @@ export class TemplatesService {
     }
 
     /** The template rendered for one recipient (and deal), as the caller would send it. */
-    async preview(id: string, target: { personId: string; dealId?: string | undefined }): Promise<ComposedEmail> {
+    /**
+     * The template rendered for a person, with the signature that would follow it (#193): `mailboxId`'s,
+     * when one is named (one the caller may sign), else the workspace default.
+     */
+    async preview(
+        id: string,
+        target: { personId: string; dealId?: string | undefined; mailboxId?: string | undefined },
+    ): Promise<ComposedEmail> {
         const context = this.current();
         const template = await this.get(id);
-        return this.renderer.render(template, { ...target, senderMemberId: context.memberId });
+        const { mailboxId, ...rest } = target;
+        const mailbox = mailboxId
+            ? await this.rls.withWorkspace((tx) => signableMailbox(tx, context, mailboxId))
+            : null;
+        return this.renderer.render(template, {
+            ...rest,
+            senderMemberId: mailbox?.ownerMemberId ?? context.memberId,
+            signature: mailbox ? { from: 'mailbox', mailboxId: mailbox.id } : { from: 'default' },
+        });
     }
 
     /**
@@ -285,6 +302,10 @@ export class TemplatesService {
                 ],
                 custom as CustomKeys,
             ),
+            // A signature is placed in the body (#193); a subject line cannot carry one.
+            ...(subjectVariablePaths(template.subject).includes(SIGNATURE_PLACEMENT_VARIABLE)
+                ? [{ path: 'subject', message: '{{sender.signature}} goes in the body, not the subject' }]
+                : []),
         ];
         if (problems.length > 0) throw new ValidationFailed('the template is not valid', problems);
     }

@@ -48,6 +48,8 @@ model Workspace {
   mailboxes              Mailbox[]
   emailTemplates         EmailTemplate[]
   mailSettings           WorkspaceMailSettings?
+  signatureSettings      WorkspaceSignatureSettings?
+  logos                  WorkspaceLogo[]
   mailThreads            MailThread[]
   mailMessages           MailMessage[]
   mailboxThreads         MailboxThread[]
@@ -230,6 +232,11 @@ model WorkspaceMember {
   /// How the seat came to be: `signup` (the workspace's first admin), `invite` (an accepted invitation),
   /// `twenty-import` (#184, an account the importer made for a Twenty member). Null for seats from before the column.
   source      String?
+  /// What a signature's `{{sender.title}}` and `{{sender.phone}}` read (#193), in this workspace.
+  jobTitle         String? @map("job_title")
+  phone            String?
+  /// The member's Slotline page is `{baseUrl}/{slotlineUsername}` (#193): set by them or an admin, never guessed.
+  slotlineUsername String? @map("slotline_username")
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -273,6 +280,7 @@ model WorkspaceMember {
 
   hostedMeetings        CalendarEvent[]
   configuredSlotline    SlotlineSettings[]
+  uploadedLogos         WorkspaceLogo[]
   calendarEventCopies   CalendarEventCopy[]
   meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
   leadsFromMeetings     CalendarEventParticipant[] @relation("CalendarParticipantLeadFor")
@@ -1067,6 +1075,12 @@ model Mailbox {
   resumedAt              DateTime?      @map("resumed_at") @db.Timestamptz
   resumedByMemberId      String?        @map("resumed_by_member_id") @db.Uuid
   resumeNote             String?        @map("resume_note")
+  /// The mailbox's own signature (#193): `RichText` in the signature subset; null takes the workspace default.
+  signature              Json?
+  /// Off: the workspace default does not apply to this mailbox (#193).
+  useDefaultSignature    Boolean        @default(true) @map("use_default_signature")
+  /// A pool mailbox's booking page, on the Slotline site, picked by an admin (#193); null for a personal mailbox.
+  bookingLink            String?        @map("booking_link")
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1139,6 +1153,47 @@ model WorkspaceMailSettings {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("workspace_mail_settings")
+}
+
+/// The workspace's signature settings (#193): its default signature and an admin's locks. Absent until first
+/// saved — a workspace without one has no default and nothing locked.
+model WorkspaceSignatureSettings {
+  workspaceId      String   @id @map("workspace_id") @db.Uuid
+  /// `RichText` in the signature subset, or null for no default.
+  defaultSignature Json?    @map("default_signature")
+  /// Every signature must carry `{{workspace.logo}}` / `{{sender.bookingLink}}`.
+  lockLogo         Boolean  @default(false) @map("lock_logo")
+  lockBookingLink  Boolean  @default(false) @map("lock_booking_link")
+  /// `Actor` from @bylinecrm/shared.
+  updatedBy        Json     @map("updated_by")
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_signature_settings")
+}
+
+/// A workspace logo (#193), served publicly at `/api/public/logos/<token>.png` so recipients' mail clients show
+/// it without a sign-in. The current logo has no `retiredAt`; a replaced one keeps answering for the grace
+/// period, for mail already sent, and is removed after it.
+model WorkspaceLogo {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  /// Unguessable, and public: it is in every email that shows the logo.
+  token        String    @unique
+  storageKey   String    @unique @map("storage_key")
+  width        Int
+  height       Int
+  sizeBytes    Int       @map("size_bytes")
+  uploadedById String?   @map("uploaded_by_id") @db.Uuid
+  retiredAt    DateTime? @map("retired_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedBy WorkspaceMember? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, retiredAt])
+  @@map("workspace_logos")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     // Readable by every member who reads records — the postal address and unsubscribe wording every
     // outreach email carries; editable by an admin on the page itself.
     { id: 'mail', label: 'Mail', to: paths.settingsMail, requires: 'record:read' },
+    // Every member signs their own mailboxes (#193); an admin also sets the logo and the workspace's.
+    { id: 'signatures', label: 'Signatures', to: paths.settingsSignatures, requires: 'mailbox:read' },
     // The workspace's own Google OAuth client (D-237); a member who is not an admin reads its status on Mailboxes.
     { id: 'google', label: 'Google', to: paths.settingsGoogle, requires: 'workspace:admin' },
     // Addresses the workspace never mails (P3-1): the other half of outreach, so outreach's capability.
