@@ -64,7 +64,14 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/timeline$`), () => data.page(data.timeline)],
     [new RegExp(`^${W}/templates/variables$`), () => data.templateVariables],
     [new RegExp(`^${W}/templates/${ID}$`), (m) => byId(data.templates, m[1])],
-    [new RegExp(`^${W}/templates$`), () => data.page(data.templates)],
+    // Filtered by `kind` as the API filters it (#192: the step picker asks for each kind).
+    [
+        new RegExp(`^${W}/templates$`),
+        (_m, url) => {
+            const kind = url.searchParams.get('kind');
+            return data.page(kind ? data.templates.filter((t) => t.kind === kind) : data.templates);
+        },
+    ],
     [new RegExp(`^${W}/settings/mail$`), () => data.mailSettings],
     [new RegExp(`^${W}/mail/oauth-client/status$`), () => data.oauthClientStatus],
     [new RegExp(`^${W}/mail/oauth-client$`), () => data.oauthClient],
@@ -84,6 +91,9 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/sequences$`), () => data.sequences],
     [new RegExp(`^${W}/people/${ID}/enrolments$`), (m) => data.enrolments.filter((e) => e.personId === m[1])],
     [new RegExp(`^${W}/sending-pool$`), () => data.sendingPool],
+    [new RegExp(`^${W}/notifications$`), () => data.notificationsInbox],
+    [new RegExp(`^${W}/notification-settings$`), () => data.notificationSettings],
+    [new RegExp(`^${W}/my-tasks$`), () => data.myTasks],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],

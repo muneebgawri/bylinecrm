@@ -1,4 +1,5 @@
 import { RECORD_OBJECTS, type RecordObject, type RecordTarget } from '@bylinecrm/shared';
+import { paths } from '../../paths';
 
 /**
  * A record's address in a query string: `?open=person:<uuid>` opens its drawer over any page and
@@ -35,3 +36,15 @@ export const OBJECT_LABEL: Record<RecordObject, string> = {
     company: 'Company',
     opportunity: 'Deal',
 };
+
+/** A record's own page: a person's, a company's, a deal's. */
+export function recordPath(workspaceId: string, target: RecordTarget): string {
+    switch (target.type) {
+        case 'person':
+            return paths.person(workspaceId, target.id);
+        case 'company':
+            return paths.company(workspaceId, target.id);
+        case 'opportunity':
+            return paths.deal(workspaceId, target.id);
+    }
+}

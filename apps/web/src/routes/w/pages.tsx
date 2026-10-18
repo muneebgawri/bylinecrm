@@ -1,5 +1,5 @@
 import { Button, EmptyState, PageHeader } from '@bylinecrm/ui';
-import { Building2, LayoutDashboard, BarChart3, Users } from 'lucide-react';
+import { Building2, BarChart3, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useCan } from '../../auth/capabilities';
 import { CREATE_PARAM } from '../paths';
@@ -21,14 +21,6 @@ interface PageSpec {
 }
 
 const PAGES = {
-    home: {
-        title: 'Dashboard',
-        subtitle: 'Your pipeline, outreach and what needs attention today.',
-        icon: <LayoutDashboard />,
-        empty: 'Nothing to show yet',
-        body: 'KPIs, the queue and the pipeline overview arrive with the records and the mail.',
-        coming: 'P1-UI-2',
-    },
     reports: {
         title: 'Reports',
         subtitle: 'Conversion, time in stage and sending health.',

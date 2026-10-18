@@ -4,7 +4,7 @@ import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
-import { usePermission } from '../../../auth/capabilities';
+import { useCan, usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
@@ -48,7 +48,7 @@ export function PersonRecord({
     const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
-    const enrol = usePermission('sequence:enrol');
+    const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState(false);
     const compose = useRef<RecordComposeHandle>(null);
     const ownerId = useId();
@@ -209,17 +209,20 @@ export function PersonRecord({
     ];
 
     const actions: RecordAction[] = [
-        {
-            id: 'enrol',
-            label: 'Enrol in sequence',
-            short: 'Enrol',
-            icon: <Send aria-hidden />,
-            // The person page's primary action once sequences exist (P2-UI-1 ruling, #140).
-            primary: true,
-            onSelect: () => setEnrolling(true),
-            disabled: !enrol.allowed,
-            reason: enrol.reason || undefined,
-        },
+        // The person page's primary action once sequences exist (P2-UI-1 ruling, #140) — offered only to
+        // a role that may enrol (#192): no sequences to use, no button.
+        ...(enrol
+            ? [
+                  {
+                      id: 'enrol',
+                      label: 'Enrol in sequence',
+                      short: 'Enrol',
+                      icon: <Send aria-hidden />,
+                      primary: true,
+                      onSelect: () => setEnrolling(true),
+                  } satisfies RecordAction,
+              ]
+            : []),
         {
             id: 'email',
             label: 'Email',

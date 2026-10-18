@@ -253,3 +253,8 @@ export type TwentyImportSyncView = Schemas['TwentyImportSync'];
 export type PutTwentyImportSettingsInput = Loose<Schemas['PutTwentyImportSettingsDto']>;
 export type PutTwentyImportSyncInput = Loose<Schemas['PutTwentyImportSyncDto']>;
 export type StartTwentyImportInput = Loose<Schemas['StartTwentyImportDto']>;
+
+// ---- Task notifications and My tasks (#192) --------------------------------------------------
+export type NotificationsView = Schemas['Notifications'];
+export type NotificationSettingsView = Schemas['NotificationSettings'];
+export type MyTaskView = Schemas['MyTask'];

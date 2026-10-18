@@ -55,8 +55,18 @@ describe('tenant routes declare a capability', () => {
         expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
     });
 
-    it('the routes open to any member are exactly the ones that ask what the caller may do', () => {
+    it('the routes open to any member are exactly the ones about the caller themselves', () => {
         const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
-        expect(open).toEqual(['WorkspaceMeController.standing']);
+        // What the caller may do, and (#192) the caller's own notifications, open tasks and notification settings.
+        expect(open.sort()).toEqual(
+            [
+                'WorkspaceMeController.standing',
+                'NotificationsController.list',
+                'NotificationsController.read',
+                'MyTasksController.list',
+                'NotificationSettingsController.get',
+                'NotificationSettingsController.update',
+            ].sort(),
+        );
     });
 });

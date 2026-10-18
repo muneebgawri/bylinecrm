@@ -76,6 +76,7 @@ model Workspace {
   enrichmentSettings        EnrichmentSettings?
   outreachExclusions        OutreachExclusion[]
   sequences                 Sequence[]
+  notifications             Notification[]
   sequenceSteps             SequenceStep[]
   sequenceEnrolments        SequenceEnrolment[]
 
@@ -267,6 +268,8 @@ model WorkspaceMember {
   configuredTwentyImports TwentyImportSettings[]
   startedTwentyImports    TwentyImportRun[]
   sequenceEnrolments      SequenceEnrolment[]    @relation("EnrolmentEnroller")
+  ownedSequences          Sequence[]             @relation("SequenceOwner")
+  notifications           Notification[]
 
   hostedMeetings        CalendarEvent[]
   configuredSlotline    SlotlineSettings[]
@@ -274,6 +277,9 @@ model WorkspaceMember {
   meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
   leadsFromMeetings     CalendarEventParticipant[] @relation("CalendarParticipantLeadFor")
   suggestedLeads        CalendarEventParticipant[] @relation("CalendarParticipantLeadSuggestedFor")
+
+  /// #192: the daily email of tasks due or overdue; the member turns it off.
+  taskDigest Boolean @default(true) @map("task_digest")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -782,6 +788,7 @@ model Task {
   targets           TaskTarget[]
   sequenceEnrolment SequenceEnrolment? @relation(fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
   sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
+  notifications     Notification[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, assigneeId])
@@ -1802,6 +1809,14 @@ model OutreachExclusion {
   @@map("outreach_exclusions")
 }
 
+/// #192: who sees a sequence.
+enum SequenceVisibility {
+  shared
+  private
+
+  @@map("sequence_visibility")
+}
+
 enum SequenceStatus {
   draft
   active
@@ -1848,25 +1863,30 @@ enum EnrolmentStopReason {
 /// A drip (FR-CRMS-5): ordered steps run per enrolled person, inside a send window in the recipient's
 /// local time. Workspace-wide, not a member's.
 model Sequence {
-  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId        String         @map("workspace_id") @db.Uuid
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String             @map("workspace_id") @db.Uuid
   name               String
-  status             SequenceStatus @default(draft)
+  status             SequenceStatus     @default(draft)
   /// A deal leaving this pipeline (or closing) stops its enrolment, when `stopOnPipelineExit`.
-  pipelineId         String?        @map("pipeline_id") @db.Uuid
-  stopOnPipelineExit Boolean        @default(true) @map("stop_on_pipeline_exit")
+  pipelineId         String?            @map("pipeline_id") @db.Uuid
+  stopOnPipelineExit Boolean            @default(true) @map("stop_on_pipeline_exit")
   /// The zone used when a recipient's cannot be inferred.
-  timeZone           String         @map("time_zone")
-  windowStartMinute  Int            @default(540) @map("window_start_minute")
-  windowEndMinute    Int            @default(1020) @map("window_end_minute")
+  timeZone           String             @map("time_zone")
+  windowStartMinute  Int                @default(540) @map("window_start_minute")
+  windowEndMinute    Int                @default(1020) @map("window_end_minute")
   /// Monday-first bitmask (bit 0 Monday … bit 6 Sunday).
-  windowDays         Int            @default(31) @map("window_days")
-  createdBy          Json           @map("created_by")
-  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz
-  archivedAt         DateTime?      @map("archived_at") @db.Timestamptz
+  windowDays         Int                @default(31) @map("window_days")
+  createdBy          Json               @map("created_by")
+  /// #192: whose sequence it is — who made it, or whose API key did; null when neither is known.
+  ownerMemberId      String?            @map("owner_member_id") @db.Uuid
+  /// #192: `shared` (everyone who may enrol) or `private` (the owner and admins only).
+  visibility         SequenceVisibility @default(shared)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  archivedAt         DateTime?          @map("archived_at") @db.Timestamptz
 
   workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner      WorkspaceMember?    @relation("SequenceOwner", fields: [ownerMemberId], references: [id], onDelete: SetNull)
   pipeline   Pipeline?           @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
   steps      SequenceStep[]
   enrolments SequenceEnrolment[]
@@ -2421,4 +2441,34 @@ model SlotlineSettings {
   configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
 
   @@map("slotline_settings")
+}
+
+/// #192: what a member is told about their tasks.
+enum NotificationKind {
+  /// Someone else assigned the task to them (a sequence's task step included).
+  task_assigned
+  /// The task came due, and was not due already when it was made.
+  task_due
+
+  @@map("notification_kind")
+}
+
+/// #192: one thing a member is told, about one task, once: (member, kind, task) is unique, so an
+/// event delivered again or a sweep run twice tells nobody twice. Each member reads only their own.
+model Notification {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String           @map("workspace_id") @db.Uuid
+  memberId    String           @map("member_id") @db.Uuid
+  kind        NotificationKind
+  taskId      String           @map("task_id") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  readAt      DateTime?        @map("read_at") @db.Timestamptz
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  task      Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, kind, taskId])
+  @@index([memberId, createdAt])
+  @@map("notifications")
 }

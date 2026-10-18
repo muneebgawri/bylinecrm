@@ -52,6 +52,9 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
 - **`CALENDAR_SYNC_WORKER`** — `1` (default) runs calendar sync in this process (CAL-1: a read of every personal
   mailbox's Google Calendar every ten minutes, and a first read when one connects); `0` on an API when a separate
   worker process runs it. The cross-tenant suite sets `0`.
+- **`NOTIFICATIONS_WORKER`** — `1` (default) runs the task notification jobs in this process (#192: due reminders
+  every 15 minutes and the morning digest at 03:00 UTC); `0` on an API when a separate worker process runs them. The
+  cross-tenant suite sets `0`.
 - **`WEBHOOK_ALLOW_PRIVATE_TARGETS`** — `0` in every deployed environment (it admits private/loopback webhook
   targets, for local receivers only; the Twenty importer's base URL is held to the same rule).
 - **`TWENTY_IMPORT_WORKER`** — `1` (default) drives Twenty import runs in this process (P4-4); `0` on an API when
