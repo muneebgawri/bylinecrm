@@ -96,6 +96,15 @@ export class FakeBigin {
         Object.assign(row, patch, { Modified_Time: at });
     }
 
+    /** Lists `count` deletions of records never seen here, one second apart from `from`, oldest first. */
+    seedDeletions(module: string, count: number, from: Date): void {
+        const rows = Array.from({ length: count }, (_, i) => ({
+            id: String(9_000_000_000_000 + i),
+            deleted_time: new Date(from.getTime() + i * 1000).toISOString(),
+        }));
+        this.deletions.set(module, [...(this.deletions.get(module) ?? []), ...rows]);
+    }
+
     /** Deletes a record: it leaves the module and is listed under `/deleted`. */
     remove(module: string, id: string): void {
         const table = this.tables.get(module) ?? [];

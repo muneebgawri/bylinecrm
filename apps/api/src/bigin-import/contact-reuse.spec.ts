@@ -20,8 +20,13 @@ describe('FR-CRMS-25 BIGIN-1 contact reuse detection', () => {
         expect(isContactReused(who('Dana Lee', 'dana@acme.com'), who('Sam Roe', 'sam@acme.com'))).toBe(true);
     });
 
-    it('reused: another address at another registrable domain, even under the same name', () => {
-        expect(isContactReused(who('Dana Lee', 'dana@acme.com'), who('Dana Lee', 'dana@globex.com'))).toBe(true);
+    it('the same person: a new address at another domain under the same name is a move, not someone else', () => {
+        expect(isContactReused(who('Dana Lee', 'dana@acme.com'), who('Dana Lee', 'dana@globex.com'))).toBe(false);
+        expect(isContactReused(who('Jane Doe', 'jane@gmail.com'), who('Jane Doe', 'jane@acme.com'))).toBe(false);
+    });
+
+    it('reused: a new address and a new name', () => {
+        expect(isContactReused(who('Dana Lee', 'dana@acme.com'), who('Kim Ito', 'kim@globex.com'))).toBe(true);
     });
 
     it('the note names the day it was detected', () => {

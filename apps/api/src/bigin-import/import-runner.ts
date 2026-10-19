@@ -239,11 +239,22 @@ export class BiginImportRunner {
             if (await this.cancelRequested(state.runId)) return false;
         }
         let truncated = false;
+        // Zoho pages deletions by number only up to 2,000 (10 pages of 200). Past that, the cursor moves by
+        // time: to the newest deletion read when they came oldest first, so the next run reads on from there.
+        // When they came in any other order the rest cannot be reached, and the report says so (audit, #217).
+        let ascending = true;
+        let lastAt: Date | null = null;
         while (!cursor.deletedDone) {
             const page = await this.bigin.deleted(state.connection, module, {
                 since: cursor.deletedSince,
                 page: cursor.deletedPage,
             });
+            for (const r of page.records) {
+                const at = biginInstant(r.deletedTime);
+                if (!at) continue;
+                if (lastAt && at.getTime() < lastAt.getTime()) ascending = false;
+                lastAt = at;
+            }
             await this.rls.withWorkspace(async (tx) => {
                 entry.missingInSource += await flagBiginDeleted(
                     tx,
@@ -270,9 +281,18 @@ export class BiginImportRunner {
                 passStartedAt: state.passStartedAt,
                 complete: true,
             });
-            const deleted = truncated
-                ? (state.settingsCursors[deletedKey(module)] ?? null)
-                : new Date(state.passStartedAt.getTime() - 1000).toISOString();
+            const deleted = !truncated
+                ? new Date(state.passStartedAt.getTime() - 1000).toISOString()
+                : ascending && lastAt
+                  ? lastAt.toISOString()
+                  : (state.settingsCursors[deletedKey(module)] ?? null);
+            if (truncated && !(ascending && lastAt)) {
+                entry.errors.push({
+                    externalId: `${module}/deleted`,
+                    message:
+                        'Bigin listed more than 2,000 deletions newest first: the older ones could not be read, so they are not flagged',
+                });
+            }
             await this.saveModuleCursors(tx, state, module, settled, deleted);
             await this.saveProgress(tx, state);
         });

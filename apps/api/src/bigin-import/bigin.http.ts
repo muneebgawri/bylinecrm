@@ -1,3 +1,5 @@
+import { fetch as undiciFetch, type Dispatcher, type RequestInit as UndiciRequestInit } from 'undici';
+import { createWebhookDispatcher } from '../webhooks/url-guard';
 import { createHash } from 'node:crypto';
 import { BIGIN_PAGE_SIZE, type BiginImportObject } from '@bylinecrm/shared';
 import { assertNoOpenTransaction } from '../infra/transaction-scope';
@@ -60,8 +62,33 @@ export class BiginHttp implements BiginApi {
     private readonly clock: Clock;
     private readonly tokens = new Map<string, { token: string; expiresAt: number }>();
 
-    constructor(clock: Partial<Clock> = {}) {
+    /**
+     * Every request goes through the webhook delivery client: its lookup refuses a private address at connect
+     * time, so a host that passed the check on save but later resolves inward (a DNS change) is refused too.
+     * Redirects are never followed — a redirect is an error, not a new destination (audit, #217).
+     */
+    private readonly dispatcher: Dispatcher;
+    /** Tests stand in their own request function; production never passes one. */
+    private readonly fetchImpl: ((url: string, init: RequestInit) => Promise<Response>) | undefined;
+
+    constructor(
+        clock: Partial<Clock> = {},
+        options: { allowPrivate?: boolean; fetch?: (url: string, init: RequestInit) => Promise<Response> } = {},
+    ) {
         this.clock = { ...realClock, ...clock };
+        this.dispatcher = createWebhookDispatcher({ allowPrivate: options.allowPrivate ?? false });
+        this.fetchImpl = options.fetch;
+    }
+
+    /** undici's `fetch` through the guarded client (the same undici as the dispatcher), refusing redirects. */
+    private async send(url: string, init: RequestInit): Promise<Response> {
+        if (this.fetchImpl) return this.fetchImpl(url, { ...init, redirect: 'error' });
+        const guarded: UndiciRequestInit = {
+            ...(init as unknown as UndiciRequestInit),
+            redirect: 'error',
+            dispatcher: this.dispatcher,
+        };
+        return (await undiciFetch(url, guarded)) as unknown as Response;
     }
 
     async list(connection: BiginConnection, module: BiginImportObject, options: BiginListOptions): Promise<BiginPage> {
@@ -137,7 +164,7 @@ export class BiginHttp implements BiginApi {
             if (since) headers['if-modified-since'] = new Date(since).toUTCString();
             let response: Response;
             try {
-                response = await fetch(url, { headers, signal: AbortSignal.timeout(BIGIN_HTTP_TIMEOUT_MS) });
+                response = await this.send(url, { headers, signal: AbortSignal.timeout(BIGIN_HTTP_TIMEOUT_MS) });
             } catch (error) {
                 last = new BiginApiError(0, `Bigin did not answer: ${describe(error)}`, false);
                 await this.clock.sleep(retryDelayMs(attempt));
@@ -179,7 +206,7 @@ export class BiginHttp implements BiginApi {
         });
         let response: Response;
         try {
-            response = await fetch(url, {
+            response = await this.send(url, {
                 method: 'POST',
                 headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
                 body: form.toString(),
@@ -217,7 +244,7 @@ export class BiginHttp implements BiginApi {
         for (let attempt = 1; attempt <= BIGIN_RETRY_ATTEMPTS; attempt++) {
             let response: Response;
             try {
-                response = await fetch(url, {
+                response = await this.send(url, {
                     method: 'POST',
                     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
                     body: form.toString(),

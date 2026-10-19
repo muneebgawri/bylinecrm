@@ -1,3 +1,4 @@
+import { ENV } from '../config/env';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
@@ -40,7 +41,7 @@ import { BiginImportRunner } from './import-runner';
     ],
     controllers: [BiginImportController],
     providers: [
-        { provide: BIGIN_PORT, useFactory: biginHttp },
+        { provide: BIGIN_PORT, useFactory: biginHttp, inject: [ENV] },
         BiginImportRunner,
         BiginSyncService,
         BiginImportWorkers,

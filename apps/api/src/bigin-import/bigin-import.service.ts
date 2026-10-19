@@ -92,8 +92,30 @@ export class BiginImportService {
         const { workspaceId, memberId } = this.current();
         const accountsUrl = await this.checkedUrl('accountsUrl', input.accountsUrl);
         const apiUrl = await this.checkedUrl('apiUrl', input.apiUrl);
+        // The stored secret and token never follow a changed Zoho URL: pointing the URLs at another host would
+        // otherwise send them there on the next exchange or refresh (audit, #217). Changing either URL needs
+        // the secret and a new grant code or refresh token entered again.
+        const stored = await this.rls.withWorkspace((tx) => tx.biginImportSettings.findFirst());
+        if (stored && (stored.accountsUrl !== accountsUrl || stored.apiUrl !== apiUrl)) {
+            const missing = [
+                ...(input.clientSecret
+                    ? []
+                    : [{ path: 'clientSecret', message: 'required when the Zoho URLs change' }]),
+                ...(input.refreshToken || input.grantCode
+                    ? []
+                    : [{ path: 'grantCode', message: 'a new grant code is required when the Zoho URLs change' }]),
+            ];
+            if (missing.length) {
+                throw new ApiException(
+                    422,
+                    'unprocessable',
+                    'changing the data centre needs the secret and a new grant code',
+                    missing,
+                );
+            }
+        }
         // A grant code is traded for the refresh token here, outside any transaction (a network call), with
-        // the secret given or, on an update that leaves it out, the stored one.
+        // the secret given or, on an update that leaves it out, the stored one (the URLs are then unchanged).
         if (input.grantCode && !input.refreshToken) {
             const clientSecret =
                 input.clientSecret ??
@@ -418,8 +440,9 @@ function notFound(): NotFoundException {
 }
 
 /** The one place the HTTP adapter is made: the module binds it to the port; tests bind a fake Bigin. */
-export function biginHttp(): BiginApi {
-    return new BiginHttp();
+/** The real client, refusing private targets unless the deployment admits them (local receivers only). */
+export function biginHttp(env: Env): BiginApi {
+    return new BiginHttp({}, { allowPrivate: env.WEBHOOK_ALLOW_PRIVATE_TARGETS });
 }
 
 function decodeCursor(cursor: string): { object: string; externalId: string } {
