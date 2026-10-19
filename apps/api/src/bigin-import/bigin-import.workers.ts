@@ -36,6 +36,8 @@ const RUN_JOB = 'run';
 export class BiginImportWorkers implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly logger = new Logger(BiginImportWorkers.name);
     private worker: Worker | null = null;
+    /** Picks up open runs that lost their job (a deploy stopped the worker holding it). */
+    private sweep: NodeJS.Timeout | null = null;
 
     constructor(
         @Inject(ENV) private readonly env: Env,
@@ -49,6 +51,8 @@ export class BiginImportWorkers implements OnApplicationBootstrap, OnModuleDestr
         try {
             const existing = await this.queue.getJob(job.runId);
             if (existing && !(await existing.isCompleted()) && !(await existing.isFailed())) return false;
+            // A finished job keeps its id: BullMQ ignores an add under it, so it goes first.
+            if (existing) await existing.remove();
             await this.queue.add(RUN_JOB, job, { jobId: job.runId });
             return true;
         } catch (error) {
@@ -111,9 +115,14 @@ export class BiginImportWorkers implements OnApplicationBootstrap, OnModuleDestr
         });
         await this.resume();
         await this.reconcileSchedules();
+        // At boot the colour being drained may still hold a run's job, so `resume()` passes over it; once that
+        // colour stops, nothing would pick the run up again. Looking again every lock period does.
+        this.sweep = setInterval(() => void this.resume(), BIGIN_IMPORT_LOCK_MS);
+        this.sweep.unref();
     }
 
     async onModuleDestroy(): Promise<void> {
+        if (this.sweep) clearInterval(this.sweep);
         await this.worker?.close();
     }
 
@@ -150,11 +159,15 @@ export class BiginImportWorkers implements OnApplicationBootstrap, OnModuleDestr
     }
 
     private async resume(): Promise<void> {
-        const open = await this.ownerPrisma.biginImportRun.findMany({
-            where: { status: { in: ['queued', 'running'] } },
-            select: { id: true, workspaceId: true },
-        });
-        for (const run of open) await this.enqueue({ workspaceId: run.workspaceId, runId: run.id });
+        try {
+            const open = await this.ownerPrisma.biginImportRun.findMany({
+                where: { status: { in: ['queued', 'running'] } },
+                select: { id: true, workspaceId: true },
+            });
+            for (const run of open) await this.enqueue({ workspaceId: run.workspaceId, runId: run.id });
+        } catch (error) {
+            this.logger.error(`could not resume bigin import runs: ${describe(error)}`);
+        }
     }
 }
 
