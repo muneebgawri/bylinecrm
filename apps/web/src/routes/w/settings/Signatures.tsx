@@ -2,6 +2,10 @@ import {
     LOGO_MAX_BYTES,
     LOGO_MIME_TYPES,
     SIGNATURE_VARIABLES,
+    SOCIAL_NETWORKS,
+    SOCIAL_NETWORK_HOSTS,
+    SOCIAL_NETWORK_LABEL,
+    type SocialLinks,
     type MailboxSignatureView,
     type RichText,
     type SignatureLockable,
@@ -350,6 +354,7 @@ function DetailsFields({
     const [jobTitle, setJobTitle] = useState(profile.jobTitle ?? '');
     const [phone, setPhone] = useState(profile.phone ?? '');
     const [username, setUsername] = useState(profile.slotlineUsername ?? '');
+    const [socials, setSocials] = useState<SocialLinks>(profile.socials);
     const submit = (event: FormEvent) => {
         event.preventDefault();
         put.mutate(
@@ -357,6 +362,10 @@ function DetailsFields({
                 jobTitle: jobTitle.trim() || null,
                 phone: phone.trim() || null,
                 slotlineUsername: username.trim() || null,
+                // Only the networks filled in: an empty one is no icon.
+                socials: Object.fromEntries(
+                    SOCIAL_NETWORKS.flatMap((n) => (socials[n]?.trim() ? [[n, socials[n]!.trim()]] : [])),
+                ) as SocialLinks,
             },
             {
                 onSuccess: () => toast({ title: 'Details saved', tone: 'success' }),
@@ -403,6 +412,31 @@ function DetailsFields({
                     className="max-w-[20rem]"
                 />
             </Field>
+            <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+                <legend className="mb-1 text-[13px] font-medium">Social profiles</legend>
+                <p className="m-0 -mt-1 text-xs text-text-muted">
+                    Each one filled in shows as an icon in {own ? 'your' : 'their'} signature, linking to the profile.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                    {SOCIAL_NETWORKS.map((network) => (
+                        <Field
+                            key={network}
+                            label={SOCIAL_NETWORK_LABEL[network]}
+                            error={fieldErrorAt(put.error, `socials.${network}`)}
+                        >
+                            <Input
+                                type="url"
+                                inputMode="url"
+                                autoComplete="off"
+                                spellCheck={false}
+                                placeholder={`https://${SOCIAL_NETWORK_HOSTS[network][0]}/…`}
+                                value={socials[network] ?? ''}
+                                onChange={(e) => setSocials((all) => ({ ...all, [network]: e.target.value }))}
+                            />
+                        </Field>
+                    ))}
+                </div>
+            </fieldset>
             {profile.bookingLink && (
                 <p className="m-0 text-[13px] text-text-muted">
                     {own ? 'Your booking link:' : 'Booking link:'}{' '}

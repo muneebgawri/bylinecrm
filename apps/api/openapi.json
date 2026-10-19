@@ -6507,6 +6507,70 @@
                 "tags": ["mail"]
             }
         },
+        "/api/public/social-icons/v1/{file}": {
+            "get": {
+                "operationId": "publicSocialIcon_serve",
+                "parameters": [
+                    {
+                        "name": "file",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/templates": {
             "get": {
                 "operationId": "templates_list",
@@ -21260,6 +21324,37 @@
                         "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
                         "description": "The member’s page on the Slotline site: `{baseUrl}/{username}`.",
                         "nullable": true
+                    },
+                    "socials": {
+                        "description": "Profiles shown as icons; each https on that network’s site. Left out, kept.",
+                        "type": "object",
+                        "properties": {
+                            "linkedin": {
+                                "type": "string",
+                                "maxLength": 300
+                            },
+                            "x": {
+                                "type": "string",
+                                "maxLength": 300
+                            },
+                            "facebook": {
+                                "type": "string",
+                                "maxLength": 300
+                            },
+                            "instagram": {
+                                "type": "string",
+                                "maxLength": 300
+                            },
+                            "youtube": {
+                                "type": "string",
+                                "maxLength": 300
+                            },
+                            "telegram": {
+                                "type": "string",
+                                "maxLength": 300
+                            }
+                        },
+                        "additionalProperties": false
                     }
                 },
                 "required": ["jobTitle", "phone", "slotlineUsername"],
@@ -27662,6 +27757,30 @@
                             }
                         },
                         "required": ["slug", "title"]
+                    },
+                    "socials": {
+                        "type": "object",
+                        "properties": {
+                            "linkedin": {
+                                "type": "string"
+                            },
+                            "x": {
+                                "type": "string"
+                            },
+                            "facebook": {
+                                "type": "string"
+                            },
+                            "instagram": {
+                                "type": "string"
+                            },
+                            "youtube": {
+                                "type": "string"
+                            },
+                            "telegram": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "The member’s profiles, shown as icons in their signature."
                     }
                 },
                 "required": [
@@ -27673,7 +27792,8 @@
                     "bookingLink",
                     "slotlineConfigured",
                     "slotlineKey",
-                    "slotlineEvent"
+                    "slotlineEvent",
+                    "socials"
                 ]
             },
             "SlotlineEventType": {

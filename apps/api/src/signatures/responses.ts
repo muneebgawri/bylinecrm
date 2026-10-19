@@ -1,4 +1,6 @@
 import {
+    SOCIAL_NETWORKS,
+    type SocialNetwork,
     SIGNATURE_LOCKABLE,
     type ImportedSignature,
     type MailboxSignatureView,
@@ -73,6 +75,14 @@ export const signatureProfileView = named(
             .object({ slug: z.string(), title: z.string() })
             .nullable()
             .meta({ description: 'The event type “Book a quick meeting” opens; null opens the member’s page.' }),
+        socials: z
+            .object(
+                Object.fromEntries(SOCIAL_NETWORKS.map((n) => [n, z.string().optional()])) as Record<
+                    SocialNetwork,
+                    z.ZodOptional<z.ZodString>
+                >,
+            )
+            .meta({ description: 'The member’s profiles, shown as icons in their signature.' }),
     }),
 );
 

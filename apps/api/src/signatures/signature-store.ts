@@ -1,5 +1,9 @@
 import {
     LOGO_PUBLIC_PATH,
+    SOCIAL_ICON_PATH,
+    SOCIAL_NETWORKS,
+    socialLinkProblem,
+    type SocialNetwork,
     SIGNATURE_LOCKABLE,
     SIGNATURE_LOCK_VARIABLE,
     type FieldError,
@@ -109,6 +113,15 @@ export function logoView(appUrl: string, logo: WorkspaceLogo): WorkspaceLogoView
     };
 }
 
+/** A member's stored profile links, in `SOCIAL_NETWORKS` order; anything else in the column is ignored. */
+export function socialsOf(stored: unknown): { network: SocialNetwork; url: string }[] {
+    const links = stored && typeof stored === 'object' ? (stored as Record<string, unknown>) : {};
+    return SOCIAL_NETWORKS.flatMap((network) => {
+        const url = links[network];
+        return typeof url === 'string' && socialLinkProblem(network, url) === null ? [{ network, url }] : [];
+    });
+}
+
 /** The Slotline site's address, while Slotline is set up. */
 export async function slotlineBase(tx: WorkspaceClient): Promise<string | null> {
     return (await tx.slotlineSettings.findFirst({ select: { baseUrl: true } }))?.baseUrl ?? null;
@@ -153,6 +166,7 @@ export async function signatureValues(
                   phone: true,
                   slotlineUsername: true,
                   slotlineEventSlug: true,
+                  socialLinks: true,
                   user: { select: { displayName: true } },
               },
           })
@@ -174,7 +188,9 @@ export async function signatureValues(
                 mailbox?.purpose === 'pool'
                     ? mailbox.bookingLink
                     : bookingLinkOf(base, member?.slotlineUsername ?? null, member?.slotlineEventSlug),
+            socials: socialsOf(member?.socialLinks),
         },
+        socialIconBase: `${appUrl.replace(/\/+$/, '')}${SOCIAL_ICON_PATH}`,
         workspace: {
             name: workspace?.name ?? '',
             logo: logo ? { url: logoUrl(appUrl, logo.token), width: logo.width, height: logo.height } : null,

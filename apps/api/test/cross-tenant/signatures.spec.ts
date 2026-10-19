@@ -298,19 +298,19 @@ describe('#193 email signatures', () => {
     describe('the workspace logo', () => {
         let first: WorkspaceLogoView;
 
-        it('an admin uploads it once; it is stored as a PNG at most 300px wide and served without a sign-in', async () => {
+        it('an admin uploads it once; it is stored as a PNG at most 360px wide and served without a sign-in', async () => {
             expect((await upload(member, workspace, await png(900, 300), 'image/png')).status).toBe(403);
             const res = await upload(admin, workspace, await png(900, 300), 'image/png');
             expect(res.status, JSON.stringify(res.body)).toBe(201);
             first = res.body as WorkspaceLogoView;
-            expect(first).toMatchObject({ width: LOGO_WIDTH, height: 100 });
+            expect(first).toMatchObject({ width: LOGO_WIDTH, height: LOGO_WIDTH / 3 });
             expect(first.url).toMatch(/^https?:\/\/[^/]+\/api\/public\/logos\/[A-Za-z0-9_-]{32,}\.png$/);
 
             const served = await http().get(new URL(first.url).pathname);
             expect(served.status).toBe(200);
             expect(served.headers['content-type']).toBe('image/png');
             expect(served.headers['cache-control']).toContain('public');
-            expect(pngSize(served.body as Buffer)).toEqual({ width: LOGO_WIDTH, height: 100 });
+            expect(pngSize(served.body as Buffer)).toEqual({ width: LOGO_WIDTH, height: LOGO_WIDTH / 3 });
             expect((await settings(member)).logo).toEqual(first);
         });
 
@@ -320,7 +320,7 @@ describe('#193 email signatures', () => {
             const theirs = await upload(otherAdmin, otherWorkspace, jpg(600, 200), 'image/jpeg', 'logo.jpg');
             expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
             const served = await http().get(new URL((theirs.body as WorkspaceLogoView).url).pathname);
-            expect(pngSize(served.body as Buffer)).toEqual({ width: LOGO_WIDTH, height: 100 });
+            expect(pngSize(served.body as Buffer)).toEqual({ width: LOGO_WIDTH, height: LOGO_WIDTH / 3 });
 
             const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"></svg>');
             expect((await upload(admin, workspace, svg, 'image/svg+xml', 'logo.svg')).status).toBe(415);
@@ -508,8 +508,11 @@ describe('#193 email signatures', () => {
             const out = res.body as RenderedSignature;
             const logo = (await settings()).logo!;
             expect(out.html).toContain('Mia Member');
-            expect(out.html).toContain(`<a href="${slotline}/mia">${BOOKING_LINK_LABEL}</a>`);
-            expect(out.html).toContain(`<img src="${logo.url}" alt="Pinion ${stamp}" width="${logo.width}"`);
+            expect(out.html).toMatch(new RegExp(`<a href="${slotline}/mia" style="[^"]+">${BOOKING_LINK_LABEL}</a>`));
+            // Shown at half its stored size: sharp on a high-density screen.
+            expect(out.html).toContain(
+                `<img src="${logo.url}" alt="Pinion ${stamp}" width="${logo.width / 2}" height="${logo.height / 2}"`,
+            );
             // Mia has no phone: that line is left out, not rendered empty.
             expect(out.html).not.toContain('<p></p>');
             expect(out.text).toBe(`Mia Member\n\n${BOOKING_LINK_LABEL}: ${slotline}/mia`);
@@ -757,8 +760,8 @@ describe('#193 email signatures', () => {
             const preview = await as(member)
                 .post(w('/signatures/preview'))
                 .send({ mailboxId: memberMailbox, signature: doc(para(v('sender.bookingLink'))) });
-            expect((preview.body as RenderedSignature).html).toBe(
-                `<p><a href="${slotline}/mia/vip-15">${BOOKING_LINK_LABEL}</a></p>`,
+            expect((preview.body as RenderedSignature).html).toMatch(
+                new RegExp(`<a href="${slotline}/mia/vip-15" style="[^"]+">${BOOKING_LINK_LABEL}</a>`),
             );
         });
 
@@ -813,6 +816,76 @@ describe('#193 email signatures', () => {
                 .expect(204);
             expect(await profileOf(memberId)).toMatchObject({ slotlineKey: null, slotlineUsername: 'mia' });
             expect((await eventTypes(memberId)).status).toBe(409);
+        });
+    });
+
+    describe('#193 social icons', () => {
+        const details = (socials: object) => ({
+            jobTitle: 'Account manager',
+            phone: null,
+            slotlineUsername: 'mia',
+            socials,
+        });
+
+        it('a member sets their profile links; each must be https on that network’s own site', async () => {
+            const saved = await putProfile(
+                memberId,
+                details({ linkedin: 'https://www.linkedin.com/in/mia', x: 'https://x.com/mia' }),
+                member,
+            );
+            expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+            expect((saved.body as SignatureProfileView).socials).toEqual({
+                linkedin: 'https://www.linkedin.com/in/mia',
+                x: 'https://x.com/mia',
+            });
+            for (const bad of [
+                { linkedin: 'https://evil.example.com/in/mia' },
+                { facebook: 'http://facebook.com/mia' },
+                { myspace: 'https://myspace.com/mia' },
+            ]) {
+                expect((await putProfile(memberId, details(bad), member)).status, JSON.stringify(bad)).toBe(400);
+            }
+            // Left out, the links are kept.
+            await putProfile(
+                memberId,
+                { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' },
+                member,
+            ).expect(200);
+            expect(
+                ((await as(member).get(w(`/members/${memberId}/signature-profile`))).body as SignatureProfileView)
+                    .socials,
+            ).toEqual({
+                linkedin: 'https://www.linkedin.com/in/mia',
+                x: 'https://x.com/mia',
+            });
+            // An admin may set them for a member; another member may not.
+            expect((await putProfile(adminMemberId, details({ x: 'https://x.com/matt' }), member)).status).toBe(403);
+            await putProfile(adminMemberId, {
+                jobTitle: 'Founder',
+                phone: '+92 300 1234567',
+                slotlineUsername: 'matt',
+                socials: { x: 'https://x.com/matt' },
+            }).expect(200);
+        });
+
+        it('renders as linked icons the CRM serves itself, no sign-in needed', async () => {
+            const res = await as(member)
+                .post(w('/signatures/preview'))
+                .send({ mailboxId: memberMailbox, signature: doc(para(v('sender.socials'))) });
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            const html = (res.body as RenderedSignature).html;
+            const icon =
+                /<a href="https:\/\/www\.linkedin\.com\/in\/mia"[^>]*><img src="(https?:\/\/[^"]+\/api\/public\/social-icons\/v1\/linkedin\.png)" alt="LinkedIn"/.exec(
+                    html,
+                );
+            expect(icon, html).not.toBeNull();
+            expect(html).toContain('/api/public/social-icons/v1/x.png');
+            const served = await http().get(new URL(icon![1]!).pathname);
+            expect(served.status).toBe(200);
+            expect(served.headers['content-type']).toBe('image/png');
+            expect(served.headers['cache-control']).toContain('public');
+            expect((await http().get('/api/public/social-icons/v1/myspace.png')).status).toBe(404);
+            expect((await http().get('/api/public/social-icons/v1/..%2F..%2Fpackage.json')).status).toBe(404);
         });
     });
 });

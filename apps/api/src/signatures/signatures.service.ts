@@ -32,6 +32,7 @@ import {
     readSignatureSettings,
     signableMailbox,
     signatureValues,
+    socialsOf,
     slotlineBase,
 } from './signature-store';
 
@@ -43,6 +44,7 @@ type ProfileRow = {
     slotlineApiKeyLast4: string | null;
     slotlineEventSlug: string | null;
     slotlineEventTitle: string | null;
+    socialLinks: Prisma.JsonValue;
     user: { displayName: string | null };
 };
 
@@ -206,7 +208,12 @@ export class SignaturesService {
             }
             const saved = await tx.workspaceMember.update({
                 where: { id: memberId },
-                data: { jobTitle: input.jobTitle, phone: input.phone, slotlineUsername: input.slotlineUsername },
+                data: {
+                    jobTitle: input.jobTitle,
+                    phone: input.phone,
+                    slotlineUsername: input.slotlineUsername,
+                    ...(input.socials === undefined ? {} : { socialLinks: input.socials as Prisma.InputJsonObject }),
+                },
                 include: { user: { select: { displayName: true } } },
             });
             return this.profileView(tx, saved);
@@ -271,6 +278,7 @@ export class SignaturesService {
                 member.slotlineEventSlug && member.slotlineEventTitle
                     ? { slug: member.slotlineEventSlug, title: member.slotlineEventTitle }
                     : null,
+            socials: Object.fromEntries(socialsOf(member.socialLinks).map((s) => [s.network, s.url])),
         };
     }
 

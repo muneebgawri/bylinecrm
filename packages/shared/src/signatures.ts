@@ -36,6 +36,7 @@ export const SIGNATURE_VARIABLES = [
     { path: 'sender.title', source: 'sender', label: 'Your job title' },
     { path: 'sender.phone', source: 'sender', label: 'Your phone' },
     { path: 'sender.bookingLink', source: 'sender', label: 'Book a quick meeting (Slotline)' },
+    { path: 'sender.socials', source: 'sender', label: 'Your social icons' },
     { path: 'workspace.name', source: 'workspace', label: 'Workspace name' },
     { path: 'workspace.logo', source: 'workspace', label: 'Company logo' },
 ] as const satisfies readonly SignatureVariable[];
@@ -66,16 +67,59 @@ export function isSignatureVariable(path: string): path is SignatureVariablePath
 const line = (...content: RichTextNode[]): RichTextNode => ({ type: 'paragraph', content });
 const variable = (path: SignatureVariablePath): RichTextNode => ({ type: 'variable', attrs: { path } });
 
-/** Where every signature starts — the workspace default and a member's own: name, title, phone, the booking link, the logo. */
+/**
+ * Where every signature starts — the workspace default and a member's own: name and title, the logo under
+ * them, then phone and the booking link together.
+ */
 export const SIGNATURE_STARTER: RichText = {
     type: 'doc',
     content: [
         line(variable('sender.fullName'), { type: 'hardBreak' }, variable('sender.title')),
-        line(variable('sender.phone')),
-        line(variable(SIGNATURE_BOOKING_VARIABLE)),
         line(variable(SIGNATURE_LOGO_VARIABLE)),
+        line(variable('sender.phone'), { type: 'hardBreak' }, variable(SIGNATURE_BOOKING_VARIABLE)),
+        line(variable('sender.socials')),
     ],
 };
+
+/** The networks a signature shows an icon for, in the order it shows them. */
+export const SOCIAL_NETWORKS = ['linkedin', 'x', 'facebook', 'instagram', 'youtube', 'telegram'] as const;
+export type SocialNetwork = (typeof SOCIAL_NETWORKS)[number];
+export type SocialLinks = { [N in SocialNetwork]?: string | undefined };
+
+export const SOCIAL_NETWORK_LABEL: Record<SocialNetwork, string> = {
+    linkedin: 'LinkedIn',
+    x: 'X',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    youtube: 'YouTube',
+    telegram: 'Telegram',
+};
+
+/** The sites a profile on each network sits on; a subdomain of one (www.) is that site. */
+export const SOCIAL_NETWORK_HOSTS: Record<SocialNetwork, readonly string[]> = {
+    linkedin: ['linkedin.com'],
+    x: ['x.com', 'twitter.com'],
+    facebook: ['facebook.com', 'fb.com'],
+    instagram: ['instagram.com'],
+    youtube: ['youtube.com', 'youtu.be'],
+    telegram: ['t.me', 'telegram.me'],
+};
+
+export const SOCIAL_LINK_MAX = 300;
+
+/** Why a profile link cannot go on `network`'s icon, or null when it can: https, on that network's own site. */
+export function socialLinkProblem(network: SocialNetwork, link: string): string | null {
+    // https, a host, no credentials, no spaces: the host is everything between `https://` and the first `/?#:`.
+    const match = /^https:\/\/([^/?#:@\s]+)(?::\d{1,5})?(?:[/?#]\S*)?$/i.exec(link);
+    if (!match) return /^https:\/\//i.test(link) ? 'not a web address' : 'a profile link starts with https://';
+    const host = match[1]!.toLowerCase();
+    const on = SOCIAL_NETWORK_HOSTS[network].some((site) => host === site || host.endsWith(`.${site}`));
+    return on ? null : `not a ${SOCIAL_NETWORK_LABEL[network]} address`;
+}
+
+/** Where the CRM serves each network's icon (#193): `<path>/<network>.png`, 40 px square, shown at 20. */
+export const SOCIAL_ICON_PATH = '/api/public/social-icons/v1';
+export const SOCIAL_ICON_SIZE = 20;
 
 /** A member's Slotline page is `{baseUrl}/{username}`; the username is set, never guessed from an address. */
 export const SLOTLINE_USERNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -85,8 +129,8 @@ export const SIGNATURE_PROFILE_TEXT_MAX = 100;
 export const LOGO_MAX_BYTES = 200 * 1024;
 /** PNG or JPEG. SVG is not taken: rasterising it needs a library outside the licence allowlist (resvg, MPL-2.0). */
 export const LOGO_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
-/** Every logo is stored as a PNG at most this wide. */
-export const LOGO_WIDTH = 300;
+/** Every logo is stored as a PNG at most this wide; a signature shows it at half that, so it is sharp on a high-density screen. */
+export const LOGO_WIDTH = 360;
 /** A replaced logo's address keeps answering this long, for mail already sent. */
 export const LOGO_GRACE_DAYS = 30;
 /** Where a logo is served, on `APP_URL`: `/api/public/logos/<token>.png`. */
@@ -152,6 +196,8 @@ export interface SignatureProfileView {
     slotlineKey: { last4: string } | null;
     /** The event type "Book a quick meeting" opens (#196); null opens the member's Slotline page. */
     slotlineEvent: { slug: string; title: string } | null;
+    /** The member's profiles, shown as icons (#193). */
+    socials: SocialLinks;
 }
 
 /** An event type on the member's Slotline account (#196), for the picker. */
@@ -181,6 +227,8 @@ export interface SignatureProfileInput {
     jobTitle: string | null;
     phone: string | null;
     slotlineUsername: string | null;
+    /** Left out, the member's links stay as they are. */
+    socials?: SocialLinks | undefined;
 }
 
 /** A signature as it renders in an email: the preview, and what the composer shows. */

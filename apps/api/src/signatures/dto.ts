@@ -1,4 +1,9 @@
 import {
+    SOCIAL_LINK_MAX,
+    SOCIAL_NETWORKS,
+    socialLinkProblem,
+    type SocialLinks,
+    type SocialNetwork,
     SLOTLINE_API_KEY_MAX,
     SLOTLINE_EVENT_SLUG_PATTERN,
     SIGNATURE_LOCKABLE,
@@ -55,6 +60,28 @@ const profileText = z
     .transform((v) => (v === '' ? null : v))
     .nullable();
 
+/**
+ * A member's profiles for the signature's icons (#193): only the known networks, each https on that network's
+ * own site; an empty one is dropped.
+ */
+const socialLinks = z
+    .object(
+        Object.fromEntries(
+            SOCIAL_NETWORKS.map((n) => [n, z.string().trim().max(SOCIAL_LINK_MAX).optional()]),
+        ) as Record<SocialNetwork, z.ZodOptional<z.ZodString>>,
+    )
+    .strict()
+    .superRefine((links, ctx) => {
+        for (const network of SOCIAL_NETWORKS) {
+            const link = links[network];
+            const problem = link ? socialLinkProblem(network, link) : null;
+            if (problem) ctx.addIssue({ code: 'custom', path: [network], message: problem });
+        }
+    })
+    .transform(
+        (links): SocialLinks => Object.fromEntries(Object.entries(links).filter(([, link]) => link)) as SocialLinks,
+    );
+
 /** `PUT /members/:memberId/signature-profile`. */
 export class PutSignatureProfileDto extends createZodDto(
     z
@@ -72,6 +99,9 @@ export class PutSignatureProfileDto extends createZodDto(
                 .transform((v) => (v === '' ? null : v))
                 .nullable()
                 .meta({ description: 'The member’s page on the Slotline site: `{baseUrl}/{username}`.' }),
+            socials: socialLinks
+                .optional()
+                .meta({ description: 'Profiles shown as icons; each https on that network’s site. Left out, kept.' }),
         })
         .strict(),
 ) {}
