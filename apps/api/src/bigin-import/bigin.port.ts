@@ -28,11 +28,15 @@ export interface BiginListOptions {
     since: string | null;
     /** 1-based page within the window. */
     page: number;
+    /** v2's token for the next page, when the window could not move (a page token pages past 2,000). */
+    pageToken?: string | null | undefined;
 }
 
 export interface BiginPage {
     records: BiginRecord[];
     moreRecords: boolean;
+    /** v2's token for the page after this one; null when there is none. */
+    nextPageToken?: string | null | undefined;
 }
 
 /** A record Bigin deleted: `/<Module>/deleted`. */

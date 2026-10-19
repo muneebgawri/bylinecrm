@@ -22,16 +22,29 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
                 calls.push({ url, init });
                 if (url.endsWith('/oauth/v2/token'))
                     return Promise.resolve(json(200, { access_token: 't1', expires_in: 3600 }));
-                return Promise.resolve(json(200, { data: [{ id: '1' }], info: { more_records: true } }));
+                return Promise.resolve(
+                    json(200, {
+                        data: [{ id: '1', Last_Name: 'Lee', $approved: true }],
+                        info: { more_records: true, next_page_token: 'tok-2' },
+                    }),
+                );
             }),
         );
         const http = new BiginHttp({ sleep: () => Promise.resolve() }, { fetch: (u, i) => globalThis.fetch(u, i) });
         const page = await http.list(connection, 'Contacts', { since: '2026-10-01T00:00:00.000Z', page: 2 });
         await http.list(connection, 'Contacts', { since: null, page: 1 });
-        expect(page).toEqual({ records: [{ id: '1' }], moreRecords: true });
+        expect(page).toEqual({
+            records: [{ id: '1', Last_Name: 'Lee', $approved: true }],
+            moreRecords: true,
+            nextPageToken: 'tok-2',
+        });
         expect(calls.filter((c) => c.url.endsWith('/oauth/v2/token'))).toHaveLength(1);
-        const read = calls[1]!;
-        expect(read.url).toContain('/bigin/v1/Contacts?per_page=200&page=2&sort_by=Modified_Time&sort_order=asc');
+        // The fields are sampled once from v1 (every field, `$` meta left out), then the list reads v2.
+        expect(calls.filter((c) => c.url.includes('/bigin/v1/Contacts?'))).toHaveLength(1);
+        const read = calls.find((c) => c.url.includes('/bigin/v2/Contacts?'))!;
+        expect(read.url).toContain('fields=id%2CModified_Time%2CCreated_Time%2CLast_Name');
+        expect(read.url).toMatch(/[?&]page=2(&|$)/);
+        expect(read.url).not.toContain('%24approved');
         const headers = read.init!.headers as Record<string, string>;
         expect(headers.authorization).toBe('Zoho-oauthtoken t1');
         expect(headers['if-modified-since']).toBe('Thu, 01 Oct 2026 00:00:00 GMT');
@@ -40,6 +53,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
     it('a 304 is an empty page; a 429 is retried; refused credentials are final and never carry a secret', async () => {
         const answers = [
             json(200, { access_token: 't1', expires_in: 3600 }),
+            json(200, { data: [{ id: '9' }] }),
             json(429, { code: 'TOO_MANY' }),
             new Response(null, { status: 304 }),
         ];
@@ -51,6 +65,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
         expect(await http.list(connection, 'Deals', { since: '2026-10-01T00:00:00Z', page: 1 })).toEqual({
             records: [],
             moreRecords: false,
+            nextPageToken: null,
         });
 
         vi.stubGlobal(
