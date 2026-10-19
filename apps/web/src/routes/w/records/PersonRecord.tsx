@@ -98,16 +98,59 @@ export function PersonRecord({
         },
         {
             field: 'emails',
+            // The primary address, then the others: each edited in place, cleared to remove it, and one more to add.
             control: (
-                <InlineText
-                    label="Email"
-                    path="emails.primary"
-                    type="email"
-                    value={person.emails.primary}
-                    canEdit={write.allowed}
-                    reason={write.reason}
-                    onSave={(v) => save({ emails: { ...person.emails, primary: v } })}
-                />
+                <div className="flex flex-col gap-1">
+                    <InlineText
+                        label="Email"
+                        path="emails.primary"
+                        type="email"
+                        value={person.emails.primary}
+                        canEdit={write.allowed}
+                        reason={write.reason}
+                        onSave={(v) => save({ emails: { ...person.emails, primary: v } })}
+                    />
+                    {person.emails.additional.map((address, i) => (
+                        <InlineText
+                            key={address}
+                            label={`Other email ${i + 1}`}
+                            path={`emails.additional.${i}`}
+                            type="email"
+                            value={address}
+                            canEdit={write.allowed}
+                            reason={write.reason}
+                            onSave={(v) =>
+                                save({
+                                    emails: {
+                                        ...person.emails,
+                                        additional: v
+                                            ? person.emails.additional.map((a, j) => (j === i ? v : a))
+                                            : person.emails.additional.filter((_, j) => j !== i),
+                                    },
+                                })
+                            }
+                        />
+                    ))}
+                    {write.allowed && person.emails.primary ? (
+                        // Keyed by the count, so once an address is added the slot is empty again.
+                        <InlineText
+                            key={`add-${person.emails.additional.length}`}
+                            label="Add email"
+                            path={`emails.additional.${person.emails.additional.length}`}
+                            type="email"
+                            value={null}
+                            placeholder="Add email"
+                            canEdit
+                            onSave={(v) =>
+                                v
+                                    ? save({
+                                          emails: { ...person.emails, additional: [...person.emails.additional, v] },
+                                      })
+                                    : Promise.resolve()
+                            }
+                        />
+                    ) : null}
+                </div>
             ),
         },
         {
