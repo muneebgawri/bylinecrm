@@ -62,6 +62,8 @@ export const paths = {
     settingsSlotline: (workspaceId: string) => `/w/${workspaceId}/settings/slotline`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
     settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
+    /** The Bigin importer (BIGIN-1): an admin connects Zoho Bigin and syncs it one way into BylineCRM. */
+    settingsImportBigin: (workspaceId: string) => `/w/${workspaceId}/settings/import-bigin`,
     /** A recipient's unsubscribe page (P3-1): public, outside the app — the mail's visible link opens it. */
     unsubscribe: (token: string) => `${UNSUBSCRIBE_PAGE_PATH}/${token}`,
 } as const;

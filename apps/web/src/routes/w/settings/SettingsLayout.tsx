@@ -37,6 +37,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'slotline', label: 'Slotline', to: paths.settingsSlotline, requires: 'workspace:admin' },
     // The Twenty importer (P4-4): it writes every object the workspace has, so an admin's.
     { id: 'import-twenty', label: 'Import from Twenty', to: paths.settingsImportTwenty, requires: 'workspace:admin' },
+    // The Bigin importer (BIGIN-1): one-way sync from Zoho Bigin, an admin's like the Twenty importer.
+    { id: 'import-bigin', label: 'Import from Bigin', to: paths.settingsImportBigin, requires: 'workspace:admin' },
 ];
 
 /** Workspace settings: a section row, then the section's table. The server is still the gate on every write. */
@@ -66,7 +68,7 @@ export function SettingsLayout() {
         <div className="p-7">
             <PageHeader
                 title="Settings"
-                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, the addresses it never mails, the regions its outreach may reach, how long an address's verification stands, what enrichment looks up, the domain its tracked links go through, and the Twenty workspace it imports from."
+                subtitle="Who is in the workspace and what they may do, the pipelines deals move through, the fields records carry, how its mail is signed, the Google client its mailboxes connect through, the addresses it never mails, the regions its outreach may reach, how long an address's verification stands, what enrichment looks up, the domain its tracked links go through, and the Twenty workspace and Bigin account it imports from."
             />
             <nav ref={nav} aria-label="Settings sections" className="mb-4 flex gap-1 overflow-x-auto">
                 {sections.map((section) => (

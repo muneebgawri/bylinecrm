@@ -268,6 +268,14 @@ function useShellCommands({
                 when: () => can(membership, 'workspace:admin'),
                 run: () => navigate(paths.settingsImportTwenty(workspaceId)),
             },
+            {
+                id: 'settings.importBigin',
+                title: 'Import from Bigin',
+                group: 'Go to',
+                keywords: ['import', 'bigin', 'zoho', 'sync', 'crm'],
+                when: () => can(membership, 'workspace:admin'),
+                run: () => navigate(paths.settingsImportBigin(workspaceId)),
+            },
             { id: 'palette.open', title: 'Search…', group: 'Account', shortcut: 'mod+k', run: openPalette },
             { id: 'sidebar.toggle', title: 'Toggle sidebar', group: 'Account', shortcut: '[', run: toggleSidebar },
             {

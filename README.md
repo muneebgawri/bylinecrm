@@ -57,7 +57,7 @@ curl -s localhost:3300/health   # {"status":"ok","db":"ok","redis":"ok","rls":"o
   cross-tenant suite sets `0`.
 - **`WEBHOOK_ALLOW_PRIVATE_TARGETS`** — `0` in every deployed environment (it admits private/loopback webhook
   targets, for local receivers only; the Twenty importer's base URL is held to the same rule).
-- **`TWENTY_IMPORT_WORKER`** — `1` (default) drives Twenty import runs in this process (P4-4); `0` on an API when
+- **`TWENTY_IMPORT_WORKER`** — `1` (default) drives Twenty and Bigin import runs and their schedules in this process (P4-4, BIGIN-1); `0` on an API when
   a separate worker process runs them.
 
 ## Webhooks (P1-5)

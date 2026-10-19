@@ -6,6 +6,7 @@ import {
     signupInvitationMail,
     taskDigestMail,
     twentySyncFailingMail,
+    biginSyncFailingMail,
     verificationMail,
     workspaceInvitationMail,
 } from './templates';
@@ -86,6 +87,32 @@ export class AccountMail {
      * The workspace's automatic Twenty sync has failed several times in a row (#185): one message
      * per admin per run, recorded against the workspace in the transaction that ended the run.
      */
+    /** The automatic Bigin sync's notice (BIGIN-1): as `twentySyncFailing`, once per admin per run. */
+    biginSyncFailing(
+        tx: MailTransaction,
+        input: {
+            workspaceId: string;
+            to: string;
+            memberId: string;
+            runId: string;
+            workspaceName: string;
+            failures: number;
+            error: string;
+            url: string;
+        },
+    ): Promise<void> {
+        return this.outbox.record(
+            tx,
+            {
+                kind: 'bigin_sync_failing',
+                to: input.to,
+                idempotencyKey: `bigin-sync-${input.runId}-${input.memberId}`,
+                ...biginSyncFailingMail(input),
+            },
+            input.workspaceId,
+        );
+    }
+
     twentySyncFailing(
         tx: MailTransaction,
         input: {

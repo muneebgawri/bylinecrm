@@ -14,6 +14,10 @@ import {
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
+    BiginContactReusePage,
+    BiginImportObjectReportView,
+    BiginImportOverviewView,
+    BiginImportRunView,
     AuthProvidersView,
     InvitePreviewView,
     PlatformAccessView,
@@ -1630,3 +1634,85 @@ export const twentyImport: TwentyImportOverviewView = {
 };
 
 export const twentyImportRuns: TwentyImportRunView[] = [twentyImportRun];
+
+// ---- The Bigin importer (BIGIN-1) ---------------------------------------------------------------
+const biginCounts: Record<BiginImportObjectReportView['object'], [number, number, number, number]> = {
+    Accounts: [412, 398, 6, 0],
+    Contacts: [1840, 1795, 31, 2],
+    Deals: [266, 260, 4, 0],
+    Notes: [933, 921, 0, 12],
+};
+
+export const biginImportRun: BiginImportRunView = {
+    id: '6b1f3c2e-7a44-4c1b-9e1a-2d6f0b9c4e11',
+    status: 'succeeded',
+    mode: 'changes',
+    phase: null,
+    report: (Object.keys(biginCounts) as BiginImportObjectReportView['object'][]).map((object) => {
+        const [remote, created, merged, skipped] = biginCounts[object];
+        return {
+            object,
+            remote,
+            before: 0,
+            read: created + merged + skipped,
+            created,
+            updated: 0,
+            unchanged: 0,
+            merged,
+            skipped,
+            failed: 0,
+            after: created + merged,
+            missingInSource: object === 'Contacts' ? 1 : 0,
+            errors: [],
+            conflicts: 0,
+            kept: [],
+            unknownStages:
+                object === 'Deals' ? [{ externalId: '5725767000000412001', stage: 'Pending Press Release' }] : [],
+            reused: object === 'Contacts' ? 1 : 0,
+        };
+    }),
+    error: null,
+    failedRecords: 0,
+    cancelRequested: false,
+    scheduled: true,
+    startedBy: null,
+    createMembers: null,
+    accountsCreated: 0,
+    queuedAt: at(3),
+    startedAt: at(3),
+    finishedAt: at(2),
+};
+
+export const biginImport: BiginImportOverviewView = {
+    settings: {
+        configured: true,
+        accountsUrl: 'https://accounts.zoho.com',
+        apiUrl: 'https://www.zohoapis.com',
+        clientId: '1000.EXAMPLECLIENTID',
+        refreshTokenLast4: '9c2d',
+        configuredBy: IDS.member,
+        updatedAt: at(30),
+        createMembers: null,
+    },
+    latestRun: biginImportRun,
+    linked: biginImportRun.report.map((r) => ({ object: r.object, count: r.after ?? 0 })),
+    cursors: biginImportRun.report.map((r) => ({ object: r.object, since: at(3) })),
+    sync: { interval: 'hourly', nextRunAt: at(1), failures: 0, lastError: null, cutoverAt: null },
+};
+
+export const biginImportRuns: BiginImportRunView[] = [biginImportRun];
+
+export const biginContactReuses: BiginContactReusePage = {
+    items: [
+        {
+            id: '0c8f2a71-55d3-4e7e-8a10-6c2b9f1d3e44',
+            biginId: '5725767000000318004',
+            previousPersonId: IDS.person,
+            newPersonId: IDS.secondPerson,
+            detectedAt: at(2),
+            before: { name: 'Pat Early', email: 'pat@early.example' },
+            after: { name: 'Robin Later', email: 'robin@later.example' },
+        },
+    ],
+    nextCursor: null,
+};

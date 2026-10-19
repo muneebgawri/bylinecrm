@@ -110,6 +110,12 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],
+    // BIGIN-1: the Bigin importer's screen.
+    [new RegExp(`^${W}/import/bigin$`), () => data.biginImport],
+    [new RegExp(`^${W}/import/bigin/missing`), () => ({ items: [], nextCursor: null })],
+    [new RegExp(`^${W}/import/bigin/reuses`), () => data.biginContactReuses],
+    [new RegExp(`^${W}/import/bigin/runs$`), () => data.biginImportRuns],
+    [new RegExp(`^${W}/import/bigin/runs/[^/]+$`), () => data.biginImportRun],
     [new RegExp(`^${W}/import/twenty/missing`), () => ({ items: [], nextCursor: null })],
     [new RegExp(`^${W}/import/twenty/runs$`), () => data.twentyImportRuns],
     [new RegExp(`^${W}/import/twenty/runs/[^/]+$`), () => data.twentyImportRun],
