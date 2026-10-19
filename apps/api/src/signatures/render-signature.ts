@@ -6,7 +6,10 @@ import {
     SIGNATURE_LOGO_VARIABLE,
     SIGNATURE_MAX_CHARS,
     SIGNATURE_NODES,
+    SOCIAL_ICON_SIZE,
+    SOCIAL_NETWORK_LABEL,
     isSignatureVariable,
+    type SocialNetwork,
     type FieldError,
     type RenderedSignature,
     type RichText,
@@ -31,7 +34,11 @@ export interface SignatureValues {
         title: string | null;
         phone: string | null;
         bookingLink: string | null;
+        /** The member's profiles, in `SOCIAL_NETWORKS` order. */
+        socials: { network: SocialNetwork; url: string }[];
     };
+    /** Where the CRM serves the social icons: `<base>/<network>.png`. */
+    socialIconBase: string;
     workspace: { name: string; logo: { url: string; width: number; height: number } | null };
 }
 
@@ -46,12 +53,14 @@ const styled = (style: string, value: string | null) =>
  */
 export const SIGNATURE_STYLE = {
     table: 'border-collapse:collapse;margin-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151',
-    row: 'padding:0 0 10px 0',
+    row: 'padding:0 0 8px 0',
     line: 'margin:0',
     name: 'font-size:15px;font-weight:bold;color:#111827',
     title: 'color:#6b7280',
     link: 'color:#2563eb;text-decoration:none',
     logo: 'display:block;border:0',
+    socialLink: 'display:inline-block;margin-right:6px;text-decoration:none',
+    socialIcon: 'display:block;border:0',
 } as const;
 
 function variable(path: SignatureVariablePath, values: SignatureValues): { html: string; text: string } {
@@ -72,6 +81,28 @@ function variable(path: SignatureVariablePath, values: SignatureValues): { html:
                 ? {
                       html: `<a href="${escapeHtml(sender.bookingLink)}" style="${SIGNATURE_STYLE.link}">${escapeHtml(BOOKING_LINK_LABEL)}</a>`,
                       text: `${BOOKING_LINK_LABEL}: ${sender.bookingLink}`,
+                  }
+                : text(null);
+        case 'sender.socials':
+            return sender.socials.length
+                ? {
+                      html: sender.socials
+                          .map(
+                              ({ network, url }) =>
+                                  `<a href="${escapeHtml(url)}" style="${SIGNATURE_STYLE.socialLink}">` +
+                                  imageHtml(
+                                      `${values.socialIconBase}/${network}.png`,
+                                      SOCIAL_NETWORK_LABEL[network],
+                                      SOCIAL_ICON_SIZE,
+                                      SOCIAL_ICON_SIZE,
+                                      SIGNATURE_STYLE.socialIcon,
+                                  ) +
+                                  '</a>',
+                          )
+                          .join(''),
+                      text: sender.socials
+                          .map(({ network, url }) => `${SOCIAL_NETWORK_LABEL[network]}: ${url}`)
+                          .join('\n'),
                   }
                 : text(null);
         case SIGNATURE_LOGO_VARIABLE:

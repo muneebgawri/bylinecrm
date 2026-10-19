@@ -243,6 +243,8 @@ model WorkspaceMember {
   /// The event type "Book a quick meeting" opens (#196): its slug and title on Slotline; null opens the member's page.
   slotlineEventSlug        String? @map("slotline_event_slug")
   slotlineEventTitle       String? @map("slotline_event_title")
+  /// The member's profiles a signature shows as icons (#193): `SocialLinks` from @bylinecrm/shared.
+  socialLinks              Json    @default("{}") @map("social_links")
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

@@ -53,7 +53,7 @@ deploying this changes no mail anyone sends.
 
 - **Logo.** `workspace_logos`: an admin uploads a PNG or JPEG of at most 200 KB; `logo-image.ts` reads it by its
   bytes (`pngjs`, MIT; `jpeg-js`, BSD-3-Clause), refuses more than 25 megapixels from the header before decoding,
-  scales it down to at most 300 px wide by area averaging and stores a PNG. **SVG is not taken:** the issue asks
+  trims its empty border (transparent, or the corner's colour around an opaque image) so it sits flush with the text, scales it down to at most 360 px wide by area averaging and stores a PNG; a signature shows it at half that size, so it is sharp on a high-density screen. **SVG is not taken:** the issue asks
   for it rasterised, but the rasterisers there are, `sharp`'s libvips (LGPL-3.0) and resvg (MPL-2.0), are
   outside the licence allowlist for runtime code; taking SVG waits on the owner granting one of them an exception.
   It is served by `GET /api/public/logos/<token>.png` — public,
@@ -68,6 +68,24 @@ deploying this changes no mail anyone sends.
 - **Locks.** `lock_logo`, `lock_booking_link`: while on, every saved signature — the default, a mailbox's, and
   one a message carries — must name the variable, and "no signature" is refused (`422`). The composer hides
   "Remove signature" while anything is locked.
+
+## How it looks (owner 2026-10-19)
+
+The owner found the first send's signature plain (bare paragraphs, wide gaps) and its logo blurry. A signature
+is now laid out for email with inline styles only, which every mail client keeps: a `role="presentation"` table
+of tight rows (`SIGNATURE_STYLE`), the name bold, the title grey, links in one colour without underline,
+neutral colours (a signature sits under any message, in any workspace). The serializer's walk takes this as
+an opt-in `layout` (a wrapper per top-level block, a paragraph's and a link's style), so a template body is
+still written plain. `SIGNATURE_STARTER` is: name and title; the logo; phone and "Book a quick meeting";
+the social icons.
+
+**Social icons.** `workspace_members.social_links` holds a member's profiles on `SOCIAL_NETWORKS` (LinkedIn, X,
+Facebook, Instagram, YouTube, Telegram), each `https` on that network's own site (`socialLinkProblem`, checked
+on save), set in Settings → Signatures by the member or an admin. `{{sender.socials}}` renders one linked
+icon per profile, in that fixed order, and a line naming nobody is left out. The icons are the CRM's own
+files — `apps/api/assets/social-icons/<network>.png`, 40 px shown at 20, Tabler Icons' glyphs (MIT) white on
+the network's colour, made once by `scripts/social-icons.mjs` and committed — served publicly at the
+versioned `SOCIAL_ICON_PATH` with a year's cache, so no mail loads an image from anyone else.
 
 ## A Slotline event type for the booking link (#196)
 

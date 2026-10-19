@@ -62,7 +62,10 @@ describe('#193 renderSignature', () => {
     });
 
     it('shows a logo at half its stored size, so it is sharp on high-density screens', () => {
-        const small = { ...FULL, workspace: { ...FULL.workspace, logo: { ...FULL.workspace.logo!, width: 120, height: 40 } } };
+        const small = {
+            ...FULL,
+            workspace: { ...FULL.workspace, logo: { ...FULL.workspace.logo!, width: 120, height: 40 } },
+        };
         expect(renderSignature(doc(para(v('workspace.logo'))), small).html).toContain('width="60" height="20"');
     });
 

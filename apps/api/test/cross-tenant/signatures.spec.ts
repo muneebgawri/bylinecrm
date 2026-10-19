@@ -298,7 +298,7 @@ describe('#193 email signatures', () => {
     describe('the workspace logo', () => {
         let first: WorkspaceLogoView;
 
-        it('an admin uploads it once; it is stored as a PNG at most 300px wide and served without a sign-in', async () => {
+        it('an admin uploads it once; it is stored as a PNG at most 360px wide and served without a sign-in', async () => {
             expect((await upload(member, workspace, await png(900, 300), 'image/png')).status).toBe(403);
             const res = await upload(admin, workspace, await png(900, 300), 'image/png');
             expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -820,10 +820,19 @@ describe('#193 email signatures', () => {
     });
 
     describe('#193 social icons', () => {
-        const details = (socials: object) => ({ jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia', socials });
+        const details = (socials: object) => ({
+            jobTitle: 'Account manager',
+            phone: null,
+            slotlineUsername: 'mia',
+            socials,
+        });
 
         it('a member sets their profile links; each must be https on that network’s own site', async () => {
-            const saved = await putProfile(memberId, details({ linkedin: 'https://www.linkedin.com/in/mia', x: 'https://x.com/mia' }), member);
+            const saved = await putProfile(
+                memberId,
+                details({ linkedin: 'https://www.linkedin.com/in/mia', x: 'https://x.com/mia' }),
+                member,
+            );
             expect(saved.status, JSON.stringify(saved.body)).toBe(200);
             expect((saved.body as SignatureProfileView).socials).toEqual({
                 linkedin: 'https://www.linkedin.com/in/mia',
@@ -837,14 +846,26 @@ describe('#193 email signatures', () => {
                 expect((await putProfile(memberId, details(bad), member)).status, JSON.stringify(bad)).toBe(400);
             }
             // Left out, the links are kept.
-            await putProfile(memberId, { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' }, member).expect(200);
-            expect(((await as(member).get(w(`/members/${memberId}/signature-profile`))).body as SignatureProfileView).socials).toEqual({
+            await putProfile(
+                memberId,
+                { jobTitle: 'Account manager', phone: null, slotlineUsername: 'mia' },
+                member,
+            ).expect(200);
+            expect(
+                ((await as(member).get(w(`/members/${memberId}/signature-profile`))).body as SignatureProfileView)
+                    .socials,
+            ).toEqual({
                 linkedin: 'https://www.linkedin.com/in/mia',
                 x: 'https://x.com/mia',
             });
             // An admin may set them for a member; another member may not.
             expect((await putProfile(adminMemberId, details({ x: 'https://x.com/matt' }), member)).status).toBe(403);
-            await putProfile(adminMemberId, { jobTitle: 'Founder', phone: '+92 300 1234567', slotlineUsername: 'matt', socials: { x: 'https://x.com/matt' } }).expect(200);
+            await putProfile(adminMemberId, {
+                jobTitle: 'Founder',
+                phone: '+92 300 1234567',
+                slotlineUsername: 'matt',
+                socials: { x: 'https://x.com/matt' },
+            }).expect(200);
         });
 
         it('renders as linked icons the CRM serves itself, no sign-in needed', async () => {
@@ -853,7 +874,10 @@ describe('#193 email signatures', () => {
                 .send({ mailboxId: memberMailbox, signature: doc(para(v('sender.socials'))) });
             expect(res.status, JSON.stringify(res.body)).toBe(200);
             const html = (res.body as RenderedSignature).html;
-            const icon = /<a href="https:\/\/www\.linkedin\.com\/in\/mia"[^>]*><img src="(https?:\/\/[^"]+\/api\/public\/social-icons\/v1\/linkedin\.png)" alt="LinkedIn"/.exec(html);
+            const icon =
+                /<a href="https:\/\/www\.linkedin\.com\/in\/mia"[^>]*><img src="(https?:\/\/[^"]+\/api\/public\/social-icons\/v1\/linkedin\.png)" alt="LinkedIn"/.exec(
+                    html,
+                );
             expect(icon, html).not.toBeNull();
             expect(html).toContain('/api/public/social-icons/v1/x.png');
             const served = await http().get(new URL(icon![1]!).pathname);
@@ -865,4 +889,3 @@ describe('#193 email signatures', () => {
         });
     });
 });
-

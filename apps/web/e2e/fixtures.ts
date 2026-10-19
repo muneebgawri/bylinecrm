@@ -877,6 +877,7 @@ export function signatureProfile(memberId: string): SignatureProfileView {
         slotlineConfigured: true,
         slotlineKey: { last4: 'k3y9' },
         slotlineEvent: { slug: 'intro', title: 'Intro call' },
+        socials: { linkedin: 'https://www.linkedin.com/in/kate-morgan', x: 'https://x.com/katemorgan' },
     };
 }
 

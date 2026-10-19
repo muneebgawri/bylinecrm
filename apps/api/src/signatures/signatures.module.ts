@@ -6,6 +6,7 @@ import { LogosService } from './logos.service';
 import {
     MailboxSignatureController,
     PublicLogoController,
+    PublicSocialIconController,
     SignaturePreviewController,
     SignatureProfileController,
     SignatureSettingsController,
@@ -24,6 +25,7 @@ import { SignaturesService } from './signatures.service';
         SignatureProfileController,
         SlotlineAccountController,
         PublicLogoController,
+        PublicSocialIconController,
     ],
     // Slotline's v2 API (#196) is read only here, for a member's event types.
     providers: [

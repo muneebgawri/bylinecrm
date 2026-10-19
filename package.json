@@ -31,11 +31,13 @@
     "devDependencies": {
         "@bylinecrm/eslint-config": "workspace:*",
         "@stoplight/prism-cli": "^5.14.2",
+        "@tabler/icons": "^3",
         "eslint": "^9.39.4",
         "husky": "^9.1.7",
         "lint-staged": "^17.6.0",
         "pg": "^8.16.3",
         "prettier": "^3.9.9",
+        "tsx": "^4",
         "turbo": "^2.11.7"
     },
     "lint-staged": {

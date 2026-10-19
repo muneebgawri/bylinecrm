@@ -1,4 +1,5 @@
 import {
+    NotFoundException,
     Body,
     Controller,
     Delete,
@@ -22,7 +23,10 @@ import type {
     SlotlineEventTypeView,
     WorkspaceLogoView,
 } from '@bylinecrm/shared';
+import { createReadStream } from 'node:fs';
+import { join } from 'node:path';
 import type { Request, Response } from 'express';
+import { SOCIAL_ICON_PATH, SOCIAL_NETWORKS } from '@bylinecrm/shared';
 import { AnyMember, Public, Requires, TenantController } from '../auth/decorators';
 import { Returns, ReturnsFile } from '../openapi/responses';
 import {
@@ -45,6 +49,9 @@ import {
 } from './responses';
 import { SignaturesService } from './signatures.service';
 import { SlotlineAccountService } from './slotline-account.service';
+
+/** The icons, as files beside the build: `apps/api/assets/social-icons/<network>.png` (made by `scripts/social-icons.mjs`). */
+const SOCIAL_ICON_DIR = join(__dirname, '..', '..', 'assets', 'social-icons');
 
 /** The workspace's signature settings (#193): every member reads them; an admin sets the default, the locks and the logo. */
 @ApiTags('mail')
@@ -229,5 +236,22 @@ export class PublicLogoController {
         res.setHeader('Cache-Control', 'public, max-age=604800');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         return new StreamableFile(body, { type: 'image/png' });
+    }
+}
+
+/** The social icons signatures link (#193), public: mail clients load them with no sign-in. */
+@ApiTags('mail')
+@Controller(SOCIAL_ICON_PATH.replace(/^\/api\//, ''))
+@Public()
+export class PublicSocialIconController {
+    @Get(':file')
+    @ReturnsFile('image/png')
+    serve(@Param('file') file: string, @Res({ passthrough: true }) res: Response): StreamableFile {
+        const network = SOCIAL_NETWORKS.find((n) => file === `${n}.png`);
+        if (!network) throw new NotFoundException('no such icon');
+        // The path is versioned (`/v1`): an icon that changes gets a new path, so this one is cached for good.
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return new StreamableFile(createReadStream(join(SOCIAL_ICON_DIR, `${network}.png`)), { type: 'image/png' });
     }
 }

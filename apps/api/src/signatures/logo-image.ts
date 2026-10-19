@@ -4,7 +4,7 @@ import { PNG } from 'pngjs';
 
 /**
  * A logo upload as the PNG every signature links to (#193): read as PNG or JPEG — by its bytes, not its
- * declared type — scaled down to at most `LOGO_WIDTH` wide by averaging (never up), written as PNG.
+ * declared type — its empty border trimmed, scaled down to at most `LOGO_WIDTH` wide by averaging (never up), written as PNG.
  * Pure JavaScript with permissive licences (`pngjs` MIT, `jpeg-js` BSD-3-Clause); an image's size is read
  * from its header and refused above `LOGO_MAX_PIXELS` before anything is decoded, so a small file cannot
  * unpack into a huge bitmap.
@@ -30,7 +30,7 @@ interface Bitmap {
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 export function logoPng(bytes: Buffer): { data: Buffer; width: number; height: number } {
-    const bitmap = decode(bytes);
+    const bitmap = trim(decode(bytes));
     const scaled = bitmap.width > LOGO_WIDTH ? downscale(bitmap, LOGO_WIDTH) : bitmap;
     const png = new PNG({ width: scaled.width, height: scaled.height });
     png.data = Buffer.from(scaled.data);
@@ -61,6 +61,57 @@ function decode(bytes: Buffer): Bitmap {
         }
     }
     throw new UnreadableImage('a logo is a PNG or a JPEG');
+}
+
+/** Alpha at or under this is empty; a channel within this of the background's is background. */
+const CLEAR_ALPHA = 16;
+const BACKGROUND_TOLERANCE = 24;
+
+/**
+ * The image without its empty border: a transparent one, or — for an opaque image, a JPEG on white — one of
+ * the corner's colour. A logo then sits flush with the signature's text, whatever margin it was drawn with.
+ * An image that is all border is kept whole.
+ */
+function trim(source: Bitmap): Bitmap {
+    const { width, height, data } = source;
+    const corner = [data[0]!, data[1]!, data[2]!, data[3]!];
+    const opaqueCorner = corner[3]! > 255 - CLEAR_ALPHA;
+    const empty = (x: number, y: number): boolean => {
+        const i = (y * width + x) * 4;
+        if (data[i + 3]! <= CLEAR_ALPHA) return true;
+        return (
+            opaqueCorner &&
+            Math.abs(data[i]! - corner[0]!) <= BACKGROUND_TOLERANCE &&
+            Math.abs(data[i + 1]! - corner[1]!) <= BACKGROUND_TOLERANCE &&
+            Math.abs(data[i + 2]! - corner[2]!) <= BACKGROUND_TOLERANCE
+        );
+    };
+    let top = 0;
+    let bottom = height - 1;
+    let left = 0;
+    let right = width - 1;
+    const rowEmpty = (y: number) => {
+        for (let x = left; x <= right; x += 1) if (!empty(x, y)) return false;
+        return true;
+    };
+    const columnEmpty = (x: number) => {
+        for (let y = top; y <= bottom; y += 1) if (!empty(x, y)) return false;
+        return true;
+    };
+    while (top <= bottom && rowEmpty(top)) top += 1;
+    if (top > bottom) return source;
+    while (rowEmpty(bottom)) bottom -= 1;
+    while (columnEmpty(left)) left += 1;
+    while (columnEmpty(right)) right -= 1;
+    if (top === 0 && left === 0 && bottom === height - 1 && right === width - 1) return source;
+    const w = right - left + 1;
+    const h = bottom - top + 1;
+    const out = Buffer.alloc(w * h * 4);
+    for (let y = 0; y < h; y += 1) {
+        const from = ((top + y) * width + left) * 4;
+        out.set(data.subarray(from, from + w * 4), y * w * 4);
+    }
+    return { width: w, height: h, data: out };
 }
 
 function assertSize(width: number, height: number): void {
