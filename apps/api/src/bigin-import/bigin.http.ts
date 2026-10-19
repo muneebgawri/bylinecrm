@@ -1,3 +1,5 @@
+import { fetch as undiciFetch, type Dispatcher, type RequestInit as UndiciRequestInit } from 'undici';
+import { createWebhookDispatcher } from '../webhooks/url-guard';
 import { createHash } from 'node:crypto';
 import { BIGIN_PAGE_SIZE, type BiginImportObject } from '@bylinecrm/shared';
 import { assertNoOpenTransaction } from '../infra/transaction-scope';
@@ -60,8 +62,33 @@ export class BiginHttp implements BiginApi {
     private readonly clock: Clock;
     private readonly tokens = new Map<string, { token: string; expiresAt: number }>();
 
-    constructor(clock: Partial<Clock> = {}) {
+    /**
+     * Every request goes through the webhook delivery client: its lookup refuses a private address at connect
+     * time, so a host that passed the check on save but later resolves inward (a DNS change) is refused too.
+     * Redirects are never followed — a redirect is an error, not a new destination (audit, #217).
+     */
+    private readonly dispatcher: Dispatcher;
+    /** Tests stand in their own request function; production never passes one. */
+    private readonly fetchImpl: ((url: string, init: RequestInit) => Promise<Response>) | undefined;
+
+    constructor(
+        clock: Partial<Clock> = {},
+        options: { allowPrivate?: boolean; fetch?: (url: string, init: RequestInit) => Promise<Response> } = {},
+    ) {
         this.clock = { ...realClock, ...clock };
+        this.dispatcher = createWebhookDispatcher({ allowPrivate: options.allowPrivate ?? false });
+        this.fetchImpl = options.fetch;
+    }
+
+    /** undici's `fetch` through the guarded client (the same undici as the dispatcher), refusing redirects. */
+    private async send(url: string, init: RequestInit): Promise<Response> {
+        if (this.fetchImpl) return this.fetchImpl(url, { ...init, redirect: 'error' });
+        const guarded: UndiciRequestInit = {
+            ...(init as unknown as UndiciRequestInit),
+            redirect: 'error',
+            dispatcher: this.dispatcher,
+        };
+        return (await undiciFetch(url, guarded)) as unknown as Response;
     }
 
     async list(connection: BiginConnection, module: BiginImportObject, options: BiginListOptions): Promise<BiginPage> {
@@ -137,7 +164,7 @@ export class BiginHttp implements BiginApi {
             if (since) headers['if-modified-since'] = new Date(since).toUTCString();
             let response: Response;
             try {
-                response = await fetch(url, { headers, signal: AbortSignal.timeout(BIGIN_HTTP_TIMEOUT_MS) });
+                response = await this.send(url, { headers, signal: AbortSignal.timeout(BIGIN_HTTP_TIMEOUT_MS) });
             } catch (error) {
                 last = new BiginApiError(0, `Bigin did not answer: ${describe(error)}`, false);
                 await this.clock.sleep(retryDelayMs(attempt));
@@ -166,6 +193,41 @@ export class BiginHttp implements BiginApi {
         throw last ?? new BiginApiError(0, 'Bigin did not answer', false);
     }
 
+    async exchangeGrantCode(
+        client: { accountsUrl: string; clientId: string; clientSecret: string },
+        code: string,
+    ): Promise<string> {
+        const url = `${client.accountsUrl.replace(/\/+$/, '')}${ZOHO_TOKEN_PATH}`;
+        const form = new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: client.clientId,
+            client_secret: client.clientSecret,
+            code,
+        });
+        let response: Response;
+        try {
+            response = await this.send(url, {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+                body: form.toString(),
+                signal: AbortSignal.timeout(BIGIN_HTTP_TIMEOUT_MS),
+            });
+        } catch (error) {
+            throw new BiginApiError(0, `Zoho's OAuth server did not answer: ${describe(error)}`, false);
+        }
+        const body = (await response.json().catch(() => ({}))) as { refresh_token?: unknown; error?: unknown };
+        // A grant code is single-use and lives a few minutes; Zoho says so with `{ error: 'invalid_code' }`.
+        if (typeof body.refresh_token !== 'string' || body.refresh_token === '') {
+            const why = typeof body.error === 'string' ? body.error : `status ${response.status}`;
+            throw new BiginApiError(
+                response.status >= 500 ? response.status : 401,
+                `Zoho refused the grant code (${why}): generate a new one and paste it within its few minutes`,
+                true,
+            );
+        }
+        return body.refresh_token;
+    }
+
     /** A Zoho access token for the connection: the cached one while it has time left, else a fresh one. */
     private async accessToken(connection: BiginConnection): Promise<string> {
         const key = tokenKey(connection);
@@ -182,7 +244,7 @@ export class BiginHttp implements BiginApi {
         for (let attempt = 1; attempt <= BIGIN_RETRY_ATTEMPTS; attempt++) {
             let response: Response;
             try {
-                response = await fetch(url, {
+                response = await this.send(url, {
                     method: 'POST',
                     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
                     body: form.toString(),

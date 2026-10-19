@@ -101,6 +101,17 @@ bodies under an ordinary domain (`ibgc.cnrs.fr`, `igd.fraunhofer.de`) still fold
     Ownership lists each as **Same company saved twice**, for a person to merge or delete (computed in code, since SQL
     has no suffix list). Until the command runs, lookups still match a `www.` row under its registrable domain.
 
+## OWN-2e: merging companies saved twice
+
+`node dist/cli/merge-duplicate-companies.js [--apply]` (owner connection, inside the api container) merges each
+company the Ownership page lists as **Same company saved twice** into the company on the registrable domain:
+people, deals, other domains, note/task/file links, timeline entries, enrichment answers, transfer history (an open
+offer of the duplicate is cancelled) and the Twenty importer's links move; the kept company takes what it lacks
+(owner, logo, size, ARR, custom values, ICP); the duplicate goes to the trash and can be restored. One transaction per
+merge. Without `--apply` every merge runs and is rolled back, so the printed counts are exactly what `--apply` does.
+Take a backup first (`systemctl start bylinecrm-backup@production`). The move bypasses the app, so it announces no
+events: webhooks and NewswireOS do not hear of it.
+
 ## Not here
 
 - **A per-workspace switch for the rule.** It judges only new writes, and the Ownership page clears what predates it.

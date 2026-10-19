@@ -404,6 +404,40 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 expect.objectContaining({ object: 'Notes', remote: 2 }),
             ]);
         });
+
+        it('FR-CRMS-25: takes a self client’s grant code instead of a refresh token, trades it once, and stores the token', async () => {
+            const { refreshToken: _token, ...withoutToken } = connection();
+            const wrong = await as(admin)
+                .put(w('/import/bigin/settings'))
+                .send({ ...withoutToken, grantCode: '1000.not-the-code' });
+            expect(wrong.status).toBe(422);
+            expect(JSON.stringify(wrong.body)).toContain('grantCode');
+
+            const good = await as(admin)
+                .put(w('/import/bigin/settings'))
+                .send({ ...withoutToken, grantCode: bigin.grantCode });
+            expect(good.status, JSON.stringify(good.body)).toBe(200);
+            expect(good.body).toMatchObject({ configured: true, refreshTokenLast4: bigin.refreshToken.slice(-4) });
+            expect(JSON.stringify(good.body)).not.toContain(bigin.refreshToken);
+            expect((await as(admin).post(w('/import/bigin/preview'))).status).toBe(200);
+
+            // The stored secret never follows a changed URL: a new data centre needs the secret and a new grant again.
+            const moved = await as(admin).put(w('/import/bigin/settings')).send({
+                accountsUrl: 'https://accounts.zoho.eu',
+                apiUrl: 'https://www.zohoapis.eu',
+                clientId: bigin.clientId,
+            });
+            expect(moved.status).toBe(422);
+            expect(JSON.stringify(moved.body)).toContain('clientSecret');
+            expect(JSON.stringify(moved.body)).toContain('grantCode');
+
+            // A grant code is single-use: the same one again is refused, and the stored token stands.
+            const again = await as(admin)
+                .put(w('/import/bigin/settings'))
+                .send({ ...withoutToken, grantCode: '1000.grant-code-abcdef' });
+            expect(again.status).toBe(422);
+            expect((await as(admin).post(w('/import/bigin/preview'))).status).toBe(200);
+        });
     });
 
     describe('a full run', () => {
@@ -546,6 +580,23 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 expect.objectContaining({ object: 'Contacts', externalId: ids.cased, localType: 'person' }),
             ]);
             expect((await people()).some((p) => p.id === items[0]!.localId)).toBe(true);
+        });
+
+        it('FR-CRMS-25: past the 2,000 deletions a pass may page through, the next run reads on from the newest one read', async () => {
+            const from = new Date(Date.now() - 3 * 60 * 60 * 1000);
+            bigin.seedDeletions('Notes', 2_500, from);
+            await runToEnd('changes');
+            const before = bigin.requests.length;
+            await runToEnd('changes');
+            const notesDeleted = bigin.requests
+                .slice(before)
+                .filter((r) => r.path.startsWith('/bigin/v1/Notes/deleted'));
+            expect(notesDeleted.length).toBeGreaterThan(0);
+            // The 2,000th deletion is the newest the first run could read; the second asks from there, not from the start.
+            const newestRead = new Date(from.getTime() + 1_999 * 1000);
+            expect(new Date(notesDeleted[0]!.ifModifiedSince!).getTime()).toBeGreaterThanOrEqual(
+                newestRead.getTime() - 1000,
+            );
         });
     });
 

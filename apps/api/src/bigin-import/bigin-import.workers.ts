@@ -100,7 +100,14 @@ export class BiginImportWorkers implements OnApplicationBootstrap, OnModuleDestr
         this.worker.on('error', (error) => this.logger.error(`worker ${BIGIN_IMPORT_QUEUE}: ${error.message}`));
         this.worker.on('failed', (job, error) => {
             if (!job || job.name !== RUN_JOB || job.attemptsMade < BIGIN_IMPORT_JOB_ATTEMPTS) return;
-            void this.runner.abandon((job.data as BiginImportJob).runId, error.message);
+            // Counted and logged when it fails, never an unhandled rejection; `resume()` at boot retries it.
+            this.runner
+                .abandon((job.data as BiginImportJob).runId, error.message)
+                .catch((e: unknown) =>
+                    this.logger.error(
+                        `could not mark run ${(job.data as BiginImportJob).runId} failed: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
+                );
         });
         await this.resume();
         await this.reconcileSchedules();

@@ -20,6 +20,8 @@ export class PutBiginImportSettingsDto extends createZodDto(
         clientId: z.string().trim().min(8, 'the client id from Zoho’s API console').max(500),
         clientSecret: z.string().trim().min(8, 'the client secret from Zoho’s API console').max(500).optional(),
         refreshToken: z.string().trim().min(8, 'a refresh token for the Bigin scopes').max(2000).optional(),
+        /** A self client's one-time grant code: traded for the refresh token on save, in place of `refreshToken`. */
+        grantCode: z.string().trim().min(8, 'the code Zoho’s self client generated').max(2000).optional(),
     }),
 ) {}
 
