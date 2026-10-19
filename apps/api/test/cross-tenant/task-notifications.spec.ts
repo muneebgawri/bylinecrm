@@ -195,8 +195,8 @@ describe('#192 task notifications: the bell, due reminders and the daily digest'
         await notify.remindDue(new Date(now + 2 * HOUR));
         await notify.remindDue(new Date(now + 3 * HOUR));
         const reminders = (await inbox(ana)).items.filter((n) => n.kind === 'task_due');
-        expect(reminders.map((n) => n.task.id)).toEqual([due]);
-        expect(reminders.map((n) => n.task.id)).not.toContain(atOnce);
+        expect(reminders.map((n) => n.task!.id)).toEqual([due]);
+        expect(reminders.map((n) => n.task!.id)).not.toContain(atOnce);
     });
 
     it('sends each member one morning digest of what is due or overdue — nothing when nothing is, never twice a day, never once turned off', async () => {

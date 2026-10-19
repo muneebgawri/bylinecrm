@@ -12,6 +12,7 @@ import { requireCallerMember } from '../infra/caller-member';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { MEMBER_SUMMARY_SELECT } from '../records/summaries';
 import { AccountMail } from '../transactional-mail/account-mail';
 import { MY_TASKS_LIMIT, TASK_DUE_AS_MADE_MS, TASK_DUE_BATCH, TASK_DUE_LOOKBACK_MS } from './notifications.constants';
 import { labelled, labelTargets } from './task-labels';
@@ -19,6 +20,7 @@ import { labelled, labelTargets } from './task-labels';
 /** An open task: not done and not deleted. */
 const OPEN = { deletedAt: null, status: { not: 'done' } } satisfies Prisma.TaskWhereInput;
 const WITH_TARGETS = { targets: { select: { targetType: true, targetId: true } } } as const;
+const MEMBER = { select: MEMBER_SUMMARY_SELECT } as const;
 
 /**
  * What members are told about their tasks (#192), one service for every way they hear of them:
@@ -155,29 +157,54 @@ export class TaskNotificationsService {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
             const me = await requireCallerMember(tx, context);
-            const live = { memberId: me, task: { deletedAt: null } } satisfies Prisma.NotificationWhereInput;
+            // About a live task, or (OWN-1) about a transfer.
+            const live = {
+                memberId: me,
+                OR: [{ task: { deletedAt: null } }, { transferId: { not: null } }],
+            } satisfies Prisma.NotificationWhereInput;
             const rows = await tx.notification.findMany({
                 where: live,
                 orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
                 take: NOTIFICATIONS_PAGE,
-                include: { task: { select: { id: true, title: true, dueAt: true, ...WITH_TARGETS } } },
+                include: {
+                    task: { select: { id: true, title: true, dueAt: true, ...WITH_TARGETS } },
+                    transfer: { include: { from: MEMBER, to: MEMBER } },
+                },
             });
-            const labels = await labelTargets(
-                tx,
-                rows.flatMap((r) => r.task.targets),
-            );
+            const labels = await labelTargets(tx, [
+                ...rows.flatMap((r) => r.task?.targets ?? []),
+                ...rows.flatMap((r) =>
+                    r.transfer ? [{ targetType: r.transfer.object, targetId: r.transfer.recordId }] : [],
+                ),
+            ]);
+            const named = (m: { id: string; user: { displayName: string | null } } | null) =>
+                m ? { memberId: m.id, name: m.user.displayName } : null;
             return {
                 items: rows.map((r) => ({
                     id: r.id,
                     kind: r.kind,
                     createdAt: r.createdAt.toISOString(),
                     readAt: r.readAt?.toISOString() ?? null,
-                    task: {
-                        id: r.task.id,
-                        title: r.task.title,
-                        dueAt: r.task.dueAt?.toISOString() ?? null,
-                        targets: labelled(r.task.targets, labels),
-                    },
+                    task: r.task
+                        ? {
+                              id: r.task.id,
+                              title: r.task.title,
+                              dueAt: r.task.dueAt?.toISOString() ?? null,
+                              targets: labelled(r.task.targets, labels),
+                          }
+                        : null,
+                    transfer: r.transfer
+                        ? {
+                              id: r.transfer.id,
+                              object: r.transfer.object,
+                              recordId: r.transfer.recordId,
+                              recordLabel: labels.get(`${r.transfer.object}:${r.transfer.recordId}`) ?? 'A record',
+                              from: named(r.transfer.from),
+                              to: named(r.transfer.to)!,
+                              status: r.transfer.status,
+                              reason: r.transfer.reason,
+                          }
+                        : null,
                 })),
                 unread: await tx.notification.count({ where: { ...live, readAt: null } }),
             };

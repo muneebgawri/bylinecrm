@@ -235,6 +235,16 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
             ...(event.suppression ? { suppression: suppressionEntry(event.suppression) } : {}),
             ...(event.tracking ? { tracking: trackingEntry(event.tracking) } : {}),
             ...(event.meeting ? { meeting: meetingEntry(event.meeting) } : {}),
+            ...(event.transfer
+                ? {
+                      transfer: {
+                          fromMemberId: event.transfer.fromMemberId,
+                          toMemberId: event.transfer.toMemberId,
+                          status: event.transfer.status,
+                          reason: event.transfer.reason,
+                      },
+                  }
+                : {}),
         });
         return targets.map((t) => ({
             ...base,
@@ -268,6 +278,14 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
             return (await tx.suppression.findUnique({ where: { id }, select: { address: true } }))?.address ?? null;
         case 'meeting':
             return (await tx.calendarEvent.findUnique({ where: { id }, select: { title: true } }))?.title ?? null;
+        case 'transfer': {
+            // OWN-1: "→ <new owner>", the name as it reads now.
+            const t = await tx.ownershipTransfer.findUnique({
+                where: { id },
+                select: { to: { select: { user: { select: { displayName: true } } } } },
+            });
+            return t ? `→ ${t.to.user.displayName ?? 'a member'}` : null;
+        }
     }
 }
 

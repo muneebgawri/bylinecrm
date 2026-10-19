@@ -6,6 +6,7 @@ import type { EmailBounce, MailboxPause } from './sending-pool.js';
 import type { EmailFailure, EnrolmentEventPayload } from './sequences.js';
 import type { EmailTrackingPayload } from './tracking.js';
 import type { SuppressionEventPayload } from './suppression.js';
+import type { TransferEventPayload } from './transfers.js';
 
 /**
  * The objects an event can be about: the record objects, the things attached to them, and the
@@ -25,6 +26,7 @@ export const EVENT_OBJECTS = [
     'suppression',
     'sequence',
     'enrolment',
+    'transfer',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
@@ -149,6 +151,16 @@ export const DOMAIN_EVENT_TYPES = [
     'enrolment.held',
     'enrolment.stopped',
     'enrolment.finished',
+    // Ownership transfers (OWN-1, FR-CRMS-17): `recordId` is the transfer, `transfer` what it moves and
+    // between whom. `transfer.completed` is the one that changed owners — accepted by the receiver, or
+    // forced by a holder of `record:transfer` — and carries `targets`, every record that moved, so the
+    // timeline writes an entry on each; each record also gets its own `…updated` with `diff.ownerId`.
+    // Integrations that mirror ownership (NewswireOS's account managers) subscribe to `transfer.completed`.
+    'transfer.proposed',
+    'transfer.accepted',
+    'transfer.declined',
+    'transfer.cancelled',
+    'transfer.completed',
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
@@ -219,6 +231,8 @@ interface DomainEventBase {
     tracking?: EmailTrackingPayload;
     /** Present on `meeting.*`: the meeting, without its description. */
     meeting?: MeetingSummary;
+    /** Present on `transfer.*`: what moves, from whom to whom, and the identities a receiver matches on. */
+    transfer?: TransferEventPayload;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

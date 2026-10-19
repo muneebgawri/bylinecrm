@@ -1,4 +1,5 @@
 import type { RecordObject, TaskStatus } from './records.js';
+import type { TransferSummary } from './transfers.js';
 
 /**
  * What members are told about their tasks (#192): a task someone else assigned them (a sequence's
@@ -6,7 +7,17 @@ import type { RecordObject, TaskStatus } from './records.js';
  * daily email of what is due. One vocabulary for the API, the web app and the tests.
  */
 
-export const NOTIFICATION_KINDS = ['task_assigned', 'task_due'] as const;
+export const NOTIFICATION_KINDS = [
+    'task_assigned',
+    'task_due',
+    // Ownership transfers (OWN-1): the receiver of a proposal; the proposer when it is decided; both
+    // parties when a manager moved the record without asking.
+    'transfer_proposed',
+    'transfer_accepted',
+    'transfer_declined',
+    'transfer_received',
+    'transfer_taken',
+] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 /** A record a task is about, with the name it is known by (a person's name, a company's, a deal's). */
@@ -28,7 +39,10 @@ export interface TaskSummary {
 export interface NotificationView {
     id: string;
     kind: NotificationKind;
-    task: TaskSummary;
+    /** The task, for a `task_*` kind; null otherwise. */
+    task: TaskSummary | null;
+    /** The transfer, for a `transfer_*` kind; null otherwise. */
+    transfer: TransferSummary | null;
     /** ISO 8601. */
     createdAt: string;
     /** ISO 8601; null while unread. */

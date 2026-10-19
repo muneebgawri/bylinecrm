@@ -9,7 +9,33 @@ import { recordPath } from '../routes/w/records/targets';
 
 type Item = NotificationsView['items'][number];
 
-const KIND_LABEL: Record<Item['kind'], string> = { task_assigned: 'Assigned to you', task_due: 'Due' };
+const KIND_LABEL: Record<Item['kind'], string> = {
+    task_assigned: 'Assigned to you',
+    task_due: 'Due',
+    transfer_proposed: 'Offered to you',
+    transfer_accepted: 'Transfer accepted',
+    transfer_declined: 'Transfer declined',
+    transfer_received: 'Moved to you',
+    transfer_taken: 'Moved from you',
+};
+
+/** What a transfer notification says under its label. */
+function transferLine(item: Item): string {
+    const t = item.transfer!;
+    const who = (m: { name: string | null } | null) => m?.name ?? 'a member';
+    switch (item.kind) {
+        case 'transfer_proposed':
+            return `${who(t.from)} offers you ${t.recordLabel}`;
+        case 'transfer_accepted':
+            return `${who(t.to)} accepted ${t.recordLabel}`;
+        case 'transfer_declined':
+            return `${who(t.to)} declined ${t.recordLabel}`;
+        case 'transfer_received':
+            return `${t.recordLabel} is yours now`;
+        default:
+            return `${t.recordLabel} went to ${who(t.to)}`;
+    }
+}
 
 /**
  * The bell's panel (#192), loaded the first time the bell opens: the member's task notifications —
@@ -72,7 +98,9 @@ export function NotificationsPanel({
 }
 
 function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; item: Item; onOpen: () => void }) {
-    const target = item.task.targets[0];
+    const target = item.task ? item.task.targets[0] : { type: item.transfer!.object, id: item.transfer!.recordId };
+    const title = item.task ? item.task.title : transferLine(item);
+    const targets = item.task?.targets ?? [];
     const body = (
         <>
             <span className="flex items-center gap-1.5 text-xs text-text-muted">
@@ -81,11 +109,12 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
                 <span aria-hidden>·</span>
                 {formatRelative(item.createdAt)}
             </span>
-            <span className={item.readAt ? 'block text-sm' : 'block text-sm font-semibold'}>{item.task.title}</span>
-            {item.task.targets.length > 0 && (
-                <span className="block truncate text-xs text-text-muted">
-                    {item.task.targets.map((t) => t.label).join(', ')}
-                </span>
+            <span className={item.readAt ? 'block text-sm' : 'block text-sm font-semibold'}>{title}</span>
+            {item.transfer?.reason && (
+                <span className="block truncate text-xs text-text-muted">{item.transfer.reason}</span>
+            )}
+            {targets.length > 0 && (
+                <span className="block truncate text-xs text-text-muted">{targets.map((t) => t.label).join(', ')}</span>
             )}
         </>
     );

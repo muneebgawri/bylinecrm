@@ -114,6 +114,7 @@ export const CAPABILITY_AREA_LABEL: Record<string, string> = {
 export const CAPABILITY_LABEL: Record<Capability, string> = {
     'record:read': 'See people and companies',
     'record:write': 'Create and edit people and companies',
+    'record:transfer': 'Move records between members without asking',
     'note:write': 'Write notes',
     'task:write': 'Create and edit tasks',
     'deal:read': 'See deals',

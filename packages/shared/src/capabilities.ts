@@ -7,6 +7,9 @@ export const CAPABILITIES = [
     // Records
     'record:read',
     'record:write',
+    // Move a record (and the people and deals that go with it) between any two members (OWN-1, FR-CRMS-17).
+    // Without it, an owner hands a record on by proposing a transfer the receiver accepts.
+    'record:transfer',
     'note:write',
     'task:write',
     // Deals and views
@@ -39,13 +42,40 @@ export function isCapability(value: unknown): value is Capability {
 }
 
 /**
- * The two roles every workspace has from creation. `admin` holds every capability by
+ * The three roles every workspace has from creation. `admin` holds every capability by
  * construction — it has no stored permission rows, so nothing can drift out of it — and a
  * workspace always keeps at least one admin. `member` starts with the defaults below and is
  * editable like any custom role.
  */
-export const SYSTEM_ROLES = { admin: 'admin', member: 'member' } as const;
+export const SYSTEM_ROLES = { admin: 'admin', member: 'member', manager: 'manager' } as const;
 export type SystemRole = (typeof SYSTEM_ROLES)[keyof typeof SYSTEM_ROLES];
+
+/**
+ * What a new workspace's `manager` role can do until an admin changes it (OWN-1, FR-CRMS-18): a member's
+ * defaults, plus moving records between members and acting on many deals at once. It is a system role
+ * (it exists in every workspace, and keeps its name) that an admin edits like any other.
+ */
+export const MANAGER_DEFAULT_CAPABILITIES: readonly Capability[] = [
+    'record:read',
+    'record:write',
+    'record:transfer',
+    'note:write',
+    'task:write',
+    'deal:read',
+    'deal:move',
+    'deal:edit',
+    'deal:bulk',
+    'view:save',
+    'view:share',
+    'email:send',
+    'template:read',
+    'template:write',
+    'template:send_test',
+    'sequence:write',
+    'sequence:enrol',
+    'mailbox:read',
+    'mailbox:manage',
+];
 
 /** What a new workspace's `member` role can do until an admin changes it. */
 export const MEMBER_DEFAULT_CAPABILITIES: readonly Capability[] = [

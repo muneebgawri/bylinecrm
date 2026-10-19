@@ -95,6 +95,7 @@ model Workspace {
   calendarParticipants CalendarEventParticipant[]
   calendarSyncStates   CalendarSyncState[]
   slotlineSettings     SlotlineSettings?
+  ownershipTransfers   OwnershipTransfer[]
 
   @@map("workspaces")
 }
@@ -222,31 +223,31 @@ model ExternalIdentity {
 
 /// A user's seat in a workspace, with the role that decides what they may do there.
 model WorkspaceMember {
-  id          String    @id @default(uuid()) @db.Uuid
-  workspaceId String    @map("workspace_id") @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  roleId      String    @map("role_id") @db.Uuid
+  id                       String    @id @default(uuid()) @db.Uuid
+  workspaceId              String    @map("workspace_id") @db.Uuid
+  userId                   String    @map("user_id") @db.Uuid
+  roleId                   String    @map("role_id") @db.Uuid
   /// When the member was removed (#147): the row stays, so their sends, enrolments and timeline rows keep
   /// their name; their access ended at this moment. Null for a member in the workspace.
-  leftAt      DateTime? @map("left_at") @db.Timestamptz
+  leftAt                   DateTime? @map("left_at") @db.Timestamptz
   /// How the seat came to be: `signup` (the workspace's first admin), `invite` (an accepted invitation),
   /// `twenty-import` (#184, an account the importer made for a Twenty member). Null for seats from before the column.
-  source      String?
+  source                   String?
   /// What a signature's `{{sender.title}}` and `{{sender.phone}}` read (#193), in this workspace.
-  jobTitle         String? @map("job_title")
-  phone            String?
+  jobTitle                 String?   @map("job_title")
+  phone                    String?
   /// The member's Slotline page is `{baseUrl}/{slotlineUsername}` (#193): set by them or an admin, never guessed.
-  slotlineUsername String? @map("slotline_username")
+  slotlineUsername         String?   @map("slotline_username")
   /// The member's own Slotline API key (#196), encrypted (`SecretBox`); only its last four are ever shown.
-  slotlineApiKeyCiphertext String? @map("slotline_api_key_ciphertext")
-  slotlineApiKeyLast4      String? @map("slotline_api_key_last4")
+  slotlineApiKeyCiphertext String?   @map("slotline_api_key_ciphertext")
+  slotlineApiKeyLast4      String?   @map("slotline_api_key_last4")
   /// The event type "Book a quick meeting" opens (#196): its slug and title on Slotline; null opens the member's page.
-  slotlineEventSlug        String? @map("slotline_event_slug")
-  slotlineEventTitle       String? @map("slotline_event_title")
+  slotlineEventSlug        String?   @map("slotline_event_slug")
+  slotlineEventTitle       String?   @map("slotline_event_title")
   /// The member's profiles a signature shows as icons (#193): `SocialLinks` from @bylinecrm/shared.
-  socialLinks              Json    @default("{}") @map("social_links")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  socialLinks              Json      @default("{}") @map("social_links")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -296,6 +297,11 @@ model WorkspaceMember {
 
   /// #192: the daily email of tasks due or overdue; the member turns it off.
   taskDigest Boolean @default(true) @map("task_digest")
+
+  transfersFrom     OwnershipTransfer[] @relation("TransferFrom")
+  transfersTo       OwnershipTransfer[] @relation("TransferTo")
+  transfersProposed OwnershipTransfer[] @relation("TransferProposedBy")
+  transfersDecided  OwnershipTransfer[] @relation("TransferDecidedBy")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -898,6 +904,7 @@ enum LinkedObject {
   email
   suppression
   meeting
+  transfer
 
   @@map("linked_object")
 }
@@ -2512,26 +2519,87 @@ enum NotificationKind {
   task_assigned
   /// The task came due, and was not due already when it was made.
   task_due
+  /// OWN-1: someone proposed handing a record to them; their proposal was decided; a manager moved a record to / from them.
+  transfer_proposed
+  transfer_accepted
+  transfer_declined
+  transfer_received
+  transfer_taken
 
   @@map("notification_kind")
 }
 
-/// #192: one thing a member is told, about one task, once: (member, kind, task) is unique, so an
-/// event delivered again or a sweep run twice tells nobody twice. Each member reads only their own.
+/// #192: one thing a member is told, about one task or (OWN-1) one transfer, once: (member, kind, task) and
+/// (member, kind, transfer) are unique, so an event delivered again or a sweep run twice tells nobody twice.
+/// Exactly one of `taskId` / `transferId` is set (the database checks). Each member reads only their own.
 model Notification {
   id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId String           @map("workspace_id") @db.Uuid
   memberId    String           @map("member_id") @db.Uuid
   kind        NotificationKind
-  taskId      String           @map("task_id") @db.Uuid
+  taskId      String?          @map("task_id") @db.Uuid
+  transferId  String?          @map("transfer_id") @db.Uuid
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
   readAt      DateTime?        @map("read_at") @db.Timestamptz
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  member    WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  task      Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    WorkspaceMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  task      Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  transfer  OwnershipTransfer? @relation(fields: [transferId], references: [id], onDelete: Cascade)
 
   @@unique([memberId, kind, taskId])
+  @@unique([memberId, kind, transferId])
   @@index([memberId, createdAt])
   @@map("notifications")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ownership transfers (OWN-1, FR-CRMS-17): the one way a record changes hands.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TransferStatus {
+  proposed
+  accepted
+  declined
+  cancelled
+  /// A holder of `record:transfer` moved the record without asking; completed at once.
+  forced
+
+  @@map("transfer_status")
+}
+
+/// One record offered, or moved, from one member to another. `moved` is every record that changed owner
+/// with it (`RecordTarget[]`), written when it completes; the history a record's drawer shows.
+model OwnershipTransfer {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String         @map("workspace_id") @db.Uuid
+  object             RecordObject
+  recordId           String         @map("record_id") @db.Uuid
+  /// The owner before; null when the record had none.
+  fromMemberId       String?        @map("from_member_id") @db.Uuid
+  toMemberId         String         @map("to_member_id") @db.Uuid
+  proposedByMemberId String         @map("proposed_by_member_id") @db.Uuid
+  decidedByMemberId  String?        @map("decided_by_member_id") @db.Uuid
+  status             TransferStatus @default(proposed)
+  reason             String?
+  /// What a declining receiver said.
+  note               String?
+  moved              Json           @default("[]")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  decidedAt          DateTime?      @map("decided_at") @db.Timestamptz
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  from       WorkspaceMember? @relation("TransferFrom", fields: [fromMemberId], references: [id], onDelete: SetNull)
+  to         WorkspaceMember  @relation("TransferTo", fields: [toMemberId], references: [id])
+  proposedBy WorkspaceMember  @relation("TransferProposedBy", fields: [proposedByMemberId], references: [id])
+  decidedBy  WorkspaceMember? @relation("TransferDecidedBy", fields: [decidedByMemberId], references: [id], onDelete: SetNull)
+
+  notifications Notification[]
+
+  // One open proposal per record — the partial unique index `ownership_transfers_open_record_key` in the migration.
+  @@index([workspaceId, object, recordId, createdAt(sort: Desc)])
+  @@index([workspaceId, toMemberId, status])
+  @@index([workspaceId, fromMemberId, status])
+  @@map("ownership_transfers")
 }

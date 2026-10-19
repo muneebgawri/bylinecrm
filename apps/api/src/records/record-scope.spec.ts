@@ -18,6 +18,35 @@ describe('ownerWhere', () => {
 });
 
 describe('resolveOwner', () => {
+    describe('FR-CRMS-17: changing an owner is a transfer (OWN-1)', () => {
+        const manager: WorkspaceRunContext = { ...all, capabilities: new Set(['record:transfer']) };
+
+        it('refuses a member without record:transfer who asks for a different owner on patch (422 USE_TRANSFER)', () => {
+            expect(() => resolveOwner(all, OTHER, ME)).toThrow(/transfer/);
+            expect(() => resolveOwner(all, null, ME)).toThrow(/transfer/);
+        });
+
+        it('lets them keep the owner as it is, pick any owner on create, and claim a record nobody owns', () => {
+            expect(resolveOwner(all, ME, ME)).toBe(ME);
+            expect(resolveOwner(all, OTHER, undefined)).toBe(OTHER);
+            expect(resolveOwner(all, ME, null)).toBe(ME);
+        });
+
+        it('does not stand in the way of a job acting for the workspace (sync, import)', () => {
+            const job: WorkspaceRunContext = {
+                workspaceId: 'w',
+                capabilities: new Set(),
+                actor: { kind: 'import', id: 'r' },
+            };
+            expect(resolveOwner(job, OTHER, ME)).toBe(OTHER);
+        });
+
+        it('lets a holder of record:transfer change the owner directly', () => {
+            expect(resolveOwner(manager, OTHER, ME)).toBe(OTHER);
+            expect(resolveOwner(manager, null, ME)).toBeNull();
+        });
+    });
+
     describe('for an own-scoped caller', () => {
         it('is always themselves, on create and on patch', () => {
             expect(resolveOwner(own, undefined, undefined)).toBe(ME);
@@ -32,9 +61,9 @@ describe('resolveOwner', () => {
     });
 
     describe('for a caller who reaches every record', () => {
-        it('is what they asked for', () => {
+        it('is what they asked for on create; on patch a change of owner needs record:transfer (OWN-1)', () => {
             expect(resolveOwner(all, OTHER, undefined)).toBe(OTHER);
-            expect(resolveOwner(all, null, ME)).toBeNull();
+            expect(resolveOwner({ ...all, capabilities: new Set(['record:transfer']) }, null, ME)).toBeNull();
         });
 
         it('defaults to themselves on create and to the current owner on patch', () => {
