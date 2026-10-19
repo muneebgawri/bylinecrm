@@ -373,13 +373,23 @@ describe('views, filters, export and search', () => {
         });
 
         it('sums deal amounts per currency', async () => {
+            const companyId = (
+                (
+                    await as(admin)
+                        .post(w('/companies'))
+                        .send({ name: `Views Co ${stamp}` })
+                        .expect(201)
+                ).body as {
+                    id: string;
+                }
+            ).id;
             await as(admin)
                 .post(w('/opportunities'))
-                .send({ name: `${token} one`, amount: { amountMinor: 1000 } })
+                .send({ name: `${token} one`, companyId, amount: { amountMinor: 1000 } })
                 .expect(201);
             await as(admin)
                 .post(w('/opportunities'))
-                .send({ name: `${token} two`, amount: { amountMinor: 2500 } })
+                .send({ name: `${token} two`, companyId, amount: { amountMinor: 2500 } })
                 .expect(201);
             const groups = (await as(admin).get(w('/opportunities/group-by?field=currency')).expect(200))
                 .body as Group[];

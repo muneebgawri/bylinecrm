@@ -4,11 +4,28 @@ import type { CompanyDomainView, OwnershipConflictView } from '@bylinecrm/shared
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { Requires, TenantController } from '../auth/decorators';
-import { Returns } from '../openapi/responses';
+import { named, Returns } from '../openapi/responses';
 import { companyDomainView, ownershipConflictView } from './responses';
 import { OwnershipService } from './ownership.service';
 
 class AddCompanyDomainDto extends createZodDto(z.object({ domain: z.string().trim().min(3).max(253) })) {}
+
+class ResolveConflictsDto extends createZodDto(
+    z.object({
+        items: z
+            .array(z.object({ object: z.enum(['person', 'opportunity']), recordId: z.uuid() }))
+            .min(1)
+            .max(200),
+    }),
+) {}
+
+const resolvedView = named(
+    'OwnershipResolution',
+    z.object({
+        resolved: z.array(z.uuid()).meta({ description: 'Records moved to their company’s owner (and linked to it).' }),
+        skipped: z.array(z.uuid()).meta({ description: 'Records the report no longer lists.' }),
+    }),
+);
 
 /** A company's other domains (OWN-2, FR-CRMS-20): a person writing from one is at the company. */
 @ApiTags('companies')
@@ -53,5 +70,13 @@ export class OwnershipController {
     @Returns([ownershipConflictView])
     conflicts(): Promise<OwnershipConflictView[]> {
         return this.ownership.conflicts();
+    }
+
+    /** Moves each named record to its company's owner (a forced transfer each). */
+    @Requires('record:transfer')
+    @Post('conflicts/resolve')
+    @Returns(resolvedView)
+    resolve(@Body() body: ResolveConflictsDto): Promise<{ resolved: string[]; skipped: string[] }> {
+        return this.ownership.resolve(body.items);
     }
 }

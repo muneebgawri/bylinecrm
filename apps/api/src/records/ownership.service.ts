@@ -4,6 +4,7 @@ import { requireCallerMember } from '../infra/caller-member';
 import { UnknownReference } from '../infra/errors/api-errors';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { TransfersService } from '../transfers/transfers.service';
 import { CompanyOwnership, normalisedDomain } from './company-ownership';
 import { recordWhere } from './record-scope';
 
@@ -16,6 +17,7 @@ export class OwnershipService {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         private readonly ownership: CompanyOwnership,
+        private readonly transfers: TransfersService,
     ) {}
 
     domains(companyId: string): Promise<CompanyDomainView[]> {
@@ -53,6 +55,45 @@ export class OwnershipService {
 
     conflicts(): Promise<OwnershipConflictView[]> {
         return this.rls.withWorkspace((tx) => this.ownership.conflicts(tx));
+    }
+
+    /**
+     * Resolves conflicts the report lists (OWN-2b): each named record moves to its company's owner — a forced
+     * transfer, so both members are told — and a person not yet linked to the company is linked. Only rows the
+     * report still lists are acted on; the rest come back as `skipped` (already resolved, or never a conflict).
+     */
+    async resolve(
+        items: readonly { object: 'person' | 'opportunity'; recordId: string }[],
+    ): Promise<{ resolved: string[]; skipped: string[] }> {
+        const context = this.current();
+        const current = await this.conflicts();
+        const resolved: string[] = [];
+        const skipped: string[] = [];
+        for (const item of items) {
+            const row = current.find((c) => c.object === item.object && c.recordId === item.recordId);
+            if (!row) {
+                skipped.push(item.recordId);
+                continue;
+            }
+            if (row.recordOwnerMemberId !== row.companyOwnerMemberId) {
+                await this.transfers.propose({
+                    object: row.object,
+                    recordId: row.recordId,
+                    toMemberId: row.companyOwnerMemberId,
+                    reason: `Company ownership: ${row.companyName} is theirs`,
+                });
+            }
+            if (row.object === 'person') {
+                await this.rls.withWorkspace((tx) =>
+                    tx.person.updateMany({
+                        where: { id: row.recordId, companyId: null, ...recordWhere(context, false) },
+                        data: { companyId: row.companyId },
+                    }),
+                );
+            }
+            resolved.push(row.recordId);
+        }
+        return { resolved, skipped };
     }
 
     /** The company, as the caller sees it. */

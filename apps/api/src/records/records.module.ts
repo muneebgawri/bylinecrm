@@ -42,6 +42,6 @@ import { TransfersModule } from '../transfers/transfers.module';
         CompanyOwnership,
         OwnershipService,
     ],
-    exports: [PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
+    exports: [CompanyOwnership, PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
 })
 export class RecordsModule {}

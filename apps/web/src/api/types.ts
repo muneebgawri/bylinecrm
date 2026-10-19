@@ -257,5 +257,7 @@ export type StartTwentyImportInput = Loose<Schemas['StartTwentyImportDto']>;
 // ---- Task notifications and My tasks (#192) --------------------------------------------------
 export type NotificationsView = Schemas['Notifications'];
 export type TransferView = Schemas['Transfer'];
+export type CompanyDomainView = Schemas['CompanyDomain'];
+export type OwnershipConflictView = Schemas['OwnershipConflict'];
 export type NotificationSettingsView = Schemas['NotificationSettings'];
 export type MyTaskView = Schemas['MyTask'];

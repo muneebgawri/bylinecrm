@@ -104,6 +104,9 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/my-tasks$`), () => data.myTasks],
     // OWN-1: a record's transfers (the owner field's open offer); none in the fixtures.
     [new RegExp(`^${W}/transfers(\\?.*)?$`), () => []],
+    // OWN-2: a company's other domains, and the ownership report; none in the fixtures.
+    [new RegExp(`^${W}/companies/${ID}/domains$`), () => []],
+    [new RegExp(`^${W}/ownership/conflicts$`), () => []],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],

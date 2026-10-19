@@ -242,7 +242,7 @@ describe('#104 a record’s sends', () => {
             (
                 await as(admin)
                     .post(w('/opportunities'))
-                    .send({ name: `Deal ${stamp}` })
+                    .send({ name: `Deal ${stamp}`, companyId: acmeId })
                     .expect(201)
             ).body as {
                 id: string;

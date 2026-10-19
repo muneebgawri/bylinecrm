@@ -14974,6 +14974,81 @@
                 "tags": ["companies"]
             }
         },
+        "/api/w/{workspaceId}/ownership/conflicts/resolve": {
+            "post": {
+                "operationId": "ownership_resolve",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResolveConflictsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnershipResolution"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
         "/api/w/{workspaceId}/search": {
             "get": {
                 "operationId": "search_find",
@@ -24083,6 +24158,32 @@
                 },
                 "required": ["domain"]
             },
+            "ResolveConflictsDto": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "minItems": 1,
+                        "maxItems": 200,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "object": {
+                                    "type": "string",
+                                    "enum": ["person", "opportunity"]
+                                },
+                                "recordId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                }
+                            },
+                            "required": ["object", "recordId"]
+                        }
+                    }
+                },
+                "required": ["items"]
+            },
             "ProposeTransferDto": {
                 "type": "object",
                 "properties": {
@@ -26212,6 +26313,133 @@
                     "exchange_failed"
                 ]
             },
+            "TransferMember": {
+                "type": "object",
+                "properties": {
+                    "memberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["memberId", "name"]
+            },
+            "Transfer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordLabel": {
+                        "type": "string",
+                        "description": "The record’s name as it reads now."
+                    },
+                    "from": {
+                        "nullable": true,
+                        "description": "The owner before; null when the record had none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TransferMember"
+                            }
+                        ]
+                    },
+                    "to": {
+                        "$ref": "#/components/schemas/TransferMember"
+                    },
+                    "proposedBy": {
+                        "$ref": "#/components/schemas/TransferMember"
+                    },
+                    "decidedBy": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TransferMember"
+                            }
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["proposed", "accepted", "declined", "cancelled", "forced"],
+                        "description": "`proposed`: waiting on the receiver. `accepted` / `forced`: the record (and its unit) changed owner. `declined` / `cancelled`: nothing moved."
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "note": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "moved": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["person", "company", "opportunity"]
+                                },
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "label": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["type", "id", "label"]
+                        },
+                        "description": "Every record that moved; empty until it completes."
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "decidedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "object",
+                    "recordId",
+                    "recordLabel",
+                    "from",
+                    "to",
+                    "proposedBy",
+                    "decidedBy",
+                    "status",
+                    "reason",
+                    "note",
+                    "moved",
+                    "createdAt",
+                    "decidedAt"
+                ]
+            },
             "RecordSummary": {
                 "type": "object",
                 "properties": {
@@ -27544,132 +27772,29 @@
                 },
                 "required": ["person", "company", "opportunity"]
             },
-            "TransferMember": {
+            "OwnershipResolution": {
                 "type": "object",
                 "properties": {
-                    "memberId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["memberId", "name"]
-            },
-            "Transfer": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "recordId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "recordLabel": {
-                        "type": "string",
-                        "description": "The record’s name as it reads now."
-                    },
-                    "from": {
-                        "nullable": true,
-                        "description": "The owner before; null when the record had none.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/TransferMember"
-                            }
-                        ]
-                    },
-                    "to": {
-                        "$ref": "#/components/schemas/TransferMember"
-                    },
-                    "proposedBy": {
-                        "$ref": "#/components/schemas/TransferMember"
-                    },
-                    "decidedBy": {
-                        "nullable": true,
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/TransferMember"
-                            }
-                        ]
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["proposed", "accepted", "declined", "cancelled", "forced"],
-                        "description": "`proposed`: waiting on the receiver. `accepted` / `forced`: the record (and its unit) changed owner. `declined` / `cancelled`: nothing moved."
-                    },
-                    "reason": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "note": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "moved": {
+                    "resolved": {
                         "type": "array",
                         "items": {
-                            "type": "object",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "enum": ["person", "company", "opportunity"]
-                                },
-                                "id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                                },
-                                "label": {
-                                    "type": "string"
-                                }
-                            },
-                            "required": ["type", "id", "label"]
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
-                        "description": "Every record that moved; empty until it completes."
+                        "description": "Records moved to their company’s owner (and linked to it)."
                     },
-                    "createdAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "decidedAt": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    "skipped": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "description": "Records the report no longer lists."
                     }
                 },
-                "required": [
-                    "id",
-                    "object",
-                    "recordId",
-                    "recordLabel",
-                    "from",
-                    "to",
-                    "proposedBy",
-                    "decidedBy",
-                    "status",
-                    "reason",
-                    "note",
-                    "moved",
-                    "createdAt",
-                    "decidedAt"
-                ]
+                "required": ["resolved", "skipped"]
             },
             "Meeting": {
                 "type": "object",

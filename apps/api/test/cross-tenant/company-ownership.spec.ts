@@ -214,10 +214,11 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
                     .expect(201)
             ).body as { id: string }
         ).id;
-        await as(ben)
+        const noCompany = await as(ben)
             .post(w('/opportunities'))
-            .send({ name: 'Ben deal', currency: 'USD', pointOfContactId: sam })
-            .expect(201);
+            .send({ name: 'Ben deal', currency: 'USD', pointOfContactId: sam });
+        expect(noCompany.status, 'OWN-2b: a deal is with a company').toBe(422);
+        expect(JSON.stringify(noCompany.body)).toContain('companyId');
         const dana = ((await as(ana).get(w(`/people?q=dana`)).expect(200)).body as { items: { id: string }[] })
             .items[0]!.id;
         const deal = await as(ana)
@@ -225,5 +226,33 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
             .send({ name: 'Ortiz deal', currency: 'USD', pointOfContactId: dana });
         expect(deal.status, JSON.stringify(deal.body)).toBe(201);
         expect(deal.body).toMatchObject({ companyId: company, ownerId: anaId });
+    });
+
+    it('FR-CRMS-20: a manager resolves conflicts in one step: each record moves to the company’s owner', async () => {
+        const before = (await as(mia).get(w('/ownership/conflicts')).expect(200)).body as OwnershipConflictView[];
+        const raj = before.find((c) => c.recordOwnerMemberId === benId && c.object === 'person')!;
+        expect(raj).toBeDefined();
+        const denied = await as(ana)
+            .post(w('/ownership/conflicts/resolve'))
+            .send({ items: [{ object: 'person', recordId: raj.recordId }] });
+        expect(denied.status).toBe(403);
+        const res = await as(mia)
+            .post(w('/ownership/conflicts/resolve'))
+            .send({
+                items: [
+                    { object: 'person', recordId: raj.recordId },
+                    { object: 'person', recordId: company },
+                ],
+            });
+        expect(res.status, JSON.stringify(res.body)).toBe(201);
+        expect(res.body).toEqual({ resolved: [raj.recordId], skipped: [company] });
+        const after = (await as(mia).get(w('/ownership/conflicts')).expect(200)).body as OwnershipConflictView[];
+        expect(after.map((c) => c.recordId)).not.toContain(raj.recordId);
+        const moved = (
+            await as(ana)
+                .get(w(`/people/${raj.recordId}`))
+                .expect(200)
+        ).body as { ownerId: string };
+        expect(moved.ownerId).toBe(anaId);
     });
 });

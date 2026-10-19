@@ -237,6 +237,10 @@ describe('webhooks', () => {
 
     it('delivers exactly one event per deal move: stage_changed, won, stage_changed on reopen, lost', async () => {
         const path = `/moves-${stamp}`;
+        const dealCompany = await as(admin)
+            .post(w('/companies'))
+            .send({ name: `Moves Co ${stamp}` });
+        expect(dealCompany.status).toBe(201);
         const created = await as(admin)
             .post(w('/webhooks'))
             .send({ url: receiver.url(path), events: ['*'] });
@@ -248,7 +252,7 @@ describe('webhooks', () => {
         const stage = (name: string) => pipeline.stages.find((s) => s.name === name)!.id;
         const dealRes = await as(admin)
             .post(w('/opportunities'))
-            .send({ name: `Moves ${stamp}` });
+            .send({ name: `Moves ${stamp}`, companyId: (dealCompany.body as { id: string }).id });
         expect(dealRes.status).toBe(201);
         const dealId = (dealRes.body as { id: string }).id;
 

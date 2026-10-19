@@ -155,7 +155,8 @@ export class CompanyOwnership {
         selfId?: string,
     ): Promise<void> {
         if (!domain) return;
-        const company = await this.companyForDomain(context, normalisedDomain(domain));
+        // As the stored domain is compared by the unique index: lower case, nothing else stripped.
+        const company = await this.companyForDomain(context, domain.trim().toLowerCase());
         if (company && company.companyId !== selfId) throw companyOwned(company, 'domain');
     }
 
@@ -233,6 +234,11 @@ export class CompanyOwnership {
         const { ownerScopeMemberId: _scope, ...wide } = context;
         return this.context.run(wide, () => this.rls.withWorkspace(context.workspaceId, fn));
     }
+}
+
+/** A person or an API key, as opposed to a job (sync, import) acting for the workspace. */
+export function isCaller(context: WorkspaceRunContext): boolean {
+    return context.memberId !== undefined || context.apiKeyId !== undefined;
 }
 
 /** The rule binds a person or an API key without `record:transfer`; never a job. */

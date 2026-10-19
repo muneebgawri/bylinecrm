@@ -8,6 +8,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
 import { paths } from '../../paths';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { CompanyDomainsCard } from './CompanyDomainsCard';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
@@ -257,6 +258,7 @@ export function CompanyRecord({
             rail={
                 <>
                     <EnrichmentPanel workspaceId={workspaceId} object="company" recordId={company.id} />
+                    <CompanyDomainsCard workspaceId={workspaceId} companyId={company.id} ownerId={company.ownerId} />
                     <RailCard title="People" count={people.data && !people.more ? companyPeople.length : undefined}>
                         {people.isPending ? (
                             <RailLoading />

@@ -221,36 +221,49 @@ export class TransfersService {
         return this.widened(context, async (tx) => {
             const wide = widen(context);
             const { row, target } = await create(tx, wide);
-            const transfer = await tx.ownershipTransfer.create({
-                data: {
-                    workspaceId: context.workspaceId,
-                    object: target.type,
-                    recordId: target.id,
-                    fromMemberId: from,
-                    toMemberId: to,
-                    proposedByMemberId: from,
-                    decidedByMemberId: from,
-                    status: 'forced',
-                    reason,
-                    decidedAt: new Date(),
-                    moved: [target] as object[],
-                },
-                include: INCLUDE,
-            });
-            const person =
-                target.type === 'person'
-                    ? await tx.person.findUnique({ where: { id: target.id }, select: { emailPrimary: true } })
-                    : null;
-            await tell(tx, transfer, to, 'transfer_received');
-            await this.events.record(
-                tx,
-                event(wide, 'transfer.completed', transfer, [target], {
-                    companyDomain: null,
-                    personEmails: person?.emailPrimary ? [person.emailPrimary] : [],
-                }),
-            );
+            await this.recordHandOverIn(tx, wide, { from, to, target, reason });
             return row;
         });
+    }
+
+    /**
+     * The hand-over's record, in the caller's transaction: the record (already the receiver's) was saved
+     * for them by `from` — a member, or a job acting for one (a calendar sync's lead at a company another
+     * member owns). The receiver is told; `transfer.completed` is announced.
+     */
+    async recordHandOverIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: { from: string; to: string; target: RecordTarget; reason: string },
+    ): Promise<void> {
+        const transfer = await tx.ownershipTransfer.create({
+            data: {
+                workspaceId: context.workspaceId,
+                object: input.target.type,
+                recordId: input.target.id,
+                fromMemberId: input.from,
+                toMemberId: input.to,
+                proposedByMemberId: input.from,
+                decidedByMemberId: input.from,
+                status: 'forced',
+                reason: input.reason,
+                decidedAt: new Date(),
+                moved: [input.target] as object[],
+            },
+            include: INCLUDE,
+        });
+        const person =
+            input.target.type === 'person'
+                ? await tx.person.findUnique({ where: { id: input.target.id }, select: { emailPrimary: true } })
+                : null;
+        await tell(tx, transfer, input.to, 'transfer_received');
+        await this.events.record(
+            tx,
+            event(context, 'transfer.completed', transfer, [input.target], {
+                companyDomain: null,
+                personEmails: person?.emailPrimary ? [person.emailPrimary] : [],
+            }),
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────

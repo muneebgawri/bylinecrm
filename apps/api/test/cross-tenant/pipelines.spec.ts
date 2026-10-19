@@ -94,10 +94,27 @@ describe('pipelines, stages, history, rules', () => {
         const res = await as(who).post(`/api/w/${ws}/people`).send({ nameFirst: first, nameLast: 'Test' }).expect(201);
         return (res.body as { id: string }).id;
     }
+    // A deal needs a company; each caller gets one of its own per workspace.
+    const companies = new Map<Browser, Map<string, string>>();
+    async function companyOf(who: Browser, ws: string): Promise<string> {
+        const byWs = companies.get(who) ?? new Map<string, string>();
+        companies.set(who, byWs);
+        let id = byWs.get(ws);
+        if (!id) {
+            const res = await as(who)
+                .post(`/api/w/${ws}/companies`)
+                .send({ name: `Deal Co ${stamp} ${companies.size}-${byWs.size}` })
+                .expect(201);
+            id = (res.body as { id: string }).id;
+            byWs.set(ws, id);
+        }
+        return id;
+    }
     async function deal(who: Browser, ws: string, name: string, extra: Record<string, unknown> = {}): Promise<Deal> {
+        const companyId = await companyOf(who, ws);
         const res = await as(who)
             .post(`/api/w/${ws}/opportunities`)
-            .send({ name, ...extra })
+            .send({ name, companyId, ...extra })
             .expect(201);
         return res.body as Deal;
     }
@@ -197,14 +214,15 @@ describe('pipelines, stages, history, rules', () => {
 
         it('may start in a named open stage, never in a closed one or another pipeline’s stage', async () => {
             const d = await deal(admin, workspace, 'Named', { stageId: stage('Replied').id });
+            const companyId = await companyOf(admin, workspace);
             expect(d.stageId).toBe(stage('Replied').id);
             await as(admin)
                 .post(w('/opportunities'))
-                .send({ name: 'Nope', stageId: stage('Won').id })
+                .send({ name: 'Nope', companyId, stageId: stage('Won').id })
                 .expect(422);
             await as(admin)
                 .post(w('/opportunities'))
-                .send({ name: 'Nope', stageId: otherPipeline.stages[0]!.id })
+                .send({ name: 'Nope', companyId, stageId: otherPipeline.stages[0]!.id })
                 .expect(422);
         });
 

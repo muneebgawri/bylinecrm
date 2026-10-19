@@ -9,7 +9,9 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { entriesFor } from '../mail-sync/blocklist-rule';
 import { membersByAddress, personsByAddress, recordTargetsForPeople } from '../mail-sync/matching';
+import { CompanyOwnership, companyDomainOfAddress } from '../records/company-ownership';
 import { PeopleService } from '../records/people.service';
+import { TransfersService } from '../transfers/transfers.service';
 import { CALENDAR_MAX_ATTENDEES, CALENDAR_STORE_ATTEMPTS } from './calendar.constants';
 import { domainOf, nameFromDisplay, outsideAttendees } from './outside';
 import type { ParsedAttendee, ParsedMeeting } from './parse-event';
@@ -118,6 +120,8 @@ export class MeetingStore {
         private readonly scope: WorkspaceContext,
         private readonly events: DomainEvents,
         private readonly people: PeopleService,
+        private readonly ownership: CompanyOwnership,
+        private readonly transfers: TransfersService,
     ) {}
 
     /**
@@ -263,7 +267,7 @@ export class MeetingStore {
                 const created = await this.createLead(tx, origin.context, attendee, owner, origin.leadSource);
                 if (!created) continue;
                 people.set(attendee.address, created.id);
-                leadsFor.add(attendee.address);
+                if (!created.handedTo) leadsFor.add(attendee.address);
                 recorded.push(created.event);
             }
             const outsideIds = clear.map((a) => people.get(a.address)).filter((id): id is string => !!id);
@@ -273,7 +277,11 @@ export class MeetingStore {
                 orderBy: { id: 'asc' },
             });
             for (const person of unowned) {
-                const updated = await this.people.updateIn(tx, origin.context, person.id, { ownerId: owner });
+                // OWN-2b: an unowned person at another member's company becomes theirs, not the host's.
+                const address = clear.find((a) => people.get(a.address) === person.id)?.address;
+                const company = await this.ownership.companyForDomain(origin.context, companyDomainOfAddress(address));
+                const to = company?.ownerId ?? owner;
+                const updated = await this.people.updateIn(tx, origin.context, person.id, { ownerId: to });
                 if (updated.event) recorded.push(updated.event);
             }
         }
@@ -387,26 +395,29 @@ export class MeetingStore {
         attendee: Pick<ParsedAttendee, 'address' | 'displayName'>,
         ownerId: string,
         leadSource: string,
-    ): Promise<{ id: string; event: DomainEvent } | null> {
+    ): Promise<{ id: string; event: DomainEvent; handedTo: string | null } | null> {
         const deleted = await tx.person.findFirst({ where: { emailPrimary: attendee.address }, select: { id: true } });
         if (deleted) return null;
-        const domain = domainOf(attendee.address);
-        const company =
-            domain && !isFreeMailDomain(domain)
-                ? await tx.company.findFirst({
-                      where: { domain, deletedAt: null },
-                      select: { id: true },
-                      orderBy: { createdAt: 'asc' },
-                  })
-                : null;
+        // OWN-2b: the attendee's company (by its domain or another of its domains). When another member owns
+        // it, the lead is theirs — saved for them, and they are told — not the meeting's host's.
+        const company = await this.ownership.companyForDomain(context, companyDomainOfAddress(attendee.address));
+        const handedTo = company?.ownerId && company.ownerId !== ownerId ? company.ownerId : null;
         const { row, event } = await this.people.createIn(tx, context, {
             ...nameFromDisplay(attendee.displayName, attendee.address),
             emails: { primary: attendee.address, additional: [] },
             source: leadSource,
-            ownerId,
-            companyId: company?.id ?? null,
+            ownerId: handedTo ?? ownerId,
+            companyId: company?.companyId ?? null,
         });
-        return { id: row.id, event };
+        if (handedTo && company) {
+            await this.transfers.recordHandOverIn(tx, context, {
+                from: ownerId,
+                to: handedTo,
+                target: { type: 'person', id: row.id },
+                reason: `${company.companyName} is theirs; met in a meeting`,
+            });
+        }
+        return { id: row.id, event, handedTo };
     }
 
     /**

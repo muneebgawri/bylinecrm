@@ -47,17 +47,30 @@ who sees only their own records must learn that a lead is already someone's.
   anyone with `record:write` claims an unowned record; everyone else sees who owns it and why they cannot change it.
   A completed transfer reads "changed the owner → Ben Ade" on each moved record's timeline.
 
+## OWN-2b: sync, required companies, and the screens
+
+- **Calendar sync follows the rule.** A lead the sync finds at a company another member owns is saved for that
+  owner, not the meeting's host. It is recorded as a forced transfer from the host, so the owner is told, and it does
+  not count as the host's new lead. An unowned person met at such a company becomes the company owner's too.
+  Suggested leads a member adds by hand were already refused by name (they run as the member).
+- **The Twenty importer still keeps Twenty's owners.** Twenty is the migration's source of truth; rewriting its owners
+  on the way in would lose them. What disagrees shows on the Ownership page instead.
+- **Managers still place records where they choose.** They are the ones who resolve conflicts.
+- **A deal is with a company.** A member or API key creating a deal names a company, or a point of contact who is at
+  one (`422 companyId` otherwise), and cannot clear a deal's company. The importer brings deals as the source had
+  them. The New deal dialog marks Company as required.
+- **Ownership (Settings, `record:transfer`)** lists every person and open deal held by someone other than its
+  company's owner, with **Move to <owner>** per row and **Move all to their owners**
+  (`POST ownership/conflicts/resolve`: a forced transfer each, and a person not yet linked to the company is linked).
+  Rows the report no longer lists come back as `skipped`.
+- **Other domains** is a card on the company record: the owner or a manager adds and removes them; everyone else
+  reads them. A company's own domain is compared as the unique index compares it (lower case only), so `www.acme.com`
+  and `acme.com` stay two companies if someone saved them so.
+
 ## Not here
 
-- **Deals without a company stay allowed.** The proposal made a company required for a new deal. Existing API
-  clients, the Twenty importer and the deal board's quick-add all create deals without one, so requiring it would
-  break them; the contact's company is filled in instead. Making it required is an owner decision.
-- **No switch to turn the rule on.** It only judges new writes (a create, a company or address change), so existing
-  records are untouched until someone edits them; the report lists them first. A per-workspace switch can follow if
-  the cutover needs one.
-- **A UI for other domains and for the report** — API only for now.
-- **"Request a transfer"** from the owner (the proposal's second action): not asked for; the owner can already hand
-  records on (OWN-1).
+- **A per-workspace switch for the rule.** It judges only new writes, and the Ownership page clears what predates it.
+- **"Request a transfer"** from the owner: not asked for; the owner can already hand records on (OWN-1).
 
 ## Tests
 

@@ -145,7 +145,11 @@ describe('email templates', () => {
         dana = (person.body as { id: string }).id;
         const deal = await as(admin)
             .post(w('/opportunities'))
-            .send({ name: 'Series B PR', amount: { amountMinor: 1200000, currency: 'USD' } })
+            .send({
+                name: 'Series B PR',
+                companyId: (company.body as { id: string }).id,
+                amount: { amountMinor: 1200000, currency: 'USD' },
+            })
             .expect(201);
         danasDeal = (deal.body as { id: string }).id;
         writersPerson = (

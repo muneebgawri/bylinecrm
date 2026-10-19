@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { Actor, DomainEvent } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
-import { CompanyOwnership } from './company-ownership';
+import { CompanyOwnership, isCaller } from './company-ownership';
+import { UnknownReference } from '../infra/errors/api-errors';
 import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -151,6 +152,13 @@ export class OpportunitiesService implements BulkRecords {
             });
             if (contact?.companyId) input = { ...input, companyId: contact.companyId };
         }
+        // OWN-2b: a deal is with a company. A job (the importer) brings deals as the source had them.
+        if (!input.companyId && isCaller(context)) {
+            throw new UnknownReference(
+                'companyId',
+                'a deal is with a company: name one, or a point of contact who is at one',
+            );
+        }
         await this.ownership.checkDeal(context, input.companyId ?? null, ownerId);
         const custom = await this.customFields.validated(tx, 'opportunity', input.custom ?? {}, 'create');
         // A deal always has a currency, amount or not: the workspace's unless the caller named one.
@@ -218,6 +226,9 @@ export class OpportunitiesService implements BulkRecords {
         if (patch.companyId != null && patch.companyId !== current.companyId) {
             await assertCompanyExists(tx, patch.companyId);
             await this.ownership.checkDeal(context, patch.companyId, ownerId);
+        }
+        if (patch.companyId === null && current.companyId !== null && isCaller(context)) {
+            throw new UnknownReference('companyId', 'a deal is with a company: pick another instead of clearing it');
         }
         if (patch.pointOfContactId != null && patch.pointOfContactId !== current.pointOfContactId) {
             await assertPersonExists(tx, patch.pointOfContactId);
