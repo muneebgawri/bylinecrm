@@ -234,7 +234,9 @@ describe('sign-up modes and platform admins (P0-14)', () => {
             expect(body.invite.url).toBe(`${env.WEB_URL.replace(/\/+$/, '')}/sign-up?invite=${token}`);
 
             const roles = await owner.role.findMany({ where: { workspaceId }, select: { name: true, isSystem: true } });
-            expect(roles.map((r) => r.name).sort()).toEqual([SYSTEM_ROLES.admin, SYSTEM_ROLES.member].sort());
+            expect(roles.map((r) => r.name).sort()).toEqual(
+                [SYSTEM_ROLES.admin, SYSTEM_ROLES.manager, SYSTEM_ROLES.member].sort(),
+            );
             expect(await owner.workspaceMember.count({ where: { workspaceId } })).toBe(0);
             expect(await owner.pipeline.count({ where: { workspaceId } })).toBeGreaterThan(0);
 

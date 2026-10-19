@@ -81,6 +81,19 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         return { ...base, ...meetingWords(entry, names), family: 'meeting' };
     }
 
+    if (entry.kind === 'linked-transfer.completed') {
+        // OWN-1: the record moved with a transfer; the entry's name reads "→ <new owner>".
+        const linked = isRecord(entry.properties['linked']) ? entry.properties['linked'] : {};
+        const name = typeof linked['name'] === 'string' ? linked['name'] : '';
+        const reason = isRecord(entry.properties['transfer']) ? entry.properties['transfer']['reason'] : null;
+        return {
+            ...base,
+            action: `changed the owner ${name}`.trim(),
+            family: 'record',
+            ...(typeof reason === 'string' && reason ? { detail: [{ label: reason }] } : {}),
+        };
+    }
+
     if (entry.kind.startsWith('linked-')) {
         const [thing = '', action = ''] = entry.kind.slice(7).split('.');
         const name = typeof entry.properties['name'] === 'string' ? entry.properties['name'] : undefined;

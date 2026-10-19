@@ -1,4 +1,10 @@
-import { BULK_ROW_ERRORS, CUSTOM_FIELD_TYPES, RECORD_OBJECTS, TASK_STATUSES } from '@bylinecrm/shared';
+import {
+    OWNERSHIP_CONFLICT_KINDS,
+    BULK_ROW_ERRORS,
+    CUSTOM_FIELD_TYPES,
+    RECORD_OBJECTS,
+    TASK_STATUSES,
+} from '@bylinecrm/shared';
 import { z } from 'zod';
 import {
     actor,
@@ -223,3 +229,26 @@ export type NoteView = z.output<typeof noteView>;
 export type TaskView = z.output<typeof taskView>;
 export type AttachmentView = z.output<typeof attachmentView>;
 export type CustomFieldView = z.output<typeof customFieldView>;
+
+/** A company's other domain (OWN-2). */
+export const companyDomainView = named('CompanyDomain', z.object({ domain: z.string(), createdAt: z.iso.datetime() }));
+
+/** One record the company-ownership rule disagrees with (OWN-2's backfill report). */
+export const ownershipConflictView = named(
+    'OwnershipConflict',
+    z.object({
+        kind: z.enum(OWNERSHIP_CONFLICT_KINDS).meta({
+            description:
+                '`domain_owned_by_other`: the person’s address is at a company another member owns. `company_owner_differs`: the person or open deal is linked to a company another member owns. `duplicate_domain`: a company saved as `www.<domain>` beside the company with that domain; merge or delete it by hand.',
+        }),
+        object: z.enum(['person', 'opportunity', 'company']),
+        recordId: id,
+        recordLabel: z.string(),
+        recordOwnerMemberId: id.nullable(),
+        recordOwnerName: z.string().nullable(),
+        companyId: id,
+        companyName: z.string(),
+        companyOwnerMemberId: id,
+        companyOwnerName: z.string().nullable(),
+    }),
+);

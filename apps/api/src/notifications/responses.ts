@@ -2,6 +2,7 @@ import {
     NOTIFICATION_KINDS,
     RECORD_OBJECTS,
     TASK_STATUSES,
+    TRANSFER_STATUSES,
     type MyTaskView,
     type NotificationSettings,
     type NotificationsView,
@@ -24,6 +25,18 @@ const labelledTarget = named(
     }),
 );
 
+const transferMember = z.object({ memberId: id, name: z.string().nullable() });
+const transferSummary = z.object({
+    id,
+    object: z.enum(RECORD_OBJECTS),
+    recordId: id,
+    recordLabel: z.string(),
+    from: transferMember.nullable(),
+    to: transferMember,
+    status: z.enum(TRANSFER_STATUSES),
+    reason: z.string().nullable(),
+});
+
 const taskSummary = {
     id,
     title: z.string(),
@@ -39,9 +52,10 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you.',
                 }),
-                task: z.object(taskSummary),
+                task: z.object(taskSummary).nullable().meta({ description: 'For a `task_*` kind.' }),
+                transfer: transferSummary.nullable().meta({ description: 'For a `transfer_*` kind.' }),
                 createdAt: isoTime,
                 readAt: isoTime.nullable(),
             }),

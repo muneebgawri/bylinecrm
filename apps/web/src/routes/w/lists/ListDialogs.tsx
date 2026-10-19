@@ -15,9 +15,11 @@ import {
     SelectTrigger,
     SelectValue,
     type ToastInput,
+    toast,
 } from '@bylinecrm/ui';
 import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
+import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
 import type { BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
 import { failureText } from '../../../lib/errors';
@@ -197,20 +199,47 @@ export function CreateRecordDialog<O extends ListObject>({
     const [b, setB] = useState('');
     const [c, setC] = useState('');
     const [error, setError] = useState<string | null>(null);
+    /** OWN-2: the company is another member's; the lead can be saved for them instead. */
+    const [owned, setOwned] = useState<{ ownerName: string; companyName: string } | null>(null);
     const copy = LIST_COPY[object];
     const person = object === 'person';
 
-    const submit = async (e: FormEvent) => {
-        e.preventDefault();
+    const save = async (handToOwner: boolean) => {
         const input: PersonInput | CompanyInput = person
-            ? { nameFirst: a.trim(), nameLast: b.trim(), emails: { primary: c.trim() || null, additional: [] } }
+            ? {
+                  nameFirst: a.trim(),
+                  nameLast: b.trim(),
+                  emails: { primary: c.trim() || null, additional: [] },
+                  ...(handToOwner ? { handToOwner: true } : {}),
+              }
             : { name: a.trim(), ...(b.trim() ? { domain: b.trim() } : {}) };
         try {
             const created = await create.mutateAsync(input as never);
+            if (handToOwner && owned) {
+                toast({ tone: 'success', title: `Saved for ${owned.ownerName}. They’ve been told.` });
+                onOpenChange(false);
+                return;
+            }
             onCreated(created.id);
         } catch (err) {
+            if (err instanceof ApiError && err.code === 'conflict.company_owned') {
+                const ownerName = String(err.details['ownerName'] ?? 'another member');
+                const companyName = String(err.details['companyName'] ?? 'This company');
+                setOwned(person ? { ownerName, companyName } : null);
+                setError(
+                    person
+                        ? `${companyName} is ${ownerName}’s. Its people and deals are theirs, so you can’t save this lead for yourself.`
+                        : `${companyName} already has this domain, and it is ${ownerName}’s.`,
+                );
+                return;
+            }
+            setOwned(null);
             setError(failureText(err));
         }
+    };
+    const submit = async (e: FormEvent) => {
+        e.preventDefault();
+        await save(false);
     };
 
     return (
@@ -261,6 +290,17 @@ export function CreateRecordDialog<O extends ListObject>({
                             <p role="alert" className="m-0 text-sm text-danger">
                                 {error}
                             </p>
+                        )}
+                        {owned && (
+                            <Button
+                                type="button"
+                                shape="square"
+                                className="self-start"
+                                loading={create.isPending}
+                                onClick={() => void save(true)}
+                            >
+                                Save for {owned.ownerName}
+                            </Button>
                         )}
                     </DialogBody>
                     <DialogFooter>

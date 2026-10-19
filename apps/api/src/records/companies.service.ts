@@ -8,6 +8,9 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
+import { bareDomain } from '@bylinecrm/shared';
+import { companyDomain } from './company-domain';
+import { CompanyOwnership } from './company-ownership';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
@@ -62,6 +65,7 @@ export class CompaniesService implements BulkRecords {
         private readonly context: WorkspaceContext,
         private readonly customFields: CustomFieldsService,
         private readonly events: DomainEvents,
+        private readonly ownership: CompanyOwnership,
     ) {}
 
     /** Live companies, or the trash when `deleted`; the page and its total read one `where`. */
@@ -138,6 +142,8 @@ export class CompaniesService implements BulkRecords {
     ): Promise<{ row: CompanyRow; event: DomainEvent }> {
         const ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
+        // OWN-2: a domain is one company's; saving it again is refused with that company's owner named.
+        await this.ownership.checkCompanyDomain(context, input.domain);
         const custom = await this.customFields.validated(tx, 'company', input.custom ?? {}, 'create');
         const arr = await moneyColumns(tx, context.workspaceId, input.arr);
         try {
@@ -168,6 +174,8 @@ export class CompaniesService implements BulkRecords {
         const current = await find(tx, context, id);
         const ownerId = resolveOwner(context, patch.ownerId, current.ownerId);
         if (ownerId !== current.ownerId) await assertOwnerIsMember(tx, ownerId);
+        if (patch.domain && patch.domain !== current.domain)
+            await this.ownership.checkCompanyDomain(context, patch.domain, id);
         const custom = patch.custom
             ? await this.customFields.validated(
                   tx,
@@ -225,7 +233,8 @@ export class CompaniesService implements BulkRecords {
 function fields(input: CompanyInput) {
     return {
         name: input.name,
-        domain: input.domain,
+        // OWN-2c: every writer (a route, the importer) stores the registrable domain.
+        domain: input.domain ? (companyDomain(input.domain) ?? bareDomain(input.domain)) : input.domain,
         logoUrl: input.logoUrl,
         employeeCount: input.employeeCount,
         address: input.address,

@@ -10,6 +10,7 @@ import {
 import {
     invitationUrl,
     mailedLinkUrl,
+    MANAGER_DEFAULT_CAPABILITIES,
     MEMBER_DEFAULT_CAPABILITIES,
     RESET_PASSWORD_PAGE,
     SYSTEM_ROLES,
@@ -540,6 +541,17 @@ async function createWorkspaceShell(
             isSystem: true,
             permissions: {
                 create: MEMBER_DEFAULT_CAPABILITIES.map((capability) => ({ workspaceId: workspace.id, capability })),
+            },
+        },
+    });
+    // OWN-1 (FR-CRMS-18): the manager role, editable like `member`; it moves records between members.
+    await tx.role.create({
+        data: {
+            workspaceId: workspace.id,
+            name: SYSTEM_ROLES.manager,
+            isSystem: true,
+            permissions: {
+                create: MANAGER_DEFAULT_CAPABILITIES.map((capability) => ({ workspaceId: workspace.id, capability })),
             },
         },
     });

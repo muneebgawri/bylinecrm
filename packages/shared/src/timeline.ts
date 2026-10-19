@@ -21,7 +21,7 @@ import { ACTOR_KINDS, RECORD_OBJECTS, type Actor, type RecordObject } from './re
  * that person, with the reason and the note (#114). A meeting from a member's calendar (CAL-1) is a
  * third: it leaves `linked-meeting.booked|cancelled` on every record its outside attendees concern.
  */
-export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email', 'suppression', 'meeting'] as const;
+export const LINKED_OBJECTS = ['note', 'task', 'attachment', 'email', 'suppression', 'meeting', 'transfer'] as const;
 export type LinkedObject = (typeof LINKED_OBJECTS)[number];
 
 export function isLinkedObject(value: unknown): value is LinkedObject {

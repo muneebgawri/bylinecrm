@@ -79,9 +79,21 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
                 .expect(201)
         ).body as Pipeline;
     }
+    let companyId: string | undefined;
     async function deal(p: Pipeline, name: string, stageId: string): Promise<Deal> {
-        return (await as(admin).post(w('/opportunities')).send({ name, pipelineId: p.id, stageId }).expect(201))
-            .body as Deal;
+        companyId ??= (
+            (
+                await as(admin)
+                    .post(w('/companies'))
+                    .send({ name: `Stage Co ${stamp}` })
+                    .expect(201)
+            ).body as {
+                id: string;
+            }
+        ).id;
+        return (
+            await as(admin).post(w('/opportunities')).send({ name, companyId, pipelineId: p.id, stageId }).expect(201)
+        ).body as Deal;
     }
     const byName = (p: Pipeline, name: string) => p.stages.find((s) => s.name === name)!;
 

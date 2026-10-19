@@ -79,6 +79,8 @@ describe('deals, notes, tasks, attachments', () => {
     let repMemberId: string;
     let adminsPerson: string;
     let repsPerson: string;
+    let adminsCompany: string;
+    let repsCompany: string;
     let otherPerson: string;
     let events: EventLog;
 
@@ -147,6 +149,22 @@ describe('deals, notes, tasks, attachments', () => {
                 id: string;
             }
         ).id;
+        adminsCompany = (
+            (
+                await as(admin)
+                    .post(w('/companies'))
+                    .send({ name: `Admin Co ${stamp}` })
+                    .expect(201)
+            ).body as { id: string }
+        ).id;
+        repsCompany = (
+            (
+                await as(rep)
+                    .post(w('/companies'))
+                    .send({ name: `Rep Co ${stamp}` })
+                    .expect(201)
+            ).body as { id: string }
+        ).id;
         otherPerson = (
             (
                 await as(other)
@@ -180,6 +198,7 @@ describe('deals, notes, tasks, attachments', () => {
                 .post(w('/opportunities'))
                 .send({
                     name: 'Series B PR',
+                    companyId: adminsCompany,
                     amount: { amountMinor: 1200000 },
                     closeDate: '2026-10-31',
                     probability: 60,
@@ -194,12 +213,19 @@ describe('deals, notes, tasks, attachments', () => {
         });
 
         it('refuses a point of contact or company outside the caller’s scope, as 422', async () => {
-            await as(rep).post(w('/opportunities')).send({ name: 'Nope', pointOfContactId: adminsPerson }).expect(422);
-            await as(rep).post(w('/opportunities')).send({ name: 'Nope', pointOfContactId: otherPerson }).expect(422);
+            await as(rep)
+                .post(w('/opportunities'))
+                .send({ name: 'Nope', companyId: repsCompany, pointOfContactId: adminsPerson })
+                .expect(422);
+            await as(rep)
+                .post(w('/opportunities'))
+                .send({ name: 'Nope', companyId: repsCompany, pointOfContactId: otherPerson })
+                .expect(422);
             const ok = await as(rep)
                 .post(w('/opportunities'))
                 .send({
                     name: 'Rep deal',
+                    companyId: repsCompany,
                     pointOfContactId: repsPerson,
                     amount: { amountMinor: 50000, currency: 'EUR' },
                 })

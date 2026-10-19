@@ -106,7 +106,7 @@ describe('auth flows', () => {
     it('lets an admin see their own roles and members', async () => {
         const roles = await http().get(`/api/w/${workspaceA}/roles`).set('Cookie', a.cookie).expect(200);
         const names = (roles.body as { name: string; isSystem: boolean }[]).map((r) => r.name).sort();
-        expect(names).toEqual([SYSTEM_ROLES.admin, SYSTEM_ROLES.member]);
+        expect(names).toEqual([SYSTEM_ROLES.admin, SYSTEM_ROLES.manager, SYSTEM_ROLES.member]);
         const members = await http().get(`/api/w/${workspaceA}/members`).set('Cookie', a.cookie).expect(200);
         expect(members.body).toHaveLength(1);
     });

@@ -641,6 +641,47 @@ describe('calendar sync', () => {
         });
     });
 
+    describe('OWN-2b: a lead at another member’s company', () => {
+        it('FR-CRMS-20: is saved for the company’s owner, not the meeting’s host, who hands it over and the owner is told', async () => {
+            const kai = `kai@${acme}`;
+            calendar.put(memberEmail, {
+                id: 'member-acme-followup',
+                iCalUID: `acme-followup-${stamp}@google.com`,
+                summary: 'Acme follow-up',
+                start: new Date(Date.now() - 1 * DAY),
+                organizer: memberEmail,
+                guests: [{ email: memberEmail }, { email: kai, displayName: 'Kai Ito' }],
+            });
+            const before = rowOf(await kpis(admin), memberMemberId);
+            await sync.syncCalendar(workspace, memberMailbox, noWait);
+            await settle(app);
+
+            // Acme is the admin's company: the lead is theirs, at it — not the member's, who organised the meeting.
+            expect(await personByEmail(kai)).toMatchObject({ ownerId: adminMemberId, companyId: acmeId });
+            const lead = (await personByEmail(kai))!;
+            const history = (
+                await as(admin)
+                    .get(w(`/transfers?object=person&recordId=${lead.id}`))
+                    .expect(200)
+            ).body as { status: string; from: { memberId: string } | null; to: { memberId: string } }[];
+            expect(history).toEqual([
+                expect.objectContaining({
+                    status: 'forced',
+                    from: expect.objectContaining({ memberId: memberMemberId }),
+                    to: expect.objectContaining({ memberId: adminMemberId }),
+                }),
+            ]);
+            const bell = (await as(admin).get(w('/notifications')).expect(200)).body as {
+                items: { kind: string; transfer: { recordId: string } | null }[];
+            };
+            expect(bell.items.some((n) => n.kind === 'transfer_received' && n.transfer?.recordId === lead.id)).toBe(
+                true,
+            );
+            // Not the member's new lead.
+            expect(rowOf(await kpis(admin), memberMemberId).newLeads).toBe(before.newLeads);
+        });
+    });
+
     describe('changes', () => {
         it('a meeting called off is cancelled once, on its records’ timelines, and stops counting as to come', async () => {
             await log.reset();

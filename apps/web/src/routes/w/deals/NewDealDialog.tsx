@@ -94,6 +94,8 @@ function NewDealForm({
         if (!name.trim()) next.name = 'Give the deal a name.';
         const amount = amountText.trim() ? parseMoneyInput(amountText, currency) : null;
         if (amountText.trim() && !amount) next.amount = 'Enter an amount, like 12000 or 12,000.50.';
+        // OWN-2b: a deal is with a company, and is its owner's.
+        if (!company) next.companyId = 'Pick the company this deal is with.';
         if (Object.keys(next).length) {
             setErrors(next);
             return;
@@ -143,6 +145,8 @@ function NewDealForm({
                 </Field>
                 <Field
                     label="Company"
+                    required
+                    error={errors.companyId}
                     hint={company ? `Linked to ${company.name}` : 'Type to search by name or domain'}
                 >
                     <Input

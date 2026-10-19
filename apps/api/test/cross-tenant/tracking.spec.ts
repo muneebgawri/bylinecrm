@@ -534,16 +534,27 @@ describe('FR-CRMS-8 tracking', () => {
     });
 
     describe('FR-CRMS-8 what tracking may drive', () => {
+        let dealCompanyId: string | undefined;
+        const dealCompany = async (): Promise<string> =>
+            (dealCompanyId ??= (
+                (
+                    await as(admin)
+                        .post(w('/companies'))
+                        .send({ name: `Trk Co ${stamp}` })
+                ).body as { id: string }
+            ).id);
+
         it('a click may move a deal by a stage rule, like a reply', async () => {
             const made = await as(admin)
                 .post(w(`/pipelines/${pipeline.id}/rules`))
                 .send({ event: 'email.clicked', toStageId: stage('Replied').id });
             expect(made.status, JSON.stringify(made.body)).toBe(201);
             const dana = await person('rule');
+            const companyId = await dealCompany();
             const deal = (
                 await as(admin)
                     .post(w('/opportunities'))
-                    .send({ name: `Clicked ${stamp}`, pointOfContactId: dana })
+                    .send({ name: `Clicked ${stamp}`, companyId, pointOfContactId: dana })
             ).body as Deal;
             expect(deal.stageId).toBe(stage('New').id);
             const { html } = await stepSent(dana);
@@ -559,10 +570,11 @@ describe('FR-CRMS-8 tracking', () => {
                 .send({ event: 'email.opened', toStageId: stage('Replied').id });
             expect(refused.status).toBe(400);
             const dana = await person('opened-rule');
+            const companyId = await dealCompany();
             const deal = (
                 await as(admin)
                     .post(w('/opportunities'))
-                    .send({ name: `Opened ${stamp}`, pointOfContactId: dana })
+                    .send({ name: `Opened ${stamp}`, companyId, pointOfContactId: dana })
             ).body as Deal;
             const { html } = await stepSent(dana);
             await http()

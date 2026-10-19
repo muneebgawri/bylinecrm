@@ -12,10 +12,14 @@ import { OpportunitiesService } from './opportunities.service';
 import { PeopleService } from './people.service';
 import { CompaniesController, CustomFieldsController, PeopleController } from './records.controllers';
 import { TasksService } from './tasks.service';
+import { CompanyOwnership } from './company-ownership';
+import { CompanyDomainsController, OwnershipController } from './ownership.controller';
+import { OwnershipService } from './ownership.service';
+import { TransfersModule } from '../transfers/transfers.module';
 
 /** People, companies, deals, the custom fields on them, and the notes, tasks and files attached to them. */
 @Module({
-    imports: [CustomFieldsModule, QueryModule, PipelinesModule],
+    imports: [CustomFieldsModule, QueryModule, PipelinesModule, TransfersModule],
     controllers: [
         PeopleController,
         CompaniesController,
@@ -24,6 +28,8 @@ import { TasksService } from './tasks.service';
         NotesController,
         TasksController,
         AttachmentsController,
+        CompanyDomainsController,
+        OwnershipController,
     ],
     providers: [
         PeopleService,
@@ -33,7 +39,9 @@ import { TasksService } from './tasks.service';
         TasksService,
         AttachmentsService,
         BulkService,
+        CompanyOwnership,
+        OwnershipService,
     ],
-    exports: [PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
+    exports: [CompanyOwnership, PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
 })
 export class RecordsModule {}

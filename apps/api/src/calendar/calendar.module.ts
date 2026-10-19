@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
+import { TransfersModule } from '../transfers/transfers.module';
 import { RecordsModule } from '../records/records.module';
 import { CalendarSyncController, MeetingsController } from './calendar.controllers';
 import { CALENDAR_SYNC_JOB_ATTEMPTS, CALENDAR_SYNC_JOB_BACKOFF_MS, CALENDAR_SYNC_QUEUE } from './calendar.constants';
@@ -30,6 +31,7 @@ import { SlotlineSettingsService } from './slotline/slotline-settings.service';
         AuthModule,
         MailAccountsModule,
         RecordsModule,
+        TransfersModule,
         BullModule.registerQueue({
             name: CALENDAR_SYNC_QUEUE,
             defaultJobOptions: {
