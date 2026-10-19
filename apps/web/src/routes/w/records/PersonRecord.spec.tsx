@@ -53,7 +53,8 @@ describe('a person’s other email addresses', () => {
 
     it('are added from the properties: the address joins the others', async () => {
         const seen = stubApi([
-            (r) => (r.method === 'PATCH' ? json({ ...person, emails: r.body.emails }) : undefined),
+            (r) =>
+                r.method === 'PATCH' ? json({ ...person, emails: (r.body as { emails: unknown }).emails }) : undefined,
             (r) => {
                 if (r.method !== 'GET') return undefined;
                 if (/\/(enrolments|attachments|members\/summary|transfers|custom-fields)(\?|$)/.test(r.url))
@@ -65,7 +66,7 @@ describe('a person’s other email addresses', () => {
         await userEvent.click(await screen.findByRole('button', { name: /Add email/ }));
         await userEvent.type(screen.getByRole('textbox', { name: 'Add email' }), 'dana.home@example.com{Enter}');
         const patch = seen.find((r) => r.method === 'PATCH');
-        expect(patch?.body.emails).toEqual({
+        expect((patch?.body as { emails?: unknown } | undefined)?.emails).toEqual({
             ...person.emails,
             additional: [...person.emails.additional, 'dana.home@example.com'],
         });
