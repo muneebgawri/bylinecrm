@@ -582,6 +582,25 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect((await people()).some((p) => p.id === items[0]!.localId)).toBe(true);
         });
 
+        it('FR-CRMS-25: more than 2,000 records modified in one second (a bulk edit) are all read, by page token', async () => {
+            // After every cursor the earlier runs left: modified now, in one second.
+            const second = new Date().toISOString();
+            bigin.seed(
+                'Accounts',
+                Array.from({ length: 2_100 }, (_, i) => ({
+                    Account_Name: `Bulk ${stamp} ${i}`,
+                    Website: `bulk-${i}-${stamp}.example`,
+                    Modified_Time: second,
+                    Created_Time: second,
+                })),
+            );
+            const run = await runToEnd('changes');
+            expect(run.status, run.error ?? '').toBe('succeeded');
+            expect(reportOf(run, 'Accounts').failed).toBe(0);
+            expect(reportOf(run, 'Accounts').created).toBeGreaterThanOrEqual(2_100);
+            expect(bigin.requests.some((r) => r.path.includes('page_token='))).toBe(true);
+        }, 300_000);
+
         it('FR-CRMS-25: past the 2,000 deletions a pass may page through, the next run reads on from the newest one read', async () => {
             const from = new Date(Date.now() - 3 * 60 * 60 * 1000);
             bigin.seedDeletions('Notes', 2_500, from);

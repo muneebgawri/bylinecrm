@@ -233,8 +233,20 @@ export class BiginImportRunner {
             state.cursors[module] = cursor;
         }
         while (!cursor.done) {
-            const page = await this.bigin.list(state.connection, module, { since: cursor.since, page: cursor.page });
-            await this.writePage(state, module, cursor, page.records, page.moreRecords, entry);
+            const page = await this.bigin.list(state.connection, module, {
+                since: cursor.since,
+                page: cursor.page,
+                pageToken: cursor.pageToken ?? null,
+            });
+            await this.writePage(
+                state,
+                module,
+                cursor,
+                page.records,
+                page.moreRecords,
+                entry,
+                page.nextPageToken ?? null,
+            );
             if (cursor.done) break;
             if (await this.cancelRequested(state.runId)) return false;
         }
@@ -312,6 +324,7 @@ export class BiginImportRunner {
         all: BiginRecord[],
         moreRecords: boolean,
         entry: BiginImportObjectReport,
+        nextPageToken: string | null = null,
     ): Promise<void> {
         const seen = new Set(cursor.seen);
         const records = all.filter((record) => !seen.has(plainBiginId(record.id) ?? ''));
@@ -427,6 +440,7 @@ export class BiginImportRunner {
                 ids: all.map((r) => plainBiginId(r.id)).filter((id): id is string => id !== null),
                 latest,
                 moreRecords: moreRecords && all.length > 0,
+                nextPageToken,
             });
             // Progress the workspace keeps even if this run never finishes: up to what this pass wrote.
             const settled = settledCursor({

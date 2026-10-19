@@ -11,6 +11,8 @@ import {
     BIGIN_RETRY_CAP_MS,
     ZOHO_TOKEN_MARGIN_MS,
     ZOHO_TOKEN_PATH,
+    BIGIN_REST_PATH_V2,
+    BIGIN_FIELDS_MAX,
 } from './bigin-import.constants';
 import type {
     BiginApi,
@@ -61,6 +63,8 @@ const realClock: Clock = {
 export class BiginHttp implements BiginApi {
     private readonly clock: Clock;
     private readonly tokens = new Map<string, { token: string; expiresAt: number }>();
+    /** The v2 field list per connection and module. */
+    private readonly fields = new Map<string, string[]>();
 
     /**
      * Every request goes through the webhook delivery client: its lookup refuses a private address at connect
@@ -92,19 +96,50 @@ export class BiginHttp implements BiginApi {
     }
 
     async list(connection: BiginConnection, module: BiginImportObject, options: BiginListOptions): Promise<BiginPage> {
+        const fields = await this.fieldsOf(connection, module);
         const params = new URLSearchParams({
+            fields: fields.join(','),
             per_page: String(BIGIN_PAGE_SIZE),
-            page: String(options.page),
             sort_by: 'Modified_Time',
             sort_order: 'asc',
         });
-        const body = await this.get(connection, module, module, params, options.since);
+        if (options.pageToken) params.set('page_token', options.pageToken);
+        else params.set('page', String(options.page));
+        const body = await this.get(connection, module, module, params, options.since, BIGIN_REST_PATH_V2);
+        const next = body.info?.next_page_token;
         return {
             records: (Array.isArray(body.data) ? body.data : []).filter(
                 (r): r is BiginRecord => typeof r === 'object' && r !== null && 'id' in r,
             ),
             moreRecords: body.info?.more_records === true,
+            nextPageToken: typeof next === 'string' && next !== '' ? next : null,
         };
+    }
+
+    /**
+     * The fields v2 is asked for: every field a v1 page of the module carries (v1 returns them all, custom
+     * fields included), `id` and the timestamps first, at most `BIGIN_FIELDS_MAX`. Read once per module and
+     * connection.
+     */
+    private async fieldsOf(connection: BiginConnection, module: BiginImportObject): Promise<string[]> {
+        const key = `${tokenKey(connection)}:${module}`;
+        const cached = this.fields.get(key);
+        if (cached) return cached;
+        const sample = await this.get(
+            connection,
+            module,
+            module,
+            new URLSearchParams({ per_page: String(BIGIN_PAGE_SIZE), page: '1' }),
+            null,
+        );
+        const seen = new Set<string>(['id', 'Modified_Time', 'Created_Time']);
+        for (const row of Array.isArray(sample.data) ? sample.data : []) {
+            if (typeof row !== 'object' || row === null) continue;
+            for (const name of Object.keys(row)) if (!name.startsWith('$')) seen.add(name);
+        }
+        const fields = [...seen].slice(0, BIGIN_FIELDS_MAX);
+        this.fields.set(key, fields);
+        return fields;
     }
 
     async deleted(
@@ -149,10 +184,11 @@ export class BiginHttp implements BiginApi {
         module: string,
         params: URLSearchParams,
         since: string | null,
+        restPath: string = BIGIN_REST_PATH,
     ): Promise<Answer> {
         assertNoOpenTransaction('Bigin read');
         const query = params.toString();
-        const url = `${connection.apiUrl.replace(/\/+$/, '')}${BIGIN_REST_PATH}/${path}${query ? `?${query}` : ''}`;
+        const url = `${connection.apiUrl.replace(/\/+$/, '')}${restPath}/${path}${query ? `?${query}` : ''}`;
         let last: BiginApiError | null = null;
         let refreshed = false;
         for (let attempt = 1; attempt <= BIGIN_RETRY_ATTEMPTS; attempt++) {
@@ -286,7 +322,7 @@ export class BiginHttp implements BiginApi {
 
 interface Answer {
     data?: unknown[];
-    info?: { more_records?: boolean };
+    info?: { more_records?: boolean; next_page_token?: unknown };
     count?: unknown;
 }
 

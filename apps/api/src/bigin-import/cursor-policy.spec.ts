@@ -76,4 +76,30 @@ describe('FR-CRMS-25 BIGIN-1 cursor policy', () => {
         advanceWindow(cursor, { ids: [], latest: null, moreRecords: false });
         expect(cursor.done).toBe(true);
     });
+
+    it('pages past 2,000 by v2’s token when a bulk edit leaves the window unable to move (production, 2026-10-19)', () => {
+        const cursor = startPass('2026-10-02T00:00:04.000Z', null);
+        const sameSecond = at('2026-10-02T00:00:05Z');
+        for (let n = 1; n <= 12; n++) {
+            advanceWindow(cursor, { ids: [String(n)], latest: sameSecond, moreRecords: true, nextPageToken: `t${n}` });
+        }
+        expect(cursor).toMatchObject({ since: '2026-10-02T00:00:04.000Z', page: 13, pageToken: 't12' });
+        // Once the window can move, the token is dropped and paging starts again from the new window.
+        advanceWindow(cursor, {
+            ids: ['13'],
+            latest: at('2026-10-02T00:01:00Z'),
+            moreRecords: true,
+            nextPageToken: 't13',
+        });
+        expect(cursor).toMatchObject({ since: '2026-10-02T00:00:59.000Z', page: 1, pageToken: null });
+    });
+
+    it('without a token, still refuses to page past the 2,000-record ceiling', () => {
+        const cursor = startPass('2026-10-02T00:00:04.000Z', null);
+        const sameSecond = at('2026-10-02T00:00:05Z');
+        expect(() => {
+            for (let n = 1; n <= 12; n++)
+                advanceWindow(cursor, { ids: [String(n)], latest: sameSecond, moreRecords: true });
+        }).toThrow(/share one modification second/);
+    });
 });
