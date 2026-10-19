@@ -94,12 +94,16 @@ describe('FR-CRMS-25 BIGIN-1 cursor policy', () => {
         expect(cursor).toMatchObject({ since: '2026-10-02T00:00:59.000Z', page: 1, pageToken: null });
     });
 
-    it('without a token, still refuses to page past the 2,000-record ceiling', () => {
+    it('past v1’s 2,000 records of a window that cannot move, reads on by v2’s page tokens', () => {
         const cursor = startPass('2026-10-02T00:00:04.000Z', null);
         const sameSecond = at('2026-10-02T00:00:05Z');
-        expect(() => {
-            for (let n = 1; n <= 12; n++)
-                advanceWindow(cursor, { ids: [String(n)], latest: sameSecond, moreRecords: true });
-        }).toThrow(/share one modification second/);
+        for (let n = 1; n <= 10; n++)
+            advanceWindow(cursor, { ids: [String(n)], latest: sameSecond, moreRecords: true });
+        expect(cursor).toMatchObject({ page: 11, byToken: true, pageToken: null });
+        advanceWindow(cursor, { ids: ['11'], latest: sameSecond, moreRecords: true, nextPageToken: 't2' });
+        expect(cursor).toMatchObject({ byToken: true, pageToken: 't2' });
+        expect(() => advanceWindow(cursor, { ids: ['12'], latest: sameSecond, moreRecords: true })).toThrow(
+            /no page token/,
+        );
     });
 });

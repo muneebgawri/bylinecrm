@@ -96,6 +96,23 @@ export class BiginHttp implements BiginApi {
     }
 
     async list(connection: BiginConnection, module: BiginImportObject, options: BiginListOptions): Promise<BiginPage> {
+        // v1 narrows by `If-Modified-Since`; v2 (whose page tokens reach past 2,000 records) reads from the oldest.
+        if (!options.byToken && !options.pageToken) {
+            const params = new URLSearchParams({
+                per_page: String(BIGIN_PAGE_SIZE),
+                page: String(options.page),
+                sort_by: 'Modified_Time',
+                sort_order: 'asc',
+            });
+            const body = await this.get(connection, module, module, params, options.since);
+            return {
+                records: (Array.isArray(body.data) ? body.data : []).filter(
+                    (r): r is BiginRecord => typeof r === 'object' && r !== null && 'id' in r,
+                ),
+                moreRecords: body.info?.more_records === true,
+                nextPageToken: null,
+            };
+        }
         const fields = await this.fieldsOf(connection, module);
         const params = new URLSearchParams({
             fields: fields.join(','),
@@ -104,7 +121,7 @@ export class BiginHttp implements BiginApi {
             sort_order: 'asc',
         });
         if (options.pageToken) params.set('page_token', options.pageToken);
-        else params.set('page', String(options.page));
+        else params.set('page', '1');
         const body = await this.get(connection, module, module, params, options.since, BIGIN_REST_PATH_V2);
         const next = body.info?.next_page_token;
         return {

@@ -598,6 +598,8 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect(run.status, run.error ?? '').toBe('succeeded');
             expect(reportOf(run, 'Accounts').failed).toBe(0);
             expect(reportOf(run, 'Accounts').created).toBeGreaterThanOrEqual(2_100);
+            // v2 reads from the oldest record (it ignores `If-Modified-Since`): what is older than the window is passed over, not read again.
+            expect(reportOf(run, 'Accounts').read).toBeLessThan(2_100 + 400);
             expect(bigin.requests.some((r) => r.path.includes('page_token='))).toBe(true);
         }, 300_000);
 

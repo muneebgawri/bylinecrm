@@ -14,6 +14,8 @@ export interface BiginPassCursor {
     page: number;
     /** v2's token for the next page while the window cannot move; null otherwise (absent on older runs). */
     pageToken?: string | null;
+    /** Past v1's 2,000 records in a window that cannot move: read on by v2's page tokens (absent on older runs). */
+    byToken?: boolean;
     seen: string[];
     /** The latest `Modified_Time` this pass wrote: everything at or before it has been read. */
     highWater: string | null;
@@ -31,6 +33,7 @@ export function startPass(since: string | null, deletedSince: string | null): Bi
         since,
         page: 1,
         pageToken: null,
+        byToken: false,
         seen: [],
         highWater: null,
         oldestFailure: null,
@@ -75,6 +78,7 @@ export function advanceWindow(
         cursor.done = true;
         cursor.seen = [];
         cursor.pageToken = null;
+        cursor.byToken = false;
         return;
     }
     const next = page.latest ? new Date(page.latest.getTime() - BIGIN_WINDOW_OVERLAP_MS).toISOString() : null;
@@ -82,21 +86,21 @@ export function advanceWindow(
         cursor.since = next;
         cursor.page = 1;
         cursor.pageToken = null;
+        cursor.byToken = false;
         cursor.seen = page.ids;
         return;
     }
     // Every record of the page was modified in the window's first second: the window cannot move, so the page
-    // does — by v2's page token when Bigin gave one (it pages past 2,000), else by number up to the ceiling.
+    // does — by number up to v1's ceiling, then by v2's page tokens from its first page (they page past 2,000).
     cursor.page += 1;
     cursor.seen = [...cursor.seen, ...page.ids];
-    if (page.nextPageToken) {
+    if (cursor.byToken) {
+        if (!page.nextPageToken) throw new Error('Bigin gave no page token for more records');
         cursor.pageToken = page.nextPageToken;
         return;
     }
     cursor.pageToken = null;
-    if (cursor.page > BIGIN_PAGE_MAX) {
-        throw new Error(`more than ${BIGIN_PAGE_MAX * 200} Bigin records share one modification second`);
-    }
+    if (cursor.page > BIGIN_PAGE_MAX) cursor.byToken = true;
 }
 
 /**

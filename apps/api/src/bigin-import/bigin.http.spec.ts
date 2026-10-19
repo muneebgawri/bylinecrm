@@ -31,29 +31,35 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
             }),
         );
         const http = new BiginHttp({ sleep: () => Promise.resolve() }, { fetch: (u, i) => globalThis.fetch(u, i) });
+        // A window reads v1, which narrows by `If-Modified-Since`; v1 gives no page token.
         const page = await http.list(connection, 'Contacts', { since: '2026-10-01T00:00:00.000Z', page: 2 });
-        await http.list(connection, 'Contacts', { since: null, page: 1 });
         expect(page).toEqual({
             records: [{ id: '1', Last_Name: 'Lee', $approved: true }],
             moreRecords: true,
-            nextPageToken: 'tok-2',
+            nextPageToken: null,
         });
-        expect(calls.filter((c) => c.url.endsWith('/oauth/v2/token'))).toHaveLength(1);
-        // The fields are sampled once from v1 (every field, `$` meta left out), then the list reads v2.
-        expect(calls.filter((c) => c.url.includes('/bigin/v1/Contacts?'))).toHaveLength(1);
-        const read = calls.find((c) => c.url.includes('/bigin/v2/Contacts?'))!;
-        expect(read.url).toContain('fields=id%2CModified_Time%2CCreated_Time%2CLast_Name');
+        const read = calls.find((c) => c.url.includes('/bigin/v1/Contacts?'))!;
         expect(read.url).toMatch(/[?&]page=2(&|$)/);
-        expect(read.url).not.toContain('%24approved');
+        expect(read.url).toContain('sort_by=Modified_Time');
         const headers = read.init!.headers as Record<string, string>;
         expect(headers.authorization).toBe('Zoho-oauthtoken t1');
         expect(headers['if-modified-since']).toBe('Thu, 01 Oct 2026 00:00:00 GMT');
+        // By token: the fields are sampled once from v1 (every field, `$` meta left out), then v2 from its first page.
+        const byToken = await http.list(connection, 'Contacts', { since: null, page: 11, byToken: true });
+        await http.list(connection, 'Contacts', { since: null, page: 12, pageToken: 'tok-2' });
+        expect(byToken.nextPageToken).toBe('tok-2');
+        expect(calls.filter((c) => c.url.endsWith('/oauth/v2/token'))).toHaveLength(1);
+        expect(calls.filter((c) => c.url.includes('/bigin/v1/Contacts?'))).toHaveLength(2);
+        const [first, next] = calls.filter((c) => c.url.includes('/bigin/v2/Contacts?'));
+        expect(first!.url).toContain('fields=id%2CModified_Time%2CCreated_Time%2CLast_Name');
+        expect(first!.url).toMatch(/[?&]page=1(&|$)/);
+        expect(first!.url).not.toContain('%24approved');
+        expect(next!.url).toContain('page_token=tok-2');
     });
 
     it('a 304 is an empty page; a 429 is retried; refused credentials are final and never carry a secret', async () => {
         const answers = [
             json(200, { access_token: 't1', expires_in: 3600 }),
-            json(200, { data: [{ id: '9' }] }),
             json(429, { code: 'TOO_MANY' }),
             new Response(null, { status: 304 }),
         ];
