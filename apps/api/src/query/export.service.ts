@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { EXPORT_MAX_ROWS, EXPORT_PAGE_SIZE, type RecordObject } from '@bylinecrm/shared';
 import type { Writable } from 'node:stream';
+import { DomainEvents } from '../events/domain-events.service';
+import { recordGuardrailEvents, type NewGuardrailEvent } from '../guardrails/record';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
@@ -27,6 +29,7 @@ export class ExportService {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         private readonly customFields: CustomFieldsService,
+        private readonly events: DomainEvents,
     ) {}
 
     async writeCsv(object: RecordObject, request: ExportRequest, out: Writable): Promise<void> {
@@ -35,10 +38,8 @@ export class ExportService {
             const scope = await listScope(tx, context, this.customFields, object, request, false);
             const { plan } = scope;
             // GUARD-1 (FR-CRMS-21): a member exports their own records unless their role has `record:export_all`.
-            const where =
-                context.memberId && !context.capabilities.has('record:export_all')
-                    ? { AND: [scope.where, { ownerId: context.memberId }] }
-                    : scope.where;
+            const own = !!context.memberId && !context.capabilities.has('record:export_all');
+            const where = own ? { AND: [scope.where, { ownerId: context.memberId }] } : scope.where;
             const columns = chosenColumns(plan.fields, request.columns);
 
             const total = await countRows(tx, object, where);
@@ -47,6 +48,10 @@ export class ExportService {
                     `this export would hold ${total} rows; the limit is ${EXPORT_MAX_ROWS}. Narrow the filter or export in parts.`,
                 );
             }
+
+            // GUARD-1b: the export audit — who, which object, under which filter, how many rows, own or all —
+            // kept with the guardrail events (and announced as `guardrail.recorded`) before the first row goes.
+            await recordGuardrailEvents(tx, this.events, context, [exportAudit(context, object, request, total, own)]);
 
             await write(out, CSV_BOM + csvRow(columns.map((c) => c.label)));
             let cursor: string | undefined;
@@ -94,4 +99,35 @@ function write(out: Writable, chunk: string): Promise<void> {
         out.once('drain', onDrain);
         out.once('error', onError);
     });
+}
+
+const PLURAL: Readonly<Record<RecordObject, string>> = { person: 'people', company: 'companies', opportunity: 'deals' };
+const FILTER_DETAIL_MAX = 2000;
+
+/** One export, as the Guardrails page and the `guardrail.recorded` webhook read it. Never a row of the CSV. */
+function exportAudit(
+    context: WorkspaceRunContext,
+    object: RecordObject,
+    request: ExportRequest,
+    rows: number,
+    own: boolean,
+): NewGuardrailEvent {
+    const filter = typeof request.filter === 'string' ? request.filter : JSON.stringify(request.filter ?? null);
+    return {
+        kind: 'record_export',
+        outcome: 'allowed',
+        severity: 'low',
+        path: 'export',
+        actorMemberId: context.memberId ?? null,
+        message: `Exported ${rows} ${PLURAL[object]} (${own ? 'their own records' : 'all records'})`,
+        detail: {
+            object,
+            scope: own ? 'own' : 'all',
+            rows: String(rows),
+            ...(request.filter !== undefined ? { filter: filter.slice(0, FILTER_DETAIL_MAX) } : {}),
+            ...(request.q ? { q: request.q.slice(0, FILTER_DETAIL_MAX) } : {}),
+            ...(request.view ? { view: request.view } : {}),
+            ...(context.apiKeyId ? { apiKeyId: context.apiKeyId } : {}),
+        },
+    };
 }

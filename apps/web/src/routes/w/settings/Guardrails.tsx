@@ -73,7 +73,8 @@ export function Guardrails() {
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">
                 Every send, reply, scheduled send and sequence passes the recipient guard. These are the times it
                 stopped someone mailing another member’s lead, a prospect in negotiation, a customer or a suppressed
-                address — and the times it let a manager through. Mark one legitimate when there was a good reason.
+                address — and the times it let a manager through. Every CSV export is here too (Export): who, what, how
+                many rows, and whether only their own. Mark one legitimate when there was a good reason.
             </p>
             <DataTableChrome
                 toolbar={{
