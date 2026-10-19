@@ -56,6 +56,7 @@ export * from './transfers.js';
 export * from './ownership.js';
 export * from './webhooks.js';
 export * from './twenty-import.js';
+export * from './bigin-import.js';
 export * from './verification.js';
 export * from './enrichment.js';
 export * from './tracking.js';

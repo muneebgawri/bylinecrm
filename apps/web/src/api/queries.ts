@@ -77,6 +77,12 @@ export const keys = {
     twentyImportMissing: (workspaceId: string) => ['w', workspaceId, 'import', 'twenty', 'missing'] as const,
     twentyImportRun: (workspaceId: string, runId: string) =>
         ['w', workspaceId, 'import', 'twenty', 'runs', runId] as const,
+    biginImport: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin'] as const,
+    biginImportRuns: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'runs'] as const,
+    biginImportRun: (workspaceId: string, runId: string) =>
+        ['w', workspaceId, 'import', 'bigin', 'runs', runId] as const,
+    biginImportMissing: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'missing'] as const,
+    biginImportReuses: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'reuses'] as const,
     oauthClientStatus: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client', 'status'] as const,
     mailboxes: (workspaceId: string) => ['w', workspaceId, 'mailboxes'] as const,
     mailboxSync: (workspaceId: string, mailboxId: string) =>

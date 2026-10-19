@@ -85,6 +85,10 @@ model Workspace {
   twentyImportSettings TwentyImportSettings?
   twentyImportRuns     TwentyImportRun[]
   twentyImportLinks    TwentyImportLink[]
+  biginImportSettings  BiginImportSettings?
+  biginImportRuns      BiginImportRun[]
+  biginImportLinks     BiginImportLink[]
+  biginContactReuses   BiginContactReuse[]
 
   trackingDomain TrackingDomain?
   trackingTokens TrackingToken[]
@@ -284,6 +288,8 @@ model WorkspaceMember {
 
   configuredTwentyImports TwentyImportSettings[]
   startedTwentyImports    TwentyImportRun[]
+  configuredBiginImports  BiginImportSettings[]
+  startedBiginImports     BiginImportRun[]
   sequenceEnrolments      SequenceEnrolment[]    @relation("EnrolmentEnroller")
   ownedSequences          Sequence[]             @relation("SequenceOwner")
   notifications           Notification[]
@@ -330,6 +336,8 @@ model Role {
   invites              WorkspaceInvite[]
   twentyImportRuns     TwentyImportRun[]
   twentyImportSettings TwentyImportSettings[] @relation("TwentyImportSettingsRole")
+  biginImportRuns      BiginImportRun[]
+  biginImportSettings  BiginImportSettings[]  @relation("BiginImportSettingsRole")
 
   @@unique([workspaceId, name])
   @@map("roles")
@@ -2169,6 +2177,125 @@ model TwentyImportLink {
   @@index([workspaceId, localType, localId])
   @@index([workspaceId, missingSince])
   @@map("twenty_import_links")
+}
+
+/// BIGIN-1 (FR-CRMS-25): a workspace's Zoho Bigin connection. The client secret and refresh token are
+/// sealed with `SecretBox` and never returned; the URLs are the data centre's OAuth server and API.
+model BiginImportSettings {
+  workspaceId            String    @id @map("workspace_id") @db.Uuid
+  accountsUrl            String    @map("accounts_url")
+  apiUrl                 String    @map("api_url")
+  clientId               String    @map("client_id")
+  clientSecretCiphertext String    @map("client_secret_ciphertext")
+  refreshTokenCiphertext String    @map("refresh_token_ciphertext")
+  refreshTokenLast4      String    @map("refresh_token_last4")
+  configuredById         String?   @map("configured_by_id") @db.Uuid
+  /// How often a `changes` run starts on its own: `off`, `15m`, `hourly` or `daily` (checked by the database).
+  syncInterval           String    @default("off") @map("sync_interval")
+  syncFailures           Int       @default(0) @map("sync_failures")
+  syncLastError          String?   @map("sync_last_error")
+  cutoverAt              DateTime? @map("cutover_at") @db.Timestamptz
+  createMembersRoleId    String?   @map("create_members_role_id") @db.Uuid
+  /// Per module, the instant a `changes` run reads from (`{ [module]: iso }`, `<module>:deleted` for deletions):
+  /// advanced past what succeeded, never past the oldest record that failed.
+  cursors                Json      @default("{}")
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy      WorkspaceMember? @relation(fields: [configuredById], references: [id], onDelete: SetNull)
+  createMembersRole Role?            @relation("BiginImportSettingsRole", fields: [createMembersRoleId], references: [id], onDelete: SetNull)
+
+  @@map("bigin_import_settings")
+}
+
+enum BiginImportRunStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+
+  @@map("bigin_import_run_status")
+}
+
+enum BiginImportMode {
+  full
+  changes
+
+  @@map("bigin_import_mode")
+}
+
+/// One run of the Bigin importer; the row is the truth the worker resumes from (`phase`, `cursor`), `report`
+/// what it did per module (`BiginImportObjectReport[]`). At most one queued or running run per workspace.
+model BiginImportRun {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String               @map("workspace_id") @db.Uuid
+  status              BiginImportRunStatus @default(queued)
+  mode                BiginImportMode
+  phase               String?
+  /// Per module, where the pass is: `{ since, page, highWater, oldestFailure, done }`.
+  cursor              Json                 @default("{}")
+  report              Json                 @default("[]")
+  error               String?
+  cancelRequested     Boolean              @default(false) @map("cancel_requested")
+  scheduled           Boolean              @default(false)
+  startedById         String?              @map("started_by_id") @db.Uuid
+  createMembersRoleId String?              @map("create_members_role_id") @db.Uuid
+  accountsCreated     Int                  @default(0) @map("accounts_created")
+  queuedAt            DateTime             @default(now()) @map("queued_at") @db.Timestamptz
+  startedAt           DateTime?            @map("started_at") @db.Timestamptz
+  finishedAt          DateTime?            @map("finished_at") @db.Timestamptz
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  startedBy         WorkspaceMember? @relation(fields: [startedById], references: [id], onDelete: SetNull)
+  createMembersRole Role?            @relation(fields: [createMembersRoleId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, queuedAt(sort: Desc)])
+  @@map("bigin_import_runs")
+}
+
+/// What one Bigin record became here: `object` is the Bigin module, `externalId` its bare record id, and
+/// `localType`/`localId` the row. `missingSince` is set when Bigin reports the record deleted.
+model BiginImportLink {
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  object            String
+  externalId        String    @map("external_id")
+  localType         String    @map("local_type")
+  localId           String    @map("local_id") @db.Uuid
+  /// Bigin's `Modified_Time` when the record was last read.
+  externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz
+  importedAt        DateTime  @default(now()) @map("imported_at") @db.Timestamptz
+  missingSince      DateTime? @map("missing_since") @db.Timestamptz
+  /// Contacts: the name and primary email Bigin had when last read (`{ name, email }`), what a reuse is detected against.
+  snapshot          Json?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, object, externalId])
+  @@index([workspaceId, localType, localId])
+  @@index([workspaceId, missingSince])
+  @@map("bigin_import_links")
+}
+
+/// A Bigin Contact edited to hold a different person (BIGIN-1): the earlier person was left as it was and the
+/// Bigin id now maps to `newPersonId`. `before`/`after` are Bigin's `{ name, email }` either side of the change.
+model BiginContactReuse {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  biginId          String   @map("bigin_id")
+  previousPersonId String   @map("previous_person_id") @db.Uuid
+  newPersonId      String   @map("new_person_id") @db.Uuid
+  runId            String?  @map("run_id") @db.Uuid
+  detectedAt       DateTime @default(now()) @map("detected_at") @db.Timestamptz
+  before           Json
+  after            Json
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, detectedAt(sort: Desc)])
+  @@index([workspaceId, biginId])
+  @@map("bigin_contact_reuses")
 }
 
 /// What verification found about an address (P3-5, FR-CRMS-14); `@bylinecrm/shared` says what each means.

@@ -254,6 +254,18 @@ export type PutTwentyImportSettingsInput = Loose<Schemas['PutTwentyImportSetting
 export type PutTwentyImportSyncInput = Loose<Schemas['PutTwentyImportSyncDto']>;
 export type StartTwentyImportInput = Loose<Schemas['StartTwentyImportDto']>;
 
+// ---- The Bigin importer (BIGIN-1) -------------------------------------------------------------
+export type BiginImportOverviewView = Schemas['BiginImportOverview'];
+export type BiginImportSettingsView = Schemas['BiginImportSettings'];
+export type BiginImportRunView = Schemas['BiginImportRun'];
+export type BiginImportObjectReportView = Schemas['BiginImportObjectReport'];
+export type BiginImportPreviewView = Schemas['BiginImportPreview'];
+export type BiginImportMissingPage = Schemas['BiginImportMissingPage'];
+export type BiginContactReusePage = Schemas['BiginContactReusePage'];
+export type PutBiginImportSettingsInput = Loose<Schemas['PutBiginImportSettingsDto']>;
+export type PutBiginImportSyncInput = Loose<Schemas['PutBiginImportSyncDto']>;
+export type StartBiginImportInput = Loose<Schemas['StartBiginImportDto']>;
+
 // ---- Task notifications and My tasks (#192) --------------------------------------------------
 export type NotificationsView = Schemas['Notifications'];
 export type TransferView = Schemas['Transfer'];

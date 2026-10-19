@@ -10,7 +10,7 @@ import { ENV, type Env } from '../config/env';
 import { StateConflict } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { AccountMail } from '../transactional-mail/account-mail';
-import { capabilitiesOf } from '../workspace/roles.service';
+import { workspaceAdmins } from '../import-common/admins';
 import { queueRun } from './twenty-import.runs';
 import { syncWaitMs } from './twenty-sync';
 
@@ -113,22 +113,7 @@ export class TwentySyncService {
         settings: TwentyImportSettings,
     ): Promise<void> {
         const workspace = await tx.workspace.findUnique({ where: { id: run.workspaceId }, select: { name: true } });
-        // Who may run the importer: the members whose role holds `workspace:admin` — resolved the way
-        // the guard does, since the system admin role is every capability without stored rows.
-        const members = await tx.workspaceMember.findMany({
-            where: { leftAt: null },
-            select: {
-                id: true,
-                user: { select: { email: true } },
-                role: { select: { name: true, isSystem: true, permissions: { select: { capability: true } } } },
-            },
-        });
-        const admins = members.filter((m) =>
-            capabilitiesOf(
-                m.role,
-                m.role.permissions.map((p) => p.capability),
-            ).has('workspace:admin'),
-        );
+        const admins = await workspaceAdmins(tx);
         if (admins.length === 0) {
             this.logger.warn(
                 `twenty sync in ${run.workspaceId} failed ${settings.syncFailures} times: no admin to tell`,
@@ -138,7 +123,7 @@ export class TwentySyncService {
         for (const admin of admins) {
             await this.mail.twentySyncFailing(tx, {
                 workspaceId: run.workspaceId,
-                to: admin.user.email,
+                to: admin.email,
                 memberId: admin.id,
                 runId: run.id,
                 workspaceName: workspace?.name ?? 'your workspace',

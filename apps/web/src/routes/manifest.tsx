@@ -64,6 +64,7 @@ const settings = {
     ownership: () => import('./w/settings/Ownership').then((m) => ({ Component: m.Ownership })),
     slotline: () => import('./w/settings/Slotline').then((m) => ({ Component: m.Slotline })),
     importTwenty: () => import('./w/settings/ImportTwenty').then((m) => ({ Component: m.ImportTwenty })),
+    importBigin: () => import('./w/settings/ImportBigin').then((m) => ({ Component: m.ImportBigin })),
 };
 
 /** A recipient's unsubscribe page is its own chunk: public, outside the app, never in the first load (P3-1). */
@@ -172,6 +173,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('ownership', settings.ownership, 'Ownership'),
             lazyPage('slotline', settings.slotline, 'Slotline'),
             lazyPage('import-twenty', settings.importTwenty, 'Import from Twenty'),
+            lazyPage('import-bigin', settings.importBigin, 'Import from Bigin'),
         ]),
     ],
 };

@@ -27,6 +27,8 @@ import { stageData } from '../pipelines/pipelines.service';
 import { StageMoveService } from '../pipelines/stage-move.service';
 import { actorOf } from '../records/actor';
 import { CompaniesService } from '../records/companies.service';
+import { companyDomain } from '../records/company-domain';
+import { localLinkedFromBigin } from '../import-common/cross-source';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import type { FieldDefinition } from '../records/custom-fields/custom-values';
 import { NotesService } from '../records/notes.service';
@@ -589,6 +591,14 @@ export class TwentyImportRunner {
             }
             case 'companies': {
                 const input = { ...(mapped.input as Parameters<CompaniesService['createIn']>[2]), custom };
+                // BIGIN-1: the company the Bigin importer made from this record's Bigin id is this one.
+                const fromBigin = existing ? null : await localLinkedFromBigin(tx, 'company', record.biginrecordid);
+                if (fromBigin) {
+                    const result = await this.companies.updateIn(tx, context, fromBigin, input);
+                    if (result.event) events.push(result.event);
+                    await link('company', fromBigin);
+                    return 'merged';
+                }
                 if (existing) {
                     const patch = await localEdits('company', existing.localId, input);
                     const result = await this.companies.updateIn(tx, context, existing.localId, patch);
@@ -596,7 +606,9 @@ export class TwentyImportRunner {
                     await link('company', existing.localId);
                     return result.event ? 'updated' : 'unchanged';
                 }
-                const match = input.domain ? await tx.company.findFirst({ where: { domain: input.domain } }) : null;
+                // OWN-2c: a company is matched by its registrable domain, the form every writer stores.
+                const domain = input.domain ? (companyDomain(input.domain) ?? input.domain) : null;
+                const match = domain ? await tx.company.findFirst({ where: { domain } }) : null;
                 if (match) {
                     if (match.deletedAt) events.push((await this.companies.restoreIn(tx, context, match.id)).event);
                     const result = await this.companies.updateIn(tx, context, match.id, input);
@@ -615,6 +627,14 @@ export class TwentyImportRunner {
                 const input: PersonInput = { ...(lead ? lead.input : (mapped.input as PersonInput)), custom };
                 // Twenty's person is the truth about a person; a lead only adds to one that exists.
                 const authoritative = object === 'people';
+                // BIGIN-1: the person the Bigin importer made from this record's Bigin id is this one.
+                const fromBigin =
+                    existing || !authoritative ? null : await localLinkedFromBigin(tx, 'person', record.biginrecordid);
+                if (fromBigin) {
+                    await this.updatePerson(tx, context, fromBigin, input, authoritative, events);
+                    await link('person', fromBigin);
+                    return 'merged';
+                }
                 const target = existing?.localId ?? lead?.personId ?? null;
                 if (target) {
                     const patch = existing && authoritative ? await localEdits('person', target, input) : input;
@@ -641,11 +661,14 @@ export class TwentyImportRunner {
                 const stage = deal.stage ? await this.ensureStage(tx, state, deal.stage) : null;
                 const actor = actorOf(context);
                 const close = stage && stage.kind !== 'open' ? { lostReason: deal.lostReason ?? undefined } : undefined;
-                if (existing) {
+                // BIGIN-1: the deal the Bigin importer made from this record's Bigin id is this one.
+                const fromBigin = existing ? null : await localLinkedFromBigin(tx, 'opportunity', record.biginrecordid);
+                const current = existing ? existing.localId : fromBigin;
+                if (current) {
                     // The stage is a move, not a column: an edit here is `stageId` on the timeline.
-                    const patch = await localEdits('opportunity', existing.localId, { ...input, stageId: stage?.id });
+                    const patch = await localEdits('opportunity', current, { ...input, stageId: stage?.id });
                     const { stageId: wantedStage, ...columns } = patch;
-                    const result = await this.opportunities.updateIn(tx, context, existing.localId, columns);
+                    const result = await this.opportunities.updateIn(tx, context, current, columns);
                     if (result.event) events.push(result.event);
                     let moved = false;
                     if (stage && wantedStage && result.after.stageId !== stage.id) {
@@ -659,7 +682,8 @@ export class TwentyImportRunner {
                             moved = true;
                         }
                     }
-                    await link('opportunity', existing.localId);
+                    await link('opportunity', current);
+                    if (!existing) return 'merged';
                     return result.event || moved ? 'updated' : 'unchanged';
                 }
                 const created = await this.opportunities.createIn(tx, context, {

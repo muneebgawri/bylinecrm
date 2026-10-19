@@ -1,0 +1,178 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+/** A record as Bigin's REST API returns it: its numeric id, `Modified_Time`, and the module's fields. */
+export type FakeBiginRecord = Record<string, unknown> & { id: string; Modified_Time: string; Created_Time: string };
+
+export interface FakeBiginRequest {
+    method: string;
+    path: string;
+    ifModifiedSince: string | undefined;
+}
+
+const PAGE_MAX = 200;
+
+/**
+ * An in-process stand-in for Zoho Bigin (BIGIN-1): Zoho's token endpoint (`POST /oauth/v2/token`, a
+ * refresh-token grant answering `{ access_token, expires_in }`, or `200 { error }` for refused credentials,
+ * as Zoho does) and the Bigin read grammar the importer uses — `GET /bigin/v1/<Module>` with a
+ * `Zoho-oauthtoken`, `If-Modified-Since` (second resolution; `304` when nothing matched), `sort_by=
+ * Modified_Time&sort_order=asc`, `page`/`per_page` and `{ data, info: { more_records } }`;
+ * `/<Module>/deleted` and `/<Module>/actions/count`. Nothing here is Zoho's code: it is the shape of its
+ * answers, as the Python sync (`twenty-bigin-sync`) relied on them.
+ */
+export class FakeBigin {
+    clientId = 'bigin-client-id';
+    clientSecret = 'bigin-client-secret';
+    refreshToken = 'bigin-refresh-token-1234';
+    readonly requests: FakeBiginRequest[] = [];
+    tokensIssued = 0;
+    private readonly tokens = new Set<string>();
+    private readonly tables = new Map<string, FakeBiginRecord[]>();
+    private readonly deletions = new Map<string, { id: string; deleted_time: string }[]>();
+    private failures: { status: number; left: number } | null = null;
+    private server: Server | null = null;
+    private base = '';
+    private nextId = 5_725_767_000_000_000;
+
+    async start(): Promise<this> {
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+            req.on('end', () => {
+                const url = new URL(req.url ?? '/', 'http://fake');
+                const since = req.headers['if-modified-since'];
+                this.requests.push({
+                    method: req.method ?? 'GET',
+                    path: url.pathname + url.search,
+                    ifModifiedSince: typeof since === 'string' ? since : undefined,
+                });
+                const answer = this.answer(req.method ?? 'GET', url, req.headers.authorization, since, body);
+                if (answer.body === undefined) res.writeHead(answer.status).end();
+                else
+                    res.writeHead(answer.status, { 'content-type': 'application/json' }).end(
+                        JSON.stringify(answer.body),
+                    );
+            });
+        });
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+        this.server = server;
+        this.base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        return this;
+    }
+
+    async close(): Promise<void> {
+        const server = this.server;
+        if (!server) return;
+        this.server = null;
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+
+    /** Both of Zoho's hosts: the fake answers the token grant and the API on one port. */
+    get url(): string {
+        return this.base;
+    }
+
+    seed(module: string, records: readonly Record<string, unknown>[]): FakeBiginRecord[] {
+        const table = this.tables.get(module) ?? [];
+        const at = new Date().toISOString();
+        const made = records.map((record) => ({
+            Created_Time: at,
+            Modified_Time: at,
+            ...record,
+            id: String(this.nextId++),
+        })) as FakeBiginRecord[];
+        table.push(...made);
+        this.tables.set(module, table);
+        return made;
+    }
+
+    /** Changes a record's fields and moves its `Modified_Time` forward. */
+    update(module: string, id: string, patch: Record<string, unknown>, at = new Date().toISOString()): void {
+        const row = this.tables.get(module)?.find((r) => r.id === id);
+        if (!row) throw new Error(`no ${module} ${id}`);
+        Object.assign(row, patch, { Modified_Time: at });
+    }
+
+    /** Deletes a record: it leaves the module and is listed under `/deleted`. */
+    remove(module: string, id: string): void {
+        const table = this.tables.get(module) ?? [];
+        this.tables.set(
+            module,
+            table.filter((r) => r.id !== id),
+        );
+        this.deletions.set(module, [
+            ...(this.deletions.get(module) ?? []),
+            { id, deleted_time: new Date().toISOString() },
+        ]);
+    }
+
+    record(module: string, id: string): FakeBiginRecord {
+        return this.tables.get(module)!.find((r) => r.id === id)!;
+    }
+
+    failNext(status: number, times: number): void {
+        this.failures = { status, left: times };
+    }
+
+    private answer(
+        method: string,
+        url: URL,
+        authorization: string | undefined,
+        since: string | string[] | undefined,
+        body: string,
+    ): { status: number; body?: unknown } {
+        if (method === 'POST' && url.pathname === '/oauth/v2/token') {
+            const form = new URLSearchParams(body);
+            if (
+                form.get('grant_type') !== 'refresh_token' ||
+                form.get('client_id') !== this.clientId ||
+                form.get('client_secret') !== this.clientSecret ||
+                form.get('refresh_token') !== this.refreshToken
+            ) {
+                return { status: 200, body: { error: 'invalid_client' } };
+            }
+            const token = `access-${++this.tokensIssued}`;
+            this.tokens.add(token);
+            return { status: 200, body: { access_token: token, expires_in: 3600, token_type: 'Bearer' } };
+        }
+        if (this.failures && this.failures.left > 0) {
+            this.failures.left -= 1;
+            return { status: this.failures.status, body: { code: 'INTERNAL_ERROR', message: 'injected' } };
+        }
+        const token = authorization?.replace(/^Zoho-oauthtoken /, '');
+        if (!token || !this.tokens.has(token)) {
+            return { status: 401, body: { code: 'INVALID_TOKEN', message: 'invalid oauth token' } };
+        }
+        const match = /^\/bigin\/v1\/([A-Za-z]+)(\/deleted|\/actions\/count)?$/.exec(url.pathname);
+        if (!match || !['Accounts', 'Contacts', 'Deals', 'Notes'].includes(match[1]!)) {
+            return {
+                status: 400,
+                body: { code: 'INVALID_MODULE', message: 'the module name given seems to be invalid' },
+            };
+        }
+        const module = match[1]!;
+        const after = typeof since === 'string' ? new Date(since).getTime() : null;
+        if (match[2] === '/actions/count')
+            return { status: 200, body: { count: this.tables.get(module)?.length ?? 0 } };
+        const page = Number(url.searchParams.get('page') ?? '1');
+        const perPage = Math.min(Number(url.searchParams.get('per_page') ?? PAGE_MAX), PAGE_MAX);
+        const rows: Record<string, unknown>[] =
+            match[2] === '/deleted'
+                ? (this.deletions.get(module) ?? []).filter(
+                      (d) => after === null || new Date(d.deleted_time).getTime() > after,
+                  )
+                : (this.tables.get(module) ?? [])
+                      .filter((r) => after === null || new Date(r.Modified_Time).getTime() > after)
+                      .sort((a, b) => a.Modified_Time.localeCompare(b.Modified_Time) || a.id.localeCompare(b.id));
+        if (rows.length === 0 && after !== null) return { status: 304 };
+        const slice = rows.slice((page - 1) * perPage, page * perPage);
+        return {
+            status: 200,
+            body: {
+                data: slice,
+                info: { page, per_page: perPage, count: slice.length, more_records: page * perPage < rows.length },
+            },
+        };
+    }
+}

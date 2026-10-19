@@ -5,6 +5,7 @@ export type MailKind =
     | 'workspace_invitation'
     | 'signup_invitation'
     | 'twenty_sync_failing'
+    | 'bigin_sync_failing'
     | 'task_digest';
 
 /** One message, rendered and addressed, as a transport sends it. */

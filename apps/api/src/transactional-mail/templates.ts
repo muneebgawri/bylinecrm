@@ -131,12 +131,29 @@ export function twentySyncFailingMail(input: {
     error: string;
     url: string;
 }): RenderedMail {
+    return importSyncFailingMail('Twenty', input);
+}
+
+/** The same notice for the automatic Bigin sync (BIGIN-1). */
+export function biginSyncFailingMail(input: {
+    workspaceName: string;
+    failures: number;
+    error: string;
+    url: string;
+}): RenderedMail {
+    return importSyncFailingMail('Bigin', input);
+}
+
+function importSyncFailingMail(
+    source: 'Twenty' | 'Bigin',
+    input: { workspaceName: string; failures: number; error: string; url: string },
+): RenderedMail {
     const name = input.workspaceName;
-    return render(`Automatic Twenty sync is failing in ${name}`, {
-        heading: `Twenty sync has failed ${input.failures} times in a row`,
+    return render(`Automatic ${source} sync is failing in ${name}`, {
+        heading: `${source} sync has failed ${input.failures} times in a row`,
         paragraphs: [
-            `${PRODUCT} could not sync ${name} from Twenty. The last run said: ${input.error}`,
-            'The schedule keeps trying, less often each time, until a run succeeds. Check the Twenty connection and the last runs on the import screen.',
+            `${PRODUCT} could not sync ${name} from ${source}. The last run said: ${input.error}`,
+            `The schedule keeps trying, less often each time, until a run succeeds. Check the ${source} connection and the last runs on the import screen.`,
         ],
         action: 'Open the import screen',
         url: input.url,

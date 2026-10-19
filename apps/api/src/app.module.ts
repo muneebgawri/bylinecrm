@@ -25,6 +25,7 @@ import { TimelineModule } from './timeline/timeline.module';
 import { TransfersModule } from './transfers/transfers.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { TwentyImportModule } from './twenty-import/twenty-import.module';
+import { BiginImportModule } from './bigin-import/bigin-import.module';
 import { ViewsModule } from './views/views.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
@@ -53,6 +54,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         TransfersModule,
         TrackingModule,
         TwentyImportModule,
+        BiginImportModule,
         ViewsModule,
         WebhooksModule,
         CalendarModule,
