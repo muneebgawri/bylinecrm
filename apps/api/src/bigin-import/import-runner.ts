@@ -559,16 +559,28 @@ export class BiginImportRunner {
                 if (found === 'trashed') return skip(mapped, 'trashed in BylineCRM');
                 if (found) {
                     const patch = await localEdits('company', found.id, input);
+                    // A domain a company already has stays where it is: another's is reported, this one's own
+                    // (perhaps as one of its other domains) is left as it is.
+                    const current = patch.domain
+                        ? (await tx.company.findUnique({ where: { id: found.id }, select: { domain: true } }))?.domain
+                        : null;
+                    const changing = patch.domain && (companyDomain(patch.domain) ?? patch.domain) !== current;
+                    const holder = changing ? await companyAtDomain(tx, patch.domain!) : null;
+                    if (holder) {
+                        delete patch.domain;
+                        if (holder.id !== found.id) page.kept.push('domain');
+                    }
                     const result = await this.companies.updateIn(tx, context, found.id, patch);
                     if (result.event) events.push(result.event);
                     await link(found.id);
                     return found.how === 'merged' ? 'merged' : result.event ? 'updated' : 'unchanged';
                 }
-                const domain = input.domain ? (companyDomain(input.domain) ?? input.domain) : null;
-                const match = domain ? await tx.company.findFirst({ where: { domain } }) : null;
+                const match = input.domain ? await companyAtDomain(tx, input.domain) : null;
                 if (match) {
                     if (match.deletedAt) events.push((await this.companies.restoreIn(tx, context, match.id)).event);
-                    const patch = await localEdits('company', match.id, input);
+                    // The company is already at this domain (perhaps as one of its other domains): it keeps its own.
+                    const { domain: _domain, ...rest } = input;
+                    const patch = await localEdits('company', match.id, rest);
                     const result = await this.companies.updateIn(tx, context, match.id, patch);
                     if (result.event) events.push(result.event);
                     await link(match.id);
@@ -879,6 +891,30 @@ export class BiginImportRunner {
 }
 
 /** The person's name and address as BylineCRM has them: what a link without a snapshot is compared with. */
+/**
+ * The company at `domain`'s registrable domain, as the ownership rule finds it (OWN-2c): its own domain, in
+ * the `www.` form saved before OWN-2c too, else one of its other domains. A live one before a trashed one.
+ */
+async function companyAtDomain(
+    tx: WorkspaceClient,
+    domain: string,
+): Promise<{ id: string; deletedAt: Date | null } | null> {
+    const key = companyDomain(domain) ?? domain;
+    const forms = [key, `www.${key}`];
+    const own = await tx.company.findMany({
+        where: { domain: { in: forms } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, deletedAt: true },
+    });
+    const live = own.find((c) => c.deletedAt === null);
+    if (live) return live;
+    const other = await tx.companyDomain.findFirst({
+        where: { domain: { in: forms }, company: { deletedAt: null } },
+        select: { companyId: true },
+    });
+    return other ? { id: other.companyId, deletedAt: null } : (own[0] ?? null);
+}
+
 async function currentIdentity(tx: WorkspaceClient, personId: string): Promise<ContactIdentity> {
     const person = await tx.person.findUniqueOrThrow({
         where: { id: personId },

@@ -235,9 +235,14 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
         ids.existingPerson = (dana.body as { id: string }).id;
         const globex = await as(admin)
             .post(w('/companies'))
-            .send({ name: 'Globex', domain: `globex-${stamp}.com` });
+            .send({ name: 'Globex', domain: `globex-${stamp}.net` });
         expect(globex.status, JSON.stringify(globex.body)).toBe(201);
         ids.existingCompany = (globex.body as { id: string }).id;
+        // Bigin's account is at one of Globex's other domains: it merges there, not refused as Globex's.
+        const other = await as(admin)
+            .post(w(`/companies/${ids.existingCompany}/domains`))
+            .send({ domain: `globex-${stamp}.com` });
+        expect(other.status, JSON.stringify(other.body)).toBe(201);
         const initech = await as(admin).post(w('/companies')).send({ name: 'Initech (from Twenty)' });
         expect(initech.status, JSON.stringify(initech.body)).toBe(201);
         ids.twentyCompany = (initech.body as { id: string }).id;
@@ -473,6 +478,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             const acme = all.find((c) => c.name === 'Acme')!;
             expect(acme).toMatchObject({ domain: `acme-${stamp}.example`, ownerId: adminMemberId });
             expect((await linkOf('Accounts', ids.globex))!.localId).toBe(ids.existingCompany);
+            expect(all.find((c) => c.id === ids.existingCompany)!.domain).toBe(`globex-${stamp}.net`);
             expect((await linkOf('Accounts', ids.initech))!.localId).toBe(ids.twentyCompany);
             expect(all.filter((c) => c.name.startsWith('Initech'))).toHaveLength(1);
         });
