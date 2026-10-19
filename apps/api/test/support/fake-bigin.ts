@@ -25,6 +25,8 @@ export class FakeBigin {
     clientId = 'bigin-client-id';
     clientSecret = 'bigin-client-secret';
     refreshToken = 'bigin-refresh-token-1234';
+    /** The self client's one-time grant code; spent by its exchange. */
+    grantCode: string | null = '1000.grant-code-abcdef';
     readonly requests: FakeBiginRequest[] = [];
     tokensIssued = 0;
     private readonly tokens = new Set<string>();
@@ -124,6 +126,20 @@ export class FakeBigin {
     ): { status: number; body?: unknown } {
         if (method === 'POST' && url.pathname === '/oauth/v2/token') {
             const form = new URLSearchParams(body);
+            // A self client's grant code, traded once for the refresh token (Zoho's authorization-code grant).
+            if (form.get('grant_type') === 'authorization_code') {
+                const ok =
+                    form.get('client_id') === this.clientId &&
+                    form.get('client_secret') === this.clientSecret &&
+                    this.grantCode !== null &&
+                    form.get('code') === this.grantCode;
+                if (!ok) return { status: 200, body: { error: 'invalid_code' } };
+                this.grantCode = null;
+                return {
+                    status: 200,
+                    body: { refresh_token: this.refreshToken, access_token: 'unused', expires_in: 3600 },
+                };
+            }
             if (
                 form.get('grant_type') !== 'refresh_token' ||
                 form.get('client_id') !== this.clientId ||

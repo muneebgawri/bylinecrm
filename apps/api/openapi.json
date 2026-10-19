@@ -25925,6 +25925,11 @@
                         "type": "string",
                         "minLength": 8,
                         "maxLength": 2000
+                    },
+                    "grantCode": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 2000
                     }
                 },
                 "required": ["accountsUrl", "apiUrl", "clientId"]

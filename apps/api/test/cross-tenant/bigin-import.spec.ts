@@ -404,6 +404,30 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 expect.objectContaining({ object: 'Notes', remote: 2 }),
             ]);
         });
+
+        it('FR-CRMS-25: takes a self client’s grant code instead of a refresh token, trades it once, and stores the token', async () => {
+            const { refreshToken: _token, ...withoutToken } = connection();
+            const wrong = await as(admin)
+                .put(w('/import/bigin/settings'))
+                .send({ ...withoutToken, grantCode: '1000.not-the-code' });
+            expect(wrong.status).toBe(422);
+            expect(JSON.stringify(wrong.body)).toContain('grantCode');
+
+            const good = await as(admin)
+                .put(w('/import/bigin/settings'))
+                .send({ ...withoutToken, grantCode: bigin.grantCode });
+            expect(good.status, JSON.stringify(good.body)).toBe(200);
+            expect(good.body).toMatchObject({ configured: true, refreshTokenLast4: bigin.refreshToken.slice(-4) });
+            expect(JSON.stringify(good.body)).not.toContain(bigin.refreshToken);
+            expect((await as(admin).post(w('/import/bigin/preview'))).status).toBe(200);
+
+            // A grant code is single-use: the same one again is refused, and the stored token stands.
+            const again = await as(admin)
+                .put(w('/import/bigin/settings'))
+                .send({ ...withoutToken, grantCode: '1000.grant-code-abcdef' });
+            expect(again.status).toBe(422);
+            expect((await as(admin).post(w('/import/bigin/preview'))).status).toBe(200);
+        });
     });
 
     describe('a full run', () => {

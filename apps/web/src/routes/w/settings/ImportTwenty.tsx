@@ -1,5 +1,4 @@
 import {
-    SYSTEM_ROLES,
     TWENTY_IMPORT_OBJECT_LABELS,
     TWENTY_IMPORT_OBJECTS,
     TWENTY_SYNC_FAILURES_BEFORE_NOTICE,
@@ -12,7 +11,6 @@ import {
 import {
     Badge,
     Button,
-    Checkbox,
     DataTableChrome,
     Field,
     Input,
@@ -45,7 +43,6 @@ import {
     useTwentyImportMissing,
 } from '../../../api/importTwenty';
 import { keys } from '../../../api/queries';
-import { useRoles } from '../../../api/team';
 import type {
     TwentyImportObjectReportView,
     TwentyImportOverviewView,
@@ -58,6 +55,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatDate, formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { CreateMembersOption } from './CreateMembersOption';
 import { paths } from '../../paths';
 
 /**
@@ -571,6 +569,7 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                         <p className="m-0 text-[13px] text-text-muted">{MODE_HELP[mode]}</p>
                         {mode !== 'reconcile' && (
                             <CreateMembersOption
+                                source="Twenty"
                                 workspaceId={workspaceId}
                                 value={createMembers}
                                 onChange={setCreateMembers}
@@ -627,67 +626,6 @@ function Runs({ workspaceId, overview }: { workspaceId: string; overview: Twenty
                 )}
             </Card>
         </>
-    );
-}
-
-/**
- * The accounts option (#184): create a user and a seat for each Twenty member who is not here, with a
- * role of the workspace's (`member` unless chosen otherwise), so the records they own are theirs
- * from this run. Nothing is mailed; an admin sends the invitation from Members later.
- */
-function CreateMembersOption({
-    workspaceId,
-    value,
-    onChange,
-}: {
-    workspaceId: string;
-    value: TwentyImportCreateMembers | null;
-    onChange: (value: TwentyImportCreateMembers | null) => void;
-}) {
-    const roles = useRoles(workspaceId);
-    const memberRole = roles.data?.find((r) => r.isSystem && r.name === SYSTEM_ROLES.member) ?? roles.data?.[0];
-    const on = value !== null;
-    return (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-            <div className="flex items-start gap-2 text-[13px]">
-                <Checkbox
-                    id="import-create-members"
-                    aria-labelledby="import-create-members-label"
-                    checked={on}
-                    disabled={!memberRole}
-                    onCheckedChange={(checked) =>
-                        onChange(checked === true && memberRole ? { roleId: memberRole.id } : null)
-                    }
-                />
-                <label htmlFor="import-create-members" className="cursor-pointer">
-                    <span id="import-create-members-label" className="font-medium">
-                        Create accounts for Twenty members who aren’t here
-                    </span>
-                    <span className="block text-text-muted">
-                        Each gets an account with no password and a seat with the role below, so the records they own
-                        are theirs. Nothing is emailed: send invitations from Members when you want them to sign in, or
-                        they sign in with Google using that address. A scheduled sync creates accounts as last chosen
-                        here, with this role.
-                    </span>
-                </label>
-            </div>
-            {on && (
-                <Field label="Role for created accounts" className="max-w-xs">
-                    <Select value={value.roleId} onValueChange={(roleId) => onChange({ roleId })}>
-                        <SelectTrigger aria-label="Role for created accounts">
-                            <SelectValue placeholder="Choose a role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {(roles.data ?? []).map((r) => (
-                                <SelectItem key={r.id} value={r.id}>
-                                    {r.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </Field>
-            )}
-        </div>
     );
 }
 

@@ -39,6 +39,8 @@ export interface BiginSettingsInput {
     /** Absent on an update that keeps the stored secret. */
     clientSecret?: string | undefined;
     refreshToken?: string | undefined;
+    /** A self client's one-time grant code, traded for the refresh token on save. */
+    grantCode?: string | undefined;
 }
 
 /**
@@ -90,13 +92,44 @@ export class BiginImportService {
         const { workspaceId, memberId } = this.current();
         const accountsUrl = await this.checkedUrl('accountsUrl', input.accountsUrl);
         const apiUrl = await this.checkedUrl('apiUrl', input.apiUrl);
+        // A grant code is traded for the refresh token here, outside any transaction (a network call), with
+        // the secret given or, on an update that leaves it out, the stored one.
+        if (input.grantCode && !input.refreshToken) {
+            const clientSecret =
+                input.clientSecret ??
+                (await this.rls.withWorkspace(
+                    async (tx) => (await readBiginConnection(tx, this.secrets))?.connection.clientSecret,
+                ));
+            if (!clientSecret) {
+                throw new ApiException(422, 'unprocessable', 'a new connection needs its client secret', [
+                    { path: 'clientSecret', message: 'required' },
+                ]);
+            }
+            try {
+                const refreshToken = await this.bigin.exchangeGrantCode(
+                    { accountsUrl, clientId: input.clientId, clientSecret },
+                    input.grantCode,
+                );
+                input = { ...input, refreshToken };
+            } catch (error) {
+                if (!(error instanceof BiginApiError)) throw error;
+                throw new ApiException(422, 'unprocessable', error.message, [
+                    { path: 'grantCode', message: error.message },
+                ]);
+            }
+        }
         const row = await this.rls.withWorkspace(async (tx) => {
             const existing = await tx.biginImportSettings.findFirst();
             if (!existing && (!input.clientSecret || !input.refreshToken)) {
-                throw new ApiException(422, 'unprocessable', 'a new connection needs its secret and refresh token', [
-                    ...(input.clientSecret ? [] : [{ path: 'clientSecret', message: 'required' }]),
-                    ...(input.refreshToken ? [] : [{ path: 'refreshToken', message: 'required' }]),
-                ]);
+                throw new ApiException(
+                    422,
+                    'unprocessable',
+                    'a new connection needs its secret, and a grant code or refresh token',
+                    [
+                        ...(input.clientSecret ? [] : [{ path: 'clientSecret', message: 'required' }]),
+                        ...(input.refreshToken ? [] : [{ path: 'refreshToken', message: 'required' }]),
+                    ],
+                );
             }
             const data = {
                 accountsUrl,

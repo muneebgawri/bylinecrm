@@ -57,6 +57,14 @@ export interface BiginApi {
     ): Promise<BiginDeletedPage>;
     /** How many records the module holds; null when Bigin will not say. */
     count(connection: BiginConnection, module: BiginImportObject): Promise<number | null>;
+    /**
+     * Trades a self client's one-time grant code for a refresh token (Zoho's authorization-code grant), so an
+     * admin pastes the code Zoho's API console shows instead of running the exchange by hand.
+     */
+    exchangeGrantCode(
+        client: { accountsUrl: string; clientId: string; clientSecret: string },
+        code: string,
+    ): Promise<string>;
 }
 
 export const BIGIN_PORT = Symbol('BIGIN_PORT');

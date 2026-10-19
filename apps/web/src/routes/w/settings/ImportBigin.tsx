@@ -50,6 +50,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatDate, formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { CreateMembersOption, type CreateMembersChoice } from './CreateMembersOption';
 
 /**
  * The Bigin importer's screen (BIGIN-1, FR-CRMS-25): connect Zoho Bigin, sync it one way into BylineCRM by
@@ -234,6 +235,8 @@ function ConnectionForm({
     const [clientId, setClientId] = useState(settings.clientId ?? '');
     const [clientSecret, setClientSecret] = useState('');
     const [refreshToken, setRefreshToken] = useState('');
+    // A self client's grant code, traded for the refresh token on save (either one will do).
+    const [grantCode, setGrantCode] = useState('');
     const dc = BIGIN_DATA_CENTRES.find((d) => d.code === centre) ?? BIGIN_DATA_CENTRES[0];
     const needsSecrets = !settings.configured;
     const submit = (event: FormEvent) => {
@@ -245,11 +248,13 @@ function ConnectionForm({
                 clientId: clientId.trim(),
                 ...(clientSecret ? { clientSecret } : {}),
                 ...(refreshToken ? { refreshToken } : {}),
+                ...(grantCode && !refreshToken ? { grantCode } : {}),
             },
             {
                 onSuccess: () => {
                     setClientSecret('');
                     setRefreshToken('');
+                    setGrantCode('');
                     toast({ title: 'Bigin connection saved', description: 'Check it, then start a sync.' });
                     onSaved();
                 },
@@ -258,7 +263,8 @@ function ConnectionForm({
     };
     const fieldError = (path: string) => fieldErrorAt(put.error, path);
     const generalError =
-        put.isError && !['clientId', 'clientSecret', 'refreshToken', 'apiUrl', 'accountsUrl'].some(fieldError)
+        put.isError &&
+        !['clientId', 'clientSecret', 'refreshToken', 'grantCode', 'apiUrl', 'accountsUrl'].some(fieldError)
             ? failureText(put.error)
             : undefined;
     return (
@@ -305,9 +311,21 @@ function ConnectionForm({
                 />
             </Field>
             <Field
+                label="Grant code"
+                hint="Easiest: in Zoho’s API console, open the self client, Generate Code with scope ZohoBigin.modules.ALL, and paste it here within its few minutes. It is traded for a refresh token when you save."
+                error={fieldError('grantCode')}
+            >
+                <Input
+                    type="password"
+                    value={grantCode}
+                    onChange={(e) => setGrantCode(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                />
+            </Field>
+            <Field
                 label="Refresh token"
-                required={needsSecrets}
-                hint="A refresh token granted for the Bigin modules (ZohoBigin.modules.ALL). Stored encrypted; afterwards only its last four characters are shown."
+                hint="Or a refresh token already granted for ZohoBigin.modules.ALL. Stored encrypted; afterwards only its last four characters are shown."
                 error={fieldError('refreshToken')}
             >
                 <Input
@@ -331,7 +349,7 @@ function ConnectionForm({
                     shape="square"
                     data-primary-action
                     loading={put.isPending}
-                    disabled={!clientId.trim() || (needsSecrets && (!clientSecret || !refreshToken))}
+                    disabled={!clientId.trim() || (needsSecrets && (!clientSecret || (!refreshToken && !grantCode)))}
                 >
                     Save connection
                 </Button>
@@ -490,6 +508,8 @@ const MODES: readonly { value: BiginImportMode; label: string }[] = [
 
 function RunCard({ workspaceId, overview }: { workspaceId: string; overview: BiginImportOverviewView }) {
     const [mode, setMode] = useState<BiginImportMode>('changes');
+    // The option starts as the workspace's saved choice (the last start's), which a scheduled sync uses too.
+    const [createMembers, setCreateMembers] = useState<CreateMembersChoice | null>(overview.settings.createMembers);
     const start = useStartBiginImport(workspaceId);
     const cancel = useCancelBiginImport(workspaceId);
     const latest = overview.latestRun;
@@ -508,7 +528,7 @@ function RunCard({ workspaceId, overview }: { workspaceId: string; overview: Big
                         className="max-md:h-touch"
                         loading={start.isPending}
                         disabled={going}
-                        onClick={() => start.mutate({ mode })}
+                        onClick={() => start.mutate({ mode, ...(createMembers ? { createMembers } : {}) })}
                     >
                         Start sync
                     </Button>
@@ -525,6 +545,12 @@ function RunCard({ workspaceId, overview }: { workspaceId: string; overview: Big
                         </Button>
                     )}
                 </div>
+                <CreateMembersOption
+                    workspaceId={workspaceId}
+                    source="Bigin"
+                    value={createMembers}
+                    onChange={setCreateMembers}
+                />
                 {start.isError && (
                     <Alert>{fieldErrorAt(start.error, 'refreshToken') ?? failureText(start.error)}</Alert>
                 )}
