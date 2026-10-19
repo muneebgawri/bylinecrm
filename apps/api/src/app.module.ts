@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { ConfigModule } from './config/config.module';
 import { EventsModule } from './events/events.module';
+import { GuardrailsModule } from './guardrails/guardrails.module';
 import { HealthModule } from './health/health.module';
 import { ErrorFilter } from './infra/errors/error.filter';
 import { InfraModule } from './infra/infra.module';
@@ -34,6 +35,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         ConfigModule,
         InfraModule,
         EventsModule,
+        GuardrailsModule,
         HealthModule,
         AuthModule,
         MailAccountsModule,

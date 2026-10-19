@@ -92,26 +92,37 @@ export class ExclusionsService {
     }
 
     /** The live exclusion for each address (by the address, else its domain), read in `tx`. */
-    async check(tx: WorkspaceClient, addresses: readonly string[]): Promise<Map<string, ExclusionHit>> {
-        const normalised = addresses.map((a) => a.toLowerCase());
-        const domains = [...new Set(normalised.map((a) => a.slice(a.lastIndexOf('@') + 1)))];
-        const rows = await tx.outreachExclusion.findMany({
-            where: { removedAt: null, OR: [{ address: { in: normalised } }, { domain: { in: domains } }] },
-        });
-        const byAddress = new Map(rows.filter((r) => r.address).map((r) => [r.address!, r]));
-        const byDomain = new Map(rows.filter((r) => r.domain).map((r) => [r.domain!, r]));
-        const hits = new Map<string, ExclusionHit>();
-        for (const address of normalised) {
-            const row = byAddress.get(address) ?? byDomain.get(address.slice(address.lastIndexOf('@') + 1));
-            if (row)
-                hits.set(address, {
-                    reason: row.reason,
-                    accountManagerName: row.accountManagerName,
-                    source: row.source,
-                });
-        }
-        return hits;
+    check(tx: WorkspaceClient, addresses: readonly string[]): Promise<Map<string, ExclusionHit>> {
+        return exclusionHits(tx, addresses);
     }
+}
+
+/**
+ * The live exclusion for each address (by the address, else its domain), read in `tx` — the one query the
+ * enrolment screen, the step runner and the recipient guard (GUARD-1) all ask.
+ */
+export async function exclusionHits(
+    tx: WorkspaceClient,
+    addresses: readonly string[],
+): Promise<Map<string, ExclusionHit>> {
+    const normalised = addresses.map((a) => a.toLowerCase());
+    const domains = [...new Set(normalised.map((a) => a.slice(a.lastIndexOf('@') + 1)))];
+    const rows = await tx.outreachExclusion.findMany({
+        where: { removedAt: null, OR: [{ address: { in: normalised } }, { domain: { in: domains } }] },
+    });
+    const byAddress = new Map(rows.filter((r) => r.address).map((r) => [r.address!, r]));
+    const byDomain = new Map(rows.filter((r) => r.domain).map((r) => [r.domain!, r]));
+    const hits = new Map<string, ExclusionHit>();
+    for (const address of normalised) {
+        const row = byAddress.get(address) ?? byDomain.get(address.slice(address.lastIndexOf('@') + 1));
+        if (row)
+            hits.set(address, {
+                reason: row.reason,
+                accountManagerName: row.accountManagerName,
+                source: row.source,
+            });
+    }
+    return hits;
 }
 
 /** The refusal an exclusion gives, naming the rule (doc 50 §D). */

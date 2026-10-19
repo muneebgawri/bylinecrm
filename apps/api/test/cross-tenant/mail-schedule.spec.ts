@@ -235,6 +235,8 @@ describe('FR-CRMS-4 scheduled send', () => {
                         nameLast: 'Reyes',
                         jobTitle: 'Head of Comms',
                         emails: { primary: dana, additional: [] },
+                        // Nobody's lead, so the member may mail her too (GUARD-1 refuses another member's).
+                        ownerId: null,
                     })
             ).body as { id: string }
         ).id;

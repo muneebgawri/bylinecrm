@@ -203,6 +203,7 @@ export class EnrolmentsService {
         const { eligible, refused, warnings } = await this.screen.screen(
             context.workspaceId,
             unique.filter((id) => !existing.has(id)),
+            forEnrol,
         );
         return { enrolled: eligible.map((e) => e.personId), skipped, refused, warnings };
     }

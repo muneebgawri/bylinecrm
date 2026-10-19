@@ -615,7 +615,12 @@ describe('FR-CRMS-5 sequences', () => {
         it('records the enroller on the enrolment and as the send’s sender, from the pool mailbox', async () => {
             const seq = await sequence([{ kind: 'email', templateId: template }]);
             expect((await activate(seq.id)).status).toBe(200);
-            const ivy = await person({ nameFirst: 'Ivy', emails: { primary: address('ivy'), additional: [] } });
+            // The enroller's own lead: GUARD-1 refuses another member's.
+            const ivy = await person({
+                nameFirst: 'Ivy',
+                emails: { primary: address('ivy'), additional: [] },
+                ownerId: enrollerMemberId,
+            });
             const res = await enrol(seq.id, [ivy], enroller);
             expect(res.status, JSON.stringify(res.body)).toBe(200);
             const e = await enrolment(seq.id, ivy);
@@ -630,13 +635,72 @@ describe('FR-CRMS-5 sequences', () => {
             expect(out).toMatchObject({ mailboxId: poolMailbox, senderMemberId: enrollerMemberId });
         });
 
+        it('GUARD-1 FR-CRMS-21: refuses another member’s lead, and a warm contact unless its owner enrols — then warns', async () => {
+            const seq = await sequence([{ kind: 'email', templateId: template }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const theirs = await person({ emails: { primary: address('theirs'), additional: [] } });
+            const warmMine = await person({
+                emails: { primary: address('warm-mine'), additional: [] },
+                ownerId: enrollerMemberId,
+            });
+            const warmNobody = await person({
+                emails: { primary: address('warm-nobody'), additional: [] },
+                ownerId: null,
+            });
+            // A two-way thread with each warm contact: they wrote, and the workspace wrote back.
+            for (const who of ['warm-mine', 'warm-nobody']) {
+                const thread = await owner.mailThread.create({
+                    data: { workspaceId: workspace, subject: 'Hi', lastMessageAt: new Date() },
+                });
+                for (const [direction, from] of [
+                    ['inbound', address(who)],
+                    ['outbound', `us-${stamp}@example.com`],
+                ] as const) {
+                    await owner.mailMessage.create({
+                        data: {
+                            workspaceId: workspace,
+                            threadId: thread.id,
+                            identityKey: `guard-${who}-${direction}-${stamp}`,
+                            direction,
+                            fromAddress: from,
+                            sentAt: new Date(Date.now() - 86_400_000),
+                        },
+                    });
+                }
+            }
+            const res = await enrol(seq.id, [theirs, warmMine, warmNobody], enroller);
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            const result = res.body as EnrolmentBatchResult;
+            expect(result.enrolled).toEqual([warmMine]);
+            expect(result.refused.map((r) => [r.personId, r.code])).toEqual([
+                [theirs, 'owned_by_other'],
+                [warmNobody, 'cold_to_known'],
+            ]);
+            expect(result.warnings).toContainEqual(
+                expect.objectContaining({ personId: warmMine, code: 'cold_to_known' }),
+            );
+            const kept = await owner.guardrailEvent.findMany({
+                where: { workspaceId: workspace, actorMemberId: enrollerMemberId, path: 'sequence_enrol' },
+            });
+            expect(kept.map((e) => [e.personId, e.kind, e.outcome])).toEqual(
+                expect.arrayContaining([
+                    [theirs, 'owned_by_other', 'blocked'],
+                    [warmNobody, 'cold_to_known', 'blocked'],
+                    [warmMine, 'cold_to_known', 'warned'],
+                ]),
+            );
+        });
+
         it('lets the enroller reschedule and cancel it, refuses a colleague who did not enrol (403), and an admin may', async () => {
             const seq = await sequence([{ kind: 'email', templateId: template }]);
             expect((await activate(seq.id)).status).toBe(200);
             const later = () => new Date(Date.now() + 6 * 3600_000).toISOString();
             const ids: string[] = [];
             for (const name of ['jo', 'kai']) {
-                const p = await person({ emails: { primary: address(name), additional: [] } });
+                const p = await person({
+                    emails: { primary: address(name), additional: [] },
+                    ownerId: enrollerMemberId,
+                });
                 await enrol(seq.id, [p], enroller);
                 const e = await enrolment(seq.id, p);
                 await runner.run(workspace, e.id, new Date());

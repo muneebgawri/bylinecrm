@@ -47,6 +47,12 @@ export const ERROR_CODES = [
      * one at its field (`to`, `cc`, `bcc`) with the reason. Nothing was sent.
      */
     'recipient.suppressed',
+    /**
+     * `422` (GUARD-1, FR-CRMS-21): a recipient is another member's lead, a customer, or in negotiation with
+     * another member. `fieldErrors` names each one at its field; `details` says why for the first (`reason`,
+     * a guardrail kind) and, for another member's lead, whose (`ownerMemberId`, `ownerName`). Nothing was sent.
+     */
+    'recipient.guarded',
     /** `422`: a pool mailbox is paused for its bounce or complaint rate (P3-2, FR-CRMS-6, -13). Nothing was sent. */
     'mailbox.paused',
     /** `422`: a pool mailbox's sending domain has not passed its SPF, DKIM and DMARC check (FR-CRMS-13). Nothing was sent. */

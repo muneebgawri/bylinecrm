@@ -107,6 +107,7 @@ export const CAPABILITY_AREA_LABEL: Record<string, string> = {
     outreach: 'Outreach',
     sequence: 'Sequences',
     mailbox: 'Mailboxes',
+    guardrail: 'Guardrails',
     workspace: 'Workspace',
 };
 
@@ -115,6 +116,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'record:read': 'See people and companies',
     'record:write': 'Create and edit people and companies',
     'record:transfer': 'Move records between members without asking',
+    'record:export_all': 'Export every record, not only their own',
     'note:write': 'Write notes',
     'task:write': 'Create and edit tasks',
     'deal:read': 'See deals',
@@ -133,5 +135,6 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'sequence:enrol': 'Enrol people in sequences',
     'mailbox:read': 'See mailboxes',
     'mailbox:manage': 'Connect and manage mailboxes',
+    'guardrail:review': 'Review guardrail events and hear of repeated blocks',
     'workspace:admin': 'Administer the workspace',
 };

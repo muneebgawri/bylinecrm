@@ -100,6 +100,7 @@ model Workspace {
   calendarSyncStates   CalendarSyncState[]
   slotlineSettings     SlotlineSettings?
   ownershipTransfers   OwnershipTransfer[]
+  guardrailEvents      GuardrailEvent[]
   companyDomains       CompanyDomain[]
 
   @@map("workspaces")
@@ -310,6 +311,10 @@ model WorkspaceMember {
   transfersProposed OwnershipTransfer[] @relation("TransferProposedBy")
   transfersDecided  OwnershipTransfer[] @relation("TransferDecidedBy")
 
+  guardrailsTried    GuardrailEvent[] @relation("GuardrailActor")
+  guardrailsOwned    GuardrailEvent[] @relation("GuardrailOwner")
+  guardrailsReviewed GuardrailEvent[] @relation("GuardrailReviewer")
+
   @@unique([workspaceId, userId])
   @@index([userId])
   @@index([roleId])
@@ -479,6 +484,7 @@ model Company {
   people        Person[]
   opportunities Opportunity[]
   otherDomains  CompanyDomain[]
+  guardrails    GuardrailEvent[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -550,6 +556,7 @@ model Person {
   sequenceEnrolments SequenceEnrolment[]
 
   meetingParticipations CalendarEventParticipant[]
+  guardrails            GuardrailEvent[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -2675,6 +2682,8 @@ enum NotificationKind {
   transfer_declined
   transfer_received
   transfer_taken
+  /// GUARD-1: a member was blocked three times in a day from mailing others' leads (to reviewers).
+  guardrail_repeat_blocks
 
   @@map("notification_kind")
 }
@@ -2683,22 +2692,26 @@ enum NotificationKind {
 /// (member, kind, transfer) are unique, so an event delivered again or a sweep run twice tells nobody twice.
 /// Exactly one of `taskId` / `transferId` is set (the database checks). Each member reads only their own.
 model Notification {
-  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String           @map("workspace_id") @db.Uuid
-  memberId    String           @map("member_id") @db.Uuid
-  kind        NotificationKind
-  taskId      String?          @map("task_id") @db.Uuid
-  transferId  String?          @map("transfer_id") @db.Uuid
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  readAt      DateTime?        @map("read_at") @db.Timestamptz
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId      String           @map("workspace_id") @db.Uuid
+  memberId         String           @map("member_id") @db.Uuid
+  kind             NotificationKind
+  taskId           String?          @map("task_id") @db.Uuid
+  transferId       String?          @map("transfer_id") @db.Uuid
+  /// GUARD-1: the guardrail event, for a `guardrail_*` kind. Exactly one of task, transfer, guardrail event.
+  guardrailEventId String?          @map("guardrail_event_id") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  readAt           DateTime?        @map("read_at") @db.Timestamptz
 
-  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  member    WorkspaceMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  task      Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  transfer  OwnershipTransfer? @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member         WorkspaceMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  task           Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  transfer       OwnershipTransfer? @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  guardrailEvent GuardrailEvent?    @relation(fields: [guardrailEventId], references: [id], onDelete: Cascade)
 
   @@unique([memberId, kind, taskId])
   @@unique([memberId, kind, transferId])
+  @@unique([memberId, kind, guardrailEventId])
   @@index([memberId, createdAt])
   @@map("notifications")
 }
@@ -2752,4 +2765,92 @@ model OwnershipTransfer {
   @@index([workspaceId, toMemberId, status])
   @@index([workspaceId, fromMemberId, status])
   @@map("ownership_transfers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guardrails (GUARD-1, FR-CRMS-21): what the recipient guard refused, warned of, or let a manager through.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum GuardrailKind {
+  suppressed
+  excluded_customer
+  excluded_account_managed
+  owned_by_other
+  in_negotiation
+  cold_to_known
+  /// Three blocks on owned addresses by one member in a UTC day.
+  repeat_blocks
+
+  @@map("guardrail_kind")
+}
+
+enum GuardrailOutcome {
+  blocked
+  warned
+  /// An exempt sender (a holder of `record:transfer`) was let through; kept for the audit.
+  allowed
+
+  @@map("guardrail_outcome")
+}
+
+enum GuardrailSeverity {
+  low
+  medium
+  high
+
+  @@map("guardrail_severity")
+}
+
+enum GuardrailPath {
+  send
+  reply
+  scheduled_send
+  sequence_enrol
+  sequence_step
+  repeat_blocks
+
+  @@map("guardrail_path")
+}
+
+/// One thing the recipient guard did (GUARD-1): the audit a manager reads and marks legitimate. History: the
+/// app role never deletes a row. GUARD-2 and REP-1/2 add their kinds and paths here.
+model GuardrailEvent {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId          String            @map("workspace_id") @db.Uuid
+  kind                 GuardrailKind
+  outcome              GuardrailOutcome
+  severity             GuardrailSeverity
+  path                 GuardrailPath
+  /// Who tried.
+  actorMemberId        String?           @map("actor_member_id") @db.Uuid
+  /// Whose lead it was (`owned_by_other`, `in_negotiation`).
+  ownerMemberId        String?           @map("owner_member_id") @db.Uuid
+  personId             String?           @map("person_id") @db.Uuid
+  companyId            String?           @map("company_id") @db.Uuid
+  /// Lower case.
+  address              String?
+  /// What the guard told the sender.
+  message              String
+  /// Machine facts: the exclusion's source, the deal in negotiation, the day's count.
+  detail               Json              @default("{}")
+  notifiedMemberIds    String[]          @default([]) @map("notified_member_ids") @db.Uuid
+  /// One event per key per workspace (`repeat_blocks:<member>:<day>`); null for most.
+  dedupeKey            String?           @map("dedupe_key")
+  legitimateAt         DateTime?         @map("legitimate_at") @db.Timestamptz
+  legitimateByMemberId String?           @map("legitimate_by_member_id") @db.Uuid
+  legitimateReason     String?           @map("legitimate_reason")
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor         WorkspaceMember? @relation("GuardrailActor", fields: [actorMemberId], references: [id], onDelete: SetNull)
+  owner         WorkspaceMember? @relation("GuardrailOwner", fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  legitimateBy  WorkspaceMember? @relation("GuardrailReviewer", fields: [legitimateByMemberId], references: [id], onDelete: SetNull)
+  person        Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  company       Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@unique([workspaceId, dedupeKey])
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([workspaceId, actorMemberId, createdAt])
+  @@map("guardrail_events")
 }

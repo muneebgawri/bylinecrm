@@ -5,6 +5,7 @@ import { useMarkNotificationsRead, useNotificationSettings, useUpdateNotificatio
 import type { NotificationsView } from '../api/types';
 import { ResponsivePanel } from '../components/ResponsivePanel';
 import { formatRelative } from '../lib/format';
+import { paths } from '../routes/paths';
 import { recordPath } from '../routes/w/records/targets';
 
 type Item = NotificationsView['items'][number];
@@ -17,6 +18,7 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     transfer_declined: 'Transfer declined',
     transfer_received: 'Moved to you',
     transfer_taken: 'Moved from you',
+    guardrail_repeat_blocks: 'Guardrails',
 };
 
 /** What a transfer notification says under its label. */
@@ -97,9 +99,20 @@ export function NotificationsPanel({
     );
 }
 
+/** What a guardrail notification says (GUARD-1): who kept being stopped, never what they wrote. */
+function guardrailLine(item: Item): string {
+    const g = item.guardrail!;
+    return `${g.actor?.name ?? 'A member'} was stopped ${g.count} times today from mailing others’ leads`;
+}
+
 function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; item: Item; onOpen: () => void }) {
-    const target = item.task ? item.task.targets[0] : { type: item.transfer!.object, id: item.transfer!.recordId };
-    const title = item.task ? item.task.title : transferLine(item);
+    const target = item.task
+        ? item.task.targets[0]
+        : item.transfer
+          ? { type: item.transfer.object, id: item.transfer.recordId }
+          : undefined;
+    const title = item.task ? item.task.title : item.transfer ? transferLine(item) : guardrailLine(item);
+    const to = target ? recordPath(workspaceId, target) : item.guardrail ? paths.settingsGuardrails(workspaceId) : null;
     const targets = item.task?.targets ?? [];
     const body = (
         <>
@@ -120,8 +133,8 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
     );
     const className =
         'block px-3 py-2.5 hover:bg-surface-raised focus-visible:bg-surface-raised outline-none max-md:min-h-touch';
-    return target ? (
-        <Link to={recordPath(workspaceId, target)} onClick={onOpen} className={className}>
+    return to ? (
+        <Link to={to} onClick={onOpen} className={className}>
             {body}
         </Link>
     ) : (

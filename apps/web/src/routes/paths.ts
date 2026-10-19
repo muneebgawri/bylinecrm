@@ -58,6 +58,8 @@ export const paths = {
     settingsTracking: (workspaceId: string) => `/w/${workspaceId}/settings/tracking`,
     /** Ownership (OWN-2): records held by someone other than their company's owner, and the fix. */
     settingsOwnership: (workspaceId: string) => `/w/${workspaceId}/settings/ownership`,
+    /** Guardrails (GUARD-1): what the recipient guard refused or let a manager through, for reviewers. */
+    settingsGuardrails: (workspaceId: string) => `/w/${workspaceId}/settings/guardrails`,
     /** Slotline (CAL-2): the booking site whose bookings count as meetings, and the hook it posts them to. */
     settingsSlotline: (workspaceId: string) => `/w/${workspaceId}/settings/slotline`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */

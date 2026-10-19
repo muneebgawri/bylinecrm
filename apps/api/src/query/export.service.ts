@@ -15,7 +15,8 @@ export interface ExportRequest extends RawQuery {
 }
 
 /**
- * Streams a filtered list as CSV: the same filter, sort, search and owner scope as the list,
+ * Streams a filtered list as CSV: the same filter, sort, search and owner scope as the list — and, for a
+ * member whose role lacks `record:export_all` (GUARD-1), only the records they own,
  * one page of `EXPORT_PAGE_SIZE` rows at a time, never the whole result in memory. A result
  * larger than `EXPORT_MAX_ROWS` is refused before the first row (`413`) rather than cut short —
  * a truncated export that looks complete is worse than none.
@@ -31,7 +32,13 @@ export class ExportService {
     async writeCsv(object: RecordObject, request: ExportRequest, out: Writable): Promise<void> {
         const context = this.current();
         await this.rls.withWorkspace(async (tx) => {
-            const { plan, where } = await listScope(tx, context, this.customFields, object, request, false);
+            const scope = await listScope(tx, context, this.customFields, object, request, false);
+            const { plan } = scope;
+            // GUARD-1 (FR-CRMS-21): a member exports their own records unless their role has `record:export_all`.
+            const where =
+                context.memberId && !context.capabilities.has('record:export_all')
+                    ? { AND: [scope.where, { ownerId: context.memberId }] }
+                    : scope.where;
             const columns = chosenColumns(plan.fields, request.columns);
 
             const total = await countRows(tx, object, where);

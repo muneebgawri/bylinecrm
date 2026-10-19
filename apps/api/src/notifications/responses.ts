@@ -1,4 +1,5 @@
 import {
+    GUARDRAIL_KINDS,
     NOTIFICATION_KINDS,
     RECORD_OBJECTS,
     TASK_STATUSES,
@@ -37,6 +38,13 @@ const transferSummary = z.object({
     reason: z.string().nullable(),
 });
 
+const guardrailSummary = z.object({
+    id,
+    kind: z.enum(GUARDRAIL_KINDS),
+    actor: transferMember.nullable(),
+    count: z.number().int(),
+});
+
 const taskSummary = {
     id,
     title: z.string(),
@@ -52,10 +60,13 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads.',
                 }),
                 task: z.object(taskSummary).nullable().meta({ description: 'For a `task_*` kind.' }),
                 transfer: transferSummary.nullable().meta({ description: 'For a `transfer_*` kind.' }),
+                guardrail: guardrailSummary.nullable().meta({
+                    description: 'For a `guardrail_*` kind (GUARD-1): the event, who it is about, and the day’s count.',
+                }),
                 createdAt: isoTime,
                 readAt: isoTime.nullable(),
             }),

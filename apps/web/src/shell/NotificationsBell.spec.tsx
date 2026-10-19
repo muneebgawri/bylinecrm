@@ -14,6 +14,7 @@ const INBOX: NotificationsView = {
             id: 'n-1',
             kind: 'task_assigned',
             transfer: null,
+            guardrail: null,
             createdAt: '2026-10-18T09:00:00Z',
             readAt: null,
             task: {
@@ -27,6 +28,7 @@ const INBOX: NotificationsView = {
             id: 'n-2',
             kind: 'task_due',
             transfer: null,
+            guardrail: null,
             createdAt: '2026-10-17T09:00:00Z',
             readAt: '2026-10-17T10:00:00Z',
             task: {

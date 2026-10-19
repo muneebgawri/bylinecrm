@@ -157,10 +157,10 @@ export class TaskNotificationsService {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
             const me = await requireCallerMember(tx, context);
-            // About a live task, or (OWN-1) about a transfer.
+            // About a live task, or (OWN-1) about a transfer, or (GUARD-1) about a guardrail event.
             const live = {
                 memberId: me,
-                OR: [{ task: { deletedAt: null } }, { transferId: { not: null } }],
+                OR: [{ task: { deletedAt: null } }, { transferId: { not: null } }, { guardrailEventId: { not: null } }],
             } satisfies Prisma.NotificationWhereInput;
             const rows = await tx.notification.findMany({
                 where: live,
@@ -169,6 +169,7 @@ export class TaskNotificationsService {
                 include: {
                     task: { select: { id: true, title: true, dueAt: true, ...WITH_TARGETS } },
                     transfer: { include: { from: MEMBER, to: MEMBER } },
+                    guardrailEvent: { include: { actor: MEMBER } },
                 },
             });
             const labels = await labelTargets(tx, [
@@ -203,6 +204,14 @@ export class TaskNotificationsService {
                               to: named(r.transfer.to)!,
                               status: r.transfer.status,
                               reason: r.transfer.reason,
+                          }
+                        : null,
+                    guardrail: r.guardrailEvent
+                        ? {
+                              id: r.guardrailEvent.id,
+                              kind: r.guardrailEvent.kind,
+                              actor: named(r.guardrailEvent.actor),
+                              count: Number((r.guardrailEvent.detail as { count?: string } | null)?.count ?? 0),
                           }
                         : null,
                 })),

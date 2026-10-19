@@ -230,6 +230,11 @@ export const ENROLMENT_REFUSAL_CODES = [
     // FR-CRMS-14 (P3-5): the address is not deliverable, or could not be verified — `unknown` does not enrol.
     'email.invalid',
     'email.unverified',
+    // GUARD-1 (FR-CRMS-21): another member's lead, in negotiation with another member, or a warm contact
+    // only their owner (or a manager) may put in a sequence.
+    'owned_by_other',
+    'in_negotiation',
+    'cold_to_known',
 ] as const;
 export type EnrolmentRefusalCode = (typeof ENROLMENT_REFUSAL_CODES)[number];
 
@@ -241,9 +246,10 @@ export interface EnrolmentRefusal {
 
 /**
  * Enrolled, but worth a look: never blocks an enrolment. No known country (D-251); an address that
- * is deliverable but may not reach a person — a role address or a disposable domain (FR-CRMS-14).
+ * is deliverable but may not reach a person — a role address or a disposable domain (FR-CRMS-14); its
+ * owner putting a warm contact in a sequence (GUARD-1, `cold_to_known`).
  */
-export const ENROLMENT_WARNING_CODES = ['region.unknown', 'email.risky'] as const;
+export const ENROLMENT_WARNING_CODES = ['region.unknown', 'email.risky', 'cold_to_known'] as const;
 export type EnrolmentWarningCode = (typeof ENROLMENT_WARNING_CODES)[number];
 
 export interface EnrolmentWarning {

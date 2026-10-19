@@ -4,10 +4,11 @@ import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
-import { useCan, usePermission } from '../../../auth/capabilities';
+import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
+import { AskIntroduction } from './AskIntroduction';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineText } from './InlineEdit';
@@ -51,6 +52,10 @@ export function PersonRecord({
     const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState(false);
     const compose = useRef<RecordComposeHandle>(null);
+    // GUARD-1: another member's lead is theirs to mail; anyone else asks them for an introduction.
+    const membership = useMembership();
+    const mayTransfer = useCan('record:transfer');
+    const othersLead = !!person.ownerId && person.ownerId !== membership?.memberId && !mayTransfer;
     const ownerId = useId();
     const target = { type: 'person' as const, id: person.id };
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
@@ -270,11 +275,11 @@ export function PersonRecord({
             : []),
         {
             id: 'email',
-            label: 'Email',
-            short: 'Email',
+            label: othersLead ? 'Ask for an introduction' : 'Email',
+            short: othersLead ? 'Intro' : 'Email',
             icon: <Mail aria-hidden />,
             onSelect: () => compose.current?.start(),
-            hint: 'Write an email (e)',
+            hint: othersLead ? 'Ask the owner to introduce you (e)' : 'Write an email (e)',
         },
         {
             id: 'note',
@@ -405,11 +410,23 @@ export function PersonRecord({
                 </>
             }
         >
-            <RecordCompose
-                workspaceId={workspaceId}
-                person={{ id: person.id, name: personName(person), email: person.emails.primary }}
-                handle={compose}
-            />
+            {othersLead ? (
+                <AskIntroduction
+                    workspaceId={workspaceId}
+                    personId={person.id}
+                    personName={personName(person)}
+                    ownerId={person.ownerId!}
+                    ownerName={membersById.get(person.ownerId!) ?? 'their owner'}
+                    requesterName={(membership?.memberId && membersById.get(membership.memberId)) || 'a colleague'}
+                    handle={compose}
+                />
+            ) : (
+                <RecordCompose
+                    workspaceId={workspaceId}
+                    person={{ id: person.id, name: personName(person), email: person.emails.primary }}
+                    handle={compose}
+                />
+            )}
             <TimelinePanel workspaceId={workspaceId} target={target} />
             {enrolling && (
                 <EnrolDialog
