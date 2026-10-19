@@ -455,7 +455,14 @@ describe('mail send and reply detection', () => {
         });
 
         it('lets the member send from their own', async () => {
-            const res = await as(member).post(w('/mail/send')).send(free(memberMailbox));
+            // To a lead of their own: GUARD-1 refuses the admin's Dana (FR-CRMS-21).
+            const mine = await as(member)
+                .post(w('/people'))
+                .send({ nameFirst: 'Max', emails: { primary: `max-${stamp}@own.example`, additional: [] } })
+                .expect(201);
+            const res = await as(member)
+                .post(w('/mail/send'))
+                .send({ ...free(memberMailbox), personId: (mine.body as { id: string }).id });
             expect(res.status).toBe(202);
         });
 

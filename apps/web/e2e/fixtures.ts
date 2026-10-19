@@ -585,6 +585,7 @@ export const notificationsInbox: NotificationsView = {
             id: '0b1e0000-0000-4000-8000-000000000a11',
             kind: 'task_assigned',
             transfer: null,
+            guardrail: null,
             createdAt: at(1),
             readAt: null,
             task: {
@@ -598,6 +599,7 @@ export const notificationsInbox: NotificationsView = {
             id: '0b1e0000-0000-4000-8000-000000000a12',
             kind: 'task_due',
             transfer: null,
+            guardrail: null,
             createdAt: at(26),
             readAt: at(25),
             task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },

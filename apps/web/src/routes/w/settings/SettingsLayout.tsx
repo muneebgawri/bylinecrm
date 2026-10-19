@@ -16,6 +16,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'custom-fields', label: 'Custom fields', to: paths.settingsCustomFields, requires: 'workspace:admin' },
     // Records held by someone other than their company's owner (OWN-2): a manager's to resolve.
     { id: 'ownership', label: 'Ownership', to: paths.settingsOwnership, requires: 'record:transfer' },
+    // What the recipient guard refused or let a manager through (GUARD-1): reviewers mark events legitimate.
+    { id: 'guardrails', label: 'Guardrails', to: paths.settingsGuardrails, requires: 'guardrail:review' },
     // Readable by every member who reads records — the postal address and unsubscribe wording every
     // outreach email carries; editable by an admin on the page itself.
     { id: 'mail', label: 'Mail', to: paths.settingsMail, requires: 'record:read' },

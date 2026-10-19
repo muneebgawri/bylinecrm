@@ -107,6 +107,8 @@ const GETS: [RegExp, Handler][] = [
     // OWN-2: a company's other domains, and the ownership report; none in the fixtures.
     [new RegExp(`^${W}/companies/${ID}/domains$`), () => []],
     [new RegExp(`^${W}/ownership/conflicts$`), () => []],
+    // GUARD-1: the guardrail events; none in the fixtures.
+    [new RegExp(`^${W}/guardrails/events(\\?.*)?$`), () => data.page([])],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],

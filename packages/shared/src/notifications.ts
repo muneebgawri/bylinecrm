@@ -1,4 +1,5 @@
 import type { RecordObject, TaskStatus } from './records.js';
+import type { GuardrailSummary } from './guardrails.js';
 import type { TransferSummary } from './transfers.js';
 
 /**
@@ -17,6 +18,8 @@ export const NOTIFICATION_KINDS = [
     'transfer_declined',
     'transfer_received',
     'transfer_taken',
+    // GUARD-1: a member was blocked three times in a day from mailing others' leads (to reviewers).
+    'guardrail_repeat_blocks',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -43,6 +46,8 @@ export interface NotificationView {
     task: TaskSummary | null;
     /** The transfer, for a `transfer_*` kind; null otherwise. */
     transfer: TransferSummary | null;
+    /** The guardrail event, for a `guardrail_*` kind; null otherwise. */
+    guardrail: GuardrailSummary | null;
     /** ISO 8601. */
     createdAt: string;
     /** ISO 8601; null while unread. */

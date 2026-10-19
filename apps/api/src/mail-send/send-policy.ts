@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MAIL_SEND_RECIPIENTS_MAX, SUPPRESSION_REASON_LABELS } from '@bylinecrm/shared';
+import { RecipientGuard, RecipientGuarded, type GuardPath } from '../guardrails/recipient-guard';
 import { ValidationFailed } from '../infra/errors/api-errors';
 import { RecipientSuppressed, SuppressionService } from '../suppression/suppression.service';
 
@@ -13,6 +14,13 @@ export interface SendRecipient {
     field: RecipientField;
 }
 
+/** How the recipient guard (GUARD-1) is asked: from which path, for a sequence's mail or not, replying to what. */
+export interface GuardedSend {
+    path: Exclude<GuardPath, 'sequence_enrol'>;
+    outreach: boolean;
+    replyToMessageId: string | null;
+}
+
 /**
  * Whether these recipients may be sent to — the one gate every send passes (P2-3): someone to send
  * to, not more than `MAIL_SEND_RECIPIENTS_MAX`, and nobody on the workspace's suppression list
@@ -24,9 +32,16 @@ export interface SendRecipient {
  */
 @Injectable()
 export class SendPolicy {
-    constructor(private readonly suppressions: SuppressionService) {}
+    constructor(
+        private readonly suppressions: SuppressionService,
+        private readonly guard: RecipientGuard,
+    ) {}
 
-    async assertSendable(workspaceId: string, recipients: readonly SendRecipient[]): Promise<void> {
+    async assertSendable(
+        workspaceId: string,
+        recipients: readonly SendRecipient[],
+        guarded?: GuardedSend,
+    ): Promise<void> {
         if (recipients.length === 0) {
             throw new ValidationFailed('a message needs at least one recipient', [
                 { path: 'to', message: 'add at least one recipient' },
@@ -36,6 +51,18 @@ export class SendPolicy {
             throw new ValidationFailed(`at most ${MAIL_SEND_RECIPIENTS_MAX} recipients`, [
                 { path: 'to', message: `at most ${MAIL_SEND_RECIPIENTS_MAX} recipients (to, cc and bcc together)` },
             ]);
+        }
+        if (guarded) {
+            const verdicts = await this.guard.check({ ...guarded, recipients });
+            const suppressedHere = verdicts.filter((v) => v.kind === 'suppressed');
+            if (suppressedHere.length > 0) {
+                throw new RecipientSuppressed(
+                    suppressedHere.map((v) => ({ path: v.field ?? 'to', message: `${v.address}: ${v.message}` })),
+                );
+            }
+            const blocked = verdicts.filter((v) => v.outcome === 'blocked');
+            if (blocked.length > 0) throw new RecipientGuarded(blocked);
+            return;
         }
         const suppressed = await this.suppressions.check(
             workspaceId,

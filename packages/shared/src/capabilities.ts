@@ -10,6 +10,8 @@ export const CAPABILITIES = [
     // Move a record (and the people and deals that go with it) between any two members (OWN-1, FR-CRMS-17).
     // Without it, an owner hands a record on by proposing a transfer the receiver accepts.
     'record:transfer',
+    // Export every record, not only your own (GUARD-1, FR-CRMS-21). Without it a CSV holds the caller's own.
+    'record:export_all',
     'note:write',
     'task:write',
     // Deals and views
@@ -32,6 +34,8 @@ export const CAPABILITIES = [
     // Mailboxes and workspace
     'mailbox:read',
     'mailbox:manage',
+    // Guardrails (GUARD-1, FR-CRMS-21): read the events, mark one legitimate, and be told of repeated blocks.
+    'guardrail:review',
     'workspace:admin',
 ] as const;
 
@@ -52,13 +56,15 @@ export type SystemRole = (typeof SYSTEM_ROLES)[keyof typeof SYSTEM_ROLES];
 
 /**
  * What a new workspace's `manager` role can do until an admin changes it (OWN-1, FR-CRMS-18): a member's
- * defaults, plus moving records between members and acting on many deals at once. It is a system role
+ * defaults, plus moving records between members, acting on many deals at once, exporting every record and
+ * reviewing guardrail events (GUARD-1). It is a system role
  * (it exists in every workspace, and keeps its name) that an admin edits like any other.
  */
 export const MANAGER_DEFAULT_CAPABILITIES: readonly Capability[] = [
     'record:read',
     'record:write',
     'record:transfer',
+    'record:export_all',
     'note:write',
     'task:write',
     'deal:read',
@@ -75,6 +81,7 @@ export const MANAGER_DEFAULT_CAPABILITIES: readonly Capability[] = [
     'sequence:enrol',
     'mailbox:read',
     'mailbox:manage',
+    'guardrail:review',
 ];
 
 /** What a new workspace's `member` role can do until an admin changes it. */

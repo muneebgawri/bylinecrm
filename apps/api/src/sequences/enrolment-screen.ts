@@ -7,11 +7,10 @@ import {
     type Emails,
     type RegionCode,
 } from '@bylinecrm/shared';
+import { RecipientGuard } from '../guardrails/recipient-guard';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
-import { SuppressionService } from '../suppression/suppression.service';
 import { EmailVerificationService } from '../verification/email-verification.service';
 import { inferCountry } from './country';
-import { ExclusionsService, exclusionMessage } from './exclusions.service';
 import { RegionPolicyService } from './region-policy.service';
 
 /** A person who passed every gate, with what the runner needs about them. */
@@ -40,8 +39,9 @@ const SUPPRESSION_WORDS: Readonly<Record<string, string>> = {
  * The enrolment gates (P3-3) — one function, so the preview and the enrol make the same decision and
  * the dialog shows the server's reasons, never a guess (doc 50 §D). In order: the person exists and is
  * visible (`person.not_found`), has a primary address (`email.missing`), has a source (FR-CRMS-11,
- * `source.missing`), is not suppressed (FR-CRMS-7, P3-1's one query), not excluded (FR-CRMS-10), is
- * in a region the workspace's policy allows (FR-CRMS-12), and has an address verification finds
+ * `source.missing`), then the recipient guard (GUARD-1, FR-CRMS-21, as the enrolling member): not
+ * suppressed (FR-CRMS-7), not excluded (FR-CRMS-10), not another member's lead or in negotiation with one,
+ * not a warm contact unless their owner (or a manager) enrols them — a warning then; then in a region the workspace's policy allows (FR-CRMS-12), and has an address verification finds
  * deliverable (FR-CRMS-14, P3-5's one check: `email.invalid`; `unknown` is not valid and does not
  * enrol — `email.unverified`; a risky address enrols with a warning). Reads in the caller's scope (a
  * person their role cannot see is `person.not_found`); each read is its own short transaction —
@@ -52,13 +52,13 @@ const SUPPRESSION_WORDS: Readonly<Record<string, string>> = {
 export class EnrolmentScreen {
     constructor(
         private readonly rls: RlsPrismaService,
-        private readonly suppressions: SuppressionService,
-        private readonly exclusions: ExclusionsService,
+        private readonly guard: RecipientGuard,
         private readonly regions: RegionPolicyService,
         private readonly verification: EmailVerificationService,
     ) {}
 
-    async screen(workspaceId: string, personIds: readonly string[]): Promise<ScreenResult> {
+    /** `record`: an enrol writes what the guard refused to the audit; a preview does not. */
+    async screen(workspaceId: string, personIds: readonly string[], record = false): Promise<ScreenResult> {
         const people = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.person.findMany({
                 where: { id: { in: [...personIds] }, deletedAt: null },
@@ -92,28 +92,36 @@ export class EnrolmentScreen {
             candidates.push({ personId, address, country });
         }
 
-        const addresses = candidates.map((c) => c.address);
-        // FR-CRMS-7: P3-1's one query.
-        const suppressed = await this.suppressions.check(workspaceId, addresses);
-        const { excluded, policy } = await this.rls.withWorkspace(workspaceId, async (tx) => ({
-            excluded: await this.exclusions.check(tx, addresses),
-            policy: await this.regions.allowedIn(tx),
-        }));
+        // GUARD-1: the one recipient guard — suppression (FR-CRMS-7), exclusions (FR-CRMS-10), ownership.
+        const verdicts = await this.guard.check({
+            path: 'sequence_enrol',
+            outreach: true,
+            recipients: candidates.map((c) => ({ address: c.address, personId: c.personId })),
+            record,
+        });
+        const policy = await this.rls.withWorkspace(workspaceId, (tx) => this.regions.allowedIn(tx));
         const passing: EligiblePerson[] = [];
-        for (const c of candidates) {
-            const s = suppressed.get(c.address);
-            if (s) {
+        const guardWarnings: EnrolmentWarning[] = [];
+        for (const [i, c] of candidates.entries()) {
+            const v = verdicts[i]!;
+            if (v.outcome === 'blocked') {
                 refused.push({
                     personId: c.personId,
-                    code: 'suppressed',
-                    message: SUPPRESSION_WORDS[s.reason] ?? 'On the suppression list',
+                    code:
+                        v.kind === 'suppressed'
+                            ? 'suppressed'
+                            : v.kind === 'excluded_customer' || v.kind === 'excluded_account_managed'
+                              ? 'excluded'
+                              : (v.kind as 'owned_by_other' | 'in_negotiation' | 'cold_to_known'),
+                    message:
+                        v.kind === 'suppressed'
+                            ? (SUPPRESSION_WORDS[v.suppression!] ?? 'On the suppression list')
+                            : v.message,
                 });
                 continue;
             }
-            const x = excluded.get(c.address);
-            if (x) {
-                refused.push({ personId: c.personId, code: 'excluded', message: exclusionMessage(x) });
-                continue;
+            if (v.outcome === 'warned' && v.kind === 'cold_to_known') {
+                guardWarnings.push({ personId: c.personId, code: 'cold_to_known', message: v.message });
             }
             const region = regionOfCountry(c.country);
             if (!policy[region]) {
@@ -135,6 +143,7 @@ export class EnrolmentScreen {
         const eligible: EligiblePerson[] = [];
         const warnings: EnrolmentWarning[] = [];
         for (const c of passing) {
+            const flagged = guardWarnings.find((w) => w.personId === c.personId);
             const verdict = verified.get(c.address)!;
             if (verdict.result === 'invalid') {
                 refused.push({ personId: c.personId, code: 'email.invalid', message: verdict.message });
@@ -145,6 +154,7 @@ export class EnrolmentScreen {
                 continue;
             }
             eligible.push(c);
+            if (flagged) warnings.push(flagged);
             if (verdict.result === 'risky') {
                 warnings.push({ personId: c.personId, code: 'email.risky', message: verdict.message });
             }

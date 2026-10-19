@@ -218,7 +218,7 @@ export class MailSendService {
         // The send's id is fixed before the message is built: the MIME carries it (X-BylineCRM-Id).
         const id = randomUUID();
         const rfc822MessageId = newMessageId();
-        const prepared = await this.prepare(input, { id, rfc822MessageId });
+        const prepared = await this.prepare(input, { id, rfc822MessageId }, 'request');
 
         const row = await this.rls.withWorkspace(async (tx) => {
             const created = await tx.mailOutbound.create({
@@ -271,16 +271,21 @@ export class MailSendService {
      * send at its request, and for that send again at its time. Runs in the caller's workspace scope
      * (a request's, or the one a scheduled send's job opens for its sender).
      */
-    private prepare(input: StoredRequest, send: { id: string; rfc822MessageId: string }): Promise<Prepared> {
+    private prepare(
+        input: StoredRequest,
+        send: { id: string; rfc822MessageId: string },
+        when: 'request' | 'due',
+    ): Promise<Prepared> {
         return 'kind' in input && input.kind === 'outreach'
             ? this.prepareOutreach(input, send)
-            : this.preparePersonal(input as PersonalRequest, send);
+            : this.preparePersonal(input as PersonalRequest, send, when);
     }
 
     /** A member's own send from their personal mailbox (P2-3). */
     private async preparePersonal(
         input: PersonalRequest,
         send: { id: string; rfc822MessageId: string },
+        when: 'request' | 'due',
     ): Promise<Prepared> {
         const context = this.current();
         const memberId = context.memberId;
@@ -368,7 +373,12 @@ export class MailSendService {
                 ? replySubject(parent.subject)
                 : rendered.subject;
 
-        await this.policy.assertSendable(context.workspaceId, [...recipients.to, ...recipients.cc, ...recipients.bcc]);
+        // GUARD-1: the recipient guard, as this sender — at the request, and again at a scheduled send's time.
+        await this.policy.assertSendable(context.workspaceId, [...recipients.to, ...recipients.cc, ...recipients.bcc], {
+            path: when === 'due' ? 'scheduled_send' : parent ? 'reply' : 'send',
+            outreach: false,
+            replyToMessageId: parent?.id ?? null,
+        });
 
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
@@ -445,7 +455,12 @@ export class MailSendService {
         if (!rendered.sendable) throw new Unsendable(rendered.missing);
         const subject = parent && template.subject.trim() === '' ? replySubject(parent.subject) : rendered.subject;
 
-        await this.policy.assertSendable(context.workspaceId, [to]);
+        // GUARD-1: every step's send passes the recipient guard at its time, as the member who enrolled.
+        await this.policy.assertSendable(context.workspaceId, [to], {
+            path: 'sequence_step',
+            outreach: true,
+            replyToMessageId: parent?.id ?? null,
+        });
         const link = await this.unsubscribes.issue(context.workspaceId, {
             address: to.address,
             personId: input.personId,
@@ -897,10 +912,11 @@ export class MailSendService {
         let prepared: Prepared;
         try {
             prepared = await this.context.run(sender.context, () =>
-                this.prepare(row.request as unknown as StoredRequest, {
-                    id: row.id,
-                    rfc822MessageId: row.rfc822MessageId,
-                }),
+                this.prepare(
+                    row.request as unknown as StoredRequest,
+                    { id: row.id, rfc822MessageId: row.rfc822MessageId },
+                    'due',
+                ),
             );
         } catch (error) {
             if (!(error instanceof HttpException)) throw error;

@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { GuardrailsModule } from '../guardrails/guardrails.module';
 import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
 import { MailSyncModule } from '../mail-sync/mail-sync.module';
 import { SignaturesModule } from '../signatures/signatures.module';
@@ -31,6 +32,7 @@ import { MailSendSweep } from './sweep';
 @Module({
     imports: [
         AuthModule,
+        GuardrailsModule,
         MailAccountsModule,
         MailSyncModule,
         SendingPoolModule,

@@ -195,6 +195,12 @@ export type TrackingDomainView = NonNullable<TrackingSettingsView['domain']>;
 export type TrackingCountsView = Schemas['TrackingCounts'];
 export type PutTrackingDomainInput = Schemas['PutTrackingDomainDto'];
 export type SuppressionPage = Schemas['SuppressionPage'];
+// ---- Guardrails (GUARD-1) ---------------------------------------------------------------------
+export type GuardrailEventView = Schemas['GuardrailEvent'];
+export type GuardrailEventPage = Schemas['GuardrailEventPage'];
+export type GuardrailEventsQuery = Loose<
+    NonNullable<paths['/api/w/{workspaceId}/guardrails/events']['get']['parameters']['query']>
+>;
 export type CreateSuppressionInput = Loose<Schemas['CreateSuppressionDto']>;
 export type RemoveSuppressionInput = Loose<Schemas['RemoveSuppressionDto']>;
 export type UnsubscribeStatusView = Schemas['UnsubscribeStatus'];

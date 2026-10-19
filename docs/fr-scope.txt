@@ -41,10 +41,11 @@ FR-CRMS-14
 FR-CRMS-15
 FR-CRMS-16
 
-[phase 6: in progress]   # Ownership and guardrails — OWN-1 (FR-17, FR-18), OWN-2 (FR-20), BIGIN-1 (FR-25, FR-26) built; GUARD-1/2 (FR-21, FR-22) open
+[phase 6: in progress]   # Ownership and guardrails — OWN-1 (FR-17, FR-18), OWN-2 (FR-20), GUARD-1 (FR-21), BIGIN-1 (FR-25, FR-26) built; GUARD-2 (FR-22) open
 FR-CRMS-17
 FR-CRMS-18
 FR-CRMS-20
+FR-CRMS-21   # GUARD-1: one recipient guard for every send path, guardrail_events, the Guardrails page
 FR-CRMS-25   # BIGIN-1: direct one-way Bigin → BylineCRM sync
 FR-CRMS-26   # BIGIN-1: historical reconcile of reused Bigin contacts
 
