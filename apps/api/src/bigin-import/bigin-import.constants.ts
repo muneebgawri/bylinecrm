@@ -34,3 +34,9 @@ export const BIGIN_PAGE_MAX = 10;
 
 export const BIGIN_IMPORT_RUNS_SHOWN = 20;
 export const BIGIN_SECRET_SHOWN_CHARS = 4;
+
+/**
+ * Records written per transaction within a page (production, 2026-10-19): a whole page of 200 in one
+ * transaction outlived the 15-second transaction limit, so a page is written 20 at a time.
+ */
+export const BIGIN_WRITE_CHUNK = 20;
