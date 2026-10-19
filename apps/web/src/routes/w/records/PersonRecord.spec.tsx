@@ -1,5 +1,6 @@
 import type { Capability } from '@bylinecrm/shared';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { people } from '../../../../e2e/fixtures';
 import { json, renderAt, route, stubApi } from '../settings/settingsTestKit';
@@ -44,5 +45,29 @@ describe('#192 the person page’s “Enrol in sequence”', () => {
         empty();
         page(['record:read', 'record:write', 'email:send', 'sequence:enrol']);
         expect((await screen.findAllByRole('button', { name: /Enrol/ }))[0]).toBeEnabled();
+    });
+});
+
+describe('a person’s other email addresses', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('are added from the properties: the address joins the others', async () => {
+        const seen = stubApi([
+            (r) => (r.method === 'PATCH' ? json({ ...person, emails: r.body.emails }) : undefined),
+            (r) => {
+                if (r.method !== 'GET') return undefined;
+                if (/\/(enrolments|attachments|members\/summary|transfers|custom-fields)(\?|$)/.test(r.url))
+                    return json([]);
+                return json({ items: [], nextCursor: null });
+            },
+        ]);
+        page(['record:read', 'record:write']);
+        await userEvent.click(await screen.findByRole('button', { name: /Add email/ }));
+        await userEvent.type(screen.getByRole('textbox', { name: 'Add email' }), 'dana.home@example.com{Enter}');
+        const patch = seen.find((r) => r.method === 'PATCH');
+        expect(patch?.body.emails).toEqual({
+            ...person.emails,
+            additional: [...person.emails.additional, 'dana.home@example.com'],
+        });
     });
 });
