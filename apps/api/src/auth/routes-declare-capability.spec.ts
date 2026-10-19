@@ -59,9 +59,15 @@ describe('tenant routes declare a capability', () => {
         const open = routes.filter((r) => typeof r.openReason === 'string').map((r) => r.route);
         // What the caller may do, (#192) the caller's own notifications, open tasks and notification settings,
         // (#193) the caller's own signature details — an admin's for anyone, the service checks which — and
-        // (#196) the caller's own Slotline account, which the service refuses to anyone else.
+        // (#196) the caller's own Slotline account, which the service refuses to anyone else, and (OWN-1) the
+        // transfers the caller is party to: the service lets only the receiver accept or decline, and only the
+        // proposer or a manager take one back.
         expect(open.sort()).toEqual(
             [
+                'TransfersController.list',
+                'TransfersController.accept',
+                'TransfersController.decline',
+                'TransfersController.cancel',
                 'WorkspaceMeController.standing',
                 'NotificationsController.list',
                 'NotificationsController.read',
