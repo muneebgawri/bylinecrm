@@ -71,7 +71,8 @@ export class OwnershipService {
         const skipped: string[] = [];
         for (const item of items) {
             const row = current.find((c) => c.object === item.object && c.recordId === item.recordId);
-            if (!row) {
+            // A duplicate company is merged or deleted by a person; moving it would not resolve anything.
+            if (!row || row.object === 'company') {
                 skipped.push(item.recordId);
                 continue;
             }

@@ -123,6 +123,9 @@ importers:
       sanitize-html:
         specifier: ^2
         version: 2.18.0
+      tldts:
+        specifier: 7.4.18
+        version: 7.4.18
       undici:
         specifier: ^7
         version: 7.30.0

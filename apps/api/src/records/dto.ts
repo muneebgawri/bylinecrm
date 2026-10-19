@@ -6,7 +6,9 @@ import {
     RECORD_OBJECTS,
     TASK_STATUSES,
     type RichTextNode,
+    bareDomain,
 } from '@bylinecrm/shared';
+import { companyDomain } from './company-domain';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { optionsProblem } from './custom-fields/custom-values';
@@ -20,7 +22,15 @@ const url = z.url().max(2048);
 
 /** A registrable host name, lower-cased on the way in; the database checks it stayed that way. */
 const HOSTNAME = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-const domain = z.string().trim().toLowerCase().regex(HOSTNAME, 'domain must be a host name like example.com');
+/**
+ * OWN-2c: stored as the registrable domain — `https://www.Acme.com/`, `uk.acme.com` and `acme.com` are one
+ * company (`companyDomain`). A value with no registrable domain (`co.uk`, an IP address) is refused.
+ */
+const domain = z
+    .string()
+    .transform((value) => companyDomain(value) ?? bareDomain(value))
+    .pipe(z.string().regex(HOSTNAME, 'domain must be a host name like example.com'))
+    .refine((value) => companyDomain(value) === value, 'not a company’s domain, e.g. example.com');
 
 /**
  * Composite fields: `additional` may be left out and means none (P1-UI-10). The whole object is

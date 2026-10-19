@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { CompanyOwnedDetails, Emails, OwnershipConflictView } from '@bylinecrm/shared';
+import { bareDomain, type CompanyOwnedDetails, type Emails, type OwnershipConflictView } from '@bylinecrm/shared';
 import { isFreeMailDomain } from '../enrichment/email-domain';
+import { companyDomain } from './company-domain';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -13,29 +14,21 @@ export interface DomainCompany {
     ownerName: string | null;
 }
 
-/** The domain of an address, lower case; null for no address, a malformed one, or free mail. */
+/**
+ * The company domain of an address — its registrable domain (`dana@eu.acme.com` is at `acme.com`); null for no
+ * address, a malformed one, or free mail.
+ */
 export function companyDomainOfAddress(address: string | null | undefined): string | null {
     if (!address) return null;
     const at = address.lastIndexOf('@');
-    const domain =
-        at > 0
-            ? address
-                  .slice(at + 1)
-                  .trim()
-                  .toLowerCase()
-            : '';
-    if (!domain.includes('.') || isFreeMailDomain(domain)) return null;
+    const domain = companyDomain(at > 0 ? address.slice(at + 1) : '');
+    if (!domain || isFreeMailDomain(domain)) return null;
     return domain;
 }
 
-/** A domain as a company stores it: lower case, no scheme, no `www.`, no path. */
+/** A domain as a company stores it (OWN-2c): its registrable domain, else the bare host. */
 export function normalisedDomain(value: string): string {
-    return value
-        .trim()
-        .toLowerCase()
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/[/?#].*$/, '');
+    return companyDomain(value) ?? bareDomain(value);
 }
 
 /**
@@ -59,9 +52,13 @@ export class CompanyOwnership {
     /** The live company whose domain, or other domain, this is; null for none. */
     async companyForDomain(context: WorkspaceRunContext, domain: string | null): Promise<DomainCompany | null> {
         if (!domain) return null;
+        // A company saved before OWN-2c may still read `www.<domain>`; the CLI rewrites the rest.
+        const key = normalisedDomain(domain);
+        const forms = [key, `www.${key}`];
         return this.widened(context, async (tx) => {
             const own = await tx.company.findFirst({
-                where: { domain, deletedAt: null },
+                where: { domain: { in: forms }, deletedAt: null },
+                orderBy: { createdAt: 'asc' },
                 select: {
                     id: true,
                     name: true,
@@ -73,7 +70,7 @@ export class CompanyOwnership {
                 own ??
                 (
                     await tx.companyDomain.findFirst({
-                        where: { domain, company: { deletedAt: null } },
+                        where: { domain: { in: forms }, company: { deletedAt: null } },
                         select: {
                             company: {
                                 select: {
@@ -155,8 +152,8 @@ export class CompanyOwnership {
         selfId?: string,
     ): Promise<void> {
         if (!domain) return;
-        // As the stored domain is compared by the unique index: lower case, nothing else stripped.
-        const company = await this.companyForDomain(context, domain.trim().toLowerCase());
+        // OWN-2c: compared by registrable domain — `uk.acme.com` is `acme.com`'s company.
+        const company = await this.companyForDomain(context, normalisedDomain(domain));
         if (company && company.companyId !== selfId) throw companyOwned(company, 'domain');
     }
 
@@ -168,7 +165,7 @@ export class CompanyOwnership {
         const rows = await tx.$queryRaw<
             {
                 kind: OwnershipConflictView['kind'];
-                object: 'person' | 'opportunity';
+                object: 'person' | 'opportunity' | 'company';
                 record_id: string;
                 record_label: string;
                 record_owner: string | null;
@@ -216,7 +213,7 @@ export class CompanyOwnership {
             ORDER BY c.name, f.object, f.record_label
             LIMIT 1000
         `;
-        return rows.map((r) => ({
+        const listed = rows.map((r) => ({
             kind: r.kind,
             object: r.object,
             recordId: r.record_id,
@@ -228,6 +225,7 @@ export class CompanyOwnership {
             companyOwnerMemberId: r.company_owner,
             companyOwnerName: r.company_owner_name,
         }));
+        return [...(await duplicateCompanies(tx)), ...listed];
     }
 
     private widened<T>(context: WorkspaceRunContext, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
@@ -271,4 +269,50 @@ export function companyOwned(company: DomainCompany, field: string): ApiExceptio
 /** The primary address of an `emails` value. */
 export function primaryOf(emails: Emails | null | undefined): string | null {
     return emails?.primary ?? null;
+}
+
+/**
+ * OWN-2c: companies saved twice before domains were compared by registrable domain — `uk.acme.com` beside
+ * `acme.com`. Grouped in code (the Public Suffix List is not in SQL); in each group the company already on the
+ * registrable domain (else the oldest) is kept, and every other is listed for a person to merge or delete.
+ */
+async function duplicateCompanies(tx: WorkspaceClient): Promise<OwnershipConflictView[]> {
+    const companies = await tx.company.findMany({
+        where: { deletedAt: null, domain: { not: null } },
+        select: {
+            id: true,
+            name: true,
+            domain: true,
+            ownerId: true,
+            owner: { select: { user: { select: { displayName: true } } } },
+        },
+        orderBy: { createdAt: 'asc' },
+    });
+    const groups = new Map<string, typeof companies>();
+    for (const c of companies) {
+        const key = companyDomain(c.domain);
+        if (key) groups.set(key, [...(groups.get(key) ?? []), c]);
+    }
+    const out: OwnershipConflictView[] = [];
+    for (const [key, group] of groups) {
+        if (group.length < 2) continue;
+        const kept = group.find((c) => c.domain === key) ?? group[0]!;
+        if (!kept.ownerId) continue;
+        for (const dup of group) {
+            if (dup.id === kept.id) continue;
+            out.push({
+                kind: 'duplicate_domain',
+                object: 'company',
+                recordId: dup.id,
+                recordLabel: dup.name,
+                recordOwnerMemberId: dup.ownerId,
+                recordOwnerName: dup.owner?.user.displayName ?? null,
+                companyId: kept.id,
+                companyName: kept.name,
+                companyOwnerMemberId: kept.ownerId,
+                companyOwnerName: kept.owner?.user.displayName ?? null,
+            });
+        }
+    }
+    return out;
 }

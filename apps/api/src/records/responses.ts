@@ -239,9 +239,9 @@ export const ownershipConflictView = named(
     z.object({
         kind: z.enum(OWNERSHIP_CONFLICT_KINDS).meta({
             description:
-                '`domain_owned_by_other`: the person’s address is at a company another member owns. `company_owner_differs`: the person or open deal is linked to a company another member owns.',
+                '`domain_owned_by_other`: the person’s address is at a company another member owns. `company_owner_differs`: the person or open deal is linked to a company another member owns. `duplicate_domain`: a company saved as `www.<domain>` beside the company with that domain; merge or delete it by hand.',
         }),
-        object: z.enum(['person', 'opportunity']),
+        object: z.enum(['person', 'opportunity', 'company']),
         recordId: id,
         recordLabel: z.string(),
         recordOwnerMemberId: id.nullable(),

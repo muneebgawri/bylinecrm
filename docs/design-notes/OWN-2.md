@@ -64,8 +64,35 @@ who sees only their own records must learn that a lead is already someone's.
   (`POST ownership/conflicts/resolve`: a forced transfer each, and a person not yet linked to the company is linked).
   Rows the report no longer lists come back as `skipped`.
 - **Other domains** is a card on the company record: the owner or a manager adds and removes them; everyone else
-  reads them. A company's own domain is compared as the unique index compares it (lower case only), so `www.acme.com`
-  and `acme.com` stay two companies if someone saved them so.
+  reads them. Compared by registrable domain (OWN-2c, below).
+
+## OWN-2c: one company per registrable domain
+
+The owner (2026-10-20): `example.com` and `www.example.com` are one company — and so is any subdomain. A company's
+domain is now its **registrable domain** by the Public Suffix List (`tldts`, MIT, API only — kept out of the web
+bundle):
+
+| Given                                                           | Stored / compared as                                                                                     |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `https://www.Acme.com/about`, `uk.acme.com`, `mail.eu.acme.com` | `acme.com`                                                                                               |
+| `shop.acme.co.uk`                                               | `acme.co.uk`                                                                                             |
+| `acme.github.io`, `acme.myshopify.com`                          | themselves: the list counts `github.io` and `myshopify.com` as suffixes, so each name is its own company |
+| `co.uk`, an IP address                                          | refused (`400`): no company's domain                                                                     |
+
+- **Every writer stores it so** — the routes and the Twenty importer — and a company's other domains too. A second
+  company on the same registrable domain is `409 conflict.company_owned`.
+- **People are matched the same way:** `dana@eu.acme.com` is at `acme.com`.
+- **Existing rows.** The migration strips `www.` in SQL. Subdomains need the Public Suffix List, so a one-off command
+  does the rest after deploy (dry run first, then `--apply`; it prints every change and a summary, zero included):
+
+    ```bash
+    node dist/cli/normalise-company-domains.js          # what it would change
+    node dist/cli/normalise-company-domains.js --apply
+    ```
+
+    A row whose registrable domain another company already has is left as it is: two records of one company. Settings →
+    Ownership lists each as **Same company saved twice**, for a person to merge or delete (computed in code, since SQL
+    has no suffix list). Until the command runs, lookups still match a `www.` row under its registrable domain.
 
 ## Not here
 

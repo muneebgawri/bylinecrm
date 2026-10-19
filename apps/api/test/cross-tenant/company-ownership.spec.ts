@@ -255,4 +255,30 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
         ).body as { ownerId: string };
         expect(moved.ownerId).toBe(anaId);
     });
+
+    it('FR-CRMS-20 (OWN-2c): www., any subdomain, a scheme or a path is the same company; domains are stored registrable', async () => {
+        for (const variant of [
+            `www.${domain}`,
+            `uk.${domain}`,
+            `https://mail.${domain}/about`,
+            `HTTP://${domain.toUpperCase()}`,
+        ]) {
+            const res = await as(ben).post(w('/companies')).send({ name: 'Ortiz again', domain: variant });
+            expect(res.status, variant).toBe(409);
+            expect(res.body).toMatchObject({ code: 'conflict.company_owned', details: { companyId: company } });
+        }
+        const fresh = await as(ana)
+            .post(w('/companies'))
+            .send({ name: `Fresh ${stamp}`, domain: `https://eu.Fresh-${stamp}.test/` })
+            .expect(201);
+        expect((fresh.body as { domain: string }).domain).toBe(`fresh-${stamp}.test`);
+    });
+
+    it('FR-CRMS-20 (OWN-2c): a person writing from a subdomain is at the company', async () => {
+        const res = await as(ben)
+            .post(w('/people'))
+            .send({ nameFirst: 'Ute', emails: { primary: `ute@eu.${domain}`, additional: [] } });
+        expect(res.status).toBe(409);
+        expect(res.body).toMatchObject({ code: 'conflict.company_owned', details: { companyId: company } });
+    });
 });

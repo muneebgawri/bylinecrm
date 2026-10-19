@@ -8,6 +8,8 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
+import { bareDomain } from '@bylinecrm/shared';
+import { companyDomain } from './company-domain';
 import { CompanyOwnership } from './company-ownership';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf, isEmpty, projectedChanges } from './diff';
@@ -231,7 +233,8 @@ export class CompaniesService implements BulkRecords {
 function fields(input: CompanyInput) {
     return {
         name: input.name,
-        domain: input.domain,
+        // OWN-2c: every writer (a route, the importer) stores the registrable domain.
+        domain: input.domain ? (companyDomain(input.domain) ?? bareDomain(input.domain)) : input.domain,
         logoUrl: input.logoUrl,
         employeeCount: input.employeeCount,
         address: input.address,

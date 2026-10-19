@@ -278,17 +278,18 @@ describe('FR-CRMS-15 enrichment', () => {
         dns.setMx(domain, `mx.${domain}`);
         // An imported company is often named by its domain (the Twenty importer brings such rows).
         const byDomain = await company({ name: domain, domain });
-        const byHost = await company({ name: `www.${domain}`, domain: `www.${domain}` });
+        // Named by its host; its domain is its own (OWN-2c: `www.` is stripped, so it cannot share `domain`).
+        const byHost = await company({ name: `www.host-${domain}`, domain: `www.host-${domain}` });
         const named = await company({ name: 'Named by a member', domain: `member-${domain}` });
         web.page(
-            `https://www.${domain}/`,
+            `https://host-${domain}/`,
             homePage('Named Properly Ltd', 'https://www.linkedin.com/company/named/', null),
         );
         web.page(
             `https://member-${domain}/`,
             homePage('Named Properly Ltd', 'https://www.linkedin.com/company/named/', null),
         );
-        dns.setMx(`www.${domain}`, `mx.${domain}`);
+        dns.setMx(`host-${domain}`, `mx.${domain}`);
         dns.setMx(`member-${domain}`, `mx.${domain}`);
 
         const log = await EventLog.open(app, ['company.updated']);

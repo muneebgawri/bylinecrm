@@ -23386,9 +23386,10 @@
                         "maxLength": 200
                     },
                     "domain": {
-                        "type": "string",
-                        "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
-                        "nullable": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     },
                     "logoUrl": {
                         "type": "string",
@@ -23517,9 +23518,10 @@
                         "maxLength": 200
                     },
                     "domain": {
-                        "type": "string",
-                        "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
-                        "nullable": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     },
                     "logoUrl": {
                         "type": "string",
@@ -27360,12 +27362,12 @@
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "enum": ["domain_owned_by_other", "company_owner_differs"],
-                        "description": "`domain_owned_by_other`: the person’s address is at a company another member owns. `company_owner_differs`: the person or open deal is linked to a company another member owns."
+                        "enum": ["duplicate_domain", "domain_owned_by_other", "company_owner_differs"],
+                        "description": "`domain_owned_by_other`: the person’s address is at a company another member owns. `company_owner_differs`: the person or open deal is linked to a company another member owns. `duplicate_domain`: a company saved as `www.<domain>` beside the company with that domain; merge or delete it by hand."
                     },
                     "object": {
                         "type": "string",
-                        "enum": ["person", "opportunity"]
+                        "enum": ["person", "opportunity", "company"]
                     },
                     "recordId": {
                         "type": "string",

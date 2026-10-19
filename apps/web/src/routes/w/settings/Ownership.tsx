@@ -8,6 +8,7 @@ import { paths } from '../../paths';
 
 const KIND_LABEL: Record<OwnershipConflictView['kind'], string> = {
     domain_owned_by_other: 'Address at their company',
+    duplicate_domain: 'Same company saved twice',
     company_owner_differs: 'Linked to their company',
 };
 
@@ -24,7 +25,8 @@ export function Ownership() {
 
     const run = (items: readonly OwnershipConflictView[]) =>
         resolve.mutate(
-            items.map((c) => ({ object: c.object, recordId: c.recordId })),
+            // A duplicate company is merged by hand; only people and deals move.
+            items.flatMap((c) => (c.object === 'company' ? [] : [{ object: c.object, recordId: c.recordId }])),
             {
                 onSuccess: (r) =>
                     toast({
@@ -56,7 +58,7 @@ export function Ownership() {
                             size="sm"
                             disabled={rows.length === 0}
                             loading={resolve.isPending}
-                            onClick={() => run(rows)}
+                            onClick={() => run(rows.filter((c) => c.object !== 'company'))}
                         >
                             Move all to their owners
                         </Button>
@@ -84,7 +86,9 @@ export function Ownership() {
                                     to={
                                         c.object === 'person'
                                             ? paths.person(workspaceId, c.recordId)
-                                            : paths.deal(workspaceId, c.recordId)
+                                            : c.object === 'company'
+                                              ? paths.company(workspaceId, c.recordId)
+                                              : paths.deal(workspaceId, c.recordId)
                                     }
                                 >
                                     {c.recordLabel}
@@ -102,11 +106,19 @@ export function Ownership() {
                         {
                             id: 'fix',
                             header: 'Fix',
-                            cell: (c) => (
-                                <Button size="sm" shape="square" disabled={resolve.isPending} onClick={() => run([c])}>
-                                    Move to {c.companyOwnerName ?? 'owner'}
-                                </Button>
-                            ),
+                            cell: (c) =>
+                                c.object === 'company' ? (
+                                    <span className="text-xs text-text-muted">Merge or delete it by hand</span>
+                                ) : (
+                                    <Button
+                                        size="sm"
+                                        shape="square"
+                                        disabled={resolve.isPending}
+                                        onClick={() => run([c])}
+                                    >
+                                        Move to {c.companyOwnerName ?? 'owner'}
+                                    </Button>
+                                ),
                         },
                     ],
                 }}
