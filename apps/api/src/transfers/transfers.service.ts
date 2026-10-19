@@ -205,6 +205,54 @@ export class TransfersService {
         });
     }
 
+    /**
+     * OWN-2: a record saved straight into another member's hands — a lead at a company they own, handed to
+     * them by whoever found it. `create` writes the record (owned by `to`) in a transaction that is not held
+     * to the saver's owner scope; the hand-over is recorded as a `forced` transfer from the saver, so the
+     * owner is told (`transfer_received`) and integrations hear `transfer.completed` like any other move.
+     */
+    async handOver<R>(
+        context: WorkspaceRunContext,
+        from: string,
+        to: string,
+        create: (tx: WorkspaceClient, wide: WorkspaceRunContext) => Promise<{ row: R; target: RecordTarget }>,
+        reason: string,
+    ): Promise<R> {
+        return this.widened(context, async (tx) => {
+            const wide = widen(context);
+            const { row, target } = await create(tx, wide);
+            const transfer = await tx.ownershipTransfer.create({
+                data: {
+                    workspaceId: context.workspaceId,
+                    object: target.type,
+                    recordId: target.id,
+                    fromMemberId: from,
+                    toMemberId: to,
+                    proposedByMemberId: from,
+                    decidedByMemberId: from,
+                    status: 'forced',
+                    reason,
+                    decidedAt: new Date(),
+                    moved: [target] as object[],
+                },
+                include: INCLUDE,
+            });
+            const person =
+                target.type === 'person'
+                    ? await tx.person.findUnique({ where: { id: target.id }, select: { emailPrimary: true } })
+                    : null;
+            await tell(tx, transfer, to, 'transfer_received');
+            await this.events.record(
+                tx,
+                event(wide, 'transfer.completed', transfer, [target], {
+                    companyDomain: null,
+                    personEmails: person?.emailPrimary ? [person.emailPrimary] : [],
+                }),
+            );
+            return row;
+        });
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────
 
     /**

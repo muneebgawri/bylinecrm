@@ -96,6 +96,7 @@ model Workspace {
   calendarSyncStates   CalendarSyncState[]
   slotlineSettings     SlotlineSettings?
   ownershipTransfers   OwnershipTransfer[]
+  companyDomains       CompanyDomain[]
 
   @@map("workspaces")
 }
@@ -469,11 +470,29 @@ model Company {
   owner         WorkspaceMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   people        Person[]
   opportunities Opportunity[]
+  otherDomains  CompanyDomain[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
   @@index([search], type: Gin)
   @@map("companies")
+}
+
+/// A company's other domain (OWN-2, FR-CRMS-20): a person writing from it is at that company. Lower case; one
+/// company per domain in a workspace, and never a domain another company has as its own (the service checks).
+model CompanyDomain {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  domain      String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, domain])
+  @@index([companyId])
+  @@map("company_domains")
 }
 
 /// A person (PAR-001/002). The primary email is unique per workspace, case-insensitively,

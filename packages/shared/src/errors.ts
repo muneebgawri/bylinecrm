@@ -28,6 +28,12 @@ export const ERROR_CODES = [
     'conflict',
     /** The change would duplicate a value that must be unique; `fieldErrors` names the field when it is safe to. */
     'conflict.unique',
+    /**
+     * `409` (OWN-2, FR-CRMS-20): the address's or domain's company is owned by another member. `details`
+     * names the company and its owner (`companyId`, `companyName`, `ownerMemberId`, `ownerName`); a person
+     * is saved for that owner instead with `handToOwner: true`.
+     */
+    'conflict.company_owned',
     /** The thing existed once and is no longer usable (an expired invitation). */
     'gone',
     /** The body is larger than the route accepts. */

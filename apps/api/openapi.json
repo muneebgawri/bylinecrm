@@ -14675,6 +14675,305 @@
                 "tags": ["attachments"]
             }
         },
+        "/api/w/{workspaceId}/companies/{companyId}/domains": {
+            "get": {
+                "operationId": "companyDomains_list",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/CompanyDomain"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            },
+            "post": {
+                "operationId": "companyDomains_add",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AddCompanyDomainDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CompanyDomain"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/companies/{companyId}/domains/{domain}": {
+            "delete": {
+                "operationId": "companyDomains_remove",
+                "parameters": [
+                    {
+                        "name": "companyId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "domain",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
+        "/api/w/{workspaceId}/ownership/conflicts": {
+            "get": {
+                "operationId": "ownership_conflicts",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/OwnershipConflict"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
         "/api/w/{workspaceId}/search": {
             "get": {
                 "operationId": "search_find",
@@ -14767,6 +15066,414 @@
                     }
                 },
                 "tags": ["search"]
+            }
+        },
+        "/api/w/{workspaceId}/transfers": {
+            "get": {
+                "operationId": "transfers_list",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["person", "company", "opportunity"]
+                        }
+                    },
+                    {
+                        "name": "recordId",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["proposed", "accepted", "declined", "cancelled", "forced"]
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Transfer"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
+            },
+            "post": {
+                "operationId": "transfers_propose",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProposeTransferDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Transfer"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
+            }
+        },
+        "/api/w/{workspaceId}/transfers/{transferId}/accept": {
+            "post": {
+                "operationId": "transfers_accept",
+                "parameters": [
+                    {
+                        "name": "transferId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Transfer"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
+            }
+        },
+        "/api/w/{workspaceId}/transfers/{transferId}/decline": {
+            "post": {
+                "operationId": "transfers_decline",
+                "parameters": [
+                    {
+                        "name": "transferId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DecideTransferDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Transfer"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
+            }
+        },
+        "/api/w/{workspaceId}/transfers/{transferId}/cancel": {
+            "post": {
+                "operationId": "transfers_cancel",
+                "parameters": [
+                    {
+                        "name": "transferId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DecideTransferDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Transfer"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
             }
         },
         "/api/w/{workspaceId}/sequences": {
@@ -17508,414 +18215,6 @@
                     }
                 },
                 "tags": ["timeline"]
-            }
-        },
-        "/api/w/{workspaceId}/transfers": {
-            "get": {
-                "operationId": "transfers_list",
-                "parameters": [
-                    {
-                        "name": "object",
-                        "required": false,
-                        "in": "query",
-                        "schema": {
-                            "type": "string",
-                            "enum": ["person", "company", "opportunity"]
-                        }
-                    },
-                    {
-                        "name": "recordId",
-                        "required": false,
-                        "in": "query",
-                        "schema": {
-                            "format": "uuid",
-                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "status",
-                        "required": false,
-                        "in": "query",
-                        "schema": {
-                            "type": "string",
-                            "enum": ["proposed", "accepted", "declined", "cancelled", "forced"]
-                        }
-                    },
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/Transfer"
-                                    }
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["transfers"]
-            },
-            "post": {
-                "operationId": "transfers_propose",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ProposeTransferDto"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Transfer"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["transfers"]
-            }
-        },
-        "/api/w/{workspaceId}/transfers/{transferId}/accept": {
-            "post": {
-                "operationId": "transfers_accept",
-                "parameters": [
-                    {
-                        "name": "transferId",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Transfer"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["transfers"]
-            }
-        },
-        "/api/w/{workspaceId}/transfers/{transferId}/decline": {
-            "post": {
-                "operationId": "transfers_decline",
-                "parameters": [
-                    {
-                        "name": "transferId",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DecideTransferDto"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Transfer"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["transfers"]
-            }
-        },
-        "/api/w/{workspaceId}/transfers/{transferId}/cancel": {
-            "post": {
-                "operationId": "transfers_cancel",
-                "parameters": [
-                    {
-                        "name": "transferId",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DecideTransferDto"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Transfer"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["transfers"]
             }
         },
         "/api/w/{workspaceId}/import/twenty": {
@@ -22835,6 +23134,9 @@
                     "custom": {
                         "type": "object",
                         "additionalProperties": {}
+                    },
+                    "handToOwner": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -23770,6 +24072,52 @@
                     }
                 }
             },
+            "AddCompanyDomainDto": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 253
+                    }
+                },
+                "required": ["domain"]
+            },
+            "ProposeTransferDto": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "toMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    }
+                },
+                "required": ["object", "recordId", "toMemberId"]
+            },
+            "DecideTransferDto": {
+                "type": "object",
+                "properties": {
+                    "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    }
+                }
+            },
             "CreateSequenceDto": {
                 "type": "object",
                 "properties": {
@@ -24185,41 +24533,6 @@
                     }
                 },
                 "required": ["target", "kind", "happenedAt", "title", "source", "idempotencyKey"]
-            },
-            "ProposeTransferDto": {
-                "type": "object",
-                "properties": {
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "recordId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "toMemberId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "reason": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                    }
-                },
-                "required": ["object", "recordId", "toMemberId"]
-            },
-            "DecideTransferDto": {
-                "type": "object",
-                "properties": {
-                    "note": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                    }
-                }
             },
             "PutTwentyImportSettingsDto": {
                 "type": "object",
@@ -25095,6 +25408,7 @@
                             "not_found",
                             "conflict",
                             "conflict.unique",
+                            "conflict.company_owned",
                             "gone",
                             "payload_too_large",
                             "unsupported_media_type",
@@ -26799,6 +27113,85 @@
                 },
                 "required": ["results", "succeeded", "failed"]
             },
+            "CompanyDomain": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["domain", "createdAt"]
+            },
+            "OwnershipConflict": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["domain_owned_by_other", "company_owner_differs"],
+                        "description": "`domain_owned_by_other`: the person’s address is at a company another member owns. `company_owner_differs`: the person or open deal is linked to a company another member owns."
+                    },
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "opportunity"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordLabel": {
+                        "type": "string"
+                    },
+                    "recordOwnerMemberId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordOwnerName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "companyId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "companyName": {
+                        "type": "string"
+                    },
+                    "companyOwnerMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "companyOwnerName": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "kind",
+                    "object",
+                    "recordId",
+                    "recordLabel",
+                    "recordOwnerMemberId",
+                    "recordOwnerName",
+                    "companyId",
+                    "companyName",
+                    "companyOwnerMemberId",
+                    "companyOwnerName"
+                ]
+            },
             "Stage": {
                 "type": "object",
                 "properties": {
@@ -27150,6 +27543,133 @@
                     }
                 },
                 "required": ["person", "company", "opportunity"]
+            },
+            "TransferMember": {
+                "type": "object",
+                "properties": {
+                    "memberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["memberId", "name"]
+            },
+            "Transfer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordLabel": {
+                        "type": "string",
+                        "description": "The record’s name as it reads now."
+                    },
+                    "from": {
+                        "nullable": true,
+                        "description": "The owner before; null when the record had none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TransferMember"
+                            }
+                        ]
+                    },
+                    "to": {
+                        "$ref": "#/components/schemas/TransferMember"
+                    },
+                    "proposedBy": {
+                        "$ref": "#/components/schemas/TransferMember"
+                    },
+                    "decidedBy": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TransferMember"
+                            }
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["proposed", "accepted", "declined", "cancelled", "forced"],
+                        "description": "`proposed`: waiting on the receiver. `accepted` / `forced`: the record (and its unit) changed owner. `declined` / `cancelled`: nothing moved."
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "note": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "moved": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["person", "company", "opportunity"]
+                                },
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "label": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["type", "id", "label"]
+                        },
+                        "description": "Every record that moved; empty until it completes."
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "decidedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "object",
+                    "recordId",
+                    "recordLabel",
+                    "from",
+                    "to",
+                    "proposedBy",
+                    "decidedBy",
+                    "status",
+                    "reason",
+                    "note",
+                    "moved",
+                    "createdAt",
+                    "decidedAt"
+                ]
             },
             "Meeting": {
                 "type": "object",
@@ -30711,133 +31231,6 @@
                     }
                 },
                 "required": ["activity", "created"]
-            },
-            "TransferMember": {
-                "type": "object",
-                "properties": {
-                    "memberId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["memberId", "name"]
-            },
-            "Transfer": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "recordId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "recordLabel": {
-                        "type": "string",
-                        "description": "The record’s name as it reads now."
-                    },
-                    "from": {
-                        "nullable": true,
-                        "description": "The owner before; null when the record had none.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/TransferMember"
-                            }
-                        ]
-                    },
-                    "to": {
-                        "$ref": "#/components/schemas/TransferMember"
-                    },
-                    "proposedBy": {
-                        "$ref": "#/components/schemas/TransferMember"
-                    },
-                    "decidedBy": {
-                        "nullable": true,
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/TransferMember"
-                            }
-                        ]
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["proposed", "accepted", "declined", "cancelled", "forced"],
-                        "description": "`proposed`: waiting on the receiver. `accepted` / `forced`: the record (and its unit) changed owner. `declined` / `cancelled`: nothing moved."
-                    },
-                    "reason": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "note": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "moved": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "enum": ["person", "company", "opportunity"]
-                                },
-                                "id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                                },
-                                "label": {
-                                    "type": "string"
-                                }
-                            },
-                            "required": ["type", "id", "label"]
-                        },
-                        "description": "Every record that moved; empty until it completes."
-                    },
-                    "createdAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "decidedAt": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "object",
-                    "recordId",
-                    "recordLabel",
-                    "from",
-                    "to",
-                    "proposedBy",
-                    "decidedBy",
-                    "status",
-                    "reason",
-                    "note",
-                    "moved",
-                    "createdAt",
-                    "decidedAt"
-                ]
             },
             "FilterGroup": {
                 "anyOf": [

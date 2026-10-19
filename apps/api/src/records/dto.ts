@@ -74,7 +74,15 @@ const personFields = {
     ownerId: uuid.nullable(),
     custom,
 };
-export class CreatePersonDto extends createZodDto(z.object(personFields).partial()) {}
+export class CreatePersonDto extends createZodDto(
+    z
+        .object({
+            ...personFields,
+            /** OWN-2: the address's company is another member's — save the person for them instead. */
+            handToOwner: z.boolean(),
+        })
+        .partial(),
+) {}
 export class UpdatePersonDto extends createZodDto(z.object(personFields).partial()) {}
 
 const companyFields = {
