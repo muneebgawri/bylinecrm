@@ -184,6 +184,9 @@ export const customFieldView = named(
         type: z.enum(CUSTOM_FIELD_TYPES),
         options: z.array(z.string()),
         required: z.boolean(),
+        adminOnly: z
+            .boolean()
+            .meta({ description: 'Seen and written only by callers with workspace:admin; hidden from everyone else.' }),
         position: z.number(),
         archivedAt: dateTime.nullable(),
         createdAt: dateTime,

@@ -10,6 +10,8 @@ export interface FieldDefinition {
     type: CustomFieldType;
     options: string[];
     required: boolean;
+    /** Hidden from callers without `workspace:admin` (absent in hand-built definitions: visible). */
+    adminOnly?: boolean;
 }
 
 /** On `create` a required field must be present; on `patch` it may be absent but never cleared. */

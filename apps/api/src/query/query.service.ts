@@ -34,7 +34,7 @@ export async function resolvePlan(
 ): Promise<QueryPlan> {
     const view = raw.view ? await loadView(tx, context, object, raw.view) : undefined;
     const filter = typeof raw.filter === 'string' ? decodeFilterParam(raw.filter) : raw.filter;
-    const definitions = await customFields.activeDefinitions(tx, object);
+    const definitions = await customFields.visibleDefinitions(tx, object);
     return planQuery(
         object,
         { filter, sort: raw.sort, view: view ? { filter: view.filter, sorts: view.sorts } : undefined },

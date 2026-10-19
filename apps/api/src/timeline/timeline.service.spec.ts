@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RlsPrismaService, WorkspaceClient } from '../infra/rls-prisma.service';
 import type { WorkspaceContext } from '../infra/workspace-context';
 import { TimelineService } from './timeline.service';
+import type { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 
 /**
  * The fan-out rule (PAR-014) without a database: a record's own event leaves one row on the
@@ -38,7 +39,11 @@ describe('TimelineService.writeFor', () => {
             }),
         } as unknown as RlsPrismaService;
         const context = { get: () => undefined } as unknown as WorkspaceContext;
-        return { service: new TimelineService(rls, context), created, tx };
+        return {
+            service: new TimelineService(rls, context, { restricted: () => false } as unknown as CustomFieldsService),
+            created,
+            tx,
+        };
     }
 
     it('writes one entry on the record for its own event, carrying the diff as given', async () => {

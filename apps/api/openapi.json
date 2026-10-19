@@ -24550,6 +24550,9 @@
                     "required": {
                         "type": "boolean"
                     },
+                    "adminOnly": {
+                        "type": "boolean"
+                    },
                     "position": {
                         "type": "number"
                     }
@@ -24574,6 +24577,9 @@
                         }
                     },
                     "required": {
+                        "type": "boolean"
+                    },
+                    "adminOnly": {
                         "type": "boolean"
                     },
                     "position": {
@@ -28175,6 +28181,10 @@
                     "required": {
                         "type": "boolean"
                     },
+                    "adminOnly": {
+                        "type": "boolean",
+                        "description": "Seen and written only by callers with workspace:admin; hidden from everyone else."
+                    },
                     "position": {
                         "type": "number"
                     },
@@ -28206,6 +28216,7 @@
                     "type",
                     "options",
                     "required",
+                    "adminOnly",
                     "position",
                     "archivedAt",
                     "createdAt",

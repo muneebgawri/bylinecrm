@@ -387,6 +387,79 @@ describe('records', () => {
             const listed = await as(admin).get(w('/custom-fields?object=person&archived=true')).expect(200);
             expect((listed.body as { key: string }[]).map((f) => f.key)).toEqual(['beat']);
         });
+
+        it('an admin-only field (FR-CRMS-UI-6): a member neither sees its definition or values nor writes it; an admin does', async () => {
+            const ltv = await as(admin)
+                .post(w('/custom-fields'))
+                .send({ object: 'person', key: 'ltv', label: 'LTV', type: 'number', adminOnly: true })
+                .expect(201);
+            const ltvId = (ltv.body as { id: string; adminOnly: boolean }).id;
+            expect((ltv.body as { adminOnly: boolean }).adminOnly).toBe(true);
+            const keys = (res: Response) => (res.body as { key: string }[]).map((f) => f.key).sort();
+            expect(keys(await as(admin).get(w('/custom-fields?object=person')).expect(200))).toEqual(['ltv', 'score']);
+            expect(keys(await as(rep).get(w('/custom-fields?object=person')).expect(200))).toEqual(['score']);
+
+            await as(rep)
+                .post(w('/people'))
+                .send({ nameFirst: 'Sneaky', custom: { ltv: 5 } })
+                .expect(403);
+            const created = await as(rep).post(w('/people')).send({ nameFirst: 'Valued' }).expect(201);
+            const id = (created.body as Person).id;
+            const set = await as(admin)
+                .patch(w(`/people/${id}`))
+                .send({ custom: { ltv: 9 } })
+                .expect(200);
+            expect((set.body as Person).custom).toEqual({ ltv: 9 });
+
+            // The member's reads: the record, the list, the query; the admin's still carry it.
+            expect(
+                (
+                    await as(rep)
+                        .get(w(`/people/${id}`))
+                        .expect(200)
+                ).body.custom,
+            ).toEqual({});
+            const listed = (await as(rep).get(w('/people')).expect(200)).body as Page<Person>;
+            expect(listed.items.find((p) => p.id === id)?.custom).toEqual({});
+            const queried = (await as(rep).post(w('/people/query')).send({}).expect(200)).body as Page<Person>;
+            expect(queried.items.find((p) => p.id === id)?.custom).toEqual({});
+            await as(rep)
+                .post(w('/people/query'))
+                .send({ filter: { and: [{ field: 'custom.ltv', op: 'gte', value: 1 }] } })
+                .expect(400);
+            await as(rep)
+                .patch(w(`/people/${id}`))
+                .send({ custom: { ltv: 1 } })
+                .expect(403);
+            const repPatched = await as(rep)
+                .patch(w(`/people/${id}`))
+                .send({ custom: { score: 3 } })
+                .expect(200);
+            expect((repPatched.body as Person).custom).toEqual({ score: 3 });
+            expect(
+                (
+                    await as(admin)
+                        .get(w(`/people/${id}`))
+                        .expect(200)
+                ).body.custom,
+            ).toEqual({ ltv: 9, score: 3 });
+
+            // Turned off, the field is everyone's again.
+            await as(admin)
+                .patch(w(`/custom-fields/${ltvId}`))
+                .send({ adminOnly: false })
+                .expect(200);
+            expect(
+                (
+                    await as(rep)
+                        .get(w(`/people/${id}`))
+                        .expect(200)
+                ).body.custom,
+            ).toEqual({ ltv: 9, score: 3 });
+            await as(admin)
+                .delete(w(`/custom-fields/${ltvId}`))
+                .expect(204);
+        });
     });
 
     describe('trash, search, pagination, events', () => {

@@ -21,6 +21,9 @@ import type { DeliveredEvent } from '../events/outbox-consumer';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
+import { stripKeys } from '../records/custom-fields/admin-only';
+import { canonical } from '../records/diff';
+import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { type Page, paginate } from '../records/list-query';
 import { stored } from '../records/references';
 import { readableTargets } from '../records/targets';
@@ -61,6 +64,7 @@ export class TimelineService {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
+        private readonly customFields: CustomFieldsService,
     ) {}
 
     /**
@@ -68,7 +72,12 @@ export class TimelineService {
      * people with its own; a target the caller cannot see "has no timeline" (`404`). Visibility
      * is the targets' own — `readableTargets` under the caller's policies, the one rule.
      */
-    list(query: TimelineQuery): Promise<Page<TimelineActivityView>> {
+    async list(query: TimelineQuery): Promise<Page<TimelineActivityView>> {
+        const page = await this.entries(query);
+        return { ...page, items: await this.withoutHiddenChanges(page.items) };
+    }
+
+    private entries(query: TimelineQuery): Promise<Page<TimelineActivityView>> {
         this.current();
         return this.rls.withWorkspace(async (tx) => {
             const visible = await readableTargets(tx, [query.target]);
@@ -88,6 +97,34 @@ export class TimelineService {
             );
             return { items: page.items.map(view), nextCursor: page.nextCursor };
         });
+    }
+
+    /**
+     * An `updated` entry's diff of `custom`, without the admin-only keys the caller may not see
+     * (the same rule as the records themselves); a change only to those keys leaves no `custom`.
+     */
+    private async withoutHiddenChanges(items: TimelineActivityView[]): Promise<TimelineActivityView[]> {
+        if (!this.customFields.restricted()) return items;
+        const hidden = new Map<RecordObject, ReadonlySet<string>>();
+        const out: TimelineActivityView[] = [];
+        for (const item of items) {
+            const diff = item.properties['diff'] as Record<string, unknown> | undefined;
+            const change = diff?.['custom'] as { from?: unknown; to?: unknown } | undefined;
+            if (!diff || !change) {
+                out.push(item);
+                continue;
+            }
+            const object = item.target.type;
+            if (!hidden.has(object)) hidden.set(object, await this.customFields.hiddenKeys(object));
+            const keys = hidden.get(object)!;
+            const side = (v: unknown) =>
+                v && typeof v === 'object' ? stripKeys(v as Record<string, unknown>, keys) : v;
+            const custom = { from: side(change.from), to: side(change.to) };
+            const { custom: _dropped, ...rest } = diff;
+            const kept = canonical(custom.from) === canonical(custom.to) ? rest : { ...rest, custom };
+            out.push({ ...item, properties: { ...item.properties, diff: kept } });
+        }
+        return out;
     }
 
     /**

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { CustomFieldType, RecordObject } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { UniqueConflict } from '../../infra/errors/api-errors';
@@ -23,6 +23,7 @@ export interface CreateCustomFieldInput {
     type: CustomFieldType;
     options?: string[] | undefined;
     required?: boolean | undefined;
+    adminOnly?: boolean | undefined;
     position?: number | undefined;
 }
 
@@ -30,8 +31,12 @@ export interface UpdateCustomFieldInput {
     label?: string | undefined;
     options?: string[] | undefined;
     required?: boolean | undefined;
+    adminOnly?: boolean | undefined;
     position?: number | undefined;
 }
+
+/** The capability that manages custom fields; a caller without it does not see admin-only ones. */
+const ADMIN = 'workspace:admin';
 
 /** How long a workspace's definitions stay cached when nothing changes them. */
 const DEFINITIONS_TTL_S = 3600;
@@ -56,6 +61,7 @@ export class CustomFieldsService {
                 where: {
                     ...(filter.object ? { object: filter.object } : {}),
                     archivedAt: filter.archived ? { not: null } : null,
+                    ...(this.restricted() ? { adminOnly: false } : {}),
                 },
                 orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
             });
@@ -79,6 +85,7 @@ export class CustomFieldsService {
                         type: input.type,
                         options,
                         required: input.required ?? false,
+                        adminOnly: input.adminOnly ?? false,
                         ...(input.position !== undefined ? { position: input.position } : {}),
                     },
                 });
@@ -108,6 +115,7 @@ export class CustomFieldsService {
                     ...(patch.label !== undefined ? { label: patch.label } : {}),
                     ...(patch.options !== undefined ? { options: patch.options } : {}),
                     ...(patch.required !== undefined ? { required: patch.required } : {}),
+                    ...(patch.adminOnly !== undefined ? { adminOnly: patch.adminOnly } : {}),
                     ...(patch.position !== undefined ? { position: patch.position } : {}),
                 },
             });
@@ -162,7 +170,13 @@ export class CustomFieldsService {
         mode: ValidationMode,
         stored: Record<string, unknown> = {},
     ): Promise<Prisma.InputJsonObject> {
-        const definitions = await this.activeDefinitions(tx, object);
+        if (this.restricted()) {
+            const hidden = await this.hiddenKeysIn(tx, object);
+            const named = Object.keys(values).filter((k) => hidden.has(k));
+            if (named.length > 0)
+                throw new ForbiddenException(`only admins write ${named.map((k) => `custom.${k}`).join(', ')}`);
+        }
+        const definitions = await this.visibleDefinitions(tx, object);
         const valid = validateCustomValues(definitions, values, mode);
         return (mode === 'patch' ? mergeCustomValues(stored, valid) : valid) as Prisma.InputJsonObject;
     }
@@ -182,7 +196,7 @@ export class CustomFieldsService {
         }
         const rows = await tx.customFieldDefinition.findMany({
             where: { object, archivedAt: null },
-            select: { key: true, label: true, type: true, options: true, required: true },
+            select: { key: true, label: true, type: true, options: true, required: true, adminOnly: true },
         });
         const definitions = rows.map((r) => ({ ...r, options: r.options as string[] }));
         try {
@@ -193,9 +207,59 @@ export class CustomFieldsService {
         return definitions;
     }
 
+    /**
+     * The active definitions the caller may see: all of them for an admin, a job or an import; the
+     * ones not marked admin-only for anyone else. What a list may filter, sort, group or export by.
+     */
+    async visibleDefinitions(tx: WorkspaceClient, object: RecordObject): Promise<FieldDefinition[]> {
+        const definitions = await this.activeDefinitions(tx, object);
+        return this.restricted() ? definitions.filter((d) => !d.adminOnly) : definitions;
+    }
+
+    /**
+     * The `custom` keys the caller may not see on records of `object` — admin-only definitions,
+     * archived ones included, since records keep their values. Empty for an admin, and outside a
+     * request (jobs and imports), without a read.
+     */
+    async hiddenKeys(object: RecordObject): Promise<ReadonlySet<string>> {
+        if (!this.restricted()) return NONE;
+        return this.rls.withWorkspace((tx) => this.hiddenKeysIn(tx, object));
+    }
+
+    /**
+     * True when the caller is a request without `workspace:admin` (a member, a manager without it,
+     * an API key without it). Jobs and imports run outside a request and see everything.
+     */
+    restricted(): boolean {
+        if (!this.context.inRequest()) return false;
+        const current = this.context.get();
+        return current !== undefined && !current.capabilities.has(ADMIN);
+    }
+
+    private async hiddenKeysIn(tx: WorkspaceClient, object: RecordObject): Promise<ReadonlySet<string>> {
+        const key = hiddenCacheKey(this.workspaceId(), object);
+        try {
+            const cached = await this.redis.get(key);
+            if (cached) return new Set(JSON.parse(cached) as string[]);
+        } catch {
+            // Redis unavailable: read the rows.
+        }
+        const rows = await tx.customFieldDefinition.findMany({
+            where: { object, adminOnly: true },
+            select: { key: true },
+        });
+        const keys = rows.map((r) => r.key);
+        try {
+            await this.redis.set(key, JSON.stringify(keys), 'EX', DEFINITIONS_TTL_S);
+        } catch {
+            // A cache that cannot be written costs a read next time.
+        }
+        return new Set(keys);
+    }
+
     private async invalidate(workspaceId: string, object: RecordObject): Promise<void> {
         try {
-            await this.redis.del(cacheKey(workspaceId, object));
+            await this.redis.del(cacheKey(workspaceId, object), hiddenCacheKey(workspaceId, object));
         } catch {
             // Redis unavailable: there is no stale entry to delete, the next read goes to the rows.
         }
@@ -208,9 +272,16 @@ export class CustomFieldsService {
     }
 }
 
+const NONE: ReadonlySet<string> = new Set();
+
 function cacheKey(workspaceId: string, object: RecordObject): string {
-    // `v2`: the cached shape gained `label` in P1-4; an older entry would lack it.
-    return `custom-fields:v2:${workspaceId}:${object}`;
+    // `v3`: the cached shape gained `adminOnly`; an older entry would lack it (`v2` gained `label` in P1-4).
+    return `custom-fields:v3:${workspaceId}:${object}`;
+}
+
+/** The keys of one object's admin-only definitions, archived ones included. */
+function hiddenCacheKey(workspaceId: string, object: RecordObject): string {
+    return `custom-fields:admin-only:v1:${workspaceId}:${object}`;
 }
 
 function view(row: {
@@ -221,6 +292,7 @@ function view(row: {
     type: CustomFieldType;
     options: unknown;
     required: boolean;
+    adminOnly: boolean;
     position: number;
     archivedAt: Date | null;
     createdAt: Date;
@@ -234,6 +306,7 @@ function view(row: {
         type: row.type,
         options: row.options as string[],
         required: row.required,
+        adminOnly: row.adminOnly,
         position: row.position,
         archivedAt: row.archivedAt,
         createdAt: row.createdAt,
