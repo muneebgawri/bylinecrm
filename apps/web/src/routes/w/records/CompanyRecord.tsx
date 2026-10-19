@@ -123,6 +123,8 @@ export function CompanyRecord({
             control: (
                 <OwnerControl
                     workspaceId={workspaceId}
+                    object="company"
+                    recordId={company.id}
                     value={company.ownerId}
                     onSave={(v) => save({ ownerId: v })}
                     id={ownerId}

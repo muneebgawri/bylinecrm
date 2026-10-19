@@ -180,6 +180,8 @@ export function DealRecord({
             control: (
                 <OwnerControl
                     workspaceId={workspaceId}
+                    object="opportunity"
+                    recordId={deal.id}
                     value={deal.ownerId}
                     onSave={(v) => save({ ownerId: v })}
                     id={ownerId}

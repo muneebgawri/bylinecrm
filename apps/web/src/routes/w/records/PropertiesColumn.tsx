@@ -1,9 +1,8 @@
 import type { CustomFieldType, RecordObject } from '@bylinecrm/shared';
 import { Skeleton } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
-import { useCustomFields, useMembersSummary, currentMembers } from '../../../api/records';
+import { useCustomFields } from '../../../api/records';
 import type { CustomFieldView } from '../../../api/types';
-import { useMembership, usePermission } from '../../../auth/capabilities';
 import { formatDate } from '../../../lib/format';
 import { fieldTitle } from './fields';
 import { InlineSelect, InlineText } from './InlineEdit';
@@ -208,34 +207,4 @@ function CustomFieldControl({
     );
 }
 
-/** The owner field: a picker over the members summary; an own-scoped member cannot hand a record away. */
-export function OwnerControl({
-    workspaceId,
-    value,
-    onSave,
-    id,
-}: {
-    workspaceId: string;
-    value: string | null;
-    onSave: (ownerId: string | null) => Promise<unknown>;
-    id?: string;
-}) {
-    const membership = useMembership();
-    const write = usePermission('record:write');
-    const members = useMembersSummary(workspaceId);
-    const ownScoped = membership?.recordScope === 'own';
-    const options = currentMembers(members.data).map((m) => ({ value: m.memberId, label: m.name ?? 'Unnamed member' }));
-    return (
-        <InlineSelect
-            id={id}
-            label="Owner"
-            path="ownerId"
-            value={value}
-            options={options}
-            clearLabel="Unassigned"
-            canEdit={write.allowed && !ownScoped}
-            reason={ownScoped ? 'Your role sees only the records you own; an admin reassigns them.' : write.reason}
-            onSave={onSave}
-        />
-    );
-}
+export { OwnerControl } from './OwnerControl';

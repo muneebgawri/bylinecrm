@@ -184,6 +184,8 @@ export function PersonRecord({
             control: (
                 <OwnerControl
                     workspaceId={workspaceId}
+                    object="person"
+                    recordId={person.id}
                     value={person.ownerId}
                     onSave={(v) => save({ ownerId: v })}
                     id={ownerId}

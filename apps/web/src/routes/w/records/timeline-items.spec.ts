@@ -20,6 +20,21 @@ function entry(partial: Partial<TimelineActivityView>): TimelineActivityView {
 }
 
 describe('wordsFor', () => {
+    it('FR-CRMS-17: reads a completed transfer as a change of owner, with its reason', () => {
+        const words = wordsFor(
+            entry({
+                kind: 'linked-transfer.completed',
+                properties: {
+                    linked: { type: 'transfer', id: 't1', name: '→ Ben Ade' },
+                    transfer: { reason: 'Rebalancing' },
+                },
+            }),
+            names,
+        );
+        expect(words).toMatchObject({ actor: 'Kate Morgan', action: 'changed the owner → Ben Ade', family: 'record' });
+        expect(words.detail).toEqual([{ label: 'Rebalancing' }]);
+    });
+
     it('FR-CRMS-4: reads stored mail by its sender and subject, and points at its thread', () => {
         const email = (direction: string) => ({
             email: {

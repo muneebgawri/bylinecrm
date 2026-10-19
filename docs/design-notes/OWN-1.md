@@ -65,8 +65,10 @@ Ltd" with the reason, and opens the record. Nobody is told what they did themsel
 
 ## Not here
 
-- **The web UI** for proposing (a "Hand on…" action in the drawer, the inbox of offers) — the next PR on #200;
-  the bell already shows the notifications and opens the record.
+- **The web UI** is the owner field on every record (`OwnerControl.tsx`): a manager picks a new owner and it moves at
+  once; the owner has **Hand on…**; an open offer shows under the field with **Accept / Decline** or **Take back**;
+  anyone with `record:write` claims an unowned record. A completed transfer reads "changed the owner → <name>" on
+  each moved record's timeline. See OWN-2.md § Web.
 - **Company-domain ownership** (first saver owns the company, OWN-2 #201), the recipient guard (GUARD-1 #202) and the
   NewswireOS receiver (newswireos#589) build on this.
 - **A transfer cooling period** and **dormancy release** — proposal §4, owner decisions pending.

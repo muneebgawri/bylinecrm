@@ -102,6 +102,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/notifications$`), () => data.notificationsInbox],
     [new RegExp(`^${W}/notification-settings$`), () => data.notificationSettings],
     [new RegExp(`^${W}/my-tasks$`), () => data.myTasks],
+    // OWN-1: a record's transfers (the owner field's open offer); none in the fixtures.
+    [new RegExp(`^${W}/transfers(\\?.*)?$`), () => []],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],
