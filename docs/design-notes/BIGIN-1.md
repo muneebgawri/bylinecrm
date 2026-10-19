@@ -72,7 +72,44 @@ records workspace, Bigin id, previous and new person, the change instant (the Co
 before/after name and email. Deals and notes resolve a reused Contact **by when they were made in Bigin**
 (`Created_Time`): after the change, the new person; before it, the person the Contact held then. The run report
 counts reuses per module (zero included); Settings → Import from Bigin lists them (`GET reuses`). Reuses that
-happened before this sync existed are reconstructed separately.
+happened before this sync existed are reconstructed by the reconcile below.
+
+## Reconciling reuses that already happened (FR-CRMS-26)
+
+Before this sync, the old Bigin → Twenty job wrote a reused Contact over the earlier person — usually the new
+_name_ with the old _address_ (e.g. "Kim Gifford" at `support@pressreleasesubmit.com`) — and BylineCRM imported those
+mixed rows from Twenty. 1,631 of 29,578 contacts changed person in the last 30 days of the old logs alone.
+
+`node dist/cli/reconcile-bigin-reuse.js <workspace-slug> [--logs <file.jsonl>] [--apply]` (owner connection, a
+Nest application context with no workers or relays of its own) runs `BiginReuseReconciler`:
+
+1. **History per Bigin id, oldest first**, read in bulk (never one request per person): Twenty's `people`
+   (who carries which `biginrecordid`) and `timelineActivities` (`person.updated` entries whose diff touches
+   `name` or `emails`), through the workspace's stored Twenty connection and the importer's HTTP client; the old
+   job's log rows (`{ biginId, ts, email, firstName, lastName }`); Bigin's current record, read through the
+   Bigin client when connected, as the latest identity.
+2. **Splitting** (`identityHistory`, pure and unit-tested): the first person is the earliest "before" Twenty
+   recorded, with the earliest address the history shows — else the holder's, the stale address the old job
+   kept. Each Twenty change starts a group that the logs and Bigin's record after it complete (the old job's
+   name change and the address it never wrote are one change). Groups are split with the sync's own
+   `isContactReused`. A name change with the same address, a change with no address to compare, an earlier
+   identity with no address of its own, or a latest address another person already has is **not split** — it
+   is printed for review.
+3. **Applying, per Contact, in one transaction**: the holder (the Bigin link's person, else the person imported
+   from the Twenty person carrying the id) becomes the latest identity; each earlier identity becomes a person
+   (matched by address first, restored if trashed; else created with the company of its registrable domain,
+   the holder's owner, source "Bigin (reused contact)") with a note explaining the split; notes and tasks on the
+   holder made before the change instant, and deals it is the point of contact of, move to the earlier person.
+   "Made" is when Twenty created them (an imported record's own `createdAt` is the import's); a record made here
+   uses its own. Each split is a `bigin_contact_reuses` row with `source = reconcile`. Every write goes through
+   the record services as the import, with its domain events — the mail sync re-points messages to whoever has
+   the address now (`email.linked`), the timeline and webhooks see the changes. Nothing is deleted.
+4. **Dry run by default**: each Contact's change is made and rolled back, so the counts are exact. **Idempotent**: a
+   Contact with a `reconcile` row is not reconciled again. The output is, per Contact, before → after and what
+   moved; the review list; and totals per kind, zero included.
+
+Owner steps: deploy, extract the log rows from the old job's logs, run without `--apply`, read the review list,
+then run with `--apply`.
 
 ## Running, and the cursor
 

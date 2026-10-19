@@ -2290,6 +2290,8 @@ model BiginContactReuse {
   detectedAt       DateTime @default(now()) @map("detected_at") @db.Timestamptz
   before           Json
   after            Json
+  /// `sync` (found as it happened) or `reconcile` (FR-CRMS-26: split after the fact from history).
+  source           String   @default("sync")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
