@@ -37,7 +37,7 @@ import { customValuesFor, definitionsNeeded, type InferredCustom } from '../twen
 import { failureText } from '../twenty-import/import-runner';
 import { withoutLocalEdits } from '../twenty-import/twenty-sync';
 import { readBiginConnection, biginReportFrom } from './bigin-import.settings';
-import { BIGIN_PAGE_MAX } from './bigin-import.constants';
+import { BIGIN_PAGE_MAX, BIGIN_WRITE_CHUNK } from './bigin-import.constants';
 import { BiginSyncService } from './bigin-sync.service';
 import { isContactReused, reuseNoteText, type ContactIdentity } from './contact-reuse';
 import { markdownToRichText } from '../twenty-import/markdown';
@@ -233,8 +233,20 @@ export class BiginImportRunner {
             state.cursors[module] = cursor;
         }
         while (!cursor.done) {
-            const page = await this.bigin.list(state.connection, module, { since: cursor.since, page: cursor.page });
-            await this.writePage(state, module, cursor, page.records, page.moreRecords, entry);
+            const page = await this.bigin.list(state.connection, module, {
+                since: cursor.since,
+                page: cursor.page,
+                pageToken: cursor.pageToken ?? null,
+            });
+            await this.writePage(
+                state,
+                module,
+                cursor,
+                page.records,
+                page.moreRecords,
+                entry,
+                page.nextPageToken ?? null,
+            );
             if (cursor.done) break;
             if (await this.cancelRequested(state.runId)) return false;
         }
@@ -312,6 +324,7 @@ export class BiginImportRunner {
         all: BiginRecord[],
         moreRecords: boolean,
         entry: BiginImportObjectReport,
+        nextPageToken: string | null = null,
     ): Promise<void> {
         const seen = new Set(cursor.seen);
         const records = all.filter((record) => !seen.has(plainBiginId(record.id) ?? ''));
@@ -357,60 +370,68 @@ export class BiginImportRunner {
                       mapped.map((m) => m.result.custom),
                   )
                 : [];
-        await this.rls.withWorkspace(async (tx) => {
-            const events: DomainEvent[] = [];
-            let latest: Date | null = null;
-            for (const { record, result } of mapped) {
-                const modified = biginInstant(record.Modified_Time);
-                if (modified && (!latest || modified > latest)) latest = modified;
-                const externalId = plainBiginId(record.id) ?? '-';
-                entry.read += 1;
-                if ('failed' in result) {
-                    entry.failed += 1;
-                    recordError(entry, externalId, result.failed);
-                    noteFailure(cursor, modified);
-                    continue;
-                }
-                if ('skip' in result) {
-                    entry.skipped += 1;
-                    recordError(entry, externalId, result.skip);
-                    noteSuccess(cursor, modified);
-                    continue;
-                }
-                await tx.$executeRawUnsafe('SAVEPOINT bigin_record');
-                try {
-                    const kept: string[] = [];
-                    const outcome = await this.write(tx, state, module, record, result, {
-                        links,
-                        members,
-                        cross,
-                        definitions,
-                        events,
-                        kept,
-                        entry,
-                    });
-                    await tx.$executeRawUnsafe('RELEASE SAVEPOINT bigin_record');
-                    entry[outcome] += 1;
-                    if (outcome === 'skipped' && result.note) recordError(entry, externalId, result.note);
-                    if (kept.length > 0) {
-                        entry.conflicts += 1;
-                        if (entry.kept.length < TWENTY_IMPORT_ERRORS_KEPT)
-                            entry.kept.push({ externalId, fields: kept });
+        // A page is written in chunks, each its own transaction: one transaction for a whole page of 200
+        // records (a savepoint each, with the services' reads and the timeline) outlived the 15-second
+        // transaction limit on production data. Re-reading a page after a failure is idempotent (the links).
+        let latest: Date | null = null;
+        for (let at = 0; at < mapped.length; at += BIGIN_WRITE_CHUNK) {
+            const chunk = mapped.slice(at, at + BIGIN_WRITE_CHUNK);
+            await this.rls.withWorkspace(async (tx) => {
+                const events: DomainEvent[] = [];
+                for (const { record, result } of chunk) {
+                    const modified = biginInstant(record.Modified_Time);
+                    if (modified && (!latest || modified > latest)) latest = modified;
+                    const externalId = plainBiginId(record.id) ?? '-';
+                    entry.read += 1;
+                    if ('failed' in result) {
+                        entry.failed += 1;
+                        recordError(entry, externalId, result.failed);
+                        noteFailure(cursor, modified);
+                        continue;
                     }
-                    noteSuccess(cursor, modified);
-                } catch (error) {
-                    await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bigin_record');
-                    if (databaseUnavailable(error) || error instanceof BiginApiError) throw error;
-                    entry.failed += 1;
-                    recordError(
-                        entry,
-                        externalId,
-                        error instanceof HttpException ? refusalText(error) : failureText(error),
-                    );
-                    noteFailure(cursor, modified);
+                    if ('skip' in result) {
+                        entry.skipped += 1;
+                        recordError(entry, externalId, result.skip);
+                        noteSuccess(cursor, modified);
+                        continue;
+                    }
+                    await tx.$executeRawUnsafe('SAVEPOINT bigin_record');
+                    try {
+                        const kept: string[] = [];
+                        const outcome = await this.write(tx, state, module, record, result, {
+                            links,
+                            members,
+                            cross,
+                            definitions,
+                            events,
+                            kept,
+                            entry,
+                        });
+                        await tx.$executeRawUnsafe('RELEASE SAVEPOINT bigin_record');
+                        entry[outcome] += 1;
+                        if (outcome === 'skipped' && result.note) recordError(entry, externalId, result.note);
+                        if (kept.length > 0) {
+                            entry.conflicts += 1;
+                            if (entry.kept.length < TWENTY_IMPORT_ERRORS_KEPT)
+                                entry.kept.push({ externalId, fields: kept });
+                        }
+                        noteSuccess(cursor, modified);
+                    } catch (error) {
+                        await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bigin_record');
+                        if (databaseUnavailable(error) || error instanceof BiginApiError) throw error;
+                        entry.failed += 1;
+                        recordError(
+                            entry,
+                            externalId,
+                            error instanceof HttpException ? refusalText(error) : failureText(error),
+                        );
+                        noteFailure(cursor, modified);
+                    }
                 }
-            }
-            await this.events.recordAll(tx, events);
+                await this.events.recordAll(tx, events);
+            });
+        }
+        await this.rls.withWorkspace(async (tx) => {
             for (const record of all) {
                 const modified = biginInstant(record.Modified_Time);
                 if (modified && (!latest || modified > latest)) latest = modified;
@@ -419,6 +440,7 @@ export class BiginImportRunner {
                 ids: all.map((r) => plainBiginId(r.id)).filter((id): id is string => id !== null),
                 latest,
                 moreRecords: moreRecords && all.length > 0,
+                nextPageToken,
             });
             // Progress the workspace keeps even if this run never finishes: up to what this pass wrote.
             const settled = settledCursor({

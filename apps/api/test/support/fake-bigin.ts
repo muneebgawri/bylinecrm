@@ -169,7 +169,10 @@ export class FakeBigin {
         if (!token || !this.tokens.has(token)) {
             return { status: 401, body: { code: 'INVALID_TOKEN', message: 'invalid oauth token' } };
         }
-        const match = /^\/bigin\/v1\/([A-Za-z]+)(\/deleted|\/actions\/count)?$/.exec(url.pathname);
+        const parsed = /^\/bigin\/(v1|v2)\/([A-Za-z]+)(\/deleted|\/actions\/count)?$/.exec(url.pathname);
+        const v2 = parsed?.[1] === 'v2';
+        // `match[1]` the module, `match[2]` what under it — the same shape for both versions.
+        const match = parsed ? [parsed[0], parsed[2], parsed[3]] : null;
         if (!match || !['Accounts', 'Contacts', 'Deals', 'Notes'].includes(match[1]!)) {
             return {
                 status: 400,
@@ -180,8 +183,21 @@ export class FakeBigin {
         const after = typeof since === 'string' ? new Date(since).getTime() : null;
         if (match[2] === '/actions/count')
             return { status: 200, body: { count: this.tables.get(module)?.length ?? 0 } };
-        const page = Number(url.searchParams.get('page') ?? '1');
+        // v2 names its fields (Zoho refuses a list without them) and pages past 2,000 only by token.
+        if (v2 && !match[2] && !url.searchParams.get('fields')) {
+            return { status: 400, body: { code: 'REQUIRED_PARAM_MISSING', message: 'fields is required' } };
+        }
+        const pageToken = url.searchParams.get('page_token');
+        const page = pageToken
+            ? Number(Buffer.from(pageToken, 'base64url').toString('utf8'))
+            : Number(url.searchParams.get('page') ?? '1');
         const perPage = Math.min(Number(url.searchParams.get('per_page') ?? PAGE_MAX), PAGE_MAX);
+        if (!pageToken && page * perPage > 2000) {
+            return {
+                status: 400,
+                body: { code: 'LIMIT_REACHED', message: 'page numbers reach 2000 records; use page_token' },
+            };
+        }
         const rows: Record<string, unknown>[] =
             match[2] === '/deleted'
                 ? (this.deletions.get(module) ?? []).filter(
@@ -196,7 +212,15 @@ export class FakeBigin {
             status: 200,
             body: {
                 data: slice,
-                info: { page, per_page: perPage, count: slice.length, more_records: page * perPage < rows.length },
+                info: {
+                    page,
+                    per_page: perPage,
+                    count: slice.length,
+                    more_records: page * perPage < rows.length,
+                    ...(v2 && page * perPage < rows.length
+                        ? { next_page_token: Buffer.from(String(page + 1)).toString('base64url') }
+                        : {}),
+                },
             },
         };
     }

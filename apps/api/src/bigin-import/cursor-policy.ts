@@ -12,6 +12,8 @@ import { BIGIN_PAGE_MAX, BIGIN_WINDOW_OVERLAP_MS } from './bigin-import.constant
 export interface BiginPassCursor {
     since: string | null;
     page: number;
+    /** v2's token for the next page while the window cannot move; null otherwise (absent on older runs). */
+    pageToken?: string | null;
     seen: string[];
     /** The latest `Modified_Time` this pass wrote: everything at or before it has been read. */
     highWater: string | null;
@@ -28,6 +30,7 @@ export function startPass(since: string | null, deletedSince: string | null): Bi
     return {
         since,
         page: 1,
+        pageToken: null,
         seen: [],
         highWater: null,
         oldestFailure: null,
@@ -66,23 +69,31 @@ export function noteFailure(cursor: BiginPassCursor, modified: Date | null): voi
 /** After a page: the next window or page to read, or the pass is done. */
 export function advanceWindow(
     cursor: BiginPassCursor,
-    page: { ids: string[]; latest: Date | null; moreRecords: boolean },
+    page: { ids: string[]; latest: Date | null; moreRecords: boolean; nextPageToken?: string | null },
 ): void {
     if (!page.moreRecords) {
         cursor.done = true;
         cursor.seen = [];
+        cursor.pageToken = null;
         return;
     }
     const next = page.latest ? new Date(page.latest.getTime() - BIGIN_WINDOW_OVERLAP_MS).toISOString() : null;
     if (next && (cursor.since === null || next > cursor.since)) {
         cursor.since = next;
         cursor.page = 1;
+        cursor.pageToken = null;
         cursor.seen = page.ids;
         return;
     }
-    // Every record of the page was modified in the window's first second: the window cannot move, so the page does.
+    // Every record of the page was modified in the window's first second: the window cannot move, so the page
+    // does — by v2's page token when Bigin gave one (it pages past 2,000), else by number up to the ceiling.
     cursor.page += 1;
     cursor.seen = [...cursor.seen, ...page.ids];
+    if (page.nextPageToken) {
+        cursor.pageToken = page.nextPageToken;
+        return;
+    }
+    cursor.pageToken = null;
     if (cursor.page > BIGIN_PAGE_MAX) {
         throw new Error(`more than ${BIGIN_PAGE_MAX * 200} Bigin records share one modification second`);
     }
