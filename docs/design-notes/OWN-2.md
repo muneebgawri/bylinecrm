@@ -79,6 +79,13 @@ bundle):
 | `acme.github.io`, `acme.myshopify.com`                          | themselves: the list counts `github.io` and `myshopify.com` as suffixes, so each name is its own company |
 | `co.uk`, an IP address                                          | refused (`400`): no company's domain                                                                     |
 
+**Exceptions (OWN-2d, after the first production dry run):** the host is kept whole, only `www.` dropped, where
+the registrable domain is not one company — a government, education or institutional umbrella (a `gov`, `gouv`,
+`gc`, `edu`, `ac`… label, or a national government domain such as `canada.ca`), so each department or school is its
+own buyer; a website builder or hosted page the suffix list does not know (`acme.weebly.com`, `acme.zendesk.com`,
+`sites.google.com`); and the Twenty importer's `.invalid` duplicate markers (`acme.com.dup1.invalid`). Research
+bodies under an ordinary domain (`ibgc.cnrs.fr`, `igd.fraunhofer.de`) still fold into their parent.
+
 - **Every writer stores it so** — the routes and the Twenty importer — and a company's other domains too. A second
   company on the same registrable domain is `409 conflict.company_owned`.
 - **People are matched the same way:** `dana@eu.acme.com` is at `acme.com`.
