@@ -30,6 +30,12 @@ export interface BiginListOptions {
     page: number;
     /** v2's token for the next page, when the window could not move (a page token pages past 2,000). */
     pageToken?: string | null | undefined;
+    /**
+     * Read by v2's page tokens (from its first page when `pageToken` is null): only once v1's 2,000 records of a
+     * window that cannot move are read. v2 does not narrow by `If-Modified-Since`, so its pages start at the
+     * oldest record and the importer passes over what is older than the window.
+     */
+    byToken?: boolean | undefined;
 }
 
 export interface BiginPage {
