@@ -1,6 +1,7 @@
 import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
+import { HidesAdminOnlyFields } from '../records/custom-fields/admin-only';
 import {
     BoardQueryDto,
     CreatePipelineDto,
@@ -29,6 +30,7 @@ import { boardView, historyEntry, moveResult, pipelineView, ruleView, stageView 
 /** Pipelines are read by anyone who reads deals and changed with `pipeline:configure`. */
 @ApiTags('pipelines')
 @TenantController('pipelines')
+@HidesAdminOnlyFields('opportunity')
 export class PipelinesController {
     constructor(private readonly pipelines: PipelinesService) {}
 
@@ -160,6 +162,7 @@ export class PipelinesController {
 /** A deal's place in its pipeline: moving it is `deal:move`; its history is reading it. */
 @ApiTags('opportunities')
 @TenantController('opportunities')
+@HidesAdminOnlyFields('opportunity')
 export class DealStageController {
     constructor(private readonly pipelines: PipelinesService) {}
 

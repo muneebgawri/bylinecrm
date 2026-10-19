@@ -15,6 +15,7 @@ const field = (over: Partial<CustomFieldView>): CustomFieldView => ({
     type: 'select',
     options: ['Fintech', 'Health'],
     required: false,
+    adminOnly: false,
     position: 1,
     archivedAt: null,
     createdAt: '2026-10-01T00:00:00Z',
@@ -131,6 +132,7 @@ describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
             type: 'select',
             options: ['Axios', 'TechWire'],
             required: true,
+            adminOnly: false,
         });
     });
 
@@ -161,6 +163,36 @@ describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
             label: 'Beat area',
             options: ['Fintech', 'Health'],
             required: false,
+            adminOnly: false,
         });
+    });
+
+    it('marks a field admins-only from its editor, and the list says so (FR-CRMS-UI-6)', async () => {
+        const seen = api([(r) => (r.method === 'PATCH' ? json(field({ adminOnly: true })) : undefined)]);
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for Beat' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+        const dialog = await screen.findByRole('dialog');
+        const toggle = within(dialog).getByRole('switch', { name: 'Admins only' });
+        expect(toggle).not.toBeChecked();
+        await userEvent.click(toggle);
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Save field' }));
+        await waitFor(() => expect(seen.some((r) => r.method === 'PATCH')).toBe(true));
+        expect(seen.find((r) => r.method === 'PATCH')?.body).toMatchObject({ adminOnly: true });
+    });
+
+    it('shows an admin-only field with its badge', async () => {
+        stubApi([
+            (r) =>
+                r.method === 'GET' && r.url.includes('/custom-fields?')
+                    ? json(
+                          r.url.includes('object=person') && !r.url.includes('archived=true')
+                              ? [field({ adminOnly: true })]
+                              : [],
+                      )
+                    : undefined,
+        ]);
+        page();
+        expect(await screen.findByText('Admins only')).toBeInTheDocument();
     });
 });

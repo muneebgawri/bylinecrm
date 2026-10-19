@@ -7,6 +7,7 @@ import type { Group } from '../query/group-by';
 import { QueryService } from '../query/query.service';
 import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
+import { HidesAdminOnlyFields } from './custom-fields/admin-only';
 import {
     CreateNoteDto,
     CreateOpportunityDto,
@@ -34,6 +35,7 @@ import { bulkResultView, notePage, noteView, opportunityPage, opportunityView, t
  */
 @ApiTags('opportunities')
 @TenantController('opportunities')
+@HidesAdminOnlyFields('opportunity')
 export class OpportunitiesController {
     constructor(
         private readonly opportunities: OpportunitiesService,

@@ -136,6 +136,12 @@ export function CustomFields() {
                             phone: 'meta',
                             cell: (f) => (f.required ? <Badge shape="pill">Required</Badge> : null),
                         },
+                        {
+                            id: 'adminOnly',
+                            header: 'Visibility',
+                            phone: 'meta',
+                            cell: (f) => (f.adminOnly ? <Badge shape="pill">Admins only</Badge> : null),
+                        },
                     ],
                     ...(canEdit && {
                         rowActions: {
@@ -282,6 +288,7 @@ function CustomFieldEditor({
     const [options, setOptions] = useState<string[]>(field?.options ?? []);
     const [draftOption, setDraftOption] = useState('');
     const [required, setRequired] = useState(field?.required ?? false);
+    const [adminOnly, setAdminOnly] = useState(field?.adminOnly ?? false);
     const mutation = field ? update : create;
 
     const shownKey = field ? field.key : keyEdited ? key : fieldKeyFromLabel(label);
@@ -314,7 +321,7 @@ function CustomFieldEditor({
     const submit = (event: FormEvent) => {
         event.preventDefault();
         if (!valid) return;
-        const shared = { label: label.trim(), ...(needsOptions && { options }), required };
+        const shared = { label: label.trim(), ...(needsOptions && { options }), required, adminOnly };
         if (field) update.mutate({ fieldId: field.id, ...shared }, { onSuccess: onClose });
         else create.mutate({ object, key: shownKey, type, ...shared }, { onSuccess: onClose });
     };
@@ -425,6 +432,12 @@ function CustomFieldEditor({
                             hint="A record can't be saved without it."
                             checked={required}
                             onCheckedChange={setRequired}
+                        />
+                        <SwitchRow
+                            label="Admins only"
+                            hint="Members don't see or edit it — on records, in lists, filters and exports."
+                            checked={adminOnly}
+                            onCheckedChange={setAdminOnly}
                         />
                     </DialogBody>
                     <DialogFooter>

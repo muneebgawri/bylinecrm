@@ -189,7 +189,7 @@ export class ViewsService {
 
     /** The filter, sorts, columns and grouping all name fields the object has; the same checks the list runs. */
     private async check(tx: WorkspaceClient, object: RecordObject, input: ViewInput): Promise<void> {
-        const fields = resolveFields(object, await this.customFields.activeDefinitions(tx, object));
+        const fields = resolveFields(object, await this.customFields.visibleDefinitions(tx, object));
         if (input.filter) compileFilter(input.filter, fields);
         for (const s of input.sorts ?? []) checkSortable(fields, s.field);
         for (const c of input.columns ?? []) fieldNamed(fields, c.field, 'columns');

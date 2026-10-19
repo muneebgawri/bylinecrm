@@ -571,6 +571,8 @@ model CustomFieldDefinition {
   /// For `select`/`multiselect`: the allowed values, as strings. Empty otherwise.
   options     Json            @default("[]")
   required    Boolean         @default(false)
+  /// Hidden from callers without `workspace:admin`: their definition list, record values and writes.
+  adminOnly   Boolean         @default(false) @map("admin_only")
   position    Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
   archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz

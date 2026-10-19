@@ -9,6 +9,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
 import { BulkService } from './bulk/bulk.service';
 import { CompaniesService, type CompanyView } from './companies.service';
+import { HidesAdminOnlyFields } from './custom-fields/admin-only';
 import { CustomFieldsService, type CustomFieldView } from './custom-fields/custom-fields.service';
 import {
     CreateCompanyDto,
@@ -33,6 +34,7 @@ import { bulkResultView, companyPage, companyView, customFieldView, personPage, 
  */
 @ApiTags('people')
 @TenantController('people')
+@HidesAdminOnlyFields('person')
 export class PeopleController {
     constructor(
         private readonly people: PeopleService,
@@ -148,6 +150,7 @@ export class PeopleController {
 
 @ApiTags('companies')
 @TenantController('companies')
+@HidesAdminOnlyFields('company')
 export class CompaniesController {
     constructor(
         private readonly companies: CompaniesService,
