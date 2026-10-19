@@ -180,7 +180,8 @@ export class FakeBigin {
             };
         }
         const module = match[1]!;
-        const after = typeof since === 'string' ? new Date(since).getTime() : null;
+        // v2 does not narrow by `If-Modified-Since` (BIGIN-1, production): only v1 and the deletions do.
+        const after = typeof since === 'string' && !(v2 && !match[2]) ? new Date(since).getTime() : null;
         if (match[2] === '/actions/count')
             return { status: 200, body: { count: this.tables.get(module)?.length ?? 0 } };
         // v2 names its fields (Zoho refuses a list without them) and pages past 2,000 only by token.

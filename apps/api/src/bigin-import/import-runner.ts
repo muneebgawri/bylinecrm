@@ -237,6 +237,7 @@ export class BiginImportRunner {
                 since: cursor.since,
                 page: cursor.page,
                 pageToken: cursor.pageToken ?? null,
+                byToken: cursor.byToken ?? false,
             });
             await this.writePage(
                 state,
@@ -327,7 +328,15 @@ export class BiginImportRunner {
         nextPageToken: string | null = null,
     ): Promise<void> {
         const seen = new Set(cursor.seen);
-        const records = all.filter((record) => !seen.has(plainBiginId(record.id) ?? ''));
+        // v2 does not narrow by `If-Modified-Since`: what is older than the window was read before it.
+        const since = cursor.since ? new Date(cursor.since) : null;
+        const inWindow = since
+            ? all.filter((record) => {
+                  const at = biginInstant(record.Modified_Time);
+                  return !at || at >= since;
+              })
+            : all;
+        const records = inWindow.filter((record) => !seen.has(plainBiginId(record.id) ?? ''));
         const emails = [...new Set(records.map(ownerEmailOf).filter((e): e is string => e !== null))];
         if (state.membersRoleId) await this.provisionOwners(state, records);
         const refs = records.flatMap((record) => referencesOf(module, record));
@@ -432,12 +441,12 @@ export class BiginImportRunner {
             });
         }
         await this.rls.withWorkspace(async (tx) => {
-            for (const record of all) {
+            for (const record of inWindow) {
                 const modified = biginInstant(record.Modified_Time);
                 if (modified && (!latest || modified > latest)) latest = modified;
             }
             advanceWindow(cursor, {
-                ids: all.map((r) => plainBiginId(r.id)).filter((id): id is string => id !== null),
+                ids: inWindow.map((r) => plainBiginId(r.id)).filter((id): id is string => id !== null),
                 latest,
                 moreRecords: moreRecords && all.length > 0,
                 nextPageToken,
