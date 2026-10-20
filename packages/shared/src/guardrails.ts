@@ -19,6 +19,7 @@ import type { TransferMember } from './transfers.js';
  * 5. `cold_to_known` — a sequence enrolment of someone already in a two-way thread with the workspace.
  *
  * `repeat_blocks` is not a recipient's: three blocks on owned addresses by one member in a day.
+ * `record_export` is the export audit (GUARD-1b): who exported which records, how many, and whether only their own.
  */
 export const GUARDRAIL_KINDS = [
     'suppressed',
@@ -28,6 +29,7 @@ export const GUARDRAIL_KINDS = [
     'in_negotiation',
     'cold_to_known',
     'repeat_blocks',
+    'record_export',
 ] as const;
 export type GuardrailKind = (typeof GUARDRAIL_KINDS)[number];
 
@@ -57,6 +59,7 @@ export const GUARDRAIL_PATHS = [
     'sequence_enrol',
     'sequence_step',
     'repeat_blocks',
+    'export',
 ] as const;
 export type GuardrailPath = (typeof GUARDRAIL_PATHS)[number];
 
@@ -75,6 +78,7 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     in_negotiation: 'In negotiation with another member',
     cold_to_known: 'Cold sequence to a warm contact',
     repeat_blocks: 'Repeated blocks',
+    record_export: 'Export',
 };
 
 /** One guardrail event, as the Guardrails page reads it. */
@@ -112,4 +116,24 @@ export interface GuardrailSummary {
     actor: TransferMember | null;
     /** How many blocks on owned addresses that member had that day when it fired. */
     count: number;
+}
+
+/**
+ * What a `guardrail.recorded` event carries (GUARD-1b): the event as the Guardrails page reads it, by ids —
+ * never a message body (the guard never sees one) and never a CSV's rows.
+ */
+export interface GuardrailEventPayload {
+    kind: GuardrailKind;
+    outcome: GuardrailOutcome;
+    severity: GuardrailSeverity;
+    path: GuardrailPath;
+    actorMemberId: string | null;
+    ownerMemberId: string | null;
+    personId: string | null;
+    companyId: string | null;
+    address: string | null;
+    /** What the guard told the sender, or what the export held. */
+    message: string;
+    /** Machine facts: an export's `object`, `scope` (`own` / `all`) and `rows`; the day's `count`. */
+    detail: Record<string, string>;
 }

@@ -24,6 +24,8 @@ import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { verifyAddress } from '../support/mail';
+import { eventLog, settle, type EventLog } from '../support/outbox';
+import { WebhookReceiver } from '../support/webhook-receiver';
 
 interface Browser {
     cookie: string;
@@ -62,6 +64,9 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
     let http: () => request.Agent;
     let owner: PrismaService;
     let send: MailSendService;
+    let announced: EventLog;
+    let hooks: WebhookReceiver;
+    let endpoint: string;
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
 
@@ -144,6 +149,8 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         owner = app.get(PrismaService);
         send = app.get(MailSendService);
+        announced = await eventLog(app, 'guardrail.*');
+        hooks = await new WebhookReceiver().start();
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -212,6 +219,7 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
 
     afterAll(async () => {
         await app?.close();
+        await hooks?.close();
     });
 
     it('lets a member mail their own lead', async () => {
@@ -325,5 +333,51 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
         const miaCsv = (await as(mia).get(w('/people/export.csv')).expect(200)).text;
         expect(miaCsv).toContain(`bo@bo-${stamp}.test`);
         expect(miaCsv).toContain(`lee@lee-${stamp}.test`);
+    });
+
+    it('GUARD-1b: audits every export — who, which object, how many rows, own or all — for reviewers', async () => {
+        await as(ana).get(w('/people/export.csv')).expect(200);
+        const [audit] = await events(`?kind=record_export&actorMemberId=${anaId}`);
+        expect(audit).toMatchObject({ outcome: 'allowed', path: 'export', actor: { memberId: anaId } });
+        expect(audit!.message).toMatch(/^Exported \d+ people \(their own records\)$/);
+        await as(mia).get(w('/companies/export.csv')).expect(200);
+        const [all] = await events('?kind=record_export');
+        expect(all!.message).toMatch(/companies \(all records\)$/);
+    });
+
+    it('GUARD-1b: announces each guardrail event as guardrail.recorded, by ids, to webhooks', async () => {
+        const created = await as(admin)
+            .post(w('/webhooks'))
+            .send({ url: hooks.url('/guard-hook'), events: ['guardrail.recorded'] })
+            .expect(201);
+        endpoint =
+            (created.body as { endpoint?: { id: string }; id?: string }).endpoint?.id ??
+            (created.body as { id: string }).id;
+        await announced.reset();
+        expect((await mail(ana, anaMailbox, benLead)).status).toBe(422);
+        const [event] = await events(`?actorMemberId=${anaId}&kind=owned_by_other`);
+        const recorded = (await announced.read()).filter((e) => e.recordId === event!.id);
+        expect(recorded).toHaveLength(1);
+        expect(recorded[0]).toMatchObject({
+            type: 'guardrail.recorded',
+            object: 'guardrail',
+            workspaceId: workspace,
+            actor: { kind: 'member', id: anaId },
+            guardrail: {
+                kind: 'owned_by_other',
+                outcome: 'blocked',
+                path: 'send',
+                actorMemberId: anaId,
+                ownerMemberId: benId,
+                personId: benLead,
+            },
+        });
+        // Ids, addresses and the guard's words — never the message the member wrote.
+        expect(JSON.stringify(recorded[0])).not.toContain('Hi');
+        await settle(app);
+        const deliveries = await owner.webhookDelivery.count({
+            where: { endpointId: endpoint, eventName: 'guardrail.recorded' },
+        });
+        expect(deliveries).toBeGreaterThanOrEqual(1);
     });
 });

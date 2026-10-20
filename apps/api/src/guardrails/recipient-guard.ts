@@ -9,12 +9,14 @@ import {
     type GuardrailSeverity,
 } from '@bylinecrm/shared';
 import { Prisma, type SuppressionReason } from '@prisma/client';
+import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { CompanyOwnership, companyDomainOfAddress, type DomainCompany } from '../records/company-ownership';
 import { exclusionHits, exclusionMessage } from '../sequences/exclusions.service';
 import { SuppressionService } from '../suppression/suppression.service';
+import { recordGuardrailEvents } from './record';
 
 /** One address an outbound path is about to reach, and the person it is, when the caller knows. */
 export interface GuardRecipient {
@@ -62,6 +64,7 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     in_negotiation: 'medium',
     cold_to_known: 'low',
     repeat_blocks: 'high',
+    record_export: 'low',
 };
 
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;
@@ -124,6 +127,7 @@ export class RecipientGuard {
         private readonly context: WorkspaceContext,
         private readonly suppressions: SuppressionService,
         private readonly ownership: CompanyOwnership,
+        private readonly events: DomainEvents,
     ) {}
 
     async check(request: GuardRequest): Promise<GuardVerdict[]> {
@@ -243,9 +247,11 @@ export class RecipientGuard {
         const actor = context.memberId ?? null;
         try {
             await this.rls.withWorkspace(context.workspaceId, async (tx) => {
-                await tx.guardrailEvent.createMany({
-                    data: kept.map((v) => ({
-                        workspaceId: context.workspaceId,
+                await recordGuardrailEvents(
+                    tx,
+                    this.events,
+                    context,
+                    kept.map((v) => ({
                         kind: v.kind!,
                         outcome: v.outcome as GuardrailOutcome,
                         severity: v.outcome === 'allowed' ? 'low' : SEVERITY[v.kind!],
@@ -258,11 +264,11 @@ export class RecipientGuard {
                         message: v.message,
                         detail: (v.detail ?? {}) as Prisma.InputJsonValue,
                     })),
-                });
+                );
                 const ownedBlocks = kept.some(
                     (v) => v.outcome === 'blocked' && OWNED_GUARDRAIL_KINDS.includes(v.kind!),
                 );
-                if (actor && ownedBlocks) await repeatBlocks(tx, context.workspaceId, actor);
+                if (actor && ownedBlocks) await repeatBlocks(tx, this.events, context, actor);
             });
         } catch (error) {
             // The refusal stands whether or not its record was written; a lost row is logged, never sent.
@@ -410,7 +416,13 @@ async function readFacts(
  * once a day) and a `guardrail_repeat_blocks` notification to every reviewer — members whose role has
  * `guardrail:review`, and admins — but never the member themselves.
  */
-async function repeatBlocks(tx: WorkspaceClient, workspaceId: string, actor: string): Promise<void> {
+async function repeatBlocks(
+    tx: WorkspaceClient,
+    events: DomainEvents,
+    context: WorkspaceRunContext,
+    actor: string,
+): Promise<void> {
+    const workspaceId = context.workspaceId;
     const now = new Date();
     const day = now.toISOString().slice(0, 10);
     const since = new Date(`${day}T00:00:00.000Z`);
@@ -441,10 +453,12 @@ async function repeatBlocks(tx: WorkspaceClient, workspaceId: string, actor: str
     const actorName =
         (await tx.workspaceMember.findUnique({ where: { id: actor }, select: NAMED.select }))?.user.displayName ??
         'A member';
-    const [event] = await tx.guardrailEvent.createManyAndReturn({
-        data: [
+    const [event] = await recordGuardrailEvents(
+        tx,
+        events,
+        context,
+        [
             {
-                workspaceId,
                 kind: 'repeat_blocks',
                 outcome: 'warned',
                 severity: 'high',
@@ -456,9 +470,8 @@ async function repeatBlocks(tx: WorkspaceClient, workspaceId: string, actor: str
                 dedupeKey: `repeat_blocks:${actor}:${day}`,
             },
         ],
-        skipDuplicates: true,
-        select: { id: true },
-    });
+        true,
+    );
     if (!event || reviewers.length === 0) return;
     await tx.notification.createMany({
         data: reviewers.map((memberId) => ({
