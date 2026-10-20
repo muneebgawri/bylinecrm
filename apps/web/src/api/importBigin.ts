@@ -10,7 +10,10 @@ import type {
     BiginImportPreviewView,
     BiginImportRunView,
     BiginImportSettingsView,
+    BiginStageApplyView,
+    BiginStageMapView,
     PutBiginImportSettingsInput,
+    PutBiginStageMapInput,
     PutBiginImportSyncInput,
     StartBiginImportInput,
     TwentyImportSyncView,
@@ -46,6 +49,12 @@ export const biginImport = {
         request<TwentyImportSyncView>('PUT', workspacePath(workspaceId, '/import/bigin/sync'), { body: input }),
     cutover: (workspaceId: string) =>
         request<TwentyImportSyncView>('POST', workspacePath(workspaceId, '/import/bigin/sync/cutover')),
+    stageMap: (workspaceId: string, signal?: AbortSignal) =>
+        request<BiginStageMapView>('GET', workspacePath(workspaceId, '/import/bigin/stage-map'), { signal }),
+    putStageMap: (workspaceId: string, input: PutBiginStageMapInput) =>
+        request<BiginStageMapView>('PUT', workspacePath(workspaceId, '/import/bigin/stage-map'), { body: input }),
+    applyStageMap: (workspaceId: string) =>
+        request<BiginStageApplyView>('POST', workspacePath(workspaceId, '/import/bigin/stage-map/apply')),
 };
 
 export const useBiginImport = (workspaceId: string) =>
@@ -59,6 +68,37 @@ export const useBiginImportRuns = (workspaceId: string) =>
         queryKey: keys.biginImportRuns(workspaceId),
         queryFn: ({ signal }) => biginImport.runs(workspaceId, signal),
     });
+
+/** Bigin's deal stages and where each lands; read again every few seconds while an apply is in progress. */
+export const useBiginStageMap = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.biginStageMap(workspaceId),
+        queryFn: ({ signal }) => biginImport.stageMap(workspaceId, signal),
+        refetchInterval: (query: { state: { data: BiginStageMapView | undefined } }) => {
+            const status = query.state.data?.apply?.status;
+            return status === 'queued' || status === 'running' ? 3000 : false;
+        },
+    });
+
+export function usePutBiginStageMap(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: PutBiginStageMapInput) => biginImport.putStageMap(workspaceId, input),
+        onSuccess: (view) => client.setQueryData(keys.biginStageMap(workspaceId), view),
+    });
+}
+
+export function useApplyBiginStageMap(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => biginImport.applyStageMap(workspaceId),
+        onSuccess: (apply) => {
+            client.setQueryData<BiginStageMapView>(keys.biginStageMap(workspaceId), (current) =>
+                current ? { ...current, apply } : current,
+            );
+        },
+    });
+}
 
 export const useBiginImportMissing = (workspaceId: string) =>
     useQuery({

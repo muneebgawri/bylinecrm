@@ -22,6 +22,7 @@ import type {
     BiginPage,
     BiginRecord,
 } from './bigin.port';
+import { stagePicklist } from './stage-map';
 
 /**
  * A Bigin request that failed for good or for now. `permanent` means no retry will help: Zoho refused
@@ -195,6 +196,17 @@ export class BiginHttp implements BiginApi {
         }
     }
 
+    async dealStages(connection: BiginConnection): Promise<string[] | null> {
+        const body = await this.get(
+            connection,
+            'settings/fields',
+            'Deals',
+            new URLSearchParams({ module: 'Deals' }),
+            null,
+        );
+        return stagePicklist(body);
+    }
+
     private async get(
         connection: BiginConnection,
         path: string,
@@ -341,6 +353,7 @@ interface Answer {
     data?: unknown[];
     info?: { more_records?: boolean; next_page_token?: unknown };
     count?: unknown;
+    fields?: unknown;
 }
 
 /** One cache entry per credential set; the refresh token is hashed, never held as a key. */

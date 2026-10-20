@@ -45,6 +45,23 @@ export class ListBiginImportMissingDto extends createZodDto(
 /** `PUT /import/bigin/sync` — how often a `changes` run starts on its own; `off` stops it. */
 export class PutBiginImportSyncDto extends createZodDto(z.object({ interval: z.enum(TWENTY_SYNC_INTERVALS) })) {}
 
+/**
+ * `PUT /import/bigin/stage-map` — the whole mapping: each Bigin stage with the default pipeline's stage its deals
+ * land in; `stageId: null` (or leaving the stage out) leaves it to the name match and the won/lost heuristic.
+ */
+export class PutBiginStageMapDto extends createZodDto(
+    z.object({
+        mappings: z
+            .array(
+                z.object({
+                    biginStage: z.string().trim().min(1).max(200),
+                    stageId: z.uuid().nullable(),
+                }),
+            )
+            .max(500),
+    }),
+) {}
+
 /** `GET /import/bigin/reuses` — Bigin Contacts reused for another person, newest first, paged. */
 export class ListBiginContactReusesDto extends createZodDto(
     z.object({

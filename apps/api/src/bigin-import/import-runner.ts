@@ -42,6 +42,7 @@ import { BiginSyncService } from './bigin-sync.service';
 import { isContactReused, reuseNoteText, type ContactIdentity } from './contact-reuse';
 import { markdownToRichText } from '../twenty-import/markdown';
 import { BiginApiError } from './bigin.http';
+import { biginStageIndex, chooseStage, type PipelineStageRef, type StageChoice } from './stage-map';
 import { BIGIN_PORT, type BiginApi, type BiginConnection, type BiginRecord } from './bigin.port';
 import {
     advanceWindow,
@@ -82,13 +83,6 @@ type MapResult =
     | { skip: string; custom: InferredCustom }
     | { failed: string; custom: InferredCustom };
 
-interface StageChoice {
-    id: string;
-    kind: StageKind;
-    /** Bigin's stage had no stage of its name here: the deal went to the first open stage. */
-    unknown: boolean;
-}
-
 interface RunState {
     runId: string;
     context: WorkspaceRunContext;
@@ -100,7 +94,9 @@ interface RunState {
     settingsCursors: Record<string, string>;
     passStartedAt: Date;
     phase?: BiginImportObject;
-    stages: { id: string; name: string; kind: StageKind }[] | null;
+    stages: PipelineStageRef[] | null;
+    /** The workspace's Bigin stage mapping, read with the stages. */
+    stageMap?: ReadonlyMap<string, string>;
     membersRoleId: string | null;
     accountsCreated: number;
 }
@@ -543,6 +539,9 @@ export class BiginImportRunner {
                   email: contactInput.emails?.primary ?? null,
               }
             : null;
+        /** A Deal's raw Bigin stage, kept on its link: what the stage mapping is applied from later. */
+        const dealSnapshot =
+            module === 'Deals' ? { stage: (mapped as unknown as MappedDeal).stage ?? null } : undefined;
         const link = (localId: string) =>
             writeBiginLink(tx, context.workspaceId, {
                 object: module,
@@ -550,7 +549,7 @@ export class BiginImportRunner {
                 localType: type,
                 localId,
                 externalUpdatedAt: modified,
-                snapshot: identity,
+                snapshot: identity ?? dealSnapshot,
             });
         const linked = page.links.link(module, externalId)?.localId ?? null;
         /** The record this one already is: its own link, else the one the Twenty importer made from it. */
@@ -791,9 +790,9 @@ export class BiginImportRunner {
     }
 
     /**
-     * Bigin's stage in the default pipeline, by name (case-insensitive). "Closed Won"/"Closed Lost" with no
-     * stage of that name are the pipeline's won and lost stages; any other stage it lacks is the first open
-     * stage, and the raw stage is kept in the run report. Stages are never made by the importer.
+     * Bigin's stage in the default pipeline (`chooseStage`): the workspace's stage mapping, then a stage of the
+     * same name, then won/lost by Bigin's wording, else the first open stage — reported in the run as unknown.
+     * Stages are never made by the importer.
      */
     private async resolveStage(tx: WorkspaceClient, state: RunState, raw: string | null): Promise<StageChoice> {
         if (!state.stages) {
@@ -805,17 +804,9 @@ export class BiginImportRunner {
                 select: { id: true, name: true, kind: true },
             });
             state.stages = stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind as StageKind }));
+            state.stageMap = biginStageIndex(await tx.biginStageMapping.findMany());
         }
-        const stages = state.stages;
-        const open = this.firstOpen(state);
-        if (!raw) return { id: open.id, kind: 'open', unknown: false };
-        const key = raw.trim().toLowerCase();
-        const named = stages.find((s) => s.name.trim().toLowerCase() === key);
-        if (named) return { id: named.id, kind: named.kind, unknown: false };
-        const kind: StageKind | null = /\bwon\b/.test(key) ? 'won' : /\blost\b/.test(key) ? 'lost' : null;
-        const closed = kind ? stages.find((s) => s.kind === kind) : undefined;
-        if (closed) return { id: closed.id, kind: closed.kind, unknown: false };
-        return { id: open.id, kind: 'open', unknown: true };
+        return chooseStage(state.stages, state.stageMap ?? new Map(), raw);
     }
 
     private firstOpen(state: RunState): { id: string } {

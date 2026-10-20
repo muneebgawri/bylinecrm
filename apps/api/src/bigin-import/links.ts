@@ -2,6 +2,7 @@ import type { BiginImportObject } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import type { BiginLinkIndex } from './mappers';
+import type { DealSnapshot } from './stage-map';
 
 /** What a Bigin record maps to here. */
 export type BiginLocalType = 'company' | 'person' | 'opportunity' | 'note';
@@ -80,7 +81,8 @@ export async function writeBiginLink(
     workspaceId: string,
     link: Omit<BiginLinkRow, 'snapshot'> & {
         externalUpdatedAt: Date | null;
-        snapshot?: BiginLinkRow['snapshot'] | undefined;
+        /** Contacts: their identity; Deals: their raw Bigin stage (`DealSnapshot`). */
+        snapshot?: BiginLinkRow['snapshot'] | DealSnapshot | undefined;
     },
 ): Promise<void> {
     const data = {
