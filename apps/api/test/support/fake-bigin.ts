@@ -28,6 +28,8 @@ export class FakeBigin {
     /** The self client's one-time grant code; spent by its exchange. */
     grantCode: string | null = '1000.grant-code-abcdef';
     readonly requests: FakeBiginRequest[] = [];
+    /** The Deals `Stage` picklist the fields API answers; null refuses the read (the importer falls back). */
+    dealStages: string[] | null = null;
     tokensIssued = 0;
     private readonly tokens = new Set<string>();
     private readonly tables = new Map<string, FakeBiginRecord[]>();
@@ -168,6 +170,23 @@ export class FakeBigin {
         const token = authorization?.replace(/^Zoho-oauthtoken /, '');
         if (!token || !this.tokens.has(token)) {
             return { status: 401, body: { code: 'INVALID_TOKEN', message: 'invalid oauth token' } };
+        }
+        // Zoho's fields API: the Deals `Stage` picklist, or a refusal when the account will not say (`null`).
+        if (url.pathname === '/bigin/v1/settings/fields' && url.searchParams.get('module') === 'Deals') {
+            if (!this.dealStages) return { status: 403, body: { code: 'NO_PERMISSION', message: 'permission denied' } };
+            return {
+                status: 200,
+                body: {
+                    fields: [
+                        { api_name: 'Deal_Name', data_type: 'text' },
+                        {
+                            api_name: 'Stage',
+                            data_type: 'picklist',
+                            pick_list_values: this.dealStages.map((v) => ({ display_value: v, actual_value: v })),
+                        },
+                    ],
+                },
+            };
         }
         const parsed = /^\/bigin\/(v1|v2)\/([A-Za-z]+)(\/deleted|\/actions\/count)?$/.exec(url.pathname);
         const v2 = parsed?.[1] === 'v2';

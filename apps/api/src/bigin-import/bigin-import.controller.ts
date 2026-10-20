@@ -8,6 +8,8 @@ import type {
     BiginImportRunView,
     BiginImportSettingsView,
     BiginImportSyncView,
+    BiginStageApplyView,
+    BiginStageMapView,
 } from '@bylinecrm/shared';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
@@ -18,6 +20,7 @@ import {
     ListBiginImportMissingDto,
     PutBiginImportSettingsDto,
     PutBiginImportSyncDto,
+    PutBiginStageMapDto,
     StartBiginImportDto,
 } from './dto';
 import {
@@ -28,13 +31,43 @@ import {
     biginImportRun,
     biginImportSettings,
     biginImportSync,
+    biginStageApply,
+    biginStageMap,
 } from './responses';
+import { BiginStageMapService } from './stage-map.service';
 
 /** The Bigin importer (BIGIN-1, FR-CRMS-25): an admin's — it writes every record the workspace has. */
 @ApiTags('bigin-import')
 @TenantController('import/bigin')
 export class BiginImportController {
-    constructor(private readonly importer: BiginImportService) {}
+    constructor(
+        private readonly importer: BiginImportService,
+        private readonly stageMap: BiginStageMapService,
+    ) {}
+
+    /** Bigin's deal stages (read now), imported deals per stage, and where each lands in the default pipeline. */
+    @Requires('workspace:admin')
+    @Get('stage-map')
+    @Returns(biginStageMap)
+    getStageMap(): Promise<BiginStageMapView> {
+        return this.stageMap.view();
+    }
+
+    @Requires('workspace:admin')
+    @Put('stage-map')
+    @Returns(biginStageMap)
+    putStageMap(@Body() body: PutBiginStageMapDto): Promise<BiginStageMapView> {
+        return this.stageMap.put(body.mappings);
+    }
+
+    /** Queues moving imported deals to where their Bigin stage maps; deals moved by hand since are left. */
+    @Requires('workspace:admin')
+    @HttpCode(202)
+    @Post('stage-map/apply')
+    @Returns(biginStageApply)
+    applyStageMap(): Promise<BiginStageApplyView> {
+        return this.stageMap.apply();
+    }
 
     @Requires('workspace:admin')
     @Get()

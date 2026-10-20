@@ -25,6 +25,7 @@ import {
 import { useState, type FormEvent } from 'react';
 import { fieldErrorAt } from '../../../api/client';
 import {
+    useApplyBiginStageMap,
     useBiginContactReuses,
     useBiginCutover,
     useBiginImport,
@@ -32,8 +33,10 @@ import {
     useBiginImportRun,
     useBiginImportRuns,
     useBiginPreview,
+    useBiginStageMap,
     useCancelBiginImport,
     usePutBiginSettings,
+    usePutBiginStageMap,
     usePutBiginSync,
     useRemoveBiginSettings,
     useStartBiginImport,
@@ -44,6 +47,7 @@ import type {
     BiginImportOverviewView,
     BiginImportPreviewView,
     BiginImportRunView,
+    BiginStageMapView,
 } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
@@ -99,6 +103,7 @@ function AdminImporter({ workspaceId }: { workspaceId: string }) {
                 <>
                     <SyncCard workspaceId={workspaceId} overview={overview.data} />
                     <RunCard workspaceId={workspaceId} overview={overview.data} />
+                    <StageMapCard workspaceId={workspaceId} />
                     <Reuses workspaceId={workspaceId} />
                     <Missing workspaceId={workspaceId} />
                     <History workspaceId={workspaceId} />
@@ -312,7 +317,7 @@ function ConnectionForm({
             </Field>
             <Field
                 label="Grant code"
-                hint="Easiest: in Zoho’s API console, open the self client, Generate Code with scope ZohoBigin.modules.ALL, and paste it here within its few minutes. It is traded for a refresh token when you save."
+                hint="Easiest: in Zoho’s API console, open the self client, Generate Code with scope ZohoBigin.modules.ALL,ZohoBigin.settings.fields.READ (the second lists Bigin's deal stages), and paste it here within its few minutes. It is traded for a refresh token when you save."
                 error={fieldError('grantCode')}
             >
                 <Input
@@ -556,6 +561,191 @@ function RunCard({ workspaceId, overview }: { workspaceId: string; overview: Big
                 )}
                 {current && <RunReport run={current} />}
             </div>
+        </Card>
+    );
+}
+
+/** The select's value for a Bigin stage left to the name match and the won/lost heuristic. */
+const AUTOMATIC = 'automatic';
+
+const MATCH_TEXT: Readonly<Record<BiginStageMapView['rows'][number]['match'], string>> = {
+    mapped: 'mapped',
+    name: 'same name',
+    closed: 'won/lost wording',
+    fallback: 'no match: first stage',
+};
+
+function StageMapCard({ workspaceId }: { workspaceId: string }) {
+    const map = useBiginStageMap(workspaceId);
+    const put = usePutBiginStageMap(workspaceId);
+    const apply = useApplyBiginStageMap(workspaceId);
+    const [draft, setDraft] = useState<Record<string, string | null>>({});
+    const [applying, setApplying] = useState(false);
+    type Row = BiginStageMapView['rows'][number];
+    const view = map.data;
+    const chosen = (row: Row) => (row.biginStage in draft ? draft[row.biginStage]! : row.stageId);
+    const dirty = !!view && view.rows.some((row) => chosen(row) !== row.stageId);
+    const stageName = (id: string) => view?.stages.find((s) => s.id === id)?.name ?? '—';
+    const going = view?.apply?.status === 'queued' || view?.apply?.status === 'running';
+    const save = () => {
+        if (!view) return;
+        put.mutate(
+            { mappings: view.rows.map((row) => ({ biginStage: row.biginStage, stageId: chosen(row) })) },
+            {
+                onSuccess: () => {
+                    setDraft({});
+                    toast({ title: 'Stage mapping saved' });
+                },
+            },
+        );
+    };
+    return (
+        <Card title="Stage mapping">
+            <div className="flex flex-col gap-3 text-[13px]">
+                <p className="m-0 text-text-muted">
+                    Which stage of the default pipeline each Bigin deal stage lands in. A stage left automatic goes to a
+                    stage of the same name, then won or lost by its wording, else the first stage. Syncs use the mapping
+                    from the next run; Apply moves deals already imported.
+                </p>
+                {map.isError ? (
+                    <Alert>{failureText(map.error)}</Alert>
+                ) : !view ? (
+                    <Skeleton className="h-24" />
+                ) : (
+                    <>
+                        {view.source === 'imported' && (
+                            <p className="m-0 text-warning">
+                                {`${view.error ?? 'Bigin did not list its stages'}. Showing the stages imported deals carry.`}
+                            </p>
+                        )}
+                        {view.unread > 0 && (
+                            <p className="m-0 text-text-muted">
+                                {`${count(view.unread)} imported deals were read before stages were kept; run an Everything sync to count and apply them.`}
+                            </p>
+                        )}
+                        {view.rows.length === 0 ? (
+                            <p className="m-0 text-text-muted">No Bigin deal stages yet.</p>
+                        ) : (
+                            <DataTableChrome
+                                data={{
+                                    label: 'Stage mapping',
+                                    rows: view.rows,
+                                    getRowId: (row: Row) => row.biginStage,
+                                    columns: [
+                                        {
+                                            id: 'bigin',
+                                            header: 'Bigin stage',
+                                            className: 'font-medium',
+                                            cell: (row: Row) => row.biginStage,
+                                        },
+                                        {
+                                            id: 'deals',
+                                            header: 'Deals',
+                                            phone: 'secondary',
+                                            cell: (row: Row) => count(row.deals),
+                                        },
+                                        {
+                                            id: 'stage',
+                                            header: 'Lands in',
+                                            cell: (row: Row) => (
+                                                <div className="w-60">
+                                                    <Select
+                                                        value={chosen(row) ?? AUTOMATIC}
+                                                        onValueChange={(value) =>
+                                                            setDraft((d) => ({
+                                                                ...d,
+                                                                [row.biginStage]: value === AUTOMATIC ? null : value,
+                                                            }))
+                                                        }
+                                                        disabled={put.isPending}
+                                                    >
+                                                        <SelectTrigger aria-label={`Stage for ${row.biginStage}`}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value={AUTOMATIC}>
+                                                                {row.stageId === null
+                                                                    ? `Automatic (${stageName(row.targetStageId)})`
+                                                                    : 'Automatic'}
+                                                            </SelectItem>
+                                                            {view.stages.map((stage) => (
+                                                                <SelectItem key={stage.id} value={stage.id}>
+                                                                    {stage.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            ),
+                                        },
+                                        {
+                                            id: 'match',
+                                            header: 'Now',
+                                            muted: true,
+                                            phone: 'hidden',
+                                            cell: (row: Row) =>
+                                                `${stageName(row.targetStageId)} · ${MATCH_TEXT[row.match]}`,
+                                        },
+                                    ],
+                                }}
+                            />
+                        )}
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                                variant="primary"
+                                shape="square"
+                                size="sm"
+                                className="max-md:h-touch"
+                                loading={put.isPending}
+                                disabled={!dirty}
+                                onClick={save}
+                            >
+                                Save mapping
+                            </Button>
+                            <Button
+                                shape="square"
+                                size="sm"
+                                variant="ghost"
+                                className="max-md:h-touch"
+                                disabled={dirty || going}
+                                onClick={() => {
+                                    apply.reset();
+                                    setApplying(true);
+                                }}
+                            >
+                                Apply to imported deals
+                            </Button>
+                            {view.apply && (
+                                <span className="text-text-muted">
+                                    {going
+                                        ? `Applying… ${count(view.apply.moved)} moved so far`
+                                        : view.apply.status === 'failed'
+                                          ? `Last apply failed: ${view.apply.error ?? 'unknown error'}`
+                                          : `Last applied ${formatDate(view.apply.finishedAt ?? view.apply.requestedAt)}: ${count(view.apply.moved)} moved, ${count(view.apply.skipped)} left where someone moved them`}
+                                </span>
+                            )}
+                        </div>
+                        {put.isError && <Alert>{fieldErrorAt(put.error, 'mappings') ?? failureText(put.error)}</Alert>}
+                    </>
+                )}
+            </div>
+            <ConfirmDialog
+                open={applying}
+                onOpenChange={setApplying}
+                title="Apply the mapping to imported deals?"
+                body="Every deal imported from Bigin moves to the stage its Bigin stage now lands in, closing or reopening it as needed. A deal someone moved by hand since Bigin last changed it stays where it is."
+                confirm="Apply"
+                pending={apply.isPending}
+                error={apply.isError ? failureText(apply.error) : undefined}
+                onConfirm={() =>
+                    apply.mutate(undefined, {
+                        onSuccess: () => {
+                            setApplying(false);
+                            toast({ title: 'Applying the stage mapping' });
+                        },
+                    })
+                }
+            />
         </Card>
     );
 }

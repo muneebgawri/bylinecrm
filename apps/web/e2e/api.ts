@@ -121,6 +121,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/import/bigin$`), () => data.biginImport],
     [new RegExp(`^${W}/import/bigin/missing`), () => ({ items: [], nextCursor: null })],
     [new RegExp(`^${W}/import/bigin/reuses`), () => data.biginContactReuses],
+    [new RegExp(`^${W}/import/bigin/stage-map$`), () => data.biginStageMap],
     [new RegExp(`^${W}/import/bigin/runs$`), () => data.biginImportRuns],
     [new RegExp(`^${W}/import/bigin/runs/[^/]+$`), () => data.biginImportRun],
     [new RegExp(`^${W}/import/twenty/missing`), () => ({ items: [], nextCursor: null })],
