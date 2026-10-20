@@ -300,8 +300,8 @@ model WorkspaceMember {
   hostedMeetings        CalendarEvent[]
   configuredSlotline    SlotlineSettings[]
   configuredNewswireos  NewswireosSettings[]
-  invoicesCreated       DealInvoice[]        @relation("InvoiceCreator")
-  invoicesDecided       DealInvoice[]        @relation("InvoiceDecider")
+  invoicesCreated       DealInvoice[]              @relation("InvoiceCreator")
+  invoicesDecided       DealInvoice[]              @relation("InvoiceDecider")
   uploadedLogos         WorkspaceLogo[]
   calendarEventCopies   CalendarEventCopy[]
   meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
@@ -685,10 +685,10 @@ enum StageHistoryReason {
 
 /// The events a rule may react to; the database value is the event type's own spelling.
 enum StageRuleEvent {
-  email_replied  @map("email.replied")
-  meeting_booked @map("meeting.booked")
+  email_replied    @map("email.replied")
+  meeting_booked   @map("meeting.booked")
   /// A tracked link clicked (P3-4). An open is never here: opens are indicative (FR-CRMS-8).
-  email_clicked  @map("email.clicked")
+  email_clicked    @map("email.clicked")
   /// INV-1: a verified invoice that makes the deal's verified invoices cover its amount.
   invoice_verified @map("invoice.verified")
 
@@ -1072,6 +1072,14 @@ enum MailboxPurpose {
   @@map("mailbox_purpose")
 }
 
+/// How a mailbox's mail leaves (TRANS-1): through its Gmail grant, or — a pool mailbox only — SMTP2Go's HTTP API.
+enum MailboxTransport {
+  gmail
+  smtp2go
+
+  @@map("mailbox_transport")
+}
+
 enum MailboxStatus {
   connected
   reconnect_needed
@@ -1108,41 +1116,50 @@ model GoogleOAuthClient {
 /// are held encrypted and never leave the API; a disconnected mailbox keeps its row (history, the
 /// email's uniqueness) and loses its tokens.
 model Mailbox {
-  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId            String         @map("workspace_id") @db.Uuid
-  ownerMemberId          String         @map("owner_member_id") @db.Uuid
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String           @map("workspace_id") @db.Uuid
+  ownerMemberId          String           @map("owner_member_id") @db.Uuid
   /// Lower case; unique in the workspace.
   email                  String
   label                  String?
   purpose                MailboxPurpose
+  /// TRANS-1: `smtp2go` only for a pool mailbox (the database checks); fixed when the mailbox is added.
+  transport              MailboxTransport @default(gmail)
   status                 MailboxStatus
-  grantedScopes          String[]       @default([]) @map("granted_scopes")
-  refreshTokenCiphertext String?        @map("refresh_token_ciphertext")
-  accessTokenCiphertext  String?        @map("access_token_ciphertext")
-  accessExpiresAt        DateTime?      @map("access_expires_at") @db.Timestamptz
+  grantedScopes          String[]         @default([]) @map("granted_scopes")
+  refreshTokenCiphertext String?          @map("refresh_token_ciphertext")
+  accessTokenCiphertext  String?          @map("access_token_ciphertext")
+  accessExpiresAt        DateTime?        @map("access_expires_at") @db.Timestamptz
   /// Why the mailbox last stopped working: `{ code, message, at }`; null while it works.
-  lastError              Json?          @map("last_error")
-  connectedAt            DateTime?      @map("connected_at") @db.Timestamptz
+  lastError              Json?            @map("last_error")
+  connectedAt            DateTime?        @map("connected_at") @db.Timestamptz
   /// A pool mailbox's own daily cap (P3-2); null takes the workspace's.
-  poolDailyCap           Int?           @map("pool_daily_cap")
+  poolDailyCap           Int?             @map("pool_daily_cap")
   /// Day 1 of a pool mailbox's warm-up: when it first connected as a pool mailbox (P3-2).
-  warmupStartedAt        DateTime?      @map("warmup_started_at") @db.Timestamptz
+  warmupStartedAt        DateTime?        @map("warmup_started_at") @db.Timestamptz
   /// Set while the mailbox is paused for its bounce or complaint rate (FR-CRMS-6, -13).
-  pausedAt               DateTime?      @map("paused_at") @db.Timestamptz
+  pausedAt               DateTime?        @map("paused_at") @db.Timestamptz
   /// Why it was paused: `{ code, message, rate, threshold, at }`; null while it is not.
-  pauseReason            Json?          @map("pause_reason")
+  pauseReason            Json?            @map("pause_reason")
   /// The last time an admin resumed it, who and why (P3-2).
-  resumedAt              DateTime?      @map("resumed_at") @db.Timestamptz
-  resumedByMemberId      String?        @map("resumed_by_member_id") @db.Uuid
-  resumeNote             String?        @map("resume_note")
+  resumedAt              DateTime?        @map("resumed_at") @db.Timestamptz
+  resumedByMemberId      String?          @map("resumed_by_member_id") @db.Uuid
+  resumeNote             String?          @map("resume_note")
   /// The mailbox's own signature (#193): `RichText` in the signature subset; null takes the workspace default.
   signature              Json?
   /// Off: the workspace default does not apply to this mailbox (#193).
-  useDefaultSignature    Boolean        @default(true) @map("use_default_signature")
+  useDefaultSignature    Boolean          @default(true) @map("use_default_signature")
   /// A pool mailbox's booking page, on the Slotline site, picked by an admin (#193); null for a personal mailbox.
-  bookingLink            String?        @map("booking_link")
-  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  bookingLink            String?          @map("booking_link")
+  /// TRANS-1: an SMTP2Go mailbox's API key, sealed; never shown back. Null for a Gmail mailbox and once disconnected.
+  transportKeyCiphertext String?          @map("transport_key_ciphertext")
+  /// TRANS-1: the bearer secret SMTP2Go's webhook sends in `Authorization`, sealed (an admin copies it into SMTP2Go).
+  hookSecretCiphertext   String?          @map("hook_secret_ciphertext")
+  /// TRANS-1: when SMTP2Go's webhook last reached this mailbox, and what came of it.
+  lastHookAt             DateTime?        @map("last_hook_at") @db.Timestamptz
+  lastHookResult         String?          @map("last_hook_result")
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner     WorkspaceMember   @relation(fields: [ownerMemberId], references: [id])
@@ -1820,28 +1837,31 @@ model PostmasterConnection {
 
 /// A delivery failure a pool mailbox was told about (P3-2): one row per bounce report and failed address.
 model MailBounce {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  mailboxId   String   @map("mailbox_id") @db.Uuid
-  /// The bounce report as stored (the message the mailbox received).
-  messageId   String   @map("message_id") @db.Uuid
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  mailboxId       String   @map("mailbox_id") @db.Uuid
+  /// The bounce report as stored (the message the mailbox received); null for one SMTP2Go reported (TRANS-1).
+  messageId       String?  @map("message_id") @db.Uuid
+  /// TRANS-1: SMTP2Go's report of it, as a key that makes a redelivered webhook change nothing.
+  providerEventId String?  @map("provider_event_id")
   /// The address that failed; lower case.
-  address     String
+  address         String
   /// A 5.x.x status: the address will never take mail. A 4.x.x one is recorded, never counted.
-  permanent   Boolean
+  permanent       Boolean
   /// The enhanced status code the report gave (`5.1.1`), when it gave one.
-  status      String?
+  status          String?
   /// The send that bounced, when the report names it.
-  outboundId  String?  @map("outbound_id") @db.Uuid
-  occurredAt  DateTime @map("occurred_at") @db.Timestamptz
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  outboundId      String?  @map("outbound_id") @db.Uuid
+  occurredAt      DateTime @map("occurred_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   mailbox   Mailbox       @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
-  message   MailMessage   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   MailMessage?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   outbound  MailOutbound? @relation(fields: [outboundId], references: [id], onDelete: SetNull)
 
   @@unique([mailboxId, messageId, address])
+  @@unique([mailboxId, providerEventId])
   @@index([mailboxId, occurredAt])
   @@map("mail_bounces")
 }
@@ -2466,22 +2486,27 @@ model TrackingToken {
 /// can be audited, and counted nowhere; every other hit is a click or an (indicative) open, announced
 /// as `email.clicked` / `email.opened`. Never deleted by the app role.
 model TrackingHit {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId    String       @map("workspace_id") @db.Uuid
-  tokenId        String       @map("token_id") @db.Uuid
-  outboundId     String       @map("outbound_id") @db.Uuid
-  kind           TrackingKind
-  personId       String?      @map("person_id") @db.Uuid
-  sequenceStepId String?      @map("sequence_step_id") @db.Uuid
-  enrolmentId    String?      @map("enrolment_id") @db.Uuid
-  happenedAt     DateTime     @map("happened_at") @db.Timestamptz
-  userAgent      String?      @map("user_agent")
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String       @map("workspace_id") @db.Uuid
+  /// Null for a hit SMTP2Go reported (TRANS-1): its own tracking, not one of our tokens.
+  tokenId         String?      @map("token_id") @db.Uuid
+  outboundId      String       @map("outbound_id") @db.Uuid
+  kind            TrackingKind
+  /// TRANS-1: SMTP2Go's report of the hit, as a key that makes a redelivered webhook change nothing.
+  providerEventId String?      @unique @map("provider_event_id")
+  /// TRANS-1: the link SMTP2Go says was followed; our own hits read it from their token.
+  url             String?
+  personId        String?      @map("person_id") @db.Uuid
+  sequenceStepId  String?      @map("sequence_step_id") @db.Uuid
+  enrolmentId     String?      @map("enrolment_id") @db.Uuid
+  happenedAt      DateTime     @map("happened_at") @db.Timestamptz
+  userAgent       String?      @map("user_agent")
   /// `TrackingBotReason` from @bylinecrm/shared; null for a person's hit.
-  botReason      String?      @map("bot_reason")
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  botReason       String?      @map("bot_reason")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
   workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  token     TrackingToken      @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  token     TrackingToken?     @relation(fields: [tokenId], references: [id], onDelete: Cascade)
   outbound  MailOutbound       @relation(fields: [outboundId], references: [id], onDelete: Cascade)
   person    Person?            @relation(fields: [personId], references: [id], onDelete: SetNull)
   step      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
