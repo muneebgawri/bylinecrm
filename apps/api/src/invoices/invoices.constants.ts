@@ -10,16 +10,22 @@ export const INVOICE_VERIFY_JOB = 'verify';
 export const INVOICE_VERIFY_ATTEMPTS = 3;
 export const INVOICE_VERIFY_BACKOFF_MS = 5_000;
 
-/** NewswireOS's lookup: where, and how long a call may take. */
+/** NewswireOS's lookup (token scope `payment_verification:lookup`): where, and how long a call may take. */
 export const NEWSWIREOS_LOOKUP_PATH = '/api/v1/crm/payment-verification/lookup';
 export const NEWSWIREOS_TIMEOUT_MS = 10_000;
 
 /** Where NewswireOS posts refunds and chargebacks: `APP_URL` + this + `/<token>`. */
 export const NEWSWIREOS_HOOK_PATH = '/api/hooks/newswireos';
-/** Hex HMAC-SHA256 of the raw body with the shared secret. */
-export const NEWSWIREOS_SIGNATURE_HEADER = 'x-newswireos-signature';
-export const NEWSWIREOS_SECRET_MIN = 16;
-export const NEWSWIREOS_SECRET_MAX = 200;
+/**
+ * NewswireOS's outbound webhook format: `sha256=<lowercase hex HMAC-SHA256 of the raw body>` with the secret
+ * NewswireOS minted (`whsec_…`, pasted into Byline). It also sends `x-webhook-id` and `x-webhook-event`.
+ */
+export const NEWSWIREOS_SIGNATURE_HEADER = 'x-webhook-signature';
+export const NEWSWIREOS_SECRET_MIN = 1;
+export const NEWSWIREOS_SECRET_MAX = 500;
+/** A delivery's `id` is remembered this long, so a redelivery is acknowledged and not applied again. */
+export const NEWSWIREOS_DELIVERY_SEEN_S = 7 * 24 * 60 * 60;
+export const newswireosDeliveryKey = (workspaceId: string, id: string) => `newswireos-hook:seen:${workspaceId}:${id}`;
 export const NEWSWIREOS_TOKEN_MAX = 500;
 export const NEWSWIREOS_BASE_URL_MAX = 200;
 /** The public hook's brake on refused deliveries, per client IP (as Slotline's). */
@@ -37,6 +43,10 @@ export const INVOICE_REASONS = {
     /** A bank transfer has no feed: a person confirms it. */
     bankWire: 'AWAITING_BANK_CONFIRMATION',
     tokenRefused: 'TOKEN_REFUSED',
+    /** NewswireOS's 403: the token is good but lacks `payment_verification:lookup`. */
+    tokenLacksScope: 'TOKEN_LACKS_SCOPE',
+    /** NewswireOS says another release already holds this payment: a person decides whether it is this deal's. */
+    alreadyUsed: 'ALREADY_USED',
     providerError: 'PROVIDER_ERROR',
     badRequest: 'BAD_REQUEST',
     noDecision: 'NO_DECISION',

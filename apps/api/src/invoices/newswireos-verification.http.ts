@@ -61,11 +61,17 @@ export function parseLookup(body: unknown): NewswireosLookupResult {
     const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
     const status = DECISIONS.find((d) => d === o['status']);
     const { status: _status, reason_code: reason, canonical_reference: canonical, ...facts } = o;
-    if (!status) return { status: 'needs_review', reasonCode: 'NO_DECISION', canonicalReference: null, facts };
+    const canonicalReference = typeof canonical === 'string' && canonical !== '' ? canonical.slice(0, 500) : null;
+    if (!status) return { status: 'needs_review', reasonCode: 'NO_DECISION', canonicalReference, facts };
+    // Another release already holds the payment. It may well be this deal's own (the release it paid for), so a
+    // person decides rather than the CRM refusing it: uncertainty never passes, and never refuses on a guess.
+    if (o['already_used'] === true && status !== 'invalid') {
+        return { status: 'needs_review', reasonCode: 'ALREADY_USED', canonicalReference, facts };
+    }
     return {
         status,
         reasonCode: typeof reason === 'string' && reason !== '' ? reason.slice(0, 100) : null,
-        canonicalReference: typeof canonical === 'string' && canonical !== '' ? canonical.slice(0, 500) : null,
+        canonicalReference,
         facts,
     };
 }

@@ -5,6 +5,7 @@ import {
     type NewswireosLookupResult,
     type NewswireosVerificationPort,
 } from '../../src/invoices/newswireos-verification.port';
+import { parseLookup } from '../../src/invoices/newswireos-verification.http';
 
 type Answer = NewswireosLookupResult | NewswireosApiError;
 
@@ -18,6 +19,14 @@ export class FakeNewswireos implements NewswireosVerificationPort {
 
     answer(reference: string, answer: Answer): void {
         this.answers.set(reference, answer);
+    }
+
+    /**
+     * Answers with a body in NewswireOS's wire format (`status`, `reason_code`, provider `amount_cents`/`currency`,
+     * `already_used`, …), read exactly as the HTTP adapter reads it.
+     */
+    answerWire(reference: string, body: Record<string, unknown>): void {
+        this.answers.set(reference, parseLookup(body));
     }
 
     static decided(
