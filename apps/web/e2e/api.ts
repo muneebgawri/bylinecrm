@@ -1,4 +1,4 @@
-import type { RecordObject } from '@bylinecrm/shared';
+import { REPUTATION_DEFAULTS, type RecordObject } from '@bylinecrm/shared';
 import type { Page, Route } from '@playwright/test';
 import * as data from './fixtures';
 
@@ -110,6 +110,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/ownership/conflicts$`), () => []],
     // GUARD-1: the guardrail events; none in the fixtures.
     [new RegExp(`^${W}/guardrails/events(\\?.*)?$`), () => data.page([])],
+    // REP-1: the workspace's sender-reputation thresholds (the defaults).
+    [new RegExp(`^${W}/reputation/settings$`), () => REPUTATION_DEFAULTS],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],
