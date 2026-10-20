@@ -55,3 +55,25 @@ function guardrailRecorded(context: WorkspaceRunContext, row: GuardrailEvent): D
         },
     };
 }
+
+/**
+ * Who is told of a guardrail event for review: members whose role has `guardrail:review`, and admins — never
+ * `except` (the member it is about).
+ */
+export async function reviewersIn(tx: WorkspaceClient, except: string | null): Promise<string[]> {
+    return (
+        await tx.workspaceMember.findMany({
+            where: {
+                leftAt: null,
+                ...(except ? { id: { not: except } } : {}),
+                role: {
+                    OR: [
+                        { isSystem: true, name: 'admin' },
+                        { permissions: { some: { capability: 'guardrail:review' } } },
+                    ],
+                },
+            },
+            select: { id: true },
+        })
+    ).map((m) => m.id);
+}

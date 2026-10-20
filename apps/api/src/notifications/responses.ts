@@ -44,6 +44,7 @@ const guardrailSummary = z.object({
     kind: z.enum(GUARDRAIL_KINDS),
     actor: transferMember.nullable(),
     count: z.number().int(),
+    message: z.string().meta({ description: 'What the event said (REP-1: the alert’s own words).' }),
 });
 
 const invoiceSummary = z.object({
@@ -70,7 +71,7 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount.',
                 }),
                 task: z.object(taskSummary).nullable().meta({ description: 'For a `task_*` kind.' }),
                 transfer: transferSummary.nullable().meta({ description: 'For a `transfer_*` kind.' }),

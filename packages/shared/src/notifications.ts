@@ -21,6 +21,8 @@ export const NOTIFICATION_KINDS = [
     'transfer_taken',
     // GUARD-1: a member was blocked three times in a day from mailing others' leads (to reviewers).
     'guardrail_repeat_blocks',
+    // REP-1: a sender-reputation finding — to the mailbox's owner, and at `high` to reviewers too.
+    'guardrail_alert',
     // INV-1: an invoice on a deal waits for finance (to holders of `invoice:verify`).
     'invoice_needs_review',
     // INV-1: a refund left a deal's verified invoices short of its amount (to holders of `invoice:verify`).

@@ -6,6 +6,7 @@ import { StateConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
+import { ReputationGate } from '../reputation/reputation-gate';
 import { EnrolmentScreen } from './enrolment-screen';
 import { SequenceRunner } from './sequence-runner';
 import { requireCallerMember } from '../infra/caller-member';
@@ -24,6 +25,7 @@ export class EnrolmentsService {
         private readonly events: DomainEvents,
         private readonly screen: EnrolmentScreen,
         private readonly runner: SequenceRunner,
+        private readonly reputation: ReputationGate,
     ) {}
 
     /** What an enrol would do now — the same decision, nothing written. */
@@ -199,6 +201,8 @@ export class EnrolmentsService {
                 ).map((e) => e.personId),
             );
         });
+        // REP-1: with a primary domain set, the pool needs a mailbox on a lookalike domain to send from.
+        if (forEnrol) await this.reputation.assertLookalikePool('sequence_enrol');
         const skipped = unique.filter((id) => existing.has(id));
         const { eligible, refused, warnings } = await this.screen.screen(
             context.workspaceId,

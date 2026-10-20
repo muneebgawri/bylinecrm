@@ -65,6 +65,7 @@ model Workspace {
   unsubscribeTokens UnsubscribeToken[]
 
   sendingPoolSettings  SendingPoolSettings?
+  reputationSettings   ReputationSettings?
   sendingDomains       SendingDomain[]
   sendingDomainStats   SendingDomainStat[]
   postmasterConnection PostmasterConnection?
@@ -1335,6 +1336,10 @@ model MailOutbound {
   ccAddresses             String[]           @default([]) @map("cc_addresses")
   bccAddresses            String[]           @default([]) @map("bcc_addresses")
   subject                 String
+  /// REP-1: 64-bit simhash of the normalised body as built; null for a scheduled send not built yet.
+  bodySimhash             BigInt?            @map("body_simhash")
+  /// REP-1: the normalised subject.
+  subjectKey              String?            @map("subject_key")
   /// Exactly what goes to Gmail. Null while `scheduled` (it is built when the send's time comes), and
   /// on a scheduled send cancelled, or failed by a check at its time, before it was built.
   mime                    String?
@@ -1456,6 +1461,10 @@ model MailMessage {
   bodyHtmlSanitized String?       @map("body_html_sanitized")
   bodyTruncated     Boolean       @default(false) @map("body_truncated")
   hasAttachments    Boolean       @default(false) @map("has_attachments")
+  /// REP-1: 64-bit simhash of the normalised body (outbound only; filled when first judged).
+  bodySimhash       BigInt?       @map("body_simhash")
+  /// REP-1: the normalised subject (outbound only; filled with `bodySimhash`).
+  subjectKey        String?       @map("subject_key")
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1701,6 +1710,25 @@ model UnsubscribeToken {
 
 /// A workspace's sending-pool settings (P3-2, FR-CRMS-6, -13); defaults in docs/design-notes/P3-2.md.
 /// Rates are in basis points (1/100 of a percent): 500 = 5%.
+/// REP-1 (FR-CRMS-23): the workspace's sender-reputation thresholds; absent = the defaults
+/// (`REPUTATION_DEFAULTS`). Bounds are checked by the database as by the API.
+model ReputationSettings {
+  workspaceId            String   @id @map("workspace_id") @db.Uuid
+  dailyNewRecipients     Int      @default(50) @map("daily_new_recipients")
+  hourlyNewRecipients    Int      @default(20) @map("hourly_new_recipients")
+  poolHourlyCap          Int      @default(12) @map("pool_hourly_cap")
+  nearDuplicateThreshold Int      @default(10) @map("near_duplicate_threshold")
+  nearDuplicateDistance  Int      @default(3) @map("near_duplicate_distance")
+  subjectRepeatThreshold Int      @default(10) @map("subject_repeat_threshold")
+  /// Lower case; null = not set (no primary-domain rule).
+  primaryDomain          String?  @map("primary_domain")
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("reputation_settings")
+}
+
 model SendingPoolSettings {
   workspaceId       String   @id @map("workspace_id") @db.Uuid
   dailyCap          Int      @default(40) @map("daily_cap")
@@ -2718,6 +2746,8 @@ enum NotificationKind {
   transfer_taken
   /// GUARD-1: a member was blocked three times in a day from mailing others' leads (to reviewers).
   guardrail_repeat_blocks
+  /// REP-1: a sender-reputation finding (to the mailbox's owner; at `high` to reviewers too).
+  guardrail_alert
   /// INV-1: an invoice on a deal waits for finance (to holders of `invoice:verify`).
   invoice_needs_review
   /// INV-1: a refund left a deal's verified invoices short of its amount (to holders of `invoice:verify`).
@@ -2824,6 +2854,18 @@ enum GuardrailKind {
   repeat_blocks
   /// GUARD-1b: a CSV export (the export audit).
   record_export
+  /// REP-1: a send refused (or a pool send deferred) by a mailbox's daily / hourly budget.
+  send_budget
+  /// REP-1: sync saw a mailbox over its daily new-recipient budget.
+  volume_anomaly
+  /// REP-1: near-identical 1:1 bodies (simhash) to many distinct recipients in 24h.
+  bulk_pattern
+  /// REP-1: one normalised subject to many distinct new recipients in 24h.
+  subject_repeat
+  /// REP-1: a reply saying "unsubscribe" / "remove me".
+  negative_reply
+  /// REP-1: a sequence send or enrolment from a pool mailbox on the primary domain.
+  primary_domain
 
   @@map("guardrail_kind")
 }
@@ -2833,6 +2875,8 @@ enum GuardrailOutcome {
   warned
   /// An exempt sender (a holder of `record:transfer`) was let through; kept for the audit.
   allowed
+  /// REP-1: a pool send held back by a budget; the sequence tries again.
+  deferred
 
   @@map("guardrail_outcome")
 }
@@ -2853,6 +2897,10 @@ enum GuardrailPath {
   sequence_step
   repeat_blocks
   export
+  /// REP-1: measured from Gmail sync.
+  sync
+  /// REP-1: the pool's gate as a send is claimed.
+  pool_send
 
   @@map("guardrail_path")
 }

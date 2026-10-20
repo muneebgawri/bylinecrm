@@ -16,7 +16,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { CompanyOwnership, companyDomainOfAddress, type DomainCompany } from '../records/company-ownership';
 import { exclusionHits, exclusionMessage } from '../sequences/exclusions.service';
 import { SuppressionService } from '../suppression/suppression.service';
-import { recordGuardrailEvents } from './record';
+import { recordGuardrailEvents, reviewersIn } from './record';
 
 /** One address an outbound path is about to reach, and the person it is, when the caller knows. */
 export interface GuardRecipient {
@@ -65,6 +65,13 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     cold_to_known: 'low',
     repeat_blocks: 'high',
     record_export: 'low',
+    // REP-1's kinds are written by the reputation gate and monitor with their own severity; listed for completeness.
+    send_budget: 'medium',
+    volume_anomaly: 'medium',
+    bulk_pattern: 'high',
+    subject_repeat: 'medium',
+    negative_reply: 'low',
+    primary_domain: 'medium',
 };
 
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;
@@ -435,21 +442,7 @@ async function repeatBlocks(
         },
     });
     if (count < GUARDRAIL_REPEAT_BLOCKS_PER_DAY) return;
-    const reviewers = (
-        await tx.workspaceMember.findMany({
-            where: {
-                leftAt: null,
-                id: { not: actor },
-                role: {
-                    OR: [
-                        { isSystem: true, name: 'admin' },
-                        { permissions: { some: { capability: 'guardrail:review' } } },
-                    ],
-                },
-            },
-            select: { id: true },
-        })
-    ).map((m) => m.id);
+    const reviewers = await reviewersIn(tx, actor);
     const actorName =
         (await tx.workspaceMember.findUnique({ where: { id: actor }, select: NAMED.select }))?.user.displayName ??
         'A member';

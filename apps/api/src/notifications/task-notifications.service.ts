@@ -218,6 +218,7 @@ export class TaskNotificationsService {
                               kind: r.guardrailEvent.kind,
                               actor: named(r.guardrailEvent.actor),
                               count: Number((r.guardrailEvent.detail as { count?: string } | null)?.count ?? 0),
+                              message: r.guardrailEvent.message,
                           }
                         : null,
                     invoice: r.invoice

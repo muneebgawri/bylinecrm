@@ -28,21 +28,26 @@ import {
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useGuardrailEvents, useMarkLegitimate } from '../../../api/guardrails';
+import { useReputationSettings } from '../../../api/reputation';
+import { useCan } from '../../../auth/capabilities';
 import type { GuardrailEventView, GuardrailEventsQuery } from '../../../api/types';
 import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { ReputationSettingsDialog } from './ReputationSettingsDialog';
 
 const OUTCOME_LABEL: Record<GuardrailOutcome, string> = {
     blocked: 'Blocked',
     warned: 'Warned',
     allowed: 'Let through',
+    deferred: 'Deferred',
 };
 const OUTCOME_TONE: Record<GuardrailOutcome, 'danger' | 'warning' | 'neutral'> = {
     blocked: 'danger',
     warned: 'warning',
     allowed: 'neutral',
+    deferred: 'neutral',
 };
 const ALL = 'all';
 
@@ -63,6 +68,9 @@ export function Guardrails() {
     };
     const events = useGuardrailEvents(workspaceId, q);
     const [marking, setMarking] = useState<GuardrailEventView | null>(null);
+    const admin = useCan('workspace:admin');
+    const reputation = useReputationSettings(workspaceId, admin);
+    const [editingReputation, setEditingReputation] = useState(false);
     const rows = events.data?.items ?? [];
 
     return (
@@ -106,6 +114,11 @@ export function Guardrails() {
                                     <SelectItem value={ALL}>All</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {admin && reputation.data && (
+                                <Button shape="square" size="sm" onClick={() => setEditingReputation(true)}>
+                                    Sender reputation
+                                </Button>
+                            )}
                         </div>
                     ),
                 }}
@@ -169,6 +182,13 @@ export function Guardrails() {
                 }}
             />
             <MarkLegitimateDialog workspaceId={workspaceId} event={marking} onClose={() => setMarking(null)} />
+            {editingReputation && reputation.data && (
+                <ReputationSettingsDialog
+                    workspaceId={workspaceId}
+                    settings={reputation.data}
+                    onClose={() => setEditingReputation(false)}
+                />
+            )}
         </section>
     );
 }

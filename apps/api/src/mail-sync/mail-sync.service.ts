@@ -2,6 +2,7 @@ import { recordBounces } from '../sending-pool/bounces';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { DomainEvent, MailSyncStatus } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
+import { ReputationMonitor } from '../reputation/reputation-monitor';
 import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -83,6 +84,7 @@ export class MailSyncService {
         private readonly quota: GmailQuota,
         private readonly events: DomainEvents,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
+        private readonly reputation: ReputationMonitor,
     ) {}
 
     /** One run for one mailbox. Throws on a failure worth retrying (the job is retried); records every outcome. */
@@ -130,6 +132,8 @@ export class MailSyncService {
                     },
                 }),
             );
+            // REP-1: what left this mailbox, however it was sent, judged against the reputation rules (never throws).
+            await this.reputation.afterSync(workspaceId, mailboxId);
             return result;
         } catch (error) {
             if (error instanceof MailboxUnavailable) {

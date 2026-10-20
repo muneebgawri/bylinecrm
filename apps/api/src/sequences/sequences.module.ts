@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { GuardrailsModule } from '../guardrails/guardrails.module';
 import { MailSendModule } from '../mail-send/mail-send.module';
+import { ReputationModule } from '../reputation/reputation.module';
 import { RecordsModule } from '../records/records.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { SuppressionModule } from '../suppression/suppression.module';
@@ -42,6 +43,7 @@ import { SequenceWorkers } from './sequences.workers';
         GuardrailsModule,
         MailSendModule,
         RecordsModule,
+        ReputationModule,
         SendingPoolModule,
         SuppressionModule,
         TemplatesModule,

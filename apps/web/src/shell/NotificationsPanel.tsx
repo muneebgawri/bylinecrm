@@ -19,6 +19,7 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     transfer_received: 'Moved to you',
     transfer_taken: 'Moved from you',
     guardrail_repeat_blocks: 'Guardrails',
+    guardrail_alert: 'Sender reputation',
     invoice_needs_review: 'Invoice waiting for finance',
     invoice_coverage_lost: 'Refund: deal no longer paid in full',
 };
@@ -104,6 +105,7 @@ export function NotificationsPanel({
 /** What a guardrail notification says (GUARD-1): who kept being stopped, never what they wrote. */
 function guardrailLine(item: Item): string {
     const g = item.guardrail!;
+    if (item.kind === 'guardrail_alert') return g.message;
     return `${g.actor?.name ?? 'A member'} was stopped ${g.count} times today from mailing others’ leads`;
 }
 

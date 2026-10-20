@@ -59,6 +59,23 @@ export const ERROR_CODES = [
     'mailbox.domain_unverified',
     /** `422`: a pool mailbox has used its allowance for the rolling 24 hours (cap or warm-up limit, FR-CRMS-6). */
     'mailbox.cap_reached',
+    /**
+     * `422` (REP-1, FR-CRMS-23): the mailbox has used its new-recipient budget for the rolling 24 hours or
+     * hour (`details.window`: `day` / `hour`). Replies are never counted. Nothing was sent.
+     */
+    'mailbox.budget_reached',
+    /**
+     * `422` (REP-1): the sequence would send from a pool mailbox on the workspace's primary domain — the pool is
+     * for lookalike domains. Nothing was sent / nobody was enrolled.
+     */
+    'mailbox.primary_domain',
+    /**
+     * `422` (REP-1): near-identical 1:1 messages have reached their 24-hour threshold from this mailbox —
+     * use a sequence from the sending pool. Nothing was sent.
+     */
+    'message.bulk_pattern',
+    /** `422` (REP-1): this subject has reached its 24-hour threshold of new recipients from this mailbox. Nothing was sent. */
+    'message.subject_repeat',
     /** `409`: a failed send whose refusal would repeat, a sequence's send, or one whose content is gone, is not retried (#134). */
     'send.not_retryable',
     /** Too many attempts; try again later. */

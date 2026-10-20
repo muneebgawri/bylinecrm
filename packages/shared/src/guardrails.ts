@@ -20,6 +20,14 @@ import type { TransferMember } from './transfers.js';
  *
  * `repeat_blocks` is not a recipient's: three blocks on owned addresses by one member in a day.
  * `record_export` is the export audit (GUARD-1b): who exported which records, how many, and whether only their own.
+ *
+ * Sender reputation (REP-1, FR-CRMS-23), about a mailbox rather than a recipient:
+ * - `send_budget` — a send refused (or, for the pool, deferred) by a mailbox's daily or hourly budget.
+ * - `volume_anomaly` — sync saw a mailbox over its daily new-recipient budget (mail sent outside the CRM).
+ * - `bulk_pattern` — near-identical 1:1 bodies to many distinct recipients in 24 hours (simhash).
+ * - `subject_repeat` — one normalised subject to many distinct new recipients in 24 hours.
+ * - `negative_reply` — a reply saying "unsubscribe" / "remove me" to a mailbox's mail.
+ * - `primary_domain` — a sequence send or enrolment refused because the pool mailbox is on the primary domain.
  */
 export const GUARDRAIL_KINDS = [
     'suppressed',
@@ -30,6 +38,13 @@ export const GUARDRAIL_KINDS = [
     'cold_to_known',
     'repeat_blocks',
     'record_export',
+    // REP-1 (FR-CRMS-23): sender reputation.
+    'send_budget',
+    'volume_anomaly',
+    'bulk_pattern',
+    'subject_repeat',
+    'negative_reply',
+    'primary_domain',
 ] as const;
 export type GuardrailKind = (typeof GUARDRAIL_KINDS)[number];
 
@@ -39,9 +54,10 @@ export const OWNED_GUARDRAIL_KINDS: readonly GuardrailKind[] = ['owned_by_other'
 /**
  * What the guard did: refused the recipient (`blocked`), let it through with a warning (`warned` — the
  * owner enrolling their own warm contact), or let an exempt sender through and kept the record (`allowed` —
- * a holder of `record:transfer` mailing someone else's lead).
+ * a holder of `record:transfer` mailing someone else's lead). `deferred` (REP-1): a pool send held for later
+ * by a budget — the sequence tries the step again.
  */
-export const GUARDRAIL_OUTCOMES = ['blocked', 'warned', 'allowed'] as const;
+export const GUARDRAIL_OUTCOMES = ['blocked', 'warned', 'allowed', 'deferred'] as const;
 export type GuardrailOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
 export const GUARDRAIL_SEVERITIES = ['low', 'medium', 'high'] as const;
@@ -60,6 +76,9 @@ export const GUARDRAIL_PATHS = [
     'sequence_step',
     'repeat_blocks',
     'export',
+    // REP-1: what Gmail sync measured (mail that left without the CRM), and the pool's gate at send time.
+    'sync',
+    'pool_send',
 ] as const;
 export type GuardrailPath = (typeof GUARDRAIL_PATHS)[number];
 
@@ -79,7 +98,23 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     cold_to_known: 'Cold sequence to a warm contact',
     repeat_blocks: 'Repeated blocks',
     record_export: 'Export',
+    send_budget: 'Send budget',
+    volume_anomaly: 'Volume over budget (Gmail)',
+    bulk_pattern: 'Bulk pattern (near-identical mail)',
+    subject_repeat: 'Repeated subject',
+    negative_reply: 'Negative reply',
+    primary_domain: 'Primary domain protected',
 };
+
+/** The kinds that are about a mailbox's sending rather than one recipient (REP-1). */
+export const REPUTATION_GUARDRAIL_KINDS: readonly GuardrailKind[] = [
+    'send_budget',
+    'volume_anomaly',
+    'bulk_pattern',
+    'subject_repeat',
+    'negative_reply',
+    'primary_domain',
+];
 
 /** One guardrail event, as the Guardrails page reads it. */
 export interface GuardrailEventView {
@@ -116,6 +151,8 @@ export interface GuardrailSummary {
     actor: TransferMember | null;
     /** How many blocks on owned addresses that member had that day when it fired. */
     count: number;
+    /** What the event said (REP-1: the alert's own words, for a `guardrail_alert`). */
+    message: string;
 }
 
 /**

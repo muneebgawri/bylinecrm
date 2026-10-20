@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+    REPUTATION_HOUR_MS,
     SENDING_POOL_DEFAULTS,
     SENDING_POOL_WINDOW_MS,
     warmupDay,
@@ -17,6 +18,7 @@ import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { DOMAIN_WITH_RATE, domainUsesIn, domainView } from './domain-view';
+import { reputationSettingsIn } from '../reputation/settings';
 import { sendingDomainOf } from './pool-mailbox';
 import { PostmasterService } from './postmaster.service';
 
@@ -24,7 +26,10 @@ type MailboxRow = Prisma.MailboxGetPayload<object>;
 
 /** A pool send the gate refuses (P3-2): paused, an unverified sending domain, or no allowance left. */
 export class PoolRefusal extends ApiException {
-    constructor(code: 'mailbox.paused' | 'mailbox.domain_unverified' | 'mailbox.cap_reached', message: string) {
+    constructor(
+        code: 'mailbox.paused' | 'mailbox.domain_unverified' | 'mailbox.cap_reached' | 'mailbox.primary_domain',
+        message: string,
+    ) {
         super(422, code, message);
     }
 }
@@ -78,6 +83,14 @@ export class SendingPoolService {
         if (mailbox.purpose !== 'pool' || alreadyCounted) return;
         const pause = pauseOf(mailbox);
         if (pause) throw new PoolRefusal('mailbox.paused', `${mailbox.email} is paused: ${pause.message}`);
+        // REP-1: the pool is for lookalike domains; nothing sends from one on the workspace's primary domain.
+        const reputation = await reputationSettingsIn(tx);
+        if (reputation.primaryDomain && sendingDomainOf(mailbox.email) === reputation.primaryDomain) {
+            throw new PoolRefusal(
+                'mailbox.primary_domain',
+                `${mailbox.email} is on the primary domain ${reputation.primaryDomain}; sequences send only from lookalike domains`,
+            );
+        }
         const domain = await tx.sendingDomain.findUnique({
             where: { workspaceId_domain: { workspaceId: mailbox.workspaceId, domain: sendingDomainOf(mailbox.email) } },
         });
@@ -98,6 +111,32 @@ export class SendingPoolService {
                 `${mailbox.email} has sent ${allowance.used} in the last 24 hours, ${why}`,
             );
         }
+        // REP-1: and no more than its hourly cap in the rolling hour.
+        const hour = await this.sentInLastHour(tx, mailbox.id, now, sendId);
+        if (hour >= reputation.poolHourlyCap) {
+            throw new PoolRefusal(
+                'mailbox.cap_reached',
+                `${mailbox.email} has sent ${hour} in the last hour, its hourly cap of ${reputation.poolHourlyCap}`,
+            );
+        }
+    }
+
+    /** Sends from the mailbox that went or are going in the rolling hour before `now` (REP-1). */
+    private async sentInLastHour(
+        tx: WorkspaceClient,
+        mailboxId: string,
+        now: Date,
+        exceptId?: string,
+    ): Promise<number> {
+        const since = new Date(now.getTime() - REPUTATION_HOUR_MS);
+        const [row] = await tx.$queryRaw<{ used: number }[]>`
+            SELECT count(*)::int AS used
+            FROM mail_outbound
+            WHERE mailbox_id = ${mailboxId}::uuid
+              AND status IN ('sending', 'sent')
+              AND coalesce(sent_at, last_attempt_at) >= ${since}
+              AND id <> ${exceptId ?? '00000000-0000-0000-0000-000000000000'}::uuid`;
+        return row?.used ?? 0;
     }
 
     // ── Rotation and spacing (what a sequence calls) ─────────────────────────────────────────
@@ -111,6 +150,7 @@ export class SendingPoolService {
     async pick(workspaceId: string, now = new Date()): Promise<string | null> {
         return this.rls.withWorkspace(workspaceId, async (tx) => {
             const settings = await this.settingsIn(tx);
+            const reputation = await reputationSettingsIn(tx);
             const verified = new Set(
                 (await tx.sendingDomain.findMany({ where: { status: 'pass' }, select: { domain: true } })).map(
                     (d) => d.domain,
@@ -123,8 +163,10 @@ export class SendingPoolService {
             const candidates: { id: string; share: number; last: number }[] = [];
             for (const mailbox of mailboxes) {
                 if (!verified.has(sendingDomainOf(mailbox.email))) continue;
+                if (reputation.primaryDomain && sendingDomainOf(mailbox.email) === reputation.primaryDomain) continue;
                 const a = await this.allowanceOf(tx, mailbox, settings, now);
                 if (a.used >= a.allowance) continue;
+                if ((await this.sentInLastHour(tx, mailbox.id, now)) >= reputation.poolHourlyCap) continue;
                 candidates.push({ id: mailbox.id, share: a.used / a.allowance, last: a.lastSentAt?.getTime() ?? 0 });
             }
             candidates.sort((x, y) => x.share - y.share || x.last - y.last || x.id.localeCompare(y.id));

@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
+import { ReputationModule } from '../reputation/reputation.module';
 import { BlocklistService } from './blocklist.service';
 import { GmailHttp } from './gmail.http';
 import { GMAIL_PORT } from './gmail.port';
@@ -23,6 +24,7 @@ import { GmailQuota } from './quota';
     imports: [
         AuthModule,
         MailAccountsModule,
+        ReputationModule,
         BullModule.registerQueue({
             name: MAIL_SYNC_QUEUE,
             defaultJobOptions: {
