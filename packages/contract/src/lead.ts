@@ -8,11 +8,11 @@ export interface BylineLeadPayload {
     email: string;
     first_name?: string;
     last_name?: string;
-    /** E.164. */
+    /** E.164 when BylineAI could parse it with `country`; otherwise as BylineAI holds it. */
     phone?: string;
     company_name?: string;
     job_title?: string;
-    /** ISO 3166-1 alpha-2. */
+    /** ISO 3166-1 alpha-2: the contact's, else the phone's region, else the enriched location's. */
     country?: string;
     linkedin_url?: string;
     /** The release the contact was found on. */

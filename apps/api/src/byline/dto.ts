@@ -16,10 +16,11 @@ export class PutBylineSettingsDto extends createZodDto(
             .optional()
             .meta({
                 description:
-                    'BylineAI’s address (BYL-2), `https://byline.example`; null unlinks its API. Leave out to keep.',
+                    'BylineAI’s site origin (BYL-2), `https://byline.example`; null unlinks its API. Leave out to keep.',
             }),
         apiKey: z.string().min(1).max(500).optional().meta({
-            description: 'A BylineAI API key (`x-api-key`). Needed with a first address; leave out to keep it.',
+            description:
+                'A BylineAI API key with the `lookup` role (`x-api-key`). Needed with a first address; leave out to keep it.',
         }),
         verifyWithByline: z.boolean().optional().meta({
             description: 'Verify addresses with BylineAI instead of the free layer alone.',

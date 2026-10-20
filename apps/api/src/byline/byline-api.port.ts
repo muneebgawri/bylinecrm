@@ -22,6 +22,11 @@ export class BylineApiError extends Error {
         super(message);
         this.name = 'BylineApiError';
     }
+
+    /** Worth asking again later (a rate limit, an outage); a spent budget or a refused key is not, until changed. */
+    get retryable(): boolean {
+        return this.kind === 'rate_limited' || this.kind === 'unavailable';
+    }
 }
 
 /**

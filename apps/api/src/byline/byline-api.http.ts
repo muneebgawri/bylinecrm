@@ -61,16 +61,23 @@ export async function ok(res: Response): Promise<unknown> {
 
 /** BylineAI's refusal, as a member would read it. Exported for the suite. */
 export function errorFrom(status: number, body: BylineApiErrorBody | null): BylineApiError {
-    const detail =
-        typeof body?.message === 'string' && body.message.trim() ? `: ${body.message.trim().slice(0, 200)}` : '';
+    // Nest's extra fields (statusCode, timestamp, path) are ignored; a validation message may be a list.
+    const message = Array.isArray(body?.message) ? body.message.join('; ') : body?.message;
+    const detail = typeof message === 'string' && message.trim() ? `: ${message.trim().slice(0, 200)}` : '';
     if (status === 402 || body?.error === 'budget_exhausted') {
         return new BylineApiError('budget', `BylineAI’s budget for this is spent${detail}`);
     }
     if (status === 429 || body?.error === 'rate_limited') {
         return new BylineApiError('rate_limited', `BylineAI is rate-limiting these asks${detail}`);
     }
+    if (status === 503 || body?.error === 'unavailable') {
+        return new BylineApiError(
+            'unavailable',
+            `BylineAI’s enrichment vendors are unavailable; try again later${detail}`,
+        );
+    }
     if (status === 401 || status === 403) {
-        return new BylineApiError('unauthorized', 'BylineAI refused the API key');
+        return new BylineApiError('unauthorized', 'BylineAI refused the API key (it needs the `lookup` role)');
     }
     return new BylineApiError('unavailable', `BylineAI answered ${status}${detail}`);
 }

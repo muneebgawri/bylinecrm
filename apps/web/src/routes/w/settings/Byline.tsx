@@ -149,7 +149,7 @@ function BylineForm({
                     </legend>
                     <Field
                         label="BylineAI address"
-                        hint="https://byline.example — leave empty to stop asking BylineAI."
+                        hint="BylineAI’s site origin, https://byline.example — leave empty to stop asking BylineAI."
                         error={local.baseUrl ?? fieldErrorAt(put.error, 'baseUrl')}
                     >
                         <Input
@@ -167,7 +167,7 @@ function BylineForm({
                         hint={
                             settings.apiConfigured
                                 ? 'Set. Enter a new one only to replace it.'
-                                : 'A BylineAI API key. Its paid layers run under BylineAI’s budgets.'
+                                : 'A BylineAI API key with the lookup role (BYLINE_API_KEYS="<key>:lookup"). Its paid layers run under BylineAI’s budgets.'
                         }
                         error={local.apiKey ?? fieldErrorAt(put.error, 'apiKey')}
                     >
