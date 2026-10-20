@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { parseLeadPayload, verifyWebhook, type BylineLeadPayload } from '@byline/contract';
-import type { DomainEvent } from '@bylinecrm/shared';
+import type { DomainEvent, Phones } from '@bylinecrm/shared';
 import { RateLimiter } from '../auth/rate-limiter.service';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, RateLimited } from '../infra/errors/api-errors';
@@ -19,6 +19,7 @@ import {
     bylineSource,
 } from './byline.constants';
 import type { BylineLeadResult } from './responses';
+import { leadPhone } from './lead-phone';
 import { dealTo } from './round-robin';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -119,10 +120,21 @@ export class BylineInboundService {
         const recorded: DomainEvent[] = [];
         const known = await tx.person.findFirst({
             where: { emailPrimary: lead.email },
-            select: { id: true, deletedAt: true, nameFirst: true, nameLast: true, jobTitle: true, country: true },
+            select: {
+                id: true,
+                deletedAt: true,
+                nameFirst: true,
+                nameLast: true,
+                jobTitle: true,
+                country: true,
+                phones: true,
+            },
         });
         if (known?.deletedAt) return { status: 'rejected', reason: 'the person was removed from the CRM' };
 
+        // E.164 or dialled-with-country becomes the person's phone; what cannot be parsed is kept raw on the lead.
+        const phone = leadPhone(lead.phone, country(lead.country));
+        const phoneRaw = lead.phone && !phone ? lead.phone : null;
         let personId: string;
         let status: 'ingested' | 'duplicate';
         if (known) {
@@ -132,6 +144,9 @@ export class BylineInboundService {
                 ...(!known.nameLast && lead.last_name ? { nameLast: lead.last_name } : {}),
                 ...(!known.jobTitle && lead.job_title ? { jobTitle: lead.job_title } : {}),
                 ...(!known.country && country(lead.country) ? { country: country(lead.country) } : {}),
+                ...(phone && !(known.phones as Phones | null)?.primary
+                    ? { phones: { primary: phone, additional: (known.phones as Phones | null)?.additional ?? [] } }
+                    : {}),
             };
             if (Object.keys(patch).length > 0) {
                 const { event } = await this.people.updateIn(tx, context, known.id, patch);
@@ -148,6 +163,7 @@ export class BylineInboundService {
                 emails: { primary: lead.email, additional: [] },
                 jobTitle: lead.job_title ?? null,
                 country: country(lead.country),
+                phones: { primary: phone, additional: [] },
                 links: { linkedin: lead.linkedin_url ? { url: lead.linkedin_url, label: null } : null, x: null },
                 source,
                 ownerId,
@@ -158,7 +174,7 @@ export class BylineInboundService {
             status = 'ingested';
         }
         await tx.bylineLead.create({
-            data: { workspaceId: context.workspaceId, leadId: lead.lead_id, personId, source },
+            data: { workspaceId: context.workspaceId, leadId: lead.lead_id, personId, source, phoneRaw },
         });
         await this.events.recordAll(tx, recorded);
         return { status, personId };

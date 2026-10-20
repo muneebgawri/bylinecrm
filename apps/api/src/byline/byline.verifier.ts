@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { BylineVerification } from '@byline/contract';
-import type { EmailVerification, EmailVerificationReason } from '@bylinecrm/shared';
+import { FALLBACK_VERIFIER_SOURCE, type EmailVerification, type EmailVerificationReason } from '@bylinecrm/shared';
 import { FreeVerifier } from '../verification/free-verifier';
 import type { Verifier } from '../verification/verifier.port';
 import { BYLINE_API, BylineApiError, type BylineApi } from './byline-api.port';
@@ -37,21 +37,26 @@ export class BylineVerifier implements Verifier {
                 `workspace ${context!.workspaceId}: BylineAI did not verify (${error.kind}): ${error.message}`,
             );
             const free = await this.free.verify(address);
-            return { ...free, message: `${free.message} (${error.message}; free checks only.)` };
+            // A rate limit or an outage passes: the free answer stands an hour (FALLBACK_VERIFIER_SOURCE), then BylineAI
+            // is asked again. A spent budget or a refused key does not pass by itself: the free answer stands as usual.
+            return {
+                ...free,
+                message: `${free.message} (${error.message}; free checks only.)`,
+                ...(error.retryable ? { source: FALLBACK_VERIFIER_SOURCE } : {}),
+            };
         }
     }
 }
 
+/** BylineAI's reasons (`BYLINE_VERIFICATION_REASONS`) in the CRM's words. */
 const REASONS: Readonly<Record<string, EmailVerificationReason>> = {
+    invalid_format: 'syntax',
+    no_mx: 'no_mail_server',
+    mailbox_not_found: 'mailbox_not_found',
+    catch_all: 'catch_all',
     disposable: 'disposable',
     role: 'role',
-    role_account: 'role',
-    no_mx: 'no_mail_server',
-    no_mail_server: 'no_mail_server',
-    no_domain: 'no_domain',
-    syntax: 'syntax',
-    invalid_syntax: 'syntax',
-    null_mx: 'null_mx',
+    mailbox_exists: 'deliverable',
 };
 
 /** BylineAI's verdict as the CRM's answer. Exported for the suite. */
@@ -70,14 +75,14 @@ export function fromByline(address: string, answer: BylineVerification): EmailVe
         case 'invalid':
             return {
                 result: 'invalid',
-                reason: known ?? 'no_mail_server',
+                reason: known ?? 'mailbox_not_found',
                 message: `${domain} does not take mail for this address${answer.reason ? `: ${answer.reason}` : ''}${by}.`,
                 source: BYLINE_VERIFIER_SOURCE,
             };
         case 'risky':
             return {
                 result: 'risky',
-                reason: known ?? 'role',
+                reason: known ?? 'catch_all',
                 message: `Mail to ${domain} may not reach a person${answer.reason ? `: ${answer.reason}` : ''}${by}.`,
                 source: BYLINE_VERIFIER_SOURCE,
             };

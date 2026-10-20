@@ -239,6 +239,25 @@ describe('BYL-1 BylineAI lead receiver (FR-CRMS-20 ownership)', () => {
         });
     });
 
+    describe('a lead’s phone (BYL-3)', () => {
+        it('E.164 is the person’s phone; one that cannot be parsed is kept raw on the lead, not dropped', async () => {
+            const parsed = await deliver(
+                lead('ph1', `ph1@phones-${stamp}.test`, { phone: '+14155550123', country: 'US' }),
+            ).expect(200);
+            const row = await owner.person.findUniqueOrThrow({
+                where: { id: (parsed.body as { personId: string }).personId },
+                select: { phones: true },
+            });
+            expect(row.phones).toEqual({ primary: { number: '4155550123', countryCode: 'US' }, additional: [] });
+
+            await deliver(lead('ph2', `ph2@phones-${stamp}.test`, { phone: 'ask reception, ext 4' })).expect(200);
+            const kept = await owner.bylineLead.findUniqueOrThrow({
+                where: { workspaceId_leadId: { workspaceId: workspace, leadId: `lead-ph2-${stamp}` } },
+            });
+            expect(kept.phoneRaw).toBe('ask reception, ext 4');
+        });
+    });
+
     describe('across workspaces', () => {
         it('one workspace’s secret does not open another’s receiver, and a lead id is each workspace’s own', async () => {
             await as(otherAdmin)
