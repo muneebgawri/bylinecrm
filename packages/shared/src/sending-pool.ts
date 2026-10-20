@@ -69,9 +69,11 @@ export function warmupDay(startedAt: Date, now: Date): number {
 /**
  * Why a mailbox was paused: the rate that crossed its threshold — its own bounce or complaint rate
  * over the window, or (`domain_spam_rate`, #129) its sending domain's user-reported spam rate in
- * Postmaster Tools, which pauses every pool mailbox on the domain at once.
+ * Postmaster Tools, which pauses every pool mailbox on the domain at once. `reply_rate` (REP-2): the mailbox's
+ * replies over new-thread sends fell under the workspace's floor. A paused personal mailbox (REP-2) still sends
+ * replies; only mail to new recipients is held until a manager resumes it.
  */
-export const MAILBOX_PAUSE_CODES = ['bounce_rate', 'complaint_rate', 'domain_spam_rate'] as const;
+export const MAILBOX_PAUSE_CODES = ['bounce_rate', 'complaint_rate', 'domain_spam_rate', 'reply_rate'] as const;
 export type MailboxPauseCode = (typeof MAILBOX_PAUSE_CODES)[number];
 
 export interface MailboxPause {

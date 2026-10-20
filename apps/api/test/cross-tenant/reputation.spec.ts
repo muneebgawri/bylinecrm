@@ -25,6 +25,7 @@ import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { ReputationGate } from '../../src/reputation/reputation-gate';
 import { ReputationMonitor } from '../../src/reputation/reputation-monitor';
+import { SendingPoolService } from '../../src/sending-pool/sending-pool.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { verifyAddress } from '../support/mail';
@@ -352,5 +353,118 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
             ),
         ).resolves.toBeUndefined();
         expect((await events(mia)).some((e) => e.kind === 'primary_domain')).toBe(true);
+    });
+
+    // ── REP-2 (#205, FR-CRMS-24) ────────────────────────────────────────────────────────────────
+
+    it('puts one-click unsubscribe (RFC 8058) on a personal message that starts a thread, and it suppresses (FR-CRMS-24)', async () => {
+        await as(admin).put(w('/reputation/settings')).send(REPUTATION_DEFAULTS).expect(200);
+        const subject = `Unsub ${stamp}`;
+        expect((await mail(5, subject, BODY_B)).status).toBe(202);
+        const row = await owner.mailOutbound.findFirstOrThrow({ where: { workspaceId: workspace, subject } });
+        const mime = row.mime!;
+        expect(mime).toMatch(/^List-Unsubscribe-Post: List-Unsubscribe=One-Click\r?$/m);
+        const url = /^List-Unsubscribe:\s*<([^>]+)>/m.exec(mime)![1]!;
+        const res = await http().post(new URL(url).pathname).type('form').send('List-Unsubscribe=One-Click');
+        expect(res.status).toBeLessThan(300);
+        const suppressed = await owner.suppression.findFirst({
+            where: { workspaceId: workspace, address: `p5@rep-5-${stamp}.test` },
+        });
+        expect(suppressed).not.toBeNull();
+        expect(await owner.suppression.count({ where: { workspaceId: otherWorkspace } })).toBe(0);
+    });
+
+    it('refuses a pool send to an invalid address and warns on a risky one (FR-CRMS-24)', async () => {
+        const gate = app.get(ReputationGate);
+        const context = app.get(WorkspaceContext);
+        const now = new Date();
+        const base = { workspaceId: workspace, message: 'checked', source: 'test', verifiedAt: now };
+        await owner.emailVerification.createMany({
+            data: [
+                { ...base, address: `bad-${stamp}@nowhere.test`, result: 'invalid', reason: 'disposable' },
+                { ...base, address: `info-${stamp}@risky.test`, result: 'risky', reason: 'role' },
+            ],
+        });
+        const run = (address: string) =>
+            context.run({ workspaceId: workspace, memberId: anaId, capabilities: new Set() }, () =>
+                gate.assertRecipientQuality({ address, personId: null }),
+            );
+        await expect(run(`bad-${stamp}@nowhere.test`)).rejects.toMatchObject({ code: 'recipient.low_quality' });
+        await expect(run(`info-${stamp}@risky.test`)).resolves.toBeUndefined();
+        await expect(run(`info-${stamp}@risky.test`)).resolves.toBeUndefined();
+        const quality = (await events(mia)).filter((e) => e.kind === 'recipient_quality');
+        expect(quality.map((e) => e.outcome).sort()).toEqual(['blocked', 'warned']);
+        expect(await events(otherAdmin, otherWorkspace)).toHaveLength(0);
+    });
+
+    it('pauses a mailbox under the reply-rate floor until a manager resumes it (FR-CRMS-24)', async () => {
+        // Three new-thread messages left through Gmail; one got a reply (33%). A 50% floor on 3 sends pauses.
+        await as(admin)
+            .put(w('/reputation/settings'))
+            .send({ ...REPUTATION_DEFAULTS, replyRateFloorBps: 5000, replyRateMinSends: 3 })
+            .expect(200);
+        await app.get(ReputationMonitor).judge(workspace, anaMailbox);
+        const paused = (await as(mia).get(w('/reputation/paused-mailboxes')).expect(200)).body as {
+            mailboxId: string;
+            pause: { code: string };
+        }[];
+        expect(paused).toEqual([
+            expect.objectContaining({ mailboxId: anaMailbox, pause: expect.objectContaining({ code: 'reply_rate' }) }),
+        ]);
+        expect((await events(mia)).some((e) => e.kind === 'reply_rate' && e.outcome === 'blocked')).toBe(true);
+
+        const refused = await mail(1, `Paused ${stamp}`, BODY_D);
+        expect((refused.body as { code: string }).code).toBe('mailbox.paused');
+
+        expect((await as(ana).get(w('/reputation/paused-mailboxes'))).status).toBe(403);
+        expect([403, 404]).toContain(
+            (
+                await as(otherAdmin)
+                    .post(w(`/reputation/paused-mailboxes/${anaMailbox}/resume`))
+                    .send({ note: 'x' })
+            ).status,
+        );
+        expect(
+            (
+                await as(otherAdmin)
+                    .post(w(`/reputation/paused-mailboxes/${anaMailbox}/resume`, otherWorkspace))
+                    .send({ note: 'x' })
+            ).status,
+        ).toBe(404);
+        await as(mia)
+            .post(w(`/reputation/paused-mailboxes/${anaMailbox}/resume`))
+            .send({ note: 'warming back up' })
+            .expect(201);
+        // Judged again from the resume: the old history does not pause it again.
+        await app.get(ReputationMonitor).judge(workspace, anaMailbox);
+        expect((await as(mia).get(w('/reputation/paused-mailboxes')).expect(200)).body).toEqual([]);
+        expect((await mail(1, `Resumed ${stamp}`, BODY_D)).status).toBe(202);
+    });
+
+    it('warns at the spam-rate warn line and pauses cold mail on the domain at the kill switch (FR-CRMS-24)', async () => {
+        await as(admin).put(w('/reputation/settings')).send(REPUTATION_DEFAULTS).expect(200);
+        const pool = app.get(SendingPoolService);
+        const domain = emails.ana.split('@')[1]!;
+        await pool.evaluateDomain(workspace, domain, { day: '2026-10-19', rateBps: 12 });
+        let spam = (await events(mia)).filter((e) => e.kind === 'spam_rate');
+        expect(spam.map((e) => e.outcome)).toEqual(['warned']);
+        expect((await as(mia).get(w('/reputation/paused-mailboxes')).expect(200)).body).toEqual([]);
+
+        await pool.evaluateDomain(workspace, domain, { day: '2026-10-19', rateBps: 35 });
+        spam = (await events(mia)).filter((e) => e.kind === 'spam_rate');
+        expect(spam.map((e) => e.outcome).sort()).toEqual(['blocked', 'warned']);
+        const paused = (await as(mia).get(w('/reputation/paused-mailboxes')).expect(200)).body as {
+            mailboxId: string;
+            pause: { code: string };
+        }[];
+        expect(paused.map((p) => [p.mailboxId, p.pause.code])).toEqual([[anaMailbox, 'domain_spam_rate']]);
+        // Admins are told in the bell.
+        expect((await alerts(admin)).some((n) => n.guardrail?.kind === 'spam_rate')).toBe(true);
+        // Replies are never held: only new recipients wait.
+        expect(((await mail(2, `Cold ${stamp}`, BODY_C)).body as { code: string }).code).toBe('mailbox.paused');
+        // Another workspace's mailboxes on the same domain are not touched.
+        expect((await as(otherAdmin).get(w('/reputation/paused-mailboxes', otherWorkspace)).expect(200)).body).toEqual(
+            [],
+        );
     });
 });

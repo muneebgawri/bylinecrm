@@ -1,4 +1,4 @@
-import type { RichText } from '@bylinecrm/shared';
+import { lintCompose, type RichText } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -47,6 +47,8 @@ export interface ComposerPerson {
     id: string;
     name: string;
     email: string | null;
+    /** Where the person came from (FR-CRMS-11); not `manual` = mail to them should carry an unsubscribe (REP-2). */
+    source?: string | null | undefined;
 }
 
 /**
@@ -253,6 +255,12 @@ function ComposerForm({
     };
 
     const empty = emptyVariables(subject, body, missing);
+    // REP-2: what spam filters punish, as warnings — never a block. A reply is a conversation, not bulk.
+    const lint = lintCompose({
+        subject: docToSubject(subject),
+        body,
+        bulk: !reply && !!person.source && person.source !== 'manual',
+    });
     const blank = isBlank(body);
     const noSubject = !reply && docToSubject(subject).trim() === '';
     const blocked = empty.length > 0 || blank || noSubject || preview.isPending;
@@ -452,6 +460,13 @@ function ComposerForm({
                     <p role="alert" className="m-0 w-full text-xs text-danger">
                         {error}
                     </p>
+                )}
+                {lint.length > 0 && (
+                    <ul aria-label="Deliverability warnings" className="m-0 w-full list-none p-0 text-xs text-warning">
+                        {lint.map((l) => (
+                            <li key={l.code}>{l.message}</li>
+                        ))}
+                    </ul>
                 )}
                 <div className="ml-auto flex items-center gap-2">
                     {onDiscard && (

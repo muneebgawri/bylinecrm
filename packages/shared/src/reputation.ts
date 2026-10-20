@@ -1,3 +1,6 @@
+import type { MailboxPurpose } from './mail.js';
+import type { MailboxPause } from './sending-pool.js';
+
 /**
  * Sender-reputation guardrails (REP-1, #204, FR-CRMS-23): per-mailbox send budgets and repetition
  * detection, for mail sent in the CRM (enforced before it leaves) and mail seen through Gmail sync
@@ -32,6 +35,21 @@ export interface ReputationSettings {
      * no mailbox off it.
      */
     primaryDomain: string | null;
+    /**
+     * REP-2: the reply-rate floor, in basis points (100 = 1%). A mailbox whose replies over new-thread sends in
+     * the last `replyRateWindowDays` (since its last resume) fall under it, on at least `replyRateMinSends` sends,
+     * is paused for new recipients until a manager resumes it.
+     */
+    replyRateFloorBps: number;
+    replyRateMinSends: number;
+    replyRateWindowDays: number;
+    /**
+     * REP-2: the spam-rate kill switch, from Postmaster Tools' user-reported spam rate for a sending domain, in
+     * basis points (30 = 0.3%, Google's line). At `spamPauseBps` every mailbox on the domain is paused for cold
+     * mail and admins are alerted; at `spamWarnBps` admins are warned.
+     */
+    spamPauseBps: number;
+    spamWarnBps: number;
 }
 
 export const REPUTATION_DEFAULTS: Readonly<ReputationSettings> = {
@@ -42,6 +60,11 @@ export const REPUTATION_DEFAULTS: Readonly<ReputationSettings> = {
     nearDuplicateDistance: 3,
     subjectRepeatThreshold: 10,
     primaryDomain: null,
+    replyRateFloorBps: 100,
+    replyRateMinSends: 50,
+    replyRateWindowDays: 7,
+    spamPauseBps: 30,
+    spamWarnBps: 10,
 };
 
 /** The bounds each number is validated against (the database checks the same). */
@@ -52,6 +75,11 @@ export const REPUTATION_LIMITS = {
     nearDuplicateThreshold: { min: 2, max: 1000 },
     nearDuplicateDistance: { min: 0, max: 16 },
     subjectRepeatThreshold: { min: 2, max: 1000 },
+    replyRateFloorBps: { min: 0, max: 10_000 },
+    replyRateMinSends: { min: 1, max: 10_000 },
+    replyRateWindowDays: { min: 1, max: 90 },
+    spamPauseBps: { min: 1, max: 10_000 },
+    spamWarnBps: { min: 1, max: 10_000 },
 } as const satisfies Record<Exclude<keyof ReputationSettings, 'primaryDomain'>, { min: number; max: number }>;
 
 /** The window budgets and repetition are judged over. */
@@ -75,3 +103,16 @@ export const NEGATIVE_REPLY_PATTERNS: readonly RegExp[] = [
 export function isNegativeReply(text: string): boolean {
     return NEGATIVE_REPLY_PATTERNS.some((p) => p.test(text));
 }
+
+/** A paused mailbox (REP-2): the reply-rate floor, the spam-rate kill switch, or P3-2's pool rates. */
+export interface PausedMailboxView {
+    mailboxId: string;
+    email: string;
+    purpose: MailboxPurpose;
+    /** ISO 8601. */
+    pausedAt: string;
+    pause: MailboxPause;
+}
+
+/** How long a resume note may be. */
+export const REPUTATION_RESUME_NOTE_MAX = 500;

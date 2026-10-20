@@ -48,6 +48,7 @@ FR-CRMS-19   # INV-1: invoices on a deal, verified by NewswireOS before they cou
 FR-CRMS-20
 FR-CRMS-21   # GUARD-1: one recipient guard for every send path, guardrail_events, the Guardrails page
 FR-CRMS-23   # REP-1: per-mailbox send budgets, near-duplicate and subject-repetition detection (CRM + Gmail sync)
+FR-CRMS-24   # REP-2: compose lint, recipient quality gate, reply-rate floor, spam-rate kill switch, one-click unsubscribe
 FR-CRMS-25   # BIGIN-1: direct one-way Bigin → BylineCRM sync
 FR-CRMS-26   # BIGIN-1: historical reconcile of reused Bigin contacts
 

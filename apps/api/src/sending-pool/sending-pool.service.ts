@@ -18,6 +18,8 @@ import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { DOMAIN_WITH_RATE, domainUsesIn, domainView } from './domain-view';
+import { raiseAlert } from '../reputation/alerts';
+import { pauseMailbox } from '../reputation/pause';
 import { reputationSettingsIn } from '../reputation/settings';
 import { sendingDomainOf } from './pool-mailbox';
 import { PostmasterService } from './postmaster.service';
@@ -254,8 +256,34 @@ export class SendingPoolService {
     ): Promise<void> {
         await this.rls.withWorkspace(workspaceId, async (tx) => {
             const settings = await this.settingsIn(tx);
-            const thresholdBps = settings.complaintPauseBps;
-            if (rate.rateBps < thresholdBps) return;
+            const reputation = await reputationSettingsIn(tx);
+            // REP-2: the kill switch's line, or the pool's complaint threshold if that is stricter.
+            const thresholdBps = Math.min(settings.complaintPauseBps, reputation.spamPauseBps);
+            if (rate.rateBps < thresholdBps) {
+                if (rate.rateBps >= reputation.spamWarnBps) {
+                    await this.spamAlert(tx, workspaceId, domain, rate, reputation.spamWarnBps, false);
+                }
+                return;
+            }
+            await this.spamAlert(tx, workspaceId, domain, rate, thresholdBps, true);
+            if (rate.rateBps >= reputation.spamPauseBps) {
+                // REP-2: every cold send on the domain stops — personal mailboxes on it hold new recipients too.
+                const personal = await tx.mailbox.findMany({
+                    where: { purpose: 'personal', pausedAt: null, email: { endsWith: `@${domain}` } },
+                    select: { id: true, email: true },
+                });
+                for (const m of personal) {
+                    if (sendingDomainOf(m.email) !== domain) continue;
+                    await pauseMailbox(tx, this.events, workspaceId, m.id, {
+                        code: 'domain_spam_rate',
+                        message: `${domain} had a user-reported spam rate of ${percent(rate.rateBps)} in Postmaster Tools on ${rate.day}, at or above the ${percent(reputation.spamPauseBps)} kill switch`,
+                        rateBps: rate.rateBps,
+                        thresholdBps: reputation.spamPauseBps,
+                        sends: null,
+                        at: now.toISOString(),
+                    });
+                }
+            }
             const mailboxes = await tx.mailbox.findMany({
                 where: { purpose: 'pool', status: 'connected', pausedAt: null, email: { endsWith: `@${domain}` } },
                 orderBy: { id: 'asc' },
@@ -275,6 +303,37 @@ export class SendingPoolService {
                 });
             }
         });
+    }
+
+    /**
+     * REP-2: a `spam_rate` guardrail event for the domain's reading — `blocked` when it pauses, `warned` at the
+     * warn line — once per domain per day, telling reviewers and admins in the bell.
+     */
+    private async spamAlert(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        domain: string,
+        rate: SendingDomainSpamRate,
+        thresholdBps: number,
+        pausing: boolean,
+    ): Promise<void> {
+        await raiseAlert(
+            tx,
+            this.events,
+            { workspaceId, capabilities: new Set() },
+            {
+                kind: 'spam_rate',
+                outcome: pausing ? 'blocked' : 'warned',
+                severity: 'high',
+                path: 'sync',
+                message: pausing
+                    ? `${domain}: Postmaster spam rate ${percent(rate.rateBps)} on ${rate.day} is at or above ${percent(thresholdBps)} — cold mail from the domain is paused`
+                    : `${domain}: Postmaster spam rate ${percent(rate.rateBps)} on ${rate.day} is at or above the ${percent(thresholdBps)} warning line`,
+                detail: { domain, rateBps: String(rate.rateBps), day: rate.day },
+                dedupeKey: `spam_rate:${domain}:${pausing ? 'pause' : 'warn'}:${rate.day}`,
+            },
+            { owner: null, reviewers: true },
+        );
     }
 
     /** The one pause write: the mailbox row (locked by the caller) and the announcement. */

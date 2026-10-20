@@ -6,12 +6,14 @@ import {
     type GuardrailKind,
     type GuardrailPath,
     type GuardrailSeverity,
+    type MailboxPause,
 } from '@bylinecrm/shared';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { sendingDomainOf } from '../sending-pool/pool-mailbox';
+import { EmailVerificationService } from '../verification/email-verification.service';
 import { raiseAlert, utcDay } from './alerts';
 import type { Fingerprint } from './fingerprint';
 import { nearDuplicateRecipients, recipientsSince, subjectRecipients } from './judge';
@@ -67,6 +69,7 @@ export class ReputationGate {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         private readonly events: DomainEvents,
+        private readonly verification: EmailVerificationService,
     ) {}
 
     async assertPersonalSend(check: PersonalSendCheck): Promise<void> {
@@ -74,6 +77,22 @@ export class ReputationGate {
         const now = check.now ?? new Date();
         const mine = [...new Set(check.recipients.map((r) => r.address.trim().toLowerCase()))];
         const verdict = await this.rls.withWorkspace(context.workspaceId, async (tx): Promise<Verdict | null> => {
+            // REP-2: a mailbox paused (reply-rate floor, domain spam rate) sends replies only.
+            const mailbox = await tx.mailbox.findUnique({
+                where: { id: check.mailboxId },
+                select: { pausedAt: true, pauseReason: true },
+            });
+            const pause = mailbox?.pausedAt ? (mailbox.pauseReason as MailboxPause | null) : null;
+            if (mailbox?.pausedAt) {
+                const code = pause?.code ?? 'reply_rate';
+                return {
+                    kind: code === 'reply_rate' ? 'reply_rate' : 'spam_rate',
+                    code: 'mailbox.paused',
+                    severity: 'medium',
+                    message: `This mailbox is paused for new recipients${pause?.message ? `: ${pause.message}` : ''}. Replies still go; a manager can resume it`,
+                    detail: { pause: code },
+                };
+            }
             const s = await reputationSettingsIn(tx);
             const entries = await newThreadMail(
                 tx,
@@ -136,6 +155,39 @@ export class ReputationGate {
             now,
         });
         throw new ReputationRefusal(verdict.code, verdict.message, { reason: verdict.kind, ...verdict.detail });
+    }
+
+    /**
+     * The recipient quality gate (REP-2, FR-CRMS-24) for a pool send, at its time: verification's answer for the
+     * address — found again just in time when it is missing or stale. `invalid` (or still `unknown`) refuses the
+     * send (`422 recipient.low_quality`, a `blocked` event); `risky` (a role address, a catch-all) lets it through
+     * with a `warned` event, once per address per day.
+     */
+    async assertRecipientQuality(recipient: JudgedRecipient): Promise<void> {
+        const context = this.current();
+        const address = recipient.address.trim().toLowerCase();
+        const verdict = (await this.verification.check(context.workspaceId, [address])).get(address);
+        if (!verdict || verdict.result === 'valid') return;
+        const now = new Date();
+        const refuse = verdict.result === 'invalid' || verdict.result === 'unknown';
+        const message =
+            verdict.result === 'unknown'
+                ? `${address} could not be verified — not sent from the pool`
+                : `${address}: ${verdict.message}`;
+        await this.record(context, {
+            kind: 'recipient_quality',
+            severity: refuse ? 'medium' : 'low',
+            path: 'sequence_step',
+            outcome: refuse ? 'blocked' : 'warned',
+            mailboxId: null,
+            address,
+            personId: recipient.personId,
+            message,
+            detail: { result: verdict.result },
+            now,
+            ...(refuse ? {} : { dedupeKey: `recipient_quality:${address}:${utcDay(now)}` }),
+        });
+        if (refuse) throw new ReputationRefusal('recipient.low_quality', message, { result: verdict.result });
     }
 
     /**
@@ -210,8 +262,9 @@ export class ReputationGate {
             kind: GuardrailKind;
             severity: GuardrailSeverity;
             path: GuardrailPath;
-            outcome: 'blocked' | 'deferred';
+            outcome: 'blocked' | 'deferred' | 'warned';
             mailboxId: string | null;
+            dedupeKey?: string;
             address: string | null;
             personId: string | null;
             message: string;
@@ -243,6 +296,7 @@ export class ReputationGate {
                         address: e.address,
                         message: e.message,
                         detail: { ...e.detail, ...(e.mailboxId ? { mailboxId: e.mailboxId } : {}) },
+                        ...(e.dedupeKey ? { dedupeKey: e.dedupeKey } : {}),
                     },
                     { owner: null, reviewers: firstToday },
                 );

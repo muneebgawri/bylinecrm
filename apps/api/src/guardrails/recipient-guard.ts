@@ -72,6 +72,9 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     subject_repeat: 'medium',
     negative_reply: 'low',
     primary_domain: 'medium',
+    recipient_quality: 'medium',
+    reply_rate: 'high',
+    spam_rate: 'high',
 };
 
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;

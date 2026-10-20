@@ -1722,6 +1722,13 @@ model ReputationSettings {
   subjectRepeatThreshold Int      @default(10) @map("subject_repeat_threshold")
   /// Lower case; null = not set (no primary-domain rule).
   primaryDomain          String?  @map("primary_domain")
+  /// REP-2: reply-rate floor (basis points), on at least `replyRateMinSends` new-thread sends over the window.
+  replyRateFloorBps      Int      @default(100) @map("reply_rate_floor_bps")
+  replyRateMinSends      Int      @default(50) @map("reply_rate_min_sends")
+  replyRateWindowDays    Int      @default(7) @map("reply_rate_window_days")
+  /// REP-2: Postmaster spam-rate kill switch and warn line (basis points).
+  spamPauseBps           Int      @default(30) @map("spam_pause_bps")
+  spamWarnBps            Int      @default(10) @map("spam_warn_bps")
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2866,6 +2873,12 @@ enum GuardrailKind {
   negative_reply
   /// REP-1: a sequence send or enrolment from a pool mailbox on the primary domain.
   primary_domain
+  /// REP-2: a pool send's recipient failed (or barely passed) the verification gate.
+  recipient_quality
+  /// REP-2: a mailbox paused for new recipients by the reply-rate floor.
+  reply_rate
+  /// REP-2: a sending domain's Postmaster spam rate reached the warn line or the kill switch.
+  spam_rate
 
   @@map("guardrail_kind")
 }
