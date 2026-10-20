@@ -1,3 +1,4 @@
+import { MAILBOX_PAUSE_CODES } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { named } from '../openapi/responses';
 
@@ -25,5 +26,43 @@ export const reputationSettings = named(
             description:
                 'The primary domain in force (no sequence sends from it): the override, else the domain most members sign in with.',
         }),
+        replyRateFloorBps: z.number().int().meta({
+            description:
+                'REP-2: reply-rate floor in basis points (100 = 1%) under which a mailbox is paused for new recipients.',
+        }),
+        replyRateMinSends: z
+            .number()
+            .int()
+            .meta({ description: 'REP-2: new-thread sends needed before the floor is judged.' }),
+        replyRateWindowDays: z
+            .number()
+            .int()
+            .meta({ description: 'REP-2: the window the reply rate is measured over.' }),
+        spamPauseBps: z.number().int().meta({
+            description:
+                'REP-2: Postmaster spam rate (basis points; 30 = 0.3%) that pauses every mailbox on the domain.',
+        }),
+        spamWarnBps: z.number().int().meta({ description: 'REP-2: Postmaster spam rate that warns admins.' }),
     }),
+);
+
+/** REP-2: the paused mailboxes, oldest pause first. */
+export const pausedMailboxList = named(
+    'PausedMailboxList',
+    z.array(
+        z.object({
+            mailboxId: z.uuid(),
+            email: z.string(),
+            purpose: z.enum(['personal', 'pool']),
+            pausedAt: z.iso.datetime(),
+            pause: z.object({
+                code: z.enum(MAILBOX_PAUSE_CODES),
+                message: z.string(),
+                rateBps: z.number().int(),
+                thresholdBps: z.number().int(),
+                sends: z.number().int().nullable(),
+                at: z.iso.datetime(),
+            }),
+        }),
+    ),
 );

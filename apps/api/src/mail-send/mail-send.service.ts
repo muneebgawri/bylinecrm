@@ -501,6 +501,8 @@ export class MailSendService {
             outreach: true,
             replyToMessageId: parent?.id ?? null,
         });
+        // REP-2: and the recipient quality gate — verification at send time, never an invalid address.
+        await this.reputation.assertRecipientQuality(to);
         const link = await this.unsubscribes.issue(context.workspaceId, {
             address: to.address,
             personId: input.personId,

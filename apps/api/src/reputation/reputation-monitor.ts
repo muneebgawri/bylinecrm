@@ -5,6 +5,7 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { raiseAlert, utcDay } from './alerts';
 import { normaliseBody } from './fingerprint';
+import { bpsText, pauseMailbox } from './pause';
 import { largestNearDuplicate, largestSubject, recipientsSince } from './judge';
 import { reputationSettingsIn } from './settings';
 import { newThreadMail } from './window';
@@ -43,7 +44,14 @@ export class ReputationMonitor {
         await this.rls.withWorkspace(workspaceId, async (tx) => {
             const mailbox = await tx.mailbox.findUnique({
                 where: { id: mailboxId },
-                select: { id: true, email: true, purpose: true, ownerMemberId: true },
+                select: {
+                    id: true,
+                    email: true,
+                    purpose: true,
+                    ownerMemberId: true,
+                    pausedAt: true,
+                    resumedAt: true,
+                },
             });
             if (!mailbox) return;
             const context: WorkspaceRunContext = { workspaceId, capabilities: new Set() };
@@ -100,7 +108,65 @@ export class ReputationMonitor {
                 }
             }
             await this.negativeReplies(tx, context, mailbox, since);
+            await this.replyRateFloor(tx, context, mailbox, now);
         });
+    }
+
+    /**
+     * The reply-rate floor (REP-2, FR-CRMS-24): replies over new-thread sends from the mailbox in the window
+     * (since its last resume, so a resume is not undone by the same history). Under the floor on enough sends,
+     * the mailbox is paused for new recipients (a pool mailbox: for everything) until a manager resumes it; a
+     * `reply_rate` event (high) tells its owner and the reviewers.
+     */
+    private async replyRateFloor(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        mailbox: { id: string; email: string; ownerMemberId: string; pausedAt: Date | null; resumedAt: Date | null },
+        now: Date,
+    ): Promise<void> {
+        if (mailbox.pausedAt) return;
+        const s = await reputationSettingsIn(tx);
+        const windowStart = new Date(now.getTime() - s.replyRateWindowDays * REPUTATION_WINDOW_MS);
+        const since = mailbox.resumedAt && mailbox.resumedAt > windowStart ? mailbox.resumedAt : windowStart;
+        const [row] = await tx.$queryRaw<{ sends: number; replied: number }[]>`
+            SELECT count(*)::int AS sends,
+                   count(*) FILTER (WHERE EXISTS (
+                       SELECT 1 FROM mail_messages r
+                       JOIN mail_participants rp ON rp.message_id = r.id AND rp.role = 'from' AND rp.member_id IS NULL
+                       WHERE r.thread_id = m.thread_id AND r.direction = 'inbound' AND r.sent_at > m.sent_at
+                   ))::int AS replied
+            FROM mail_messages m
+            JOIN mail_message_copies c ON c.message_id = m.id AND c.mailbox_id = ${mailbox.id}::uuid AND c.direction = 'outbound'
+            WHERE m.sent_at >= ${since} AND m.in_reply_to IS NULL`;
+        const sends = row?.sends ?? 0;
+        if (sends < s.replyRateMinSends) return;
+        const rateBps = Math.floor(((row?.replied ?? 0) * 10_000) / sends);
+        if (rateBps >= s.replyRateFloorBps) return;
+        const message = `${row?.replied ?? 0} replies to ${sends} new-thread messages since ${since.toISOString().slice(0, 10)} (${bpsText(rateBps)}), under the ${bpsText(s.replyRateFloorBps)} floor`;
+        const paused = await pauseMailbox(tx, this.events, context.workspaceId, mailbox.id, {
+            code: 'reply_rate',
+            message,
+            rateBps,
+            thresholdBps: s.replyRateFloorBps,
+            sends,
+            at: now.toISOString(),
+        });
+        if (!paused) return;
+        await raiseAlert(
+            tx,
+            this.events,
+            context,
+            {
+                kind: 'reply_rate',
+                outcome: 'blocked',
+                severity: 'high',
+                path: 'sync',
+                actorMemberId: mailbox.ownerMemberId,
+                message: `${mailbox.email} is paused for new recipients: ${message}`,
+                detail: { mailboxId: mailbox.id, rateBps: String(rateBps), sends: String(sends) },
+            },
+            { owner: mailbox.ownerMemberId, reviewers: true },
+        );
     }
 
     /** Replies in the window, to this mailbox's mail, that say "stop": one event per reply. */

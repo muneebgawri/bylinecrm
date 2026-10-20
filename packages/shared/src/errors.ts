@@ -74,6 +74,11 @@ export const ERROR_CODES = [
      * use a sequence from the sending pool. Nothing was sent.
      */
     'message.bulk_pattern',
+    /**
+     * `422` (REP-2, FR-CRMS-24): a pool send's recipient failed the quality gate — verification finds the address
+     * `invalid` (no such domain or mailbox, a disposable domain) or could not verify it. Nothing was sent.
+     */
+    'recipient.low_quality',
     /** `409`: a failed send whose refusal would repeat, a sequence's send, or one whose content is gone, is not retried (#134). */
     'send.not_retryable',
     /** Too many attempts; try again later. */

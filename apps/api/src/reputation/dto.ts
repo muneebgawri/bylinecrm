@@ -1,4 +1,4 @@
-import { REPUTATION_LIMITS } from '@bylinecrm/shared';
+import { REPUTATION_LIMITS, REPUTATION_RESUME_NOTE_MAX } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -24,10 +24,23 @@ export class UpdateReputationSettingsDto extends createZodDto(
                     'a domain, like example.com',
                 )
                 .nullable(),
+            replyRateFloorBps: int(L.replyRateFloorBps),
+            replyRateMinSends: int(L.replyRateMinSends),
+            replyRateWindowDays: int(L.replyRateWindowDays),
+            spamPauseBps: int(L.spamPauseBps),
+            spamWarnBps: int(L.spamWarnBps),
         })
         .superRefine((v, ctx) => {
             if (v.hourlyNewRecipients > v.dailyNewRecipients) {
                 ctx.addIssue({ code: 'custom', path: ['hourlyNewRecipients'], message: 'at most the daily budget' });
             }
+            if (v.spamWarnBps > v.spamPauseBps) {
+                ctx.addIssue({ code: 'custom', path: ['spamWarnBps'], message: 'at most the pause line' });
+            }
         }),
+) {}
+
+/** `POST /reputation/paused-mailboxes/:id/resume` — why the pause is lifted (REP-2). */
+export class ResumeMailboxDto extends createZodDto(
+    z.object({ note: z.string().trim().min(1).max(REPUTATION_RESUME_NOTE_MAX) }),
 ) {}

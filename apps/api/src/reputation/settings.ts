@@ -46,5 +46,10 @@ export function pickReputationSettings(row: Row): ReputationSettings {
         nearDuplicateDistance: row.nearDuplicateDistance,
         subjectRepeatThreshold: row.subjectRepeatThreshold,
         primaryDomain: row.primaryDomain,
+        replyRateFloorBps: row.replyRateFloorBps,
+        replyRateMinSends: row.replyRateMinSends,
+        replyRateWindowDays: row.replyRateWindowDays,
+        spamPauseBps: row.spamPauseBps,
+        spamWarnBps: row.spamWarnBps,
     };
 }

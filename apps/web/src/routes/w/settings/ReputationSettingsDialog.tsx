@@ -38,6 +38,19 @@ const FIELDS: { key: NumberKey; label: string; hint: string }[] = [
         label: 'Same subject',
         hint: 'Distinct new recipients in 24 hours before the next is refused.',
     },
+    {
+        key: 'replyRateFloorBps',
+        label: 'Reply-rate floor (basis points)',
+        hint: '100 = 1%. Under it, the mailbox is paused for new recipients.',
+    },
+    { key: 'replyRateMinSends', label: 'Judge reply rate after (sends)', hint: 'New-thread messages in the window.' },
+    { key: 'replyRateWindowDays', label: 'Reply rate over (days)', hint: 'Counted from the last resume, if later.' },
+    {
+        key: 'spamPauseBps',
+        label: 'Spam-rate kill switch (basis points)',
+        hint: '30 = 0.3%, Google’s line. Pauses cold mail on the domain.',
+    },
+    { key: 'spamWarnBps', label: 'Spam-rate warning (basis points)', hint: 'Admins are warned at this rate.' },
 ];
 
 /** Settings → Guardrails → Sender reputation (REP-1): the workspace's budgets and repetition thresholds. */

@@ -423,7 +423,12 @@ export function PersonRecord({
             ) : (
                 <RecordCompose
                     workspaceId={workspaceId}
-                    person={{ id: person.id, name: personName(person), email: person.emails.primary }}
+                    person={{
+                        id: person.id,
+                        name: personName(person),
+                        email: person.emails.primary,
+                        source: person.source ?? null,
+                    }}
                     handle={compose}
                 />
             )}

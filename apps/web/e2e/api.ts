@@ -112,6 +112,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/guardrails/events(\\?.*)?$`), () => data.page([])],
     // REP-1: the workspace's sender-reputation thresholds (the defaults).
     [new RegExp(`^${W}/reputation/settings$`), () => ({ ...REPUTATION_DEFAULTS, effectivePrimaryDomain: null })],
+    // REP-2: mailboxes paused by the reply-rate floor or the spam-rate kill switch; none in the fixtures.
+    [new RegExp(`^${W}/reputation/paused-mailboxes$`), () => []],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
     [new RegExp(`^${W}/sending-domains$`), () => data.sendingDomains],
     [new RegExp(`^${W}/import/twenty$`), () => data.twentyImport],

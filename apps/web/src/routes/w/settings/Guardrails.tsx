@@ -35,6 +35,7 @@ import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { PausedMailboxes } from './PausedMailboxes';
 import { ReputationSettingsDialog } from './ReputationSettingsDialog';
 
 const OUTCOME_LABEL: Record<GuardrailOutcome, string> = {
@@ -84,6 +85,7 @@ export function Guardrails() {
                 address — and the times it let a manager through. Every CSV export is here too (Export): who, what, how
                 many rows, and whether only their own. Mark one legitimate when there was a good reason.
             </p>
+            <PausedMailboxes workspaceId={workspaceId} />
             <DataTableChrome
                 toolbar={{
                     extra: (

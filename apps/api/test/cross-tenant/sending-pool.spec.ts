@@ -779,7 +779,7 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                 ).toBe(404);
             });
 
-            it('reads a personal domain’s spam rate and pauses nothing for it', async () => {
+            it('REP-2 FR-CRMS-24: a personal domain at the kill switch pauses its personal mailboxes for new recipients', async () => {
                 await log.reset();
                 if ((await view()).postmaster?.status !== 'connected')
                     expect(await connectPostmaster()).toBe('connected');
@@ -788,8 +788,15 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
                 const checked = await checkDomain(personalDomain);
                 expect(checked.spamRate).toEqual({ day: yesterday, rateBps: 50 });
                 expect(checked.postmaster).toMatchObject({ status: 'ok', readAt: expect.any(String) });
-                expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(0);
-                expect((await owner.mailbox.findUniqueOrThrow({ where: { id: personalMailbox } })).pausedAt).toBeNull();
+                // 0.5% is past the 0.3% kill switch: the personal mailbox holds new recipients (replies still go).
+                expect((await recorded()).filter((e) => e.type === 'mailbox.paused')).toHaveLength(1);
+                const paused = await owner.mailbox.findUniqueOrThrow({ where: { id: personalMailbox } });
+                expect(paused.pauseReason).toMatchObject({ code: 'domain_spam_rate', rateBps: 50 });
+                // Leave it as the next tests expect it.
+                await owner.mailbox.update({
+                    where: { id: personalMailbox },
+                    data: { pausedAt: null, pauseReason: Prisma.DbNull },
+                });
             });
 
             it('reads the delivery-error rate alongside the spam rate, keeps each day of each, and pauses nothing for it', async () => {

@@ -28,6 +28,11 @@ import type { TransferMember } from './transfers.js';
  * - `subject_repeat` — one normalised subject to many distinct new recipients in 24 hours.
  * - `negative_reply` — a reply saying "unsubscribe" / "remove me" to a mailbox's mail.
  * - `primary_domain` — a sequence send or enrolment refused because the pool mailbox is on the primary domain.
+ *
+ * REP-2 (FR-CRMS-24):
+ * - `recipient_quality` — a pool send to an address verification finds `invalid` (blocked) or `risky` (warned).
+ * - `reply_rate` — a mailbox paused for new recipients: its reply rate fell under the floor.
+ * - `spam_rate` — a sending domain's Postmaster spam rate reached the warn line or the kill switch.
  */
 export const GUARDRAIL_KINDS = [
     'suppressed',
@@ -45,6 +50,10 @@ export const GUARDRAIL_KINDS = [
     'subject_repeat',
     'negative_reply',
     'primary_domain',
+    // REP-2 (FR-CRMS-24): quality gate and kill switches.
+    'recipient_quality',
+    'reply_rate',
+    'spam_rate',
 ] as const;
 export type GuardrailKind = (typeof GUARDRAIL_KINDS)[number];
 
@@ -104,6 +113,9 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     subject_repeat: 'Repeated subject',
     negative_reply: 'Negative reply',
     primary_domain: 'Primary domain protected',
+    recipient_quality: 'Recipient quality',
+    reply_rate: 'Reply rate under the floor',
+    spam_rate: 'Domain spam rate',
 };
 
 /** The kinds that are about a mailbox's sending rather than one recipient (REP-1). */
@@ -114,6 +126,9 @@ export const REPUTATION_GUARDRAIL_KINDS: readonly GuardrailKind[] = [
     'subject_repeat',
     'negative_reply',
     'primary_domain',
+    'recipient_quality',
+    'reply_rate',
+    'spam_rate',
 ];
 
 /** One guardrail event, as the Guardrails page reads it. */

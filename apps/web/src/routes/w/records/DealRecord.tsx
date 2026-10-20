@@ -73,7 +73,12 @@ export function DealRecord({
     // A deal's mail goes to its point of contact (doc 50 §A); without one there is no one to write to.
     const recipient =
         deal.pointOfContactId && contact.data
-            ? { id: contact.data.id, name: personName(contact.data), email: contact.data.emails.primary }
+            ? {
+                  id: contact.data.id,
+                  name: personName(contact.data),
+                  email: contact.data.emails.primary,
+                  source: contact.data.source ?? null,
+              }
             : null;
     const noRecipient = deal.pointOfContactId
         ? contact.isError

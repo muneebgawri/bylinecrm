@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { VerificationModule } from '../verification/verification.module';
 import { ReputationController } from './reputation.controller';
 import { ReputationGate } from './reputation-gate';
 import { ReputationMonitor } from './reputation-monitor';
@@ -11,7 +12,7 @@ import { ReputationService } from './reputation.service';
  * sync (`ReputationMonitor`), and the thresholds' routes. Events go to `guardrail_events` (GUARD-1's table).
  */
 @Module({
-    imports: [AuthModule],
+    imports: [AuthModule, VerificationModule],
     controllers: [ReputationController],
     providers: [ReputationService, ReputationGate, ReputationMonitor],
     exports: [ReputationGate, ReputationMonitor],
