@@ -6,6 +6,7 @@
  * mapping is what it is: docs/design-notes/BIGIN-1.md.
  */
 
+import type { StageKind } from './pipelines.js';
 import type { TwentyImportRecordError, TwentyImportSyncView } from './twenty-import.js';
 
 /** The Bigin modules the importer reads, in the order it reads them (a later one refers to earlier ones). */
@@ -221,4 +222,55 @@ export function plainBiginId(value: unknown): string | null {
         .trim()
         .replace(/^zcrm_/i, '');
     return raw === '' ? null : raw;
+}
+
+/**
+ * How a Bigin deal stage lands in the default pipeline: `mapped` by the workspace's stage mapping, `name` a
+ * stage of the same name (case aside), `closed` a Bigin won/lost stage to the pipeline's won or lost stage,
+ * `fallback` the first open stage (the run reports Bigin's stage as unknown).
+ */
+export const BIGIN_STAGE_MATCHES = ['mapped', 'name', 'closed', 'fallback'] as const;
+export type BiginStageMatch = (typeof BIGIN_STAGE_MATCHES)[number];
+
+/** Where the stage list came from: Bigin's `Stage` picklist, or (Bigin unreadable) the stages imported deals carry. */
+export const BIGIN_STAGE_SOURCES = ['bigin', 'imported'] as const;
+export type BiginStageSource = (typeof BIGIN_STAGE_SOURCES)[number];
+
+export const BIGIN_STAGE_APPLY_STATUSES = ['queued', 'running', 'succeeded', 'failed'] as const;
+export type BiginStageApplyStatus = (typeof BIGIN_STAGE_APPLY_STATUSES)[number];
+
+/** The last "apply the mapping to imported deals". */
+export interface BiginStageApplyView {
+    status: BiginStageApplyStatus;
+    requestedAt: string;
+    finishedAt: string | null;
+    /** Deals moved to the stage their Bigin stage maps to. */
+    moved: number;
+    /** Deals left where they are because someone moved them by hand after Bigin last changed them. */
+    skipped: number;
+    error: string | null;
+}
+
+export interface BiginStageMapRow {
+    /** The stage as Bigin spells it. */
+    biginStage: string;
+    /** Imported deals whose link holds this stage (zero included). */
+    deals: number;
+    /** The workspace's explicit choice; null when the stage is left to the name match and the heuristic. */
+    stageId: string | null;
+    /** Where a deal in this Bigin stage lands now, and why. */
+    targetStageId: string;
+    match: BiginStageMatch;
+}
+
+export interface BiginStageMapView {
+    source: BiginStageSource;
+    /** Why Bigin's picklist could not be read, when `source` is `imported`. */
+    error: string | null;
+    pipelineId: string;
+    stages: { id: string; name: string; kind: StageKind }[];
+    rows: BiginStageMapRow[];
+    /** Imported deals whose link has no Bigin stage yet (imported before stages were kept): a full run fills them. */
+    unread: number;
+    apply: BiginStageApplyView | null;
 }

@@ -279,6 +279,9 @@ export type BiginImportMissingPage = Schemas['BiginImportMissingPage'];
 export type BiginContactReusePage = Schemas['BiginContactReusePage'];
 export type PutBiginImportSettingsInput = Loose<Schemas['PutBiginImportSettingsDto']>;
 export type PutBiginImportSyncInput = Loose<Schemas['PutBiginImportSyncDto']>;
+export type BiginStageMapView = Schemas['BiginStageMap'];
+export type BiginStageApplyView = Schemas['BiginStageApply'];
+export type PutBiginStageMapInput = Loose<Schemas['PutBiginStageMapDto']>;
 export type StartBiginImportInput = Loose<Schemas['StartBiginImportDto']>;
 
 // ---- Task notifications and My tasks (#192) --------------------------------------------------

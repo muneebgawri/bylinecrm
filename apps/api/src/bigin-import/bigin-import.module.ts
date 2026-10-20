@@ -15,6 +15,8 @@ import { BiginSyncService } from './bigin-sync.service';
 import { BIGIN_PORT } from './bigin.port';
 import { BiginImportRunner } from './import-runner';
 import { BiginReuseReconciler } from './reuse-reconciler';
+import { BiginStageApplier } from './stage-apply';
+import { BiginStageMapService } from './stage-map.service';
 
 /**
  * The Bigin importer (BIGIN-1, FR-CRMS-25): Zoho Bigin behind `BIGIN_PORT` (the HTTP adapter here, a fake
@@ -48,6 +50,8 @@ import { BiginReuseReconciler } from './reuse-reconciler';
         BiginImportWorkers,
         BiginImportService,
         BiginReuseReconciler,
+        BiginStageApplier,
+        BiginStageMapService,
     ],
 })
 export class BiginImportModule {}

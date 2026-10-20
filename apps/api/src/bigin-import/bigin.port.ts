@@ -67,6 +67,8 @@ export interface BiginApi {
     ): Promise<BiginDeletedPage>;
     /** How many records the module holds; null when Bigin will not say. */
     count(connection: BiginConnection, module: BiginImportObject): Promise<number | null>;
+    /** The values of the Deals `Stage` picklist (Zoho's fields API), in Bigin's order; null when it has none. */
+    dealStages(connection: BiginConnection): Promise<string[] | null>;
     /**
      * Trades a self client's one-time grant code for a refresh token (Zoho's authorization-code grant), so an
      * admin pastes the code Zoho's API console shows instead of running the exchange by hand.

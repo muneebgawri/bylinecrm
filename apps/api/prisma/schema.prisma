@@ -90,6 +90,7 @@ model Workspace {
   biginImportRuns      BiginImportRun[]
   biginImportLinks     BiginImportLink[]
   biginContactReuses   BiginContactReuse[]
+  biginStageMappings   BiginStageMapping[]
 
   trackingDomain TrackingDomain?
   trackingTokens TrackingToken[]
@@ -742,10 +743,11 @@ model PipelineStage {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  opportunities Opportunity[]
-  rules         StageRule[]
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline           Pipeline            @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities      Opportunity[]
+  rules              StageRule[]
+  biginStageMappings BiginStageMapping[]
 
   @@unique([pipelineId, position])
   @@index([workspaceId, pipelineId])
@@ -2280,6 +2282,8 @@ model BiginImportSettings {
   /// Per module, the instant a `changes` run reads from (`{ [module]: iso }`, `<module>:deleted` for deletions):
   /// advanced past what succeeded, never past the oldest record that failed.
   cursors                Json      @default("{}")
+  /// The last "apply the stage mapping to imported deals": `{ status, requestedAt, finishedAt, moved, skipped, error }`.
+  stageApply             Json?     @map("stage_apply")
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2349,6 +2353,7 @@ model BiginImportLink {
   importedAt        DateTime  @default(now()) @map("imported_at") @db.Timestamptz
   missingSince      DateTime? @map("missing_since") @db.Timestamptz
   /// Contacts: the name and primary email Bigin had when last read (`{ name, email }`), what a reuse is detected against.
+  /// Deals: the raw Bigin stage when last read (`{ stage }`), what the stage mapping is applied from.
   snapshot          Json?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2357,6 +2362,22 @@ model BiginImportLink {
   @@index([workspaceId, localType, localId])
   @@index([workspaceId, missingSince])
   @@map("bigin_import_links")
+}
+
+/// Which stage of the default pipeline a Bigin deal stage lands in, keyed by Bigin's stage name as Bigin spells it.
+/// Applied before the name match and the won/lost heuristic; a deleted stage takes its mappings with it.
+model BiginStageMapping {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  biginStage  String   @map("bigin_stage")
+  stageId     String   @map("stage_id") @db.Uuid
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stage     PipelineStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, biginStage])
+  @@index([stageId])
+  @@map("bigin_stage_mappings")
 }
 
 /// A Bigin Contact edited to hold a different person (BIGIN-1): the earlier person was left as it was and the

@@ -15,6 +15,8 @@ import {
     type BiginImportOverview,
     type BiginImportRunView,
     type BiginImportSettingsView,
+    type BiginStageApplyView,
+    type BiginStageMapView,
     type TwentyImportRunView,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
@@ -23,12 +25,15 @@ import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { BiginImportWorkers } from '../../src/bigin-import/bigin-import.workers';
 import { BiginImportRunner } from '../../src/bigin-import/import-runner';
+import { BiginStageApplier } from '../../src/bigin-import/stage-apply';
+import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { ENV, parseEnv } from '../../src/config/env';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { TwentyImportRunner } from '../../src/twenty-import/import-runner';
 import { FakeBigin } from '../support/fake-bigin';
+import { settle } from '../support/outbox';
 import { PeopleDedupe } from '../../src/records/people-dedupe.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
@@ -897,5 +902,111 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 await owner.person.count({ where: { workspaceId: workspace, nameLast: 'Twice', deletedAt: null } }),
             ).toBe(1);
         }, 300_000);
+    });
+
+    describe('the stage mapping', () => {
+        it("lists Bigin's stages with counts, maps them, and applies the mapping to imported deals except one moved by hand", async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            const [first, second, third] = bigin.seed('Deals', [
+                { Deal_Name: 'Follow up A', Stage: 'Second Follow Up Done', Owner: ownerOf(adminEmail) },
+                { Deal_Name: 'Follow up B', Stage: 'Second Follow Up Done', Owner: ownerOf(adminEmail) },
+                { Deal_Name: 'Qualifying', Stage: 'Qualification', Owner: ownerOf(adminEmail) },
+            ]);
+            const run = await runToEnd('changes');
+            expect(reportOf(run, 'Deals').unknownStages.map((u) => u.stage)).toContain('Second Follow Up Done');
+            expect((await linkOf('Deals', first!.id))!.snapshot).toEqual({ stage: 'Second Follow Up Done' });
+            const dealOf = async (bid: string) =>
+                owner.opportunity.findUniqueOrThrow({ where: { id: (await linkOf('Deals', bid))!.localId } });
+
+            // Bigin's picklist, then the stages deals carry when Bigin will not say.
+            bigin.dealStages = ['Qualification', 'Second Follow Up Done', 'Never Used'];
+            const listed = await as(admin).get(w('/import/bigin/stage-map'));
+            expect(listed.status, JSON.stringify(listed.body)).toBe(200);
+            const map = listed.body as BiginStageMapView;
+            expect(map.source).toBe('bigin');
+            const row = (name: string, m = map) => m.rows.find((r) => r.biginStage === name)!;
+            expect(row('Second Follow Up Done')).toMatchObject({ deals: 2, stageId: null, match: 'fallback' });
+            expect(row('Never Used').deals).toBe(0);
+            expect(row('Pending Press Release').deals).toBeGreaterThan(0);
+            bigin.dealStages = null;
+            const fallback = (await as(admin).get(w('/import/bigin/stage-map'))).body as BiginStageMapView;
+            expect(fallback.source).toBe('imported');
+            expect(fallback.error).toMatch(/stage list/);
+            expect(fallback.rows.some((r) => r.biginStage === 'Never Used')).toBe(false);
+            expect((await as(member).get(w('/import/bigin/stage-map'))).status).toBe(403);
+
+            const meeting = map.stages.find((s) => s.name === 'Meeting')!;
+            const put = await as(admin)
+                .put(w('/import/bigin/stage-map'))
+                .send({
+                    mappings: [
+                        { biginStage: 'Second Follow Up Done', stageId: meeting.id },
+                        { biginStage: 'Qualification', stageId: null },
+                    ],
+                });
+            expect(put.status, JSON.stringify(put.body)).toBe(200);
+            expect(row('Second Follow Up Done', put.body as BiginStageMapView)).toMatchObject({
+                stageId: meeting.id,
+                targetStageId: meeting.id,
+                match: 'mapped',
+            });
+
+            // One deal is moved by hand after Bigin last changed it: the apply leaves it there.
+            const handStage = map.stages.find((s) => s.name === 'Replied')!;
+            const moved = await as(admin)
+                .post(w(`/opportunities/${(await dealOf(second!.id)).id}/move`))
+                .send({ stageId: handStage.id });
+            expect(moved.status, JSON.stringify(moved.body)).toBeLessThan(300);
+            await settle(app);
+
+            const queued = await as(admin).post(w('/import/bigin/stage-map/apply'));
+            expect(queued.status, JSON.stringify(queued.body)).toBe(202);
+            expect((queued.body as BiginStageApplyView).status).toBe('queued');
+            await app.get(BiginStageApplier).apply(workspace);
+            const applied = ((await as(admin).get(w('/import/bigin/stage-map'))).body as BiginStageMapView).apply!;
+            expect(applied).toMatchObject({ status: 'succeeded', error: null });
+            expect(applied.moved).toBeGreaterThanOrEqual(1);
+            expect(applied.skipped).toBeGreaterThanOrEqual(1);
+            const firstDeal = await dealOf(first!.id);
+            expect(firstDeal.stageId).toBe(meeting.id);
+            expect(
+                await owner.opportunityStageHistory.findFirst({
+                    where: { opportunityId: firstDeal.id, toStageId: meeting.id },
+                }),
+            ).toMatchObject({ reason: 'import' });
+            expect((await dealOf(second!.id)).stageId).toBe(handStage.id);
+            expect((await dealOf(third!.id)).stageId).not.toBe(meeting.id);
+
+            // A later run resolves through the mapping too, and never calls the mapped stage unknown.
+            bigin.update(
+                'Deals',
+                third!.id,
+                { Stage: 'Second Follow Up Done' },
+                new Date(Date.now() + 1000).toISOString(),
+            );
+            const again = await runToEnd('changes');
+            expect(reportOf(again, 'Deals').unknownStages.map((u) => u.externalId)).not.toContain(third!.id);
+            expect((await dealOf(third!.id)).stageId).toBe(meeting.id);
+        }, 300_000);
+
+        it("one workspace never sees, sets or applies another's mapping", async () => {
+            const mine = (await as(admin).get(w('/import/bigin/stage-map'))).body as BiginStageMapView;
+            const theirs = await as(otherAdmin)
+                .put(w('/import/bigin/stage-map', otherWorkspace))
+                .send({ mappings: [{ biginStage: 'Qualification', stageId: mine.stages[0]!.id }] });
+            expect(theirs.status).toBe(422);
+            expect((await as(otherAdmin).get(w('/import/bigin/stage-map', otherWorkspace))).status).toBe(422);
+            const rls = app.get(RlsPrismaService);
+            expect(await rls.withWorkspace(otherWorkspace, (tx) => tx.biginStageMapping.findMany())).toEqual([]);
+            expect((await rls.withWorkspace(workspace, (tx) => tx.biginStageMapping.findMany())).length).toBe(1);
+            await expect(
+                rls.withWorkspace(otherWorkspace, (tx) =>
+                    tx.biginStageMapping.create({
+                        data: { workspaceId: workspace, biginStage: 'Injected', stageId: mine.stages[0]!.id },
+                    }),
+                ),
+            ).rejects.toThrow();
+            expect(await owner.biginStageMapping.count({ where: { biginStage: 'Injected' } })).toBe(0);
+        });
     });
 });

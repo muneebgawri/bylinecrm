@@ -83,6 +83,7 @@ export const keys = {
         ['w', workspaceId, 'import', 'bigin', 'runs', runId] as const,
     biginImportMissing: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'missing'] as const,
     biginImportReuses: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'reuses'] as const,
+    biginStageMap: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'stage-map'] as const,
     oauthClientStatus: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client', 'status'] as const,
     mailboxes: (workspaceId: string) => ['w', workspaceId, 'mailboxes'] as const,
     mailboxSync: (workspaceId: string, mailboxId: string) =>

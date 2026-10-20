@@ -48,3 +48,9 @@ export const BIGIN_SECRET_SHOWN_CHARS = 4;
  * transaction outlived the 15-second transaction limit, so a page is written 20 at a time.
  */
 export const BIGIN_WRITE_CHUNK = 20;
+
+/** Applying the stage mapping to imported deals: one job per workspace on the import queue, under this id. */
+export const BIGIN_STAGE_APPLY_JOB = 'stage-apply';
+export const biginStageApplyJobId = (workspaceId: string): string => `bigin-stage-apply-${workspaceId}`;
+/** Deals links read per page while applying (each page is then written `BIGIN_WRITE_CHUNK` at a time). */
+export const BIGIN_STAGE_APPLY_PAGE = 500;
