@@ -9,7 +9,7 @@ import type { TrackingKind } from '@prisma/client';
 import { hashToken, randomToken } from '../auth/tokens';
 import { DomainEvents } from '../events/domain-events.service';
 import { PrismaService } from '../infra/prisma.service';
-import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { botReason } from './bots';
 import { rewriteLinks, trackableLinks, withOpenPixel } from './link-rewriter';
 import { TRACKING_TOKEN_BYTES } from './tracking.constants';
@@ -118,29 +118,95 @@ export class TrackingService {
                 },
             });
             if (reason === null) {
-                const tracking: EmailTrackingPayload = {
-                    outboundId: row.outboundId,
-                    personId: row.outbound.personId,
-                    url: row.url,
-                    sequenceStepId: row.outbound.sequenceStepId,
-                    enrolmentId: row.outbound.sequenceEnrolmentId,
-                    indicative: kind === 'open',
-                };
-                const person = row.outbound.personId ? [{ type: 'person' as const, id: row.outbound.personId }] : [];
-                const event: DomainEvent = {
-                    type: kind === 'click' ? 'email.clicked' : 'email.opened',
-                    object: 'email',
-                    workspaceId: owner.workspaceId,
-                    actor: { kind: 'system', id: null },
-                    occurredAt: request.at.toISOString(),
-                    recordId: row.outboundId,
-                    related: person,
-                    targets: person,
-                    tracking,
-                };
-                await this.events.record(tx, event);
+                await this.events.record(
+                    tx,
+                    hitEvent(owner.workspaceId, kind, row.outboundId, row.url, row.outbound, request.at),
+                );
             }
             return row.url;
         });
     }
+
+    /**
+     * An open or click SMTP2Go reported for a send that went through it (TRANS-1), inside the webhook's
+     * transaction: one `tracking_hits` row keyed by SMTP2Go's event (a redelivery writes nothing), judged by the
+     * same scanner rule, and announced as `email.opened` / `email.clicked` exactly as our own hits are. A send
+     * whose links are already ours (the workspace's short-link domain, P3-4) is counted by our hits only:
+     * SMTP2Go's report of the same open or click is `ignored`, never counted twice.
+     */
+    async recordProviderHit(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        hit: {
+            outboundId: string;
+            kind: TrackingKind;
+            url: string | null;
+            userAgent: string | undefined;
+            at: Date;
+            providerEventId: string;
+        },
+    ): Promise<'recorded' | 'duplicate' | 'ignored'> {
+        if ((await tx.trackingToken.count({ where: { outboundId: hit.outboundId } })) > 0) return 'ignored';
+        const outbound = await tx.mailOutbound.findUniqueOrThrow({
+            where: { id: hit.outboundId },
+            select: { personId: true, sequenceStepId: true, sequenceEnrolmentId: true, sentAt: true },
+        });
+        const reason = botReason({ userAgent: hit.userAgent, sentAt: outbound.sentAt, at: hit.at });
+        const url = hit.kind === 'click' ? hit.url : null;
+        const written = await tx.trackingHit.createManyAndReturn({
+            data: [
+                {
+                    workspaceId,
+                    tokenId: null,
+                    providerEventId: hit.providerEventId,
+                    url,
+                    outboundId: hit.outboundId,
+                    kind: hit.kind,
+                    personId: outbound.personId,
+                    sequenceStepId: outbound.sequenceStepId,
+                    enrolmentId: outbound.sequenceEnrolmentId,
+                    happenedAt: hit.at,
+                    userAgent: hit.userAgent?.slice(0, 512) ?? null,
+                    botReason: reason,
+                },
+            ],
+            skipDuplicates: true,
+        });
+        if (written.length === 0) return 'duplicate';
+        if (reason === null) {
+            await this.events.record(tx, hitEvent(workspaceId, hit.kind, hit.outboundId, url, outbound, hit.at));
+        }
+        return 'recorded';
+    }
+}
+
+/** The `email.clicked` / `email.opened` a counted hit announces, whoever's tracking saw it. */
+function hitEvent(
+    workspaceId: string,
+    kind: TrackingKind,
+    outboundId: string,
+    url: string | null,
+    outbound: { personId: string | null; sequenceStepId: string | null; sequenceEnrolmentId: string | null },
+    at: Date,
+): DomainEvent {
+    const tracking: EmailTrackingPayload = {
+        outboundId,
+        personId: outbound.personId,
+        url,
+        sequenceStepId: outbound.sequenceStepId,
+        enrolmentId: outbound.sequenceEnrolmentId,
+        indicative: kind === 'open',
+    };
+    const person = outbound.personId ? [{ type: 'person' as const, id: outbound.personId }] : [];
+    return {
+        type: kind === 'click' ? 'email.clicked' : 'email.opened',
+        object: 'email',
+        workspaceId,
+        actor: { kind: 'system', id: null },
+        occurredAt: at.toISOString(),
+        recordId: outboundId,
+        related: person,
+        targets: person,
+        tracking,
+    };
 }

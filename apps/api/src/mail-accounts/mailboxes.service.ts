@@ -152,6 +152,9 @@ export class MailboxesService {
                     refreshTokenCiphertext: null,
                     accessTokenCiphertext: null,
                     accessExpiresAt: null,
+                    // An SMTP2Go mailbox's key and hook secret go too (TRANS-1): its hook stops being heard.
+                    transportKeyCiphertext: null,
+                    hookSecretCiphertext: null,
                     lastError: Prisma.DbNull,
                 },
             });
@@ -178,6 +181,8 @@ export class MailboxesService {
         if (row.status === 'disconnected') {
             throw new ApiException(409, 'conflict', 'the mailbox is disconnected; connect it again to check it');
         }
+        // An SMTP2Go mailbox (TRANS-1) has no Google grant to probe: its key is proven by its sends.
+        if (row.transport === 'smtp2go') return { mailbox: view(row), ok: true, problem: null };
         let problem: MailboxCheck['problem'] = null;
         try {
             const accessToken = await this.tokens.getAccessToken(context.workspaceId, id);
@@ -310,9 +315,13 @@ export class MailboxesService {
             if (existing && existing.status !== 'disconnected') {
                 if (existing.ownerMemberId !== pending.memberId) return { result: 'owned_by_another' as const };
                 if (existing.purpose !== purpose) return { result: 'purpose_mismatch' as const };
+                // An SMTP2Go pool mailbox (TRANS-1) is not taken over by a Gmail grant while it works.
+                if (existing.transport !== 'gmail') return { result: 'purpose_mismatch' as const };
             }
             const tokens = {
                 status: 'connected' as const,
+                transport: 'gmail' as const,
+                transportKeyCiphertext: null,
                 grantedScopes: grant.scopes,
                 refreshTokenCiphertext: this.secrets.seal(refreshToken),
                 accessTokenCiphertext: this.secrets.seal(grant.accessToken),
@@ -470,6 +479,7 @@ export function view(row: MailboxRow): MailboxView {
         email: row.email,
         label: row.label,
         purpose: row.purpose,
+        transport: row.transport,
         status: row.status,
         grantedScopes: row.grantedScopes,
         lastError: lastError ? { code: lastError.code, message: lastError.message, at: new Date(lastError.at) } : null,
