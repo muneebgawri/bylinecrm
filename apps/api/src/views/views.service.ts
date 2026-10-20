@@ -1,5 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { type FilterGroup, type RecordObject, type SavedView, type ViewColumn, type ViewSort } from '@bylinecrm/shared';
+import {
+    customFieldKey,
+    type FilterGroup,
+    type FilterNode,
+    isFilterGroup,
+    groupNodes,
+    type RecordObject,
+    type SavedView,
+    type ViewColumn,
+    type ViewSort,
+} from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -47,6 +57,35 @@ export async function loadView(
 }
 
 /**
+ * A view as a caller who cannot see the `hidden` custom keys applies it: conditions, sorts and
+ * columns on an admin-only field are dropped (a group left empty goes with them; a filter left
+ * empty is none), and a grouping on one is cleared. A shared view an admin built over such a field
+ * still loads for a member — over the fields they may see — instead of failing with `400`.
+ */
+export function withoutHiddenFields(saved: SavedView, hidden: ReadonlySet<string>): SavedView {
+    if (hidden.size === 0) return saved;
+    const isHidden = (field: string): boolean => {
+        const key = customFieldKey(field);
+        return key !== null && hidden.has(key);
+    };
+    const prune = (node: FilterNode): FilterNode | null => {
+        if (!isFilterGroup(node)) return isHidden(node.field) ? null : node;
+        const kept = groupNodes(node)
+            .map(prune)
+            .filter((n): n is FilterNode => n !== null);
+        if (kept.length === 0) return null;
+        return 'and' in node ? { and: kept } : { or: kept };
+    };
+    return {
+        ...saved,
+        filter: saved.filter ? (prune(saved.filter) as FilterGroup | null) : null,
+        sorts: saved.sorts.filter((s) => !isHidden(s.field)),
+        columns: saved.columns.filter((c) => !isHidden(c.field)),
+        groupBy: saved.groupBy !== null && isHidden(saved.groupBy) ? null : saved.groupBy,
+    };
+}
+
+/**
  * Saved views (PAR-056): a filter, sorts, columns and a grouping over one object. The filter and
  * the sorts are validated against the object's fields on every write, so a view can never be
  * saved with a condition the list would refuse; a field archived after the fact is reported when
@@ -67,13 +106,30 @@ export class ViewsService {
                 where: { ...(object ? { object } : {}), ...visibleViews(context) },
                 orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
             });
-            return rows.map(view);
+            const hidden = await this.hidden(tx, [...new Set(rows.map((r) => r.object))]);
+            return rows.map((r) => withoutHiddenFields(view(r), hidden(r.object)));
         });
     }
 
     get(id: string): Promise<SavedView> {
         const context = this.current();
-        return this.rls.withWorkspace(async (tx) => view(await find(tx, context, id)));
+        return this.rls.withWorkspace(async (tx) => {
+            const row = await find(tx, context, id);
+            const hidden = await this.hidden(tx, [row.object]);
+            return withoutHiddenFields(view(row), hidden(row.object));
+        });
+    }
+
+    /** The admin-only keys the caller may not see on each of `objects` (none for an admin). */
+    private async hidden(
+        tx: WorkspaceClient,
+        objects: readonly RecordObject[],
+    ): Promise<(object: RecordObject) => ReadonlySet<string>> {
+        const none: ReadonlySet<string> = new Set();
+        if (!this.customFields.restricted()) return () => none;
+        const sets = new Map<RecordObject, ReadonlySet<string>>();
+        for (const o of objects) sets.set(o, await this.customFields.hiddenKeysWithin(tx, o));
+        return (o) => sets.get(o) ?? none;
     }
 
     async create(object: RecordObject, input: ViewInput & { name: string }): Promise<SavedView> {
