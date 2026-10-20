@@ -160,7 +160,12 @@ export class TaskNotificationsService {
             // About a live task, or (OWN-1) about a transfer, or (GUARD-1) about a guardrail event.
             const live = {
                 memberId: me,
-                OR: [{ task: { deletedAt: null } }, { transferId: { not: null } }, { guardrailEventId: { not: null } }],
+                OR: [
+                    { task: { deletedAt: null } },
+                    { transferId: { not: null } },
+                    { guardrailEventId: { not: null } },
+                    { invoiceId: { not: null } },
+                ],
             } satisfies Prisma.NotificationWhereInput;
             const rows = await tx.notification.findMany({
                 where: live,
@@ -170,6 +175,7 @@ export class TaskNotificationsService {
                     task: { select: { id: true, title: true, dueAt: true, ...WITH_TARGETS } },
                     transfer: { include: { from: MEMBER, to: MEMBER } },
                     guardrailEvent: { include: { actor: MEMBER } },
+                    invoice: { include: { opportunity: { select: { name: true } } } },
                 },
             });
             const labels = await labelTargets(tx, [
@@ -212,6 +218,16 @@ export class TaskNotificationsService {
                               kind: r.guardrailEvent.kind,
                               actor: named(r.guardrailEvent.actor),
                               count: Number((r.guardrailEvent.detail as { count?: string } | null)?.count ?? 0),
+                          }
+                        : null,
+                    invoice: r.invoice
+                        ? {
+                              id: r.invoice.id,
+                              opportunityId: r.invoice.opportunityId,
+                              opportunityName: r.invoice.opportunity.name,
+                              gateway: r.invoice.gateway,
+                              reference: r.invoice.reference,
+                              reasonCode: r.invoice.reasonCode,
                           }
                         : null,
                 })),

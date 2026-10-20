@@ -29,6 +29,7 @@ export default defineConfig({
             SEQUENCE_WORKER: '0',
             TWENTY_IMPORT_WORKER: '0',
             ENRICHMENT_WORKER: '0',
+            INVOICE_WORKER: '0',
             TRANSACTIONAL_MAIL_RELAY: '0',
             SIGNUP_MODE: 'open',
         },

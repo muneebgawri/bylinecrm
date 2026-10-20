@@ -64,6 +64,7 @@ const settings = {
     ownership: () => import('./w/settings/Ownership').then((m) => ({ Component: m.Ownership })),
     guardrails: () => import('./w/settings/Guardrails').then((m) => ({ Component: m.Guardrails })),
     slotline: () => import('./w/settings/Slotline').then((m) => ({ Component: m.Slotline })),
+    newswireos: () => import('./w/settings/Newswireos').then((m) => ({ Component: m.Newswireos })),
     importTwenty: () => import('./w/settings/ImportTwenty').then((m) => ({ Component: m.ImportTwenty })),
     importBigin: () => import('./w/settings/ImportBigin').then((m) => ({ Component: m.ImportBigin })),
 };
@@ -174,6 +175,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('ownership', settings.ownership, 'Ownership'),
             lazyPage('guardrails', settings.guardrails, 'Guardrails'),
             lazyPage('slotline', settings.slotline, 'Slotline'),
+            lazyPage('newswireos', settings.newswireos, 'NewswireOS'),
             lazyPage('import-twenty', settings.importTwenty, 'Import from Twenty'),
             lazyPage('import-bigin', settings.importBigin, 'Import from Bigin'),
         ]),

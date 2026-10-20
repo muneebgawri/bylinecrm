@@ -272,6 +272,17 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
             ...(event.suppression ? { suppression: suppressionEntry(event.suppression) } : {}),
             ...(event.tracking ? { tracking: trackingEntry(event.tracking) } : {}),
             ...(event.meeting ? { meeting: meetingEntry(event.meeting) } : {}),
+            ...(event.invoice
+                ? {
+                      invoice: {
+                          gateway: event.invoice.gateway,
+                          amountMinor: event.invoice.amountMinor,
+                          currency: event.invoice.currency,
+                          status: event.invoice.status,
+                          reasonCode: event.invoice.reasonCode,
+                      },
+                  }
+                : {}),
             ...(event.transfer
                 ? {
                       transfer: {
@@ -323,6 +334,8 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
             });
             return t ? `→ ${t.to.user.displayName ?? 'a member'}` : null;
         }
+        case 'invoice':
+            return (await tx.dealInvoice.findUnique({ where: { id }, select: { reference: true } }))?.reference ?? null;
     }
 }
 

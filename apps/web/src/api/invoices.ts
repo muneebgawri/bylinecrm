@@ -1,0 +1,97 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { request } from './client';
+import { workspacePath } from './endpoints';
+import type { CreateInvoiceInput, DealInvoiceView, NewswireosSettingsView, PutNewswireosSettingsInput } from './types';
+
+/**
+ * Invoices on a deal (INV-1, #206): a payment's reference, verified by NewswireOS before it counts; what NewswireOS
+ * cannot decide waits for a person with `invoice:verify`. And the workspace's NewswireOS link (an admin's).
+ */
+
+const keys = {
+    deal: (workspaceId: string, dealId: string) => ['w', workspaceId, 'invoices', dealId] as const,
+    newswireos: (workspaceId: string) => ['w', workspaceId, 'integrations', 'newswireos'] as const,
+};
+
+const base = (workspaceId: string, dealId: string) => workspacePath(workspaceId, `/opportunities/${dealId}/invoices`);
+
+export const invoices = {
+    list: (workspaceId: string, dealId: string, signal?: AbortSignal) =>
+        request<DealInvoiceView[]>('GET', base(workspaceId, dealId), { signal }),
+    create: (workspaceId: string, dealId: string, input: CreateInvoiceInput) =>
+        request<DealInvoiceView>('POST', base(workspaceId, dealId), { body: input }),
+    verify: (workspaceId: string, dealId: string, id: string, note?: string) =>
+        request<DealInvoiceView>('POST', `${base(workspaceId, dealId)}/${id}/verify`, { body: note ? { note } : {} }),
+    reject: (workspaceId: string, dealId: string, id: string, reason: string) =>
+        request<DealInvoiceView>('POST', `${base(workspaceId, dealId)}/${id}/reject`, { body: { reason } }),
+    recheck: (workspaceId: string, dealId: string, id: string) =>
+        request<DealInvoiceView>('POST', `${base(workspaceId, dealId)}/${id}/recheck`),
+};
+
+/** A deal's invoices; looked at again every few seconds while one is being verified. */
+export function useDealInvoices(workspaceId: string, dealId: string) {
+    return useQuery({
+        queryKey: keys.deal(workspaceId, dealId),
+        queryFn: ({ signal }) => invoices.list(workspaceId, dealId, signal),
+        refetchInterval: (q) => (q.state.data?.some((i) => i.status === 'verifying') ? 3000 : false),
+    });
+}
+
+type InvoiceAction =
+    | { kind: 'create'; input: CreateInvoiceInput }
+    | { kind: 'verify'; id: string; note?: string }
+    | { kind: 'reject'; id: string; reason: string }
+    | { kind: 'recheck'; id: string };
+
+export function useInvoiceAction(workspaceId: string, dealId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (action: InvoiceAction) => {
+            switch (action.kind) {
+                case 'create':
+                    return invoices.create(workspaceId, dealId, action.input);
+                case 'verify':
+                    return invoices.verify(workspaceId, dealId, action.id, action.note);
+                case 'reject':
+                    return invoices.reject(workspaceId, dealId, action.id, action.reason);
+                case 'recheck':
+                    return invoices.recheck(workspaceId, dealId, action.id);
+            }
+        },
+        onSuccess: () => {
+            void client.invalidateQueries({ queryKey: keys.deal(workspaceId, dealId) });
+            void client.invalidateQueries({ queryKey: ['w', workspaceId, 'notifications'], exact: false });
+        },
+    });
+}
+
+const newswireos = {
+    get: (workspaceId: string, signal?: AbortSignal) =>
+        request<NewswireosSettingsView>('GET', workspacePath(workspaceId, '/integrations/newswireos'), { signal }),
+    put: (workspaceId: string, input: PutNewswireosSettingsInput) =>
+        request<NewswireosSettingsView>('PUT', workspacePath(workspaceId, '/integrations/newswireos'), { body: input }),
+    rotate: (workspaceId: string) =>
+        request<NewswireosSettingsView>('POST', workspacePath(workspaceId, '/integrations/newswireos/rotate')),
+    remove: (workspaceId: string) => request<void>('DELETE', workspacePath(workspaceId, '/integrations/newswireos')),
+};
+
+export const useNewswireosSettings = (workspaceId: string) =>
+    useQuery({ queryKey: keys.newswireos(workspaceId), queryFn: ({ signal }) => newswireos.get(workspaceId, signal) });
+
+function useNewswireosWrite<I>(workspaceId: string, write: (input: I) => Promise<NewswireosSettingsView | void>) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: write,
+        onSuccess: (view) =>
+            view
+                ? client.setQueryData(keys.newswireos(workspaceId), view)
+                : client.invalidateQueries({ queryKey: keys.newswireos(workspaceId) }),
+    });
+}
+
+export const usePutNewswireos = (workspaceId: string) =>
+    useNewswireosWrite(workspaceId, (input: PutNewswireosSettingsInput) => newswireos.put(workspaceId, input));
+export const useRotateNewswireos = (workspaceId: string) =>
+    useNewswireosWrite(workspaceId, () => newswireos.rotate(workspaceId));
+export const useRemoveNewswireos = (workspaceId: string) =>
+    useNewswireosWrite(workspaceId, () => newswireos.remove(workspaceId));

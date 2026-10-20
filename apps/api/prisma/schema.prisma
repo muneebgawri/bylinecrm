@@ -99,6 +99,8 @@ model Workspace {
   calendarParticipants CalendarEventParticipant[]
   calendarSyncStates   CalendarSyncState[]
   slotlineSettings     SlotlineSettings?
+  newswireosSettings   NewswireosSettings?
+  dealInvoices         DealInvoice[]
   ownershipTransfers   OwnershipTransfer[]
   guardrailEvents      GuardrailEvent[]
   companyDomains       CompanyDomain[]
@@ -297,6 +299,9 @@ model WorkspaceMember {
 
   hostedMeetings        CalendarEvent[]
   configuredSlotline    SlotlineSettings[]
+  configuredNewswireos  NewswireosSettings[]
+  invoicesCreated       DealInvoice[]        @relation("InvoiceCreator")
+  invoicesDecided       DealInvoice[]        @relation("InvoiceDecider")
   uploadedLogos         WorkspaceLogo[]
   calendarEventCopies   CalendarEventCopy[]
   meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
@@ -645,6 +650,7 @@ model Opportunity {
 
   mailOutbound       MailOutbound[]
   sequenceEnrolments SequenceEnrolment[]
+  invoices           DealInvoice[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -683,6 +689,8 @@ enum StageRuleEvent {
   meeting_booked @map("meeting.booked")
   /// A tracked link clicked (P3-4). An open is never here: opens are indicative (FR-CRMS-8).
   email_clicked  @map("email.clicked")
+  /// INV-1: a verified invoice that makes the deal's verified invoices cover its amount.
+  invoice_verified @map("invoice.verified")
 
   @@map("stage_rule_event")
 }
@@ -941,6 +949,7 @@ enum LinkedObject {
   suppression
   meeting
   transfer
+  invoice
 
   @@map("linked_object")
 }
@@ -2684,6 +2693,10 @@ enum NotificationKind {
   transfer_taken
   /// GUARD-1: a member was blocked three times in a day from mailing others' leads (to reviewers).
   guardrail_repeat_blocks
+  /// INV-1: an invoice on a deal waits for finance (to holders of `invoice:verify`).
+  invoice_needs_review
+  /// INV-1: a refund left a deal's verified invoices short of its amount (to holders of `invoice:verify`).
+  invoice_coverage_lost
 
   @@map("notification_kind")
 }
@@ -2700,6 +2713,8 @@ model Notification {
   transferId       String?          @map("transfer_id") @db.Uuid
   /// GUARD-1: the guardrail event, for a `guardrail_*` kind. Exactly one of task, transfer, guardrail event.
   guardrailEventId String?          @map("guardrail_event_id") @db.Uuid
+  /// INV-1: the invoice, for an `invoice_*` kind.
+  invoiceId        String?          @map("invoice_id") @db.Uuid
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
   readAt           DateTime?        @map("read_at") @db.Timestamptz
 
@@ -2708,10 +2723,12 @@ model Notification {
   task           Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
   transfer       OwnershipTransfer? @relation(fields: [transferId], references: [id], onDelete: Cascade)
   guardrailEvent GuardrailEvent?    @relation(fields: [guardrailEventId], references: [id], onDelete: Cascade)
+  invoice        DealInvoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@unique([memberId, kind, taskId])
   @@unique([memberId, kind, transferId])
   @@unique([memberId, kind, guardrailEventId])
+  @@unique([memberId, kind, invoiceId])
   @@index([memberId, createdAt])
   @@map("notifications")
 }
@@ -2856,4 +2873,93 @@ model GuardrailEvent {
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([workspaceId, actorMemberId, createdAt])
   @@map("guardrail_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Invoices on a deal (INV-1, FR-CRMS-19): verified by NewswireOS before they count.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum InvoiceGateway {
+  stripe
+  paypal
+  crypto_onchain
+  bank_wire
+
+  @@map("invoice_gateway")
+}
+
+enum InvoiceStatus {
+  verifying
+  verified
+  invalid
+  needs_review
+  invalidated
+
+  @@map("invoice_status")
+}
+
+/// A gateway reference on a deal. One payment is one deal: `(workspace, gateway, reference)` is unique.
+model DealInvoice {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String         @map("workspace_id") @db.Uuid
+  opportunityId       String         @map("opportunity_id") @db.Uuid
+  gateway             InvoiceGateway
+  /// As entered, trimmed.
+  reference           String
+  /// The reference as NewswireOS names it (an invoice's payment intent, a normalised hash); refunds match on either.
+  canonicalReference  String?        @map("canonical_reference")
+  /// What the payment must be: the deal's amount by default, less for a partial payment.
+  amountMinor         BigInt         @map("amount_minor")
+  /// How much of it has been refunded (NewswireOS's running total). Only the net counts toward the deal.
+  refundedAmountMinor BigInt         @default(0) @map("refunded_amount_minor")
+  currency            String         @db.Char(3)
+  /// An optional receipt, stored as an ordinary attachment on the deal.
+  attachmentId        String?        @map("attachment_id") @db.Uuid
+  status              InvoiceStatus  @default(verifying)
+  /// NewswireOS's reason code (`AMOUNT_MISMATCH`, `PROVIDER_ERROR`, …), ours (`NO_LINK`), or a person's (`MANUAL`).
+  reasonCode          String?        @map("reason_code")
+  /// A person's words when they verified or rejected it by hand.
+  note                String?
+  verifiedAt          DateTime?      @map("verified_at") @db.Timestamptz
+  invalidatedAt       DateTime?      @map("invalidated_at") @db.Timestamptz
+  /// What NewswireOS answered (the facts of the payment), or what the webhook said took it back.
+  verificationPayload Json           @default("{}") @map("verification_payload")
+  createdById         String?        @map("created_by_id") @db.Uuid
+  decidedById         String?        @map("decided_by_id") @db.Uuid
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  createdBy     WorkspaceMember? @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  decidedBy     WorkspaceMember? @relation("InvoiceDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@unique([workspaceId, gateway, reference])
+  @@index([workspaceId, opportunityId])
+  @@map("deal_invoices")
+}
+
+/// The workspace's NewswireOS link (INV-1), an admin's to set: where to verify, with which token, and the
+/// hook NewswireOS posts refunds and chargebacks to.
+model NewswireosSettings {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String    @unique @map("workspace_id") @db.Uuid
+  /// `https://app.newswireos.example`
+  baseUrl             String    @map("base_url")
+  apiTokenCiphertext  String    @map("api_token_ciphertext")
+  hookTokenHash       String    @unique @map("hook_token_hash")
+  hookTokenCiphertext String    @map("hook_token_ciphertext")
+  secretCiphertext    String    @map("secret_ciphertext")
+  configuredById      String    @map("configured_by_id") @db.Uuid
+  lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz
+  /// `applied`, `unmatched`, `ignored`, `ping`, `bad_signature`.
+  lastDeliveryResult  String?   @map("last_delivery_result")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
+
+  @@map("newswireos_settings")
 }

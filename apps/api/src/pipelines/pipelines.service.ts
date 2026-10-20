@@ -494,12 +494,13 @@ async function findDeal(tx: WorkspaceClient, context: WorkspaceRunContext, id: s
     return row;
 }
 
-/** A rule moves deals only within its pipeline and only into an open stage: rules never close deals. */
+/**
+ * A rule moves deals only within its pipeline. Its stage may be a won or lost one (INV-1): the rule then closes
+ * the deal through the same close path a member's move takes.
+ */
 async function assertRuleTarget(tx: WorkspaceClient, pipelineId: string, stageId: string): Promise<void> {
     const stage = await findStage(tx, pipelineId, stageId).catch(() => null);
     if (!stage) throw new UnprocessableEntityException('stage is not in this pipeline');
-    if (stage.kind !== 'open')
-        throw new UnprocessableEntityException('a rule moves deals into an open stage; closing is a member’s decision');
 }
 
 export function stageData(

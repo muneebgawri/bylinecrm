@@ -5,6 +5,7 @@ import { CalendarModule } from './calendar/calendar.module';
 import { ConfigModule } from './config/config.module';
 import { EventsModule } from './events/events.module';
 import { GuardrailsModule } from './guardrails/guardrails.module';
+import { InvoicesModule } from './invoices/invoices.module';
 import { HealthModule } from './health/health.module';
 import { ErrorFilter } from './infra/errors/error.filter';
 import { InfraModule } from './infra/infra.module';
@@ -36,6 +37,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         InfraModule,
         EventsModule,
         GuardrailsModule,
+        InvoicesModule,
         HealthModule,
         AuthModule,
         MailAccountsModule,

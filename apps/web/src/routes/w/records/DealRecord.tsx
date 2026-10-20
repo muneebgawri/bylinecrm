@@ -30,6 +30,7 @@ import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { InlineText, messageFor } from './InlineEdit';
+import { InvoicesPanel } from './InvoicesPanel';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
@@ -415,6 +416,7 @@ export function DealRecord({
                         open={notesOpen}
                         onOpenChange={setNotesOpen}
                     />
+                    <InvoicesPanel workspaceId={workspaceId} deal={deal} />
                     <AttachmentsPanel workspaceId={workspaceId} target={target} />
                 </>
             }

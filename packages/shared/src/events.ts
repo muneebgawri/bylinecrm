@@ -8,6 +8,7 @@ import type { EmailTrackingPayload } from './tracking.js';
 import type { SuppressionEventPayload } from './suppression.js';
 import type { GuardrailEventPayload } from './guardrails.js';
 import type { TransferEventPayload } from './transfers.js';
+import type { InvoiceEventPayload } from './invoices.js';
 
 /**
  * The objects an event can be about: the record objects, the things attached to them, and the
@@ -28,6 +29,7 @@ export const EVENT_OBJECTS = [
     'sequence',
     'enrolment',
     'transfer',
+    'invoice',
     'guardrail',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
@@ -163,6 +165,14 @@ export const DOMAIN_EVENT_TYPES = [
     'transfer.declined',
     'transfer.cancelled',
     'transfer.completed',
+    // An invoice on a deal (INV-1): NewswireOS (or a person with `invoice:verify`) verified it, or a refund or
+    // chargeback took it back. `recordId` is the invoice, `targets` the deal, `invoice` what it is; `related`
+    // names the deal on `invoice.verified` only once its verified invoices cover its amount, so a stage rule
+    // moves it then and not before.
+    'invoice.verified',
+    'invoice.invalidated',
+    // Part of a verified invoice was refunded (INV-1): it still counts, net of the refund (`invoice` has both amounts).
+    'invoice.refunded',
     // Guardrails (GUARD-1b, FR-CRMS-21): `recordId` is the guardrail event, `guardrail` what happened — a send,
     // reply, scheduled send or sequence the recipient guard blocked, warned of or let a manager through, a
     // member's repeated blocks, or a CSV export. Ids and addresses only, never a message body.
@@ -239,6 +249,8 @@ interface DomainEventBase {
     meeting?: MeetingSummary;
     /** Present on `transfer.*`: what moves, from whom to whom, and the identities a receiver matches on. */
     transfer?: TransferEventPayload;
+    /** Present on `invoice.*`: the invoice, and whether the deal's verified invoices now cover its amount. */
+    invoice?: InvoiceEventPayload;
     /** Present on `guardrail.recorded`: the guardrail event, without any message body. */
     guardrail?: GuardrailEventPayload;
 }
