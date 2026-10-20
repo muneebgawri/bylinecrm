@@ -624,7 +624,9 @@ export class BiginImportRunner {
                     }
                 }
                 if (found) {
-                    const patch = await localEdits('person', found.id, input);
+                    const edits = await localEdits('person', found.id, input);
+                    const patch = await withoutTakenEmail(tx, found.id, edits);
+                    if (patch !== edits) page.kept.push('emails');
                     const result = await this.people.updateIn(tx, context, found.id, patch);
                     if (result.event) events.push(result.event);
                     await link(found.id);
@@ -922,6 +924,25 @@ async function companyAtDomain(
         select: { companyId: true },
     });
     return other ? { id: other.companyId, deletedAt: null } : (own[0] ?? null);
+}
+
+/**
+ * The patch for a person already here (linked, or the one the Twenty importer made from this Contact),
+ * without Bigin's address when another person here holds it as theirs: the unique index would refuse
+ * the whole record otherwise ("a person with that primary email exists") and leave it unlinked. The
+ * person keeps their address, the rest is applied, and the caller reports the field as kept. Returns
+ * `patch` itself when nothing was taken.
+ */
+async function withoutTakenEmail(tx: WorkspaceClient, personId: string, patch: PersonInput): Promise<PersonInput> {
+    const email = patch.emails?.primary;
+    if (!email) return patch;
+    const holder = await tx.person.findFirst({
+        where: { emailPrimary: email, id: { not: personId } },
+        select: { id: true },
+    });
+    if (!holder) return patch;
+    const { emails: _taken, ...rest } = patch;
+    return rest;
 }
 
 async function currentIdentity(tx: WorkspaceClient, personId: string): Promise<ContactIdentity> {

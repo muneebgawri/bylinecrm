@@ -736,6 +736,43 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             });
             expect(twentyLink!.localId).toBe(matthewId);
         });
+
+        it('a Contact the Twenty importer made, whose Bigin address another person here holds, is linked and updated with its own address kept, never failed', async () => {
+            const create = async (nameFirst: string, email: string) => {
+                const res = await as(admin)
+                    .post(w('/people'))
+                    .send({ nameFirst, nameLast: 'Dup', emails: { primary: email, additional: [] } });
+                expect(res.status, JSON.stringify(res.body)).toBe(201);
+                return (res.body as { id: string }).id;
+            };
+            const holderId = await create('Holder', `taken-${stamp}@dup.example`);
+            const twentyMadeId = await create('Terry', `terry-${stamp}@old.example`);
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            const [contact] = bigin.seed('Contacts', [
+                {
+                    First_Name: 'Terry',
+                    Last_Name: 'Dup',
+                    Title: 'Editor',
+                    Email: `Taken-${stamp}@dup.example`,
+                    Owner: ownerOf(adminEmail),
+                },
+            ]);
+            await owner.person.update({
+                where: { id: twentyMadeId },
+                data: { custom: { biginrecordid: `zcrm_${contact!.id}` } },
+            });
+            const run = await runToEnd('changes');
+            const contacts = reportOf(run, 'Contacts');
+            expect(contacts.errors, JSON.stringify(contacts.errors)).toEqual([]);
+            expect(counts(contacts)).toMatchObject({ merged: 1, created: 0, failed: 0 });
+            expect(contacts.kept).toContainEqual({ externalId: contact!.id, fields: ['emails'] });
+            expect((await linkOf('Contacts', contact!.id))!.localId).toBe(twentyMadeId);
+            const terry = await owner.person.findUniqueOrThrow({ where: { id: twentyMadeId } });
+            expect(terry).toMatchObject({ emailPrimary: `terry-${stamp}@old.example`, jobTitle: 'Editor' });
+            expect((await owner.person.findUniqueOrThrow({ where: { id: holderId } })).emailPrimary).toBe(
+                `taken-${stamp}@dup.example`,
+            );
+        });
     });
 
     describe('the automatic sync', () => {
