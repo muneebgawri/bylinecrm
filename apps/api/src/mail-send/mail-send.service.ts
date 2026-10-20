@@ -35,6 +35,8 @@ import { RenderService } from '../templates/render.service';
 import { withUnsubscribeUrl } from '../templates/render/compose';
 import { TemplatesService } from '../templates/templates.service';
 import { UnsubscribeService } from '../suppression/unsubscribe.service';
+import { fingerprint, type Fingerprint } from '../reputation/fingerprint';
+import { ReputationGate } from '../reputation/reputation-gate';
 import { trackingCountsForSends } from '../tracking/tracking-counts';
 import { TrackingService } from '../tracking/tracking.service';
 import { afterCommit } from '../infra/transaction-scope';
@@ -162,6 +164,9 @@ class Unsendable extends ApiException {
 }
 
 /** A message built and checked, ready to store: the outcome of `prepare`. */
+/** When a send is prepared: at its request (sent now), at its request but sent later, or at its time. */
+type SendMoment = 'request' | 'later' | 'due';
+
 interface Prepared {
     mailboxId: string;
     memberId: string;
@@ -169,6 +174,8 @@ interface Prepared {
     parentId: string | null;
     subject: string;
     mime: string;
+    /** REP-1: what the message is compared by (body simhash, normalised subject). */
+    fingerprint: Fingerprint;
 }
 
 /**
@@ -207,6 +214,7 @@ export class MailSendService {
         private readonly unsubscribes: UnsubscribeService,
         private readonly tracking: TrackingService,
         private readonly signatures: SignaturesService,
+        private readonly reputation: ReputationGate,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
         @Inject(SMTP2GO_PORT) private readonly smtp2go: Smtp2GoPort,
         private readonly secrets: SecretBox,
@@ -227,7 +235,7 @@ export class MailSendService {
         // The send's id is fixed before the message is built: the MIME carries it (X-BylineCRM-Id).
         const id = randomUUID();
         const rfc822MessageId = newMessageId();
-        const prepared = await this.prepare(input, { id, rfc822MessageId }, 'request');
+        const prepared = await this.prepare(input, { id, rfc822MessageId }, sendAt ? 'later' : 'request');
 
         const row = await this.rls.withWorkspace(async (tx) => {
             const created = await tx.mailOutbound.create({
@@ -243,6 +251,8 @@ export class MailSendService {
                     rfc822MessageId,
                     ...addressesOf(prepared),
                     subject: prepared.subject,
+                    bodySimhash: prepared.fingerprint.simhash,
+                    subjectKey: prepared.fingerprint.subjectKey,
                     ...(sendAt
                         ? {
                               status: 'scheduled' as const,
@@ -283,7 +293,7 @@ export class MailSendService {
     private prepare(
         input: StoredRequest,
         send: { id: string; rfc822MessageId: string },
-        when: 'request' | 'due',
+        when: SendMoment,
     ): Promise<Prepared> {
         return 'kind' in input && input.kind === 'outreach'
             ? this.prepareOutreach(input, send)
@@ -294,7 +304,7 @@ export class MailSendService {
     private async preparePersonal(
         input: PersonalRequest,
         send: { id: string; rfc822MessageId: string },
-        when: 'request' | 'due',
+        when: SendMoment,
     ): Promise<Prepared> {
         const context = this.current();
         const memberId = context.memberId;
@@ -389,6 +399,19 @@ export class MailSendService {
             replyToMessageId: parent?.id ?? null,
         });
 
+        // REP-1: a message that starts a thread passes the mailbox's budget and repetition rules — now, or (a
+        // send later) at its time, when the day it counts against is known. A reply is never judged.
+        const print = fingerprint(subject, rendered.text);
+        if (!parent && when !== 'later') {
+            await this.reputation.assertPersonalSend({
+                mailboxId: mailbox.id,
+                sendId: send.id,
+                recipients: [...recipients.to, ...recipients.cc, ...recipients.bcc],
+                fingerprint: print,
+                path: when === 'due' ? 'scheduled_send' : 'send',
+            });
+        }
+
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
             : [];
@@ -406,7 +429,15 @@ export class MailSendService {
             references,
             date: new Date(),
         });
-        return { mailboxId: mailbox.id, memberId, recipients, parentId: parent?.id ?? null, subject, mime };
+        return {
+            mailboxId: mailbox.id,
+            memberId,
+            recipients,
+            parentId: parent?.id ?? null,
+            subject,
+            mime,
+            fingerprint: print,
+        };
     }
 
     /**
@@ -508,6 +539,7 @@ export class MailSendService {
             parentId: parent?.id ?? null,
             subject,
             mime,
+            fingerprint: fingerprint(subject, email.text),
         };
     }
 
@@ -807,6 +839,13 @@ export class MailSendService {
             });
         } catch (error) {
             if (!(error instanceof PoolRefusal)) throw error;
+            // REP-1: a budget's deferral, or the primary-domain rule, is a guardrail event too.
+            await this.reputation.recordPoolRefusal(
+                workspaceId,
+                { ...row, mailboxId: mailbox.id },
+                error.code,
+                error.message,
+            );
             await this.markFailed(workspaceId, id, refusalRecord(error, Date.now()));
             return 'failed';
         }
@@ -1039,6 +1078,8 @@ export class MailSendService {
                     status: 'queued',
                     mime: prepared.mime,
                     subject: prepared.subject,
+                    bodySimhash: prepared.fingerprint.simhash,
+                    subjectKey: prepared.fingerprint.subjectKey,
                     replyToMessageId: prepared.parentId,
                     ...addressesOf(prepared),
                 },

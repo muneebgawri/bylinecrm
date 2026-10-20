@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { GuardrailsModule } from '../guardrails/guardrails.module';
 import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
+import { ReputationModule } from '../reputation/reputation.module';
 import { MailSyncModule } from '../mail-sync/mail-sync.module';
 import { SignaturesModule } from '../signatures/signatures.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
@@ -36,6 +37,7 @@ import { MailSendSweep } from './sweep';
         GuardrailsModule,
         MailAccountsModule,
         MailSyncModule,
+        ReputationModule,
         SendingPoolModule,
         Smtp2GoModule,
         SignaturesModule,

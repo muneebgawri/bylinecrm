@@ -19,7 +19,13 @@
                                 "in_negotiation",
                                 "cold_to_known",
                                 "repeat_blocks",
-                                "record_export"
+                                "record_export",
+                                "send_budget",
+                                "volume_anomaly",
+                                "bulk_pattern",
+                                "subject_repeat",
+                                "negative_reply",
+                                "primary_domain"
                             ]
                         }
                     },
@@ -29,7 +35,7 @@
                         "in": "query",
                         "schema": {
                             "type": "string",
-                            "enum": ["blocked", "warned", "allowed"]
+                            "enum": ["blocked", "warned", "allowed", "deferred"]
                         }
                     },
                     {
@@ -10265,6 +10271,144 @@
                     }
                 },
                 "tags": ["suppression"]
+            }
+        },
+        "/api/w/{workspaceId}/reputation/settings": {
+            "get": {
+                "operationId": "reputation_settings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReputationSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["reputation"]
+            },
+            "put": {
+                "operationId": "reputation_updateSettings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateReputationSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReputationSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["reputation"]
             }
         },
         "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices": {
@@ -25712,6 +25856,55 @@
                 },
                 "required": ["note"]
             },
+            "UpdateReputationSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "dailyNewRecipients": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2000
+                    },
+                    "hourlyNewRecipients": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    },
+                    "poolHourlyCap": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    },
+                    "nearDuplicateThreshold": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 1000
+                    },
+                    "nearDuplicateDistance": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 16
+                    },
+                    "subjectRepeatThreshold": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 1000
+                    },
+                    "primaryDomain": {
+                        "type": "string",
+                        "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "dailyNewRecipients",
+                    "hourlyNewRecipients",
+                    "poolHourlyCap",
+                    "nearDuplicateThreshold",
+                    "nearDuplicateDistance",
+                    "subjectRepeatThreshold",
+                    "primaryDomain"
+                ]
+            },
             "CreateInvoiceDto": {
                 "type": "object",
                 "properties": {
@@ -28215,6 +28408,9 @@
                             "mailbox.paused",
                             "mailbox.domain_unverified",
                             "mailbox.cap_reached",
+                            "mailbox.budget_reached",
+                            "mailbox.primary_domain",
+                            "message.bulk_pattern",
                             "send.not_retryable",
                             "rate_limited",
                             "bad_request",
@@ -31118,13 +31314,19 @@
                             "in_negotiation",
                             "cold_to_known",
                             "repeat_blocks",
-                            "record_export"
+                            "record_export",
+                            "send_budget",
+                            "volume_anomaly",
+                            "bulk_pattern",
+                            "subject_repeat",
+                            "negative_reply",
+                            "primary_domain"
                         ],
                         "description": "Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day)."
                     },
                     "outcome": {
                         "type": "string",
-                        "enum": ["blocked", "warned", "allowed"],
+                        "enum": ["blocked", "warned", "allowed", "deferred"],
                         "description": "`blocked`: refused. `warned`: let through with a warning. `allowed`: an exempt sender (`record:transfer`) let through, kept for the audit."
                     },
                     "severity": {
@@ -31140,7 +31342,9 @@
                             "sequence_enrol",
                             "sequence_step",
                             "repeat_blocks",
-                            "export"
+                            "export",
+                            "sync",
+                            "pool_send"
                         ]
                     },
                     "actor": {
@@ -31351,6 +31555,67 @@
                     }
                 },
                 "required": ["status"]
+            },
+            "ReputationSettings": {
+                "type": "object",
+                "properties": {
+                    "dailyNewRecipients": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "New-recipient messages a personal mailbox may send in a rolling 24 hours (replies exempt)."
+                    },
+                    "hourlyNewRecipients": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "The same, in a rolling hour."
+                    },
+                    "poolHourlyCap": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "A pool mailbox’s sends in a rolling hour."
+                    },
+                    "nearDuplicateThreshold": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Distinct recipients of near-identical 1:1 bodies in 24 hours before the next is refused."
+                    },
+                    "nearDuplicateDistance": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Simhash bits at or under which bodies match."
+                    },
+                    "subjectRepeatThreshold": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Distinct new recipients of one normalised subject in 24 hours before the next is refused."
+                    },
+                    "primaryDomain": {
+                        "nullable": true,
+                        "description": "An admin’s override of the primary domain; null to derive it from the members’ sign-in addresses.",
+                        "type": "string"
+                    },
+                    "effectivePrimaryDomain": {
+                        "nullable": true,
+                        "description": "The primary domain in force (no sequence sends from it): the override, else the domain most members sign in with.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "dailyNewRecipients",
+                    "hourlyNewRecipients",
+                    "poolHourlyCap",
+                    "nearDuplicateThreshold",
+                    "nearDuplicateDistance",
+                    "subjectRepeatThreshold",
+                    "primaryDomain",
+                    "effectivePrimaryDomain"
+                ]
             },
             "DealInvoice": {
                 "type": "object",
@@ -33327,10 +33592,11 @@
                                         "transfer_received",
                                         "transfer_taken",
                                         "guardrail_repeat_blocks",
+                                        "guardrail_alert",
                                         "invoice_needs_review",
                                         "invoice_coverage_lost"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount."
                                 },
                                 "task": {
                                     "nullable": true,
@@ -33459,7 +33725,13 @@
                                                 "in_negotiation",
                                                 "cold_to_known",
                                                 "repeat_blocks",
-                                                "record_export"
+                                                "record_export",
+                                                "send_budget",
+                                                "volume_anomaly",
+                                                "bulk_pattern",
+                                                "subject_repeat",
+                                                "negative_reply",
+                                                "primary_domain"
                                             ]
                                         },
                                         "actor": {
@@ -33483,9 +33755,13 @@
                                             "type": "integer",
                                             "minimum": -9007199254740991,
                                             "maximum": 9007199254740991
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "description": "What the event said (REP-1: the alert’s own words)."
                                         }
                                     },
-                                    "required": ["id", "kind", "actor", "count"]
+                                    "required": ["id", "kind", "actor", "count", "message"]
                                 },
                                 "invoice": {
                                     "nullable": true,
