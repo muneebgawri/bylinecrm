@@ -35,6 +35,8 @@ export interface PaymentStateChange {
     type: 'payment.refunded' | 'payment.disputed' | 'payment.verified';
     gateway: string;
     references: string[];
+    /** On a refund: NewswireOS's running total refunded, in minor units; `null` means all of it. */
+    refundedCents: number | null;
     detail: Record<string, unknown>;
 }
 
@@ -320,21 +322,42 @@ export class InvoicesService {
                     continue;
                 }
                 if (!(OPEN_OR_VERIFIED as readonly string[]).includes(row.status)) continue;
-                const reasonCode =
-                    change.type === 'payment.refunded' ? INVOICE_REASONS.refunded : INVOICE_REASONS.disputed;
-                const updated = await tx.dealInvoice.update({
-                    where: { id: row.id },
-                    data: {
-                        status: 'invalidated',
-                        reasonCode,
-                        invalidatedAt: new Date(),
-                        verificationPayload: {
-                            ...(row.verificationPayload as Prisma.JsonObject),
-                            [change.type]: change.detail as Prisma.InputJsonObject,
+                const coveredBefore = await coverage(tx, row.opportunityId);
+                const payload = {
+                    ...(row.verificationPayload as Prisma.JsonObject),
+                    [change.type]: change.detail as Prisma.InputJsonObject,
+                };
+                // A refund names NewswireOS's running total; one short of the invoice leaves it counting, net.
+                const refunded = change.type === 'payment.refunded' ? change.refundedCents : null;
+                const partial = refunded !== null && BigInt(refunded) < row.amountMinor;
+                let updated: Row;
+                if (partial) {
+                    if (BigInt(refunded) <= row.refundedAmountMinor) continue; // a replay, or an older total
+                    updated = await tx.dealInvoice.update({
+                        where: { id: row.id },
+                        data: { refundedAmountMinor: BigInt(refunded), verificationPayload: payload },
+                    });
+                    await this.events.record(tx, await this.event(tx, 'invoice.refunded', updated, actor));
+                } else {
+                    updated = await tx.dealInvoice.update({
+                        where: { id: row.id },
+                        data: {
+                            status: 'invalidated',
+                            reasonCode:
+                                change.type === 'payment.refunded'
+                                    ? INVOICE_REASONS.refunded
+                                    : INVOICE_REASONS.disputed,
+                            invalidatedAt: new Date(),
+                            ...(change.type === 'payment.refunded' ? { refundedAmountMinor: row.amountMinor } : {}),
+                            verificationPayload: payload,
                         },
-                    },
-                });
-                await this.events.record(tx, await this.event(tx, 'invoice.invalidated', updated, actor));
+                    });
+                    await this.events.record(tx, await this.event(tx, 'invoice.invalidated', updated, actor));
+                }
+                // The deal was paid and no longer is: whoever may verify invoices is told. A won deal stays won.
+                if (coveredBefore && !(await coverage(tx, row.opportunityId))) {
+                    await notifyReviewers(tx, workspaceId, row.id, 'invoice_coverage_lost');
+                }
                 changed += 1;
             }
             return changed;
@@ -383,19 +406,11 @@ export class InvoicesService {
 
     private async event(
         tx: WorkspaceClient,
-        type: 'invoice.verified' | 'invoice.invalidated',
+        type: 'invoice.verified' | 'invoice.invalidated' | 'invoice.refunded',
         row: Row,
         actor: Actor,
     ): Promise<DomainEvent> {
-        const deal = await tx.opportunity.findUnique({
-            where: { id: row.opportunityId },
-            select: { amountMinor: true, currency: true },
-        });
-        const verified = await tx.dealInvoice.findMany({
-            where: { opportunityId: row.opportunityId, status: 'verified' },
-            select: { amountMinor: true, currency: true },
-        });
-        const covered = deal ? covers(deal, verified) : false;
+        const covered = await coverage(tx, row.opportunityId);
         const target = { type: 'opportunity' as const, id: row.opportunityId };
         return {
             type,
@@ -411,6 +426,7 @@ export class InvoicesService {
                 gateway: row.gateway,
                 reference: row.reference,
                 amountMinor: row.amountMinor.toString(),
+                refundedAmountMinor: row.refundedAmountMinor.toString(),
                 currency: row.currency,
                 status: row.status,
                 reasonCode: row.reasonCode,
@@ -442,11 +458,30 @@ async function invoiceOn(tx: WorkspaceClient, opportunityId: string, invoiceId: 
     return row;
 }
 
+/** Whether the deal's verified invoices, net of refunds, cover its amount. */
+async function coverage(tx: WorkspaceClient, opportunityId: string): Promise<boolean> {
+    const deal = await tx.opportunity.findUnique({
+        where: { id: opportunityId },
+        select: { amountMinor: true, currency: true },
+    });
+    if (!deal) return false;
+    const verified = await tx.dealInvoice.findMany({
+        where: { opportunityId, status: 'verified' },
+        select: { amountMinor: true, refundedAmountMinor: true, currency: true },
+    });
+    return covers(deal, verified);
+}
+
 /**
  * Tells whoever may verify invoices by hand — members whose role has `invoice:verify`, and admins — that one waits
  * for finance. Once per invoice per member; waiting again makes it unread again.
  */
-async function notifyReviewers(tx: WorkspaceClient, workspaceId: string, invoiceId: string): Promise<void> {
+async function notifyReviewers(
+    tx: WorkspaceClient,
+    workspaceId: string,
+    invoiceId: string,
+    kind: 'invoice_needs_review' | 'invoice_coverage_lost' = 'invoice_needs_review',
+): Promise<void> {
     const reviewers = await tx.workspaceMember.findMany({
         where: {
             leftAt: null,
@@ -461,13 +496,13 @@ async function notifyReviewers(tx: WorkspaceClient, workspaceId: string, invoice
         data: reviewers.map((m) => ({
             workspaceId,
             memberId: m.id,
-            kind: 'invoice_needs_review' as const,
+            kind,
             invoiceId,
         })),
         skipDuplicates: true,
     });
     await tx.notification.updateMany({
-        where: { invoiceId, kind: 'invoice_needs_review', readAt: { not: null } },
+        where: { invoiceId, kind, readAt: { not: null } },
         data: { readAt: null },
     });
 }
@@ -480,6 +515,7 @@ export function view(row: Row): DealInvoiceView {
         reference: row.reference,
         canonicalReference: row.canonicalReference,
         amountMinor: row.amountMinor.toString(),
+        refundedAmountMinor: row.refundedAmountMinor.toString(),
         currency: row.currency,
         attachmentId: row.attachmentId,
         status: row.status,

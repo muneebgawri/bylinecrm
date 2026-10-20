@@ -404,7 +404,7 @@ describe('pipelines, stages, history, rules', () => {
         it('are created on the pipeline, targeting an open stage only, once per event', async () => {
             await as(admin)
                 .post(w(`/pipelines/${pipeline.id}/rules`))
-                .send({ event: 'email.replied', toStageId: stage('Won').id })
+                .send({ event: 'email.replied', toStageId: '00000000-0000-4000-8000-000000000000' })
                 .expect(422);
             await as(admin)
                 .post(w(`/pipelines/${pipeline.id}/rules`))

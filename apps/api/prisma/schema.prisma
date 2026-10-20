@@ -2695,6 +2695,8 @@ enum NotificationKind {
   guardrail_repeat_blocks
   /// INV-1: an invoice on a deal waits for finance (to holders of `invoice:verify`).
   invoice_needs_review
+  /// INV-1: a refund left a deal's verified invoices short of its amount (to holders of `invoice:verify`).
+  invoice_coverage_lost
 
   @@map("notification_kind")
 }
@@ -2908,6 +2910,8 @@ model DealInvoice {
   canonicalReference  String?        @map("canonical_reference")
   /// What the payment must be: the deal's amount by default, less for a partial payment.
   amountMinor         BigInt         @map("amount_minor")
+  /// How much of it has been refunded (NewswireOS's running total). Only the net counts toward the deal.
+  refundedAmountMinor BigInt         @default(0) @map("refunded_amount_minor")
   currency            String         @db.Char(3)
   /// An optional receipt, stored as an ordinary attachment on the deal.
   attachmentId        String?        @map("attachment_id") @db.Uuid

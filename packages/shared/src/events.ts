@@ -171,6 +171,8 @@ export const DOMAIN_EVENT_TYPES = [
     // moves it then and not before.
     'invoice.verified',
     'invoice.invalidated',
+    // Part of a verified invoice was refunded (INV-1): it still counts, net of the refund (`invoice` has both amounts).
+    'invoice.refunded',
     // Guardrails (GUARD-1b, FR-CRMS-21): `recordId` is the guardrail event, `guardrail` what happened — a send,
     // reply, scheduled send or sequence the recipient guard blocked, warned of or let a manager through, a
     // member's repeated blocks, or a CSV export. Ids and addresses only, never a message body.

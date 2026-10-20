@@ -50,7 +50,11 @@ function statusBadge(invoice: DealInvoiceView) {
         case 'verifying':
             return <Badge status="neutral">Verifying…</Badge>;
         case 'verified':
-            return <Badge status="success">Verified</Badge>;
+            return invoice.refundedAmountMinor !== '0' ? (
+                <Badge status="warning">Partially refunded</Badge>
+            ) : (
+                <Badge status="success">Verified</Badge>
+            );
         case 'invalid':
             return <Badge status="danger">Refused</Badge>;
         case 'needs_review':
@@ -108,7 +112,13 @@ function InvoiceRow({ workspaceId, invoice }: { workspaceId: string; invoice: De
     const [reason, setReason] = useState('');
     const undecided = invoice.status === 'needs_review' || invoice.status === 'verifying';
     const failed = (e: unknown) => toast({ title: 'That did not work', description: failureText(e), tone: 'danger' });
+    const refunded = Number(invoice.refundedAmountMinor);
     const amount = formatMoney({ amountMinor: Number(invoice.amountMinor), currency: invoice.currency });
+    // A partially refunded invoice counts net of the refund.
+    const net =
+        invoice.status === 'verified' && refunded > 0
+            ? formatMoney({ amountMinor: Number(invoice.amountMinor) - refunded, currency: invoice.currency })
+            : null;
     const why = invoice.reasonCode ? (REASON_TEXT[invoice.reasonCode] ?? invoice.reasonCode) : null;
 
     return (
@@ -121,6 +131,7 @@ function InvoiceRow({ workspaceId, invoice }: { workspaceId: string; invoice: De
             </div>
             <span className="text-xs text-text-muted">
                 {GATEWAY_LABEL[invoice.gateway]} · {amount}
+                {net && ` · ${net} after refunds`}
             </span>
             {why && invoice.status !== 'verified' && <span className="text-xs text-text-muted">{why}</span>}
             {invoice.note && <span className="text-xs text-text-muted">“{invoice.note}”</span>}

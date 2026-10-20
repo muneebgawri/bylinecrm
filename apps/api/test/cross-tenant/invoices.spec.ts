@@ -179,8 +179,8 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             stages: Stage[];
         }[];
         pipelineId = pipelines[0]!.id;
-        const open = pipelines[0]!.stages.filter((s) => s.kind === 'open').sort((a, b) => a.position - b.position);
-        target = open[open.length - 1]!;
+        // A rule may close a deal: fully paid → Won.
+        target = pipelines[0]!.stages.find((s) => s.kind === 'won')!;
     });
 
     afterAll(async () => {
@@ -390,7 +390,7 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             expect(await one(deal, id2)).toMatchObject({ status: 'needs_review', reasonCode: 'TOKEN_REFUSED' });
         });
 
-        it('a verified invoice covering the deal moves it by an `invoice.verified` rule', async () => {
+        it('a verified invoice covering the deal closes it Won by an `invoice.verified` rule', async () => {
             await as(admin)
                 .post(w(`/pipelines/${pipelineId}/rules`))
                 .send({ event: 'invoice.verified', toStageId: target.id })
@@ -408,8 +408,15 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                 await as(ana)
                     .get(w(`/opportunities/${covered}`))
                     .expect(200)
-            ).body as { stageId: string };
+            ).body as { stageId: string; closedAt: string | null };
             expect(after.stageId).toBe(target.id);
+            // The normal close path: closed, and announced as `deal.won` by the rule.
+            expect(after.closedAt).not.toBeNull();
+            const won = await owner.outboxEvent.findMany({
+                where: { workspaceId: workspace, type: 'deal.won', payload: { path: ['recordId'], equals: covered } },
+            });
+            expect(won).toHaveLength(1);
+            expect((won[0]!.payload as unknown as DomainEvent).actor).toMatchObject({ kind: 'rule' });
         });
 
         it('a refund on the signed hook takes the invoice back; a wrong signature or token is refused', async () => {
@@ -449,6 +456,54 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                     }).expect(200)
                 ).body,
             ).toEqual({ result: 'unmatched' });
+        });
+    });
+
+    describe('partial refunds', () => {
+        it('a partial refund keeps the invoice verified, counts it net, and tells finance the deal is short', async () => {
+            const paid = await newDeal(ana, `Refunded ${stamp}`, 10_000);
+            newswireos.answer(ref('pi_part'), FakeNewswireos.decided('verified'));
+            const id = (
+                (await add(ana, paid, { gateway: 'stripe', reference: ref('pi_part') }).expect(201))
+                    .body as DealInvoiceView
+            ).id;
+            await run(id);
+            const refund = (refunded: number) =>
+                deliver(hookUrl, {
+                    type: 'payment.refunded',
+                    data: {
+                        gateway: 'stripe',
+                        reference: ref('pi_part'),
+                        amount_cents: 10_000,
+                        refunded_amount_cents: refunded,
+                    },
+                });
+            expect((await refund(2_500).expect(200)).body).toEqual({ result: 'applied' });
+            expect(await one(paid, id)).toMatchObject({ status: 'verified', refundedAmountMinor: '2500' });
+            const events = await outboxEvents(id);
+            expect(events.at(-1)).toMatchObject({
+                type: 'invoice.refunded',
+                invoice: { amountMinor: '10000', refundedAmountMinor: '2500', covers: false },
+            });
+            const told = (await as(mia).get(w('/notifications')).expect(200)).body as NotificationsView;
+            expect(told.items.find((n) => n.kind === 'invoice_coverage_lost')?.invoice).toMatchObject({ id });
+            // The deal was closed Won by the rule and stays won.
+            const after = (
+                await as(ana)
+                    .get(w(`/opportunities/${paid}`))
+                    .expect(200)
+            ).body as { stageId: string };
+            expect(after.stageId).toBe(target.id);
+            // A replay (or an older total) changes nothing; a larger total moves it on; the whole amount ends it.
+            expect((await refund(2_500).expect(200)).body).toEqual({ result: 'unmatched' });
+            await refund(4_000).expect(200);
+            expect(await one(paid, id)).toMatchObject({ status: 'verified', refundedAmountMinor: '4000' });
+            await refund(10_000).expect(200);
+            expect(await one(paid, id)).toMatchObject({
+                status: 'invalidated',
+                reasonCode: 'REFUNDED',
+                refundedAmountMinor: '10000',
+            });
         });
     });
 

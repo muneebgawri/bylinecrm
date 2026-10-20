@@ -27063,7 +27063,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 66,
+                        "maxItems": 67,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -27133,6 +27133,7 @@
                                 "transfer.completed",
                                 "invoice.verified",
                                 "invoice.invalidated",
+                                "invoice.refunded",
                                 "guardrail.recorded"
                             ]
                         }
@@ -27158,7 +27159,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 66,
+                        "maxItems": 67,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -27228,6 +27229,7 @@
                                 "transfer.completed",
                                 "invoice.verified",
                                 "invoice.invalidated",
+                                "invoice.refunded",
                                 "guardrail.recorded"
                             ]
                         }
@@ -30598,6 +30600,10 @@
                         "type": "string",
                         "description": "What the payment must be, in minor units."
                     },
+                    "refundedAmountMinor": {
+                        "type": "string",
+                        "description": "Refunded so far. A verified invoice with some refunded counts net of it (partially refunded)."
+                    },
                     "currency": {
                         "type": "string"
                     },
@@ -30663,6 +30669,7 @@
                     "reference",
                     "canonicalReference",
                     "amountMinor",
+                    "refundedAmountMinor",
                     "currency",
                     "attachmentId",
                     "status",
@@ -32492,9 +32499,10 @@
                                         "transfer_received",
                                         "transfer_taken",
                                         "guardrail_repeat_blocks",
-                                        "invoice_needs_review"
+                                        "invoice_needs_review",
+                                        "invoice_coverage_lost"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount."
                                 },
                                 "task": {
                                     "nullable": true,

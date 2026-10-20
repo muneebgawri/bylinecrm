@@ -20,6 +20,7 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     transfer_taken: 'Moved from you',
     guardrail_repeat_blocks: 'Guardrails',
     invoice_needs_review: 'Invoice waiting for finance',
+    invoice_coverage_lost: 'Refund: deal no longer paid in full',
 };
 
 /** What a transfer notification says under its label. */

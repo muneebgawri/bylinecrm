@@ -67,5 +67,8 @@ describe('covers (INV-1)', () => {
         ).toBe(true);
         expect(covers(deal, [{ amountMinor: 5000n, currency: 'EUR' }])).toBe(false);
         expect(covers({ amountMinor: null, currency: 'USD' }, [{ amountMinor: 1n, currency: 'USD' }])).toBe(true);
+        // Net of refunds.
+        expect(covers(deal, [{ amountMinor: 1000n, refundedAmountMinor: 1n, currency: 'USD' }])).toBe(false);
+        expect(covers(deal, [{ amountMinor: 1200n, refundedAmountMinor: 200n, currency: 'USD' }])).toBe(true);
     });
 });

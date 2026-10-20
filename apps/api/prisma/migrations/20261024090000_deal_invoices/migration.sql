@@ -10,6 +10,7 @@ CREATE TYPE "invoice_status" AS ENUM ('verifying', 'verified', 'invalid', 'needs
 ALTER TYPE "stage_rule_event" ADD VALUE 'invoice.verified';
 ALTER TYPE "linked_object" ADD VALUE 'invoice';
 ALTER TYPE "notification_kind" ADD VALUE 'invoice_needs_review';
+ALTER TYPE "notification_kind" ADD VALUE 'invoice_coverage_lost';
 
 -- CreateTable
 CREATE TABLE "deal_invoices" (
@@ -20,6 +21,7 @@ CREATE TABLE "deal_invoices" (
     "reference" TEXT NOT NULL,
     "canonical_reference" TEXT,
     "amount_minor" BIGINT NOT NULL,
+    "refunded_amount_minor" BIGINT NOT NULL DEFAULT 0,
     "currency" CHAR(3) NOT NULL,
     "attachment_id" UUID,
     "status" "invoice_status" NOT NULL DEFAULT 'verifying',
@@ -62,7 +64,7 @@ CREATE UNIQUE INDEX "newswireos_settings_hook_token_hash_key" ON "newswireos_set
 
 -- Shape: a positive amount, an upper-case currency, a reference with something in it; verified when verified.
 ALTER TABLE "deal_invoices" ADD CONSTRAINT "deal_invoices_shape"
-    CHECK ("amount_minor" > 0 AND "currency" ~ '^[A-Z]{3}$' AND length(btrim("reference")) > 0
+    CHECK ("amount_minor" > 0 AND "refunded_amount_minor" BETWEEN 0 AND "amount_minor" AND "currency" ~ '^[A-Z]{3}$' AND length(btrim("reference")) > 0
         AND (("status" = 'verified') <= ("verified_at" IS NOT NULL)));
 ALTER TABLE "newswireos_settings" ADD CONSTRAINT "newswireos_settings_shape"
     CHECK ("base_url" ~ '^https?://[^/?#]+$');

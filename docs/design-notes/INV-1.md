@@ -19,11 +19,23 @@ copy NewswireOS's verification logic (D-239).
   This is the working default until NewswireOS ships the token endpoint.
 - Verification runs as a BullMQ job (`invoice-verification`, worker flag `INVOICE_WORKER`). It goes through
   `NewswireosVerificationPort`, which has an HTTP adapter and a fake in `test/support/fake-newswireos.ts`.
-- Events: `invoice.verified` and `invoice.invalidated` have the object `invoice`, target the deal, and carry
-  an `invoice` payload. `invoice.verified` puts the deal in `related` only when the deal's verified invoices
-  in its currency cover its amount (or when the deal has no amount). So a stage rule on `invoice.verified`
-  moves the deal once it is fully paid. Stage rules can't target won/lost (P1-2), so "auto-Won" is a rule to
-  the last open stage. Moving to Won remains a person's act.
+- Events: `invoice.verified`, `invoice.refunded` and `invoice.invalidated` have the object `invoice`, target
+  the deal, and carry an `invoice` payload (`amountMinor`, `refundedAmountMinor`, `covers`, and the rest).
+  `invoice.verified` puts the deal in `related` only when the deal's verified invoices in its currency, net of
+  refunds, cover its amount (or when the deal has no amount). So a stage rule on `invoice.verified` moves the
+  deal once it is fully paid.
+- Stage rules may now target a won or lost stage (decided for INV-1). Such a rule closes the deal through the
+  same path a member's close takes (`StageMoveService.move` with a close payload, then `announce`): it sets
+  `closedAt`, writes history attributed to the rule, emits `deal.won`/`deal.lost`, and so reaches webhooks and
+  the timeline. The deal keeps its amount, and a rule-made lost close has no lost reason. Only open deals are
+  moved by rules: a closed deal is never reopened by one. "Fully paid → Won" is a rule on `invoice.verified`
+  to the Won stage.
+- Partial refunds (decided for INV-1): `refunded_amount_minor` stores NewswireOS's running total. A refund
+  smaller than the invoice keeps it `verified`, shows a "Partially refunded" badge, and counts it net
+  (`amount − refunded`) toward the deal's coverage. It emits `invoice.refunded` with both amounts. A refund of
+  the whole amount, or any chargeback, makes the invoice `invalidated` as before. When a refund or chargeback
+  leaves the deal's verified invoices short of its amount, admins and holders of `invoice:verify` get an
+  `invoice_coverage_lost` notification. A won deal is not reopened.
 - Settings > NewswireOS (an admin page) holds the base URL and the API token (sealed with SecretBox, never
   shown), the hook secret (sealed), and a rotatable hook URL, in the same shape as Slotline (CAL-2).
 
@@ -31,7 +43,6 @@ copy NewswireOS's verification logic (D-239).
 
 - NewswireOS has no external token-scoped endpoint or outbound webhook yet. The contract below is
   the assumption. The NewswireOS side is being built separately.
-- Should a refund that is only partial invalidate the whole invoice? For now it does, because uncertainty never passes.
 
 ## The contract (v1)
 
@@ -123,6 +134,7 @@ Body:
         "reference": "ch_9",
         "references": ["ch_9", "pi_9", "in_77"],
         "amount_cents": 150000,
+        "refunded_amount_cents": 50000,
         "currency": "usd",
         "reason_code": "REFUNDED"
     }
@@ -131,8 +143,12 @@ Body:
 
 Types:
 
-- `payment.refunded`: a full or partial refund. Matched invoices become `invalidated`, and Byline emits `invoice.invalidated`.
-- `payment.disputed`: a chargeback or dispute opened. Handled the same way.
+- `payment.refunded`: a refund. `data.amount_cents` is the payment's amount and `data.refunded_amount_cents`
+  is the **running total** refunded on it so far (not this refund alone), so a replay is harmless. If the total is
+  less than the invoice's amount, it is a partial refund: the invoice stays `verified`, counts net, and Byline
+  emits `invoice.refunded`. If the total is the whole amount or more, or `refunded_amount_cents` is missing,
+  the invoice becomes `invalidated` and Byline emits `invoice.invalidated`.
+- `payment.disputed`: a chargeback or dispute opened. The invoice is always `invalidated`, whatever the amount.
 - `payment.verified`: optional. Finance verified the payment in NewswireOS, so a `needs_review`
   invoice becomes `verified`.
 - `ping`: Byline answers `{ "result": "ping" }`.

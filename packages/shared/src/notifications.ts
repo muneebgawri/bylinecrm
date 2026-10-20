@@ -23,6 +23,8 @@ export const NOTIFICATION_KINDS = [
     'guardrail_repeat_blocks',
     // INV-1: an invoice on a deal waits for finance (to holders of `invoice:verify`).
     'invoice_needs_review',
+    // INV-1: a refund left a deal's verified invoices short of its amount (to holders of `invoice:verify`).
+    'invoice_coverage_lost',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

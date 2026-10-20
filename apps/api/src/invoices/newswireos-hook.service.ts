@@ -104,10 +104,16 @@ export function parse(body: unknown): PaymentStateChange | 'ping' | 'ignored' {
         type,
         gateway: data['gateway'],
         references: [...new Set(references)].slice(0, 20),
+        refundedCents:
+            typeof data['refunded_amount_cents'] === 'number' && Number.isSafeInteger(data['refunded_amount_cents'])
+                ? Math.max(0, data['refunded_amount_cents'])
+                : null,
         detail: {
             id: typeof o['id'] === 'string' ? o['id'] : null,
             occurredAt: typeof o['occurred_at'] === 'string' ? o['occurred_at'] : null,
             amountCents: typeof data['amount_cents'] === 'number' ? data['amount_cents'] : null,
+            refundedAmountCents:
+                typeof data['refunded_amount_cents'] === 'number' ? data['refunded_amount_cents'] : null,
             currency: typeof data['currency'] === 'string' ? data['currency'] : null,
             reasonCode: typeof data['reason_code'] === 'string' ? data['reason_code'] : null,
         },

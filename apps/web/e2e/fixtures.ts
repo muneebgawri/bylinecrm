@@ -1750,6 +1750,7 @@ export function dealInvoices(dealId: string): DealInvoiceView[] {
         reference,
         canonicalReference: null,
         amountMinor,
+        refundedAmountMinor: '0',
         currency: 'USD',
         attachmentId: null,
         status,

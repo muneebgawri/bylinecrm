@@ -9,7 +9,8 @@ import { StageMoveService, type MoveOutcome } from './stage-move.service';
  * The rule engine (FR-CRMS-9). When something a rule reacts to happens to a person or company,
  * the deals they are on move forward to the rule's stage — never backward unless the rule says
  * so, never twice for the same event (a deal already in or past the stage is left alone), and
- * never into a won or lost stage (rules cannot target one). It runs in the event's workspace
+ * only open deals move (a closed one is never reopened by a rule). A rule into a won or lost stage closes the
+ * deal by the same close path a member's move takes (INV-1): `closedAt`, history, `deal.won`/`deal.lost`. It runs in the event's workspace
  * with no member and no owner scope, so a rule in one workspace cannot reach a deal in another:
  * the policies see only that workspace. Each move is attributed to the rule that made it.
  */
@@ -74,6 +75,8 @@ export class StageRulesService implements OutboxConsumer {
                     const outcome = await this.moves.move(tx, deal, rule.toStageId, actor, {
                         reason: 'rule',
                         allowBackward: rule.allowBackward,
+                        // Into a won or lost stage this is a close: the deal keeps its amount, no lost reason.
+                        close: {},
                     });
                     if (outcome.outcome === 'moved') {
                         await this.moves.announce(tx, event.workspaceId, deal.id, actor, outcome);

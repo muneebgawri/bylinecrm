@@ -49,15 +49,18 @@ export function settle(
 }
 
 /**
- * Whether a deal's verified invoices cover its amount: those in the deal's currency add up to at least it. A deal
+ * Whether a deal's verified invoices cover its amount: those in the deal's currency, net of refunds, add up to at
+ * least it. A deal
  * with no amount is covered by any verified invoice.
  */
 export function covers(
     deal: { amountMinor: bigint | null; currency: string },
-    verified: readonly { amountMinor: bigint; currency: string }[],
+    verified: readonly { amountMinor: bigint; refundedAmountMinor?: bigint; currency: string }[],
 ): boolean {
     if (verified.length === 0) return false;
     if (deal.amountMinor === null) return true;
-    const sum = verified.filter((i) => i.currency === deal.currency).reduce((a, i) => a + i.amountMinor, 0n);
+    const sum = verified
+        .filter((i) => i.currency === deal.currency)
+        .reduce((a, i) => a + i.amountMinor - (i.refundedAmountMinor ?? 0n), 0n);
     return sum >= deal.amountMinor;
 }

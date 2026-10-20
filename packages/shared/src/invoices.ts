@@ -20,6 +20,8 @@ export interface InvoiceEventPayload {
     gateway: InvoiceGateway;
     reference: string;
     amountMinor: string;
+    /** Refunded so far; `amountMinor - refundedAmountMinor` is what counts toward the deal. */
+    refundedAmountMinor: string;
     currency: string;
     status: InvoiceStatus;
     reasonCode: string | null;
@@ -38,6 +40,8 @@ export interface DealInvoiceView {
     reference: string;
     canonicalReference: string | null;
     amountMinor: string;
+    /** Refunded so far; a verified invoice with some refunded is partially refunded. */
+    refundedAmountMinor: string;
     currency: string;
     attachmentId: string | null;
     status: InvoiceStatus;

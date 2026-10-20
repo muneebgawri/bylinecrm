@@ -14,6 +14,10 @@ export const dealInvoiceView = named(
         reference: z.string(),
         canonicalReference: z.string().nullable().meta({ description: 'The reference as NewswireOS names it.' }),
         amountMinor: z.string().meta({ description: 'What the payment must be, in minor units.' }),
+        refundedAmountMinor: z.string().meta({
+            description:
+                'Refunded so far. A verified invoice with some refunded counts net of it (partially refunded).',
+        }),
         currency: z.string(),
         attachmentId: id.nullable().meta({ description: 'The receipt: a file on the deal.' }),
         status: z.enum(INVOICE_STATUSES).meta({
