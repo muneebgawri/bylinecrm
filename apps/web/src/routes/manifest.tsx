@@ -65,6 +65,7 @@ const settings = {
     guardrails: () => import('./w/settings/Guardrails').then((m) => ({ Component: m.Guardrails })),
     slotline: () => import('./w/settings/Slotline').then((m) => ({ Component: m.Slotline })),
     newswireos: () => import('./w/settings/Newswireos').then((m) => ({ Component: m.Newswireos })),
+    smtp2go: () => import('./w/settings/Smtp2Go').then((m) => ({ Component: m.Smtp2Go })),
     importTwenty: () => import('./w/settings/ImportTwenty').then((m) => ({ Component: m.ImportTwenty })),
     importBigin: () => import('./w/settings/ImportBigin').then((m) => ({ Component: m.ImportBigin })),
 };
@@ -176,6 +177,7 @@ const workspaceRoutes: RouteObject = {
             lazyPage('guardrails', settings.guardrails, 'Guardrails'),
             lazyPage('slotline', settings.slotline, 'Slotline'),
             lazyPage('newswireos', settings.newswireos, 'NewswireOS'),
+            lazyPage('smtp2go', settings.smtp2go, 'SMTP2Go'),
             lazyPage('import-twenty', settings.importTwenty, 'Import from Twenty'),
             lazyPage('import-bigin', settings.importBigin, 'Import from Bigin'),
         ]),

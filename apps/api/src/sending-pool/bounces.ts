@@ -66,3 +66,58 @@ export async function recordBounces(
     }
     return events;
 }
+
+/**
+ * A bounce SMTP2Go reported for a pool send that went through it (TRANS-1), in the webhook's transaction: one
+ * `mail_bounces` row keyed by SMTP2Go's event (a redelivered webhook writes nothing) and its `email.bounced`, so
+ * what follows — a permanent bounce suppressing the address, the mailbox's bounce rate judged — is the same
+ * consumer's as for a report Gmail received. `recordId` is the bounce row: there is no stored report message.
+ */
+export async function recordProviderBounce(
+    tx: WorkspaceClient,
+    mailbox: { id: string; workspaceId: string },
+    bounce: {
+        providerEventId: string;
+        address: string;
+        permanent: boolean;
+        status: string | null;
+        outboundId: string;
+        at: Date;
+    },
+): Promise<DomainEvent[]> {
+    const written = await tx.mailBounce.createManyAndReturn({
+        data: [
+            {
+                workspaceId: mailbox.workspaceId,
+                mailboxId: mailbox.id,
+                messageId: null,
+                providerEventId: bounce.providerEventId,
+                address: bounce.address,
+                permanent: bounce.permanent,
+                status: bounce.status,
+                outboundId: bounce.outboundId,
+                occurredAt: bounce.at,
+            },
+        ],
+        skipDuplicates: true,
+    });
+    const row = written[0];
+    if (!row) return [];
+    return [
+        {
+            type: 'email.bounced',
+            object: 'email',
+            workspaceId: mailbox.workspaceId,
+            actor: { kind: 'sync', id: mailbox.id },
+            occurredAt: bounce.at.toISOString(),
+            recordId: row.id,
+            bounce: {
+                mailboxId: mailbox.id,
+                address: bounce.address,
+                permanent: bounce.permanent,
+                status: bounce.status,
+                outboundId: bounce.outboundId,
+            },
+        },
+    ];
+}

@@ -95,6 +95,13 @@ export interface EmailBounce {
     outboundId: string | null;
 }
 
+/** What `email.complained` says (TRANS-1): who marked which pool send as spam, from which mailbox. */
+export interface EmailComplaint {
+    mailboxId: string;
+    address: string;
+    outboundId: string;
+}
+
 /** One DNS check's outcome for one step. */
 export interface DomainCheckStep {
     outcome: 'pass' | 'fail';

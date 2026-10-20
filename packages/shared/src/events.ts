@@ -2,7 +2,7 @@ import type { MeetingSummary } from './calendar.js';
 import type { EmailReply, EmailSummary } from './mail.js';
 import type { StageHistoryReason } from './pipelines.js';
 import { RECORD_OBJECTS, type Actor, type RecordTarget } from './records.js';
-import type { EmailBounce, MailboxPause } from './sending-pool.js';
+import type { EmailBounce, EmailComplaint, MailboxPause } from './sending-pool.js';
 import type { EmailFailure, EnrolmentEventPayload } from './sequences.js';
 import type { EmailTrackingPayload } from './tracking.js';
 import type { SuppressionEventPayload } from './suppression.js';
@@ -110,6 +110,10 @@ export const DOMAIN_EVENT_TYPES = [
     // the address that failed and the send. A permanent one suppresses the address and counts
     // towards the mailbox's bounce rate. No timeline entry; webhooks deliver it.
     'email.bounced',
+    // SMTP2Go reported that a recipient marked a pool send as spam (TRANS-1); `recordId` is the send, `complaint`
+    // the address and mailbox. The address is suppressed (`complaint`) and the mailbox's rates judged again. No
+    // timeline entry; webhooks deliver it.
+    'email.complained',
     // A send failed for good (P3-3): the mailbox's or the recipient's state, Gmail's refusal, a check
     // at a scheduled send's time. `recordId` is the send, `failure` why. No timeline entry (nothing was
     // sent); a sequence reads it to reschedule, hold or stop the step; webhooks deliver it.
@@ -237,6 +241,8 @@ interface DomainEventBase {
     suppression?: SuppressionEventPayload;
     /** Present on `email.bounced`: the address that failed, how, and the send. */
     bounce?: EmailBounce;
+    /** Present on `email.complained`: the address that complained, the mailbox and the send. */
+    complaint?: EmailComplaint;
     /** Present on `mailbox.paused` (and `mailbox.resumed`, the pause it ends): why. */
     pause?: MailboxPause;
     /** Present on `email.failed`: the send and why. */

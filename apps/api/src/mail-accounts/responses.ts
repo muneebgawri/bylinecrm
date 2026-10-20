@@ -1,4 +1,10 @@
-import { MAILBOX_CONNECT_RESULTS, MAILBOX_PURPOSES, MAILBOX_STATUSES, OAUTH_CHECK_OUTCOMES } from '@bylinecrm/shared';
+import {
+    MAILBOX_CONNECT_RESULTS,
+    MAILBOX_PURPOSES,
+    MAILBOX_TRANSPORTS,
+    MAILBOX_STATUSES,
+    OAUTH_CHECK_OUTCOMES,
+} from '@bylinecrm/shared';
 import { z } from 'zod';
 import { dateTime, id, named } from '../openapi/responses';
 
@@ -74,6 +80,9 @@ export const mailboxView = named(
         email: z.string(),
         label: z.string().nullable(),
         purpose: z.enum(MAILBOX_PURPOSES).meta({ description: 'Fixed when the mailbox connects.' }),
+        transport: z.enum(MAILBOX_TRANSPORTS).meta({
+            description: 'How its mail leaves: its Gmail grant, or SMTP2Go (TRANS-1; pool mailboxes only).',
+        }),
         status: z.enum(MAILBOX_STATUSES),
         grantedScopes: z.array(z.string()),
         lastError: mailboxError.nullable(),

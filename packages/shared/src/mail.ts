@@ -40,6 +40,21 @@ export const MAILBOX_PURPOSES = ['personal', 'pool'] as const;
 export type MailboxPurpose = (typeof MAILBOX_PURPOSES)[number];
 
 /**
+ * How a mailbox's mail leaves (TRANS-1): through its Gmail grant, or — a pool mailbox only, never personal or 1:1
+ * mail — through SMTP2Go's HTTP API. Fixed when the mailbox is added.
+ */
+export const MAILBOX_TRANSPORTS = ['gmail', 'smtp2go'] as const;
+export type MailboxTransport = (typeof MAILBOX_TRANSPORTS)[number];
+
+/**
+ * What SMTP2Go's webhook made of its last delivery to a pool mailbox (TRANS-1): a bounce, complaint, open or click
+ * recorded; one already recorded (`duplicate`); one for no send of this mailbox (`unmatched`); an event the CRM does
+ * not read, or an open/click our own short links already count (`ignored`); or refused (`bad_secret`).
+ */
+export const SMTP2GO_HOOK_RESULTS = ['recorded', 'duplicate', 'unmatched', 'ignored', 'bad_secret'] as const;
+export type Smtp2GoHookResult = (typeof SMTP2GO_HOOK_RESULTS)[number];
+
+/**
  * Where a mailbox stands. `reconnect_needed`: Google refused the stored grant (revoked, expired,
  * a scope withdrawn) — sync and sending stop until the owner connects it again. `disconnected`:
  * someone disconnected it; its tokens are gone.

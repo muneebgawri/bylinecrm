@@ -98,7 +98,8 @@ export class MailSyncService {
         const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: mailboxId } }),
         );
-        if (!mailbox) return skipped;
+        // An SMTP2Go mailbox (TRANS-1) has no Gmail to read; what it sends is stored by `storeSent`.
+        if (!mailbox || mailbox.transport !== 'gmail') return skipped;
         if (mailbox.status !== 'connected') {
             await this.recordStopped(mailbox, unavailableError(mailbox.status));
             return skipped;
@@ -160,6 +161,27 @@ export class MailSyncService {
         const copy = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailMessageCopy.findUnique({
                 where: { mailboxId_providerMessageId: { mailboxId, providerMessageId } },
+                select: { messageId: true },
+            }),
+        );
+        return copy?.messageId ?? null;
+    }
+
+    /**
+     * Stores a message the mailbox sent through another transport (TRANS-1: SMTP2Go), in Gmail's message shape,
+     * through the same one writer as a sync — so it is linked to its send, threaded with what it answers, on the
+     * timeline as `email.sent` (which moves a sequence on), and a reply to it is recognised by its Message-ID as
+     * any other. Returns the stored message's id; already stored is not an error.
+     */
+    async storeSent(workspaceId: string, mailboxId: string, message: GmailRawMessage): Promise<string | null> {
+        const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailbox.findUnique({ where: { id: mailboxId } }),
+        );
+        if (!mailbox) return null;
+        await this.store(mailbox, { parsed: parseGmailMessage(message), direction: 'outbound' });
+        const copy = await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailMessageCopy.findUnique({
+                where: { mailboxId_providerMessageId: { mailboxId, providerMessageId: message.id } },
                 select: { messageId: true },
             }),
         );

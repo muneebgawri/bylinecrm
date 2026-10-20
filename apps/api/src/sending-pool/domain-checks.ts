@@ -1,4 +1,5 @@
 import type { DomainCheck, DomainCheckStep } from '@bylinecrm/shared';
+import { SMTP2GO_SPF_INCLUDE } from '../smtp2go/smtp2go.constants';
 import { GOOGLE_SPF_INCLUDE } from './sending-pool.constants';
 
 /** The three names a sending domain's check reads. */
@@ -28,17 +29,21 @@ function spfStep(records: string[]): DomainCheckStep {
     if (spf.length === 0) return fail(`no SPF record (v=spf1); add one that includes ${GOOGLE_SPF_INCLUDE}`);
     if (spf.length > 1)
         return fail('more than one SPF record; receivers treat that as no SPF at all — merge them into one');
-    const includes = spf[0]!.split(/\s+/).some((term) => term.toLowerCase() === `include:${GOOGLE_SPF_INCLUDE}`);
-    return includes
-        ? pass(`SPF includes ${GOOGLE_SPF_INCLUDE}`)
-        : fail(
-              `the SPF record does not include ${GOOGLE_SPF_INCLUDE}, so Gmail's servers are not allowed to send for the domain`,
-          );
+    const terms = spf[0]!.split(/\s+/).map((term) => term.toLowerCase());
+    if (terms.includes(`include:${GOOGLE_SPF_INCLUDE}`)) return pass(`SPF includes ${GOOGLE_SPF_INCLUDE}`);
+    // A domain the pool sends from through SMTP2Go (TRANS-1) names SMTP2Go's servers instead.
+    if (terms.includes(`include:${SMTP2GO_SPF_INCLUDE}`)) return pass(`SPF includes ${SMTP2GO_SPF_INCLUDE} (SMTP2Go)`);
+    return fail(
+        `the SPF record does not include ${GOOGLE_SPF_INCLUDE}, so Gmail's servers are not allowed to send for the domain (or ${SMTP2GO_SPF_INCLUDE}, for SMTP2Go)`,
+    );
 }
 
 function dkimStep(name: string, records: string[]): DomainCheckStep {
     const key = records.find((r) => /(^|;)\s*p=/i.test(r));
-    if (!key) return fail(`no DKIM key at ${name}; turn on DKIM for the domain in Google Workspace with that selector`);
+    if (!key)
+        return fail(
+            `no DKIM key at ${name}; turn on DKIM for the domain in Google Workspace (or SMTP2Go) with that selector`,
+        );
     const value = /(?:^|;)\s*p=([^;]*)/i.exec(key)?.[1]?.trim() ?? '';
     return value ? pass(`DKIM key found at ${name}`) : fail(`the DKIM key at ${name} is empty (revoked)`);
 }
