@@ -14,8 +14,7 @@ export const UNPARSABLE_BODY_MESSAGE = 'the request body is not valid JSON';
 export function bodyParsers(): RequestHandler[] {
     const hookJson = express.json({ verify: keepRawBody, limit: HOOK_BODY_LIMIT });
     // The hook parser runs first on its paths; the general one then sees the body already read and passes.
-    const hooks: RequestHandler = (req, res, next) =>
-        req.url.startsWith(RAW_BODY_PATH_PREFIX) ? hookJson(req, res, next) : next();
+    const hooks: RequestHandler = (req, res, next) => (keepsRawBody(req.url) ? hookJson(req, res, next) : next());
     return [hooks, express.json(), express.urlencoded({ extended: true })];
 }
 
@@ -26,6 +25,13 @@ export function bodyParsers(): RequestHandler[] {
  * long answers to its questions gets more room than the default 100 kB.
  */
 export const RAW_BODY_PATH_PREFIX = '/api/hooks/';
+/** A tenant's signed inbound receiver (BYL-1: `/api/w/:id/inbound/byline`), signed over its bytes as the hooks are. */
+const INBOUND_PATH = /^\/api\/w\/[^/]+\/inbound\//;
+
+/** Whether a request's raw body is kept for its signature check. Exported for the suite. */
+export function keepsRawBody(url: string): boolean {
+    return url.startsWith(RAW_BODY_PATH_PREFIX) || INBOUND_PATH.test(url);
+}
 const HOOK_BODY_LIMIT = '1mb';
 
 export interface RequestWithRawBody {

@@ -15,7 +15,7 @@ import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
 import { ApiKeyService } from './api-key.service';
 import { EmailUnverified } from './auth.service';
-import { ANY_MEMBER_KEY, PUBLIC_KEY, REQUIRES_KEY, requiredCapabilities } from './decorators';
+import { ANY_MEMBER_KEY, PUBLIC_KEY, REQUIRES_KEY, SIGNED_INBOUND_KEY, requiredCapabilities } from './decorators';
 import type { AuthenticatedRequest } from './principal';
 import { SessionService } from './session.service';
 
@@ -99,11 +99,14 @@ export class WorkspaceGuard implements CanActivate {
         private readonly context: WorkspaceContext,
         private readonly memberships: MembershipService,
         private readonly roles: RolesService,
+        private readonly reflector: Reflector,
     ) {}
 
     async canActivate(ctx: ExecutionContext): Promise<boolean> {
         const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
         if (!isTenantPath(req.path)) return true;
+        // Another system posting to its own receiver (BYL-1): the handler's signature check is the gate.
+        if (signedInbound(this.reflector, ctx)) return true;
         const workspaceId = req.params['workspaceId'];
         const principal = req.principal;
         if (typeof workspaceId !== 'string' || !UUID.test(workspaceId) || !principal) throw new ForbiddenException();
@@ -159,6 +162,7 @@ export class RequiresGuard implements CanActivate {
     canActivate(ctx: ExecutionContext): boolean {
         const req = ctx.switchToHttp().getRequest<Request>();
         if (!isTenantPath(req.path)) return true;
+        if (signedInbound(this.reflector, ctx)) return true;
         // A route open to any member (with its reason written down) has the workspace guard as its gate.
         if (typeof this.reflector.get<unknown>(ANY_MEMBER_KEY, ctx.getHandler()) === 'string') return true;
         const required = requiredCapabilities(this.reflector.get<unknown>(REQUIRES_KEY, ctx.getHandler()));
@@ -181,4 +185,10 @@ export function isTenantPath(path: string): boolean {
 function cookie(req: Request, name: string): string | undefined {
     const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
     return cookies?.[name];
+}
+
+/** Whether the handler is a signed inbound receiver (`@SignedInbound(reason)`), with its reason written down. */
+function signedInbound(reflector: Reflector, ctx: ExecutionContext): boolean {
+    const reason = reflector.get<unknown>(SIGNED_INBOUND_KEY, ctx.getHandler());
+    return typeof reason === 'string' && reason.trim().length > 0;
 }

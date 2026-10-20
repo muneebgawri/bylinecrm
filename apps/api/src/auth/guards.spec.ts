@@ -134,7 +134,7 @@ describe('WorkspaceGuard', () => {
         const roles = {
             access: vi.fn().mockResolvedValue({ capabilities: new Set(['record:read']), recordScope: 'all' }),
         } as unknown as RolesService;
-        const guard = new WorkspaceGuard(workspaceContext, memberships, roles);
+        const guard = new WorkspaceGuard(workspaceContext, memberships, roles, new Reflector());
         return { guard, workspaceContext, memberships, roles };
     }
     const user: Principal = { kind: 'user', userId: 'u', sessionId: 's', emailVerified: true };

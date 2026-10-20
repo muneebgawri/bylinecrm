@@ -5,7 +5,7 @@ import { Test } from '@nestjs/testing';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../app.module';
 import { APP_COMPILE_TIMEOUT_MS, applyPlaceholderEnv } from '../openapi/placeholder-env';
-import { ANY_MEMBER_KEY, REQUIRES_KEY, requiredCapabilities } from './decorators';
+import { ANY_MEMBER_KEY, REQUIRES_KEY, SIGNED_INBOUND_KEY, requiredCapabilities } from './decorators';
 import { TENANT_PATH } from './guards';
 
 /**
@@ -14,7 +14,7 @@ import { TENANT_PATH } from './guards';
  * a request ever reaches it. The module is compiled, not initialised: no connection is opened.
  */
 describe('tenant routes declare a capability', () => {
-    const routes: { route: string; capability: unknown; openReason: unknown }[] = [];
+    const routes: { route: string; capability: unknown; openReason: unknown; inboundReason: unknown }[] = [];
 
     beforeAll(async () => {
         applyPlaceholderEnv();
@@ -35,6 +35,7 @@ describe('tenant routes declare a capability', () => {
                     route: `${controller.name}.${name}`,
                     capability: Reflect.getMetadata(REQUIRES_KEY, handler),
                     openReason: Reflect.getMetadata(ANY_MEMBER_KEY, handler),
+                    inboundReason: Reflect.getMetadata(SIGNED_INBOUND_KEY, handler),
                 });
             }
         }
@@ -46,13 +47,22 @@ describe('tenant routes declare a capability', () => {
 
     it('every one of them names capabilities from the catalogue, or is open to any member for a written reason', () => {
         const open = (r: { openReason: unknown }) => typeof r.openReason === 'string' && r.openReason.trim().length > 0;
-        const undeclared = routes.filter((r) => !requiredCapabilities(r.capability) && !open(r)).map((r) => r.route);
+        const inbound = (r: { inboundReason: unknown }) =>
+            typeof r.inboundReason === 'string' && r.inboundReason.trim().length > 0;
+        const undeclared = routes
+            .filter((r) => !requiredCapabilities(r.capability) && !open(r) && !inbound(r))
+            .map((r) => r.route);
         expect(undeclared, 'tenant routes with no @Requires() and no @AnyMember(reason)').toEqual([]);
     });
 
     it('a route gated by several capabilities counts as gated (the deal bulk route)', () => {
         const bulk = routes.find((r) => r.route === 'OpportunitiesController.bulk');
         expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
+    });
+
+    it('the signed inbound receivers, which no member calls, are exactly these (BYL-1)', () => {
+        const inbound = routes.filter((r) => typeof r.inboundReason === 'string').map((r) => r.route);
+        expect(inbound).toEqual(['BylineInboundController.receive']);
     });
 
     it('the routes open to any member are exactly the ones about the caller themselves', () => {
