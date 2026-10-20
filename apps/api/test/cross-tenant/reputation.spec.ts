@@ -478,7 +478,9 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
             mailboxId: string;
             pause: { code: string };
         }[];
-        expect(paused.map((p) => [p.mailboxId, p.pause.code])).toEqual([[anaMailbox, 'domain_spam_rate']]);
+        // Ana's personal mailbox and the pool mailbox on the same domain (from the primary-domain test) both stop.
+        expect(paused.map((p) => p.pause.code)).toEqual(['domain_spam_rate', 'domain_spam_rate']);
+        expect(paused.map((p) => p.mailboxId)).toContain(anaMailbox);
         // Admins are told in the bell.
         expect((await alerts(admin)).some((n) => n.guardrail?.kind === 'spam_rate')).toBe(true);
         // Replies are never held: only new recipients wait.
