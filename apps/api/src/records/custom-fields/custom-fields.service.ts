@@ -226,6 +226,11 @@ export class CustomFieldsService {
         return this.rls.withWorkspace((tx) => this.hiddenKeysIn(tx, object));
     }
 
+    /** `hiddenKeys` inside the caller's transaction. */
+    hiddenKeysWithin(tx: WorkspaceClient, object: RecordObject): Promise<ReadonlySet<string>> {
+        return this.restricted() ? this.hiddenKeysIn(tx, object) : Promise.resolve(NONE);
+    }
+
     /**
      * True when the caller is a request without `workspace:admin` (a member, a manager without it,
      * an API key without it). Jobs and imports run outside a request and see everything.

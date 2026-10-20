@@ -444,6 +444,59 @@ describe('records', () => {
                 ).body.custom,
             ).toEqual({ ltv: 9, score: 3 });
 
+            // A shared view an admin built over the field still loads for the member, without it.
+            const filter = {
+                and: [
+                    { field: 'custom.ltv', op: 'gte', value: 1 },
+                    { field: 'nameFirst', op: 'eq', value: 'Valued' },
+                ],
+            };
+            const shared = await as(admin)
+                .post(w('/views'))
+                .send({
+                    object: 'person',
+                    name: 'High LTV',
+                    isShared: true,
+                    filter,
+                    columns: [{ field: 'nameFirst' }, { field: 'custom.ltv' }],
+                })
+                .expect(201);
+            const viewId = (shared.body as { id: string }).id;
+            const repView = (
+                await as(rep)
+                    .get(w(`/views/${viewId}`))
+                    .expect(200)
+            ).body as {
+                filter: unknown;
+                columns: unknown;
+            };
+            expect(repView.filter).toEqual({ and: [{ field: 'nameFirst', op: 'eq', value: 'Valued' }] });
+            expect(repView.columns).toEqual([{ field: 'nameFirst' }]);
+            const repViews = (await as(rep).get(w('/views?object=person')).expect(200)).body as {
+                id: string;
+                filter: unknown;
+            }[];
+            expect(repViews.find((v) => v.id === viewId)?.filter).toEqual(repView.filter);
+            expect(
+                (
+                    (
+                        await as(admin)
+                            .get(w(`/views/${viewId}`))
+                            .expect(200)
+                    ).body as { filter: unknown }
+                ).filter,
+            ).toEqual(filter);
+            const viaView = (
+                await as(rep)
+                    .get(w(`/people?view=${viewId}`))
+                    .expect(200)
+            ).body as Page<Person>;
+            expect(viaView.items.map((p) => p.id)).toEqual([id]);
+            expect(viaView.items[0]?.custom).toEqual({ score: 3 });
+            await as(admin)
+                .delete(w(`/views/${viewId}`))
+                .expect(204);
+
             // Turned off, the field is everyone's again.
             await as(admin)
                 .patch(w(`/custom-fields/${ltvId}`))
