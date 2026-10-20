@@ -90,6 +90,7 @@ const sequences = {
 const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.HomePage }));
 
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
+const profilePage = () => import('./w/profile/ProfilePage').then((m) => ({ Component: m.ProfilePage }));
 const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
 
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
@@ -157,6 +158,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('mailboxes', mailboxesPage, 'Mailboxes'),
         lazyPage(`mailboxes/domains/:${DOMAIN_PARAM}`, sendingDomainPage, 'Sending domain'),
         lazyPage('team', teamPage, 'Team'),
+        lazyPage('profile', profilePage, 'Profile'),
         lazyPage('settings', settings.layout, 'Settings', [
             { index: true, element: <Navigate to="members" replace /> },
             lazyPage('members', settings.members, 'Members'),

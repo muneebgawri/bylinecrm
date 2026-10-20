@@ -1,5 +1,6 @@
 import {
     SIGNATURE_PLACEMENT_VARIABLE,
+    TEMPLATE_IMAGE_MAX_WIDTH,
     TEMPLATE_LINK_SCHEMES,
     type RenderedSignature,
     type RichText,
@@ -15,9 +16,11 @@ import {
  * `mailto:` — and everything else is dropped. Attributes are never copied from the document; the
  * only attribute the output carries is a link's `href`, escaped. Text and variable values are
  * escaped. The API also refuses bodies outside the subset on save, so dropping here is the second
- * line, not the first. A signature (#193) is the same walk with two additions, both opt-in: images by
- * `https:` URL (source, alt text and a capped width are the only attributes copied), and empty lines
- * left out.
+ * line, not the first. Images by `https:` URL (source, alt text and a capped width are the only
+ * attributes copied) and tables (rows of cells, with fixed inline styles Gmail and Outlook both draw —
+ * collapsed borders, a border and padding on each cell) are opt-in: a template body has both, a
+ * signature (#193) images only, and empty lines left out. In the text part an image is its alt text in
+ * brackets (a signature's says nothing), and a table is a line a row, its cells joined by ` | `.
  *
  * A variable whose value is missing is never rendered blank: it is named in `missing`, marked in
  * the HTML (`data-missing-variable`, which the editor's preview highlights) and kept as its
@@ -35,8 +38,14 @@ export type VariableRenderer = (path: string) => { html: string; text: string } 
 
 /** What a walk may render beyond the template subset. */
 export interface WalkOptions {
-    /** `image` nodes by `https:` URL, width capped (signatures, #193). */
+    /** `image` nodes by `https:` URL, width capped (a body; a signature, #193). */
     images: boolean;
+    /** `table` nodes, with inline styles for mail clients (a body, not a signature). */
+    tables?: boolean | undefined;
+    /** The text part names an image by its alt text, `[alt]` (a body); a signature's image says nothing. */
+    imageAlt?: boolean | undefined;
+    /** An image's inline style (a body: never wider than the column); absent, none. */
+    imageStyle?: string | undefined;
     /**
      * A line — a block, or a stretch between line breaks — with nothing visible on it is left out, so an
      * empty variable leaves no blank line behind (signatures, #193). A template keeps its lines as written.
@@ -55,7 +64,30 @@ export interface WalkOptions {
     layout?: { block: (html: string) => string; paragraph: string; link: string } | undefined;
 }
 
-const TEMPLATE_WALK: WalkOptions = { images: false, dropEmptyLines: false };
+const TEMPLATE_WALK: WalkOptions = {
+    images: true,
+    tables: true,
+    imageAlt: true,
+    imageStyle: 'max-width:100%;height:auto;border:0;',
+    dropEmptyLines: false,
+};
+
+/**
+ * A table's inline styles: what Gmail (which drops `<style>`) and Outlook (Word's renderer) both draw —
+ * collapsed borders, and each cell's own border and padding, since neither inherits them from the table.
+ */
+export const TABLE_STYLE = {
+    table: 'border-collapse:collapse;border:1px solid #d0d5dd;margin:0 0 12px 0;',
+    cell: 'border:1px solid #d0d5dd;padding:6px 10px;vertical-align:top;text-align:left;',
+    header: 'border:1px solid #d0d5dd;padding:6px 10px;vertical-align:top;text-align:left;font-weight:bold;background-color:#f2f4f7;',
+} as const;
+
+/** A cell's span when it has one beyond 1, as the attribute it renders as; `''` for none. */
+function spanAttr(name: 'colspan' | 'rowspan', value: unknown): string {
+    return Number.isInteger(value) && (value as number) > 1 && (value as number) <= 50
+        ? ` ${name}="${value as number}"`
+        : '';
+}
 
 export interface RenderedBody {
     html: string;
@@ -78,11 +110,17 @@ export function missingMarker(path: string): string {
     return `<span data-missing-variable="${escapeHtml(path)}">${escapeHtml(token)}</span>`;
 }
 
-/** An image source a signature may carry: an absolute `https:` URL, as written; `null` for anything else. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** An image source mail may carry: an absolute `https:` URL (or a loopback one, locally), as written; `null` for anything else. */
 export function safeImageSrc(src: unknown): string | null {
     if (typeof src !== 'string' || src.trim() !== src || src === '') return null;
     try {
-        return new URL(src).protocol === 'https:' ? src : null;
+        const url = new URL(src);
+        // A loopback `http:` address is a local CRM's own upload (its APP_URL is http there); no recipient
+        // could load it, and nothing but https leaves a deployed one.
+        const loopback = url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname);
+        return url.protocol === 'https:' || loopback ? src : null;
     } catch {
         return null;
     }
@@ -204,10 +242,58 @@ class Walker {
                 const tag = ordered ? 'ol' : 'ul';
                 return { html: `<${tag}>${items.join('')}</${tag}>`, text: lines.join('\n') };
             }
+            case 'table': {
+                // A table only at the top of a body: anywhere else (a list, a cell) it is dropped, as on save.
+                if (!this.options.tables || depth !== 0) return null;
+                return this.table(node);
+            }
             default:
                 // Outside the subset (a script, a code block, a block-level image, …): dropped with its content.
                 return null;
         }
+    }
+
+    /** A table's rows of cells; a cell's paragraphs are its lines, so no paragraph margin opens it up. */
+    private table(node: RichTextNode): { html: string; text: string } | null {
+        const rows: string[] = [];
+        const lines: string[] = [];
+        for (const row of node.content ?? []) {
+            if (row.type !== 'tableRow') continue;
+            const cells: string[] = [];
+            const texts: string[] = [];
+            for (const cell of row.content ?? []) {
+                if (cell.type !== 'tableCell' && cell.type !== 'tableHeader') continue;
+                const header = cell.type === 'tableHeader';
+                const html: string[] = [];
+                const text: string[] = [];
+                for (const child of cell.content ?? []) {
+                    if (child.type === 'paragraph') {
+                        const inline = this.inline(child.content);
+                        html.push(inline.html);
+                        text.push(inline.text);
+                        continue;
+                    }
+                    const out = this.block(child, 1);
+                    if (!out) continue;
+                    html.push(out.html);
+                    text.push(out.text);
+                }
+                const attrs = attrsOf(cell);
+                const tag = header ? 'th' : 'td';
+                cells.push(
+                    `<${tag}${spanAttr('colspan', attrs['colspan'])}${spanAttr('rowspan', attrs['rowspan'])} style="${header ? TABLE_STYLE.header : TABLE_STYLE.cell}">${html.join('<br>')}</${tag}>`,
+                );
+                texts.push(text.join(' ').replace(/\s+/g, ' ').trim());
+            }
+            if (cells.length === 0) continue;
+            rows.push(`<tr>${cells.join('')}</tr>`);
+            lines.push(texts.join(' | '));
+        }
+        if (rows.length === 0) return null;
+        return {
+            html: `<table cellpadding="0" cellspacing="0" border="1" style="${TABLE_STYLE.table}">${rows.join('')}</table>`,
+            text: lines.join('\n'),
+        };
     }
 
     /**
@@ -304,7 +390,10 @@ class Walker {
                         src,
                         alt,
                         Number.isInteger(width) && width > 0 ? Math.min(width, this.maxImageWidth) : null,
+                        null,
+                        this.options.imageStyle,
                     );
+                    if (this.options.imageAlt && alt.trim() !== '') text += `[${alt.trim()}]`;
                     break;
                 }
                 case 'hardBreak':
@@ -355,6 +444,7 @@ export function renderBody(
             return value === null ? null : { html: escapeHtml(value), text: value };
         },
         { ...TEMPLATE_WALK, signature: { at: signature } },
+        TEMPLATE_IMAGE_MAX_WIDTH,
     );
 }
 

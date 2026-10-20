@@ -55,6 +55,19 @@ function api(calls: Call[], completed: boolean) {
                 capabilities: ['record:read'],
             });
         if (path.endsWith('/members/summary')) return json([]);
+        if (path.endsWith('/m/signature-profile'))
+            return json({
+                memberId: 'm',
+                name: profile.displayName,
+                jobTitle: 'Partner',
+                phone: null,
+                slotlineUsername: null,
+                bookingLink: null,
+                slotlineConfigured: false,
+                slotlineKey: null,
+                slotlineEvent: null,
+                socials: {},
+            });
         return json({});
     });
 }
@@ -127,14 +140,28 @@ describe('the display name', { timeout: 20_000 }, () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('opens from the user menu to change the name later', async () => {
+    it('the user menu opens the Profile page: the name and the signature details, for any member', async () => {
         const calls: Call[] = [];
         vi.stubGlobal('fetch', api(calls, true));
         renderHome();
         const user = userEvent.setup();
         await user.click(await screen.findByRole('button', { name: /Kate Morgan/ }, { timeout: FIRST_RENDER_MS }));
-        await user.click(await screen.findByRole('menuitem', { name: 'Edit profile' }));
-        const dialog = await screen.findByRole('dialog', { name: 'Your profile' });
-        expect(within(dialog).getByRole('textbox', { name: 'Your name' })).toHaveValue('Kate Morgan');
+        await user.click(await screen.findByRole('menuitem', { name: 'Profile' }));
+        expect(
+            await screen.findByRole('heading', { name: 'Profile' }, { timeout: FIRST_RENDER_MS }),
+        ).toBeInTheDocument();
+        const name = await screen.findByRole('textbox', { name: /^Name/ });
+        expect(name).toHaveValue('Kate Morgan');
+        expect(await screen.findByRole('textbox', { name: 'Job title' })).toHaveValue('Partner');
+        expect(screen.getByRole('textbox', { name: 'Phone' })).toBeInTheDocument();
+        // A role without mailbox:read is told so, never shown someone else's mailbox.
+        expect(screen.getByText(/cannot see mailboxes/)).toBeInTheDocument();
+        await user.clear(name);
+        await user.type(name, 'Kate M.');
+        await user.click(screen.getByRole('button', { name: 'Save name' }));
+        await waitFor(() =>
+            expect(calls.some((c) => c.method === 'PATCH' && c.path.endsWith('/me/profile'))).toBe(true),
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 });

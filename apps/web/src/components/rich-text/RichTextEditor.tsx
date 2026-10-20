@@ -1,11 +1,15 @@
-import type { RichText } from '@bylinecrm/shared';
+import type { MailAssetView, RichText } from '@bylinecrm/shared';
 import { Button, cn, focusRing } from '@bylinecrm/ui';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
+import { TableKit } from '@tiptap/extension-table';
 import { EditorContent, Node, useEditor, type AnyExtension, type Editor, type JSONContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Heading2, Heading3, Italic, Link2, List, ListOrdered } from 'lucide-react';
-import { useEffect, useImperativeHandle, useState, type Ref } from 'react';
+import { Bold, Heading2, Heading3, ImagePlus, Italic, Link2, List, ListOrdered, Table2 } from 'lucide-react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useUploadMailImage } from '../../api/mailAssets';
+import { failureText } from '../../lib/errors';
+import { ImageBar, TableBar, imageFilesOf, insertUploadedImage, mailImageProblem } from './media';
 import { MissingVariables, VARIABLE_TRIGGER_EVENT, Variable, missingVariablesKey } from './variableNode';
 
 /**
@@ -16,10 +20,11 @@ import { MissingVariables, VARIABLE_TRIGGER_EVENT, Variable, missingVariablesKey
  *
  * - `note`: headings, bold, italic, lists, http(s) links (what `RichTextView` shows).
  * - `template`: exactly the API's template subset (P2-4: paragraphs, h2/h3, bold, italic, lists,
- *   line breaks, `https:`/`mailto:` links) plus variable chips.
+ *   line breaks, `https:`/`mailto:` links) plus variable chips, images (uploaded — button, paste or drop —
+ *   and served at a public https address, with alt text and a width) and tables. The composer's body too.
  * - `subject`: one line of text and variable chips; no marks, no blocks.
  * - `signature` (#193): the template subset's paragraphs, line breaks, bold, italic and links, variable
- *   chips, and images linked by https URL (a Gmail import's, or the logo's chip).
+ *   chips, and images linked by https URL (uploaded, a Gmail import's, or the logo's chip) — no tables.
  */
 export type RichTextProfile = 'note' | 'template' | 'subject' | 'signature';
 
@@ -49,9 +54,11 @@ export interface RichTextEditorProps {
     handle?: Ref<RichTextHandle>;
     readOnly?: boolean;
     className?: string;
+    /** Stores an image and gives its public address (image profiles); the current workspace's upload by default. */
+    uploadImage?: (file: File) => Promise<MailAssetView>;
 }
 
-type Tool = 'h2' | 'h3' | 'bold' | 'italic' | 'bulletList' | 'orderedList' | 'link';
+type Tool = 'h2' | 'h3' | 'bold' | 'italic' | 'bulletList' | 'orderedList' | 'link' | 'image' | 'table';
 
 interface ProfileSpec {
     tools: readonly Tool[];
@@ -69,7 +76,7 @@ export const PROFILES: Record<RichTextProfile, ProfileSpec> = {
         minHeightClass: 'min-h-24',
     },
     template: {
-        tools: ['h2', 'h3', 'bold', 'italic', 'bulletList', 'orderedList', 'link'],
+        tools: ['h2', 'h3', 'bold', 'italic', 'bulletList', 'orderedList', 'link', 'image', 'table'],
         linkSchemes: ['https', 'mailto'],
         singleLine: false,
         minHeightClass: 'min-h-48',
@@ -77,7 +84,7 @@ export const PROFILES: Record<RichTextProfile, ProfileSpec> = {
     // One line, but still a finger's 44px on a phone whatever the font's metrics (FR-CRMS-UI-12).
     subject: { tools: [], singleLine: true, minHeightClass: 'max-md:min-h-touch' },
     signature: {
-        tools: ['bold', 'italic', 'link'],
+        tools: ['bold', 'italic', 'link', 'image'],
         linkSchemes: ['https', 'mailto'],
         singleLine: false,
         minHeightClass: 'min-h-16',
@@ -114,16 +121,16 @@ function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension
         ];
     }
     if (profile === 'template' || profile === 'signature') {
-        const images =
-            profile === 'signature'
-                ? [
-                      Image.configure({
-                          inline: true,
-                          allowBase64: false,
-                          HTMLAttributes: { class: 'inline max-w-full h-auto' },
-                      }),
-                  ]
-                : [];
+        // Images sit in a line (as mail carries them), by URL only — never a pasted data: URI.
+        const images = [
+            Image.configure({
+                inline: true,
+                allowBase64: false,
+                HTMLAttributes: { class: 'inline max-w-full h-auto' },
+            }),
+        ];
+        // Tables in a body only; the API refuses one in a signature. Fixed layout: no column resizing.
+        const tables = profile === 'template' ? [TableKit.configure({ table: { resizable: false } })] : [];
         return [
             StarterKit.configure({
                 heading: { levels: [2, 3] },
@@ -138,6 +145,7 @@ function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension
             ...link,
             ...variables,
             ...images,
+            ...tables,
         ];
     }
     return [
@@ -190,8 +198,16 @@ export function RichTextEditor({
     handle,
     readOnly = false,
     className,
+    uploadImage: uploadOverride,
 }: RichTextEditorProps) {
     const spec = PROFILES[profile];
+    const workspaceUpload = useUploadMailImage();
+    const upload = spec.tools.includes('image') ? (uploadOverride ?? workspaceUpload) : undefined;
+    const [uploading, setUploading] = useState(0);
+    const [mediaError, setMediaError] = useState<string | null>(null);
+    const fileInput = useRef<HTMLInputElement>(null);
+    // The editor's paste and drop handlers are set once; they read the latest upload through this.
+    const uploadFiles = useRef<(files: File[], at?: number) => void>(() => undefined);
     const editor = useEditor({
         extensions: extensionsFor(profile, onVariableTrigger !== undefined),
         content: (value.content?.length ? value : EMPTY) as JSONContent,
@@ -210,6 +226,20 @@ export function RichTextEditor({
             },
             // A subject is one line: Enter does nothing rather than splitting it.
             handleKeyDown: (_view, event) => spec.singleLine && event.key === 'Enter',
+            // A pasted or dropped image is uploaded and goes in by its public address, never as data.
+            handlePaste: (_view, event) => {
+                const files = imageFilesOf(event.clipboardData);
+                if (files.length === 0 || !spec.tools.includes('image')) return false;
+                uploadFiles.current(files);
+                return true;
+            },
+            handleDrop: (view, event) => {
+                const files = imageFilesOf(event.dataTransfer);
+                if (files.length === 0 || !spec.tools.includes('image')) return false;
+                const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+                uploadFiles.current(files, at);
+                return true;
+            },
         },
         onUpdate: ({ editor: e }) => onChange(e.getJSON() as RichText),
         onFocus: () => onFocus?.(),
@@ -259,6 +289,30 @@ export function RichTextEditor({
         };
     }, [editor]);
 
+    // The latest upload for the paste and drop handlers, kept current after each render.
+    useEffect(() => {
+        uploadFiles.current = (files: File[], at?: number) => {
+            if (!editor) return;
+            if (!upload) {
+                setMediaError('Images can be added inside a workspace only.');
+                return;
+            }
+            for (const file of files) {
+                const problem = mailImageProblem(file);
+                if (problem) {
+                    setMediaError(problem);
+                    continue;
+                }
+                setMediaError(null);
+                setUploading((n) => n + 1);
+                upload(file)
+                    .then((asset) => insertUploadedImage(editor, asset, file.name, at))
+                    .catch((error: unknown) => setMediaError(`The image was not added: ${failureText(error)}`))
+                    .finally(() => setUploading((n) => n - 1));
+            }
+        };
+    });
+
     if (!editor) return null;
 
     const setLink = () => {
@@ -277,7 +331,42 @@ export function RichTextEditor({
                 className,
             )}
         >
-            {spec.tools.length > 0 && !readOnly && <Toolbar editor={editor} tools={spec.tools} onLink={setLink} />}
+            {spec.tools.length > 0 && !readOnly && (
+                <Toolbar
+                    editor={editor}
+                    tools={spec.tools}
+                    onLink={setLink}
+                    onImage={() => fileInput.current?.click()}
+                    uploading={uploading > 0}
+                />
+            )}
+            {spec.tools.includes('image') && !readOnly && (
+                <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    multiple
+                    hidden
+                    aria-label="Image to add"
+                    onChange={(e) => {
+                        uploadFiles.current([...(e.target.files ?? [])]);
+                        e.target.value = '';
+                    }}
+                />
+            )}
+            {!readOnly && editor.isActive('image') && <ImageBar editor={editor} />}
+            {!readOnly && spec.tools.includes('table') && editor.isActive('table') && <TableBar editor={editor} />}
+            {(uploading > 0 || mediaError) && (
+                <p
+                    role={mediaError ? 'alert' : 'status'}
+                    className={cn(
+                        'm-0 border-b border-border px-3 py-1.5 text-xs',
+                        mediaError ? 'text-danger' : 'text-text-muted',
+                    )}
+                >
+                    {mediaError ?? 'Uploading the image…'}
+                </p>
+            )}
             {linkOpen && (
                 <form
                     className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5"
@@ -397,9 +486,33 @@ const TOOLS: Record<
         active: (e) => e.isActive('link'),
         run: () => undefined,
     },
+    image: {
+        title: 'Add image',
+        icon: <ImagePlus className="size-4" />,
+        active: () => false,
+        run: () => undefined,
+    },
+    table: {
+        title: 'Insert table',
+        icon: <Table2 className="size-4" />,
+        active: (e) => e.isActive('table'),
+        run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+    },
 };
 
-function Toolbar({ editor, tools, onLink }: { editor: Editor; tools: readonly Tool[]; onLink: () => void }) {
+function Toolbar({
+    editor,
+    tools,
+    onLink,
+    onImage,
+    uploading,
+}: {
+    editor: Editor;
+    tools: readonly Tool[];
+    onLink: () => void;
+    onImage: () => void;
+    uploading: boolean;
+}) {
     return (
         // On a phone the toolbar scrolls inside itself; every button is a 44px target (FR-CRMS-UI-12).
         <div
@@ -412,7 +525,11 @@ function Toolbar({ editor, tools, onLink }: { editor: Editor; tools: readonly To
                 const isLink = id === 'link';
                 const active = tool.active(editor);
                 const title = isLink && active ? 'Remove link' : tool.title;
-                const disabled = isLink && editor.state.selection.empty && !active;
+                // A table never goes inside another (the API refuses it); an upload runs one at a time per click.
+                const disabled =
+                    (isLink && editor.state.selection.empty && !active) ||
+                    (id === 'table' && active) ||
+                    (id === 'image' && uploading);
                 return (
                     <button
                         key={id}
@@ -422,7 +539,7 @@ function Toolbar({ editor, tools, onLink }: { editor: Editor; tools: readonly To
                         aria-pressed={active}
                         disabled={disabled}
                         onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => (isLink ? onLink() : tool.run(editor))}
+                        onClick={() => (isLink ? onLink() : id === 'image' ? onImage() : tool.run(editor))}
                         className={cn(
                             'grid size-7 shrink-0 place-items-center rounded-md text-text-muted hover:bg-surface-raised hover:text-text disabled:opacity-40 max-md:size-touch',
                             active && 'bg-surface-raised text-text',

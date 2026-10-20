@@ -20,7 +20,7 @@ export const TEMPLATE_BODY_MAX_CHARS = 100_000;
  * renderer drops anything else again on the way out (defence in depth), so an email can only ever
  * carry these. Headings are levels 2 and 3 only: a subject line is the email's level 1.
  */
-export const TEMPLATE_BODY_NODES = [
+export const TEMPLATE_TEXT_NODES = [
     'paragraph',
     'heading',
     'bulletList',
@@ -30,6 +30,38 @@ export const TEMPLATE_BODY_NODES = [
     'text',
     'variable',
 ] as const;
+/** A table (a data table, rendered with inline borders and padding for Gmail and Outlook): rows of cells. */
+export const TEMPLATE_TABLE_NODES = ['table', 'tableRow', 'tableHeader', 'tableCell'] as const;
+/**
+ * A template body, and the composer's: the text subset, images linked by `https:` URL (an uploaded mail
+ * image's public address, or any other https image), and tables. A signature has images but no tables.
+ */
+export const TEMPLATE_BODY_NODES = [...TEMPLATE_TEXT_NODES, 'image', ...TEMPLATE_TABLE_NODES] as const;
+/** A body image's width is capped (px), the width of an email's column; its height follows its aspect. */
+export const TEMPLATE_IMAGE_MAX_WIDTH = 600;
+export const TEMPLATE_IMAGE_ALT_MAX = 200;
+/** A table's size: enough for a price list or a schedule, not a spreadsheet. */
+export const TEMPLATE_TABLE_MAX_ROWS = 50;
+export const TEMPLATE_TABLE_MAX_COLUMNS = 8;
+
+/** An image uploaded for mail (a body's or a signature's): its bytes' limits as the API takes them. */
+export const MAIL_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+export const MAIL_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
+/** Stored at most this wide (twice the widest an email shows it, for high-density screens); never scaled up. */
+export const MAIL_IMAGE_STORED_WIDTH = 1200;
+/** Where an uploaded mail image is served, on `APP_URL`, with no sign-in: `/api/public/mail-assets/<token>.<png|jpg>`. */
+export const MAIL_ASSET_PUBLIC_PATH = '/api/public/mail-assets';
+
+/** `POST /w/:workspaceId/mail-assets`: an uploaded image, at its stable public https address. */
+export interface MailAssetView {
+    id: string;
+    url: string;
+    /** As stored, in pixels. */
+    width: number;
+    height: number;
+    contentType: (typeof MAIL_IMAGE_MIME_TYPES)[number];
+    sizeBytes: number;
+}
 export const TEMPLATE_BODY_MARKS = ['bold', 'italic', 'link'] as const;
 export const TEMPLATE_HEADING_LEVELS = [2, 3] as const;
 /** Link targets an email may carry; `javascript:` and every other scheme are refused. */

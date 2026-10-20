@@ -261,7 +261,7 @@ function UserCard({
                     })}
                 </DropdownMenuRadioGroup>
                 <DropdownMenuItem onSelect={onOpenProfile}>
-                    <UserRound aria-hidden /> Edit profile
+                    <UserRound aria-hidden /> Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={onOpenShortcuts}>
                     <Keyboard aria-hidden /> Keyboard shortcuts

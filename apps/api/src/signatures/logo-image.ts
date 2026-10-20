@@ -37,6 +37,26 @@ export function logoPng(bytes: Buffer): { data: Buffer; width: number; height: n
     return { data: PNG.sync.write(png), width: scaled.width, height: scaled.height };
 }
 
+/**
+ * A mail image upload (a body's or a signature's) as stored: read as PNG or JPEG by its bytes, scaled down to
+ * at most `maxWidth` wide (never up), and written again in the format it came in — which also drops its
+ * metadata (a photo's location, say). Nothing is trimmed: the image is the author's as drawn.
+ */
+export function mailImage(
+    bytes: Buffer,
+    maxWidth: number,
+): { data: Buffer; width: number; height: number; contentType: 'image/png' | 'image/jpeg' } {
+    const bitmap = decode(bytes);
+    const scaled = bitmap.width > maxWidth ? downscale(bitmap, maxWidth) : bitmap;
+    if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
+        const png = new PNG({ width: scaled.width, height: scaled.height });
+        png.data = Buffer.from(scaled.data);
+        return { data: PNG.sync.write(png), width: scaled.width, height: scaled.height, contentType: 'image/png' };
+    }
+    const data = Buffer.from(jpeg.encode({ width: scaled.width, height: scaled.height, data: scaled.data }, 85).data);
+    return { data, width: scaled.width, height: scaled.height, contentType: 'image/jpeg' };
+}
+
 function decode(bytes: Buffer): Bitmap {
     if (bytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
         // IHDR is the first chunk: width and height at bytes 16 and 20.
@@ -60,7 +80,7 @@ function decode(bytes: Buffer): Bitmap {
             throw new UnreadableImage('the JPEG cannot be read');
         }
     }
-    throw new UnreadableImage('a logo is a PNG or a JPEG');
+    throw new UnreadableImage('an image is a PNG or a JPEG');
 }
 
 /** Alpha at or under this is empty; a channel within this of the background's is background. */

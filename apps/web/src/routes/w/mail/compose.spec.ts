@@ -85,6 +85,8 @@ describe('FR-CRMS-3: empty variables hold the send', () => {
         expect(isBlank(doc(para()))).toBe(true);
         expect(isBlank(doc(para(text('  '))))).toBe(true);
         expect(isBlank(doc(para(chip('person.firstName'))))).toBe(false);
+        // An image alone is something a reader sees.
+        expect(isBlank(doc(para({ type: 'image', attrs: { src: 'https://x.test/a.png' } })))).toBe(false);
     });
 });
 

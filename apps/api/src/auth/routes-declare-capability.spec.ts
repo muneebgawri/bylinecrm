@@ -71,7 +71,8 @@ describe('tenant routes declare a capability', () => {
         // (#193) the caller's own signature details — an admin's for anyone, the service checks which — and
         // (#196) the caller's own Slotline account, which the service refuses to anyone else, and (OWN-1) the
         // transfers the caller is party to: the service lets only the receiver accept or decline, and only the
-        // proposer or a manager take one back.
+        // proposer or a manager take one back. Uploading a mail image is the one route open to any of several
+        // capabilities — email:send, template:write or mailbox:manage, whoever writes mail — which the service checks.
         expect(open.sort()).toEqual(
             [
                 'TransfersController.list',
@@ -90,6 +91,7 @@ describe('tenant routes declare a capability', () => {
                 'SlotlineAccountController.pickEvent',
                 'SlotlineAccountController.putKey',
                 'SlotlineAccountController.removeKey',
+                'MailAssetsController.upload',
             ].sort(),
         );
     });

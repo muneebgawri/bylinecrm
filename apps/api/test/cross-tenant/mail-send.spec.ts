@@ -426,7 +426,7 @@ describe('mail send and reply detection', () => {
                     mailboxId: adminMailbox,
                     personId: danaId,
                     subject: 'x',
-                    body: body({ type: 'image', attrs: { src: 'https://t.example/p.gif' } }),
+                    body: body({ type: 'codeBlock', content: [{ type: 'text', text: 'x' }] }),
                 });
             expect(res.status).toBe(400);
             expect(err(res).code).toBe('validation.failed');
