@@ -7,7 +7,7 @@ import { Enrichment } from './Enrichment';
 
 const settings: EnrichmentSettingsView = {
     reaskAfterDays: 90,
-    sources: { website: true, dns: true, gravatar: true, email_domain: true },
+    sources: { website: true, dns: true, gravatar: true, email_domain: true, byline: true },
     isDefault: true,
     updatedAt: null,
 };
@@ -36,7 +36,7 @@ describe('P4-2 FR-CRMS-15 Settings → Enrichment', { timeout: 20_000 }, () => {
         expect(website).toBeChecked();
         expect(website).toBeDisabled();
         expect(screen.getByRole('switch', { name: /Gravatar/ })).toBeChecked();
-        expect(screen.getByText(/no paid API/i)).toBeInTheDocument();
+        expect(screen.getByText(/BylineAI when it is linked/)).toBeInTheDocument();
         const age = screen.getByLabelText(/Ask again after/);
         expect(age).toHaveValue(90);
         expect(age).toBeDisabled();
@@ -73,7 +73,7 @@ describe('P4-2 FR-CRMS-15 Settings → Enrichment', { timeout: 20_000 }, () => {
         await waitFor(() =>
             expect(seen.filter((r) => r.method === 'PUT').at(-1)?.body).toEqual({
                 reaskAfterDays: 30,
-                sources: { website: true, dns: true, gravatar: false, email_domain: true },
+                sources: { website: true, dns: true, gravatar: false, email_domain: true, byline: true },
             }),
         );
         await waitFor(() => expect(screen.getByRole('switch', { name: /Gravatar/ })).not.toBeChecked());

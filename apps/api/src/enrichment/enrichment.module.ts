@@ -2,6 +2,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { RecordsModule } from '../records/records.module';
+import { BylineApiModule } from '../byline/byline-api.module';
+import { BylineEnricher } from '../byline/byline.enricher';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { DnsEnricher } from './dns';
 import { EmailDomainEnricher } from './email-domain';
@@ -38,6 +40,7 @@ import { WebsiteEnricher } from './website';
         AuthModule,
         RecordsModule,
         SendingPoolModule,
+        BylineApiModule,
         BullModule.registerQueue({
             name: ENRICHMENT_QUEUE,
             defaultJobOptions: {
@@ -59,10 +62,11 @@ import { WebsiteEnricher } from './website';
         DnsEnricher,
         GravatarEnricher,
         EmailDomainEnricher,
+        BylineEnricher,
         {
             provide: ENRICHERS,
             useFactory: (...sources: unknown[]) => sources,
-            inject: [WebsiteEnricher, DnsEnricher, GravatarEnricher, EmailDomainEnricher],
+            inject: [WebsiteEnricher, DnsEnricher, GravatarEnricher, EmailDomainEnricher, BylineEnricher],
         },
         EnrichmentSettingsService,
         EnrichmentQueue,

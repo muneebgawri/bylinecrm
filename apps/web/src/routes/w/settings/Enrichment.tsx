@@ -30,10 +30,10 @@ export function Enrichment() {
                 Enrichment
             </h2>
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
-                A new person or company, and one whose address or domain changes, is looked up in the free sources below
-                — no paid API, nothing behind a login. Each answer is kept with where it came from and when it was
-                asked, and written to the record only when it is better than what is there: an empty field takes any
-                answer; what a member typed is never replaced.
+                A new person or company, and one whose address or domain changes, is looked up in the sources below —
+                free ones, and BylineAI when it is linked (its paid layers run under BylineAI’s budgets). Each answer is
+                kept with where it came from and when it was asked, and written to the record only when it is better
+                than what is there: an empty field takes any answer; what a member typed is never replaced.
             </p>
             {settings.data ? (
                 // A save (here or elsewhere) starts the form again from what is stored.

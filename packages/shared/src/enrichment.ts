@@ -8,7 +8,7 @@ export const ENRICHMENT_OBJECTS = ['person', 'company'] as const;
 export type EnrichmentObject = (typeof ENRICHMENT_OBJECTS)[number];
 
 /** The free sources, in the order the settings show them. No paid API; nothing behind a login. */
-export const ENRICHMENT_SOURCES = ['website', 'dns', 'gravatar', 'email_domain'] as const;
+export const ENRICHMENT_SOURCES = ['website', 'dns', 'gravatar', 'email_domain', 'byline'] as const;
 export type EnrichmentSource = (typeof ENRICHMENT_SOURCES)[number];
 
 export const ENRICHMENT_SOURCE_LABELS: Readonly<Record<EnrichmentSource, string>> = {
@@ -16,6 +16,7 @@ export const ENRICHMENT_SOURCE_LABELS: Readonly<Record<EnrichmentSource, string>
     dns: 'DNS',
     gravatar: 'Gravatar',
     email_domain: 'Email addresses',
+    byline: 'BylineAI',
 };
 
 /** What each source reads, and from where — the settings page says this beside the switch. */
@@ -25,6 +26,7 @@ export const ENRICHMENT_SOURCE_NOTES: Readonly<Record<EnrichmentSource, string>>
     gravatar: 'A person’s public Gravatar picture, by their address.',
     email_domain:
         'A person’s country from a country-coded address; a company’s domain from the addresses its people write from, free mail excluded.',
+    byline: 'BylineAI’s enrichment, by address, with the workspace’s API key (Settings › BylineAI). Its paid layers run under BylineAI’s budgets; nothing is asked without a key.',
 };
 
 /**
@@ -108,7 +110,7 @@ export interface EnrichmentSettingsView extends EnrichmentSettings {
 
 export const ENRICHMENT_DEFAULTS: Readonly<EnrichmentSettings> = {
     reaskAfterDays: 90,
-    sources: { website: true, dns: true, gravatar: true, email_domain: true },
+    sources: { website: true, dns: true, gravatar: true, email_domain: true, byline: true },
 };
 export const ENRICHMENT_LIMITS = { reaskAfterDays: { min: 1, max: 365 } } as const;
 

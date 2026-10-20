@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { BylineApiModule } from '../byline/byline-api.module';
+import { BylineVerifier } from '../byline/byline.verifier';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { EmailVerificationService } from './email-verification.service';
 import { FreeVerifier } from './free-verifier';
@@ -13,9 +15,14 @@ import { VERIFIER } from './verifier.port';
  * enrolment screen and the step runner (sequences) — through `EmailVerificationService.check`.
  */
 @Module({
-    imports: [AuthModule, SendingPoolModule],
+    imports: [AuthModule, SendingPoolModule, BylineApiModule],
     controllers: [VerificationSettingsController, PersonVerificationController],
-    providers: [FreeVerifier, { provide: VERIFIER, useExisting: FreeVerifier }, EmailVerificationService],
+    providers: [
+        FreeVerifier,
+        BylineVerifier,
+        { provide: VERIFIER, useExisting: BylineVerifier },
+        EmailVerificationService,
+    ],
     exports: [EmailVerificationService],
 })
 export class VerificationModule {}
