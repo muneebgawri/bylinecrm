@@ -116,6 +116,11 @@ export const envSchema = z
         /** Whether this process runs enrichment jobs and their sweep (P4-2); `0` leaves them to a worker process. */
         ENRICHMENT_WORKER: flag('1'),
         /**
+         * Whether this process verifies invoices against NewswireOS (INV-1); `0` leaves them to a worker process.
+         * The cross-tenant suite sets `0` and runs verifications itself against a fake NewswireOS.
+         */
+        INVOICE_WORKER: flag('1'),
+        /**
          * Whether this process relays the outbox (P1-6): delivers recorded domain events to the
          * timeline, webhooks, stage rules and mail re-matching. On by default; any number of processes
          * may relay at once (claims never overlap), and at least one must. `0` keeps compile-only runs

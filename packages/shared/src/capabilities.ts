@@ -36,6 +36,9 @@ export const CAPABILITIES = [
     'mailbox:manage',
     // Guardrails (GUARD-1, FR-CRMS-21): read the events, mark one legitimate, and be told of repeated blocks.
     'guardrail:review',
+    // Invoices (INV-1, FR-CRMS-19): verify or reject an invoice by hand (one NewswireOS could not decide, or
+    // any when the workspace has no NewswireOS link), and be told when one waits for finance.
+    'invoice:verify',
     'workspace:admin',
 ] as const;
 
@@ -82,6 +85,7 @@ export const MANAGER_DEFAULT_CAPABILITIES: readonly Capability[] = [
     'mailbox:read',
     'mailbox:manage',
     'guardrail:review',
+    'invoice:verify',
 ];
 
 /** What a new workspace's `member` role can do until an admin changes it. */

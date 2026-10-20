@@ -87,7 +87,13 @@ export class StageMoveService {
         const reason: StageHistoryReason = closing ? 'close' : options.reason;
         const closeColumns = await closeColumnsFor(tx, deal.workspaceId, to.kind, options.close);
 
-        await tx.opportunity.update({ where: { id: deal.id }, data: { stageId: to.id, ...closeColumns } });
+        // Only from the stage it was read in: two movers at once (the outbox relay and a redelivery, two rules) see
+        // one move, and the second finds it already done, so a deal is never closed or announced twice.
+        const { count } = await tx.opportunity.updateMany({
+            where: { id: deal.id, stageId: from.id },
+            data: { stageId: to.id, ...closeColumns },
+        });
+        if (count === 0) return { outcome: 'already' };
         await tx.opportunityStageHistory.create({
             data: {
                 workspaceId: deal.workspaceId,

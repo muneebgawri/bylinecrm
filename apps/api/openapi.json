@@ -10267,6 +10267,748 @@
                 "tags": ["suppression"]
             }
         },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices": {
+            "get": {
+                "operationId": "invoices_list",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/DealInvoice"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            },
+            "post": {
+                "operationId": "invoices_create",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateInvoiceDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DealInvoice"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices/{invoiceId}/verify": {
+            "post": {
+                "operationId": "invoices_verify",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "invoiceId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerifyInvoiceDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DealInvoice"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices/{invoiceId}/reject": {
+            "post": {
+                "operationId": "invoices_reject",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "invoiceId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RejectInvoiceDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DealInvoice"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices/{invoiceId}/recheck": {
+            "post": {
+                "operationId": "invoices_recheck",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "invoiceId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DealInvoice"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/newswireos": {
+            "get": {
+                "operationId": "newswireosSettings_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            },
+            "put": {
+                "operationId": "newswireosSettings_put",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutNewswireosSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            },
+            "delete": {
+                "operationId": "newswireosSettings_remove",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/newswireos/rotate": {
+            "post": {
+                "operationId": "newswireosSettings_rotate",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/hooks/newswireos/{token}": {
+            "post": {
+                "operationId": "newswireosHook_receive",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosHookResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/health": {
             "get": {
                 "operationId": "health_get",
@@ -22427,7 +23169,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 24,
+                        "maxItems": 25,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -22455,6 +23197,7 @@
                                 "mailbox:read",
                                 "mailbox:manage",
                                 "guardrail:review",
+                                "invoice:verify",
                                 "workspace:admin"
                             ]
                         }
@@ -22475,7 +23218,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 24,
+                        "maxItems": 25,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -22503,6 +23246,7 @@
                                 "mailbox:read",
                                 "mailbox:manage",
                                 "guardrail:review",
+                                "invoice:verify",
                                 "workspace:admin"
                             ]
                         }
@@ -24222,7 +24966,7 @@
                 "properties": {
                     "event": {
                         "type": "string",
-                        "enum": ["email.replied", "meeting.booked", "email.clicked"]
+                        "enum": ["email.replied", "meeting.booked", "email.clicked", "invoice.verified"]
                     },
                     "toStageId": {
                         "type": "string",
@@ -24348,6 +25092,82 @@
                     }
                 },
                 "required": ["note"]
+            },
+            "CreateInvoiceDto": {
+                "type": "object",
+                "properties": {
+                    "gateway": {
+                        "type": "string",
+                        "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                    },
+                    "reference": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "description": "A Stripe `pi_`/`ch_`/`in_` id, a PayPal capture or invoice number, a transaction hash."
+                    },
+                    "expectedAmountMinor": {
+                        "description": "Minor units. Leave out for the deal’s amount; less for a partial payment.",
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]{0,15}$"
+                    },
+                    "currency": {
+                        "description": "ISO 4217. Leave out for the deal’s currency.",
+                        "type": "string",
+                        "pattern": "^[A-Za-z]{3}$"
+                    },
+                    "attachmentId": {
+                        "description": "A receipt already uploaded to the deal.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                },
+                "required": ["gateway", "reference"]
+            },
+            "VerifyInvoiceDto": {
+                "type": "object",
+                "properties": {
+                    "note": {
+                        "type": "string",
+                        "maxLength": 500
+                    }
+                }
+            },
+            "RejectInvoiceDto": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    }
+                },
+                "required": ["reason"]
+            },
+            "PutNewswireosSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "baseUrl": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "format": "uri",
+                        "description": "NewswireOS’s address, `https://app.newswireos.example`."
+                    },
+                    "apiToken": {
+                        "description": "A NewswireOS API token with payment verification. Leave out to keep the current one.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    },
+                    "secret": {
+                        "description": "The secret NewswireOS signs its hook deliveries with. Leave out to keep it.",
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 200
+                    }
+                },
+                "required": ["baseUrl"]
             },
             "PutOAuthClientDto": {
                 "type": "object",
@@ -26243,7 +27063,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 64,
+                        "maxItems": 67,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -26311,6 +27131,9 @@
                                 "transfer.declined",
                                 "transfer.cancelled",
                                 "transfer.completed",
+                                "invoice.verified",
+                                "invoice.invalidated",
+                                "invoice.refunded",
                                 "guardrail.recorded"
                             ]
                         }
@@ -26336,7 +27159,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 64,
+                        "maxItems": 67,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -26404,6 +27227,9 @@
                                 "transfer.declined",
                                 "transfer.cancelled",
                                 "transfer.completed",
+                                "invoice.verified",
+                                "invoice.invalidated",
+                                "invoice.refunded",
                                 "guardrail.recorded"
                             ]
                         }
@@ -26932,6 +27758,7 @@
                                 "mailbox:read",
                                 "mailbox:manage",
                                 "guardrail:review",
+                                "invoice:verify",
                                 "workspace:admin"
                             ]
                         }
@@ -27065,6 +27892,7 @@
                                 "mailbox:read",
                                 "mailbox:manage",
                                 "guardrail:review",
+                                "invoice:verify",
                                 "workspace:admin"
                             ]
                         }
@@ -28706,7 +29534,7 @@
                     },
                     "event": {
                         "type": "string",
-                        "enum": ["email.replied", "meeting.booked", "email.clicked"]
+                        "enum": ["email.replied", "meeting.booked", "email.clicked", "invoice.verified"]
                     },
                     "toStageId": {
                         "type": "string",
@@ -29740,6 +30568,160 @@
                     }
                 },
                 "required": ["items", "nextCursor"]
+            },
+            "DealInvoice": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "opportunityId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "gateway": {
+                        "type": "string",
+                        "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                    },
+                    "reference": {
+                        "type": "string"
+                    },
+                    "canonicalReference": {
+                        "nullable": true,
+                        "description": "The reference as NewswireOS names it.",
+                        "type": "string"
+                    },
+                    "amountMinor": {
+                        "type": "string",
+                        "description": "What the payment must be, in minor units."
+                    },
+                    "refundedAmountMinor": {
+                        "type": "string",
+                        "description": "Refunded so far. A verified invoice with some refunded counts net of it (partially refunded)."
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "attachmentId": {
+                        "nullable": true,
+                        "description": "The receipt: a file on the deal.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["verifying", "verified", "invalid", "needs_review", "invalidated"],
+                        "description": "`verifying`: NewswireOS is being asked. `verified`: it counts. `invalid`: refused (see `reasonCode`). `needs_review`: waiting for finance (a person with `invoice:verify`). `invalidated`: refunded or charged back after it was verified."
+                    },
+                    "reasonCode": {
+                        "nullable": true,
+                        "description": "NewswireOS’s reason (`AMOUNT_MISMATCH`, `NOT_FOUND`, `PROVIDER_ERROR`, …), or `NO_LINK`, `AWAITING_BANK_CONFIRMATION`, `TOKEN_REFUSED`, `MANUAL`, `REFUNDED`, `DISPUTED`.",
+                        "type": "string"
+                    },
+                    "note": {
+                        "nullable": true,
+                        "description": "Why a person verified or refused it by hand.",
+                        "type": "string"
+                    },
+                    "verifiedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "invalidatedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdById": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "decidedById": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "opportunityId",
+                    "gateway",
+                    "reference",
+                    "canonicalReference",
+                    "amountMinor",
+                    "refundedAmountMinor",
+                    "currency",
+                    "attachmentId",
+                    "status",
+                    "reasonCode",
+                    "note",
+                    "verifiedAt",
+                    "invalidatedAt",
+                    "createdById",
+                    "decidedById",
+                    "createdAt"
+                ]
+            },
+            "NewswireosSettings": {
+                "type": "object",
+                "properties": {
+                    "configured": {
+                        "type": "boolean"
+                    },
+                    "baseUrl": {
+                        "nullable": true,
+                        "description": "Where NewswireOS is.",
+                        "type": "string"
+                    },
+                    "hookUrl": {
+                        "nullable": true,
+                        "description": "Give NewswireOS this URL, with the same secret, for refunds and chargebacks.",
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "lastDeliveryAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastDeliveryResult": {
+                        "nullable": true,
+                        "description": "`applied`, `unmatched`, `ignored`, `ping` or `bad_signature`.",
+                        "type": "string"
+                    }
+                },
+                "required": ["configured", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
+            },
+            "NewswireosHookResult": {
+                "type": "object",
+                "properties": {
+                    "result": {
+                        "type": "string",
+                        "enum": ["applied", "unmatched", "ignored", "ping"]
+                    }
+                },
+                "required": ["result"]
             },
             "HealthStatus": {
                 "type": "object",
@@ -31516,9 +32498,11 @@
                                         "transfer_declined",
                                         "transfer_received",
                                         "transfer_taken",
-                                        "guardrail_repeat_blocks"
+                                        "guardrail_repeat_blocks",
+                                        "invoice_needs_review",
+                                        "invoice_coverage_lost"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount."
                                 },
                                 "task": {
                                     "nullable": true,
@@ -31675,6 +32659,47 @@
                                     },
                                     "required": ["id", "kind", "actor", "count"]
                                 },
+                                "invoice": {
+                                    "nullable": true,
+                                    "description": "For an `invoice_*` kind (INV-1): the invoice waiting for finance, and its deal.",
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "opportunityId": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "opportunityName": {
+                                            "type": "string"
+                                        },
+                                        "gateway": {
+                                            "type": "string",
+                                            "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                                        },
+                                        "reference": {
+                                            "type": "string"
+                                        },
+                                        "reasonCode": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "id",
+                                        "opportunityId",
+                                        "opportunityName",
+                                        "gateway",
+                                        "reference",
+                                        "reasonCode"
+                                    ]
+                                },
                                 "createdAt": {
                                     "type": "string",
                                     "format": "date-time",
@@ -31687,7 +32712,16 @@
                                     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                                 }
                             },
-                            "required": ["id", "kind", "task", "transfer", "guardrail", "createdAt", "readAt"]
+                            "required": [
+                                "id",
+                                "kind",
+                                "task",
+                                "transfer",
+                                "guardrail",
+                                "invoice",
+                                "createdAt",
+                                "readAt"
+                            ]
                         }
                     },
                     "unread": {
@@ -32717,7 +33751,16 @@
                         "properties": {
                             "type": {
                                 "type": "string",
-                                "enum": ["note", "task", "attachment", "email", "suppression", "meeting", "transfer"]
+                                "enum": [
+                                    "note",
+                                    "task",
+                                    "attachment",
+                                    "email",
+                                    "suppression",
+                                    "meeting",
+                                    "transfer",
+                                    "invoice"
+                                ]
                             },
                             "id": {
                                 "type": "string",

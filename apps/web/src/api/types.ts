@@ -169,6 +169,11 @@ export type SlotlineSettingsView = Schemas['SlotlineSettings'];
 export type LeadSuggestionView = Schemas['LeadSuggestion'];
 export type LeadSuggestionDecisionInput = Loose<Schemas['LeadSuggestionDecisionDto']>;
 export type PutSlotlineSettingsInput = Loose<Schemas['PutSlotlineSettingsDto']>;
+// ---- Invoices on a deal (INV-1) ---------------------------------------------------------------
+export type DealInvoiceView = Schemas['DealInvoice'];
+export type CreateInvoiceInput = Loose<Schemas['CreateInvoiceDto']>;
+export type NewswireosSettingsView = Schemas['NewswireosSettings'];
+export type PutNewswireosSettingsInput = Loose<Schemas['PutNewswireosSettingsDto']>;
 export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */
 export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];
