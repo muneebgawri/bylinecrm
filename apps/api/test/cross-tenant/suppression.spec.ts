@@ -564,14 +564,14 @@ describe('FR-CRMS-7 suppression and unsubscribe', () => {
             expect((await sendTo(dana.id)).status).toBe(422);
         });
 
-        it('REP-2 FR-CRMS-24: personal 1:1 mail that starts a thread carries the one-click headers, never a footer link', async () => {
+        it('sends personal 1:1 mail without unsubscribe headers or link', async () => {
             const dana = await person('personal');
             const res = await sendTo(dana.id);
             const { messageId } = res.body as { messageId: string };
             await send.deliver(workspace, messageId, noWait);
             const raw = gmail.sent.find((s) => s.raw.includes(messageId))!.raw;
-            expect(header(raw, 'List-Unsubscribe')).toMatch(/^<https?:\/\/.+\/api\/unsubscribe\/.+>$/);
-            expect(header(raw, 'List-Unsubscribe-Post')).toBe('List-Unsubscribe=One-Click');
+            expect(header(raw, 'List-Unsubscribe')).toBeUndefined();
+            expect(header(raw, 'List-Unsubscribe-Post')).toBeUndefined();
             expect(htmlPart(raw)).not.toContain('nsubscribe');
         });
     });

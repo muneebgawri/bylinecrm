@@ -13159,6 +13159,265 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/integrations/byline": {
+            "get": {
+                "operationId": "bylineSettings_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BylineSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["byline"]
+            },
+            "put": {
+                "operationId": "bylineSettings_put",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutBylineSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BylineSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["byline"]
+            },
+            "delete": {
+                "operationId": "bylineSettings_remove",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["byline"]
+            }
+        },
+        "/api/w/{workspaceId}/inbound/byline": {
+            "post": {
+                "operationId": "bylineInbound_receive",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BylineLeadResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["byline"]
+            }
+        },
         "/health": {
             "get": {
                 "operationId": "health_get",
@@ -26048,6 +26307,44 @@
                 },
                 "required": ["baseUrl"]
             },
+            "PutBylineSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "secret": {
+                        "description": "The secret BylineAI signs lead deliveries with (`BYLINE_WEBHOOK_SECRET`). Leave out to keep it.",
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 200
+                    },
+                    "baseUrl": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "format": "uri",
+                        "description": "BylineAI’s address (BYL-2), `https://byline.example`; null unlinks its API. Leave out to keep.",
+                        "nullable": true
+                    },
+                    "apiKey": {
+                        "description": "A BylineAI API key (`x-api-key`). Needed with a first address; leave out to keep it.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    },
+                    "verifyWithByline": {
+                        "description": "Verify addresses with BylineAI instead of the free layer alone.",
+                        "type": "boolean"
+                    },
+                    "roundRobinMemberIds": {
+                        "description": "Members to deal leads at unowned companies to, in order. Leave out to keep the list.",
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                    }
+                }
+            },
             "CreateBlocklistEntryDto": {
                 "type": "object",
                 "properties": {
@@ -27266,9 +27563,12 @@
                             },
                             "email_domain": {
                                 "type": "boolean"
+                            },
+                            "byline": {
+                                "type": "boolean"
                             }
                         },
-                        "required": ["website", "dns", "gravatar", "email_domain"]
+                        "required": ["website", "dns", "gravatar", "email_domain", "byline"]
                     }
                 },
                 "required": ["reaskAfterDays", "sources"]
@@ -28292,7 +28592,6 @@
                             "mailbox.budget_reached",
                             "mailbox.primary_domain",
                             "message.bulk_pattern",
-                            "message.subject_repeat",
                             "recipient.low_quality",
                             "send.not_retryable",
                             "rate_limited",
@@ -31362,6 +31661,86 @@
                 },
                 "required": ["items", "nextCursor"]
             },
+            "BylineSettings": {
+                "type": "object",
+                "properties": {
+                    "configured": {
+                        "type": "boolean",
+                        "description": "The webhook has a secret: BylineAI’s leads are taken in."
+                    },
+                    "apiConfigured": {
+                        "type": "boolean",
+                        "description": "BylineAI’s API is linked (BYL-2): it enriches, and may verify."
+                    },
+                    "baseUrl": {
+                        "nullable": true,
+                        "description": "BylineAI’s address. Never the key.",
+                        "type": "string"
+                    },
+                    "verifyWithByline": {
+                        "type": "boolean",
+                        "description": "Email verification asks BylineAI (its Reacher pool), falling back to the free layer."
+                    },
+                    "webhookUrl": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Point BylineAI’s `BYLINE_WEBHOOK_URL` here, with the same secret as `BYLINE_WEBHOOK_SECRET`."
+                    },
+                    "roundRobinMemberIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                        },
+                        "description": "A lead at a company nobody owns is dealt to these members in turn; empty, it waits unowned in the Leads queue."
+                    },
+                    "lastDeliveryAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastDeliveryResult": {
+                        "nullable": true,
+                        "description": "`ingested`, `duplicate`, `rejected` or `bad_signature`.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "configured",
+                    "apiConfigured",
+                    "baseUrl",
+                    "verifyWithByline",
+                    "webhookUrl",
+                    "roundRobinMemberIds",
+                    "lastDeliveryAt",
+                    "lastDeliveryResult"
+                ]
+            },
+            "BylineLeadResult": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["ingested", "duplicate", "rejected"]
+                    },
+                    "personId": {
+                        "description": "The person the lead is; with `ingested`/`duplicate`.",
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "reason": {
+                        "description": "Why, with `rejected`.",
+                        "type": "string"
+                    }
+                },
+                "required": ["status"]
+            },
             "SendingDomain": {
                 "type": "object",
                 "properties": {
@@ -31958,7 +32337,12 @@
                     },
                     "primaryDomain": {
                         "nullable": true,
-                        "description": "The primary domain no sequence may send from; null when not set.",
+                        "description": "An admin’s override of the primary domain; null to derive it from the members’ sign-in addresses.",
+                        "type": "string"
+                    },
+                    "effectivePrimaryDomain": {
+                        "nullable": true,
+                        "description": "The primary domain in force (no sequence sends from it): the override, else the domain most members sign in with.",
                         "type": "string"
                     },
                     "replyRateFloorBps": {
@@ -32000,6 +32384,7 @@
                     "nearDuplicateDistance",
                     "subjectRepeatThreshold",
                     "primaryDomain",
+                    "effectivePrimaryDomain",
                     "replyRateFloorBps",
                     "replyRateMinSends",
                     "replyRateWindowDays",
@@ -32186,6 +32571,10 @@
                     "configured": {
                         "type": "boolean"
                     },
+                    "secretSet": {
+                        "type": "boolean",
+                        "description": "Whether the hook secret NewswireOS minted has been pasted; deliveries are refused until it is."
+                    },
                     "baseUrl": {
                         "nullable": true,
                         "description": "Where NewswireOS is.",
@@ -32205,11 +32594,11 @@
                     },
                     "lastDeliveryResult": {
                         "nullable": true,
-                        "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery) or `bad_signature`.",
+                        "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.",
                         "type": "string"
                     }
                 },
-                "required": ["configured", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
+                "required": ["configured", "secretSet", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
             },
             "NewswireosHookResult": {
                 "type": "object",
@@ -34463,7 +34852,7 @@
                     },
                     "source": {
                         "type": "string",
-                        "enum": ["website", "dns", "gravatar", "email_domain"]
+                        "enum": ["website", "dns", "gravatar", "email_domain", "byline"]
                     },
                     "status": {
                         "type": "string",
@@ -34562,9 +34951,12 @@
                             },
                             "email_domain": {
                                 "type": "boolean"
+                            },
+                            "byline": {
+                                "type": "boolean"
                             }
                         },
-                        "required": ["website", "dns", "gravatar", "email_domain"]
+                        "required": ["website", "dns", "gravatar", "email_domain", "byline"]
                     },
                     "isDefault": {
                         "type": "boolean"

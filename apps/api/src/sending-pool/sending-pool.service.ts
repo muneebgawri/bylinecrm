@@ -20,7 +20,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { DOMAIN_WITH_RATE, domainUsesIn, domainView } from './domain-view';
 import { raiseAlert } from '../reputation/alerts';
 import { pauseMailbox } from '../reputation/pause';
-import { reputationSettingsIn } from '../reputation/settings';
+import { primaryDomainIn, reputationSettingsIn } from '../reputation/settings';
 import { sendingDomainOf } from './pool-mailbox';
 import { PostmasterService } from './postmaster.service';
 
@@ -87,10 +87,11 @@ export class SendingPoolService {
         if (pause) throw new PoolRefusal('mailbox.paused', `${mailbox.email} is paused: ${pause.message}`);
         // REP-1: the pool is for lookalike domains; nothing sends from one on the workspace's primary domain.
         const reputation = await reputationSettingsIn(tx);
-        if (reputation.primaryDomain && sendingDomainOf(mailbox.email) === reputation.primaryDomain) {
+        const primaryDomain = await primaryDomainIn(tx, reputation);
+        if (primaryDomain && sendingDomainOf(mailbox.email) === primaryDomain) {
             throw new PoolRefusal(
                 'mailbox.primary_domain',
-                `${mailbox.email} is on the primary domain ${reputation.primaryDomain}; sequences send only from lookalike domains`,
+                `${mailbox.email} is on the primary domain ${primaryDomain}; sequences send only from lookalike domains`,
             );
         }
         const domain = await tx.sendingDomain.findUnique({
@@ -153,6 +154,7 @@ export class SendingPoolService {
         return this.rls.withWorkspace(workspaceId, async (tx) => {
             const settings = await this.settingsIn(tx);
             const reputation = await reputationSettingsIn(tx);
+            const primaryDomain = await primaryDomainIn(tx, reputation);
             const verified = new Set(
                 (await tx.sendingDomain.findMany({ where: { status: 'pass' }, select: { domain: true } })).map(
                     (d) => d.domain,
@@ -165,7 +167,7 @@ export class SendingPoolService {
             const candidates: { id: string; share: number; last: number }[] = [];
             for (const mailbox of mailboxes) {
                 if (!verified.has(sendingDomainOf(mailbox.email))) continue;
-                if (reputation.primaryDomain && sendingDomainOf(mailbox.email) === reputation.primaryDomain) continue;
+                if (primaryDomain && sendingDomainOf(mailbox.email) === primaryDomain) continue;
                 const a = await this.allowanceOf(tx, mailbox, settings, now);
                 if (a.used >= a.allowance) continue;
                 if ((await this.sentInLastHour(tx, mailbox.id, now)) >= reputation.poolHourlyCap) continue;

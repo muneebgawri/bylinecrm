@@ -30,9 +30,10 @@ export interface ReputationSettings {
     /** Distinct new recipients one normalised subject may reach in 24 hours before the next is refused. */
     subjectRepeatThreshold: number;
     /**
-     * The workspace's primary domain (lower case), or null. When set, no sequence sends from a pool
-     * mailbox on it — the pool is for lookalike domains — and enrolment is refused while the pool has
-     * no mailbox off it.
+     * An admin's override of the workspace's primary domain (lower case), or null to derive it: the domain most
+     * members sign in with. No sequence sends from a pool mailbox on the primary domain — the pool is for
+     * lookalike domains — and enrolment is refused while the pool has no mailbox off it. On whenever a primary
+     * domain is known.
      */
     primaryDomain: string | null;
     /**
@@ -116,3 +117,9 @@ export interface PausedMailboxView {
 
 /** How long a resume note may be. */
 export const REPUTATION_RESUME_NOTE_MAX = 500;
+
+/** The thresholds as the API returns them (REP-1): with the primary domain in force, set or derived. */
+export interface ReputationSettingsView extends ReputationSettings {
+    /** `primaryDomain` when set, else the domain most members sign in with; null when neither is known. */
+    effectivePrimaryDomain: string | null;
+}

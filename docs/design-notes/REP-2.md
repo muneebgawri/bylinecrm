@@ -63,11 +63,11 @@ still works.
 
 ## One-click unsubscribe (RFC 8058)
 
-Outreach already carried `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (P3-1). REP-2 adds
-them to every personal message that **starts a thread** (sent now or at a scheduled send's time), for its first
-`to` recipient. The URL holds a 32-byte random token whose SHA-256 is stored (unforgeable, single address); the
-existing `POST /api/unsubscribe/:token` suppresses the address (`unsubscribe` reason). Replies carry no header and
-no footer link is added to personal mail.
+`List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` go on **sequence / outreach / pool mail
+only** (decision 2026-10-20) — every pool send carries them (P3-1's per-recipient token: 32 random bytes, only the
+SHA-256 stored, so the URL is unforgeable and names one address; `POST /api/unsubscribe/:token` suppresses it).
+Personal 1:1 mail carries neither header nor footer link; the compose lint's `missing_unsubscribe` warning nudges
+a member writing to a non-`manual` contact.
 
 ## Defaults
 
@@ -82,6 +82,6 @@ no footer link is added to personal mail.
 ## Tests
 
 `apps/web/src/routes/w/mail/composeLint.spec.ts`; `apps/api/test/cross-tenant/reputation.spec.ts` (REP-2 cases:
-headers + one-click suppression, quality gate, reply-rate pause and resume, spam warn/kill switch, all
-cross-workspace); `suppression.spec.ts` and `sending-pool.spec.ts` updated for the two intended behaviour changes
-(personal mail headers; personal domain at the kill switch pauses).
+no one-click headers on personal mail, quality gate, reply-rate pause and resume, spam warn/kill switch, all
+cross-workspace); `sending-pool.spec.ts` updated for the one intended behaviour change (a personal domain at the
+kill switch pauses its personal mailboxes).

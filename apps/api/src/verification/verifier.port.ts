@@ -11,5 +11,6 @@ export const VERIFIER = Symbol('VERIFIER');
  */
 export interface Verifier {
     readonly source: string;
-    verify(address: string): Promise<EmailVerification>;
+    /** `context` names the workspace asking, for a verifier linked per workspace (BylineAI, BYL-2). */
+    verify(address: string, context?: { workspaceId: string }): Promise<EmailVerification>;
 }

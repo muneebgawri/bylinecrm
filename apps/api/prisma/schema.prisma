@@ -101,6 +101,8 @@ model Workspace {
   calendarSyncStates   CalendarSyncState[]
   slotlineSettings     SlotlineSettings?
   newswireosSettings   NewswireosSettings?
+  bylineSettings       BylineSettings?
+  bylineLeads          BylineLead[]
   dealInvoices         DealInvoice[]
   ownershipTransfers   OwnershipTransfer[]
   guardrailEvents      GuardrailEvent[]
@@ -301,6 +303,7 @@ model WorkspaceMember {
   hostedMeetings        CalendarEvent[]
   configuredSlotline    SlotlineSettings[]
   configuredNewswireos  NewswireosSettings[]
+  configuredByline      BylineSettings[]
   invoicesCreated       DealInvoice[]              @relation("InvoiceCreator")
   invoicesDecided       DealInvoice[]              @relation("InvoiceDecider")
   uploadedLogos         WorkspaceLogo[]
@@ -563,6 +566,7 @@ model Person {
 
   meetingParticipations CalendarEventParticipant[]
   guardrails            GuardrailEvent[]
+  bylineLeads           BylineLead[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -3036,7 +3040,8 @@ model NewswireosSettings {
   apiTokenCiphertext  String    @map("api_token_ciphertext")
   hookTokenHash       String    @unique @map("hook_token_hash")
   hookTokenCiphertext String    @map("hook_token_ciphertext")
-  secretCiphertext    String    @map("secret_ciphertext")
+  /// Null until the admin pastes the secret NewswireOS mints for the hook; deliveries are refused till then.
+  secretCiphertext    String?   @map("secret_ciphertext")
   configuredById      String    @map("configured_by_id") @db.Uuid
   lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz
   /// `applied`, `unmatched`, `ignored`, `ping`, `bad_signature`.
@@ -3048,4 +3053,50 @@ model NewswireosSettings {
   configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
 
   @@map("newswireos_settings")
+}
+
+/// The workspace's BylineAI link (BYL-1): the secret BylineAI's WEBHOOK connector signs lead deliveries with
+/// (encrypted, never shown back) and the members a lead at an unowned company is dealt to in turn.
+model BylineSettings {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String    @unique @map("workspace_id") @db.Uuid
+  /// Null while only the API (BYL-2) is linked: deliveries are then refused as for an unlinked workspace.
+  secretCiphertext    String?   @map("secret_ciphertext")
+  /// BYL-2: BylineAI's address, `https://byline.example`, and the API key the CRM asks it with (sealed).
+  baseUrl             String?   @map("base_url")
+  apiKeyCiphertext    String?   @map("api_key_ciphertext")
+  /// BYL-2: whether email verification asks BylineAI (its Reacher pool) instead of the free layer alone.
+  verifyWithByline    Boolean   @default(false) @map("verify_with_byline")
+  /// Dealt to in this order; empty: such a lead waits unowned in the Leads queue.
+  roundRobinMemberIds String[]  @default([]) @map("round_robin_member_ids") @db.Uuid
+  /// Leads dealt so far; the next goes to the member at this position (modulo the list).
+  roundRobinCursor    Int       @default(0) @map("round_robin_cursor")
+  configuredById      String    @map("configured_by_id") @db.Uuid
+  lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz
+  /// `ingested`, `duplicate`, `rejected` or `bad_signature`.
+  lastDeliveryResult  String?   @map("last_delivery_result")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
+
+  @@map("byline_settings")
+}
+
+/// A BylineAI lead the workspace took in (BYL-1), by BylineAI's `lead_id`: a redelivery is answered `duplicate`.
+model BylineLead {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  leadId      String   @map("lead_id")
+  personId    String?  @map("person_id") @db.Uuid
+  /// `byline:<source_key>`, as the person's source says.
+  source      String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person?   @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, leadId])
+  @@map("byline_leads")
 }

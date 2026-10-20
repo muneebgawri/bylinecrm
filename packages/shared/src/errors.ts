@@ -74,8 +74,6 @@ export const ERROR_CODES = [
      * use a sequence from the sending pool. Nothing was sent.
      */
     'message.bulk_pattern',
-    /** `422` (REP-1): this subject has reached its 24-hour threshold of new recipients from this mailbox. Nothing was sent. */
-    'message.subject_repeat',
     /**
      * `422` (REP-2, FR-CRMS-24): a pool send's recipient failed the quality gate — verification finds the address
      * `invalid` (no such domain or mailbox, a disposable domain) or could not verify it. Nothing was sent.

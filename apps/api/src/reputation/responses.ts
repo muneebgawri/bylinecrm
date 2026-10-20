@@ -19,7 +19,12 @@ export const reputationSettings = named(
             description: 'Distinct new recipients of one normalised subject in 24 hours before the next is refused.',
         }),
         primaryDomain: z.string().nullable().meta({
-            description: 'The primary domain no sequence may send from; null when not set.',
+            description:
+                'An admin’s override of the primary domain; null to derive it from the members’ sign-in addresses.',
+        }),
+        effectivePrimaryDomain: z.string().nullable().meta({
+            description:
+                'The primary domain in force (no sequence sends from it): the override, else the domain most members sign in with.',
         }),
         replyRateFloorBps: z.number().int().meta({
             description:

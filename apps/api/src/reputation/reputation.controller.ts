@@ -1,6 +1,6 @@
 import { Body, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { PausedMailboxView, ReputationSettings } from '@bylinecrm/shared';
+import type { PausedMailboxView, ReputationSettingsView } from '@bylinecrm/shared';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
 import { ResumeMailboxDto, UpdateReputationSettingsDto } from './dto';
@@ -16,14 +16,14 @@ export class ReputationController {
     @Requires('guardrail:review')
     @Get('settings')
     @Returns(reputationSettings)
-    settings(): Promise<ReputationSettings> {
+    settings(): Promise<ReputationSettingsView> {
         return this.reputation.settings();
     }
 
     @Requires('workspace:admin')
     @Put('settings')
     @Returns(reputationSettings)
-    updateSettings(@Body() body: UpdateReputationSettingsDto): Promise<ReputationSettings> {
+    updateSettings(@Body() body: UpdateReputationSettingsDto): Promise<ReputationSettingsView> {
         return this.reputation.updateSettings(body);
     }
 

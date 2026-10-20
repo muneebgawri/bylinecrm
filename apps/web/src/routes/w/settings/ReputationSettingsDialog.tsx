@@ -1,4 +1,4 @@
-import type { ReputationSettings } from '@bylinecrm/shared';
+import type { ReputationSettings, ReputationSettingsView } from '@bylinecrm/shared';
 import {
     Button,
     Dialog,
@@ -60,7 +60,7 @@ export function ReputationSettingsDialog({
     onClose,
 }: {
     workspaceId: string;
-    settings: ReputationSettings;
+    settings: ReputationSettingsView;
     onClose: () => void;
 }) {
     const update = useUpdateReputationSettings(workspaceId);
@@ -105,7 +105,11 @@ export function ReputationSettingsDialog({
                         ))}
                         <Field
                             label="Primary domain"
-                            hint="No sequence sends from a pool mailbox on it. Leave empty for none."
+                            hint={`No sequence sends from a pool mailbox on it. Leave empty to use the members’ domain${
+                                settings.effectivePrimaryDomain && !settings.primaryDomain
+                                    ? ` (now ${settings.effectivePrimaryDomain})`
+                                    : ''
+                            }.`}
                             error={fieldErrorAt(update.error, 'primaryDomain')}
                         >
                             <Input

@@ -412,23 +412,10 @@ export class MailSendService {
             });
         }
 
-        // REP-2: one-click unsubscribe (RFC 8058) on every message that starts a thread, personal mail included —
-        // for the first `to` recipient; it feeds the suppression list like an outreach unsubscribe.
-        const first = recipients.to[0];
-        const unsubscribe =
-            !parent && when !== 'later' && first
-                ? await this.unsubscribes.issue(context.workspaceId, {
-                      address: first.address,
-                      personId: first.personId,
-                      outboundId: when === 'due' ? send.id : null,
-                  })
-                : null;
-
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
             : [];
         const mime = buildMime({
-            ...(unsubscribe ? { listUnsubscribe: { url: unsubscribe.oneClickUrl } } : {}),
             from: { address: mailbox.email, name: sender },
             to: recipients.to.map(toMime),
             cc: recipients.cc.map(toMime),

@@ -5,6 +5,7 @@ import { CalendarModule } from './calendar/calendar.module';
 import { ConfigModule } from './config/config.module';
 import { EventsModule } from './events/events.module';
 import { GuardrailsModule } from './guardrails/guardrails.module';
+import { BylineModule } from './byline/byline.module';
 import { ReputationModule } from './reputation/reputation.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { HealthModule } from './health/health.module';
@@ -41,6 +42,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         GuardrailsModule,
         ReputationModule,
         InvoicesModule,
+        BylineModule,
         HealthModule,
         AuthModule,
         MailAccountsModule,

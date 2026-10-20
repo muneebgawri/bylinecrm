@@ -111,7 +111,7 @@ const GETS: [RegExp, Handler][] = [
     // GUARD-1: the guardrail events; none in the fixtures.
     [new RegExp(`^${W}/guardrails/events(\\?.*)?$`), () => data.page([])],
     // REP-1: the workspace's sender-reputation thresholds (the defaults).
-    [new RegExp(`^${W}/reputation/settings$`), () => REPUTATION_DEFAULTS],
+    [new RegExp(`^${W}/reputation/settings$`), () => ({ ...REPUTATION_DEFAULTS, effectivePrimaryDomain: null })],
     // REP-2: mailboxes paused by the reply-rate floor or the spam-rate kill switch; none in the fixtures.
     [new RegExp(`^${W}/reputation/paused-mailboxes$`), () => []],
     [new RegExp(`^${W}/sending-domains/${ID}$`), (m) => byId(data.sendingDomains, m[1])],
@@ -134,6 +134,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/meetings$`), () => data.meetings],
     [new RegExp(`^${W}/integrations/slotline$`), () => data.slotlineSettings],
     [new RegExp(`^${W}/integrations/newswireos$`), () => data.newswireosSettings],
+    [new RegExp(`^${W}/integrations/byline$`), () => data.bylineSettings],
     [new RegExp(`^${W}/smtp2go/mailboxes$`), () => data.smtp2goMailboxes],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
     [new RegExp(`^${W}/mail/messages$`), (_m, url) => data.page(recordSends(url))],

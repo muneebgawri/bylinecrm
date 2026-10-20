@@ -1,4 +1,4 @@
-import type { PausedMailboxView, ReputationSettings } from '@bylinecrm/shared';
+import type { PausedMailboxView, ReputationSettings, ReputationSettingsView } from '@bylinecrm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
@@ -12,9 +12,9 @@ const keys = {
 
 export const reputation = {
     settings: (workspaceId: string, signal?: AbortSignal) =>
-        request<ReputationSettings>('GET', workspacePath(workspaceId, '/reputation/settings'), { signal }),
+        request<ReputationSettingsView>('GET', workspacePath(workspaceId, '/reputation/settings'), { signal }),
     updateSettings: (workspaceId: string, input: ReputationSettings) =>
-        request<ReputationSettings>('PUT', workspacePath(workspaceId, '/reputation/settings'), { body: input }),
+        request<ReputationSettingsView>('PUT', workspacePath(workspaceId, '/reputation/settings'), { body: input }),
     paused: (workspaceId: string, signal?: AbortSignal) =>
         request<PausedMailboxView[]>('GET', workspacePath(workspaceId, '/reputation/paused-mailboxes'), { signal }),
     resume: (workspaceId: string, mailboxId: string, note: string) =>
