@@ -27,7 +27,11 @@ export function ownSendingMailboxes(
 export function isBlank(doc: RichText): boolean {
     const visible = (nodes: readonly RichTextNode[] | undefined): boolean =>
         (nodes ?? []).some(
-            (n) => (n.type === 'text' && (n.text ?? '').trim() !== '') || n.type === 'variable' || visible(n.content),
+            (n) =>
+                (n.type === 'text' && (n.text ?? '').trim() !== '') ||
+                n.type === 'variable' ||
+                n.type === 'image' ||
+                visible(n.content),
         );
     return !visible(doc.content);
 }

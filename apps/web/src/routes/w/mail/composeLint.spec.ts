@@ -40,4 +40,30 @@ describe('REP-2 compose lint (FR-CRMS-24)', () => {
         expect(codes('Update', plain, true)).toEqual(['missing_unsubscribe']);
         expect(codes('Update', para(text('A short note. Reply “unsubscribe” to opt out.')), true)).toEqual([]);
     });
+
+    it('reads a table’s cells as separate words, and still calls a body of images and few words image-heavy', () => {
+        const cell = (t: string): RichTextNode => ({
+            type: 'tableCell',
+            content: [{ type: 'paragraph', content: [text(t)] }],
+        });
+        const table = (...rows: string[][]): RichTextNode => ({
+            type: 'table',
+            content: rows.map((r) => ({ type: 'tableRow', content: r.map(cell) })),
+        });
+        const image: RichTextNode = { type: 'image', attrs: { src: 'https://x.test/a.png', alt: 'chart' } };
+        const filled: RichText = {
+            type: 'doc',
+            content: [
+                table(['Plan', 'Price'], ['Basic', 'Ten pounds a month']),
+                { type: 'paragraph', content: [link('Sign up')] },
+            ],
+        };
+        // Six words of the table's own, read across its cells: not a link-only message.
+        expect(codes('Prices', filled)).toEqual([]);
+        const sparse: RichText = {
+            type: 'doc',
+            content: [table(['Hi']), { type: 'paragraph', content: [image, image] }],
+        };
+        expect(codes('Look', sparse)).toEqual(['image_heavy']);
+    });
 });

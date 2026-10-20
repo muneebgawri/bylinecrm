@@ -1,5 +1,5 @@
 import type { RichText, RichTextNode } from './records.js';
-import { TEMPLATE_BODY_NODES } from './templates.js';
+import { TEMPLATE_IMAGE_ALT_MAX, TEMPLATE_IMAGE_MAX_WIDTH, TEMPLATE_TEXT_NODES } from './templates.js';
 
 /**
  * Email signatures (#193). A signature belongs to a mailbox: a personal mailbox's is its member's,
@@ -8,13 +8,13 @@ import { TEMPLATE_BODY_NODES } from './templates.js';
  * serializer and added by the send path after the body — above an outreach email's locked footer.
  */
 
-/** What a signature may contain: the template subset, and images linked by `https:` URL. */
-export const SIGNATURE_NODES = [...TEMPLATE_BODY_NODES, 'image'] as const;
+/** What a signature may contain: the template's text subset and images linked by `https:` URL — no tables. */
+export const SIGNATURE_NODES = [...TEMPLATE_TEXT_NODES, 'image'] as const;
 /** The stored signature's JSON, serialised: a signature is a few lines. */
 export const SIGNATURE_MAX_CHARS = 20_000;
 /** An image's width is capped (px); its height follows its aspect. */
-export const SIGNATURE_IMAGE_MAX_WIDTH = 600;
-export const SIGNATURE_IMAGE_ALT_MAX = 200;
+export const SIGNATURE_IMAGE_MAX_WIDTH = TEMPLATE_IMAGE_MAX_WIDTH;
+export const SIGNATURE_IMAGE_ALT_MAX = TEMPLATE_IMAGE_ALT_MAX;
 
 /** What a signature variable reads: the member who sends, or the workspace. */
 export type SignatureVariableSource = 'sender' | 'workspace';

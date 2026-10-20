@@ -1,7 +1,6 @@
 import {
     BOOKING_LINK_LABEL,
     SIGNATURE_BOOKING_VARIABLE,
-    SIGNATURE_IMAGE_ALT_MAX,
     SIGNATURE_IMAGE_MAX_WIDTH,
     SIGNATURE_LOGO_VARIABLE,
     SIGNATURE_MAX_CHARS,
@@ -13,11 +12,10 @@ import {
     type FieldError,
     type RenderedSignature,
     type RichText,
-    type RichTextNode,
     type SignatureVariablePath,
 } from '@bylinecrm/shared';
-import { subsetProblems, variablePathsOf, type Subset } from '../templates/render/body-subset';
-import { escapeHtml, imageHtml, renderRichText, safeImageSrc } from '../templates/render/serializer';
+import { imageProblems, subsetProblems, variablePathsOf, type Subset } from '../templates/render/body-subset';
+import { escapeHtml, imageHtml, renderRichText } from '../templates/render/serializer';
 
 /**
  * A signature as an email carries it (#193): the template serializer's one walk, with images and with
@@ -142,34 +140,6 @@ export function renderSignature(doc: RichText, values: SignatureValues): Rendere
         html: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="${SIGNATURE_STYLE.table}">${out.html}</table>`,
         text: out.text,
     };
-}
-
-function imageProblems(node: RichTextNode, at: string): FieldError[] {
-    if (node.type !== 'image') return [];
-    const attrs = (node['attrs'] ?? {}) as Record<string, unknown>;
-    const problems: FieldError[] = [];
-    if (safeImageSrc(attrs['src']) === null) {
-        problems.push({ path: `${at}.attrs.src`, message: 'an image is linked by an https: URL' });
-    }
-    const alt = attrs['alt'];
-    if (alt !== undefined && alt !== null && (typeof alt !== 'string' || alt.length > SIGNATURE_IMAGE_ALT_MAX)) {
-        problems.push({
-            path: `${at}.attrs.alt`,
-            message: `alt text is at most ${SIGNATURE_IMAGE_ALT_MAX} characters`,
-        });
-    }
-    const width = attrs['width'];
-    if (
-        width !== undefined &&
-        width !== null &&
-        !(Number.isInteger(width) && (width as number) >= 1 && (width as number) <= SIGNATURE_IMAGE_MAX_WIDTH)
-    ) {
-        problems.push({
-            path: `${at}.attrs.width`,
-            message: `an image is 1 to ${SIGNATURE_IMAGE_MAX_WIDTH} pixels wide`,
-        });
-    }
-    return problems;
 }
 
 const SIGNATURE_SUBSET: Subset = { nodes: new Set<string>(SIGNATURE_NODES), at: 'signature', node: imageProblems };

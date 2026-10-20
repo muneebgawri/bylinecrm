@@ -1,6 +1,7 @@
 import {
     LOGO_MAX_BYTES,
     LOGO_MIME_TYPES,
+    SIGNATURE_LOCKABLE,
     SIGNATURE_VARIABLES,
     SOCIAL_NETWORKS,
     SOCIAL_NETWORK_HOSTS,
@@ -29,6 +30,7 @@ import {
     cn,
     toast,
 } from '@bylinecrm/ui';
+import { Lock } from 'lucide-react';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { fieldErrorAt } from '../../../api/client';
 import { useMailboxes } from '../../../api/mailAdmin';
@@ -110,14 +112,14 @@ export function Signatures() {
                         empty="Connect a mailbox under Mailboxes to give it a signature."
                         workspaceId={workspaceId}
                         mailboxes={own}
-                        starter={settings.data.starter}
+                        settings={settings.data}
                     />
                     {pool.length > 0 && (
                         <MailboxList
                             title="Pool mailboxes"
                             workspaceId={workspaceId}
                             mailboxes={pool}
-                            starter={settings.data.starter}
+                            settings={settings.data}
                         />
                     )}
                 </>
@@ -126,7 +128,52 @@ export function Signatures() {
     );
 }
 
-function DetailsForm({ workspaceId, memberId }: { workspaceId: string; memberId: string }) {
+/**
+ * The signed-in member's own mailboxes and their signatures (#193), with the admin's locks named: what the
+ * Profile page (from the account menu) shows every member, and Settings → Signatures shows too.
+ */
+export function OwnMailboxSignatures({ workspaceId, memberId }: { workspaceId: string; memberId: string }) {
+    const settings = useSignatureSettings(workspaceId);
+    const mailboxes = useMailboxes(workspaceId);
+    if (settings.isError) throw settings.error;
+    if (mailboxes.isError) throw mailboxes.error;
+    if (!settings.data || !mailboxes.data) return <LoadingRegion label="Loading your signatures" className="h-24" />;
+    const own = mailboxes.data.filter(
+        (m) => m.status !== 'disconnected' && m.purpose === 'personal' && m.ownerMemberId === memberId,
+    );
+    return (
+        <MailboxList
+            title="Your signatures"
+            empty="Connect a mailbox under Mailboxes to give it a signature."
+            workspaceId={workspaceId}
+            mailboxes={own}
+            settings={settings.data}
+        />
+    );
+}
+
+/** What an admin locked into every signature, named with why it cannot be taken out; nothing when none is. */
+export function LockedNotice({ locked }: { locked: SignatureSettingsView['locked'] }) {
+    const names = SIGNATURE_LOCKABLE.filter((l) => locked[l]).map((l) => LOCKED_NAME[l]);
+    if (names.length === 0) return null;
+    return (
+        <p role="note" className="m-0 flex items-start gap-2 text-[13px] text-text-muted">
+            <Lock aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+                Locked by an admin: {names.join(' and ')} {names.length === 1 ? 'stays' : 'stay'} in every signature, so
+                the workspace’s mail looks the same — a signature without {names.length === 1 ? 'it' : 'them'} is not
+                saved.
+            </span>
+        </p>
+    );
+}
+
+const LOCKED_NAME: Record<SignatureLockable, string> = {
+    logo: 'the company logo',
+    bookingLink: 'the “Book a quick meeting” link',
+};
+
+export function DetailsForm({ workspaceId, memberId }: { workspaceId: string; memberId: string }) {
     const profile = useSignatureProfile(workspaceId, memberId);
     if (profile.isError) throw profile.error;
     if (!profile.data) return <LoadingRegion label="Loading your details" className="h-24" />;
@@ -633,20 +680,22 @@ function MailboxList({
     empty,
     workspaceId,
     mailboxes,
-    starter,
+    settings,
 }: {
     title: string;
     empty?: string;
     workspaceId: string;
     mailboxes: readonly MailboxView[];
-    starter: RichText;
+    settings: SignatureSettingsView;
 }) {
     const id = useId();
+    const starter = settings.starter;
     return (
         <section aria-labelledby={id} className="flex flex-col gap-3">
             <h3 id={id} className="m-0 text-sm font-semibold">
                 {title}
             </h3>
+            {mailboxes.length > 0 && <LockedNotice locked={settings.locked} />}
             {mailboxes.length === 0 && empty && <p className="m-0 text-[13px] text-text-muted">{empty}</p>}
             {mailboxes.map((m) => (
                 <MailboxSignatureCard key={m.id} workspaceId={workspaceId} mailbox={m} starter={starter} />

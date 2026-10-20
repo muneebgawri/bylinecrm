@@ -67,6 +67,7 @@ export function AppShell() {
 
 function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boolean }) {
     const narrow = useIsNarrow();
+    const navigate = useNavigate();
     const [collapsed, setCollapsed] = usePersistedState(SIDEBAR_COLLAPSED_KEY, isBoolean, false);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
@@ -89,7 +90,8 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
         workspaceId,
         openPalette: () => setPaletteOpen(true),
         openShortcuts: () => setShortcutsOpen(true),
-        openProfile: () => setProfileOpen(true),
+        // Every member's own profile page: name, signature details and signatures.
+        openProfile: () => navigate(paths.profile(workspaceId)),
         toggleSidebar,
     });
     useCommandShortcuts();
@@ -100,7 +102,10 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
             collapsed={!narrow && collapsed}
             onNavigate={narrow ? () => setDrawerOpen(false) : undefined}
             onOpenShortcuts={() => setShortcutsOpen(true)}
-            onOpenProfile={() => setProfileOpen(true)}
+            onOpenProfile={() => {
+                if (narrow) setDrawerOpen(false);
+                navigate(paths.profile(workspaceId));
+            }}
         />
     );
 
@@ -292,7 +297,7 @@ function useShellCommands({
                 id: 'account.profile',
                 title: 'Edit profile',
                 group: 'Account',
-                keywords: ['name', 'display name', 'account'],
+                keywords: ['name', 'display name', 'account', 'signature', 'phone', 'job title', 'socials'],
                 run: openProfile,
             },
             {

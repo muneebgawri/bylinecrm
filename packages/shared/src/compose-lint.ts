@@ -78,7 +78,8 @@ function walk(nodes: readonly RichTextNode[] | undefined, out: Walked): void {
                 out.linkText += node.text;
             }
         }
-        if (node.type === 'paragraph' || node.type === 'hardBreak' || node.type === 'listItem') out.text += '\n';
+        // A table's cells read as separate words, as a list's items do.
+        if (['paragraph', 'hardBreak', 'listItem', 'tableCell', 'tableHeader'].includes(node.type)) out.text += '\n';
         walk(node.content, out);
     }
 }

@@ -50,6 +50,7 @@ model Workspace {
   mailSettings           WorkspaceMailSettings?
   signatureSettings      WorkspaceSignatureSettings?
   logos                  WorkspaceLogo[]
+  mailAssets             MailAsset[]
   mailThreads            MailThread[]
   mailMessages           MailMessage[]
   mailboxThreads         MailboxThread[]
@@ -308,6 +309,7 @@ model WorkspaceMember {
   invoicesCreated       DealInvoice[]              @relation("InvoiceCreator")
   invoicesDecided       DealInvoice[]              @relation("InvoiceDecider")
   uploadedLogos         WorkspaceLogo[]
+  uploadedMailAssets    MailAsset[]
   calendarEventCopies   CalendarEventCopy[]
   meetingParticipations CalendarEventParticipant[] @relation("CalendarParticipantMember")
   leadsFromMeetings     CalendarEventParticipant[] @relation("CalendarParticipantLeadFor")
@@ -1282,6 +1284,29 @@ model WorkspaceLogo {
 
   @@index([workspaceId, retiredAt])
   @@map("workspace_logos")
+}
+
+/// An image uploaded for mail: a template's or a composed email's body, or a signature. Served publicly at
+/// an unguessable address so recipients' mail clients load it with no sign-in; kept for mail already sent.
+model MailAsset {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// Unguessable, and public: it is in every email that shows the image.
+  token        String   @unique
+  storageKey   String   @unique @map("storage_key")
+  /// `image/png` or `image/jpeg`: the bytes as stored, re-encoded on upload.
+  contentType  String   @map("content_type")
+  width        Int
+  height       Int
+  sizeBytes    Int      @map("size_bytes")
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedBy WorkspaceMember? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("mail_assets")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
