@@ -54,6 +54,9 @@ if ! mkdir "$LOCK" 2>/dev/null; then
     exit 1
 fi
 echo "$SHA $(date -u +%FT%TZ) pid $$" >"$LOCK/holder"
+# Any exit before the revert trap takes over (a missing image, a refused env, a failed migration)
+# releases the lock, so the next deploy is not refused by a lock nobody holds.
+trap 'rm -rf "$LOCK"' EXIT
 
 # This release's own derivation of <env>.env and postgres.env: a value it newly derives (a new
 # variable, a renamed service's URL) is written before anything reads it. Idempotent; never prints a
@@ -189,8 +192,9 @@ else
     log "no edge file installed yet — see docs/deploy/production.md, one-time steps"
 fi
 
-# From here the new colour serves; failures no longer revert.
-trap - ERR EXIT
+# From here the new colour serves; failures no longer revert, but still release the lock.
+trap - ERR
+trap 'rm -rf "$LOCK"' EXIT
 phase="draining $ACTIVE"
 if [ "$ACTIVE" != none ] || [ -n "$LEGACY_API$LEGACY_WEB" ]; then
     log "$phase"
