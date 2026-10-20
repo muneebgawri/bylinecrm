@@ -271,6 +271,8 @@ export interface PersonMergeCounts {
     openOffersCancelled: number;
     twentyLinks: number;
     biginLinks: number;
+    contactReuses: number;
+    mergedPointers: number;
 }
 
 export const EMPTY_PERSON_COUNTS: PersonMergeCounts = {
@@ -294,6 +296,8 @@ export const EMPTY_PERSON_COUNTS: PersonMergeCounts = {
     openOffersCancelled: 0,
     twentyLinks: 0,
     biginLinks: 0,
+    contactReuses: 0,
+    mergedPointers: 0,
 };
 
 /** The fields of a person the merge combines. */
@@ -361,8 +365,8 @@ export function combined(survivor: MergeablePerson, dup: MergeablePerson) {
  * and CRM sends), meetings, sequence enrolments (one per sequence and person: the duplicate's enrolment in a
  * sequence the survivor is already in is stopped and stays on the duplicate), deals it is the contact of,
  * suppressions (they stay per address), unsubscribe tokens, tracking, guardrail events, Byline leads, transfer
- * history (an open offer is cancelled) and the Twenty and Bigin importers' links, so the next sync updates the
- * survivor. A link the survivor already has is kept once. Does not touch the two people's own rows.
+ * history (an open offer is cancelled), the Twenty and Bigin importers' links (so the next sync updates the
+ * survivor), Bigin Contact reuse records and earlier merges' pointers. A link the survivor already has is kept once. Does not touch the two people's own rows.
  */
 export async function moveRelated(
     tx: Prisma.TransactionClient,
@@ -447,6 +451,18 @@ export async function moveRelated(
     );
     c.biginLinks = n(
         await tx.$executeRaw`UPDATE bigin_import_links SET local_id = ${kept}::uuid WHERE workspace_id = ${ws}::uuid AND local_type = 'person' AND local_id = ${dup}::uuid`,
+    );
+    // A reuse between the two people merged stays as it was (it cannot point from a person to itself).
+    c.contactReuses =
+        n(
+            await tx.$executeRaw`UPDATE bigin_contact_reuses SET previous_person_id = ${kept}::uuid WHERE workspace_id = ${ws}::uuid AND previous_person_id = ${dup}::uuid AND new_person_id <> ${kept}::uuid`,
+        ) +
+        n(
+            await tx.$executeRaw`UPDATE bigin_contact_reuses SET new_person_id = ${kept}::uuid WHERE workspace_id = ${ws}::uuid AND new_person_id = ${dup}::uuid AND previous_person_id <> ${kept}::uuid`,
+        );
+    // People merged into the duplicate earlier now point at the survivor.
+    c.mergedPointers = n(
+        await tx.$executeRaw`UPDATE people SET merged_into_id = ${kept}::uuid WHERE workspace_id = ${ws}::uuid AND merged_into_id = ${dup}::uuid`,
     );
     return c;
 }

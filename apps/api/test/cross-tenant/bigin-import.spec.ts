@@ -29,6 +29,7 @@ import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { TwentyImportRunner } from '../../src/twenty-import/import-runner';
 import { FakeBigin } from '../support/fake-bigin';
+import { PeopleDedupe } from '../../src/records/people-dedupe.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { FakeTwenty } from '../support/fake-twenty';
@@ -836,5 +837,65 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect((await people(otherWorkspace, otherAdmin)).some((p) => p.source === 'bigin')).toBe(false);
             expect(await owner.biginImportLink.count({ where: { workspaceId: otherWorkspace } })).toBe(0);
         });
+    });
+
+    describe('a person merged from duplicates linked to several Contacts (person dedupe)', () => {
+        it('every Contact still resolves to the survivor; only the most recently modified one writes its fields', async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            const [older, newer] = bigin.seed('Contacts', [
+                {
+                    First_Name: 'Rick',
+                    Last_Name: 'Twice',
+                    Email: `rick-a-${stamp}@twice.example`,
+                    Title: 'A',
+                    Owner: ownerOf(adminEmail),
+                },
+                {
+                    First_Name: 'Rick',
+                    Last_Name: 'Twice',
+                    Email: `rick-b-${stamp}@twice.example`,
+                    Title: 'B',
+                    Owner: ownerOf(adminEmail),
+                },
+            ]);
+            await runToEnd('changes');
+            const a = (await linkOf('Contacts', older!.id))!.localId;
+            const b = (await linkOf('Contacts', newer!.id))!.localId;
+            expect(a).not.toBe(b);
+            const merged = await app.get(PeopleDedupe).merge(workspace, [a, b], true);
+            const survivor = merged!.decision.survivorId;
+            expect((await linkOf('Contacts', older!.id))!.localId).toBe(survivor);
+            expect((await linkOf('Contacts', newer!.id))!.localId).toBe(survivor);
+
+            // `newer` is modified in Bigin last: its change writes.
+            const hour = 60 * 60 * 1000;
+            bigin.update(
+                'Contacts',
+                newer!.id,
+                { Title: 'From the newer Contact' },
+                new Date(Date.now() + hour).toISOString(),
+            );
+            await runToEnd('changes');
+            expect((await owner.person.findUniqueOrThrow({ where: { id: survivor } })).jobTitle).toBe(
+                'From the newer Contact',
+            );
+
+            // `older` changes, but was modified in Bigin before `newer`: on a full pass it only keeps its link.
+            bigin.update(
+                'Contacts',
+                older!.id,
+                { Title: 'From the older Contact' },
+                new Date(Date.now() + hour / 2).toISOString(),
+            );
+            const run = await runToEnd('full');
+            expect(reportOf(run, 'Contacts').errors.map((e) => e.externalId)).not.toContain(older!.id);
+            const after = await owner.person.findUniqueOrThrow({ where: { id: survivor } });
+            expect(after.jobTitle).toBe('From the newer Contact');
+            expect((await linkOf('Contacts', older!.id))!.localId).toBe(survivor);
+            expect((await linkOf('Contacts', older!.id))!.externalUpdatedAt).not.toBeNull();
+            expect(
+                await owner.person.count({ where: { workspaceId: workspace, nameLast: 'Twice', deletedAt: null } }),
+            ).toBe(1);
+        }, 300_000);
     });
 });

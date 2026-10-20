@@ -115,6 +115,16 @@ describe('person dedupe: merging people saved more than once', () => {
                 localId: p2,
             },
         });
+        await owner.biginContactReuse.create({
+            data: {
+                workspaceId: workspace,
+                biginId: `zcrm_${stamp}`,
+                previousPersonId: p2,
+                newPersonId: p3,
+                before: {},
+                after: {},
+            },
+        });
         await as(admin)
             .post(w('/notes'))
             .send({
@@ -206,6 +216,10 @@ describe('person dedupe: merging people saved more than once', () => {
                 })
             ).localId,
         ).toBe(p1);
+        expect(await owner.biginContactReuse.findFirstOrThrow({ where: { workspaceId: workspace } })).toMatchObject({
+            previousPersonId: p1,
+            newPersonId: p3,
+        });
 
         const transfer = await owner.ownershipTransfer.findFirstOrThrow({
             where: { workspaceId: workspace, recordId: p1 },
