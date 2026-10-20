@@ -1,4 +1,4 @@
-import type { ReputationSettings } from '@bylinecrm/shared';
+import type { ReputationSettings, ReputationSettingsView } from '@bylinecrm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
@@ -11,9 +11,9 @@ const keys = {
 
 export const reputation = {
     settings: (workspaceId: string, signal?: AbortSignal) =>
-        request<ReputationSettings>('GET', workspacePath(workspaceId, '/reputation/settings'), { signal }),
+        request<ReputationSettingsView>('GET', workspacePath(workspaceId, '/reputation/settings'), { signal }),
     updateSettings: (workspaceId: string, input: ReputationSettings) =>
-        request<ReputationSettings>('PUT', workspacePath(workspaceId, '/reputation/settings'), { body: input }),
+        request<ReputationSettingsView>('PUT', workspacePath(workspaceId, '/reputation/settings'), { body: input }),
 };
 
 export function useReputationSettings(workspaceId: string, enabled = true) {

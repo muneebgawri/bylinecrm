@@ -74,8 +74,6 @@ export const ERROR_CODES = [
      * use a sequence from the sending pool. Nothing was sent.
      */
     'message.bulk_pattern',
-    /** `422` (REP-1): this subject has reached its 24-hour threshold of new recipients from this mailbox. Nothing was sent. */
-    'message.subject_repeat',
     /** `409`: a failed send whose refusal would repeat, a sequence's send, or one whose content is gone, is not retried (#134). */
     'send.not_retryable',
     /** Too many attempts; try again later. */

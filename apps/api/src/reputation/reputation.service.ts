@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { ReputationSettings } from '@bylinecrm/shared';
+import type { ReputationSettings, ReputationSettingsView } from '@bylinecrm/shared';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
-import { pickReputationSettings, reputationSettingsIn } from './settings';
+import { pickReputationSettings, primaryDomainIn, reputationSettingsIn } from './settings';
 
 /** The workspace's sender-reputation thresholds (REP-1): read by reviewers, set by admins. */
 @Injectable()
@@ -12,20 +12,24 @@ export class ReputationService {
         private readonly context: WorkspaceContext,
     ) {}
 
-    settings(): Promise<ReputationSettings> {
-        return this.rls.withWorkspace((tx) => reputationSettingsIn(tx));
+    settings(): Promise<ReputationSettingsView> {
+        return this.rls.withWorkspace(async (tx) => {
+            const s = await reputationSettingsIn(tx);
+            return { ...s, effectivePrimaryDomain: await primaryDomainIn(tx, s) };
+        });
     }
 
-    async updateSettings(input: ReputationSettings): Promise<ReputationSettings> {
+    async updateSettings(input: ReputationSettings): Promise<ReputationSettingsView> {
         const workspaceId = this.context.get()!.workspaceId;
-        return this.rls.withWorkspace(async (tx) =>
-            pickReputationSettings(
+        return this.rls.withWorkspace(async (tx) => {
+            const s = pickReputationSettings(
                 await tx.reputationSettings.upsert({
                     where: { workspaceId },
                     create: { workspaceId, ...input },
                     update: input,
                 }),
-            ),
-        );
+            );
+            return { ...s, effectivePrimaryDomain: await primaryDomainIn(tx, s) };
+        });
     }
 }

@@ -234,7 +234,12 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
     });
 
     it('thresholds are the workspace’s own: defaults until an admin sets them, reviewers read, members cannot', async () => {
-        expect((await as(admin).get(w('/reputation/settings')).expect(200)).body).toEqual(REPUTATION_DEFAULTS);
+        // No override: the primary domain is the one the members sign in with.
+        const derived = { effectivePrimaryDomain: 'example.com' };
+        expect((await as(admin).get(w('/reputation/settings')).expect(200)).body).toEqual({
+            ...REPUTATION_DEFAULTS,
+            ...derived,
+        });
         expect((await as(ana).get(w('/reputation/settings'))).status).toBe(403);
         const tight: ReputationSettings = {
             ...REPUTATION_DEFAULTS,
@@ -248,17 +253,21 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
             .put(w('/reputation/settings'))
             .send({ ...tight, hourlyNewRecipients: 9 });
         expect(bad.status).toBe(400);
-        expect((await as(admin).put(w('/reputation/settings')).send(tight).expect(200)).body).toEqual(tight);
-        expect((await as(mia).get(w('/reputation/settings')).expect(200)).body).toEqual(tight);
+        expect((await as(admin).put(w('/reputation/settings')).send(tight).expect(200)).body).toEqual({
+            ...tight,
+            ...derived,
+        });
+        expect((await as(mia).get(w('/reputation/settings')).expect(200)).body).toEqual({ ...tight, ...derived });
         // Another workspace still has the defaults, and cannot read or write this one's.
-        expect((await as(otherAdmin).get(w('/reputation/settings', otherWorkspace)).expect(200)).body).toEqual(
-            REPUTATION_DEFAULTS,
-        );
+        expect((await as(otherAdmin).get(w('/reputation/settings', otherWorkspace)).expect(200)).body).toEqual({
+            ...REPUTATION_DEFAULTS,
+            ...derived,
+        });
         expect([403, 404]).toContain((await as(otherAdmin).get(w('/reputation/settings'))).status);
         expect([403, 404]).toContain((await as(otherAdmin).put(w('/reputation/settings')).send(tight)).status);
     });
 
-    it('refuses the bulk pattern, the repeated subject and the over-budget send, and records each', async () => {
+    it('refuses the bulk pattern and the over-budget send, warns of the repeated subject, and records each', async () => {
         expect((await mail(0, 'Intro', `Hi P0,\n${BODY_A}`)).status).toBe(202);
         expect((await mail(1, 'Intro', `Hi P1,\n${BODY_B}`)).status).toBe(202);
         expect((await mail(2, 'Pilot', `Hello P2,\n${BODY_A}`)).status).toBe(202);
@@ -266,9 +275,8 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
         const bulk = await mail(3, 'Another', `Hi P3,\n${BODY_A}`);
         expect(bulk.status).toBe(422);
         expect((bulk.body as { code: string }).code).toBe('message.bulk_pattern');
-        const subject = await mail(3, 'Re: intro', BODY_C);
-        expect((subject.body as { code: string }).code).toBe('message.subject_repeat');
-        expect((await mail(3, 'Dinner', BODY_C)).status).toBe(202);
+        // A repeated subject warns: the send goes.
+        expect((await mail(3, 'Re: intro', BODY_C)).status).toBe(202);
         const budget = await mail(4, 'Export', BODY_D);
         expect(budget.status).toBe(422);
         expect(budget.body as { code: string; details: Record<string, string> }).toMatchObject({
@@ -281,11 +289,12 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
             [
                 ['bulk_pattern', 'blocked', 'send'],
                 ['send_budget', 'blocked', 'send'],
-                ['subject_repeat', 'blocked', 'send'],
+                ['subject_repeat', 'warned', 'send'],
             ].sort(),
         );
-        // The first bulk pattern of the day tells the reviewers.
+        // The first bulk pattern of the day tells the reviewers; the subject warning tells Ana.
         expect((await alerts(mia)).length).toBeGreaterThanOrEqual(1);
+        expect((await alerts(ana)).map((n) => n.guardrail?.kind)).toEqual(['subject_repeat']);
         // Nothing of it reaches another workspace.
         expect(await events(otherAdmin, otherWorkspace)).toHaveLength(0);
     });
@@ -328,29 +337,31 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
         expect(fromSync.every((e) => e.outcome === 'warned')).toBe(true);
         expect(fromSync.find((e) => e.kind === 'negative_reply')!.address).toBe(sent[0]!.to);
         // Ana is told in the bell; the next send counts what left through Gmail.
-        expect((await alerts(ana)).length).toBe(4);
+        expect((await alerts(ana)).length).toBe(5);
         expect(((await mail(5, 'Unrelated', BODY_D)).body as { code: string }).code).toBe('mailbox.budget_reached');
         expect(await events(otherAdmin, otherWorkspace)).toHaveLength(0);
     });
 
-    it('protects the primary domain: no enrolment while the pool has no lookalike mailbox', async () => {
-        await as(admin)
-            .put(w('/reputation/settings'))
-            .send({ ...REPUTATION_DEFAULTS, primaryDomain: 'Example.com' })
-            .expect(200);
+    it('protects the primary domain, derived from the members or set by an admin: no enrolment while the pool has no lookalike mailbox', async () => {
         const gate = app.get(ReputationGate);
         const context = app.get(WorkspaceContext);
-        await expect(
+        const enrol = () =>
             context.run({ workspaceId: workspace, memberId: anaId, capabilities: new Set() }, () =>
                 gate.assertLookalikePool('sequence_enrol'),
-            ),
-        ).rejects.toMatchObject({ code: 'mailbox.primary_domain' });
-        // The other workspace has no primary domain: nothing is refused there.
-        await expect(
-            context.run({ workspaceId: otherWorkspace, capabilities: new Set() }, () =>
-                gate.assertLookalikePool('sequence_enrol'),
-            ),
-        ).resolves.toBeUndefined();
-        expect((await events(mia)).some((e) => e.kind === 'primary_domain')).toBe(true);
+            );
+        // Derived (example.com, the members' sign-in domain), on by default.
+        await expect(enrol()).rejects.toMatchObject({ code: 'mailbox.primary_domain' });
+        // An admin's override.
+        const set = await as(admin)
+            .put(w('/reputation/settings'))
+            .send({ ...REPUTATION_DEFAULTS, primaryDomain: 'Brand.Example' })
+            .expect(200);
+        expect(set.body).toMatchObject({ primaryDomain: 'brand.example', effectivePrimaryDomain: 'brand.example' });
+        await expect(enrol()).rejects.toMatchObject({ details: { primaryDomain: 'brand.example' } });
+        const mine = (await events(mia)).filter((e) => e.kind === 'primary_domain');
+        expect(mine).toHaveLength(2);
+        // Recorded only in this workspace.
+        expect((await events(otherAdmin, otherWorkspace)).some((e) => e.kind === 'primary_domain')).toBe(false);
+        await as(admin).put(w('/reputation/settings')).send(REPUTATION_DEFAULTS).expect(200);
     });
 });

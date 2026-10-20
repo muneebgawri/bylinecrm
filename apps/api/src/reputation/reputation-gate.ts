@@ -15,7 +15,7 @@ import { sendingDomainOf } from '../sending-pool/pool-mailbox';
 import { raiseAlert, utcDay } from './alerts';
 import type { Fingerprint } from './fingerprint';
 import { nearDuplicateRecipients, recipientsSince, subjectRecipients } from './judge';
-import { reputationSettingsIn } from './settings';
+import { primaryDomainIn, reputationSettingsIn } from './settings';
 import { newThreadMail } from './window';
 
 /** A send the reputation gate refused (REP-1): `422` with the code, nothing sent. */
@@ -42,7 +42,8 @@ export interface PersonalSendCheck {
 
 interface Verdict {
     kind: GuardrailKind;
-    code: ErrorCode;
+    /** Null: a warning — the send goes. */
+    code: ErrorCode | null;
     severity: GuardrailSeverity;
     message: string;
     detail: Record<string, string>;
@@ -51,7 +52,8 @@ interface Verdict {
 /**
  * The reputation gate (REP-1, #204, FR-CRMS-23): what a personal mailbox's new mail must pass before it
  * leaves — its new-recipient budget for the rolling 24 hours and hour, and the repetition rules (a near-identical
- * body or the same subject to too many distinct people in 24 hours: "use a sequence from the pool"). A reply
+ * body to too many distinct people in 24 hours: "use a sequence from the pool"; the same subject to too many is a
+ * warning, once a day, and the send goes). A reply
  * is never judged. Every refusal is a guardrail event (`blocked`); the first bulk pattern of a member's day tells
  * the reviewers. The counts include what the mailbox sent outside the CRM (Gmail sync), so a budget spent in
  * Gmail is spent here too. Judged at the send's request and, for a scheduled send, at its time.
@@ -109,20 +111,39 @@ export class ReputationGate {
                     detail: { recipients: String(near), threshold: String(s.nearDuplicateThreshold) },
                 };
             }
+            // A repeated subject warns (the send goes): a cheap signal, not proof of bulk mail.
             const subject = others(subjectRecipients(entries, check.fingerprint.subjectKey));
             if (subject >= s.subjectRepeatThreshold) {
                 return {
                     kind: 'subject_repeat',
-                    code: 'message.subject_repeat',
+                    code: null,
                     severity: 'medium',
-                    message: `This subject has gone to ${subject} new recipients from this mailbox in the last 24 hours (limit ${s.subjectRepeatThreshold}) — use a sequence from the sending pool`,
-                    detail: { recipients: String(subject), threshold: String(s.subjectRepeatThreshold) },
+                    message: `This subject has gone to ${subject + mine.length} new recipients from this mailbox in the last 24 hours (threshold ${s.subjectRepeatThreshold}) — bulk mail belongs in a sequence from the pool`,
+                    detail: { recipients: String(subject + mine.length), threshold: String(s.subjectRepeatThreshold) },
                 };
             }
             return null;
         });
         if (!verdict) return;
         const first = check.recipients[0];
+        if (verdict.code === null) {
+            // Warned once per mailbox per day, in the sender's bell and on the Guardrails page.
+            await this.record(context, {
+                kind: verdict.kind,
+                severity: verdict.severity,
+                path: check.path,
+                outcome: 'warned',
+                mailboxId: check.mailboxId,
+                address: first?.address.toLowerCase() ?? null,
+                personId: first?.personId ?? null,
+                message: verdict.message,
+                detail: verdict.detail,
+                now,
+                dedupeKey: `subject_repeat:send:${check.mailboxId}:${utcDay(now)}`,
+                owner: context.memberId ?? null,
+            });
+            return;
+        }
         await this.record(context, {
             kind: verdict.kind,
             severity: verdict.severity,
@@ -139,19 +160,20 @@ export class ReputationGate {
     }
 
     /**
-     * The primary-domain rule (REP-1): with a primary domain set, a sequence enrolment needs a connected pool
+     * The primary-domain rule (REP-1): with a primary domain known (set by an admin, or derived from the members'
+     * sign-in addresses), a sequence enrolment needs a connected pool
      * mailbox on another (lookalike) domain to send from. Refuses — and records — otherwise.
      */
     async assertLookalikePool(path: Extract<GuardrailPath, 'sequence_enrol'>): Promise<void> {
         const context = this.current();
         const primary = await this.rls.withWorkspace(context.workspaceId, async (tx) => {
-            const s = await reputationSettingsIn(tx);
-            if (!s.primaryDomain) return null;
+            const primaryDomain = await primaryDomainIn(tx, await reputationSettingsIn(tx));
+            if (!primaryDomain) return null;
             const pool = await tx.mailbox.findMany({
                 where: { purpose: 'pool', status: 'connected' },
                 select: { email: true },
             });
-            return pool.some((m) => sendingDomainOf(m.email) !== s.primaryDomain) ? null : s.primaryDomain;
+            return pool.some((m) => sendingDomainOf(m.email) !== primaryDomain) ? null : primaryDomain;
         });
         if (!primary) return;
         const message = `Sequences send only from pool mailboxes on lookalike domains, and the pool has none off ${primary} — connect one first`;
@@ -210,8 +232,11 @@ export class ReputationGate {
             kind: GuardrailKind;
             severity: GuardrailSeverity;
             path: GuardrailPath;
-            outcome: 'blocked' | 'deferred';
+            outcome: 'blocked' | 'deferred' | 'warned';
             mailboxId: string | null;
+            dedupeKey?: string;
+            /** Who is told in the bell besides reviewers (a warning's sender). */
+            owner?: string | null;
             address: string | null;
             personId: string | null;
             message: string;
@@ -243,8 +268,9 @@ export class ReputationGate {
                         address: e.address,
                         message: e.message,
                         detail: { ...e.detail, ...(e.mailboxId ? { mailboxId: e.mailboxId } : {}) },
+                        ...(e.dedupeKey ? { dedupeKey: e.dedupeKey } : {}),
                     },
-                    { owner: null, reviewers: firstToday },
+                    { owner: e.owner ?? null, reviewers: firstToday },
                 );
             });
         } catch (error) {
