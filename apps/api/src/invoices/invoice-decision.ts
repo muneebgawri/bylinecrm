@@ -31,7 +31,7 @@ export function settle(
     if (error instanceof NewswireosApiError && error.refused) {
         return {
             status: 'needs_review',
-            reasonCode: INVOICE_REASONS.tokenRefused,
+            reasonCode: error.status === 403 ? INVOICE_REASONS.tokenLacksScope : INVOICE_REASONS.tokenRefused,
             canonicalReference: null,
             facts: {},
         };

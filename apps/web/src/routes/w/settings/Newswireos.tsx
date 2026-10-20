@@ -14,14 +14,11 @@ import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 
-/** The shortest hook secret the API accepts. */
-const SECRET_MIN = 16;
-
 const RESULT_TEXT: Record<string, string> = {
     applied: 'A refund or chargeback was applied to an invoice.',
     unmatched: 'A payment change arrived for no invoice in this workspace.',
     ignored: 'A delivery the CRM does not read was acknowledged.',
-    ping: 'NewswireOS’s test ping arrived.',
+    duplicate: 'NewswireOS redelivered an event already applied; it was acknowledged.',
     bad_signature: 'A delivery was refused: it was not signed with this secret.',
 };
 
@@ -72,8 +69,8 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
         const errors: { baseUrl?: string; apiToken?: string; secret?: string } = {};
         if (!/^https?:\/\/[^/\s]+/i.test(baseUrl.trim())) errors.baseUrl = 'Enter NewswireOS’s address.';
         if (!settings.configured && !apiToken) errors.apiToken = 'Enter a NewswireOS API token.';
-        if ((!settings.configured || secret !== '') && secret.length < SECRET_MIN)
-            errors.secret = `At least ${SECRET_MIN} characters${settings.configured ? ', or leave it empty to keep it' : ''}.`;
+        if (!settings.configured && secret.trim() === '')
+            errors.secret = 'Paste the webhook secret NewswireOS made for this hook (whsec_…).';
         setLocal(errors);
         if (errors.baseUrl || errors.apiToken || errors.secret) return;
         put.mutate(
@@ -112,7 +109,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                     hint={
                         settings.configured
                             ? 'Set. Enter a new one only to replace it.'
-                            : 'A NewswireOS API token that may verify payments.'
+                            : 'A NewswireOS API token with the payment_verification:lookup scope.'
                     }
                     error={local.apiToken ?? fieldErrorAt(put.error, 'apiToken')}
                 >
@@ -128,8 +125,8 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                     label="Hook secret"
                     hint={
                         settings.configured
-                            ? 'Set. Enter a new one only when you change it in NewswireOS too.'
-                            : 'NewswireOS signs refunds and chargebacks with it; anything else is refused.'
+                            ? 'Set. Paste a new one only when NewswireOS makes a new one.'
+                            : 'Made by NewswireOS when you add this hook there (whsec_…). Deliveries not signed with it are refused.'
                     }
                     error={local.secret ?? fieldErrorAt(put.error, 'secret')}
                 >

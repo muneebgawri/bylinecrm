@@ -41,120 +41,67 @@ copy NewswireOS's verification logic (D-239).
 
 ## Open questions
 
-- NewswireOS has no external token-scoped endpoint or outbound webhook yet. The contract below is
-  the assumption. The NewswireOS side is being built separately.
+- The NewswireOS side is in review (newswireos#621, pressboard#350). The contract below matches it.
 
-## The contract (v1)
+## The contract (final, as built in newswireos#621 / pressboard#350)
 
-Byline codes against this through a port (`NewswireosVerificationPort`). The HTTP adapter is used in
-production and a fake is used in tests. Until NewswireOS ships it, a workspace with no NewswireOS link
-sends every invoice to `needs_review`, and someone with `invoice:verify` verifies it by hand. That manual
-path is the default that works today.
+Byline calls NewswireOS through `NewswireosVerificationPort`. Production uses the HTTP adapter and tests use
+`test/support/fake-newswireos.ts`. A workspace with no NewswireOS link sends every invoice to `needs_review`,
+where a person with `invoice:verify` decides.
 
-Naming follows the internal `POST /api/workspaces/:slug/payment-verification/lookup`
-(`amount_cents`, `status` + `reason_code`, `VerificationService.decide()`), but this is a **separate
-token-scoped endpoint**. The token identifies the NewswireOS tenant, so the path has no slug.
-
-## 1. Verification lookup (Byline -> NewswireOS)
+### 1. Verification lookup (Byline → NewswireOS)
 
 `POST {baseUrl}/api/v1/crm/payment-verification/lookup`
 
-Byline's per-workspace setting holds `baseUrl` (an http(s) origin) and `apiToken`, sealed at rest with
-Byline's SecretBox.
+- Auth: `Authorization: Bearer <apiToken>`, a NewswireOS API token with scope `payment_verification:lookup`.
+  It is stored in Settings → NewswireOS and sealed with SecretBox.
+- Request: `{ "reference", "gateway": "stripe" | "paypal" | "crypto_onchain", "amount_cents", "currency" }`.
+  `amount_cents` is the amount expected (the deal amount, or the per-invoice override), and `currency` is lowercase.
+  Byline never sends `bank_wire`; those invoices go to `needs_review` without a call.
+- Response 200: `{ status, reason_code, canonical_reference, amount_cents, currency, paid_at, already_used, … }`.
+    - `status` + `reason_code` are NewswireOS's decision (`VerificationService.decide()`): `verified`
+      (`reason_code` null or `UNDERPAID_WITHIN_TOLERANCE`), `invalid` (`NOT_FOUND`, `AMOUNT_MISMATCH`, `REFUNDED`,
+      `WRONG_PAYEE`, …), `needs_review` (`PROVIDER_ERROR`, …) or `pending` (`UNDER_CONFIRMED`). Byline treats
+      `pending` and anything it doesn't recognise as `needs_review`.
+    - `amount_cents` / `currency` are what the **provider** reports (null when not found), not an echo of the
+      request. Byline keeps them, and every other field, in `verification_payload` for display. `canonical_reference`
+      is also stored, so later webhooks can match on it.
+    - `already_used: true` means another release already holds the payment. **Byline treats this as `needs_review`
+      with reason `ALREADY_USED`, not `invalid`.** A CRM deal's payment is often the very payment that bought
+      a release, so refusing it would be a guess, and uncertainty goes to a person. When the decision is already
+      `invalid`, it stays `invalid` with NewswireOS's reason.
+- Errors:
+    - 401 (bad or revoked token): `needs_review` / `TOKEN_REFUSED`.
+    - 403 (token lacks the scope): `needs_review` / `TOKEN_LACKS_SCOPE`. The UI says "token lacks the
+      payment_verification:lookup scope".
+    - 400 (malformed body): `invalid` / `BAD_REQUEST`, keeping NewswireOS's message.
+    - 5xx, 429, network failure or a 10 s timeout: retried with backoff (3 attempts), then `needs_review` / `PROVIDER_ERROR`.
+    - A provider (gateway) error is not an HTTP error. It arrives as 200 `needs_review` / `PROVIDER_ERROR`.
 
-Headers:
+### 2. Payment-state webhook (NewswireOS → Byline)
 
-- `Authorization: Bearer <apiToken>`: a NewswireOS API token bound to one tenant, with scope
-  `payment-verification:lookup` (equivalent to `payment_proof:verify` for this route only).
-- `Content-Type: application/json`, `Accept: application/json`
+NewswireOS's existing outbound webhook format, posted to `POST {bylineAppUrl}/api/hooks/newswireos/{hookToken}`.
+Settings → NewswireOS shows that URL, which can be rotated.
 
-Request:
-
-```json
-{ "reference": "pi_3P...", "gateway": "stripe", "amount_cents": 150000, "currency": "usd" }
-```
-
-- `gateway`: `stripe` | `paypal` | `crypto_onchain`. Byline never sends `bank_wire`, because it goes straight to needs_review.
-- `amount_cents`: integer minor units > 0 (the deal amount, or a per-invoice override for a partial payment)
-- `currency`: ISO 4217, lowercase
-
-Response 200:
-
-```json
-{
-    "status": "verified",
-    "reason_code": null,
-    "gateway": "stripe",
-    "canonical_reference": "pi_3P...",
-    "amount_cents": 150000,
-    "currency": "usd",
-    "paid_at": "2026-10-20T10:00:00Z",
-    "already_used": false
-}
-```
-
-- `status`: `verified` | `invalid` | `needs_review` | `pending`, exactly as `decide()` returns it.
-    - `verified` (reason_code may be `UNDERPAID_WITHIN_TOLERANCE`): Byline attaches the invoice.
-    - `invalid` + reason_code (`NOT_FOUND`, `NOT_SUCCEEDED`, `INVOICE_UNPAID`, `REFUNDED`, `WRONG_PAYEE`,
-      `AMOUNT_MISMATCH`, `REUSED`, …): Byline refuses it and shows the reason.
-    - `needs_review` (`PROVIDER_ERROR`, `INVOICE_LINK_UNRESOLVED`, `CONFIRMATIONS_UNKNOWN`, …) and `pending`
-      (`UNDER_CONFIRMED`): Byline shows a "waiting for finance" badge and notifies holders of `invoice:verify`.
-      A person can re-check it later.
-- Byline stores every other field as given, for display. It reads `canonical_reference` to match webhooks later.
-- `already_used`: whether NewswireOS already has this payment on a release. Informational only.
-  Byline enforces its own one-payment-one-deal rule.
-- Nothing is persisted on the NewswireOS side.
-
-Errors:
-
-- 401/403: Byline sets `needs_review` / `TOKEN_REFUSED`.
-- 400/422: Byline sets `invalid` / `BAD_REQUEST`, keeping `{ "message": "..." }` when present.
-- 5xx, network failure or timeout (10 s): Byline retries with backoff (3 attempts), then sets
-  `needs_review` / `PROVIDER_ERROR`.
-
-## 2. Payment-state webhook (NewswireOS -> Byline)
-
-`POST {bylineAppUrl}/api/hooks/newswireos/{hookToken}`. Byline's Settings > NewswireOS page shows the
-full URL. An admin gives NewswireOS that URL and the same shared secret (16-200 chars) entered in Byline.
-
-Headers:
-
-- `Content-Type: application/json`
-- `X-NewswireOS-Signature: <lowercase hex HMAC-SHA256 of the raw body, key = shared secret>`
-
-Body:
-
-```json
-{
-    "id": "evt_01J...",
-    "type": "payment.refunded",
-    "occurred_at": "2026-10-21T09:00:00Z",
-    "data": {
-        "gateway": "stripe",
-        "reference": "ch_9",
-        "references": ["ch_9", "pi_9", "in_77"],
-        "amount_cents": 150000,
-        "refunded_amount_cents": 50000,
-        "currency": "usd",
-        "reason_code": "REFUNDED"
-    }
-}
-```
-
-Types:
-
-- `payment.refunded`: a refund. `data.amount_cents` is the payment's amount and `data.refunded_amount_cents`
-  is the **running total** refunded on it so far (not this refund alone), so a replay is harmless. If the total is
-  less than the invoice's amount, it is a partial refund: the invoice stays `verified`, counts net, and Byline
-  emits `invoice.refunded`. If the total is the whole amount or more, or `refunded_amount_cents` is missing,
-  the invoice becomes `invalidated` and Byline emits `invoice.invalidated`.
-- `payment.disputed`: a chargeback or dispute opened. The invoice is always `invalidated`, whatever the amount.
-- `payment.verified`: optional. Finance verified the payment in NewswireOS, so a `needs_review`
-  invoice becomes `verified`.
-- `ping`: Byline answers `{ "result": "ping" }`.
-- Any other type: Byline answers `{ "result": "ignored" }`.
-
-Byline matches on `gateway` plus any of `reference` / `references[]` against the stored reference, or the
-canonical reference NewswireOS returned at lookup, within the hook's workspace.
-Answers: 200 `{ "result": "applied" | "unmatched" | "ignored" | "ping" }`; 401 for a bad or missing signature; 404 for an unknown
-token. Replays are harmless. NewswireOS should retry a non-2xx answer with backoff.
+- Secret: minted by NewswireOS (`whsec_…`, any length) when the hook is added there, then pasted into Byline
+  Settings → NewswireOS. Byline stores it sealed and never generates one.
+- Headers:
+    - `x-webhook-signature: sha256=<lowercase hex HMAC-SHA256 of the raw body>`. Byline strips the prefix and
+      compares in constant time. A wrong or missing signature gets 401, and an unknown hook token gets 404.
+    - `x-webhook-id` and `x-webhook-event` are also sent. Byline reads the body's `id` and `event_type`.
+- Body: exactly `{ id, event_type, occurred_at, data }`.
+- `data`: `{ gateway, reference, references[], amount_cents | null, currency, reason_code, refunded_amount_cents? }`.
+  Byline matches an invoice on `gateway` plus any of `references[]` (and `reference`), compared with the stored
+  reference or the stored canonical reference, within the hook's workspace.
+- Dedup: Byline remembers each applied `id` for 7 days. A redelivery is answered `{ "result": "duplicate" }`
+  and not applied again. Applying is idempotent anyway.
+- Events:
+    - `payment.refunded`: `refunded_amount_cents` is the **running total** refunded. `amount_cents` may be null,
+      for example on PayPal. If the total is below the invoice's amount, it is a partial refund: the invoice stays
+      `verified`, counts net, and Byline emits `invoice.refunded`. If the total is the whole amount or more, or
+      the field is missing, the invoice becomes `invalidated` and Byline emits `invoice.invalidated`.
+    - `payment.disputed`: a chargeback. The invoice is always `invalidated`.
+    - `payment.verified`: finance verified the payment in NewswireOS. `reason_code` is null or
+      `UNDERPAID_WITHIN_TOLERANCE`, and Byline keeps it on the invoice. A `needs_review` invoice becomes `verified`.
+    - There is no ping event. Any other `event_type` is answered `{ "result": "ignored" }`.
+- Answers: 200 `{ "result": "applied" | "unmatched" | "ignored" | "duplicate" }`. NewswireOS retries any non-2xx answer.

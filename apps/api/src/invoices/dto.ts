@@ -47,13 +47,11 @@ export class PutNewswireosSettingsDto extends createZodDto(
             .max(NEWSWIREOS_BASE_URL_MAX)
             .meta({ description: 'NewswireOS’s address, `https://app.newswireos.example`.' }),
         apiToken: z.string().min(1).max(NEWSWIREOS_TOKEN_MAX).optional().meta({
-            description: 'A NewswireOS API token with payment verification. Leave out to keep the current one.',
+            description:
+                'A NewswireOS API token with the `payment_verification:lookup` scope. Leave out to keep the current one.',
         }),
-        secret: z
-            .string()
-            .min(NEWSWIREOS_SECRET_MIN)
-            .max(NEWSWIREOS_SECRET_MAX)
-            .optional()
-            .meta({ description: 'The secret NewswireOS signs its hook deliveries with. Leave out to keep it.' }),
+        secret: z.string().min(NEWSWIREOS_SECRET_MIN).max(NEWSWIREOS_SECRET_MAX).optional().meta({
+            description: 'The webhook secret NewswireOS minted (`whsec_…`). Leave out to keep the current one.',
+        }),
     }),
 ) {}

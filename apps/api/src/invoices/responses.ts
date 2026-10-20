@@ -48,14 +48,14 @@ export const newswireosSettingsView = named(
         }),
         lastDeliveryAt: dateTime.nullable(),
         lastDeliveryResult: z.string().nullable().meta({
-            description: '`applied`, `unmatched`, `ignored`, `ping` or `bad_signature`.',
+            description: '`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery) or `bad_signature`.',
         }),
     }),
 );
 
 export const newswireosHookResult = named(
     'NewswireosHookResult',
-    z.object({ result: z.enum(['applied', 'unmatched', 'ignored', 'ping']) }),
+    z.object({ result: z.enum(['applied', 'unmatched', 'ignored', 'duplicate']) }),
 );
 
 export type NewswireosSettingsView = z.output<typeof newswireosSettingsView>;
