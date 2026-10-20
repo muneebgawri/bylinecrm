@@ -349,7 +349,25 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
             context.run({ workspaceId: workspace, memberId: anaId, capabilities: new Set() }, () =>
                 gate.assertLookalikePool('sequence_enrol'),
             );
-        // Derived (example.com, the members' sign-in domain), on by default.
+        // An empty pool refuses nothing (steps wait for a mailbox).
+        await expect(enrol()).resolves.toBeUndefined();
+        // A pool only on the primary domain — derived (example.com, the members' sign-in domain), on by default.
+        const adminId = (
+            await owner.workspaceMember.findFirstOrThrow({
+                where: { workspaceId: workspace, user: { email: emails.admin } },
+            })
+        ).id;
+        await owner.mailbox.create({
+            data: {
+                workspaceId: workspace,
+                ownerMemberId: adminId,
+                email: `pool-${stamp}@example.com`,
+                purpose: 'pool',
+                status: 'connected',
+                // Never opened: the gate reads only the address.
+                refreshTokenCiphertext: 'unused',
+            },
+        });
         await expect(enrol()).rejects.toMatchObject({ code: 'mailbox.primary_domain' });
         // An admin's override.
         const set = await as(admin)
@@ -357,9 +375,10 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
             .send({ ...REPUTATION_DEFAULTS, primaryDomain: 'Brand.Example' })
             .expect(200);
         expect(set.body).toMatchObject({ primaryDomain: 'brand.example', effectivePrimaryDomain: 'brand.example' });
-        await expect(enrol()).rejects.toMatchObject({ details: { primaryDomain: 'brand.example' } });
+        // The pool's example.com mailbox is now a lookalike: enrolment goes.
+        await expect(enrol()).resolves.toBeUndefined();
         const mine = (await events(mia)).filter((e) => e.kind === 'primary_domain');
-        expect(mine).toHaveLength(2);
+        expect(mine).toHaveLength(1);
         // Recorded only in this workspace.
         expect((await events(otherAdmin, otherWorkspace)).some((e) => e.kind === 'primary_domain')).toBe(false);
         await as(admin).put(w('/reputation/settings')).send(REPUTATION_DEFAULTS).expect(200);

@@ -161,7 +161,7 @@ export class ReputationGate {
 
     /**
      * The primary-domain rule (REP-1): with a primary domain known (set by an admin, or derived from the members'
-     * sign-in addresses), a sequence enrolment needs a connected pool
+     * sign-in addresses), a sequence enrolment is refused while every connected pool mailbox is on it — it needs a connected pool
      * mailbox on another (lookalike) domain to send from. Refuses — and records — otherwise.
      */
     async assertLookalikePool(path: Extract<GuardrailPath, 'sequence_enrol'>): Promise<void> {
@@ -173,6 +173,9 @@ export class ReputationGate {
                 where: { purpose: 'pool', status: 'connected' },
                 select: { email: true },
             });
+            // An empty pool refuses nothing here (the steps wait for a mailbox, as before); a pool whose every
+            // mailbox is on the primary domain could only ever send from it.
+            if (pool.length === 0) return null;
             return pool.some((m) => sendingDomainOf(m.email) !== primaryDomain) ? null : primaryDomain;
         });
         if (!primary) return;
