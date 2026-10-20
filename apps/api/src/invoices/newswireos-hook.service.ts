@@ -4,11 +4,14 @@ import { hashToken } from '../auth/tokens';
 import { RateLimiter } from '../auth/rate-limiter.service';
 import { ApiException, RateLimited } from '../infra/errors/api-errors';
 import { PrismaService } from '../infra/prisma.service';
+import { RedisService } from '../infra/redis.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import {
+    NEWSWIREOS_DELIVERY_SEEN_S,
     NEWSWIREOS_HOOK_FAILURE_LIMIT,
     NEWSWIREOS_HOOK_FAILURE_WINDOW_S,
+    newswireosDeliveryKey,
     newswireosHookRateKey,
 } from './invoices.constants';
 import { InvoicesService, type PaymentStateChange } from './invoices.service';
@@ -31,6 +34,7 @@ export class NewswireosHookService {
         private readonly secrets: SecretBox,
         private readonly invoices: InvoicesService,
         private readonly limiter: RateLimiter,
+        private readonly redis: RedisService,
     ) {}
 
     async receive(
@@ -55,11 +59,22 @@ export class NewswireosHookService {
             throw new ApiException(401, 'unauthorized', 'the delivery is not signed with this hook’s secret');
         }
         const delivery = parse(body);
-        if (delivery === 'ping' || delivery === 'ignored') {
+        if (delivery === 'ignored') {
             await this.record(workspaceId, delivery);
             return { result: delivery };
         }
+        // NewswireOS retries until it gets a 2xx: a delivery already applied is acknowledged, not applied twice.
+        const seen = delivery.id ? newswireosDeliveryKey(workspaceId, delivery.id) : null;
+        if (seen) {
+            await this.redis.ensureReady();
+            if (await this.redis.exists(seen)) {
+                await this.record(workspaceId, 'duplicate');
+                return { result: 'duplicate' };
+            }
+        }
         const changed = await this.invoices.applyPaymentState(workspaceId, delivery);
+        // Remembered once applied: a delivery that failed half-way is applied again on NewswireOS's retry.
+        if (seen) await this.redis.set(seen, '1', 'EX', NEWSWIREOS_DELIVERY_SEEN_S);
         const result = changed > 0 ? 'applied' : 'unmatched';
         await this.record(workspaceId, result);
         return { result };
@@ -90,10 +105,9 @@ export function signed(raw: Buffer, signature: string | undefined, secret: strin
 }
 
 /** A delivery, read defensively. Exported for its spec. */
-export function parse(body: unknown): PaymentStateChange | 'ping' | 'ignored' {
+export function parse(body: unknown): (PaymentStateChange & { id: string | null }) | 'ignored' {
     const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-    if (o['type'] === 'ping') return 'ping';
-    const type = TYPES.find((t) => t === o['type']);
+    const type = TYPES.find((t) => t === o['event_type']);
     const data = o['data'] && typeof o['data'] === 'object' ? (o['data'] as Record<string, unknown>) : null;
     if (!type || !data || typeof data['gateway'] !== 'string') return 'ignored';
     const references = [data['reference'], ...(Array.isArray(data['references']) ? data['references'] : [])]
@@ -101,8 +115,13 @@ export function parse(body: unknown): PaymentStateChange | 'ping' | 'ignored' {
         .map((r) => r.trim().slice(0, 500));
     if (references.length === 0) return 'ignored';
     return {
+        id: typeof o['id'] === 'string' && o['id'] !== '' ? o['id'].slice(0, 200) : null,
         type,
         gateway: data['gateway'],
+        reasonCode:
+            typeof data['reason_code'] === 'string' && data['reason_code'] !== ''
+                ? data['reason_code'].slice(0, 100)
+                : null,
         references: [...new Set(references)].slice(0, 20),
         refundedCents:
             typeof data['refunded_amount_cents'] === 'number' && Number.isSafeInteger(data['refunded_amount_cents'])

@@ -41,6 +41,23 @@ describe('settle (INV-1)', () => {
         });
     });
 
+    it('a token without the scope (403) says so; already used waits for a person', () => {
+        expect(settle({ error: new NewswireosApiError(403, 'scope'), finalAttempt: false })).toMatchObject({
+            status: 'needs_review',
+            reasonCode: 'TOKEN_LACKS_SCOPE',
+        });
+        expect(settle({ result: parseLookup({ status: 'verified', already_used: true }) })).toMatchObject({
+            status: 'needs_review',
+            reasonCode: 'ALREADY_USED',
+        });
+        expect(
+            settle({ result: parseLookup({ status: 'invalid', reason_code: 'REFUNDED', already_used: true }) }),
+        ).toMatchObject({
+            status: 'invalid',
+            reasonCode: 'REFUNDED',
+        });
+    });
+
     it('a refused token waits for a person; a refused request is invalid', () => {
         expect(settle({ error: new NewswireosApiError(401, 'no'), finalAttempt: false })).toMatchObject({
             status: 'needs_review',
