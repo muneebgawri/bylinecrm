@@ -13975,6 +13975,745 @@
                 "tags": ["sending-pool"]
             }
         },
+        "/api/w/{workspaceId}/smtp2go/mailboxes": {
+            "get": {
+                "operationId": "poolSmtpMailboxes_list",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Smtp2GoMailbox"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            },
+            "post": {
+                "operationId": "poolSmtpMailboxes_add",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AddSmtp2GoMailboxDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Smtp2GoMailbox"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/smtp2go/mailboxes/{mailboxId}/api-key": {
+            "put": {
+                "operationId": "poolSmtpMailboxes_putKey",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutSmtp2GoKeyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Smtp2GoMailbox"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/smtp2go/mailboxes/{mailboxId}/rotate-secret": {
+            "post": {
+                "operationId": "poolSmtpMailboxes_rotate",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Smtp2GoMailbox"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/hooks/smtp2go/{mailboxId}": {
+            "post": {
+                "operationId": "poolSmtpHook_receive",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Smtp2GoHookResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/w/{workspaceId}/tracking/domain": {
+            "get": {
+                "operationId": "trackingDomain_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrackingSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            },
+            "put": {
+                "operationId": "trackingDomain_put",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutTrackingDomainDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrackingSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            },
+            "delete": {
+                "operationId": "trackingDomain_remove",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            }
+        },
+        "/api/w/{workspaceId}/tracking/domain/check": {
+            "post": {
+                "operationId": "trackingDomain_check",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrackingSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            }
+        },
+        "/r/{token}": {
+            "get": {
+                "operationId": "trackingPublic_click",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "A redirect; the `Location` header says where.",
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            }
+        },
+        "/o/{token}": {
+            "get": {
+                "operationId": "trackingPublic_open",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "image/gif": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            }
+        },
         "/api/w/{workspaceId}/settings/signatures": {
             "get": {
                 "operationId": "signatureSettings_get",
@@ -16148,385 +16887,6 @@
                     }
                 },
                 "tags": ["templates"]
-            }
-        },
-        "/api/w/{workspaceId}/tracking/domain": {
-            "get": {
-                "operationId": "trackingDomain_get",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TrackingSettings"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["tracking"]
-            },
-            "put": {
-                "operationId": "trackingDomain_put",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PutTrackingDomainDto"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TrackingSettings"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["tracking"]
-            },
-            "delete": {
-                "operationId": "trackingDomain_remove",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "",
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["tracking"]
-            }
-        },
-        "/api/w/{workspaceId}/tracking/domain/check": {
-            "post": {
-                "operationId": "trackingDomain_check",
-                "parameters": [
-                    {
-                        "name": "workspaceId",
-                        "required": true,
-                        "in": "path",
-                        "description": "The workspace",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TrackingSettings"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["tracking"]
-            }
-        },
-        "/r/{token}": {
-            "get": {
-                "operationId": "trackingPublic_click",
-                "parameters": [
-                    {
-                        "name": "token",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "302": {
-                        "description": "A redirect; the `Location` header says where.",
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["tracking"]
-            }
-        },
-        "/o/{token}": {
-            "get": {
-                "operationId": "trackingPublic_open",
-                "parameters": [
-                    {
-                        "name": "token",
-                        "required": true,
-                        "in": "path",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "image/gif": {
-                                "schema": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "4XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    },
-                    "5XX": {
-                        "description": "The error envelope",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiError"
-                                }
-                            }
-                        },
-                        "headers": {
-                            "x-request-id": {
-                                "$ref": "#/components/headers/RequestId"
-                            }
-                        }
-                    }
-                },
-                "tags": ["tracking"]
             }
         },
         "/api/platform/access": {
@@ -25854,6 +26214,52 @@
                 },
                 "required": ["dkimSelector"]
             },
+            "AddSmtp2GoMailboxDto": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "maxLength": 254,
+                        "format": "email",
+                        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    "label": {
+                        "type": "string",
+                        "maxLength": 80,
+                        "nullable": true
+                    },
+                    "apiKey": {
+                        "type": "string",
+                        "pattern": "^api-[A-Za-z0-9]{16,64}$"
+                    },
+                    "dkimSelector": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9](?:[a-z0-9_-]{0,62})(?:\\.[a-z0-9](?:[a-z0-9_-]{0,62}))*$"
+                    }
+                },
+                "required": ["email", "apiKey"]
+            },
+            "PutSmtp2GoKeyDto": {
+                "type": "object",
+                "properties": {
+                    "apiKey": {
+                        "type": "string",
+                        "pattern": "^api-[A-Za-z0-9]{16,64}$"
+                    }
+                },
+                "required": ["apiKey"]
+            },
+            "PutTrackingDomainDto": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "maxLength": 253,
+                        "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+                    }
+                },
+                "required": ["domain"]
+            },
             "PutSignatureSettingsDto__schema0": {
                 "type": "object",
                 "properties": {
@@ -26399,17 +26805,6 @@
                     }
                 },
                 "required": ["postalAddress", "defaultSenderName", "unsubscribeFooterText"]
-            },
-            "PutTrackingDomainDto": {
-                "type": "object",
-                "properties": {
-                    "domain": {
-                        "type": "string",
-                        "maxLength": 253,
-                        "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
-                    }
-                },
-                "required": ["domain"]
             },
             "CreatePlatformWorkspaceDto": {
                 "type": "object",
@@ -27363,7 +27758,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 67,
+                        "maxItems": 68,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -27406,6 +27801,7 @@
                                 "email.scheduled",
                                 "email.cancelled",
                                 "email.bounced",
+                                "email.complained",
                                 "email.failed",
                                 "email.clicked",
                                 "email.opened",
@@ -27459,7 +27855,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 67,
+                        "maxItems": 68,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -27502,6 +27898,7 @@
                                 "email.scheduled",
                                 "email.cancelled",
                                 "email.bounced",
+                                "email.complained",
                                 "email.failed",
                                 "email.clicked",
                                 "email.opened",
@@ -28490,6 +28887,11 @@
                         "enum": ["personal", "pool"],
                         "description": "Fixed when the mailbox connects."
                     },
+                    "transport": {
+                        "type": "string",
+                        "enum": ["gmail", "smtp2go"],
+                        "description": "How its mail leaves: its Gmail grant, or SMTP2Go (TRANS-1; pool mailboxes only)."
+                    },
                     "status": {
                         "type": "string",
                         "enum": ["connected", "reconnect_needed", "disconnected"]
@@ -28546,6 +28948,7 @@
                     "email",
                     "label",
                     "purpose",
+                    "transport",
                     "status",
                     "grantedScopes",
                     "lastError",
@@ -32321,6 +32724,47 @@
                     }
                 },
                 "required": ["clicks", "uniqueClicks", "opens"]
+            },
+            "Smtp2GoMailbox": {
+                "type": "object",
+                "properties": {
+                    "mailbox": {
+                        "$ref": "#/components/schemas/Mailbox"
+                    },
+                    "hookUrl": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "SMTP2Go's webhook URL for this mailbox (Settings > Webhooks)."
+                    },
+                    "hookAuthorization": {
+                        "nullable": true,
+                        "description": "The Authorization header SMTP2Go must send with it (`Bearer …`); null once the mailbox is disconnected.",
+                        "type": "string"
+                    },
+                    "lastHookAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastHookResult": {
+                        "nullable": true,
+                        "type": "string",
+                        "enum": ["recorded", "duplicate", "unmatched", "ignored", "bad_secret"]
+                    }
+                },
+                "required": ["mailbox", "hookUrl", "hookAuthorization", "lastHookAt", "lastHookResult"]
+            },
+            "Smtp2GoHookResult": {
+                "type": "object",
+                "properties": {
+                    "result": {
+                        "type": "string",
+                        "enum": ["recorded", "duplicate", "unmatched", "ignored", "bad_secret"]
+                    }
+                },
+                "required": ["result"]
             },
             "EmailTemplate": {
                 "type": "object",

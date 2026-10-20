@@ -6,6 +6,7 @@ import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
 import { MailSyncModule } from '../mail-sync/mail-sync.module';
 import { SignaturesModule } from '../signatures/signatures.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
+import { Smtp2GoModule } from '../smtp2go/smtp2go.module';
 import { SuppressionModule } from '../suppression/suppression.module';
 import { TrackingModule } from '../tracking/tracking.module';
 import { TemplatesModule } from '../templates/templates.module';
@@ -36,6 +37,7 @@ import { MailSendSweep } from './sweep';
         MailAccountsModule,
         MailSyncModule,
         SendingPoolModule,
+        Smtp2GoModule,
         SignaturesModule,
         SuppressionModule,
         TemplatesModule,

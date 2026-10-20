@@ -17,6 +17,7 @@ import type { Queue } from 'bullmq';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, StateConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
 import { MailboxesService } from '../mail-accounts/mailboxes.service';
@@ -53,8 +54,14 @@ import type { MailOutboundView, MailRecordSendsPage, MailScheduledPage, MailSend
 import { PoolRefusal, SendingPoolService } from '../sending-pool/sending-pool.service';
 import { RecipientSuppressed } from '../suppression/suppression.service';
 import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
+import { gmailShapeOf } from './mime-read';
+import { SMTP2GO_PROVIDER_PREFIX } from '../smtp2go/smtp2go.constants';
+import { SMTP2GO_PORT, Smtp2GoError, type Smtp2GoPort } from '../smtp2go/smtp2go.port';
 
 type OutboundRow = Prisma.MailOutboundGetPayload<object>;
+/** TRANS-1: the last attempt certainly did not reach SMTP2Go, so the next may send. */
+const SMTP2GO_NOT_SENT = 'smtp2go.not_sent';
+type MailboxRow = Prisma.MailboxGetPayload<object>;
 
 /** A recipient as the request names it. */
 type RecipientInput = { personId: string } | { address: string };
@@ -201,6 +208,8 @@ export class MailSendService {
         private readonly tracking: TrackingService,
         private readonly signatures: SignaturesService,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
+        @Inject(SMTP2GO_PORT) private readonly smtp2go: Smtp2GoPort,
+        private readonly secrets: SecretBox,
         @InjectQueue(MAIL_SEND_QUEUE) private readonly queue: Queue,
     ) {}
 
@@ -801,6 +810,7 @@ export class MailSendService {
             await this.markFailed(workspaceId, id, refusalRecord(error, Date.now()));
             return 'failed';
         }
+        if (mailbox.transport === 'smtp2go') return this.deliverThroughSmtp2Go(workspaceId, row, mailbox, mime);
         const threadId = await this.parentThread(workspaceId, row);
 
         let sent: { message: GmailSent; found: boolean };
@@ -864,6 +874,106 @@ export class MailSendService {
             );
         }
         return sent.found ? 'already_sent' : 'sent';
+    }
+
+    /**
+     * A pool send through SMTP2Go (TRANS-1), after the pool's gate claimed it. Only outreach from a pool mailbox
+     * goes this way — 1:1 and personal mail never do (checked again here; the database refuses an SMTP2Go
+     * mailbox that is not `pool`). The recipients were passed through the recipient guard (GUARD-1) when the
+     * message was built, and the suppression list is read again now, as for Gmail. SMTP2Go has no idempotency key
+     * and nothing to look a lost answer up by, so an attempt that may have reached it is never repeated: the send
+     * fails as `smtp2go.unconfirmed` and says so. One that certainly did not (no connection, `429`, `503`) is
+     * retried by the queue. What went is stored through sync's writer, as a Gmail send's copy is.
+     */
+    private async deliverThroughSmtp2Go(
+        workspaceId: string,
+        row: OutboundRow,
+        mailbox: MailboxRow,
+        mime: string,
+    ): Promise<DeliveryOutcome> {
+        const id = row.id;
+        const outreach =
+            row.sequenceEnrolmentId !== null || (row.request as { kind?: string } | null)?.kind === 'outreach';
+        if (mailbox.purpose !== 'pool' || !outreach || !mailbox.transportKeyCiphertext) {
+            await this.markFailed(workspaceId, id, {
+                code: 'transport.pool_only',
+                message: 'SMTP2Go sends only the sending pool’s outreach; this message was not sent',
+                at: new Date().toISOString(),
+            });
+            return 'failed';
+        }
+        const prior = (row.lastError as { code?: string } | null)?.code;
+        if (row.status === 'sending' && prior !== SMTP2GO_NOT_SENT) {
+            await this.markFailed(workspaceId, id, {
+                code: 'smtp2go.unconfirmed',
+                message:
+                    'an earlier attempt may have reached SMTP2Go; it was not sent again — check SMTP2Go’s activity',
+                at: new Date().toISOString(),
+            });
+            return 'failed';
+        }
+        let emailId: string;
+        try {
+            await this.policy.assertSendable(workspaceId, storedRecipients(row));
+            emailId = (await this.smtp2go.sendMime(this.secrets.open(mailbox.transportKeyCiphertext), mime)).emailId;
+        } catch (error) {
+            if (error instanceof RecipientSuppressed) {
+                await this.markFailed(workspaceId, id, refusalRecord(error, Date.now()));
+                return 'failed';
+            }
+            if (!(error instanceof Smtp2GoError)) throw error;
+            const at = new Date().toISOString();
+            if (error.outcome === 'retry') {
+                await this.recordError(workspaceId, id, {
+                    code: SMTP2GO_NOT_SENT,
+                    message: `SMTP2Go did not take the message (${error.status || 'no answer'}); it is tried again`,
+                    at,
+                });
+                throw error;
+            }
+            await this.markFailed(
+                workspaceId,
+                id,
+                error.outcome === 'refused'
+                    ? { code: `smtp2go.${error.reason}`, message: `SMTP2Go refused the message (${error.status})`, at }
+                    : {
+                          code: 'smtp2go.unconfirmed',
+                          message: `SMTP2Go's answer was lost (${error.status || 'timeout'}); it may have gone and was not sent again`,
+                          at,
+                      },
+            );
+            return 'failed';
+        }
+
+        const providerMessageId = `${SMTP2GO_PROVIDER_PREFIX}${emailId}`;
+        const sentAt = new Date();
+        await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailOutbound.update({
+                where: { id },
+                data: {
+                    status: 'sent',
+                    providerMessageId,
+                    providerThreadId: providerMessageId,
+                    // SMTP2Go sends the MIME as built: our Message-ID is the one a reply names.
+                    providerRfc822MessageId: row.rfc822MessageId,
+                    sentAt,
+                    lastError: Prisma.DbNull,
+                    request: Prisma.DbNull,
+                },
+            }),
+        );
+        try {
+            await this.sync.storeSent(
+                workspaceId,
+                mailbox.id,
+                gmailShapeOf(mime, { id: providerMessageId, threadId: providerMessageId, sentAt }),
+            );
+        } catch (error) {
+            this.logger.warn(
+                `send ${id}: sent through SMTP2Go as ${emailId}, not stored (${error instanceof Error ? error.message : String(error)})`,
+            );
+        }
+        return 'sent';
     }
 
     /** The queue's attempts are spent: the send failed, unless it went after all. */

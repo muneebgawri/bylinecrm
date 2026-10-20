@@ -52,6 +52,7 @@ case "\$*" in
         echo " Container bylinecrm-$env-migrate-run-1 Creating" >&2
         cat "$WORK/check.out"
         exit $check_exit ;;
+    *"pull --quiet"*) exit ${PULL_EXIT:-0} ;;
     *"exec -T api-"*"node -e"*) exit $api_exit ;;
     *"exec newswireos-web-1 nginx -t"*)
         if [ "$edge" = https-refuse ] && grep -q web-green "$DYN/bylinecrm-$env.conf" 2>/dev/null; then exit 1; fi
@@ -98,6 +99,13 @@ for env in staging production; do
     grep -q 'run --rm migrate' "$CALLS" && fail "$env: migrated when the check could not run"
     rm -rf "$WORK"
 done
+
+# ── An image is missing (pull fails): refuse, change nothing, release the lock (2026-10-20). ──
+PULL_EXIT=1 scenario production 0 '' 0 https blue
+[ "$STATUS" -ne 0 ] || fail "release went ahead although the pull failed"
+grep -q 'run --rm migrate' "$CALLS" && fail "migrated although the pull failed"
+[ -d "$WORK/runtime/deploy.lock" ] && fail "lock left behind after a failed pull"
+rm -rf "$WORK"
 
 # ── First release of an environment (no colour yet): blue, in order, nothing to drain. ──
 scenario staging 0 '' 0 https

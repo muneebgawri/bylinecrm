@@ -5,7 +5,8 @@ import type { WorkspaceClient } from '../infra/rls-prisma.service';
 /**
  * The counts a listing shows (P3-4): clicks, distinct links clicked, and indicative opens, per send
  * or per sequence step, from the hits that are not a scanner's. One query for a page of rows; a
- * listing adds it to the view it already builds — there is no counter to keep in step.
+ * listing adds it to the view it already builds — there is no counter to keep in step. A distinct link is
+ * our token, or — for a click SMTP2Go reported (TRANS-1), which has none — the URL it names.
  */
 async function countsBy(
     tx: WorkspaceClient,
@@ -15,7 +16,7 @@ async function countsBy(
     const out = new Map<string, TrackingCounts>();
     if (ids.length === 0) return out;
     const rows = await tx.$queryRaw<{ id: string; kind: 'click' | 'open'; hits: number; tokens: number }[]>`
-        SELECT ${Prisma.raw(column)} AS id, kind, count(*)::int AS hits, count(DISTINCT token_id)::int AS tokens
+        SELECT ${Prisma.raw(column)} AS id, kind, count(*)::int AS hits, count(DISTINCT coalesce(token_id::text, url))::int AS tokens
         FROM tracking_hits
         WHERE bot_reason IS NULL AND ${Prisma.raw(column)} = ANY(${[...ids]}::uuid[])
         GROUP BY ${Prisma.raw(column)}, kind`;

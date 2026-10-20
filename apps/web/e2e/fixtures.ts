@@ -53,6 +53,7 @@ import type {
     DealInvoiceView,
     NewswireosSettingsView,
     BylineSettingsView,
+    Smtp2GoMailboxView,
     MailOutboundView,
     MailThreadView,
     MailSettingsView,
@@ -809,6 +810,7 @@ export const mailboxes: MailboxView[] = [
         email: 'kate.morgan@example.com',
         label: null,
         purpose: 'personal',
+        transport: 'gmail',
         status: 'connected',
         grantedScopes: PERSONAL_SCOPES,
         lastError: null,
@@ -822,6 +824,7 @@ export const mailboxes: MailboxView[] = [
         email: 'outreach@example.com',
         label: 'Q4 outreach',
         purpose: 'pool',
+        transport: 'gmail',
         status: 'reconnect_needed',
         grantedScopes: GMAIL_SCOPES,
         lastError: { code: 'invalid_grant', message: 'Google revoked the app’s access.', at: at(3) },
@@ -1725,6 +1728,30 @@ export const biginContactReuses: BiginContactReusePage = {
     ],
     nextCursor: null,
 };
+
+/** SMTP2Go pool mailboxes (TRANS-1): one, its hook heard from. */
+export const smtp2goMailboxes: Smtp2GoMailboxView[] = [
+    {
+        mailbox: {
+            id: '5f0c2a8e-3b1d-4c6e-9a7f-2d8b4e6c1a90',
+            ownerMemberId: IDS.member,
+            email: 'hello@outreach-mail.example',
+            label: 'SMTP2Go outreach',
+            purpose: 'pool',
+            transport: 'smtp2go',
+            status: 'connected',
+            grantedScopes: [],
+            lastError: null,
+            connectedAt: at(10),
+            createdAt: at(10),
+            updatedAt: at(10),
+        },
+        hookUrl: 'https://crm.example.com/api/hooks/smtp2go/5f0c2a8e-3b1d-4c6e-9a7f-2d8b4e6c1a90',
+        hookAuthorization: 'Bearer 7KxQ2mVt9LpR4sWb1nHy8DdZ3fGj6AeUoPiE5tCrYwM',
+        lastHookAt: at(2),
+        lastHookResult: 'recorded',
+    },
+];
 
 /** The NewswireOS link (INV-1): linked, its hook heard from. */
 export const newswireosSettings: NewswireosSettingsView = {

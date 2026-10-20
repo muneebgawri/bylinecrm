@@ -69,7 +69,8 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
     /** Every connected mailbox, in every workspace: read as the owner, since a tick is no tenant's. */
     private async tick(): Promise<number> {
         const mailboxes = await this.ownerPrisma.mailbox.findMany({
-            where: { status: 'connected' },
+            // An SMTP2Go mailbox (TRANS-1) has no Gmail to read: its replies arrive in its Reply-To mailbox.
+            where: { status: 'connected', transport: 'gmail' },
             select: { id: true, workspaceId: true },
         });
         let queued = 0;
