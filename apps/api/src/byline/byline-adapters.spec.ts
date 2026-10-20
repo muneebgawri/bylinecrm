@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { errorFrom, ok } from './byline-api.http';
 import { findings } from './byline.enricher';
+import { leadPhone } from './lead-phone';
 import { fromByline } from './byline.verifier';
 
 describe('BYL-2 BylineAI adapters (FR-CRMS-15 enrichment source, FR-CRMS-16 verifier): the pure parts', () => {
@@ -18,9 +19,29 @@ describe('BYL-2 BylineAI adapters (FR-CRMS-15 enrichment source, FR-CRMS-16 veri
             expect(errorFrom(429, null).kind).toBe('rate_limited');
             expect(errorFrom(401, null)).toMatchObject({
                 kind: 'unauthorized',
-                message: 'BylineAI refused the API key',
+                message: 'BylineAI refused the API key (it needs the `lookup` role)',
             });
-            expect(errorFrom(503, null)).toMatchObject({ kind: 'unavailable', message: 'BylineAI answered 503' });
+            expect(errorFrom(500, null)).toMatchObject({ kind: 'unavailable', message: 'BylineAI answered 500' });
+        });
+
+        it('its vendors down (503 unavailable): retryable, unlike a spent budget; Nest’s extra fields ignored', () => {
+            const e = errorFrom(503, {
+                error: 'unavailable',
+                message: 'person-enrichment vendors are rate-limited',
+                statusCode: 503,
+                timestamp: '2026-10-20T00:00:00Z',
+                path: '/enrichment/a@b.co',
+            });
+            expect(e).toMatchObject({
+                kind: 'unavailable',
+                message:
+                    'BylineAI’s enrichment vendors are unavailable; try again later: person-enrichment vendors are rate-limited',
+            });
+            expect(e.retryable).toBe(true);
+            expect(errorFrom(402, { error: 'budget_exhausted', statusCode: 402 }).retryable).toBe(false);
+            expect(errorFrom(400, { statusCode: 400, message: ['a', 'b'] }).message).toBe(
+                'BylineAI answered 400: a; b',
+            );
         });
 
         it('a 2xx body is read; another status throws', async () => {
@@ -53,9 +74,10 @@ describe('BYL-2 BylineAI adapters (FR-CRMS-15 enrichment source, FR-CRMS-16 veri
 
         it('a person’s country, upper case, ranked by BylineAI’s confidence; what it lacks is no answer', () => {
             expect(findings('person', found)).toEqual([
-                { field: 'avatar_url', status: 'no_answer' },
                 { field: 'country', status: 'answered', value: 'GB', rank: 2, note: 'BylineAI' },
             ]);
+            // A vendor-only match (BylineAI's fixed 0.8) ranks with the free sources.
+            expect(findings('person', { ...found, confidence: 0.8 })[0]).toMatchObject({ rank: 1 });
         });
 
         it('a company’s facts; nothing known is no answer for each', () => {
@@ -83,10 +105,31 @@ describe('BYL-2 BylineAI adapters (FR-CRMS-15 enrichment source, FR-CRMS-16 veri
             expect(
                 fromByline('dana@acme.com', { ...base, verdict: 'invalid', reason: 'mailbox_not_found' }).message,
             ).toContain('mailbox_not_found');
+            expect(fromByline('dana@acme.com', { ...base, verdict: 'invalid', reason: 'invalid_format' }).reason).toBe(
+                'syntax',
+            );
+            expect(fromByline('dana@acme.com', { ...base, verdict: 'risky', reason: 'catch_all' }).reason).toBe(
+                'catch_all',
+            );
             expect(fromByline('dana@acme.com', { ...base, verdict: 'unknown', reason: null })).toMatchObject({
                 result: 'unknown',
                 reason: 'lookup_failed',
             });
+        });
+    });
+
+    describe('a lead’s phone (BYL-3)', () => {
+        it('E.164 is split at its calling code; a shared one goes to the lead’s country', () => {
+            expect(leadPhone('+14155550123', 'US')).toEqual({ number: '4155550123', countryCode: 'US' });
+            expect(leadPhone('+14165550123', 'CA')).toEqual({ number: '4165550123', countryCode: 'CA' });
+            expect(leadPhone('+44 20 7946 0958', null)).toEqual({ number: '2079460958', countryCode: 'GB' });
+        });
+
+        it('dialled digits take the lead’s country; what cannot be parsed is null, for the raw copy', () => {
+            expect(leadPhone('020 7946 0958', 'GB')).toEqual({ number: '02079460958', countryCode: 'GB' });
+            expect(leadPhone('020 7946 0958', null)).toBeNull();
+            expect(leadPhone('call reception', 'GB')).toBeNull();
+            expect(leadPhone(undefined, 'GB')).toBeNull();
         });
     });
 });

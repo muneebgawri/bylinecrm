@@ -3031,6 +3031,8 @@ model BylineLead {
   personId    String?  @map("person_id") @db.Uuid
   /// `byline:<source_key>`, as the person's source says.
   source      String
+  /// The lead's phone as BylineAI sent it, when it was neither E.164 nor dialled digits with a country: kept, not dropped.
+  phoneRaw    String?  @map("phone_raw")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

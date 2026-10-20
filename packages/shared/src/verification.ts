@@ -23,6 +23,10 @@ export const EMAIL_VERIFICATION_REASONS = [
     'disposable',
     'role',
     'lookup_failed',
+    // A vendor verifier (BYL-2) that probed the mailbox: the domain takes mail, but not for this address; or it takes
+    // mail for every address, so this one cannot be told apart.
+    'mailbox_not_found',
+    'catch_all',
 ] as const;
 export type EmailVerificationReason = (typeof EMAIL_VERIFICATION_REASONS)[number];
 
@@ -43,6 +47,12 @@ export interface EmailVerification {
 
 /** The free layer (syntax, MX, disposable list, role detection; no SMTP probe) names itself this. */
 export const FREE_VERIFIER_SOURCE = 'free';
+/**
+ * The free layer's answer given while the workspace's vendor verifier (BylineAI, BYL-2) was rate-limited or down:
+ * it stands only `FALLBACK_VERIFICATION_TTL_MS`, then the vendor is asked again.
+ */
+export const FALLBACK_VERIFIER_SOURCE = 'free:fallback';
+export const FALLBACK_VERIFICATION_TTL_MS = 60 * 60 * 1000;
 
 /** A stored answer, as the API returns it: the address it is about, when it was found, whether it still stands. */
 export interface EmailVerificationView extends EmailVerification {
@@ -78,11 +88,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * else once it is older than the workspace's age. Dated from `verifiedAt`, not from any later read.
  */
 export function isVerificationStale(
-    verification: { result: EmailVerificationResult; verifiedAt: Date },
+    verification: { result: EmailVerificationResult; verifiedAt: Date; source?: string },
     maxAgeDays: number,
     now: Date,
 ): boolean {
     if (verification.result === 'unknown') return true;
+    // The free layer standing in for a vendor that was briefly unavailable (BYL-2): the vendor is asked again soon.
+    if (verification.source === FALLBACK_VERIFIER_SOURCE) {
+        return now.getTime() - verification.verifiedAt.getTime() > FALLBACK_VERIFICATION_TTL_MS;
+    }
     return now.getTime() - verification.verifiedAt.getTime() > maxAgeDays * DAY_MS;
 }
 
