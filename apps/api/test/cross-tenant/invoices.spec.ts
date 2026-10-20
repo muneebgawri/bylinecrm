@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -82,7 +82,8 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
     let pipelineId: string;
     let target: Stage;
     let hookUrl: string;
-    const secret = `newswireos-secret-${stamp}`;
+    // Minted by NewswireOS and pasted into Byline: any length.
+    const secret = `whsec_${stamp}`;
 
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const as = (who: Browser) => ({
@@ -124,12 +125,29 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                 orderBy: { createdAt: 'asc' },
             })
         ).map((e) => e.payload as unknown as DomainEvent);
-    const deliver = (url: string, body: unknown, key = secret) => {
-        const raw = JSON.stringify(body);
+    /** A delivery in NewswireOS's outbound format: `{id, event_type, occurred_at, data}`, `sha256=`-signed. */
+    const deliver = (
+        url: string,
+        body: {
+            id?: string;
+            type: string;
+            data: Record<string, unknown> & { reference?: string; references?: string[] };
+        },
+        key = secret,
+    ) => {
+        const id = body.id ?? `evt_${randomUUID()}`;
+        const raw = JSON.stringify({
+            id,
+            event_type: body.type,
+            occurred_at: '2026-10-21T09:00:00Z',
+            data: { ...body.data, references: body.data.references ?? [body.data.reference] },
+        });
         return http()
             .post(new URL(url).pathname)
             .set('content-type', 'application/json')
-            .set(NEWSWIREOS_SIGNATURE_HEADER, createHmac('sha256', key).update(raw).digest('hex'))
+            .set('x-webhook-id', id)
+            .set('x-webhook-event', body.type)
+            .set(NEWSWIREOS_SIGNATURE_HEADER, `sha256=${createHmac('sha256', key).update(raw).digest('hex')}`)
             .send(raw);
     };
 
@@ -301,11 +319,32 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                 .put(w('/integrations/newswireos'))
                 .send({ baseUrl: 'https://newswireos.example' })
                 .expect(400);
+            // Linked first without the secret: NewswireOS mints it only once it has the hook URL linking makes.
+            const linked = await as(admin)
+                .put(w('/integrations/newswireos'))
+                .send({ baseUrl: 'https://newswireos.example/ignored', apiToken: `nwos_${stamp}` })
+                .expect(200);
+            expect(linked.body).toMatchObject({ configured: true, secretSet: false });
+            const early = (linked.body as { hookUrl: string }).hookUrl;
+            expect(early).toBeTruthy();
+            await deliver(early, {
+                id: 'evt_0',
+                type: 'payment.refunded',
+                data: { gateway: 'stripe', reference: 'x' },
+            }).expect(401);
+            expect((await as(admin).get(w('/integrations/newswireos')).expect(200)).body).toMatchObject({
+                lastDeliveryResult: 'no_secret',
+            });
             const res = await as(admin)
                 .put(w('/integrations/newswireos'))
-                .send({ baseUrl: 'https://newswireos.example/ignored', apiToken: `nwos_${stamp}`, secret })
+                .send({ baseUrl: 'https://newswireos.example/ignored', secret })
                 .expect(200);
-            expect(res.body).toMatchObject({ configured: true, baseUrl: 'https://newswireos.example' });
+            expect(res.body).toMatchObject({
+                configured: true,
+                secretSet: true,
+                baseUrl: 'https://newswireos.example',
+            });
+            expect((res.body as { hookUrl: string }).hookUrl).toBe(early);
             expect(JSON.stringify(res.body)).not.toContain(secret);
             expect(JSON.stringify(res.body)).not.toContain(`nwos_${stamp}`);
             hookUrl = (res.body as { hookUrl: string }).hookUrl;
@@ -390,6 +429,41 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             expect(await one(deal, id2)).toMatchObject({ status: 'needs_review', reasonCode: 'TOKEN_REFUSED' });
         });
 
+        it('a token without the scope, or a payment another release holds, waits for finance', async () => {
+            newswireos.answer(ref('pi_403'), new NewswireosApiError(403, 'missing scope'));
+            const id = (
+                (await add(ana, deal, { gateway: 'stripe', reference: ref('pi_403') }).expect(201))
+                    .body as DealInvoiceView
+            ).id;
+            await run(id, false);
+            expect(await one(deal, id)).toMatchObject({ status: 'needs_review', reasonCode: 'TOKEN_LACKS_SCOPE' });
+
+            newswireos.answerWire(ref('pi_used'), {
+                status: 'verified',
+                reason_code: null,
+                amount_cents: 150000,
+                currency: 'usd',
+                already_used: true,
+            });
+            const used = (
+                (await add(ana, deal, { gateway: 'stripe', reference: ref('pi_used') }).expect(201))
+                    .body as DealInvoiceView
+            ).id;
+            await run(used);
+            expect(await one(deal, used)).toMatchObject({ status: 'needs_review', reasonCode: 'ALREADY_USED' });
+
+            // Finance verifies it in NewswireOS, within the on-chain tolerance: the reason is kept.
+            const res = await deliver(hookUrl, {
+                type: 'payment.verified',
+                data: { gateway: 'stripe', reference: ref('pi_used'), reason_code: 'UNDERPAID_WITHIN_TOLERANCE' },
+            }).expect(200);
+            expect(res.body).toEqual({ result: 'applied' });
+            expect(await one(deal, used)).toMatchObject({
+                status: 'verified',
+                reasonCode: 'UNDERPAID_WITHIN_TOLERANCE',
+            });
+        });
+
         it('a verified invoice covering the deal closes it Won by an `invoice.verified` rule', async () => {
             await as(admin)
                 .post(w(`/pipelines/${pipelineId}/rules`))
@@ -425,14 +499,24 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                 { id: 'evt_1', type: 'payment.refunded', data: { gateway: 'stripe', reference: ref('pi_full') } },
                 'wrong-secret-0000000',
             ).expect(401);
-            await deliver(hookUrl.replace(/[^/]+$/, 'nope'), { type: 'ping' }).expect(404);
-            expect((await deliver(hookUrl, { type: 'ping' }).expect(200)).body).toEqual({ result: 'ping' });
+            await deliver(hookUrl.replace(/[^/]+$/, 'nope'), {
+                type: 'payment.refunded',
+                data: { gateway: 'stripe', reference: ref('pi_full') },
+            }).expect(404);
+            // An event the CRM does not read is acknowledged.
+            expect(
+                (
+                    await deliver(hookUrl, {
+                        type: 'release.published',
+                        data: { gateway: 'stripe', reference: 'x' },
+                    }).expect(200)
+                ).body,
+            ).toEqual({ result: 'ignored' });
 
             // Matched by NewswireOS's canonical reference as well as the one entered.
             const res = await deliver(hookUrl, {
                 id: 'evt_2',
                 type: 'payment.disputed',
-                occurred_at: '2026-10-21T09:00:00Z',
                 data: {
                     gateway: 'stripe',
                     reference: 'ch_unknown',
@@ -441,6 +525,16 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                 },
             }).expect(200);
             expect(res.body).toEqual({ result: 'applied' });
+            // NewswireOS retries until it gets a 2xx: the same delivery id is acknowledged, not applied again.
+            expect(
+                (
+                    await deliver(hookUrl, {
+                        id: 'evt_2',
+                        type: 'payment.disputed',
+                        data: { gateway: 'stripe', references: [ref('pi_canon')] },
+                    }).expect(200)
+                ).body,
+            ).toEqual({ result: 'duplicate' });
             const rows = await owner.dealInvoice.findMany({
                 where: { workspaceId: workspace, reference: ref('pi_ok') },
             });

@@ -14,15 +14,13 @@ import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 
-/** The shortest hook secret the API accepts. */
-const SECRET_MIN = 16;
-
 const RESULT_TEXT: Record<string, string> = {
     applied: 'A refund or chargeback was applied to an invoice.',
     unmatched: 'A payment change arrived for no invoice in this workspace.',
     ignored: 'A delivery the CRM does not read was acknowledged.',
-    ping: 'NewswireOS’s test ping arrived.',
+    duplicate: 'NewswireOS redelivered an event already applied; it was acknowledged.',
     bad_signature: 'A delivery was refused: it was not signed with this secret.',
+    no_secret: 'A delivery was refused: paste the secret NewswireOS made for this hook.',
 };
 
 /**
@@ -72,8 +70,6 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
         const errors: { baseUrl?: string; apiToken?: string; secret?: string } = {};
         if (!/^https?:\/\/[^/\s]+/i.test(baseUrl.trim())) errors.baseUrl = 'Enter NewswireOS’s address.';
         if (!settings.configured && !apiToken) errors.apiToken = 'Enter a NewswireOS API token.';
-        if ((!settings.configured || secret !== '') && secret.length < SECRET_MIN)
-            errors.secret = `At least ${SECRET_MIN} characters${settings.configured ? ', or leave it empty to keep it' : ''}.`;
         setLocal(errors);
         if (errors.baseUrl || errors.apiToken || errors.secret) return;
         put.mutate(
@@ -112,7 +108,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                     hint={
                         settings.configured
                             ? 'Set. Enter a new one only to replace it.'
-                            : 'A NewswireOS API token that may verify payments.'
+                            : 'A NewswireOS API token with the payment_verification:lookup scope.'
                     }
                     error={local.apiToken ?? fieldErrorAt(put.error, 'apiToken')}
                 >
@@ -127,9 +123,11 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                 <Field
                     label="Hook secret"
                     hint={
-                        settings.configured
-                            ? 'Set. Enter a new one only when you change it in NewswireOS too.'
-                            : 'NewswireOS signs refunds and chargebacks with it; anything else is refused.'
+                        settings.secretSet
+                            ? 'Set. Paste a new one only when NewswireOS makes a new one.'
+                            : settings.configured
+                              ? 'Add the hook URL below in NewswireOS, then paste the secret it shows you (whsec_…).'
+                              : 'Leave empty for now: link first, add the hook URL in NewswireOS, then paste its secret here.'
                     }
                     error={local.secret ?? fieldErrorAt(put.error, 'secret')}
                 >
@@ -160,7 +158,9 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                 >
                     <div className="flex flex-wrap items-center gap-2">
                         <h3 className="m-0 text-[14px] font-semibold text-text">Refunds and chargebacks</h3>
-                        {settings.lastDeliveryResult === 'bad_signature' ? (
+                        {!settings.secretSet ? (
+                            <Badge status="warning">Secret not set</Badge>
+                        ) : settings.lastDeliveryResult === 'bad_signature' ? (
                             <Badge status="danger">Secret does not match</Badge>
                         ) : settings.lastDeliveryAt ? (
                             <Badge status="success">Receiving</Badge>

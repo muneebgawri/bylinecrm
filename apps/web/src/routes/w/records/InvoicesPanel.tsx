@@ -33,6 +33,9 @@ const REASON_TEXT: Record<string, string> = {
     NO_LINK: 'No NewswireOS link: finance verifies it by hand.',
     AWAITING_BANK_CONFIRMATION: 'A bank transfer is confirmed by finance.',
     TOKEN_REFUSED: 'NewswireOS refused the CRM’s token.',
+    TOKEN_LACKS_SCOPE: 'The CRM’s NewswireOS token lacks the payment_verification:lookup scope.',
+    ALREADY_USED: 'Another release already holds this payment: finance decides if it is this deal’s.',
+    UNDERPAID_WITHIN_TOLERANCE: 'Paid a little short, within the on-chain tolerance.',
     PROVIDER_ERROR: 'NewswireOS or the gateway did not answer.',
     UNDER_CONFIRMED: 'Not enough confirmations yet.',
     AMOUNT_MISMATCH: 'The amount or currency does not match.',
@@ -133,7 +136,9 @@ function InvoiceRow({ workspaceId, invoice }: { workspaceId: string; invoice: De
                 {GATEWAY_LABEL[invoice.gateway]} · {amount}
                 {net && ` · ${net} after refunds`}
             </span>
-            {why && invoice.status !== 'verified' && <span className="text-xs text-text-muted">{why}</span>}
+            {why && (invoice.status !== 'verified' || invoice.reasonCode === 'UNDERPAID_WITHIN_TOLERANCE') && (
+                <span className="text-xs text-text-muted">{why}</span>
+            )}
             {invoice.note && <span className="text-xs text-text-muted">“{invoice.note}”</span>}
             {undecided && (verify.allowed || (edit.allowed && invoice.status === 'needs_review')) && (
                 <div className="flex flex-wrap gap-1.5">

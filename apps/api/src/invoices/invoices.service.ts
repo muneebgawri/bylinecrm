@@ -35,6 +35,8 @@ export interface PaymentStateChange {
     type: 'payment.refunded' | 'payment.disputed' | 'payment.verified';
     gateway: string;
     references: string[];
+    /** NewswireOS's reason: on `payment.verified`, null or `UNDERPAID_WITHIN_TOLERANCE`. */
+    reasonCode: string | null;
     /** On a refund: NewswireOS's running total refunded, in minor units; `null` means all of it. */
     refundedCents: number | null;
     detail: Record<string, unknown>;
@@ -311,7 +313,7 @@ export class InvoicesService {
                         row.id,
                         {
                             status: 'verified',
-                            reasonCode: null,
+                            reasonCode: change.reasonCode,
                             canonicalReference: null,
                             facts: { finance: change.detail },
                         },

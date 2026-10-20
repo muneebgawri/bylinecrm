@@ -25774,16 +25774,16 @@
                         "description": "NewswireOS’s address, `https://app.newswireos.example`."
                     },
                     "apiToken": {
-                        "description": "A NewswireOS API token with payment verification. Leave out to keep the current one.",
+                        "description": "A NewswireOS API token with the `payment_verification:lookup` scope. Leave out to keep the current one.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 500
                     },
                     "secret": {
-                        "description": "The secret NewswireOS signs its hook deliveries with. Leave out to keep it.",
+                        "description": "The webhook secret NewswireOS minted (`whsec_…`). Leave out to keep the current one.",
                         "type": "string",
-                        "minLength": 16,
-                        "maxLength": 200
+                        "minLength": 1,
+                        "maxLength": 500
                     }
                 },
                 "required": ["baseUrl"]
@@ -31471,6 +31471,10 @@
                     "configured": {
                         "type": "boolean"
                     },
+                    "secretSet": {
+                        "type": "boolean",
+                        "description": "Whether the hook secret NewswireOS minted has been pasted; deliveries are refused until it is."
+                    },
                     "baseUrl": {
                         "nullable": true,
                         "description": "Where NewswireOS is.",
@@ -31490,18 +31494,18 @@
                     },
                     "lastDeliveryResult": {
                         "nullable": true,
-                        "description": "`applied`, `unmatched`, `ignored`, `ping` or `bad_signature`.",
+                        "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.",
                         "type": "string"
                     }
                 },
-                "required": ["configured", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
+                "required": ["configured", "secretSet", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
             },
             "NewswireosHookResult": {
                 "type": "object",
                 "properties": {
                     "result": {
                         "type": "string",
-                        "enum": ["applied", "unmatched", "ignored", "ping"]
+                        "enum": ["applied", "unmatched", "ignored", "duplicate"]
                     }
                 },
                 "required": ["result"]

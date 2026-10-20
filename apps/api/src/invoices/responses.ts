@@ -42,20 +42,25 @@ export const newswireosSettingsView = named(
     'NewswireosSettings',
     z.object({
         configured: z.boolean(),
+        secretSet: z.boolean().meta({
+            description:
+                'Whether the hook secret NewswireOS minted has been pasted; deliveries are refused until it is.',
+        }),
         baseUrl: z.string().nullable().meta({ description: 'Where NewswireOS is.' }),
         hookUrl: z.url().nullable().meta({
             description: 'Give NewswireOS this URL, with the same secret, for refunds and chargebacks.',
         }),
         lastDeliveryAt: dateTime.nullable(),
         lastDeliveryResult: z.string().nullable().meta({
-            description: '`applied`, `unmatched`, `ignored`, `ping` or `bad_signature`.',
+            description:
+                '`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.',
         }),
     }),
 );
 
 export const newswireosHookResult = named(
     'NewswireosHookResult',
-    z.object({ result: z.enum(['applied', 'unmatched', 'ignored', 'ping']) }),
+    z.object({ result: z.enum(['applied', 'unmatched', 'ignored', 'duplicate']) }),
 );
 
 export type NewswireosSettingsView = z.output<typeof newswireosSettingsView>;
