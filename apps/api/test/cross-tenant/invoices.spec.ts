@@ -319,11 +319,32 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
                 .put(w('/integrations/newswireos'))
                 .send({ baseUrl: 'https://newswireos.example' })
                 .expect(400);
+            // Linked first without the secret: NewswireOS mints it only once it has the hook URL linking makes.
+            const linked = await as(admin)
+                .put(w('/integrations/newswireos'))
+                .send({ baseUrl: 'https://newswireos.example/ignored', apiToken: `nwos_${stamp}` })
+                .expect(200);
+            expect(linked.body).toMatchObject({ configured: true, secretSet: false });
+            const early = (linked.body as { hookUrl: string }).hookUrl;
+            expect(early).toBeTruthy();
+            await deliver(early, {
+                id: 'evt_0',
+                type: 'payment.refunded',
+                data: { gateway: 'stripe', reference: 'x' },
+            }).expect(401);
+            expect((await as(admin).get(w('/integrations/newswireos')).expect(200)).body).toMatchObject({
+                lastDeliveryResult: 'no_secret',
+            });
             const res = await as(admin)
                 .put(w('/integrations/newswireos'))
-                .send({ baseUrl: 'https://newswireos.example/ignored', apiToken: `nwos_${stamp}`, secret })
+                .send({ baseUrl: 'https://newswireos.example/ignored', secret })
                 .expect(200);
-            expect(res.body).toMatchObject({ configured: true, baseUrl: 'https://newswireos.example' });
+            expect(res.body).toMatchObject({
+                configured: true,
+                secretSet: true,
+                baseUrl: 'https://newswireos.example',
+            });
+            expect((res.body as { hookUrl: string }).hookUrl).toBe(early);
             expect(JSON.stringify(res.body)).not.toContain(secret);
             expect(JSON.stringify(res.body)).not.toContain(`nwos_${stamp}`);
             hookUrl = (res.body as { hookUrl: string }).hookUrl;

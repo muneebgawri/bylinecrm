@@ -1755,6 +1755,7 @@ export const smtp2goMailboxes: Smtp2GoMailboxView[] = [
 /** The NewswireOS link (INV-1): linked, its hook heard from. */
 export const newswireosSettings: NewswireosSettingsView = {
     configured: true,
+    secretSet: true,
     baseUrl: 'https://newswireos.example.com',
     hookUrl: 'https://crm.example.com/api/hooks/newswireos/9QmR2vXc7LpT4sWb1nKy8HdZ3fGj6AeUoPiE5tCrYwM',
     lastDeliveryAt: at(3),

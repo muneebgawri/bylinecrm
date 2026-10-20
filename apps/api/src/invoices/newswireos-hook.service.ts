@@ -53,6 +53,10 @@ export class NewswireosHookService {
             throw new NotFoundException('not found');
         }
         const { workspaceId } = settings;
+        if (settings.secretCiphertext === null) {
+            await this.record(workspaceId, 'no_secret');
+            throw new ApiException(401, 'unauthorized', 'this hook’s secret has not been set in the CRM yet');
+        }
         if (!rawBody || !signed(rawBody, signature, this.secrets.open(settings.secretCiphertext))) {
             await this.record(workspaceId, 'bad_signature');
             await this.refused(clientIp);

@@ -2975,7 +2975,8 @@ model NewswireosSettings {
   apiTokenCiphertext  String    @map("api_token_ciphertext")
   hookTokenHash       String    @unique @map("hook_token_hash")
   hookTokenCiphertext String    @map("hook_token_ciphertext")
-  secretCiphertext    String    @map("secret_ciphertext")
+  /// Null until the admin pastes the secret NewswireOS mints for the hook; deliveries are refused till then.
+  secretCiphertext    String?   @map("secret_ciphertext")
   configuredById      String    @map("configured_by_id") @db.Uuid
   lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz
   /// `applied`, `unmatched`, `ignored`, `ping`, `bad_signature`.

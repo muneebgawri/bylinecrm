@@ -31091,6 +31091,10 @@
                     "configured": {
                         "type": "boolean"
                     },
+                    "secretSet": {
+                        "type": "boolean",
+                        "description": "Whether the hook secret NewswireOS minted has been pasted; deliveries are refused until it is."
+                    },
                     "baseUrl": {
                         "nullable": true,
                         "description": "Where NewswireOS is.",
@@ -31110,11 +31114,11 @@
                     },
                     "lastDeliveryResult": {
                         "nullable": true,
-                        "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery) or `bad_signature`.",
+                        "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.",
                         "type": "string"
                     }
                 },
-                "required": ["configured", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
+                "required": ["configured", "secretSet", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
             },
             "NewswireosHookResult": {
                 "type": "object",
