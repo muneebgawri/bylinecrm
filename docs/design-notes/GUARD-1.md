@@ -74,11 +74,26 @@ Notifications now point at a task, a transfer **or** a guardrail event (exactly 
   in the bell and My tasks. Managers still see the composer.
 - **The bell** shows `guardrail_repeat_blocks` and opens the Guardrails page.
 
+## GUARD-1b: exports audited, guardrail events announced
+
+The owner (2026-10-20): audit exports, and send guardrail events to webhooks.
+
+- **Export audit.** Every CSV export of people, companies or deals (`GET`/`POST …/export.csv`) writes a
+  `guardrail_events` row before the first row of the file: kind `record_export`, path `export`, outcome `allowed`,
+  severity `low`, the actor, and in `detail` the `object`, `scope` (`own` without `record:export_all`, else `all`),
+  `rows`, and the `filter` / `q` / `view` asked for (an API key's id when a key exported). There was no workspace
+  audit table to reuse (`platform_audit` is the operator's, outside any workspace), and the Guardrails page is
+  where reviewers already look: exports show there under **Export**. A refused export (`413`) is not recorded.
+- **`guardrail.recorded`.** One domain event per guardrail event, recorded in the same transaction by the one
+  writer (`guardrails/record.ts`), so the outbox, webhooks and the Guardrails page never disagree. `recordId` is
+  the event; `guardrail` carries kind, outcome, severity, path, actor, owner, person, company, address, the
+  guard's message and `detail` — ids and addresses, never a message body (the guard never sees one) or an
+  export's rows. A `repeat_blocks` row written once a day announces once. It is not on any record's timeline.
+
 ## Not here
 
 - Detecting mail sent outside the CRM, and telling the lead's owner — GUARD-2 (#203).
 - Volume, near-duplicate and reputation guardrails — REP-1/REP-2 (#204, #205).
-- Auditing exports (the proposal's "export is audited") and a domain event / webhook for guardrail events.
 
 ## Tests
 
@@ -88,3 +103,6 @@ the third block tells the manager and the admin once, not the member; a manager 
 scheduled send whose lead changed hands meanwhile fails at its time; reviewers only, marked legitimate once; another
 workspace sees nothing; exports scoped. `sequences.spec.ts` covers enrolment (another member's lead refused, a warm
 contact refused to a non-owner and a warning to its owner, all recorded).
+
+GUARD-1b: `guardrails.spec.ts` — an export is audited with its scope and row count (own for a member, all for a
+manager); a block is announced as `guardrail.recorded` with ids only and reaches a subscribed webhook.
