@@ -20,6 +20,7 @@ const RESULT_TEXT: Record<string, string> = {
     ignored: 'A delivery the CRM does not read was acknowledged.',
     duplicate: 'NewswireOS redelivered an event already applied; it was acknowledged.',
     bad_signature: 'A delivery was refused: it was not signed with this secret.',
+    no_secret: 'A delivery was refused: paste the secret NewswireOS made for this hook.',
 };
 
 /**
@@ -69,8 +70,6 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
         const errors: { baseUrl?: string; apiToken?: string; secret?: string } = {};
         if (!/^https?:\/\/[^/\s]+/i.test(baseUrl.trim())) errors.baseUrl = 'Enter NewswireOS’s address.';
         if (!settings.configured && !apiToken) errors.apiToken = 'Enter a NewswireOS API token.';
-        if (!settings.configured && secret.trim() === '')
-            errors.secret = 'Paste the webhook secret NewswireOS made for this hook (whsec_…).';
         setLocal(errors);
         if (errors.baseUrl || errors.apiToken || errors.secret) return;
         put.mutate(
@@ -124,9 +123,11 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                 <Field
                     label="Hook secret"
                     hint={
-                        settings.configured
+                        settings.secretSet
                             ? 'Set. Paste a new one only when NewswireOS makes a new one.'
-                            : 'Made by NewswireOS when you add this hook there (whsec_…). Deliveries not signed with it are refused.'
+                            : settings.configured
+                              ? 'Add the hook URL below in NewswireOS, then paste the secret it shows you (whsec_…).'
+                              : 'Leave empty for now: link first, add the hook URL in NewswireOS, then paste its secret here.'
                     }
                     error={local.secret ?? fieldErrorAt(put.error, 'secret')}
                 >
@@ -157,7 +158,9 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                 >
                     <div className="flex flex-wrap items-center gap-2">
                         <h3 className="m-0 text-[14px] font-semibold text-text">Refunds and chargebacks</h3>
-                        {settings.lastDeliveryResult === 'bad_signature' ? (
+                        {!settings.secretSet ? (
+                            <Badge status="warning">Secret not set</Badge>
+                        ) : settings.lastDeliveryResult === 'bad_signature' ? (
                             <Badge status="danger">Secret does not match</Badge>
                         ) : settings.lastDeliveryAt ? (
                             <Badge status="success">Receiving</Badge>

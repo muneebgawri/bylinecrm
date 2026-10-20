@@ -39,12 +39,10 @@ export class NewswireosSettingsService {
         const baseUrl = new URL(input.baseUrl).origin;
         return this.rls.withWorkspace(async (tx) => {
             const existing = await tx.newswireosSettings.findFirst();
-            if (!existing && (!input.apiToken || !input.secret)) {
-                throw new ApiException(
-                    400,
-                    'validation.failed',
-                    'the API token and the hook’s secret are needed the first time',
-                );
+            // The secret is not asked for here the first time: NewswireOS mints it only once it has this
+            // workspace's hook URL, which linking makes. Deliveries are refused until it is pasted.
+            if (!existing && !input.apiToken) {
+                throw new ApiException(400, 'validation.failed', 'the API token is needed the first time');
             }
             const data = {
                 baseUrl,
@@ -62,7 +60,7 @@ export class NewswireosSettingsService {
                         ...data,
                         workspaceId: context.workspaceId,
                         apiTokenCiphertext: this.secrets.seal(input.apiToken!),
-                        secretCiphertext: this.secrets.seal(input.secret!),
+                        secretCiphertext: input.secret ? this.secrets.seal(input.secret) : null,
                         hookTokenHash: hashToken(token),
                         hookTokenCiphertext: this.secrets.seal(token),
                     },
@@ -94,6 +92,7 @@ export class NewswireosSettingsService {
     private view(row: SettingsRow | null): NewswireosSettingsView {
         return {
             configured: row !== null,
+            secretSet: row?.secretCiphertext != null,
             baseUrl: row?.baseUrl ?? null,
             hookUrl: row
                 ? new URL(
