@@ -39,6 +39,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'slotline', label: 'Slotline', to: paths.settingsSlotline, requires: 'workspace:admin' },
     // Where invoices on deals are verified (INV-1): its token and hook secret are an admin's.
     { id: 'newswireos', label: 'NewswireOS', to: paths.settingsNewswireos, requires: 'workspace:admin' },
+    // Where BylineAI's leads come in (BYL-1): the webhook's secret and the round-robin list are an admin's.
+    { id: 'byline', label: 'BylineAI', to: paths.settingsByline, requires: 'workspace:admin' },
     // The Twenty importer (P4-4): it writes every object the workspace has, so an admin's.
     { id: 'import-twenty', label: 'Import from Twenty', to: paths.settingsImportTwenty, requires: 'workspace:admin' },
     // The Bigin importer (BIGIN-1): one-way sync from Zoho Bigin, an admin's like the Twenty importer.

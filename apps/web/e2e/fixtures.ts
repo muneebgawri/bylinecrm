@@ -52,6 +52,7 @@ import type {
     SlotlineSettingsView,
     DealInvoiceView,
     NewswireosSettingsView,
+    BylineSettingsView,
     MailOutboundView,
     MailThreadView,
     MailSettingsView,
@@ -1732,6 +1733,15 @@ export const newswireosSettings: NewswireosSettingsView = {
     hookUrl: 'https://crm.example.com/api/hooks/newswireos/9QmR2vXc7LpT4sWb1nKy8HdZ3fGj6AeUoPiE5tCrYwM',
     lastDeliveryAt: at(3),
     lastDeliveryResult: 'applied',
+};
+
+/** The BylineAI link (BYL-1): linked, two members dealt leads in turn, a lead heard from. */
+export const bylineSettings: BylineSettingsView = {
+    configured: true,
+    webhookUrl: 'https://crm.example.com/api/w/0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b/inbound/byline',
+    roundRobinMemberIds: members.slice(1, 3).map((m) => m.id),
+    lastDeliveryAt: at(3),
+    lastDeliveryResult: 'ingested',
 };
 
 /** A deal's invoices (INV-1): the main deal has one verified and one waiting for finance; the rest none. */

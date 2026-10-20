@@ -20,7 +20,7 @@ RUN corepack enable
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @bylinecrm/shared build \
+RUN pnpm --filter @bylinecrm/shared --filter @byline/contract build \
     && pnpm --filter api exec prisma generate \
     && pnpm --filter api build
 # A production-only copy of the api package with its workspace dependency injected; `prisma` and

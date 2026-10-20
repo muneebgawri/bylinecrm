@@ -64,6 +64,8 @@ export const paths = {
     settingsSlotline: (workspaceId: string) => `/w/${workspaceId}/settings/slotline`,
     /** NewswireOS (INV-1): where invoices on deals are verified, and the hook it reports refunds to. */
     settingsNewswireos: (workspaceId: string) => `/w/${workspaceId}/settings/newswireos`,
+    /** BylineAI (BYL-1): the lead webhook's secret and who leads at unowned companies are dealt to. */
+    settingsByline: (workspaceId: string) => `/w/${workspaceId}/settings/byline`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
     settingsImportTwenty: (workspaceId: string) => `/w/${workspaceId}/settings/import-twenty`,
     /** The Bigin importer (BIGIN-1): an admin connects Zoho Bigin and syncs it one way into BylineCRM. */

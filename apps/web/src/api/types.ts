@@ -174,6 +174,8 @@ export type DealInvoiceView = Schemas['DealInvoice'];
 export type CreateInvoiceInput = Loose<Schemas['CreateInvoiceDto']>;
 export type NewswireosSettingsView = Schemas['NewswireosSettings'];
 export type PutNewswireosSettingsInput = Loose<Schemas['PutNewswireosSettingsDto']>;
+export type BylineSettingsView = Schemas['BylineSettings'];
+export type PutBylineSettingsInput = Loose<Schemas['PutBylineSettingsDto']>;
 export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */
 export type BlocklistEntryCreatedView = Schemas['BlocklistEntryCreated'];

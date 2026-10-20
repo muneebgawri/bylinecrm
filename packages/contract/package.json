@@ -1,0 +1,28 @@
+{
+    "name": "@byline/contract",
+    "version": "1.0.0",
+    "private": true,
+    "description": "BylineAI and CRM wire contract: StandardizedContact, the lead webhook payload and answer, the HMAC schemes, the enrichment and verification API shapes. Mirrors BylineAI's packages/contract.",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
+    },
+    "devDependencies": {
+        "@bylinecrm/eslint-config": "workspace:*",
+        "@types/node": "^22.19.0",
+        "eslint": "^9.39.4",
+        "typescript": "^5.9.3"
+    }
+}
