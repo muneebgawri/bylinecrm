@@ -1,4 +1,5 @@
 import {
+    INVOICE_GATEWAYS,
     GUARDRAIL_KINDS,
     NOTIFICATION_KINDS,
     RECORD_OBJECTS,
@@ -45,6 +46,15 @@ const guardrailSummary = z.object({
     count: z.number().int(),
 });
 
+const invoiceSummary = z.object({
+    id,
+    opportunityId: id,
+    opportunityName: z.string(),
+    gateway: z.enum(INVOICE_GATEWAYS),
+    reference: z.string(),
+    reasonCode: z.string().nullable(),
+});
+
 const taskSummary = {
     id,
     title: z.string(),
@@ -60,12 +70,15 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance.',
                 }),
                 task: z.object(taskSummary).nullable().meta({ description: 'For a `task_*` kind.' }),
                 transfer: transferSummary.nullable().meta({ description: 'For a `transfer_*` kind.' }),
                 guardrail: guardrailSummary.nullable().meta({
                     description: 'For a `guardrail_*` kind (GUARD-1): the event, who it is about, and the day’s count.',
+                }),
+                invoice: invoiceSummary.nullable().meta({
+                    description: 'For an `invoice_*` kind (INV-1): the invoice waiting for finance, and its deal.',
                 }),
                 createdAt: isoTime,
                 readAt: isoTime.nullable(),

@@ -41,7 +41,9 @@ export class StageRulesService implements OutboxConsumer {
         if (!isRuleEvent(event.type)) return 0;
         const people = (event.related ?? []).filter((t) => t.type === 'person').map((t) => t.id);
         const companies = (event.related ?? []).filter((t) => t.type === 'company').map((t) => t.id);
-        if (people.length === 0 && companies.length === 0) return 0;
+        // An invoice (INV-1) names its deal itself.
+        const dealIds = (event.related ?? []).filter((t) => t.type === 'opportunity').map((t) => t.id);
+        if (people.length === 0 && companies.length === 0 && dealIds.length === 0) return 0;
 
         const moved = await this.rls.withWorkspace(event.workspaceId, async (tx) => {
             const rules = await tx.stageRule.findMany({
@@ -63,6 +65,7 @@ export class StageRulesService implements OutboxConsumer {
                         OR: [
                             ...(people.length ? [{ pointOfContactId: { in: people } }] : []),
                             ...(companies.length ? [{ companyId: { in: companies } }] : []),
+                            ...(dealIds.length ? [{ id: { in: dealIds } }] : []),
                         ],
                     },
                     select: { id: true, workspaceId: true, pipelineId: true, stageId: true },

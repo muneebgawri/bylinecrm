@@ -1,5 +1,6 @@
 import type { RecordObject, TaskStatus } from './records.js';
 import type { GuardrailSummary } from './guardrails.js';
+import type { InvoiceSummary } from './invoices.js';
 import type { TransferSummary } from './transfers.js';
 
 /**
@@ -20,6 +21,8 @@ export const NOTIFICATION_KINDS = [
     'transfer_taken',
     // GUARD-1: a member was blocked three times in a day from mailing others' leads (to reviewers).
     'guardrail_repeat_blocks',
+    // INV-1: an invoice on a deal waits for finance (to holders of `invoice:verify`).
+    'invoice_needs_review',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -48,6 +51,8 @@ export interface NotificationView {
     transfer: TransferSummary | null;
     /** The guardrail event, for a `guardrail_*` kind; null otherwise. */
     guardrail: GuardrailSummary | null;
+    /** The invoice, for an `invoice_*` kind (INV-1); null otherwise. */
+    invoice: InvoiceSummary | null;
     /** ISO 8601. */
     createdAt: string;
     /** ISO 8601; null while unread. */

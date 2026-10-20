@@ -26,7 +26,8 @@ export const STAGE_DELETE_MOVE_LIMIT = 5000;
  * event first fires. A tracked link clicked (P3-4) is one; an open never is — opens are indicative
  * (FR-CRMS-8) and may not move a deal.
  */
-export const STAGE_RULE_EVENTS = ['email.replied', 'meeting.booked', 'email.clicked'] as const;
+// A verified invoice (INV-1) is one too: it moves the deal it is on once its verified invoices cover the amount.
+export const STAGE_RULE_EVENTS = ['email.replied', 'meeting.booked', 'email.clicked', 'invoice.verified'] as const;
 export type StageRuleEvent = (typeof STAGE_RULE_EVENTS)[number];
 
 /** The colour a stage is drawn in: a semantic token name, never a colour value. */

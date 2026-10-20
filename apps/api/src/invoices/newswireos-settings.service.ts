@@ -1,0 +1,108 @@
+import { Inject, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { hashToken } from '../auth/tokens';
+import { ENV, type Env } from '../config/env';
+import { ApiException } from '../infra/errors/api-errors';
+import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { SecretBox } from '../infra/secret-box';
+import { WorkspaceContext } from '../infra/workspace-context';
+import { randomToken } from '../mail-accounts/oauth-flow';
+import { NEWSWIREOS_HOOK_PATH } from './invoices.constants';
+import type { NewswireosSettingsView } from './responses';
+
+type SettingsRow = Prisma.NewswireosSettingsGetPayload<object>;
+
+/**
+ * The workspace's NewswireOS link (INV-1), an admin's to set: where to verify payments, the API token to verify
+ * with, and the secret the refund/chargeback hook is signed with. Neither secret is ever shown back. The hook's
+ * URL is made once (a new one on `rotate`), as Slotline's is. Without a link, invoices wait for a person with
+ * `invoice:verify`.
+ */
+@Injectable()
+export class NewswireosSettingsService {
+    constructor(
+        @Inject(ENV) private readonly env: Env,
+        private readonly rls: RlsPrismaService,
+        private readonly context: WorkspaceContext,
+        private readonly secrets: SecretBox,
+    ) {}
+
+    get(): Promise<NewswireosSettingsView> {
+        return this.rls.withWorkspace(async (tx) => this.view(await tx.newswireosSettings.findFirst()));
+    }
+
+    async put(input: { baseUrl: string; apiToken?: string | undefined; secret?: string | undefined }) {
+        const context = this.context.get()!;
+        if (!context.memberId) {
+            throw new ApiException(403, 'forbidden', 'NewswireOS is linked by a member signed in, not by an API key');
+        }
+        const baseUrl = new URL(input.baseUrl).origin;
+        return this.rls.withWorkspace(async (tx) => {
+            const existing = await tx.newswireosSettings.findFirst();
+            if (!existing && (!input.apiToken || !input.secret)) {
+                throw new ApiException(
+                    400,
+                    'validation.failed',
+                    'the API token and the hook’s secret are needed the first time',
+                );
+            }
+            const data = {
+                baseUrl,
+                configuredById: context.memberId!,
+                ...(input.apiToken ? { apiTokenCiphertext: this.secrets.seal(input.apiToken) } : {}),
+                ...(input.secret ? { secretCiphertext: this.secrets.seal(input.secret) } : {}),
+            };
+            if (existing) {
+                return this.view(await tx.newswireosSettings.update({ where: { id: existing.id }, data }));
+            }
+            const token = randomToken();
+            return this.view(
+                await tx.newswireosSettings.create({
+                    data: {
+                        ...data,
+                        workspaceId: context.workspaceId,
+                        apiTokenCiphertext: this.secrets.seal(input.apiToken!),
+                        secretCiphertext: this.secrets.seal(input.secret!),
+                        hookTokenHash: hashToken(token),
+                        hookTokenCiphertext: this.secrets.seal(token),
+                    },
+                }),
+            );
+        });
+    }
+
+    /** A new hook URL; the old one stops working at once. */
+    rotate(): Promise<NewswireosSettingsView> {
+        return this.rls.withWorkspace(async (tx) => {
+            const existing = await tx.newswireosSettings.findFirst();
+            if (!existing) throw new ApiException(404, 'not_found', 'NewswireOS is not linked');
+            const token = randomToken();
+            return this.view(
+                await tx.newswireosSettings.update({
+                    where: { id: existing.id },
+                    data: { hookTokenHash: hashToken(token), hookTokenCiphertext: this.secrets.seal(token) },
+                }),
+            );
+        });
+    }
+
+    /** Unlinks NewswireOS: new invoices wait for a person; those already decided stay. */
+    async remove(): Promise<void> {
+        await this.rls.withWorkspace((tx) => tx.newswireosSettings.deleteMany({}));
+    }
+
+    private view(row: SettingsRow | null): NewswireosSettingsView {
+        return {
+            configured: row !== null,
+            baseUrl: row?.baseUrl ?? null,
+            hookUrl: row
+                ? new URL(
+                      `${NEWSWIREOS_HOOK_PATH}/${this.secrets.open(row.hookTokenCiphertext)}`,
+                      this.env.APP_URL,
+                  ).toString()
+                : null,
+            lastDeliveryAt: row?.lastDeliveryAt?.toISOString() ?? null,
+            lastDeliveryResult: row?.lastDeliveryResult ?? null,
+        };
+    }
+}

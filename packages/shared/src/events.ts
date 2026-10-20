@@ -7,6 +7,7 @@ import type { EmailFailure, EnrolmentEventPayload } from './sequences.js';
 import type { EmailTrackingPayload } from './tracking.js';
 import type { SuppressionEventPayload } from './suppression.js';
 import type { TransferEventPayload } from './transfers.js';
+import type { InvoiceEventPayload } from './invoices.js';
 
 /**
  * The objects an event can be about: the record objects, the things attached to them, and the
@@ -27,6 +28,7 @@ export const EVENT_OBJECTS = [
     'sequence',
     'enrolment',
     'transfer',
+    'invoice',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
@@ -161,6 +163,12 @@ export const DOMAIN_EVENT_TYPES = [
     'transfer.declined',
     'transfer.cancelled',
     'transfer.completed',
+    // An invoice on a deal (INV-1): NewswireOS (or a person with `invoice:verify`) verified it, or a refund or
+    // chargeback took it back. `recordId` is the invoice, `targets` the deal, `invoice` what it is; `related`
+    // names the deal on `invoice.verified` only once its verified invoices cover its amount, so a stage rule
+    // moves it then and not before.
+    'invoice.verified',
+    'invoice.invalidated',
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
@@ -233,6 +241,8 @@ interface DomainEventBase {
     meeting?: MeetingSummary;
     /** Present on `transfer.*`: what moves, from whom to whom, and the identities a receiver matches on. */
     transfer?: TransferEventPayload;
+    /** Present on `invoice.*`: the invoice, and whether the deal's verified invoices now cover its amount. */
+    invoice?: InvoiceEventPayload;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */
