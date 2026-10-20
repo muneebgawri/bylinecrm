@@ -19,6 +19,7 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     transfer_received: 'Moved to you',
     transfer_taken: 'Moved from you',
     guardrail_repeat_blocks: 'Guardrails',
+    invoice_needs_review: 'Invoice waiting for finance',
 };
 
 /** What a transfer notification says under its label. */
@@ -110,8 +111,16 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
         ? item.task.targets[0]
         : item.transfer
           ? { type: item.transfer.object, id: item.transfer.recordId }
-          : undefined;
-    const title = item.task ? item.task.title : item.transfer ? transferLine(item) : guardrailLine(item);
+          : item.invoice
+            ? { type: 'opportunity' as const, id: item.invoice.opportunityId }
+            : undefined;
+    const title = item.task
+        ? item.task.title
+        : item.transfer
+          ? transferLine(item)
+          : item.invoice
+            ? `${item.invoice.opportunityName}: ${item.invoice.reference}`
+            : guardrailLine(item);
     const to = target ? recordPath(workspaceId, target) : item.guardrail ? paths.settingsGuardrails(workspaceId) : null;
     const targets = item.task?.targets ?? [];
     const body = (

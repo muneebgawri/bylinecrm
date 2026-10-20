@@ -50,6 +50,8 @@ import type {
     MeetingKpisView,
     MeetingPage,
     SlotlineSettingsView,
+    DealInvoiceView,
+    NewswireosSettingsView,
     MailOutboundView,
     MailThreadView,
     MailSettingsView,
@@ -586,6 +588,7 @@ export const notificationsInbox: NotificationsView = {
             kind: 'task_assigned',
             transfer: null,
             guardrail: null,
+            invoice: null,
             createdAt: at(1),
             readAt: null,
             task: {
@@ -600,6 +603,7 @@ export const notificationsInbox: NotificationsView = {
             kind: 'task_due',
             transfer: null,
             guardrail: null,
+            invoice: null,
             createdAt: at(26),
             readAt: at(25),
             task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },
@@ -1720,3 +1724,51 @@ export const biginContactReuses: BiginContactReusePage = {
     ],
     nextCursor: null,
 };
+
+/** The NewswireOS link (INV-1): linked, its hook heard from. */
+export const newswireosSettings: NewswireosSettingsView = {
+    configured: true,
+    baseUrl: 'https://newswireos.example.com',
+    hookUrl: 'https://crm.example.com/api/hooks/newswireos/9QmR2vXc7LpT4sWb1nKy8HdZ3fGj6AeUoPiE5tCrYwM',
+    lastDeliveryAt: at(3),
+    lastDeliveryResult: 'applied',
+};
+
+/** A deal's invoices (INV-1): the main deal has one verified and one waiting for finance; the rest none. */
+export function dealInvoices(dealId: string): DealInvoiceView[] {
+    if (dealId !== IDS.deal) return [];
+    const invoice = (
+        id: string,
+        reference: string,
+        status: DealInvoiceView['status'],
+        reasonCode: string | null,
+        amountMinor: string,
+    ): DealInvoiceView => ({
+        id,
+        opportunityId: dealId,
+        gateway: 'stripe',
+        reference,
+        canonicalReference: null,
+        amountMinor,
+        currency: 'USD',
+        attachmentId: null,
+        status,
+        reasonCode,
+        note: null,
+        verifiedAt: status === 'verified' ? at(2) : null,
+        invalidatedAt: null,
+        createdById: null,
+        decidedById: null,
+        createdAt: at(4),
+    });
+    return [
+        invoice('00000000-0000-4000-8000-00000000f001', 'pi_3PxQ7b2eZvKYlo2C1', 'verified', null, '600000'),
+        invoice(
+            '00000000-0000-4000-8000-00000000f002',
+            'in_1PyR8c3fAwLZmp3D',
+            'needs_review',
+            'PROVIDER_ERROR',
+            '600000',
+        ),
+    ];
+}

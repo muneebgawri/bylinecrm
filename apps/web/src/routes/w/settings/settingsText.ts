@@ -11,6 +11,7 @@ export const RULE_EVENT_PHRASE: Record<StageRuleEvent, string> = {
     'email.replied': 'a reply arrives',
     'meeting.booked': 'a meeting is booked',
     'email.clicked': 'a link is clicked',
+    'invoice.verified': 'verified invoices cover the deal',
 };
 
 /** The event's name in a picker. */
@@ -18,6 +19,7 @@ export const RULE_EVENT_LABEL: Record<StageRuleEvent, string> = {
     'email.replied': 'A reply arrives',
     'meeting.booked': 'A meeting is booked',
     'email.clicked': 'A link is clicked',
+    'invoice.verified': 'Verified invoices cover the deal',
 };
 
 /** "When a reply arrives, move the deal to Replied" — what a rule does, as a person says it. */
@@ -108,6 +110,7 @@ export const CAPABILITY_AREA_LABEL: Record<string, string> = {
     sequence: 'Sequences',
     mailbox: 'Mailboxes',
     guardrail: 'Guardrails',
+    invoice: 'Invoices',
     workspace: 'Workspace',
 };
 
@@ -136,5 +139,6 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'mailbox:read': 'See mailboxes',
     'mailbox:manage': 'Connect and manage mailboxes',
     'guardrail:review': 'Review guardrail events and hear of repeated blocks',
+    'invoice:verify': 'Verify or refuse invoices by hand, and hear of ones waiting for finance',
     'workspace:admin': 'Administer the workspace',
 };
