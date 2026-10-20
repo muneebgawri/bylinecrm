@@ -39,6 +39,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'slotline', label: 'Slotline', to: paths.settingsSlotline, requires: 'workspace:admin' },
     // Where invoices on deals are verified (INV-1): its token and hook secret are an admin's.
     { id: 'newswireos', label: 'NewswireOS', to: paths.settingsNewswireos, requires: 'workspace:admin' },
+    // Where BylineAI's leads come in (BYL-1): the webhook's secret and the round-robin list are an admin's.
+    { id: 'byline', label: 'BylineAI', to: paths.settingsByline, requires: 'workspace:admin' },
     // SMTP2Go pool mailbox (TRANS-1): the pool's second transport — its API key and hook secret are an admin's.
     { id: 'smtp2go', label: 'SMTP2Go', to: paths.settingsSmtp2Go, requires: 'workspace:admin' },
     // The Twenty importer (P4-4): it writes every object the workspace has, so an admin's.

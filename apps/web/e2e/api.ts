@@ -130,6 +130,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/meetings$`), () => data.meetings],
     [new RegExp(`^${W}/integrations/slotline$`), () => data.slotlineSettings],
     [new RegExp(`^${W}/integrations/newswireos$`), () => data.newswireosSettings],
+    [new RegExp(`^${W}/integrations/byline$`), () => data.bylineSettings],
     [new RegExp(`^${W}/smtp2go/mailboxes$`), () => data.smtp2goMailboxes],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
     [new RegExp(`^${W}/mail/messages$`), (_m, url) => data.page(recordSends(url))],

@@ -75,7 +75,7 @@ export class EnrichmentRunner {
     ): Promise<EnrichmentRunReport> {
         const now = options.now ?? new Date();
         const loaded = await this.rls.withWorkspace(async (tx) => {
-            const subject = await this.subject(tx, object, recordId);
+            const subject = await this.subject(tx, context.workspaceId, object, recordId);
             if (!subject) return null;
             const settings = await this.settings.settingsIn(tx);
             const lastAsked = await tx.enrichmentAnswer.groupBy({
@@ -90,11 +90,16 @@ export class EnrichmentRunner {
             return { asked: [], answers: 0, applied: 0 };
         }
         const { subject, settings, lastAsked } = loaded;
-        const due = this.enrichers.filter((e) => {
+        const dueNow = this.enrichers.filter((e) => {
             if (!settings.sources[e.source] || !e.applies(subject)) return false;
             const last = lastAsked.get(e.source);
             return options.force || !last || now.getTime() - last.getTime() > settings.reaskAfterDays * DAY_MS;
         });
+        // A source linked per workspace (BylineAI) is not asked where the workspace has not linked it.
+        const linked = await Promise.all(
+            dueNow.map((e) => (e.available ? e.available(context.workspaceId) : Promise.resolve(true))),
+        );
+        const due = dueNow.filter((_, i) => linked[i]);
         if (due.length === 0) return { asked: [], answers: 0, applied: 0 };
 
         // No transaction is open here: the sources reach the network.
@@ -149,6 +154,7 @@ export class EnrichmentRunner {
     /** What the sources may read about the record; `null` when it is gone or not in scope. */
     private async subject(
         tx: WorkspaceClient,
+        workspaceId: string,
         object: EnrichmentObject,
         id: string,
     ): Promise<EnrichmentSubject | null> {
@@ -165,6 +171,7 @@ export class EnrichmentRunner {
             });
             if (!row) return null;
             return {
+                workspaceId,
                 object,
                 id,
                 company: {
@@ -184,7 +191,12 @@ export class EnrichmentRunner {
             select: { emails: true, country: true },
         });
         if (!row) return null;
-        return { object, id, person: { email: (row.emails as Emails | null)?.primary ?? null, country: row.country } };
+        return {
+            workspaceId,
+            object,
+            id,
+            person: { email: (row.emails as Emails | null)?.primary ?? null, country: row.country },
+        };
     }
 
     /**

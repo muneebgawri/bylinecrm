@@ -5,6 +5,8 @@ export const ENRICHERS = Symbol('ENRICHERS');
 
 /** What a source may read about the record it is asked about — never the record itself. */
 export interface EnrichmentSubject {
+    /** The workspace the record is in: a source with a per-workspace link (BylineAI, BYL-2) reads it by this. */
+    workspaceId?: string;
     object: EnrichmentObject;
     id: string;
     company?: {
@@ -42,5 +44,7 @@ export interface Enricher {
     readonly source: EnrichmentSource;
     facts(object: EnrichmentObject): readonly EnrichmentFactKey[];
     applies(subject: EnrichmentSubject): boolean;
+    /** Whether the workspace has this source at all (a per-workspace link); absent means always. Asked outside a transaction. */
+    available?(workspaceId: string): Promise<boolean>;
     enrich(subject: EnrichmentSubject): Promise<EnrichmentFinding[]>;
 }

@@ -29,6 +29,16 @@ export const CurrentPrincipal = createParamDecorator((_: unknown, ctx: Execution
     return principal;
 });
 
+export const SIGNED_INBOUND_KEY = 'auth:signed-inbound';
+/**
+ * A tenant-path route another system posts to (BYL-1: `POST /w/:id/inbound/byline`): no session, no key, no member —
+ * the workspace guard and the capability guard let it through, and the handler admits nothing until the body's
+ * signature checks out against that workspace's secret. The reason is required and the router-walking test lists
+ * every such route: it is an exemption from the tenant gate, so each one is named.
+ */
+export const SignedInbound = (reason: string): MethodDecorator =>
+    applyDecorators(SetMetadata(PUBLIC_KEY, true), SetMetadata(SIGNED_INBOUND_KEY, reason));
+
 export const ANY_MEMBER_KEY = 'auth:any-member';
 /**
  * A tenant route any member or key of the workspace may call, with the workspace guard as its
