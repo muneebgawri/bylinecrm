@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { BylineEnrichment } from '@byline/contract';
+import { BYLINE_VENDOR_ONLY_CONFIDENCE, type BylineEnrichment } from '@byline/contract';
 import type { EnrichmentFactKey, EnrichmentObject } from '@bylinecrm/shared';
 import type { Enricher, EnrichmentFinding, EnrichmentSubject } from '../enrichment/enricher.port';
 import { BYLINE_API, type BylineApi } from './byline-api.port';
 import { BylineLinks } from './byline-links.service';
 
-const PERSON_FACTS: readonly EnrichmentFactKey[] = ['avatar_url', 'country'];
+// No picture: BylineAI's `avatarUrl` is always null (its only photo source is not exposed).
+const PERSON_FACTS: readonly EnrichmentFactKey[] = ['country'];
 const COMPANY_FACTS: readonly EnrichmentFactKey[] = ['name', 'domain', 'logo_url', 'linkedin_url'];
 
 /**
@@ -50,13 +51,12 @@ function addressOf(subject: EnrichmentSubject): string | null {
 
 /** BylineAI's answer as findings for the object: each fact answered, or no answer. Exported for the suite. */
 export function findings(object: EnrichmentObject, found: BylineEnrichment | null): EnrichmentFinding[] {
-    const rank = (found?.confidence ?? 0) >= 0.8 ? 2 : 1;
+    // A contact BylineAI holds (scored above a vendor-only match's fixed 0.8) outranks the free sources; a vendor-only
+    // match ranks with them.
+    const rank = (found?.confidence ?? 0) > BYLINE_VENDOR_ONLY_CONFIDENCE ? 2 : 1;
     const values: Partial<Record<EnrichmentFactKey, string | null | undefined>> =
         object === 'person'
-            ? {
-                  avatar_url: found?.person?.avatarUrl,
-                  country: found?.person?.country?.toUpperCase(),
-              }
+            ? { country: found?.person?.country?.toUpperCase() }
             : {
                   name: found?.company?.name,
                   domain: found?.company?.domain?.toLowerCase(),

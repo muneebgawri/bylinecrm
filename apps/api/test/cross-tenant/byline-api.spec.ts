@@ -2,12 +2,12 @@ import 'reflect-metadata';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, isVerificationStale } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
-import { BYLINE_API } from '../../src/byline/byline-api.port';
+import { BYLINE_API, BylineApiError } from '../../src/byline/byline-api.port';
 import { EnrichmentRunner } from '../../src/enrichment/enrichment-runner';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { DNS_PORT } from '../../src/sending-pool/dns.port';
@@ -164,6 +164,25 @@ describe('BYL-2 BylineAI enrichment and verification adapters (FR-CRMS-15, FR-CR
             }
         });
 
+        it('BylineAI’s vendors down (503): the free layer answers for an hour only, then BylineAI is asked again', async () => {
+            byline.refusal = new BylineApiError(
+                'unavailable',
+                'BylineAI’s enrichment vendors are unavailable; try again later',
+            );
+            try {
+                const res = await as(a)
+                    .post(w(`/people/${personA}/verification`, wsA))
+                    .expect(200);
+                expect(res.body).toMatchObject({ source: 'free:fallback', stale: false });
+            } finally {
+                byline.refusal = null;
+            }
+            const row = await owner.emailVerification.findUniqueOrThrow({
+                where: { workspaceId_address: { workspaceId: wsA, address: addressA } },
+            });
+            expect(isVerificationStale(row, 90, new Date(row.verifiedAt.getTime() + 61 * 60 * 1000))).toBe(true);
+        });
+
         it('one workspace cannot verify another’s person', async () => {
             await as(b)
                 .post(w(`/people/${personA}/verification`, wsB))
@@ -184,7 +203,7 @@ describe('BYL-2 BylineAI enrichment and verification adapters (FR-CRMS-15, FR-CR
                     avatarUrl: null,
                 },
                 company: null,
-                confidence: 0.9,
+                confidence: 0.95,
             });
             const report = await runner.enrich(wsA, 'person', personA, { force: true });
             expect(report.asked).toContain('byline');

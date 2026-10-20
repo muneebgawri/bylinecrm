@@ -26320,11 +26320,11 @@
                         "type": "string",
                         "maxLength": 200,
                         "format": "uri",
-                        "description": "BylineAI’s address (BYL-2), `https://byline.example`; null unlinks its API. Leave out to keep.",
+                        "description": "BylineAI’s site origin (BYL-2), `https://byline.example`; null unlinks its API. Leave out to keep.",
                         "nullable": true
                     },
                     "apiKey": {
-                        "description": "A BylineAI API key (`x-api-key`). Needed with a first address; leave out to keep it.",
+                        "description": "A BylineAI API key with the `lookup` role (`x-api-key`). Needed with a first address; leave out to keep it.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 500
@@ -32234,7 +32234,9 @@
                             "null_mx",
                             "disposable",
                             "role",
-                            "lookup_failed"
+                            "lookup_failed",
+                            "mailbox_not_found",
+                            "catch_all"
                         ]
                     },
                     "message": {

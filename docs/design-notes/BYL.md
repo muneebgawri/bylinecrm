@@ -18,8 +18,8 @@ Added here, because BylineAI's package does not have them yet (they live inline 
 - `signWebhook` / `verifyWebhook` — the connector's signature: `x-byline-signature: sha256=<hex HMAC-SHA256(secret,
 raw body)>`, no timestamp (unlike the ingest scheme, `signPayload`/`verifySignature`, which is mirrored as is).
 
-**For BylineAI** (not changed from here): move these three into its `packages/contract` and have the connector
-import them, so both repos depend on one definition.
+BylineAI took these into its own `packages/contract` (pinionpartners/bylineai#3) under the same names; its connector
+imports `signWebhook`. Both suites pin one vector (secret `byline-test-vector-secret`, `byline.spec.ts`).
 
 ## BYL-1 — the lead receiver
 
@@ -44,8 +44,11 @@ the workspace's secret. Today Lead Engine on Twenty receives these; cut over wit
 - **Company.** Found by domain, else made from it (named `company_name`, else the domain). Free mail has no company.
 - **Source.** `byline:<source_key>` (lower case, `[a-z0-9_.-]`), or `byline` when BylineAI names none.
 - It runs as a job for the workspace (`actor: sync`), so OWN-2's refusal binds it no more than calendar sync.
-- Phone is not taken: BylineAI sends E.164 and the CRM keeps a number with its country, which the payload does not
-  say. Left for when it matters.
+- **Phone (BYL-3).** BylineAI sends `country` (ISO alpha-2) and the phone in E.164 when it could parse it, else as it
+  holds it. E.164 is split at its calling code (a shared one — `+1`, `+7`, `+44` — goes to the lead's country);
+  dialled digits take the lead's country; anything else (letters, an extension, no country) is kept as sent on the
+  lead (`byline_leads.phone_raw`) rather than dropped. A person already in the CRM gets the phone only when it has
+  none.
 
 **Settings > BylineAI** (`GET / PUT / DELETE /integrations/byline`, `workspace:admin`): the secret (sealed with
 `SECRETS_KEY`, never shown back; needed the first time, kept when left out), the round-robin members (must be in the
@@ -57,24 +60,29 @@ The CRM asks BylineAI by address with the workspace's API key (`x-api-key`, as B
 `BylineApi` is the port (`byline/byline-api.port.ts`); `BylineApiHttp` the adapter (10 s timeout); the suites use
 `test/support/fake-byline.ts`.
 
-- **Link.** The same Settings > BylineAI page: BylineAI's address (stored as its origin) and API key (sealed, never
-  shown back; needed with a first address, kept when left out; `baseUrl: null` unlinks the API), and whether
+- **Link.** The same Settings > BylineAI page: BylineAI's site origin (its nginx sends `/(enrichment|verification)/
+<email>` straight to its API) and an API key with BylineAI's scoped `lookup` role (`BYLINE_API_KEYS="<key>:lookup"`;
+  sealed, never shown back; needed with a first address, kept when left out; `baseUrl: null` unlinks the API), and whether
   verification goes to BylineAI. A link may be the webhook, the API, or both; a link with only the API refuses
   deliveries as an unlinked workspace does.
 - **Enrichment** (P4-2's `Enricher`, FR-CRMS-15): source `byline`, a sixth switch on Settings > Enrichment. A
-  person is asked by their address (country, picture); a company by its first person's (name, domain, logo,
-  LinkedIn). Rank 2 at BylineAI confidence ≥ 0.8, else 1, so the "better" rule weighs it against the free sources. A
+  person is asked by their address (country — BylineAI's `avatarUrl` is always null); a company by its first person's
+  (name, domain, logo, LinkedIn). A contact BylineAI holds (confidence above a vendor-only match's fixed 0.8) ranks
+  2; a vendor-only match ranks 1, with the free sources. A
   workspace with no API link is not asked (`Enricher.available`, new and optional, is checked before asking).
 - **Verification** (FR-CRMS-16 "vendor behind an interface"): the `Verifier` in use is `BylineVerifier`. With the
   switch on it asks BylineAI (its Reacher pool, on its own box — the CRM never probes SMTP), source `byline`;
   otherwise the free layer answers, as before. `Verifier.verify` now takes the asking workspace.
-- **Budgets are BylineAI's.** A `402`/`budget_exhausted`, `429`/`rate_limited`, a refused key or an outage becomes a
-  `BylineApiError` with BylineAI's words. Enrichment records each fact `failed` with that note; verification answers
-  from the free layer and says why BylineAI did not ("… BylineAI's budget for this is spent: …; free checks only."),
-  so a spent budget never stops a workspace's sends.
+- **Reasons.** BylineAI's `invalid_format`, `no_mx`, `mailbox_not_found`, `catch_all`, `disposable`, `role`,
+  `mailbox_exists` map to the CRM's reasons (two new ones: `mailbox_not_found`, `catch_all`); the provider
+  (`free`, `reacher`, `smtp-probe`, `zerobounce`, `hunter`, `emailable`) is named in the message.
+- **Budgets are BylineAI's.** A `402`/`budget_exhausted`, `429`/`rate_limited`, `503`/`unavailable` (its vendor pool
+  down), a refused key or an outage becomes a `BylineApiError` with BylineAI's words; Nest's extra `statusCode`,
+  `timestamp`, `path` are ignored. Enrichment records each fact `failed` with that note; verification answers from
+  the free layer and says why BylineAI did not, so a spent budget never stops a workspace's sends. A rate limit or an
+  outage is **retryable**: that free answer is stored as `free:fallback` and goes stale after an hour, so BylineAI is
+  asked again at the next check; a spent budget or a refused key is not, and the free answer stands as usual.
 
-**For BylineAI** (not changed from here): it has no per-address routes yet — enrichment and verification run as
-sweeps over its own contacts. The adapters speak the shape in `@byline/contract` (`api.ts`): `GET
-/enrichment/:email` → `BylineEnrichment` (404 for nothing) and `GET /verification/:email` → `BylineVerification`,
-refusals as `{error: 'budget_exhausted' | 'rate_limited', message}` with 402/429. Until BylineAI adds them, a linked
-workspace's asks fail as `unavailable` (enrichment: failed answers; verification: the free layer).
+BylineAI implemented `GET /enrichment/:email` and `GET /verification/:email` in pinionpartners/bylineai#3 with the
+shapes in `@byline/contract` (`api.ts`). An enrichment answer that failed is asked again on _Enrich now_ or at the
+workspace's re-ask age, as for every source.

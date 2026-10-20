@@ -23,6 +23,14 @@ describe('BYL-1 BylineAI lead receiver: the pure parts', () => {
             expect(verifyWebhook('s3cret-s3cret-s3cret', raw, undefined)).toBe(false);
         });
 
+        it('matches BylineAI’s pinned vector (pinionpartners/bylineai#3, computed by openssl and both repos)', () => {
+            const body =
+                '{"lead_id":"c_0001","email":"jane@acme.com","first_name":"Jane","phone":"+14155550123","country":"US","source_key":"prweb"}';
+            const signature = 'sha256=02069c3b3261ed1f1115a58ef34783b6a1658caac3bf1d30e21769be93673f14';
+            expect(signWebhook('byline-test-vector-secret', body)).toBe(signature);
+            expect(verifyWebhook('byline-test-vector-secret', Buffer.from(body), signature)).toBe(true);
+        });
+
         it('keeps BylineAI’s timestamped ingest scheme as BylineAI has it', () => {
             const sig = signPayload('k', 1_700_000_000, raw);
             expect(
