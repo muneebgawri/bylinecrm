@@ -51,6 +51,9 @@ export const DOMAIN_EVENT_TYPES = [
     'person.updated',
     'person.deleted',
     'person.restored',
+    // Duplicates of one person merged (#person-dedupe): one on the person kept (`diff.mergedFrom`: the people merged
+    // into it) and one on each person merged away and trashed (`diff.mergedInto`: the person kept).
+    'person.merged',
     'company.created',
     'company.updated',
     'company.deleted',

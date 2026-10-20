@@ -28132,7 +28132,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 68,
+                        "maxItems": 69,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -28142,6 +28142,7 @@
                                 "person.updated",
                                 "person.deleted",
                                 "person.restored",
+                                "person.merged",
                                 "company.created",
                                 "company.updated",
                                 "company.deleted",
@@ -28229,7 +28230,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 68,
+                        "maxItems": 69,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -28239,6 +28240,7 @@
                                 "person.updated",
                                 "person.deleted",
                                 "person.restored",
+                                "person.merged",
                                 "company.created",
                                 "company.updated",
                                 "company.deleted",

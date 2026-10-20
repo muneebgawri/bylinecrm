@@ -15,6 +15,7 @@ import { TasksService } from './tasks.service';
 import { CompanyOwnership } from './company-ownership';
 import { CompanyDomainsController, OwnershipController } from './ownership.controller';
 import { OwnershipService } from './ownership.service';
+import { PeopleDedupe } from './people-dedupe.service';
 import { TransfersModule } from '../transfers/transfers.module';
 
 /** People, companies, deals, the custom fields on them, and the notes, tasks and files attached to them. */
@@ -33,6 +34,7 @@ import { TransfersModule } from '../transfers/transfers.module';
     ],
     providers: [
         PeopleService,
+        PeopleDedupe,
         CompaniesService,
         OpportunitiesService,
         NotesService,
@@ -42,6 +44,14 @@ import { TransfersModule } from '../transfers/transfers.module';
         CompanyOwnership,
         OwnershipService,
     ],
-    exports: [CompanyOwnership, PeopleService, CompaniesService, OpportunitiesService, NotesService, TasksService],
+    exports: [
+        CompanyOwnership,
+        PeopleService,
+        PeopleDedupe,
+        CompaniesService,
+        OpportunitiesService,
+        NotesService,
+        TasksService,
+    ],
 })
 export class RecordsModule {}

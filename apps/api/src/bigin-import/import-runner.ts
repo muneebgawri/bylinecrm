@@ -605,9 +605,21 @@ export class BiginImportRunner {
                 const input: PersonInput = { ...(mapped.input as PersonInput), custom };
                 const found = await known();
                 if (found === 'trashed') return skip(mapped, 'trashed in BylineCRM');
+                // Duplicates merged into one person (person dedupe) leave it linked to several Contacts: each still
+                // resolves to it, but only the most recently modified Contact writes its fields; the others link.
+                const snapshot = page.links.link(module, externalId)?.snapshot ?? null;
+                if (
+                    found &&
+                    found.how === 'linked' &&
+                    (await outrankedContact(tx, context.workspaceId, found.id, externalId, modified))
+                ) {
+                    if (snapshot === null || !identity || !isContactReused(snapshot, identity)) {
+                        await link(found.id);
+                        return 'unchanged';
+                    }
+                }
                 if (found && found.how === 'linked' && identity) {
-                    const before =
-                        page.links.link(module, externalId)?.snapshot ?? (await currentIdentity(tx, found.id));
+                    const before = snapshot ?? (await currentIdentity(tx, found.id));
                     if (isContactReused(before, identity)) {
                         page.entry.reused += 1;
                         return this.reuseContact(tx, state, {
@@ -933,6 +945,34 @@ async function companyAtDomain(
  * person keeps their address, the rest is applied, and the caller reports the field as kept. Returns
  * `patch` itself when nothing was taken.
  */
+/**
+ * Whether another Bigin Contact linked to the same person was modified in Bigin more recently (ties: the larger
+ * id) — then that Contact writes the person's fields and this one only keeps its link.
+ */
+export async function outrankedContact(
+    tx: WorkspaceClient,
+    workspaceId: string,
+    personId: string,
+    externalId: string,
+    modified: Date | null,
+): Promise<boolean> {
+    const others = await tx.biginImportLink.findMany({
+        where: {
+            workspaceId,
+            object: 'Contacts',
+            localType: 'person',
+            localId: personId,
+            externalId: { not: externalId },
+        },
+        select: { externalId: true, externalUpdatedAt: true },
+    });
+    const mine = modified?.getTime() ?? -Infinity;
+    return others.some((o) => {
+        const theirs = o.externalUpdatedAt?.getTime() ?? -Infinity;
+        return theirs > mine || (theirs === mine && o.externalId > externalId);
+    });
+}
+
 async function withoutTakenEmail(tx: WorkspaceClient, personId: string, patch: PersonInput): Promise<PersonInput> {
     const email = patch.emails?.primary;
     if (!email) return patch;
