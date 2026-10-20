@@ -25437,6 +25437,23 @@
                         "minLength": 16,
                         "maxLength": 200
                     },
+                    "baseUrl": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "format": "uri",
+                        "description": "BylineAI’s address (BYL-2), `https://byline.example`; null unlinks its API. Leave out to keep.",
+                        "nullable": true
+                    },
+                    "apiKey": {
+                        "description": "A BylineAI API key (`x-api-key`). Needed with a first address; leave out to keep it.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    },
+                    "verifyWithByline": {
+                        "description": "Verify addresses with BylineAI instead of the free layer alone.",
+                        "type": "boolean"
+                    },
                     "roundRobinMemberIds": {
                         "description": "Members to deal leads at unowned companies to, in order. Leave out to keep the list.",
                         "maxItems": 100,
@@ -26777,9 +26794,12 @@
                             },
                             "email_domain": {
                                 "type": "boolean"
+                            },
+                            "byline": {
+                                "type": "boolean"
                             }
                         },
-                        "required": ["website", "dns", "gravatar", "email_domain"]
+                        "required": ["website", "dns", "gravatar", "email_domain", "byline"]
                     }
                 },
                 "required": ["reaskAfterDays", "sources"]
@@ -30853,7 +30873,21 @@
                 "type": "object",
                 "properties": {
                     "configured": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "The webhook has a secret: BylineAI’s leads are taken in."
+                    },
+                    "apiConfigured": {
+                        "type": "boolean",
+                        "description": "BylineAI’s API is linked (BYL-2): it enriches, and may verify."
+                    },
+                    "baseUrl": {
+                        "nullable": true,
+                        "description": "BylineAI’s address. Never the key.",
+                        "type": "string"
+                    },
+                    "verifyWithByline": {
+                        "type": "boolean",
+                        "description": "Email verification asks BylineAI (its Reacher pool), falling back to the free layer."
                     },
                     "webhookUrl": {
                         "type": "string",
@@ -30882,7 +30916,16 @@
                         "type": "string"
                     }
                 },
-                "required": ["configured", "webhookUrl", "roundRobinMemberIds", "lastDeliveryAt", "lastDeliveryResult"]
+                "required": [
+                    "configured",
+                    "apiConfigured",
+                    "baseUrl",
+                    "verifyWithByline",
+                    "webhookUrl",
+                    "roundRobinMemberIds",
+                    "lastDeliveryAt",
+                    "lastDeliveryResult"
+                ]
             },
             "BylineLeadResult": {
                 "type": "object",
@@ -33802,7 +33845,7 @@
                     },
                     "source": {
                         "type": "string",
-                        "enum": ["website", "dns", "gravatar", "email_domain"]
+                        "enum": ["website", "dns", "gravatar", "email_domain", "byline"]
                     },
                     "status": {
                         "type": "string",
@@ -33901,9 +33944,12 @@
                             },
                             "email_domain": {
                                 "type": "boolean"
+                            },
+                            "byline": {
+                                "type": "boolean"
                             }
                         },
-                        "required": ["website", "dns", "gravatar", "email_domain"]
+                        "required": ["website", "dns", "gravatar", "email_domain", "byline"]
                     },
                     "isDefault": {
                         "type": "boolean"

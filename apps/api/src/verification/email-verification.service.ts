@@ -58,7 +58,9 @@ export class EmailVerificationService {
         });
         if (toRun.length > 0) {
             // No transaction is open here: the verifier asks DNS.
-            const answers = await mapPool(toRun, VERIFY_CONCURRENCY, (address) => this.verifier.verify(address));
+            const answers = await mapPool(toRun, VERIFY_CONCURRENCY, (address) =>
+                this.verifier.verify(address, { workspaceId }),
+            );
             const verifiedAt = new Date();
             const written = await this.rls.withWorkspace(workspaceId, async (tx) => {
                 const out: EmailVerification[] = [];

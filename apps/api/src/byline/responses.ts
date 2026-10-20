@@ -7,7 +7,14 @@ const dateTime = z.iso.datetime();
 export const bylineSettingsView = named(
     'BylineSettings',
     z.object({
-        configured: z.boolean(),
+        configured: z.boolean().meta({ description: 'The webhook has a secret: BylineAI’s leads are taken in.' }),
+        apiConfigured: z
+            .boolean()
+            .meta({ description: 'BylineAI’s API is linked (BYL-2): it enriches, and may verify.' }),
+        baseUrl: z.string().nullable().meta({ description: 'BylineAI’s address. Never the key.' }),
+        verifyWithByline: z.boolean().meta({
+            description: 'Email verification asks BylineAI (its Reacher pool), falling back to the free layer.',
+        }),
         webhookUrl: z.url().meta({
             description: 'Point BylineAI’s `BYLINE_WEBHOOK_URL` here, with the same secret as `BYLINE_WEBHOOK_SECRET`.',
         }),

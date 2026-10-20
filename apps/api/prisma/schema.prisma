@@ -2955,7 +2955,7 @@ model NewswireosSettings {
   hookTokenHash       String    @unique @map("hook_token_hash")
   hookTokenCiphertext String    @map("hook_token_ciphertext")
   secretCiphertext    String    @map("secret_ciphertext")
-  configuredById      String    @map("configured_by_id") @db.Uuid
+  configuredById     String    @map("configured_by_id") @db.Uuid
   lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz
   /// `applied`, `unmatched`, `ignored`, `ping`, `bad_signature`.
   lastDeliveryResult  String?   @map("last_delivery_result")
@@ -2973,7 +2973,13 @@ model NewswireosSettings {
 model BylineSettings {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId         String    @unique @map("workspace_id") @db.Uuid
-  secretCiphertext    String    @map("secret_ciphertext")
+  /// Null while only the API (BYL-2) is linked: deliveries are then refused as for an unlinked workspace.
+  secretCiphertext    String?   @map("secret_ciphertext")
+  /// BYL-2: BylineAI's address, `https://byline.example`, and the API key the CRM asks it with (sealed).
+  baseUrl             String?   @map("base_url")
+  apiKeyCiphertext    String?   @map("api_key_ciphertext")
+  /// BYL-2: whether email verification asks BylineAI (its Reacher pool) instead of the free layer alone.
+  verifyWithByline    Boolean   @default(false) @map("verify_with_byline")
   /// Dealt to in this order; empty: such a lead waits unowned in the Leads queue.
   roundRobinMemberIds String[]  @default([]) @map("round_robin_member_ids") @db.Uuid
   /// Leads dealt so far; the next goes to the member at this position (modulo the list).

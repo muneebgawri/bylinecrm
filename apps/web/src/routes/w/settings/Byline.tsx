@@ -68,18 +68,31 @@ function BylineForm({
     const remove = useRemoveByline(workspaceId);
     const [secret, setSecret] = useState('');
     const [dealt, setDealt] = useState<string[]>(settings.roundRobinMemberIds);
-    const [local, setLocal] = useState<{ secret?: string }>({});
+    const [baseUrl, setBaseUrl] = useState(settings.baseUrl ?? '');
+    const [apiKey, setApiKey] = useState('');
+    const [verify, setVerify] = useState(settings.verifyWithByline);
+    const [local, setLocal] = useState<{ secret?: string; baseUrl?: string; apiKey?: string }>({});
     const [confirm, setConfirm] = useState(false);
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        const errors: { secret?: string } = {};
-        if ((!settings.configured || secret !== '') && secret.length < SECRET_MIN)
+        const errors: { secret?: string; baseUrl?: string; apiKey?: string } = {};
+        const url = baseUrl.trim();
+        if (secret !== '' && secret.length < SECRET_MIN)
             errors.secret = `At least ${SECRET_MIN} characters${settings.configured ? ', or leave it empty to keep it' : ''}.`;
+        if (!settings.configured && !settings.apiConfigured && secret === '' && url === '')
+            errors.secret = 'Enter the webhook secret, or BylineAI’s API below.';
+        if (url !== '' && !/^https?:\/\/[^/\s]+/i.test(url)) errors.baseUrl = 'Enter BylineAI’s address.';
+        if (url !== '' && !settings.apiConfigured && apiKey === '') errors.apiKey = 'Enter a BylineAI API key.';
         setLocal(errors);
-        if (errors.secret) return;
+        if (errors.secret || errors.baseUrl || errors.apiKey) return;
         put.mutate(
-            { roundRobinMemberIds: dealt, ...(secret ? { secret } : {}) },
+            {
+                roundRobinMemberIds: dealt,
+                ...(secret ? { secret } : {}),
+                ...(url ? { baseUrl: url, verifyWithByline: verify } : settings.apiConfigured ? { baseUrl: null } : {}),
+                ...(url && apiKey ? { apiKey } : {}),
+            },
             {
                 onSuccess: () => toast({ title: settings.configured ? 'BylineAI saved' : 'BylineAI linked' }),
                 onError: (e) => {
@@ -130,11 +143,52 @@ function BylineForm({
                         <p className="m-0 text-[13px] text-danger">{fieldErrorAt(put.error, 'roundRobinMemberIds')}</p>
                     )}
                 </fieldset>
+                <fieldset className="m-0 flex flex-col gap-4 border-0 p-0">
+                    <legend className="mb-1 text-[13px] font-medium text-text">
+                        Enrichment and verification from BylineAI
+                    </legend>
+                    <Field
+                        label="BylineAI address"
+                        hint="https://byline.example — leave empty to stop asking BylineAI."
+                        error={local.baseUrl ?? fieldErrorAt(put.error, 'baseUrl')}
+                    >
+                        <Input
+                            type="url"
+                            inputMode="url"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={baseUrl}
+                            onChange={(e) => setBaseUrl(e.target.value)}
+                            className="max-w-[28rem]"
+                        />
+                    </Field>
+                    <Field
+                        label="API key"
+                        hint={
+                            settings.apiConfigured
+                                ? 'Set. Enter a new one only to replace it.'
+                                : 'A BylineAI API key. Its paid layers run under BylineAI’s budgets.'
+                        }
+                        error={local.apiKey ?? fieldErrorAt(put.error, 'apiKey')}
+                    >
+                        <Input
+                            type="password"
+                            autoComplete="new-password"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            className="max-w-[28rem]"
+                        />
+                    </Field>
+                    <label className="flex items-center gap-2 text-[13px]">
+                        <Checkbox checked={verify} onCheckedChange={(checked) => setVerify(checked === true)} />
+                        Verify addresses with BylineAI (its Reacher pool); the free checks answer when it cannot
+                    </label>
+                </fieldset>
                 <div className="flex flex-wrap gap-2">
                     <Button type="submit" variant="primary" shape="square" loading={put.isPending}>
-                        {settings.configured ? 'Save' : 'Link BylineAI'}
+                        {settings.configured || settings.apiConfigured ? 'Save' : 'Link BylineAI'}
                     </Button>
-                    {settings.configured && (
+                    {(settings.configured || settings.apiConfigured) && (
                         <Button type="button" variant="ghost" shape="square" onClick={() => setConfirm(true)}>
                             Unlink
                         </Button>
@@ -176,7 +230,7 @@ function BylineForm({
                 open={confirm}
                 onOpenChange={setConfirm}
                 title="Unlink BylineAI?"
-                body="BylineAI’s deliveries are refused from now on. Leads already in stay."
+                body="BylineAI’s deliveries are refused and it is no longer asked about addresses. Leads already in stay."
                 confirm="Unlink"
                 pending={remove.isPending}
                 onConfirm={() =>

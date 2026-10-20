@@ -65,7 +65,8 @@ export class BylineInboundService {
                   select: { secretCiphertext: true },
               })
             : null;
-        if (!settings) {
+        // A link with only the API side (BYL-2) takes no deliveries.
+        if (!settings?.secretCiphertext) {
             await this.refused(clientIp);
             throw new NotFoundException('not found');
         }

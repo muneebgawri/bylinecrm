@@ -50,3 +50,31 @@ the workspace's secret. Today Lead Engine on Twenty receives these; cut over wit
 **Settings > BylineAI** (`GET / PUT / DELETE /integrations/byline`, `workspace:admin`): the secret (sealed with
 `SECRETS_KEY`, never shown back; needed the first time, kept when left out), the round-robin members (must be in the
 workspace), the webhook URL to copy, and the last delivery's result.
+
+## BYL-2 — enrichment and verification from BylineAI
+
+The CRM asks BylineAI by address with the workspace's API key (`x-api-key`, as BylineAI's `ApiKeyGuard` reads it).
+`BylineApi` is the port (`byline/byline-api.port.ts`); `BylineApiHttp` the adapter (10 s timeout); the suites use
+`test/support/fake-byline.ts`.
+
+- **Link.** The same Settings > BylineAI page: BylineAI's address (stored as its origin) and API key (sealed, never
+  shown back; needed with a first address, kept when left out; `baseUrl: null` unlinks the API), and whether
+  verification goes to BylineAI. A link may be the webhook, the API, or both; a link with only the API refuses
+  deliveries as an unlinked workspace does.
+- **Enrichment** (P4-2's `Enricher`, FR-CRMS-15): source `byline`, a sixth switch on Settings > Enrichment. A
+  person is asked by their address (country, picture); a company by its first person's (name, domain, logo,
+  LinkedIn). Rank 2 at BylineAI confidence ≥ 0.8, else 1, so the "better" rule weighs it against the free sources. A
+  workspace with no API link is not asked (`Enricher.available`, new and optional, is checked before asking).
+- **Verification** (FR-CRMS-16 "vendor behind an interface"): the `Verifier` in use is `BylineVerifier`. With the
+  switch on it asks BylineAI (its Reacher pool, on its own box — the CRM never probes SMTP), source `byline`;
+  otherwise the free layer answers, as before. `Verifier.verify` now takes the asking workspace.
+- **Budgets are BylineAI's.** A `402`/`budget_exhausted`, `429`/`rate_limited`, a refused key or an outage becomes a
+  `BylineApiError` with BylineAI's words. Enrichment records each fact `failed` with that note; verification answers
+  from the free layer and says why BylineAI did not ("… BylineAI's budget for this is spent: …; free checks only."),
+  so a spent budget never stops a workspace's sends.
+
+**For BylineAI** (not changed from here): it has no per-address routes yet — enrichment and verification run as
+sweeps over its own contacts. The adapters speak the shape in `@byline/contract` (`api.ts`): `GET
+/enrichment/:email` → `BylineEnrichment` (404 for nothing) and `GET /verification/:email` → `BylineVerification`,
+refusals as `{error: 'budget_exhausted' | 'rate_limited', message}` with 402/429. Until BylineAI adds them, a linked
+workspace's asks fail as `unavailable` (enrichment: failed answers; verification: the free layer).
