@@ -80,12 +80,24 @@ export class SendingDomainsService {
      */
     async checkDue(now = new Date()): Promise<number> {
         await this.listPostmasterDomains(now);
-        const due = await this.ownerPrisma.sendingDomain.findMany({
+        // A domain never checked (just added, or just listed from Postmaster) goes first: behind a
+        // backlog of overdue rechecks larger than one batch it would otherwise wait pass after pass.
+        const fresh = await this.ownerPrisma.sendingDomain.findMany({
             ...DOMAIN_WITH_RATE,
-            where: { nextCheckAt: { lte: now } },
+            where: { nextCheckAt: { lte: now }, checkedAt: null },
             orderBy: { nextCheckAt: 'asc' },
             take: SENDING_DOMAIN_CHECK_BATCH,
         });
+        const rest =
+            fresh.length < SENDING_DOMAIN_CHECK_BATCH
+                ? await this.ownerPrisma.sendingDomain.findMany({
+                      ...DOMAIN_WITH_RATE,
+                      where: { nextCheckAt: { lte: now }, checkedAt: { not: null } },
+                      orderBy: { nextCheckAt: 'asc' },
+                      take: SENDING_DOMAIN_CHECK_BATCH - fresh.length,
+                  })
+                : [];
+        const due = [...fresh, ...rest];
         for (const row of due) {
             try {
                 await this.run(row.workspaceId, row);

@@ -6,6 +6,7 @@ import type { EmailBounce, MailboxPause } from './sending-pool.js';
 import type { EmailFailure, EnrolmentEventPayload } from './sequences.js';
 import type { EmailTrackingPayload } from './tracking.js';
 import type { SuppressionEventPayload } from './suppression.js';
+import type { GuardrailEventPayload } from './guardrails.js';
 import type { TransferEventPayload } from './transfers.js';
 import type { InvoiceEventPayload } from './invoices.js';
 
@@ -29,6 +30,7 @@ export const EVENT_OBJECTS = [
     'enrolment',
     'transfer',
     'invoice',
+    'guardrail',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
@@ -169,6 +171,10 @@ export const DOMAIN_EVENT_TYPES = [
     // moves it then and not before.
     'invoice.verified',
     'invoice.invalidated',
+    // Guardrails (GUARD-1b, FR-CRMS-21): `recordId` is the guardrail event, `guardrail` what happened — a send,
+    // reply, scheduled send or sequence the recipient guard blocked, warned of or let a manager through, a
+    // member's repeated blocks, or a CSV export. Ids and addresses only, never a message body.
+    'guardrail.recorded',
 ] as const;
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
@@ -243,6 +249,8 @@ interface DomainEventBase {
     transfer?: TransferEventPayload;
     /** Present on `invoice.*`: the invoice, and whether the deal's verified invoices now cover its amount. */
     invoice?: InvoiceEventPayload;
+    /** Present on `guardrail.recorded`: the guardrail event, without any message body. */
+    guardrail?: GuardrailEventPayload;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

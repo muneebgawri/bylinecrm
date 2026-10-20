@@ -47,6 +47,8 @@ export interface RenderSubjects {
         custom: Record<string, unknown>;
     } | null;
     sender: { displayName: string | null } | null;
+    /** Custom keys the caller may not see (admin-only): they render blank, neither a value nor missing. */
+    hidden?: Partial<Record<'person' | 'company' | 'deal', ReadonlySet<string>>> | undefined;
 }
 
 /** A value, or `null` when it is empty — whitespace is empty. */
@@ -110,6 +112,7 @@ export function resolverFor(subjects: RenderSubjects): VariableResolver {
         const parsed = parseVariablePath(path);
         if (!parsed) return null;
         if (parsed.kind === 'standard') return standardValue(parsed.variable.path, subjects);
+        if (subjects.hidden?.[parsed.source]?.has(parsed.key)) return '';
         const record =
             parsed.source === 'person'
                 ? subjects.person

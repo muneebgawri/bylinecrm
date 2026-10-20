@@ -18,7 +18,8 @@
                                 "owned_by_other",
                                 "in_negotiation",
                                 "cold_to_known",
-                                "repeat_blocks"
+                                "repeat_blocks",
+                                "record_export"
                             ]
                         }
                     },
@@ -27062,7 +27063,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 65,
+                        "maxItems": 66,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -27131,7 +27132,8 @@
                                 "transfer.cancelled",
                                 "transfer.completed",
                                 "invoice.verified",
-                                "invoice.invalidated"
+                                "invoice.invalidated",
+                                "guardrail.recorded"
                             ]
                         }
                     },
@@ -27156,7 +27158,7 @@
                     },
                     "events": {
                         "minItems": 1,
-                        "maxItems": 65,
+                        "maxItems": 66,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -27225,7 +27227,8 @@
                                 "transfer.cancelled",
                                 "transfer.completed",
                                 "invoice.verified",
-                                "invoice.invalidated"
+                                "invoice.invalidated",
+                                "guardrail.recorded"
                             ]
                         }
                     },
@@ -30409,7 +30412,8 @@
                             "owned_by_other",
                             "in_negotiation",
                             "cold_to_known",
-                            "repeat_blocks"
+                            "repeat_blocks",
+                            "record_export"
                         ],
                         "description": "Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day)."
                     },
@@ -30424,7 +30428,15 @@
                     },
                     "path": {
                         "type": "string",
-                        "enum": ["send", "reply", "scheduled_send", "sequence_enrol", "sequence_step", "repeat_blocks"]
+                        "enum": [
+                            "send",
+                            "reply",
+                            "scheduled_send",
+                            "sequence_enrol",
+                            "sequence_step",
+                            "repeat_blocks",
+                            "export"
+                        ]
                     },
                     "actor": {
                         "nullable": true,
@@ -32610,7 +32622,8 @@
                                                 "owned_by_other",
                                                 "in_negotiation",
                                                 "cold_to_known",
-                                                "repeat_blocks"
+                                                "repeat_blocks",
+                                                "record_export"
                                             ]
                                         },
                                         "actor": {

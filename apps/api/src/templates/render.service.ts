@@ -3,6 +3,8 @@ import type { EmailTemplateBody, Emails } from '@bylinecrm/shared';
 import { ENV, type Env } from '../config/env';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { stripKeys } from '../records/custom-fields/admin-only';
+import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { recordWhere } from '../records/record-scope';
 import { renderChoice, type SignatureChoice } from '../signatures/signature-store';
 import { readMailSettings } from './mail-settings.service';
@@ -31,6 +33,7 @@ export class RenderService {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         @Inject(ENV) private readonly env: Env,
+        private readonly customFields: CustomFieldsService,
     ) {}
 
     render(
@@ -39,7 +42,7 @@ export class RenderService {
     ): Promise<ComposedEmail> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
-            const subjects = await loadSubjects(tx, context, target);
+            const subjects = await this.withoutHidden(tx, await loadSubjects(tx, context, target));
             const settings = await readMailSettings(tx);
             const signature = target.signature
                 ? await renderChoice(tx, this.env.APP_URL, target.signature, {
@@ -49,6 +52,27 @@ export class RenderService {
                 : null;
             return composeEmail(template, resolverFor(subjects), settings, signature);
         });
+    }
+
+    /**
+     * The subjects without the admin-only custom values the caller may not see: a member's preview
+     * or send renders such a variable blank, as if the record had no value. A job (a sequence step)
+     * runs outside a request and renders everything.
+     */
+    private async withoutHidden(tx: WorkspaceClient, subjects: RenderSubjects): Promise<RenderSubjects> {
+        if (!this.customFields.restricted()) return subjects;
+        const [person, company, deal] = await Promise.all([
+            this.customFields.hiddenKeysWithin(tx, 'person'),
+            this.customFields.hiddenKeysWithin(tx, 'company'),
+            this.customFields.hiddenKeysWithin(tx, 'opportunity'),
+        ]);
+        return {
+            ...subjects,
+            person: { ...subjects.person, custom: stripKeys(subjects.person.custom, person) },
+            company: subjects.company && { ...subjects.company, custom: stripKeys(subjects.company.custom, company) },
+            deal: subjects.deal && { ...subjects.deal, custom: stripKeys(subjects.deal.custom, deal) },
+            hidden: { person, company, deal },
+        };
     }
 
     private current(): WorkspaceRunContext {

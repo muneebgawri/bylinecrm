@@ -99,13 +99,16 @@ export class TemplatesService {
         return this.rls.withWorkspace(async (tx) => view(await find(tx, id, false)));
     }
 
-    /** The registry and the workspace's custom fields as variables — what the editor offers. */
+    /**
+     * The registry and the workspace's custom fields as variables — what the editor offers. An
+     * admin-only field is offered only to a caller with `workspace:admin`; a member's render leaves it blank.
+     */
     variables(): Promise<TemplateVariablesView> {
         this.current();
         return this.rls.withWorkspace(async (tx) => {
             const custom: TemplateVariablesView['custom'] = [];
             for (const source of CUSTOM_VARIABLE_SOURCES) {
-                for (const definition of await this.customFields.activeDefinitions(tx, SOURCE_OBJECT[source])) {
+                for (const definition of await this.customFields.visibleDefinitions(tx, SOURCE_OBJECT[source])) {
                     custom.push({
                         path: `${source}.custom.${definition.key}`,
                         source,

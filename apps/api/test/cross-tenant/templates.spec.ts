@@ -490,5 +490,59 @@ describe('email templates', () => {
             expect(paths(ours)).toContain('person.custom.beat');
             expect(paths(theirs)).not.toContain('person.custom.beat');
         });
+
+        it('an admin-only field: hidden from a member’s variables list, blank in their render; an admin’s shows it', async () => {
+            const field = await as(admin)
+                .post(w('/custom-fields'))
+                .send({ object: 'person', key: 'fee', label: 'Fee', type: 'text', adminOnly: true })
+                .expect(201);
+            const paths = (r: Response) => (r.body as { custom: { path: string }[] }).custom.map((c) => c.path);
+            expect(paths(await as(admin).get(w('/templates/variables')).expect(200))).toContain('person.custom.fee');
+            const writerPaths = paths(await as(writer).get(w('/templates/variables')).expect(200));
+            expect(writerPaths).toContain('person.custom.beat');
+            expect(writerPaths).not.toContain('person.custom.fee');
+
+            const wren = (
+                (await as(writer).post(w('/people')).send({ nameFirst: 'Wren' }).expect(201)).body as { id: string }
+            ).id;
+            await as(admin)
+                .patch(w(`/people/${wren}`))
+                .send({ custom: { fee: 'SECRET-FEE' } })
+                .expect(200);
+            const template = (subjectOwner: typeof admin) =>
+                as(subjectOwner)
+                    .post(w('/templates'))
+                    .send({
+                        name: `Fee ${Math.random()}`,
+                        kind: 'personal',
+                        subject: 'Fee {{person.custom.fee}}',
+                        body: body(para(t('Hi '), v('person.firstName'), t(' fee='), v('person.custom.fee'), t('.'))),
+                    })
+                    .expect(201);
+            const mine = (await template(writer)).body as Template;
+            const rendered = (
+                await as(writer)
+                    .post(w(`/templates/${mine.id}/preview`))
+                    .send({ personId: wren })
+                    .expect(200)
+            ).body as Rendered;
+            expect(rendered.missing).toEqual([]);
+            expect(rendered.subject).toBe('Fee ');
+            expect(rendered.html).not.toContain('SECRET-FEE');
+            expect(rendered.text).not.toContain('SECRET-FEE');
+            expect(rendered.text).toContain('Hi Wren fee=.');
+
+            const theirs = (await template(admin)).body as Template;
+            const adminRendered = (
+                await as(admin)
+                    .post(w(`/templates/${theirs.id}/preview`))
+                    .send({ personId: wren })
+                    .expect(200)
+            ).body as Rendered;
+            expect(adminRendered.text).toContain('fee=SECRET-FEE.');
+            await as(admin)
+                .delete(w(`/custom-fields/${(field.body as { id: string }).id}`))
+                .expect(204);
+        });
     });
 });

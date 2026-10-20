@@ -2795,6 +2795,8 @@ enum GuardrailKind {
   cold_to_known
   /// Three blocks on owned addresses by one member in a UTC day.
   repeat_blocks
+  /// GUARD-1b: a CSV export (the export audit).
+  record_export
 
   @@map("guardrail_kind")
 }
@@ -2823,6 +2825,7 @@ enum GuardrailPath {
   sequence_enrol
   sequence_step
   repeat_blocks
+  export
 
   @@map("guardrail_path")
 }

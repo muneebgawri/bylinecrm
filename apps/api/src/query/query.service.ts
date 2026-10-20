@@ -5,7 +5,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { recordWhere } from '../records/record-scope';
 import { searchCandidates } from '../records/search';
-import { loadView } from '../views/views.service';
+import { loadView, withoutHiddenFields } from '../views/views.service';
 import type { CompiledWhere } from './compile-filter';
 import { type Group, groupRows } from './group-by';
 import { decodeFilterParam, planQuery, type QueryPlan } from './plan';
@@ -32,7 +32,13 @@ export async function resolvePlan(
     raw: RawQuery,
     defaultSort?: ViewSort,
 ): Promise<QueryPlan> {
-    const view = raw.view ? await loadView(tx, context, object, raw.view) : undefined;
+    // A shared view may name an admin-only field the caller cannot see: it applies without it.
+    const view = raw.view
+        ? withoutHiddenFields(
+              await loadView(tx, context, object, raw.view),
+              await customFields.hiddenKeysWithin(tx, object),
+          )
+        : undefined;
     const filter = typeof raw.filter === 'string' ? decodeFilterParam(raw.filter) : raw.filter;
     const definitions = await customFields.visibleDefinitions(tx, object);
     return planQuery(
