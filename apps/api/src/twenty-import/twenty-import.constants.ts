@@ -28,5 +28,3 @@ export const TWENTY_RETRY_CAP_MS = 30_000;
 export const TWENTY_IMPORT_RUNS_SHOWN = 20;
 /** The last characters of an API key the screen shows, to tell keys apart. */
 export const TWENTY_API_KEY_SHOWN_CHARS = 4;
-/** The note on an exclusion the importer ends because Twenty no longer assigns the address. */
-export const TWENTY_RELEASE_NOTE = 'Unassigned in Twenty';

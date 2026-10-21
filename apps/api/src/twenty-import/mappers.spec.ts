@@ -2,6 +2,7 @@ import { TWENTY_IMPORT_SOURCE, type TwentyImportObject } from '@bylinecrm/shared
 import { describe, expect, it } from 'vitest';
 import {
     mapCompany,
+    LEAD_LOOKUP_SKIP,
     mapLeadLookup,
     mapLeadView,
     mapMessageCampaign,
@@ -369,28 +370,13 @@ describe('P4-4 (doc 48 §11): notes and tasks land on the records they were on',
     });
 });
 
-describe('P4-4 (doc 48 §11) / FR-CRMS-10: a lead lookup says who works an address', () => {
-    it('an assigned lookup excludes the address for its account manager; an unassigned one releases it', () => {
-        expect(
-            mapLeadLookup({
-                ...base,
-                email: 'Raphael.Camp@comexposium.com',
-                status: 'Assigned',
-                assignedToName: 'Tom Lane',
-                assignedToEmail: 'tom@example.com',
-            }),
-        ).toEqual({ action: 'exclude', address: 'raphael.camp@comexposium.com', accountManagerName: 'Tom Lane' });
-        expect(mapLeadLookup({ ...base, email: 'x@example.com', status: 'Unassigned', assignedToName: '' })).toEqual({
-            action: 'release',
-            address: 'x@example.com',
-        });
-        expect(mapLeadLookup({ ...base, email: 'not an address', status: 'Assigned' })).toEqual({ skip: 'no address' });
-    });
-
-    it('#180: an address the one email rule refuses is skipped as no address, not written as an empty exclusion', () => {
-        expect(mapLeadLookup({ ...base, email: 'joe@acme_corp.com', status: 'Assigned' })).toEqual({
-            skip: 'no address',
-        });
+describe('FR-CRMS-10, revised: a lead lookup is Twenty contact ownership, not a client list', () => {
+    it('is always skipped, assigned or not: it excludes nothing', () => {
+        for (const status of ['Assigned', 'Unassigned']) {
+            expect(mapLeadLookup({ ...base, email: 'raphael.camp@comexposium.com', status })).toEqual({
+                skip: LEAD_LOOKUP_SKIP,
+            });
+        }
     });
 });
 
