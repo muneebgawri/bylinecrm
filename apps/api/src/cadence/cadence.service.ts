@@ -23,7 +23,7 @@ export async function refreshCadence(tx: WorkspaceClient, ids: readonly string[]
     await tx.$queryRaw`SELECT refresh_cadence(${[...ids]}::uuid[])`;
 }
 
-const REFRESH_BATCH = 500;
+const REFRESH_BATCH = 200;
 
 /**
  * Re-derives the cadence of a workspace's deals (those `where` picks; by default every open one, and any still
