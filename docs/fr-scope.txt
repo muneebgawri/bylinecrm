@@ -26,7 +26,7 @@ FR-CRMS-3
 FR-CRMS-4
 FR-CRMS-UI-5
 
-[phase 3: in progress]   # Outreach — P3-1, P3-2, P3-3 built; P3-4 (FR-8), P3-5 (FR-14), P3-UI-2 open
+[phase 3: complete]   # Outreach — P3-1…P3-5, P3-UI-1 built (P3-4 tracking FR-8, P3-5 verification FR-14). No P3-UI-2 is defined anywhere.
 FR-CRMS-5
 FR-CRMS-6
 FR-CRMS-7
@@ -37,11 +37,16 @@ FR-CRMS-12
 FR-CRMS-13
 FR-CRMS-14
 
-[phase 4: not started]   # Data — P4-1 (FR-16), P4-2 (FR-15)
+[phase 4: complete]   # Data — P4-1 verifier port + BylineAI verifier (FR-16), P4-2 enrichment (FR-15), P4-4 Twenty importer
 FR-CRMS-15
 FR-CRMS-16
 
-[phase 6: in progress]   # Ownership and guardrails — OWN-1 (FR-17, FR-18), OWN-2 (FR-20), GUARD-1 (FR-21), GUARD-2 (FR-22), BIGIN-1 (FR-25, FR-26) built
+[phase 5: in progress]   # Integrations — no doc 48 ids of its own; kept open, not checked:
+#   P5-1 the NewswireOS receivers (ownership-changed, deal.won) live in the NewswireOS repo, outside this one;
+#   P5-3 the embed is not started.
+
+[phase 6: complete]   # Ownership and guardrails — OWN-1/2, GUARD-1/2, INV-1, REP-1/2, BIGIN-1 all shipped. FR-19's CRM side is
+#   built; the NewswireOS verification endpoint it calls is external (P5-1). Owner decisions: docs/design-notes/OWNER-DECISIONS.md
 FR-CRMS-17
 FR-CRMS-18
 FR-CRMS-19   # INV-1: invoices on a deal, verified by NewswireOS before they count
@@ -54,4 +59,4 @@ FR-CRMS-25   # BIGIN-1: direct one-way Bigin → BylineCRM sync
 FR-CRMS-26   # BIGIN-1: historical reconcile of reused Bigin contacts
 
 [deferred]
-FR-CRMS-UI-11   # English only in v1, catalogue-ready — parity/LEDGER.md PAR-092
+FR-CRMS-UI-11   # deferred: English only in v1, catalogue-ready — parity/LEDGER.md PAR-092

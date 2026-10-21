@@ -26,40 +26,40 @@ model Workspace {
   apiKeys ApiKey[]
   invites WorkspaceInvite[]
 
-  people                 Person[]
-  companies              Company[]
-  customFieldDefinitions CustomFieldDefinition[]
-  opportunities          Opportunity[]
-  notes                  Note[]
-  noteTargets            NoteTarget[]
-  tasks                  Task[]
-  taskTargets            TaskTarget[]
-  attachments            Attachment[]
-  savedViews             SavedView[]
-  timelineActivities     TimelineActivity[]
-  outboxEvents           OutboxEvent[]
-  pipelines              Pipeline[]
-  pipelineStages         PipelineStage[]
-  stageHistory           OpportunityStageHistory[]
-  stageRules             StageRule[]
-  webhookEndpoints       WebhookEndpoint[]
-  webhookDeliveries      WebhookDelivery[]
-  googleOAuthClient      GoogleOAuthClient?
+  people                         Person[]
+  companies                      Company[]
+  customFieldDefinitions         CustomFieldDefinition[]
+  opportunities                  Opportunity[]
+  notes                          Note[]
+  noteTargets                    NoteTarget[]
+  tasks                          Task[]
+  taskTargets                    TaskTarget[]
+  attachments                    Attachment[]
+  savedViews                     SavedView[]
+  timelineActivities             TimelineActivity[]
+  outboxEvents                   OutboxEvent[]
+  pipelines                      Pipeline[]
+  pipelineStages                 PipelineStage[]
+  stageHistory                   OpportunityStageHistory[]
+  stageRules                     StageRule[]
+  webhookEndpoints               WebhookEndpoint[]
+  webhookDeliveries              WebhookDelivery[]
+  googleOAuthClient              GoogleOAuthClient?
   googleWorkspaceDelegation      GoogleWorkspaceDelegation?
   googleWorkspaceDelegationAudit GoogleWorkspaceDelegationAudit[]
-  mailboxes              Mailbox[]
-  emailTemplates         EmailTemplate[]
-  mailSettings           WorkspaceMailSettings?
-  signatureSettings      WorkspaceSignatureSettings?
-  logos                  WorkspaceLogo[]
-  mailAssets             MailAsset[]
-  mailThreads            MailThread[]
-  mailMessages           MailMessage[]
-  mailboxThreads         MailboxThread[]
-  mailMessageCopies      MailMessageCopy[]
-  mailParticipants       MailParticipant[]
-  mailboxSyncStates      MailboxSyncState[]
-  blocklistEntries       BlocklistEntry[]
+  mailboxes                      Mailbox[]
+  emailTemplates                 EmailTemplate[]
+  mailSettings                   WorkspaceMailSettings?
+  signatureSettings              WorkspaceSignatureSettings?
+  logos                          WorkspaceLogo[]
+  mailAssets                     MailAsset[]
+  mailThreads                    MailThread[]
+  mailMessages                   MailMessage[]
+  mailboxThreads                 MailboxThread[]
+  mailMessageCopies              MailMessageCopy[]
+  mailParticipants               MailParticipant[]
+  mailboxSyncStates              MailboxSyncState[]
+  blocklistEntries               BlocklistEntry[]
 
   mailOutbound MailOutbound[]
   mailOutbox   MailOutbox[]
@@ -112,6 +112,7 @@ model Workspace {
   guardrailEvents           GuardrailEvent[]
   companyDomains            CompanyDomain[]
   customerExclusionSettings CustomerExclusionSettings?
+  ownershipSettings         OwnershipSettings?
 
   @@map("workspaces")
 }
@@ -1230,54 +1231,54 @@ model GoogleWorkspaceDelegationAudit {
 /// are held encrypted and never leave the API; a disconnected mailbox keeps its row (history, the
 /// email's uniqueness) and loses its tokens.
 model Mailbox {
-  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId            String           @map("workspace_id") @db.Uuid
-  ownerMemberId          String           @map("owner_member_id") @db.Uuid
+  id                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId            String                  @map("workspace_id") @db.Uuid
+  ownerMemberId          String                  @map("owner_member_id") @db.Uuid
   /// Lower case; unique in the workspace.
   email                  String
   label                  String?
   purpose                MailboxPurpose
   /// TRANS-1: `smtp2go` only for a pool mailbox (the database checks); fixed when the mailbox is added.
-  transport              MailboxTransport @default(gmail)
+  transport              MailboxTransport        @default(gmail)
   /// #225: `delegation` — tokens minted by the workspace's service account (no refresh token of its own); `oauth` otherwise.
   credentialSource       MailboxCredentialSource @default(oauth) @map("credential_source")
   /// #225: when this delegated mailbox's current run of syncing was audited; null until its next sync is.
-  delegationAuditedAt    DateTime?        @map("delegation_audited_at") @db.Timestamptz
+  delegationAuditedAt    DateTime?               @map("delegation_audited_at") @db.Timestamptz
   status                 MailboxStatus
-  grantedScopes          String[]         @default([]) @map("granted_scopes")
-  refreshTokenCiphertext String?          @map("refresh_token_ciphertext")
-  accessTokenCiphertext  String?          @map("access_token_ciphertext")
-  accessExpiresAt        DateTime?        @map("access_expires_at") @db.Timestamptz
+  grantedScopes          String[]                @default([]) @map("granted_scopes")
+  refreshTokenCiphertext String?                 @map("refresh_token_ciphertext")
+  accessTokenCiphertext  String?                 @map("access_token_ciphertext")
+  accessExpiresAt        DateTime?               @map("access_expires_at") @db.Timestamptz
   /// Why the mailbox last stopped working: `{ code, message, at }`; null while it works.
-  lastError              Json?            @map("last_error")
-  connectedAt            DateTime?        @map("connected_at") @db.Timestamptz
+  lastError              Json?                   @map("last_error")
+  connectedAt            DateTime?               @map("connected_at") @db.Timestamptz
   /// A pool mailbox's own daily cap (P3-2); null takes the workspace's.
-  poolDailyCap           Int?             @map("pool_daily_cap")
+  poolDailyCap           Int?                    @map("pool_daily_cap")
   /// Day 1 of a pool mailbox's warm-up: when it first connected as a pool mailbox (P3-2).
-  warmupStartedAt        DateTime?        @map("warmup_started_at") @db.Timestamptz
+  warmupStartedAt        DateTime?               @map("warmup_started_at") @db.Timestamptz
   /// Set while the mailbox is paused for its bounce or complaint rate (FR-CRMS-6, -13).
-  pausedAt               DateTime?        @map("paused_at") @db.Timestamptz
+  pausedAt               DateTime?               @map("paused_at") @db.Timestamptz
   /// Why it was paused: `{ code, message, rate, threshold, at }`; null while it is not.
-  pauseReason            Json?            @map("pause_reason")
+  pauseReason            Json?                   @map("pause_reason")
   /// The last time an admin resumed it, who and why (P3-2).
-  resumedAt              DateTime?        @map("resumed_at") @db.Timestamptz
-  resumedByMemberId      String?          @map("resumed_by_member_id") @db.Uuid
-  resumeNote             String?          @map("resume_note")
+  resumedAt              DateTime?               @map("resumed_at") @db.Timestamptz
+  resumedByMemberId      String?                 @map("resumed_by_member_id") @db.Uuid
+  resumeNote             String?                 @map("resume_note")
   /// The mailbox's own signature (#193): `RichText` in the signature subset; null takes the workspace default.
   signature              Json?
   /// Off: the workspace default does not apply to this mailbox (#193).
-  useDefaultSignature    Boolean          @default(true) @map("use_default_signature")
+  useDefaultSignature    Boolean                 @default(true) @map("use_default_signature")
   /// A pool mailbox's booking page, on the Slotline site, picked by an admin (#193); null for a personal mailbox.
-  bookingLink            String?          @map("booking_link")
+  bookingLink            String?                 @map("booking_link")
   /// TRANS-1: an SMTP2Go mailbox's API key, sealed; never shown back. Null for a Gmail mailbox and once disconnected.
-  transportKeyCiphertext String?          @map("transport_key_ciphertext")
+  transportKeyCiphertext String?                 @map("transport_key_ciphertext")
   /// TRANS-1: the bearer secret SMTP2Go's webhook sends in `Authorization`, sealed (an admin copies it into SMTP2Go).
-  hookSecretCiphertext   String?          @map("hook_secret_ciphertext")
+  hookSecretCiphertext   String?                 @map("hook_secret_ciphertext")
   /// TRANS-1: when SMTP2Go's webhook last reached this mailbox, and what came of it.
-  lastHookAt             DateTime?        @map("last_hook_at") @db.Timestamptz
-  lastHookResult         String?          @map("last_hook_result")
-  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  lastHookAt             DateTime?               @map("last_hook_at") @db.Timestamptz
+  lastHookResult         String?                 @map("last_hook_result")
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner     WorkspaceMember   @relation(fields: [ownerMemberId], references: [id])
@@ -2133,6 +2134,18 @@ model CustomerExclusionSettings {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("customer_exclusion_settings")
+}
+
+/// OWN-1 (owner decision 2): Settings → Ownership. No row means the defaults.
+model OwnershipSettings {
+  workspaceId         String   @id @map("workspace_id") @db.Uuid
+  /// Days a transferred record cannot go back to the member it left (0–90, checked by the database; 0 is off).
+  transferCoolingDays Int      @default(14) @map("transfer_cooling_days")
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("ownership_settings")
 }
 
 /// #192: who sees a sequence.
@@ -3168,36 +3181,36 @@ enum InvoiceStatus {
 
 /// A gateway reference on a deal. One payment is one deal: `(workspace, gateway, reference)` is unique.
 model DealInvoice {
-  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId         String         @map("workspace_id") @db.Uuid
-  opportunityId       String         @map("opportunity_id") @db.Uuid
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String          @map("workspace_id") @db.Uuid
+  opportunityId       String          @map("opportunity_id") @db.Uuid
   gateway             InvoiceGateway
   /// As entered, trimmed.
   reference           String
   /// The reference as NewswireOS names it (an invoice's payment intent, a normalised hash); refunds match on either.
-  canonicalReference  String?        @map("canonical_reference")
+  canonicalReference  String?         @map("canonical_reference")
   /// For a NewswireOS invoice number: the rail NewswireOS resolved it to (`canonicalReference` is the id there).
   resolvedGateway     InvoiceGateway? @map("resolved_gateway")
   /// What the payment must be: the deal's amount by default, less for a partial payment.
-  amountMinor         BigInt         @map("amount_minor")
+  amountMinor         BigInt          @map("amount_minor")
   /// How much of it has been refunded (NewswireOS's running total). Only the net counts toward the deal.
-  refundedAmountMinor BigInt         @default(0) @map("refunded_amount_minor")
-  currency            String         @db.Char(3)
+  refundedAmountMinor BigInt          @default(0) @map("refunded_amount_minor")
+  currency            String          @db.Char(3)
   /// An optional receipt, stored as an ordinary attachment on the deal.
-  attachmentId        String?        @map("attachment_id") @db.Uuid
-  status              InvoiceStatus  @default(verifying)
+  attachmentId        String?         @map("attachment_id") @db.Uuid
+  status              InvoiceStatus   @default(verifying)
   /// NewswireOS's reason code (`AMOUNT_MISMATCH`, `PROVIDER_ERROR`, …), ours (`NO_LINK`), or a person's (`MANUAL`).
-  reasonCode          String?        @map("reason_code")
+  reasonCode          String?         @map("reason_code")
   /// A person's words when they verified or rejected it by hand.
   note                String?
-  verifiedAt          DateTime?      @map("verified_at") @db.Timestamptz
-  invalidatedAt       DateTime?      @map("invalidated_at") @db.Timestamptz
+  verifiedAt          DateTime?       @map("verified_at") @db.Timestamptz
+  invalidatedAt       DateTime?       @map("invalidated_at") @db.Timestamptz
   /// What NewswireOS answered (the facts of the payment), or what the webhook said took it back.
-  verificationPayload Json           @default("{}") @map("verification_payload")
-  createdById         String?        @map("created_by_id") @db.Uuid
-  decidedById         String?        @map("decided_by_id") @db.Uuid
-  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  verificationPayload Json            @default("{}") @map("verification_payload")
+  createdById         String?         @map("created_by_id") @db.Uuid
+  decidedById         String?         @map("decided_by_id") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   opportunity   Opportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)

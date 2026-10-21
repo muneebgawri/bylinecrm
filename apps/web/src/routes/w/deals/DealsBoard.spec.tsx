@@ -90,12 +90,12 @@ const BOARD: BoardView = {
     }),
 };
 
-function renderBoard() {
+function renderBoard(board: BoardView = BOARD) {
     const announce = vi.fn<(text: string) => void>();
     captured.props = null;
     render(
         <DealsBoard
-            board={BOARD}
+            board={board}
             canMove
             layout="lanes"
             touch={false}
@@ -144,3 +144,51 @@ describe('FR-CRMS-UI-8: the deals board announces drags by name, in the page’s
         expect(instructions?.draggable).not.toMatch(/sortable|press space bar to pick up the draggable/i);
     });
 });
+
+/** The board with the New stage's quiet threshold set, and the one deal at `days` in it. */
+function boardAt(days: number, threshold: number | null): BoardView {
+    const newStage = { ...STAGES[0]!, daysThreshold: threshold };
+    const deal = { ...DEAL, daysInStage: days };
+    return {
+        ...BOARD,
+        columns: BOARD.columns.map((c: BoardView['columns'][number]) =>
+            c.stage.id === NEW_ID ? { ...c, stage: newStage, deals: [deal] } : c,
+        ),
+        pipeline: { ...BOARD.pipeline, stages: [newStage, STAGES[1]!] },
+    };
+}
+
+describe('FR-CRMS-UI-3: a board card shows its days in stage and turns quiet only past the stage threshold', () => {
+    it('shows the API’s days in stage; at the threshold it is not quiet, one day past it is', () => {
+        const atThreshold = render(<DealsBoard {...boardProps(boardAt(5, 5))} />);
+        expect(atThreshold.getByText('5d in stage')).toBeInTheDocument();
+        expect(atThreshold.queryByText('⚠ Quiet')).toBeNull();
+        expect(atThreshold.queryByText(/past threshold/)).toBeNull();
+        atThreshold.unmount();
+
+        const past = render(<DealsBoard {...boardProps(boardAt(6, 5))} />);
+        expect(past.getByText('6d in stage')).toBeInTheDocument();
+        expect(past.getByText('⚠ Quiet')).toBeInTheDocument();
+        expect(past.getByText('6d · past threshold')).toBeInTheDocument();
+        past.unmount();
+
+        // A stage with no threshold never marks a card quiet, however long it sits.
+        const none = render(<DealsBoard {...boardProps(boardAt(400, null))} />);
+        expect(none.getByText('400d in stage')).toBeInTheDocument();
+        expect(none.queryByText('⚠ Quiet')).toBeNull();
+    });
+});
+
+function boardProps(board: BoardView) {
+    return {
+        board,
+        canMove: true,
+        layout: 'lanes' as const,
+        touch: false,
+        onMove: () => {},
+        onMoveSheet: () => {},
+        onOpen: () => {},
+        announce: () => {},
+        onShowList: () => {},
+    };
+}

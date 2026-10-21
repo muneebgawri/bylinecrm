@@ -4,6 +4,7 @@ import type {
     Emails,
     LabelledTarget,
     NotificationKind,
+    OwnershipSettingsView,
     RecordObject,
     RecordTarget,
     TransferEventPayload,
@@ -22,6 +23,7 @@ import { labelled, labelTargets } from '../notifications/task-labels';
 import { actorOf } from '../records/actor';
 import { recordWhere } from '../records/record-scope';
 import { MEMBER_SUMMARY_SELECT } from '../records/summaries';
+import { assertNotCooling, coolingDays } from './transfer-cooling';
 
 /** The reason on a hand-over that gave an owner to a record that had none, from an import's source (Bigin). */
 export const TRANSFER_REASON_IMPORT_FILL = 'import_fill';
@@ -80,10 +82,19 @@ export class TransfersService {
             }
             const to = await tx.workspaceMember.findFirst({
                 where: { id: input.toMemberId, leftAt: null },
-                select: { id: true },
+                select: { id: true, user: { select: { displayName: true } } },
             });
             if (!to) throw new UnknownReference('toMemberId', 'not a member of this workspace');
             if (to.id === head.ownerId) throw new UnknownReference('toMemberId', 'already the owner');
+            // The cooling period: a record does not go straight back to a member it just left. Managers are exempt.
+            if (!canForce) {
+                await assertNotCooling(tx, {
+                    object: input.object,
+                    recordId: input.recordId,
+                    memberId: to.id,
+                    memberName: to.user.displayName ?? 'that member',
+                });
+            }
 
             if (canForce) {
                 const row = await this.complete(tx, context, {
@@ -153,6 +164,23 @@ export class TransfersService {
         });
     }
 
+    /** Settings → Ownership: the transfer cooling period. */
+    settings(): Promise<OwnershipSettingsView> {
+        return this.rls.withWorkspace(async (tx) => ({ transferCoolingDays: await coolingDays(tx) }));
+    }
+
+    setSettings(input: OwnershipSettingsView): Promise<OwnershipSettingsView> {
+        const workspaceId = this.current().workspaceId;
+        return this.rls.withWorkspace(async (tx) => {
+            const row = await tx.ownershipSettings.upsert({
+                where: { workspaceId },
+                create: { workspaceId, transferCoolingDays: input.transferCoolingDays },
+                update: { transferCoolingDays: input.transferCoolingDays },
+            });
+            return { transferCoolingDays: row.transferCoolingDays };
+        });
+    }
+
     /** The receiver takes the record and its unit. */
     async accept(id: string): Promise<TransferView> {
         const context = this.current();
@@ -160,6 +188,14 @@ export class TransfersService {
             const me = await requireCallerMember(tx, context);
             const open = await openTransfer(tx, id);
             if (open.toMemberId !== me) throw new ForbiddenException('only the member it is offered to may accept');
+            if (!context.capabilities.has('record:transfer')) {
+                await assertNotCooling(tx, {
+                    object: open.object as RecordObject,
+                    recordId: open.recordId,
+                    memberId: me,
+                    memberName: null,
+                });
+            }
             const head = await this.widened(context, (wide) =>
                 findHead(wide, widen(context), open.object, open.recordId),
             );
