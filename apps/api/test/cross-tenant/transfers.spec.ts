@@ -236,6 +236,55 @@ describe('OWN-1 ownership transfers (FR-CRMS-17) and the manager role (FR-CRMS-1
         expect(timeline.items.map((e) => e.kind)).toContain('linked-transfer.completed');
     });
 
+    it('FR-CRMS-17: a record cannot go back to the member it left within the cooling period; the error says when it unlocks', async () => {
+        const put = (who: Browser) =>
+            http().put(w('/ownership/settings')).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf);
+        // The default, readable by any member; only a manager (or admin) changes it.
+        expect((await as(ana).get(w('/ownership/settings')).expect(200)).body).toEqual({ transferCoolingDays: 14 });
+        expect((await put(ana).send({ transferCoolingDays: 0 })).status).toBe(403);
+        expect((await put(mia).send({ transferCoolingDays: 91 })).status).toBe(400);
+
+        // The previous test moved the unit from Ana to Ben. Offering it straight back is refused — the company, and
+        // the deal that moved with it.
+        const back = await as(ben)
+            .post(w('/transfers'))
+            .send({ object: 'company', recordId: company, toMemberId: anaId });
+        expect(back.status, JSON.stringify(back.body)).toBe(409);
+        const body = back.body as {
+            code: string;
+            message: string;
+            details: { unlocksAt: string; coolingDays: number };
+        };
+        expect(body.code).toBe('conflict.transfer_cooling');
+        expect(body.details.coolingDays).toBe(14);
+        const unlocks = new Date(body.details.unlocksAt).getTime();
+        expect(unlocks).toBeGreaterThan(Date.now() + 13 * 86_400_000);
+        expect(unlocks).toBeLessThanOrEqual(Date.now() + 14 * 86_400_000);
+        expect(body.message).toContain(body.details.unlocksAt.slice(0, 10));
+        expect(
+            (await as(ben).post(w('/transfers')).send({ object: 'opportunity', recordId: deal, toMemberId: anaId }))
+                .status,
+        ).toBe(409);
+
+        // A proposal made while the period was off cannot be accepted by Ana once it is back on.
+        await put(mia).send({ transferCoolingDays: 0 }).expect(200);
+        const offer = (
+            await as(ben)
+                .post(w('/transfers'))
+                .send({ object: 'opportunity', recordId: deal, toMemberId: anaId })
+                .expect(201)
+        ).body as TransferView;
+        await put(mia).send({ transferCoolingDays: 14 }).expect(200);
+        const accept = await as(ana).post(w(`/transfers/${offer.id}/accept`));
+        expect(accept.status).toBe(409);
+        expect((accept.body as { code: string; message: string }).message).toMatch(/away from you/);
+        await as(ben)
+            .post(w(`/transfers/${offer.id}/cancel`))
+            .send({})
+            .expect(201);
+        expect(await ownerOf(`/opportunities/${deal}`)).toBe(benId);
+    });
+
     it('FR-CRMS-18: a manager moves a record at once; both parties are told; the transfer says it was forced', async () => {
         const forced = await as(mia)
             .post(w('/transfers'))

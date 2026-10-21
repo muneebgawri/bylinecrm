@@ -1,8 +1,8 @@
 # Owner decisions — ownership and guardrails
 
 The "Open owner decisions" in [PROPOSAL-ownership-and-guardrails.md](PROPOSAL-ownership-and-guardrails.md)
-(last section), each with what the code does today and a recommendation. Nothing here changes behaviour; a
-decision that differs from the current code gets its own work package.
+(last section), each with what the code did when it was written and the recommendation. Decisions 1, 3, 4 and 5
+keep the current behaviour. Decision 2 is built: see its section. Decision 6 is superseded.
 
 ## 1. Free-mail domains (§3): person-owned, or block?
 
@@ -17,7 +17,7 @@ decision that differs from the current code gets its own work package.
   (`apps/api/src/invoices/invoices.service.ts:534`).
 - **Recommendation.** Keep person-owned. Blocking would stop sole traders and freelancers, who are real
   customers, and the person-level `owned_by_other` guard still protects them once someone owns them.
-- **Status: PROPOSED (awaiting Matt)**
+- **Status: DECIDED (2026-10-21, Matt)** — approved as recommended.
 
 ## 2. Transfer cooling days
 
@@ -28,7 +28,13 @@ decision that differs from the current code gets its own work package.
   OWN-1 left cooling and dormancy release out pending this decision (`docs/design-notes/OWN-1.md:74`).
 - **Recommendation.** 14 days for member-to-member proposals, with managers exempt. That stops ping-pong
   without slowing down a manager who is fixing an assignment.
-- **Status: PROPOSED (awaiting Matt)**
+- **Built (2026-10-21).** For the cooling period after a record is transferred away from a member, it cannot be
+  offered to them or accepted by them again. The refusal is a `409 conflict.transfer_cooling` that gives the date
+  it unlocks (`details.unlocksAt`). A transfer counts whether the record was its subject or moved with the
+  company. Holders of `record:transfer` (managers and admins) are exempt, and so are their forced transfers. The
+  period is a workspace setting, 14 days by default and 0–90 allowed (0 turns it off). Managers and admins set it
+  in Settings → Ownership (`GET/PUT /ownership/settings`). Code is in `apps/api/src/transfers/transfer-cooling.ts`.
+- **Status: DECIDED (2026-10-21, Matt)** — approved as recommended.
 
 ## 3. Per-mailbox daily send budget default
 
@@ -40,7 +46,7 @@ decision that differs from the current code gets its own work package.
   workspace, not per role as the proposal described.
 - **Recommendation.** Keep 50/day and 20/hour. That is the low end of the 50–100 industry norm for cold mail,
   and admins can raise it. Leave per-role budgets until a team actually asks for them.
-- **Status: PROPOSED (awaiting Matt)**
+- **Status: DECIDED (2026-10-21, Matt)** — approved as recommended.
 
 ## 4. Manager exemption from `owned_by_other`
 
@@ -52,7 +58,7 @@ decision that differs from the current code gets its own work package.
   customer exclusions still apply to everyone (`recipient-guard.ts:112-117`).
 - **Recommendation.** Keep managers exempt. A manager can already force a transfer, so blocking their mail
   protects nothing, and every exempt send is still logged as `allowed` for review.
-- **Status: PROPOSED (awaiting Matt)**
+- **Status: DECIDED (2026-10-21, Matt)** — approved as recommended.
 
 ## 5. SMTP2Go: worth a second warm-up before Phase 3 volume is known?
 
@@ -65,7 +71,7 @@ decision that differs from the current code gets its own work package.
   `packages/shared/src/sending-pool.ts:22-25`). No SMTP2Go mailbox is connected unless an admin adds one.
 - **Recommendation.** Don't warm up SMTP2Go yet. Use it only if pool volume nears the Gmail pool's combined
   cap or Postmaster spam rates rise. Until then a second warm-up costs effort and buys nothing.
-- **Status: PROPOSED (awaiting Matt)**
+- **Status: DECIDED (2026-10-21, Matt)** — approved as recommended.
 
 ## 6. Dormancy release (§4, related)
 
@@ -75,4 +81,4 @@ decision that differs from the current code gets its own work package.
   a time with a forced transfer.
 - **Recommendation.** 60 days, as a workspace setting, flag only (nothing moves automatically). This is what
   makes the strict ownership rule workable for the team.
-- **Status: PROPOSED (awaiting Matt)**
+- **Status: SUPERSEDED (2026-10-21, Matt)** — to be replaced by cadence plus round-robin lead rotation (design pending). The dormancy flag is not to be built.

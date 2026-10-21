@@ -34,6 +34,12 @@ export const ERROR_CODES = [
      * is saved for that owner instead with `handToOwner: true`.
      */
     'conflict.company_owned',
+    /**
+     * `409` (OWN-1, owner decision 2): the record was transferred away from this member less than the workspace's
+     * cooling period ago, so it cannot be offered back to them or accepted by them yet. `details` says when it
+     * unlocks (`unlocksAt`, ISO 8601) and the period (`coolingDays`). Managers and admins are exempt.
+     */
+    'conflict.transfer_cooling',
     /** The thing existed once and is no longer usable (an expired invitation). */
     'gone',
     /** The body is larger than the route accepts. */
