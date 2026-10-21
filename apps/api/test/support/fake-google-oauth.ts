@@ -102,6 +102,16 @@ export class FakeGoogleOAuth implements GoogleOAuthPort {
         }
     }
 
+    /**
+     * A token a service account minted for `email` by domain-wide delegation (#225): it resolves to that
+     * mailbox in the fake Gmail and Calendar like any OAuth token, so sync cannot tell them apart.
+     */
+    issueDelegated(serviceAccount: string, email: string, scopes: readonly string[]): string {
+        const grantKey = `sa:${serviceAccount}:${email}`;
+        this.grants.set(grantKey, { clientId: serviceAccount, email, scopes: [...scopes], revoked: false });
+        return this.accessFor(grantKey, [...scopes], null).accessToken;
+    }
+
     // ── The port ─────────────────────────────────────────────────────────────────────────────
 
     exchangeCode(

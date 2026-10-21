@@ -13,6 +13,7 @@ const added: Smtp2GoMailboxView = {
         label: null,
         purpose: 'pool',
         transport: 'smtp2go',
+        credentialSource: 'oauth',
         status: 'connected',
         grantedScopes: [],
         lastError: null,

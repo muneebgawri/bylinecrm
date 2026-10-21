@@ -3,6 +3,7 @@ import { calendarGranted, GOOGLE_CALENDAR_SCOPE, type MailSyncStatus } from '@by
 import { Prisma } from '@prisma/client';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
+import { DelegationService } from '../mail-accounts/delegation.service';
 import { MailboxTokens, MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
 import { gmailRetryDelayMs, type RetryOptions } from '../mail-sync/retry';
 import {
@@ -76,6 +77,7 @@ export class CalendarSyncService {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly tokens: MailboxTokens,
+        private readonly delegation: DelegationService,
         private readonly meetings: MeetingStore,
         @Inject(GOOGLE_CALENDAR_PORT) private readonly calendar: GoogleCalendarPort,
     ) {}
@@ -94,6 +96,8 @@ export class CalendarSyncService {
         const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: mailboxId } }),
         );
+        // #225: every delegated sync start is audited.
+        if (mailbox) await this.delegation.noteSyncStart(mailbox, 'calendar');
         // A pool mailbox is the workspace's outreach, not anyone's calendar.
         if (!mailbox || mailbox.purpose !== 'personal') return totals;
         const unusable = await this.unusable(mailbox);

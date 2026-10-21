@@ -46,6 +46,9 @@ import type {
     EmailTemplateView,
     GoogleOAuthClientStatusView,
     GoogleOAuthClientView,
+    DelegationAuditEntryView,
+    DelegationMemberView,
+    DelegationView,
     InviteView,
     MailboxSyncView,
     MailboxView,
@@ -816,6 +819,67 @@ export const oauthClient: GoogleOAuthClientView = {
     updatedAt: at(22),
 };
 
+/** Google Workspace delegation (#225): set up and active, one member delegated and one with their own connection. */
+export const delegation: DelegationView = {
+    configured: true,
+    clientEmail: 'byline-sync@byline-crm.iam.gserviceaccount.com',
+    clientId: '104857600123456789012',
+    privateKeyIdLast4: '9f3c',
+    allowedDomains: ['example.com'],
+    scopes: PERSONAL_SCOPES,
+    grantedScopes: PERSONAL_SCOPES,
+    active: true,
+    lastCheck: {
+        checkedAt: at(3),
+        subject: user.email,
+        scopes: PERSONAL_SCOPES.map((scope) => ({ scope, granted: true, error: null })),
+    },
+    delegatedMailboxes: 1,
+    updatedAt: at(3),
+};
+
+export const delegationMembers: DelegationMemberView[] = [
+    {
+        memberId: IDS.member,
+        name: 'Kate Morgan',
+        email: user.email,
+        state: 'own_connection',
+        excluded: false,
+        mailboxId: null,
+        mailboxStatus: null,
+    },
+    {
+        memberId: IDS.secondMember,
+        name: 'Sam Okafor',
+        email: 'sam.okafor@example.com',
+        state: 'delegated',
+        excluded: false,
+        mailboxId: '0b1e0000-0000-4000-8000-0000000008a3',
+        mailboxStatus: 'connected',
+    },
+];
+
+export const delegationAudit: DelegationAuditEntryView[] = [
+    {
+        id: '0b1e0000-0000-4000-8000-0000000008c1',
+        action: 'domains_changed',
+        actorMemberId: IDS.member,
+        subjectMemberId: null,
+        mailboxId: null,
+        detail: {},
+        createdAt: at(3),
+    },
+    {
+        id: '0b1e0000-0000-4000-8000-0000000008c2',
+        action: 'key_set',
+        actorMemberId: IDS.member,
+        subjectMemberId: null,
+        mailboxId: null,
+        detail: {},
+        createdAt: at(4),
+    },
+];
+
 export const oauthClientStatus: GoogleOAuthClientStatusView = {
     configured: true,
     verified: true,
@@ -832,6 +896,7 @@ export const mailboxes: MailboxView[] = [
         label: null,
         purpose: 'personal',
         transport: 'gmail',
+        credentialSource: 'oauth',
         status: 'connected',
         grantedScopes: PERSONAL_SCOPES,
         lastError: null,
@@ -846,6 +911,7 @@ export const mailboxes: MailboxView[] = [
         label: 'Q4 outreach',
         purpose: 'pool',
         transport: 'gmail',
+        credentialSource: 'oauth',
         status: 'reconnect_needed',
         grantedScopes: GMAIL_SCOPES,
         lastError: { code: 'invalid_grant', message: 'Google revoked the app’s access.', at: at(3) },
@@ -1821,6 +1887,7 @@ export const smtp2goMailboxes: Smtp2GoMailboxView[] = [
             label: 'SMTP2Go outreach',
             purpose: 'pool',
             transport: 'smtp2go',
+            credentialSource: 'oauth',
             status: 'connected',
             grantedScopes: [],
             lastError: null,

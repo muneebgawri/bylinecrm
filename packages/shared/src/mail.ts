@@ -47,6 +47,14 @@ export const MAILBOX_TRANSPORTS = ['gmail', 'smtp2go'] as const;
 export type MailboxTransport = (typeof MAILBOX_TRANSPORTS)[number];
 
 /**
+ * Where a Gmail mailbox's access tokens come from (#225): `oauth` — the member connected it through the
+ * workspace's OAuth client; `delegation` — the workspace's Google Workspace service account mints them
+ * with domain-wide delegation, read-only. A member's own OAuth connection always wins over delegation.
+ */
+export const MAILBOX_CREDENTIAL_SOURCES = ['oauth', 'delegation'] as const;
+export type MailboxCredentialSource = (typeof MAILBOX_CREDENTIAL_SOURCES)[number];
+
+/**
  * What SMTP2Go's webhook made of its last delivery to a pool mailbox (TRANS-1): a bounce, complaint, open or click
  * recorded; one already recorded (`duplicate`); one for no send of this mailbox (`unmatched`); an event the CRM does
  * not read, or an open/click our own short links already count (`ignored`); or refused (`bad_secret`).

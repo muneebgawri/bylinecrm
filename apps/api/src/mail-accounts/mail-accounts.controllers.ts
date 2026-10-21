@@ -21,10 +21,25 @@ import { Public, Requires, TenantController } from '../auth/decorators';
 import type { AuthenticatedRequest } from '../auth/principal';
 import { ENV, type Env } from '../config/env';
 import { Redirects, Returns } from '../openapi/responses';
-import { ConnectMailboxDto, OAuthCallbackQueryDto, PutOAuthClientDto, UpdateMailboxDto } from './dto';
+import {
+    ConnectMailboxDto,
+    OAuthCallbackQueryDto,
+    PatchDelegationDto,
+    PutDelegationKeyDto,
+    PutDelegationMemberDto,
+    PutOAuthClientDto,
+    UpdateMailboxDto,
+} from './dto';
+import { DelegationService } from './delegation.service';
 import { MailboxesService, type ConnectOutcome } from './mailboxes.service';
 import { OAuthClientsService } from './oauth-clients.service';
 import {
+    delegationAuditEntry,
+    delegationMember,
+    delegationView,
+    type DelegationAuditEntry,
+    type DelegationMember,
+    type DelegationView,
     connectStart,
     mailboxCheck,
     mailboxConnectResult,
@@ -91,6 +106,83 @@ export class OAuthClientController {
     @Returns(oauthClientView)
     verify(): Promise<OAuthClientView> {
         return this.clients.verify();
+    }
+}
+
+/**
+ * The workspace's Google Workspace service account with domain-wide delegation (#225). Administrators
+ * only: the key can read every member's mail. The key is write-only — no route returns it.
+ */
+@ApiTags('mail')
+@TenantController('mail/google-workspace')
+export class DelegationController {
+    constructor(private readonly delegation: DelegationService) {}
+
+    /** The setup screen: the service account's email and client ID, the scopes to authorise, the last check. */
+    @Requires('workspace:admin')
+    @Get()
+    @Returns(delegationView)
+    describe(): Promise<DelegationView> {
+        return this.delegation.describe();
+    }
+
+    /** The allowed domains: only members whose address is in one of them sync through the service account. */
+    @Requires('workspace:admin')
+    @Patch()
+    @Returns(delegationView)
+    update(@Body() body: PatchDelegationDto): Promise<DelegationView> {
+        return this.delegation.setDomains(body.allowedDomains);
+    }
+
+    /** Stores the service account's JSON key, sealed, and checks it at once. */
+    @Requires('workspace:admin')
+    @Put('key')
+    @Returns(delegationView)
+    putKey(@Body() body: PutDelegationKeyDto): Promise<DelegationView> {
+        return this.delegation.putKey(body.key);
+    }
+
+    /** Removes the key; every delegated mailbox stops syncing. */
+    @Requires('workspace:admin')
+    @HttpCode(204)
+    @Delete('key')
+    removeKey(): Promise<void> {
+        return this.delegation.removeKey();
+    }
+
+    /** Mints a token for the caller's own address, once per scope, and records which scopes are authorised. */
+    @Requires('workspace:admin')
+    @HttpCode(200)
+    @Post('check')
+    @Returns(delegationView)
+    check(): Promise<DelegationView> {
+        return this.delegation.check();
+    }
+
+    @Requires('workspace:admin')
+    @Get('members')
+    @Returns([delegationMember])
+    members(): Promise<DelegationMember[]> {
+        return this.delegation.members();
+    }
+
+    /** Excludes a member from delegation, or includes them again. */
+    @Requires('workspace:admin')
+    @Put('members/:memberId')
+    @Returns(delegationMember)
+    setMember(
+        @Param('memberId', ParseUUIDPipe) memberId: string,
+        @Body() body: PutDelegationMemberDto,
+    ): Promise<DelegationMember> {
+        return this.delegation.setExcluded(memberId, body.excluded);
+    }
+
+    /** The latest audit entries: key and setting changes, checks, and delegated sync starts. */
+    @Requires('workspace:admin')
+    @Get('audit')
+    @Returns([delegationAuditEntry])
+    audit(): Promise<DelegationAuditEntry[]> {
+        return this.delegation.auditLog();
     }
 }
 

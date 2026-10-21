@@ -3,6 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, Worker, type Job } from 'bullmq';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
+import { DelegationService } from '../mail-accounts/delegation.service';
 import { MAIL_SYNC_EVERY_MS, MAIL_SYNC_QUEUE, MAIL_SYNC_WORKER_CONCURRENCY } from './mail-sync.constants';
 import { MailSyncService } from './mail-sync.service';
 
@@ -31,6 +32,7 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
         @Inject(ENV) private readonly env: Env,
         private readonly ownerPrisma: PrismaService,
         private readonly sync: MailSyncService,
+        private readonly delegation: DelegationService,
         @InjectQueue(MAIL_SYNC_QUEUE) private readonly queue: Queue,
     ) {}
 
@@ -68,6 +70,12 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
 
     /** Every connected mailbox, in every workspace: read as the owner, since a tick is no tenant's. */
     private async tick(): Promise<number> {
+        // #225: delegated mailboxes follow the members and settings first, so this tick syncs the right set.
+        try {
+            await this.delegation.reconcileAll();
+        } catch (error) {
+            this.logger.error(`delegation reconcile failed: ${String(error)}`);
+        }
         const mailboxes = await this.ownerPrisma.mailbox.findMany({
             // An SMTP2Go mailbox (TRANS-1) has no Gmail to read: its replies arrive in its Reply-To mailbox.
             where: { status: 'connected', transport: 'gmail' },

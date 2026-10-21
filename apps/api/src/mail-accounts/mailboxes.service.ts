@@ -21,6 +21,7 @@ import { MembershipService } from '../workspace/membership.service';
 import { RolesService } from '../workspace/roles.service';
 import { GOOGLE_OAUTH_PORT, GoogleOAuthError, type GoogleOAuthPort, type TokenGrant } from './google-oauth.port';
 import { CONNECT_STATE_KEY_PREFIX, CONNECT_STATE_TTL_S } from './mail-accounts.constants';
+import { DelegationService } from './delegation.service';
 import { MailboxTokens, MailboxUnavailable, type MailboxErrorRecord } from './mailbox-tokens.service';
 import { OAuthClientsService } from './oauth-clients.service';
 import { assessGrant, authorizeUrl, codeChallengeS256, randomToken } from './oauth-flow';
@@ -73,6 +74,7 @@ export class MailboxesService {
         private readonly memberships: MembershipService,
         private readonly roles: RolesService,
         private readonly events: DomainEvents,
+        private readonly delegation: DelegationService,
         @Inject(GOOGLE_OAUTH_PORT) private readonly google: GoogleOAuthPort,
     ) {}
 
@@ -131,6 +133,13 @@ export class MailboxesService {
         const context = this.current();
         const row = await this.rls.withWorkspace((tx) => this.changeable(tx, context, id));
         if (row.status === 'disconnected') return { mailbox: view(row), revoked: false };
+        if (row.credentialSource === 'delegation') {
+            throw new ApiException(
+                409,
+                'conflict',
+                'this mailbox syncs through Workspace delegation; an admin excludes the member in Settings → Google instead',
+            );
+        }
 
         let revoked = false;
         if (row.refreshTokenCiphertext) {
@@ -168,6 +177,8 @@ export class MailboxesService {
             });
             return disconnected;
         });
+        // #225: with their own connection gone, a member in an allowed domain syncs through delegation again.
+        await this.reconcileDelegation(context.workspaceId);
         return { mailbox: view(after), revoked };
     }
 
@@ -183,6 +194,18 @@ export class MailboxesService {
         }
         // An SMTP2Go mailbox (TRANS-1) has no Google grant to probe: its key is proven by its sends.
         if (row.transport === 'smtp2go') return { mailbox: view(row), ok: true, problem: null };
+        // A delegated mailbox (#225) has no grant of its own to assess: a minted token is the proof.
+        if (row.credentialSource === 'delegation') {
+            let delegatedProblem: MailboxCheck['problem'] = null;
+            try {
+                await this.tokens.getAccessToken(context.workspaceId, id);
+            } catch (error) {
+                if (!(error instanceof MailboxUnavailable)) throw error;
+                delegatedProblem = 'reconnect_needed';
+            }
+            const after = await this.rls.withWorkspace((tx) => this.visible(tx, context, id));
+            return { mailbox: view(after), ok: delegatedProblem === null, problem: delegatedProblem };
+        }
         let problem: MailboxCheck['problem'] = null;
         try {
             const accessToken = await this.tokens.getAccessToken(context.workspaceId, id);
@@ -321,6 +344,8 @@ export class MailboxesService {
             const tokens = {
                 status: 'connected' as const,
                 transport: 'gmail' as const,
+                // #225: the member's own connection takes over a delegated mailbox at the same address.
+                credentialSource: 'oauth' as const,
                 transportKeyCiphertext: null,
                 grantedScopes: grant.scopes,
                 refreshTokenCiphertext: this.secrets.seal(refreshToken),
@@ -357,6 +382,8 @@ export class MailboxesService {
             return { result: 'connected' as const };
         });
         if (outcome.result !== 'connected') return end(outcome.result);
+        // #225: the member's own connection wins; a delegated mailbox at another address of theirs stops.
+        await this.reconcileDelegation(workspaceId);
         return end('connected');
     }
 
@@ -400,6 +427,17 @@ export class MailboxesService {
     }
 
     // ── Internals ────────────────────────────────────────────────────────────────────────────
+
+    /** Delegation catches up now rather than at the next sync tick; a failure waits for that tick. */
+    private async reconcileDelegation(workspaceId: string): Promise<void> {
+        try {
+            await this.delegation.reconcile(workspaceId);
+        } catch (error) {
+            this.logger.warn(
+                `delegation reconcile in workspace ${workspaceId} deferred to the next tick: ${String(error)}`,
+            );
+        }
+    }
 
     /** Reads and deletes a pending request in one step: a state is accepted once. */
     private async takePending(state: string): Promise<PendingConnect | null> {
@@ -481,6 +519,7 @@ export function view(row: MailboxRow): MailboxView {
         purpose: row.purpose,
         transport: row.transport,
         status: row.status,
+        credentialSource: row.credentialSource,
         grantedScopes: row.grantedScopes,
         lastError: lastError ? { code: lastError.code, message: lastError.message, at: new Date(lastError.at) } : null,
         connectedAt: row.connectedAt,

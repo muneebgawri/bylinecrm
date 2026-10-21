@@ -22,6 +22,33 @@ export const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.e
  */
 export const PERSONAL_MAILBOX_SCOPES = [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE, GOOGLE_CALENDAR_SCOPE] as const;
 
+/**
+ * What the Google Workspace service account (#225) is authorised for in the Admin console, and all it ever
+ * asks for: exactly what a member's own OAuth connection asks for — Gmail send, Gmail read and calendar
+ * events read-only — so a delegated member syncs and sends (composer and sequences) like a connected one.
+ */
+export const DELEGATION_SCOPES = PERSONAL_MAILBOX_SCOPES;
+
+/**
+ * What the delegation's audit log records (#225): key and domain changes, exclusion toggles, a member's
+ * first delegated sync (and their first again after a gap or an exclusion change), and a delegated sync
+ * failing — once per member until it works again. Not every sync: they run every few minutes.
+ */
+export const DELEGATION_AUDIT_ACTIONS = [
+    'key_set',
+    'key_removed',
+    'domains_changed',
+    'member_excluded',
+    'member_included',
+    'sync_started',
+    'sync_failed',
+] as const;
+export type DelegationAuditAction = (typeof DELEGATION_AUDIT_ACTIONS)[number];
+
+/** How a workspace member stands with delegation (#225), as the settings page lists them. */
+export const DELEGATION_MEMBER_STATES = ['delegated', 'own_connection', 'excluded', 'outside_domains'] as const;
+export type DelegationMemberState = (typeof DELEGATION_MEMBER_STATES)[number];
+
 /** True when a mailbox's grant lets calendar sync read its calendar. */
 export function calendarGranted(grantedScopes: readonly string[]): boolean {
     return grantedScopes.includes(GOOGLE_CALENDAR_SCOPE);
