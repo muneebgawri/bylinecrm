@@ -60,6 +60,7 @@ export class TwentyHttp implements TwentyApi {
         const filters: string[] = [];
         if (options.since) filters.push(`updatedAt[gte]:"${options.since}"`);
         if (options.deleted) filters.push('deletedAt[is]:NOT_NULL');
+        if (options.name) filters.push(`name[eq]:${JSON.stringify(options.name)}`);
         if (filters.length > 0) params.set('filter', filters.length === 1 ? filters[0]! : `and(${filters.join(',')})`);
         const body = await this.get(connection, objects, params);
         return {

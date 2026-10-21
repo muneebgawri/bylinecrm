@@ -16,6 +16,7 @@ import {
     groupDuplicates,
     moveRelated,
     type DuplicateGroup,
+    DUPLICATE_TIERS,
     type DuplicateTier,
     type OwnerDecision,
     type PersonMergeCounts,
@@ -117,7 +118,11 @@ export class PeopleDedupe {
         const report: DedupeReport = {
             applied: options.apply,
             groups: [],
-            tiers: { auto: { groups: 0, people: 0 }, review: { groups: 0, people: 0 } },
+            tiers: {
+                auto: { groups: 0, people: 0 },
+                auto_name_mismatch: { groups: 0, people: 0 },
+                review: { groups: 0, people: 0 },
+            },
             merged: 0,
             failed: 0,
             totals: { ...EMPTY_PERSON_COUNTS },
@@ -126,11 +131,12 @@ export class PeopleDedupe {
             report.tiers[g.tier].groups += 1;
             report.tiers[g.tier].people += g.personIds.length;
         }
-        const ordered = [...groups.filter((g) => g.tier === 'auto'), ...groups.filter((g) => g.tier === 'review')];
+        // A name-mismatch group is listed, never merged — not even with `includeReview`.
+        const ordered = DUPLICATE_TIERS.flatMap((tier) => groups.filter((g) => g.tier === tier));
         let merges = 0;
         for (const group of ordered) {
             const mergeIt =
-                (group.tier === 'auto' || options.includeReview === true) &&
+                (group.tier === 'auto' || (group.tier === 'review' && options.includeReview === true)) &&
                 (options.limit === undefined || merges < options.limit);
             const result = await this.group(workspaceId, group, mergeIt ? options.apply : null);
             if (mergeIt && (result.outcome === 'merged' || result.outcome === 'would merge')) {

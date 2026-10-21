@@ -30,6 +30,8 @@ export interface TwentyListOptions {
      * The importer reads deactivated workspace members this way (#184).
      */
     deleted?: boolean | undefined;
+    /** Only records whose `name` is this (a timeline activity's event name, `person.updated`). */
+    name?: string | undefined;
 }
 
 export interface TwentyPage {

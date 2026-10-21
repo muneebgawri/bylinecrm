@@ -11,7 +11,8 @@ const USAGE =
 /**
  * `node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review] [--limit <n>] [--csv <file>]`
  * — run on the server inside the api container. Merges people saved more than once (the 2026-10-12 Twenty
- * import's duplicates, `PeopleDedupe`). Tiers: `auto` (the people share an address) and `review` (only the name
+ * import's duplicates, `PeopleDedupe`). Tiers: `auto` (the people share an address and their names agree),
+ * `auto_name_mismatch` (they share an address but the names differ — listed in the CSV, never merged) and `review` (only the name
  * and the company or work domain agree). Without `--apply` it is a dry run: each merge is made and rolled back,
  * so the counts are exact. `--apply` merges the auto tier only, unless `--include-review`. `--limit` caps the
  * merges of one run; each group is its own transaction and merged people go to the trash, so re-running resumes
@@ -77,8 +78,11 @@ async function main(): Promise<void> {
 }
 
 function printReport(report: DedupeReport): void {
-    const { auto, review } = report.tiers;
-    console.log(`auto (shared email): ${auto.groups} groups, ${auto.people} people`);
+    const { auto, auto_name_mismatch: mismatch, review } = report.tiers;
+    console.log(`auto (shared email, names agree): ${auto.groups} groups, ${auto.people} people`);
+    console.log(
+        `auto_name_mismatch (shared email, names differ; never merged): ${mismatch.groups} groups, ${mismatch.people} people`,
+    );
     console.log(`review (same name + company/domain): ${review.groups} groups, ${review.people} people`);
     const sample = report.groups.slice(0, 25);
     for (const g of sample) console.log(line(g));

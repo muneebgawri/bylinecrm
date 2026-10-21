@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { chooseOwner, combined, emailsOf, groupDuplicates, type MergeablePerson } from './merge-people';
+import {
+    chooseOwner,
+    combined,
+    emailsOf,
+    groupDuplicates,
+    nameTokens,
+    namesAgree,
+    type MergeablePerson,
+} from './merge-people';
 
 const at = (day: number) => new Date(Date.UTC(2026, 9, day));
 const person = (
@@ -56,6 +64,81 @@ describe('groupDuplicates', () => {
             ['auto', ['a', 'b']],
             ['review', ['a', 'b', 'c']],
         ]);
+    });
+});
+
+describe('namesAgree', () => {
+    const named = (first: string, last: string, ...emails: string[]) => ({
+        nameFirst: first,
+        nameLast: last,
+        emails: { primary: emails[0] ?? null, additional: emails.slice(1) },
+    });
+
+    it('drops punctuation, filler words and initials', () => {
+        expect(nameTokens('Dr. J.', "O'Brien Media")).toEqual(['brien']);
+        expect(nameTokens('The PR', 'Team')).toEqual([]);
+        expect(nameTokens('josh@10to1pr.com', '')).toEqual([]);
+    });
+
+    it('a shared first or last name agrees', () => {
+        expect(namesAgree(named('Josh', 'Weiss', 'j@x.test'), named('Joshua', 'Weiss', 'j@x.test'))).toBe(true);
+        expect(namesAgree(named('Rick', 'Hoganson'), named('R', 'Hoganson'))).toBe(true);
+        expect(namesAgree(named('José', 'Núñez'), named('Jose', 'Nunez'))).toBe(true);
+    });
+
+    it('different people at one company do not', () => {
+        expect(
+            namesAgree(
+                named('Josh', 'Weiss', 'josh@10to1pr.com', 'erica@10to1pr.com'),
+                named('Erica', 'Fetherston', 'erica@10to1pr.com'),
+            ),
+        ).toBe(false);
+        expect(namesAgree(named('Joshua', 'Stine', 'pr@x.test'), named('Penina', 'First', 'pr@x.test'))).toBe(false);
+    });
+
+    it('a nameless side agrees when its local part spells the other name', () => {
+        expect(namesAgree(named('Lalpern', '', 'lalpern@x.test'), named('Lauren', 'Alpern', 'lalpern@x.test'))).toBe(
+            true,
+        );
+        expect(namesAgree(named('Media', '', 'lauren.alpern@x.test'), named('Lauren', 'Alpern'))).toBe(true);
+        expect(namesAgree(named('lalpern@x.test', '', 'lalpern@x.test'), named('Lauren', 'Alpern'))).toBe(true);
+        expect(namesAgree(named('Admin', '', 'admin@x.test'), named('Media', '', 'admin@x.test'))).toBe(true);
+    });
+
+    it('a nameless side whose local part is a role or someone else does not', () => {
+        expect(namesAgree(named('Media', '', 'info@x.test'), named('Josh', 'Weiss', 'info@x.test'))).toBe(false);
+        expect(namesAgree(named('Admin', '', 'erica@x.test'), named('Josh', 'Weiss', 'erica@x.test'))).toBe(false);
+        expect(namesAgree(named('Lalpern', '', 'lalpern@x.test'), named('Josh', 'Weiss', 'lalpern@x.test'))).toBe(
+            false,
+        );
+    });
+});
+
+describe('groupDuplicates name guard', () => {
+    it('a shared address with names that differ is auto_name_mismatch, never auto, and stays out of review', () => {
+        const groups = groupDuplicates([
+            person('a', 1, 'Josh', 'Weiss', ['josh@10to1pr.com', 'erica@10to1pr.com'], 'co'),
+            person('b', 2, 'Erica', 'Fetherston', ['erica@10to1pr.com'], 'co'),
+            person('c', 3, 'Joshua', 'Stine', ['pr@agency.test']),
+            person('d', 4, 'Penina', 'First', ['pr@agency.test']),
+            person('e', 5, 'Erica', 'Fetherston', ['ef@10to1pr.com'], 'co'),
+            person('f', 6, 'Lauren', 'Alpern', ['lalpern@pub.test']),
+            person('g', 7, 'Lalpern', '', ['lalpern@pub.test']),
+        ]);
+        expect(groups).toEqual([
+            { tier: 'auto_name_mismatch', personIds: ['a', 'b'], why: 'names differ' },
+            { tier: 'auto_name_mismatch', personIds: ['c', 'd'], why: 'names differ' },
+            expect.objectContaining({ tier: 'auto', personIds: ['f', 'g'] }),
+        ]);
+    });
+
+    it('a group agrees through a chain: every person agrees with one of the others', () => {
+        const groups = groupDuplicates([
+            person('a', 1, 'Lauren', 'Alpern', ['lalpern@pub.test']),
+            person('b', 2, 'Lalpern', '', ['lalpern@pub.test', 'l@pub.test']),
+            person('c', 3, 'L', 'Alpern', ['l@pub.test']),
+        ]);
+        expect(groups).toEqual([expect.objectContaining({ tier: 'auto', personIds: ['a', 'b', 'c'] })]);
     });
 });
 
