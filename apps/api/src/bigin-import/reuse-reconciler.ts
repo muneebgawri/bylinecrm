@@ -96,10 +96,7 @@ export class BiginReuseReconciler {
         private readonly opportunities: OpportunitiesService,
     ) {}
 
-    reconcile(
-        workspaceId: string,
-        options: { apply: boolean; logs: readonly ReuseLogRow[] },
-    ): Promise<ReconcileReport> {
+    reconcile(workspaceId: string, options: ReconcileOptions): Promise<ReconcileReport> {
         const context: WorkspaceRunContext = {
             workspaceId,
             capabilities: new Set(),
@@ -108,10 +105,8 @@ export class BiginReuseReconciler {
         return this.context.run(context, () => this.run(context, options));
     }
 
-    private async run(
-        context: WorkspaceRunContext,
-        options: { apply: boolean; logs: readonly ReuseLogRow[] },
-    ): Promise<ReconcileReport> {
+    private async run(context: WorkspaceRunContext, options: ReconcileOptions): Promise<ReconcileReport> {
+        const progress = options.progress ?? (() => undefined);
         const report: ReconcileReport = {
             applied: options.apply,
             contacts: [],
@@ -138,19 +133,22 @@ export class BiginReuseReconciler {
         const twentyPeople = new Map<string, string[]>();
         if (connections.twenty) {
             const byTwentyId = new Map<string, string>();
-            for (const person of await this.readAll(connections.twenty, 'people')) {
+            for (const person of await this.readAll(connections.twenty, 'people', progress)) {
                 const biginId = plainBiginId(person.biginrecordid);
                 if (!biginId) continue;
                 byTwentyId.set(person.id, biginId);
-                twentyPeople.set(biginId, [...(twentyPeople.get(biginId) ?? []), person.id]);
+                push(twentyPeople, biginId, person.id);
             }
-            for (const activity of await this.readAll(connections.twenty, 'timelineActivities')) {
+            // Only `person.updated` entries, filtered by Twenty: the whole timeline is millions of rows (#251).
+            for (const activity of await this.readAll(connections.twenty, 'timelineActivities', progress, {
+                name: 'person.updated',
+            })) {
                 if (text(activity.name) !== 'person.updated') continue;
                 const personId =
                     text(activity.personId) ?? text(activity.targetPersonId) ?? text(activity.linkedRecordId);
                 const biginId = personId ? byTwentyId.get(personId) : undefined;
                 const change = biginId ? changeOf(activity) : null;
-                if (biginId && change) changes.set(biginId, [...(changes.get(biginId) ?? []), change]);
+                if (biginId && change) push(changes, biginId, change);
             }
         }
         // (b) the old job's logs.
@@ -159,36 +157,31 @@ export class BiginReuseReconciler {
             const biginId = plainBiginId(row.biginId);
             const at = biginInstant(row.ts);
             if (!biginId || !at) continue;
-            observations.set(biginId, [
-                ...(observations.get(biginId) ?? []),
-                {
-                    at,
-                    identity: {
-                        first: row.firstName?.trim() ?? '',
-                        last: row.lastName?.trim() ?? '',
-                        email: row.email?.trim().toLowerCase() || null,
-                    },
+            push(observations, biginId, {
+                at,
+                identity: {
+                    first: row.firstName?.trim() ?? '',
+                    last: row.lastName?.trim() ?? '',
+                    email: row.email?.trim().toLowerCase() || null,
                 },
-            ]);
+            });
         }
         const candidates = [...new Set([...changes.keys(), ...observations.keys()])].sort();
+        progress(`${candidates.length} Bigin contacts with history`);
         // (c) Bigin's current record, the latest identity.
         if (connections.bigin && candidates.length > 0) {
             const wanted = new Set(candidates);
-            for (const record of await this.readBiginContacts(connections.bigin)) {
+            for (const record of await this.readBiginContacts(connections.bigin, progress)) {
                 const biginId = plainBiginId(record.id);
                 if (!biginId || !wanted.has(biginId)) continue;
-                observations.set(biginId, [
-                    ...(observations.get(biginId) ?? []),
-                    {
-                        at: new Date(),
-                        identity: {
-                            first: text(record.First_Name) ?? '',
-                            last: text(record.Last_Name) ?? '',
-                            email: text(record.Email)?.toLowerCase() ?? null,
-                        },
+                push(observations, biginId, {
+                    at: new Date(),
+                    identity: {
+                        first: text(record.First_Name) ?? '',
+                        last: text(record.Last_Name) ?? '',
+                        email: text(record.Email)?.toLowerCase() ?? null,
                     },
-                ]);
+                });
             }
         }
 
@@ -205,7 +198,8 @@ export class BiginReuseReconciler {
         );
         let origins: Map<string, Date> | null = null;
 
-        for (const biginId of candidates) {
+        for (const [index, biginId] of candidates.entries()) {
+            if (index > 0 && index % 100 === 0) progress(`… ${index}/${candidates.length} contacts reconciled`);
             const holderId = holders.get(biginId) ?? null;
             if (!holderId) {
                 if ((changes.get(biginId) ?? []).length > 0) {
@@ -230,7 +224,7 @@ export class BiginReuseReconciler {
             });
             for (const reason of history.review) report.review.push({ biginId, holderId, reason });
             if (history.segments.length < 2) continue;
-            origins ??= connections.twenty ? await this.twentyOrigins(connections.twenty) : new Map();
+            origins ??= connections.twenty ? await this.twentyOrigins(connections.twenty, progress) : new Map();
             try {
                 const contact = await this.split(context, biginId, holderId, history.segments, origins, options.apply);
                 report.contacts.push(contact);
@@ -413,7 +407,7 @@ export class BiginReuseReconciler {
     }
 
     /** When the notes, tasks and deals the Twenty importer made were created in Twenty, by local `type:id`. */
-    private async twentyOrigins(connection: TwentyConnection): Promise<Map<string, Date>> {
+    private async twentyOrigins(connection: TwentyConnection, progress: Progress): Promise<Map<string, Date>> {
         const out = new Map<string, Date>();
         const links = await this.rls.withWorkspace((tx) =>
             tx.twentyImportLink.findMany({
@@ -424,7 +418,7 @@ export class BiginReuseReconciler {
         if (links.length === 0) return out;
         const byExternal = new Map(links.map((l) => [`${l.object}:${l.externalId}`, `${l.localType}:${l.localId}`]));
         for (const object of ['notes', 'tasks', 'opportunities']) {
-            for (const record of await this.readAll(connection, object)) {
+            for (const record of await this.readAll(connection, object, progress)) {
                 const local = byExternal.get(`${object}:${record.id}`);
                 const at = biginInstant(record.createdAt);
                 if (local && at) out.set(local, at);
@@ -434,13 +428,19 @@ export class BiginReuseReconciler {
     }
 
     /** Every record of a Twenty object, page by page (in bulk, never one request per person). */
-    private async readAll(connection: TwentyConnection, objects: string): Promise<TwentyRecord[]> {
+    private async readAll(
+        connection: TwentyConnection,
+        objects: string,
+        progress: Progress,
+        filter: { name?: string } = {},
+    ): Promise<TwentyRecord[]> {
         const out: TwentyRecord[] = [];
         let cursor: string | null = null;
+        let pages = 0;
         for (;;) {
             let page;
             try {
-                page = await this.twenty.list(connection, objects, { cursor, depth: 0 });
+                page = await this.twenty.list(connection, objects, { cursor, depth: 0, ...filter });
             } catch (error) {
                 // An object this Twenty workspace does not have (no tasks): nothing to read. A refused key is the run's.
                 if (
@@ -453,19 +453,27 @@ export class BiginReuseReconciler {
                 }
                 throw error;
             }
-            out.push(...page.records);
-            if (!page.hasNextPage || page.records.length === 0 || !page.endCursor) return out;
+            for (const record of page.records) out.push(record);
+            pages += 1;
+            const last = !page.hasNextPage || page.records.length === 0 || !page.endCursor;
+            if (last || pages % 50 === 0) {
+                progress(
+                    `Twenty ${objects}${filter.name ? ` (${filter.name})` : ''}: ${out.length}/${page.totalCount}`,
+                );
+            }
+            if (last) return out;
             cursor = page.endCursor;
         }
     }
 
-    private async readBiginContacts(connection: BiginConnection) {
+    private async readBiginContacts(connection: BiginConnection, progress: Progress) {
         const out: Awaited<ReturnType<BiginApi['list']>>['records'] = [];
         const cursor = startPass(null, null);
+        let pages = 0;
         while (!cursor.done) {
             const page = await this.bigin.list(connection, 'Contacts', { since: cursor.since, page: cursor.page });
             const seen = new Set(cursor.seen);
-            out.push(...page.records.filter((r) => !seen.has(String(r.id))));
+            for (const r of page.records) if (!seen.has(String(r.id))) out.push(r);
             let latest: Date | null = null;
             for (const r of page.records) {
                 const at = biginInstant(r.Modified_Time);
@@ -476,9 +484,26 @@ export class BiginReuseReconciler {
                 latest,
                 moreRecords: page.moreRecords && page.records.length > 0,
             });
+            pages += 1;
+            if (cursor.done || pages % 20 === 0) progress(`Bigin Contacts: ${out.length}`);
         }
         return out;
     }
+}
+
+type Progress = (line: string) => void;
+
+export interface ReconcileOptions {
+    apply: boolean;
+    logs: readonly ReuseLogRow[];
+    /** A line per stage and every so many pages or contacts, so a long run shows it is moving. */
+    progress?: Progress;
+}
+
+function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+    const list = map.get(key);
+    if (list) list.push(value);
+    else map.set(key, [value]);
 }
 
 /** A Contact the reconcile will not split, for the review list. */

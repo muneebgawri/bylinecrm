@@ -181,7 +181,11 @@ describe('person dedupe: merging people saved more than once', () => {
 
     it('a dry run reports the merge, with the first contact’s member as owner, and changes nothing', async () => {
         const report = await dedupe.run(workspace, { apply: false });
-        expect(report.tiers).toEqual({ auto: { groups: 1, people: 2 }, review: { groups: 1, people: 3 } });
+        expect(report.tiers).toEqual({
+            auto: { groups: 1, people: 2 },
+            auto_name_mismatch: { groups: 0, people: 0 },
+            review: { groups: 1, people: 3 },
+        });
         expect(report.merged).toBe(1);
         const [auto, review] = report.groups;
         expect(auto).toMatchObject({ outcome: 'would merge', survivorId: p1, mergedIds: [p2], ownerId: second });

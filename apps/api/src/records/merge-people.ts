@@ -8,8 +8,14 @@ import { isFreeMailDomain } from '../enrichment/email-domain';
  * merged person, and the SQL that moves one duplicate onto the person it is merged into; `PeopleDedupe` runs it.
  */
 
-/** `auto`: the people share an address — the same person. `review`: only the name and the company (or work domain) agree. */
-export type DuplicateTier = 'auto' | 'review';
+/**
+ * `auto`: the people share an address and their names agree — the same person. `auto_name_mismatch`: they share an
+ * address but their names do not agree (often colleagues whose records came to share one) — listed, never merged.
+ * `review`: only the name and the company (or work domain) agree.
+ */
+export type DuplicateTier = 'auto' | 'auto_name_mismatch' | 'review';
+
+export const DUPLICATE_TIERS: readonly DuplicateTier[] = ['auto', 'auto_name_mismatch', 'review'];
 
 /** A live person as detection reads it. */
 export interface DedupeCandidate {
@@ -53,6 +59,94 @@ export function normaliseName(first: string, last: string): string {
         .trim();
 }
 
+/** Words that are not a name: a role mailbox's label, a title, or an initial. */
+const FILLER = new Set([
+    'team',
+    'media',
+    'pr',
+    'press',
+    'info',
+    'admin',
+    'the',
+    'relations',
+    'contact',
+    'mr',
+    'ms',
+    'dr',
+]);
+
+/** A name's meaningful tokens: normalised, filler and single letters dropped. A name holding an address gives none. */
+export function nameTokens(first: string, last: string): string[] {
+    if (`${first} ${last}`.includes('@')) return [];
+    return normaliseName(first, last)
+        .split(' ')
+        .filter((t) => t.length > 1 && !FILLER.has(t));
+}
+
+export interface NamedCandidate {
+    nameFirst: string;
+    nameLast: string;
+    emails: unknown;
+}
+
+/**
+ * Whether two people sharing an address are plausibly one person: their names share a token, or one side has no
+ * real name (none at all, filler only, an address, or just its own address's local part like `Lalpern`) and its
+ * local part spells the other's name — `lalpern`, `laurenalpern`, `alpernl`, `lauren`, `alpern`. Two nameless
+ * sides agree (one mailbox). Conservative: anything else does not.
+ */
+export function namesAgree(a: NamedCandidate, b: NamedCandidate): boolean {
+    const ta = nameTokens(a.nameFirst, a.nameLast);
+    const tb = nameTokens(b.nameFirst, b.nameLast);
+    if (ta.some((t) => tb.includes(t))) return true;
+    const la = localParts(a.emails);
+    const lb = localParts(b.emails);
+    const nameless = (tokens: string[], locals: string[]) =>
+        tokens.length === 0 || (tokens.length === 1 && locals.includes(tokens[0]!));
+    const na = nameless(ta, la);
+    const nb = nameless(tb, lb);
+    if (na && nb) return true;
+    if (na && tb.length > 0) return la.some((l) => spells(l, tb));
+    if (nb && ta.length > 0) return lb.some((l) => spells(l, ta));
+    return false;
+}
+
+/** A person's address local parts, letters and digits only (`l.alpern` → `lalpern`). */
+function localParts(emails: unknown): string[] {
+    return emailsOf(emails)
+        .map((e) =>
+            e
+                .slice(0, e.lastIndexOf('@'))
+                .replace(/\+.*$/, '')
+                .replace(/[^a-z0-9]/g, ''),
+        )
+        .filter((l) => l.length > 1 && !FILLER.has(l));
+}
+
+/** Whether a local part is the name (first and last, either order) or one of it with the other's initial. */
+function spells(local: string, tokens: readonly string[]): boolean {
+    const first = tokens[0]!;
+    const last = tokens[tokens.length - 1]!;
+    const forms = new Set([first, last, first + last, last + first, first[0] + last, last + first[0], first + last[0]]);
+    return forms.has(local);
+}
+
+/** Whether every person of a group agrees by name with the others, through a chain of agreeing pairs. */
+function groupNamesAgree(people: readonly NamedCandidate[]): boolean {
+    const reached = new Set([0]);
+    const queue = [0];
+    while (queue.length > 0) {
+        const i = queue.pop()!;
+        for (let j = 0; j < people.length; j += 1) {
+            if (!reached.has(j) && namesAgree(people[i]!, people[j]!)) {
+                reached.add(j);
+                queue.push(j);
+            }
+        }
+    }
+    return reached.size === people.length;
+}
+
 class UnionFind {
     private readonly parent = new Map<string, string>();
     find(x: string): string {
@@ -72,7 +166,8 @@ class UnionFind {
 
 /**
  * Groups live people of one workspace. `auto`: connected by any shared address (primary or additional, case and
- * whitespace ignored) — transitively, so A~B by one address and B~C by another is one group. `review`: two or more
+ * whitespace ignored) — transitively, so A~B by one address and B~C by another is one group — whose names agree
+ * (`namesAgree`, through a chain of pairs); otherwise `auto_name_mismatch`, which is listed and never merged. `review`: two or more
  * of those groups (or single people) whose full name agrees (two words at least) and that share a company or a
  * work domain (free mail says nothing); merging it merges the auto groups inside it too. Deterministic: groups and
  * their people are ordered oldest first.
@@ -101,18 +196,26 @@ export function groupDuplicates(people: readonly DedupeCandidate[]): DuplicateGr
     const sharedOf = (ids: readonly string[]) =>
         [...holders.entries()].filter(([, h]) => h.filter((id) => ids.includes(id)).length > 1).map(([e]) => e);
 
+    const person = new Map(sorted.map((p) => [p.id, p]));
     const groups: DuplicateGroup[] = [];
-    for (const ids of components.values()) {
-        if (ids.length > 1)
+    const mismatched = new Set<string>();
+    for (const [root, ids] of components) {
+        if (ids.length < 2) continue;
+        if (groupNamesAgree(ids.map((id) => person.get(id)!))) {
             groups.push({ tier: 'auto', personIds: ids, why: `shared email ${sharedOf(ids).join(' ')}` });
+        } else {
+            mismatched.add(root);
+            groups.push({ tier: 'auto_name_mismatch', personIds: ids, why: 'names differ' });
+        }
     }
 
     // Review: unite the auto components by (name, company) and (name, work domain).
     const byName = new UnionFind();
     const keyHolder = new Map<string, string>();
     const keysOf = new Map<string, Set<string>>();
-    const person = new Map(sorted.map((p) => [p.id, p]));
+    // A name-mismatch group is a person to look at, not to sweep into a review merge.
     for (const [root, ids] of components) {
+        if (mismatched.has(root)) continue;
         for (const id of ids) {
             const p = person.get(id)!;
             const name = normaliseName(p.nameFirst, p.nameLast);
@@ -134,6 +237,7 @@ export function groupDuplicates(people: readonly DedupeCandidate[]): DuplicateGr
     }
     const supers = new Map<string, string[]>();
     for (const root of components.keys()) {
+        if (mismatched.has(root)) continue;
         const s = byName.find(root);
         supers.set(s, [...(supers.get(s) ?? []), root]);
     }

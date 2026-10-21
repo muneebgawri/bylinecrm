@@ -44,7 +44,12 @@ async function main(): Promise<void> {
     try {
         const workspace = await app.get(PrismaService).workspace.findUnique({ where: { slug }, select: { id: true } });
         if (!workspace) throw new Error(`no workspace ${slug}`);
-        const report = await app.get(BiginReuseReconciler).reconcile(workspace.id, { apply, logs });
+        const report = await app.get(BiginReuseReconciler).reconcile(workspace.id, {
+            apply,
+            logs,
+            // stderr, so the report on stdout stays clean to redirect.
+            progress: (line) => console.error(`${new Date().toISOString()} ${line}`),
+        });
         printReconcileReport(report);
     } finally {
         await app.close();
