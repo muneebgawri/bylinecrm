@@ -58,6 +58,7 @@ import type {
     SlotlineSettingsView,
     DealInvoiceView,
     NewswireosSettingsView,
+    NewswireosOwnershipDeliveryView,
     BylineSettingsView,
     Smtp2GoMailboxView,
     MailOutboundView,
@@ -1910,7 +1911,53 @@ export const newswireosSettings: NewswireosSettingsView = {
     hookUrl: 'https://crm.example.com/api/hooks/newswireos/9QmR2vXc7LpT4sWb1nKy8HdZ3fGj6AeUoPiE5tCrYwM',
     lastDeliveryAt: at(3),
     lastDeliveryResult: 'applied',
+    pushOwnership: true,
 };
+
+/** PNW-765: ownership changes pushed to NewswireOS: one matched, one waiting for NewswireOS's route. */
+export const newswireosOwnershipDeliveries: NewswireosOwnershipDeliveryView[] = [
+    {
+        id: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e01',
+        eventId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e02',
+        transferId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e03',
+        recordType: 'company',
+        recordId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e04',
+        recordName: 'Northwind Media',
+        newOwnerEmail: 'maya@example.com',
+        reason: 'transfer',
+        status: 'delivered',
+        attempts: 1,
+        matched: true,
+        customers: [
+            { customerId: '1042', reasonCode: 'REASSIGNED' },
+            { customerId: '1077', reasonCode: 'AGENCY_CLIENT' },
+        ],
+        reasonCode: 'REASSIGNED',
+        httpStatus: 200,
+        lastError: null,
+        lastAttemptAt: at(1),
+        createdAt: at(1),
+    },
+    {
+        id: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e05',
+        eventId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e06',
+        transferId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e07',
+        recordType: 'person',
+        recordId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e08',
+        recordName: 'Dana Ortiz',
+        newOwnerEmail: 'sam@example.com',
+        reason: 'forced',
+        status: 'not_ready',
+        attempts: 1,
+        matched: null,
+        customers: [],
+        reasonCode: 'NEWSWIREOS_NOT_READY',
+        httpStatus: 404,
+        lastError: 'NewswireOS answered 404',
+        lastAttemptAt: at(5),
+        createdAt: at(5),
+    },
+];
 
 /** The BylineAI link (BYL-1): linked, two members dealt leads in turn, a lead heard from. */
 export const bylineSettings: BylineSettingsView = {

@@ -260,7 +260,7 @@ export class TransfersService {
         return this.widened(context, async (tx) => {
             const wide = widen(context);
             const { row, target } = await create(tx, wide);
-            await this.recordHandOverIn(tx, wide, { from, to, target, reason });
+            await this.recordHandOverIn(tx, wide, { from, to, target, reason, firstContact: true });
             return row;
         });
     }
@@ -278,7 +278,15 @@ export class TransfersService {
     async recordHandOverIn(
         tx: WorkspaceClient,
         context: WorkspaceRunContext,
-        input: { from: string | null; to: string; target: RecordTarget; reason: string; silent?: boolean },
+        input: {
+            from: string | null;
+            to: string;
+            target: RecordTarget;
+            reason: string;
+            silent?: boolean;
+            /** A first contact's hand-over (OWN-2): the event says so, for NewswireOS (PNW-765). */
+            firstContact?: boolean;
+        },
     ): Promise<void> {
         const transfer = await tx.ownershipTransfer.create({
             data: {
@@ -305,6 +313,7 @@ export class TransfersService {
             companyDomain: null,
             personEmails: person?.emailPrimary ? [person.emailPrimary] : [],
         });
+        if (input.firstContact && completed.transfer) completed.transfer.firstContact = true;
         await this.events.record(tx, input.silent ? { ...completed, internal: true } : completed);
     }
 

@@ -5,17 +5,28 @@ import type { DealInvoiceView } from '@bylinecrm/shared';
 import { Public, Requires, TenantController } from '../auth/decorators';
 import type { RequestWithRawBody } from '../infra/errors/body-parsing';
 import { Returns } from '../openapi/responses';
-import { CreateInvoiceDto, PutNewswireosSettingsDto, RejectInvoiceDto, VerifyInvoiceDto } from './dto';
+import {
+    CreateInvoiceDto,
+    PutNewswireosSettingsDto,
+    PutOwnershipPushDto,
+    RejectInvoiceDto,
+    VerifyInvoiceDto,
+} from './dto';
 import { NEWSWIREOS_HOOK_PATH, NEWSWIREOS_SIGNATURE_HEADER } from './invoices.constants';
 import { InvoicesService } from './invoices.service';
 import { NewswireosHookService } from './newswireos-hook.service';
 import { NewswireosSettingsService } from './newswireos-settings.service';
+import { OwnershipPushService } from './ownership-push.service';
 import {
     dealInvoiceView,
     newswireosHookResult,
     newswireosSettingsView,
+    ownershipDeliveryView,
+    ownershipPushPreview,
     type NewswireosHookResult,
     type NewswireosSettingsView,
+    type OwnershipDeliveryView,
+    type OwnershipPushPreview,
 } from './responses';
 
 /** Invoices on a deal (INV-1, FR-CRMS-19). */
@@ -85,7 +96,10 @@ export class InvoicesController {
 @ApiTags('invoices')
 @TenantController('integrations/newswireos')
 export class NewswireosSettingsController {
-    constructor(private readonly settings: NewswireosSettingsService) {}
+    constructor(
+        private readonly settings: NewswireosSettingsService,
+        private readonly ownership: OwnershipPushService,
+    ) {}
 
     @Requires('workspace:admin')
     @Get()
@@ -114,6 +128,32 @@ export class NewswireosSettingsController {
     @Delete()
     remove(): Promise<void> {
         return this.settings.remove();
+    }
+
+    /** PNW-765: pushes completed ownership transfers to NewswireOS, or stops. `404` without a link. */
+    @Requires('workspace:admin')
+    @Put('ownership-push')
+    @Returns(newswireosSettingsView)
+    async putOwnershipPush(@Body() body: PutOwnershipPushDto): Promise<NewswireosSettingsView> {
+        await this.ownership.setEnabled(body.enabled);
+        return this.settings.get();
+    }
+
+    /** PNW-765: the latest ownership changes pushed to NewswireOS, newest first. */
+    @Requires('workspace:admin')
+    @Get('ownership-push/deliveries')
+    @Returns([ownershipDeliveryView])
+    ownershipDeliveries(): Promise<OwnershipDeliveryView[]> {
+        return this.ownership.deliveries();
+    }
+
+    /** PNW-765: a dry run. Nothing is sent (NewswireOS reads no `test` flag); the body a push would send. */
+    @Requires('workspace:admin')
+    @HttpCode(200)
+    @Post('ownership-push/test')
+    @Returns(ownershipPushPreview)
+    testOwnershipPush(): Promise<OwnershipPushPreview> {
+        return this.ownership.preview();
     }
 }
 

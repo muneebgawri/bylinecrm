@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
-import type { CreateInvoiceInput, DealInvoiceView, NewswireosSettingsView, PutNewswireosSettingsInput } from './types';
+import type {
+    CreateInvoiceInput,
+    DealInvoiceView,
+    NewswireosOwnershipDeliveryView,
+    NewswireosOwnershipPreview,
+    NewswireosSettingsView,
+    PutNewswireosSettingsInput,
+} from './types';
 
 /**
  * Invoices on a deal (INV-1, #206): a payment's reference, verified by NewswireOS before it counts; what NewswireOS
@@ -11,6 +18,8 @@ import type { CreateInvoiceInput, DealInvoiceView, NewswireosSettingsView, PutNe
 const keys = {
     deal: (workspaceId: string, dealId: string) => ['w', workspaceId, 'invoices', dealId] as const,
     newswireos: (workspaceId: string) => ['w', workspaceId, 'integrations', 'newswireos'] as const,
+    ownershipDeliveries: (workspaceId: string) =>
+        ['w', workspaceId, 'integrations', 'newswireos', 'ownership-deliveries'] as const,
 };
 
 const base = (workspaceId: string, dealId: string) => workspacePath(workspaceId, `/opportunities/${dealId}/invoices`);
@@ -73,6 +82,21 @@ const newswireos = {
     rotate: (workspaceId: string) =>
         request<NewswireosSettingsView>('POST', workspacePath(workspaceId, '/integrations/newswireos/rotate')),
     remove: (workspaceId: string) => request<void>('DELETE', workspacePath(workspaceId, '/integrations/newswireos')),
+    setOwnershipPush: (workspaceId: string, enabled: boolean) =>
+        request<NewswireosSettingsView>('PUT', workspacePath(workspaceId, '/integrations/newswireos/ownership-push'), {
+            body: { enabled },
+        }),
+    ownershipDeliveries: (workspaceId: string, signal?: AbortSignal) =>
+        request<NewswireosOwnershipDeliveryView[]>(
+            'GET',
+            workspacePath(workspaceId, '/integrations/newswireos/ownership-push/deliveries'),
+            { signal },
+        ),
+    testOwnershipPush: (workspaceId: string) =>
+        request<NewswireosOwnershipPreview>(
+            'POST',
+            workspacePath(workspaceId, '/integrations/newswireos/ownership-push/test'),
+        ),
 };
 
 export const useNewswireosSettings = (workspaceId: string) =>
@@ -95,3 +119,20 @@ export const useRotateNewswireos = (workspaceId: string) =>
     useNewswireosWrite(workspaceId, () => newswireos.rotate(workspaceId));
 export const useRemoveNewswireos = (workspaceId: string) =>
     useNewswireosWrite(workspaceId, () => newswireos.remove(workspaceId));
+
+/** PNW-765: push completed ownership transfers to NewswireOS, or stop. */
+export const useSetOwnershipPush = (workspaceId: string) =>
+    useNewswireosWrite(workspaceId, (enabled: boolean) => newswireos.setOwnershipPush(workspaceId, enabled));
+
+/** PNW-765: the latest ownership changes pushed to NewswireOS; looked at again while one is still going. */
+export const useOwnershipDeliveries = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.ownershipDeliveries(workspaceId),
+        queryFn: ({ signal }) => newswireos.ownershipDeliveries(workspaceId, signal),
+        refetchInterval: (q) =>
+            q.state.data?.some((d) => d.status === 'pending' || d.status === 'retrying') ? 5000 : false,
+    });
+
+/** PNW-765: the dry run. Nothing is sent; the body a push would send comes back. */
+export const useTestOwnershipPush = (workspaceId: string) =>
+    useMutation({ mutationFn: () => newswireos.testOwnershipPush(workspaceId) });
