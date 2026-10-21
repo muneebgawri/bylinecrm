@@ -262,6 +262,12 @@ interface DomainEventBase {
     invoice?: InvoiceEventPayload;
     /** Present on `guardrail.recorded`: the guardrail event, without any message body. */
     guardrail?: GuardrailEventPayload;
+    /**
+     * Kept in BylineCRM only: on the timeline and in the record's history, never delivered to a webhook (an
+     * import giving an owner to a record that had none — `transfer.completed` from no one — is no transfer
+     * an integration mirrors).
+     */
+    internal?: true;
 }
 
 /** One stage change, as `deal.stage_changed`, `deal.won` and `deal.lost` all report it. */

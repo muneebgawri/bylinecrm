@@ -6,6 +6,7 @@ import { PipelinesModule } from '../pipelines/pipelines.module';
 import { CustomFieldsModule } from '../records/custom-fields/custom-fields.module';
 import { RecordsModule } from '../records/records.module';
 import { TimelineModule } from '../timeline/timeline.module';
+import { TransfersModule } from '../transfers/transfers.module';
 import { TransactionalMailModule } from '../transactional-mail/transactional-mail.module';
 import { BIGIN_IMPORT_JOB_ATTEMPTS, BIGIN_IMPORT_JOB_BACKOFF_MS, BIGIN_IMPORT_QUEUE } from './bigin-import.constants';
 import { BiginImportController } from './bigin-import.controller';
@@ -32,6 +33,7 @@ import { BiginStageMapService } from './stage-map.service';
         PipelinesModule,
         TimelineModule,
         TransactionalMailModule,
+        TransfersModule,
         BullModule.registerQueue({
             name: BIGIN_IMPORT_QUEUE,
             defaultJobOptions: {

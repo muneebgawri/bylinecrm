@@ -26960,7 +26960,7 @@
                 "properties": {
                     "gateway": {
                         "type": "string",
-                        "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                        "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
                     },
                     "reference": {
                         "type": "string",
@@ -33365,7 +33365,12 @@
                     },
                     "gateway": {
                         "type": "string",
-                        "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                        "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
+                    },
+                    "resolvedGateway": {
+                        "nullable": true,
+                        "type": "string",
+                        "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
                     },
                     "reference": {
                         "type": "string"
@@ -33445,6 +33450,7 @@
                     "id",
                     "opportunityId",
                     "gateway",
+                    "resolvedGateway",
                     "reference",
                     "canonicalReference",
                     "amountMinor",
@@ -35046,7 +35052,13 @@
                                         },
                                         "gateway": {
                                             "type": "string",
-                                            "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                                            "enum": [
+                                                "newswireos_invoice",
+                                                "stripe",
+                                                "paypal",
+                                                "crypto_onchain",
+                                                "bank_wire"
+                                            ]
                                         },
                                         "reference": {
                                             "type": "string"
@@ -37058,6 +37070,12 @@
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991,
                         "description": "Contacts edited in Bigin to hold a different person: the earlier person kept, a new one made, the link moved."
+                    },
+                    "ownersFilled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Matched records with no owner given Bigin's owner (a deal without one: its point of contact's). Existing owners are never changed."
                     }
                 },
                 "required": [
@@ -37077,7 +37095,8 @@
                     "conflicts",
                     "kept",
                     "unknownStages",
-                    "reused"
+                    "reused",
+                    "ownersFilled"
                 ]
             },
             "BiginImportRun": {

@@ -1732,6 +1732,7 @@ export const biginImportRun: BiginImportRunView = {
             unknownStages:
                 object === 'Deals' ? [{ externalId: '5725767000000412001', stage: 'Pending Press Release' }] : [],
             reused: object === 'Contacts' ? 1 : 0,
+            ownersFilled: 0,
         };
     }),
     error: null,
@@ -1869,6 +1870,7 @@ export function dealInvoices(dealId: string): DealInvoiceView[] {
         gateway: 'stripe',
         reference,
         canonicalReference: null,
+        resolvedGateway: null,
         amountMinor,
         refundedAmountMinor: '0',
         currency: 'USD',

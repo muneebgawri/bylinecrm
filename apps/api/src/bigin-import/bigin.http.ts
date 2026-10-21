@@ -13,6 +13,7 @@ import {
     ZOHO_TOKEN_PATH,
     BIGIN_REST_PATH_V2,
     BIGIN_FIELDS_MAX,
+    BIGIN_MAPPED_FIELDS,
 } from './bigin-import.constants';
 import type {
     BiginApi,
@@ -150,11 +151,16 @@ export class BiginHttp implements BiginApi {
             new URLSearchParams({ per_page: String(BIGIN_PAGE_SIZE), page: '1' }),
             null,
         );
-        const seen = new Set<string>(['id', 'Modified_Time', 'Created_Time']);
+        const sampled = new Set<string>();
         for (const row of Array.isArray(sample.data) ? sample.data : []) {
             if (typeof row !== 'object' || row === null) continue;
-            for (const name of Object.keys(row)) if (!name.startsWith('$')) seen.add(name);
+            for (const name of Object.keys(row)) if (!name.startsWith('$')) sampled.add(name);
         }
+        // What the mappers read comes first: past the cap a field is not read, and a blank would be written.
+        // Only what the sample has is asked (v2 refuses a field the module does not have).
+        const seen = new Set<string>(['id', 'Modified_Time', 'Created_Time']);
+        for (const name of BIGIN_MAPPED_FIELDS[module] ?? []) if (sampled.has(name)) seen.add(name);
+        for (const name of sampled) seen.add(name);
         const fields = [...seen].slice(0, BIGIN_FIELDS_MAX);
         this.fields.set(key, fields);
         return fields;

@@ -3086,6 +3086,8 @@ enum InvoiceGateway {
   paypal
   crypto_onchain
   bank_wire
+  /// A NewswireOS invoice number (`INV-202610-000067`), resolved by NewswireOS to its payment.
+  newswireos_invoice
 
   @@map("invoice_gateway")
 }
@@ -3110,6 +3112,8 @@ model DealInvoice {
   reference           String
   /// The reference as NewswireOS names it (an invoice's payment intent, a normalised hash); refunds match on either.
   canonicalReference  String?        @map("canonical_reference")
+  /// For a NewswireOS invoice number: the rail NewswireOS resolved it to (`canonicalReference` is the id there).
+  resolvedGateway     InvoiceGateway? @map("resolved_gateway")
   /// What the payment must be: the deal's amount by default, less for a partial payment.
   amountMinor         BigInt         @map("amount_minor")
   /// How much of it has been refunded (NewswireOS's running total). Only the net counts toward the deal.

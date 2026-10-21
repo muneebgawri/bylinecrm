@@ -75,3 +75,11 @@ describe('the guarded dispatcher connects (production 2026-10-14)', () => {
         }
     });
 });
+
+describe('public hosts the enrichment sources reach', () => {
+    it('admits Gravatar’s addresses (Automattic 192.0.64.0/18, and IPv6): the guard never refused them', () => {
+        for (const address of ['192.0.80.239', '192.0.80.242', '2a04:fa87:fffe::c000:4902']) {
+            expect(isPublicAddress(address), address).toBe(true);
+        }
+    });
+});

@@ -4,7 +4,7 @@
  */
 
 /** The rails a reference can be on. `bank_wire` has no feed: it always waits for a person. */
-export const INVOICE_GATEWAYS = ['stripe', 'paypal', 'crypto_onchain', 'bank_wire'] as const;
+export const INVOICE_GATEWAYS = ['newswireos_invoice', 'stripe', 'paypal', 'crypto_onchain', 'bank_wire'] as const;
 export type InvoiceGateway = (typeof INVOICE_GATEWAYS)[number];
 
 /**
@@ -39,6 +39,8 @@ export interface DealInvoiceView {
     gateway: InvoiceGateway;
     reference: string;
     canonicalReference: string | null;
+    /** For a NewswireOS invoice number: the rail NewswireOS resolved it to (newswireos#647). */
+    resolvedGateway: InvoiceGateway | null;
     amountMinor: string;
     /** Refunded so far; a verified invoice with some refunded is partially refunded. */
     refundedAmountMinor: string;

@@ -103,4 +103,27 @@ describe('P4-2 FR-CRMS-15 the enrichment panel on a record', { timeout: 20_000 }
         expect(await within(panel).findByText(/Not enriched yet/)).toBeInTheDocument();
         expect(within(panel).queryByRole('button', { name: 'Enrich now' })).toBeNull();
     });
+
+    it('a person with no Gravatar has "No picture", not a failure', async () => {
+        stubApi([
+            (r) =>
+                r.method === 'GET' && r.url.endsWith(`/enrichment/company/${recordId}`)
+                    ? json({
+                          ...answered,
+                          answers: [
+                              {
+                                  ...answered.answers[1]!,
+                                  field: 'avatar_url',
+                                  source: 'gravatar',
+                                  note: 'No picture',
+                              },
+                          ],
+                      })
+                    : undefined,
+        ]);
+        open(['record:read']);
+        const panel = await screen.findByRole('region', { name: 'Enrichment' });
+        const row = (await within(panel).findByText('No picture')).closest('li')!;
+        expect(row).not.toHaveTextContent(/Failed|No answer/);
+    });
 });

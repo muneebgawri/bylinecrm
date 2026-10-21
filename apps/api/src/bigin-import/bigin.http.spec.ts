@@ -57,6 +57,39 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
         expect(next!.url).toContain('page_token=tok-2');
     });
 
+    it('asks v2 for the mapped fields first: past the 50-field cap a custom field is dropped, never First_Name', async () => {
+        const calls: string[] = [];
+        const customs = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`Custom_${i}`, null]));
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                calls.push(url);
+                if (url.endsWith('/oauth/v2/token'))
+                    return Promise.resolve(json(200, { access_token: 't1', expires_in: 3600 }));
+                return Promise.resolve(
+                    json(200, {
+                        data: [{ id: '1', ...customs, Last_Name: 'Glusman', First_Name: 'Jeffrey', PR_LINK: null }],
+                        info: { more_records: false },
+                    }),
+                );
+            }),
+        );
+        const http = new BiginHttp({ sleep: () => Promise.resolve() }, { fetch: (u, i) => globalThis.fetch(u, i) });
+        await http.list(connection, 'Contacts', { since: null, page: 11, byToken: true });
+        const v2 = new URL(calls.find((c) => c.includes('/bigin/v2/Contacts?'))!);
+        const fields = v2.searchParams.get('fields')!.split(',');
+        expect(fields).toHaveLength(50);
+        expect(fields.slice(0, 6)).toEqual([
+            'id',
+            'Modified_Time',
+            'Created_Time',
+            'First_Name',
+            'Last_Name',
+            'PR_LINK',
+        ]);
+        expect(fields).not.toContain('Custom_59');
+    });
+
     it('a 304 is an empty page; a 429 is retried; refused credentials are final and never carry a secret', async () => {
         const answers = [
             json(200, { access_token: 't1', expires_in: 3600 }),

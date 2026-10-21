@@ -128,7 +128,10 @@ function newestPerFact(answers: readonly EnrichmentAnswerView[]): EnrichmentAnsw
 }
 
 function valueOf(answer: EnrichmentAnswerView): React.ReactNode {
-    if (answer.status === 'no_answer') return <span className="text-text-muted">No answer</span>;
+    if (answer.status === 'no_answer') {
+        // A person with no Gravatar has no picture: that is the answer, not a gap.
+        return <span className="text-text-muted">{answer.field === 'avatar_url' ? 'No picture' : 'No answer'}</span>;
+    }
     if (answer.status === 'failed') {
         return <span className="text-danger">Failed{answer.note ? `: ${answer.note}` : ''}</span>;
     }
