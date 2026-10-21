@@ -14,8 +14,9 @@ import { WebhooksService } from './webhooks.service';
 export class WebhooksSubscriber implements OutboxConsumer {
     constructor(private readonly webhooks: WebhooksService) {}
 
-    accepts(_event: DomainEvent): boolean {
-        return true;
+    /** Every event but one kept in BylineCRM (`internal`: an import's owner fill). */
+    accepts(event: DomainEvent): boolean {
+        return event.internal !== true;
     }
 
     async consume(delivered: DeliveredEvent): Promise<void> {

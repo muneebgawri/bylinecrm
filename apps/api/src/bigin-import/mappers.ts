@@ -14,8 +14,8 @@ import type { BiginRecord } from './bigin.port';
  * From a Bigin record to the input one of BylineCRM's own services takes (BIGIN-1). Pure: a mapper
  * reads the record and the link index — what earlier modules of this run became — and returns the
  * input, or why the record has no place here (`skip`). The owner rides beside the input as Bigin's
- * `Owner.email`: the runner resolves it to a member and sets it on a record it creates, never on one
- * it updates. The services then validate and write it the way they write anything.
+ * `Owner.email`: the runner resolves it to a member and sets it on a record it creates, or on one it
+ * updates that has no owner (never changing one). The services then validate and write it the way they write anything.
  */
 export interface BiginLinkIndex {
     /**

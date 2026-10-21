@@ -114,6 +114,11 @@ export interface BiginImportObjectReport {
      * note), a new person made for the new identity, and the link moved to them. Zero included.
      */
     reused: number;
+    /**
+     * Records matched here with no owner, given Bigin's owner (a Deal without one: its point of contact's).
+     * An owner a record already has is never changed. Zero included.
+     */
+    ownersFilled: number;
     /** Deals whose Bigin stage the pipeline has no stage for: placed in the first open stage, the raw stage kept here. */
     unknownStages: { externalId: string; stage: string }[];
 }
@@ -209,6 +214,7 @@ export function emptyBiginObjectReport(object: BiginImportObject): BiginImportOb
         kept: [],
         unknownStages: [],
         reused: 0,
+        ownersFilled: 0,
     };
 }
 

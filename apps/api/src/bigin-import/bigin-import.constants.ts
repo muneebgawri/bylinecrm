@@ -22,6 +22,37 @@ export const BIGIN_REST_PATH = '/bigin/v1';
 export const BIGIN_REST_PATH_V2 = '/bigin/v2';
 /** Bigin v2 names at most this many fields per list call. */
 export const BIGIN_FIELDS_MAX = 50;
+/**
+ * The fields the mappers read, by module: asked of v2 (when the sampled v1 page has them) ahead of every other field, so the 50-field cap never
+ * drops one (a Contact read without `First_Name` was imported, and updated, with an empty first name).
+ */
+export const BIGIN_MAPPED_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    Accounts: [
+        'Account_Name',
+        'Website',
+        'Billing_Street',
+        'Billing_City',
+        'Billing_State',
+        'Billing_Country',
+        'Billing_Code',
+        'Owner',
+    ],
+    Contacts: [
+        'First_Name',
+        'Last_Name',
+        'Email',
+        'Secondary_Email',
+        'Phone',
+        'Mobile',
+        'Title',
+        'Mailing_City',
+        'Account_Name',
+        'Owner',
+        'PR_LINK',
+    ],
+    Deals: ['Deal_Name', 'Amount', 'Closing_Date', 'Stage', 'Account_Name', 'Contact_Name', 'Owner'],
+    Notes: ['Note_Title', 'Note_Content', 'Parent_Id', 'Owner'],
+};
 /** Zoho's token endpoint under the data centre's accounts host. */
 export const ZOHO_TOKEN_PATH = '/oauth/v2/token';
 export const BIGIN_HTTP_TIMEOUT_MS = 60_000;

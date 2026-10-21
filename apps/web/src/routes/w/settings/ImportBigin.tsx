@@ -425,8 +425,9 @@ function SyncCard({ workspaceId, overview }: { workspaceId: string; overview: Bi
             <div className="flex flex-col gap-3 text-[13px]">
                 <p className="m-0 text-text-muted">
                     Reads what Bigin changed since each module’s cursor. Bigin is the source for the fields it maps; a
-                    field edited here after Bigin last changed the record keeps its value. Owners are set when a record
-                    is created, never after. Records deleted in Bigin are flagged for review, never deleted here.
+                    field edited here after Bigin last changed the record keeps its value. A record with no owner gets
+                    Bigin’s owner; an owner a record already has is never changed. Records deleted in Bigin are flagged
+                    for review, never deleted here.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="w-56">
@@ -834,6 +835,12 @@ function RunReport({ run }: { run: BiginImportRunView }) {
                             ),
                         },
                         { id: 'reused', header: 'Reused', phone: 'secondary', cell: (row: Row) => count(row.reused) },
+                        {
+                            id: 'ownersFilled',
+                            header: 'Owners filled',
+                            phone: 'secondary',
+                            cell: (row: Row) => count(row.ownersFilled ?? 0),
+                        },
                         {
                             id: 'missing',
                             header: 'Deleted in Bigin',
