@@ -11,6 +11,8 @@ import {
     type SignatureProfileView,
     type SignatureSettingsView,
     type SlotlineEventTypeView,
+    type CustomerExclusionSettingsView,
+    type OutreachExclusionView,
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
@@ -1220,6 +1222,38 @@ export const regionPolicyChanges: RegionPolicyChangeView[] = [
         lawfulBasis: 'Express consent captured at event sign-up.',
         changedBy: 'Kate Morgan',
         changedAt: at(30),
+    },
+];
+
+/** #242: a won deal's exclusion flagged after a reopen, beside an admin's own. */
+export const customerExclusionSettings: CustomerExclusionSettingsView = { wonExclusionScope: 'address' };
+
+export const outreachExclusions: OutreachExclusionView[] = [
+    {
+        id: '0193a000-0000-7000-8000-00000000c242',
+        address: 'dana@acme.example',
+        domain: null,
+        reason: 'customer',
+        accountManagerName: null,
+        source: 'won_deal',
+        externalRef: IDS.deal,
+        note: 'Won deal: Series B PR',
+        createdAt: at(48),
+        reviewReason: 'deal_reopened',
+        reviewFlaggedAt: at(3),
+    },
+    {
+        id: '0193a000-0000-7000-8000-00000000c243',
+        address: null,
+        domain: 'globex.example',
+        reason: 'customer',
+        accountManagerName: null,
+        source: 'manual',
+        externalRef: null,
+        note: null,
+        createdAt: at(24 * 10),
+        reviewReason: null,
+        reviewFlaggedAt: null,
     },
 ];
 
