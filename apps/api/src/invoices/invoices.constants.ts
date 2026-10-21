@@ -13,6 +13,8 @@ export const INVOICE_VERIFY_BACKOFF_MS = 5_000;
 /** NewswireOS's lookup (token scope `payment_verification:lookup`): where, and how long a call may take. */
 export const NEWSWIREOS_LOOKUP_PATH = '/api/v1/crm/payment-verification/lookup';
 export const NEWSWIREOS_TIMEOUT_MS = 10_000;
+/** At most this many client addresses go with a lookup (newswireos#647): the contact's first, then the company's. */
+export const NEWSWIREOS_CLIENT_EMAILS_MAX = 20;
 
 /** Where NewswireOS posts refunds and chargebacks: `APP_URL` + this + `/<token>`. */
 export const NEWSWIREOS_HOOK_PATH = '/api/hooks/newswireos';
@@ -49,6 +51,11 @@ export const INVOICE_REASONS = {
     alreadyUsed: 'ALREADY_USED',
     providerError: 'PROVIDER_ERROR',
     badRequest: 'BAD_REQUEST',
+    /**
+     * NewswireOS could not resolve a NewswireOS invoice number (not found, or the gateway is not supported yet): a
+     * person checks it, since the payment may well be fine.
+     */
+    invoiceNumberUnresolved: 'INVOICE_NUMBER_UNRESOLVED',
     noDecision: 'NO_DECISION',
     manual: 'MANUAL',
     refunded: 'REFUNDED',

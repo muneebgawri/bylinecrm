@@ -1820,6 +1820,7 @@ export function dealInvoices(dealId: string): DealInvoiceView[] {
         gateway: 'stripe',
         reference,
         canonicalReference: null,
+        resolvedGateway: null,
         amountMinor,
         refundedAmountMinor: '0',
         currency: 'USD',

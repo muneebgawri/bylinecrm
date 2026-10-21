@@ -10,13 +10,27 @@ export interface NewswireosLink {
 }
 
 export interface NewswireosLookupRequest {
-    gateway: 'stripe' | 'paypal' | 'crypto_onchain';
+    /** `newswireos_invoice`: `reference` is NewswireOS's own invoice number (`INV-202610-000067`, `2GBMDHSF-0002`). */
+    gateway: 'stripe' | 'paypal' | 'crypto_onchain' | 'newswireos_invoice';
     reference: string;
     /** Minor units, > 0. */
     amountCents: number;
     /** ISO 4217, lowercase. */
     currency: string;
+    /**
+     * Who the client is (newswireos#647): the deal's contact and company people's addresses (at most
+     * `NEWSWIREOS_CLIENT_EMAILS_MAX`), and the company's domain unless it is free mail. NewswireOS uses them to say
+     * whether a release already holding the payment is this client's (`holder`). Omitted when empty.
+     */
+    clientEmails?: string[];
+    clientDomain?: string | null;
 }
+
+/**
+ * Who already holds the payment (newswireos#647): no one, someone (no client was named), a release of the same
+ * client, or another client's. Absent from an older NewswireOS: `already_used` decides as before.
+ */
+export type NewswireosHolder = 'none' | 'held' | 'same_client' | 'other_client';
 
 /** NewswireOS's decision, exactly as `VerificationService.decide()` makes it. */
 export type NewswireosDecision = 'verified' | 'invalid' | 'needs_review' | 'pending';
@@ -25,6 +39,10 @@ export interface NewswireosLookupResult {
     status: NewswireosDecision;
     reasonCode: string | null;
     canonicalReference: string | null;
+    /** The real rail NewswireOS named (for a NewswireOS invoice number, the gateway its payment went through). */
+    gateway?: 'stripe' | 'paypal' | 'crypto_onchain' | 'bank_wire' | null;
+    /** Who already holds the payment; undefined when NewswireOS did not say (before #647). */
+    holder?: NewswireosHolder | undefined;
     /** The rest of the answer (amount, currency, paid at, …), kept for display. */
     facts: Record<string, unknown>;
 }

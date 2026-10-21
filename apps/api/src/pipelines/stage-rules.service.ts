@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { STAGE_RULE_EVENTS, type DomainEvent, type EventActor, type StageRuleEvent } from '@bylinecrm/shared';
 import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
+import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { fillWonDealAmount } from '../invoices/deal-amount';
 import { storedRuleEvent } from './rule-events';
 import { StageMoveService, type MoveOutcome } from './stage-move.service';
 
@@ -22,6 +24,7 @@ export class StageRulesService implements OutboxConsumer {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly moves: StageMoveService,
+        private readonly events: DomainEvents,
     ) {}
 
     accepts(event: DomainEvent): boolean {
@@ -80,6 +83,8 @@ export class StageRulesService implements OutboxConsumer {
                     });
                     if (outcome.outcome === 'moved') {
                         await this.moves.announce(tx, event.workspaceId, deal.id, actor, outcome);
+                        // Closed Won with no amount: it takes what its verified invoices add up to (INV-1).
+                        if (outcome.toKind === 'won') await fillWonDealAmount(tx, this.events, deal.id, actor);
                         outcomes.push({ dealId: deal.id, actor, outcome });
                     }
                 }
