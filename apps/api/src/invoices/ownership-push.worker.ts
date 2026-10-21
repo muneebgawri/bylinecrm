@@ -1,7 +1,12 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Worker, type Job } from 'bullmq';
 import { ENV, type Env } from '../config/env';
-import { OWNERSHIP_PUSH_ATTEMPTS, OWNERSHIP_PUSH_JOB, OWNERSHIP_PUSH_QUEUE } from './invoices.constants';
+import {
+    OWNERSHIP_PUSH_ATTEMPTS,
+    OWNERSHIP_PUSH_JOB,
+    OWNERSHIP_PUSH_QUEUE,
+    OWNERSHIP_PUSH_SWEEP_EVERY_MS,
+} from './invoices.constants';
 import { OwnershipPushService, type OwnershipPushJob } from './ownership-push.service';
 
 /**
@@ -13,6 +18,7 @@ import { OwnershipPushService, type OwnershipPushJob } from './ownership-push.se
 export class OwnershipPushWorker implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly logger = new Logger(OwnershipPushWorker.name);
     private worker: Worker | null = null;
+    private sweepTimer: NodeJS.Timeout | null = null;
 
     constructor(
         @Inject(ENV) private readonly env: Env,
@@ -25,9 +31,21 @@ export class OwnershipPushWorker implements OnApplicationBootstrap, OnModuleDest
             connection: { url: this.env.REDIS_URL, maxRetriesPerRequest: null },
         });
         this.worker.on('error', (error) => this.logger.error(`worker ${OWNERSHIP_PUSH_QUEUE}: ${error.message}`));
+        this.sweepTimer = setInterval(() => void this.sweepOnce(), OWNERSHIP_PUSH_SWEEP_EVERY_MS);
+        this.sweepTimer.unref();
+    }
+
+    private async sweepOnce(): Promise<void> {
+        try {
+            const requeued = await this.push.sweep();
+            if (requeued > 0) this.logger.warn(`re-queued ${requeued} stuck ownership push deliveries`);
+        } catch (error) {
+            this.logger.error(`ownership push sweep: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     async onModuleDestroy(): Promise<void> {
+        if (this.sweepTimer) clearInterval(this.sweepTimer);
         await this.worker?.close();
     }
 

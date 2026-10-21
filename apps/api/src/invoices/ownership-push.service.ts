@@ -6,6 +6,7 @@ import { Queue } from 'bullmq';
 import type { RecordTarget } from '@bylinecrm/shared';
 import type { DeliveredEvent } from '../events/outbox-consumer';
 import { ApiException } from '../infra/errors/api-errors';
+import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext } from '../infra/workspace-context';
@@ -17,6 +18,8 @@ import {
     OWNERSHIP_PUSH_JOB,
     OWNERSHIP_PUSH_QUEUE,
     OWNERSHIP_PUSH_REASONS,
+    OWNERSHIP_PUSH_STUCK_MS,
+    OWNERSHIP_PUSH_SWEEP_MAX,
 } from './invoices.constants';
 import { NewswireosApiError } from './newswireos-verification.port';
 import {
@@ -59,6 +62,7 @@ function personEmails(emails: unknown): string[] {
 export class OwnershipPushService {
     constructor(
         private readonly rls: RlsPrismaService,
+        private readonly ownerPrisma: PrismaService,
         private readonly context: WorkspaceContext,
         private readonly secrets: SecretBox,
         @Inject(NEWSWIREOS_OWNERSHIP_PORT) private readonly newswireos: NewswireosOwnershipPort,
@@ -176,6 +180,32 @@ export class OwnershipPushService {
             await settle({ ...failed, status: 'failed', reasonCode });
             return 'done';
         }
+    }
+
+    /**
+     * Queues again every delivery stuck `pending` past `OWNERSHIP_PUSH_STUCK_MS` whose job is gone (Redis lost it, or
+     * the process died between the row and its job). Across workspaces, through the owner client. Idempotent: the
+     * job id is the delivery, and a delivery is one per event, so a delivery whose job still exists is left alone and
+     * a second pass adds nothing. Returns how many were queued.
+     */
+    async sweep(now = Date.now()): Promise<number> {
+        const stuck = await this.ownerPrisma.newswireosOwnershipDelivery.findMany({
+            where: { status: 'pending', createdAt: { lt: new Date(now - OWNERSHIP_PUSH_STUCK_MS) } },
+            select: { id: true, workspaceId: true },
+            orderBy: { createdAt: 'asc' },
+            take: OWNERSHIP_PUSH_SWEEP_MAX,
+        });
+        let requeued = 0;
+        for (const row of stuck) {
+            if (await this.queue.getJob(row.id)) continue;
+            await this.queue.add(
+                OWNERSHIP_PUSH_JOB,
+                { workspaceId: row.workspaceId, deliveryId: row.id },
+                { jobId: row.id },
+            );
+            requeued += 1;
+        }
+        return requeued;
     }
 
     /** Turns the push on or off (an admin's). Needs a link. */

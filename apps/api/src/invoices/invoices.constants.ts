@@ -76,6 +76,13 @@ export const NEWSWIREOS_OWNERSHIP_PATH = '/api/v1/crm/ownership-changed';
 export const NEWSWIREOS_OWNERSHIP_SCOPE = 'crm:ownership_write';
 /** Deliveries the settings page lists, newest first. */
 export const OWNERSHIP_DELIVERIES_SHOWN = 20;
+/**
+ * The sweep (a lost Redis job, a crash between the row and its job): every 10 minutes, a delivery still `pending` 15
+ * minutes after it was written, with no job, is queued again (at most 500 a pass).
+ */
+export const OWNERSHIP_PUSH_SWEEP_EVERY_MS = 10 * 60_000;
+export const OWNERSHIP_PUSH_STUCK_MS = 15 * 60_000;
+export const OWNERSHIP_PUSH_SWEEP_MAX = 500;
 /** At most this many addresses go with a push (NewswireOS's limit). `event_id` is a UUID, well under its 200. */
 export const NEWSWIREOS_OWNERSHIP_EMAILS_MAX = 200;
 /** NewswireOS's codes that settle a push for good, whatever status they come with: never retried. */

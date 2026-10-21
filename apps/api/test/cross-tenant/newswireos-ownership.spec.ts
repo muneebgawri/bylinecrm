@@ -2,7 +2,9 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { getQueueToken } from '@nestjs/bullmq';
 import { Test } from '@nestjs/testing';
+import type { Queue } from 'bullmq';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES, type DomainEvent } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -12,6 +14,7 @@ import type { DeliveredEvent } from '../../src/events/outbox-consumer';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { NewswireosApiError } from '../../src/invoices/newswireos-verification.port';
+import { OWNERSHIP_PUSH_QUEUE, OWNERSHIP_PUSH_STUCK_MS } from '../../src/invoices/invoices.constants';
 import { NEWSWIREOS_OWNERSHIP_PORT } from '../../src/invoices/ownership-push.port';
 import { OwnershipPushService } from '../../src/invoices/ownership-push.service';
 import type { OwnershipDeliveryView, OwnershipPushPreview } from '../../src/invoices/responses';
@@ -263,6 +266,30 @@ describe('PNW-765 ownership push to NewswireOS', () => {
         }
     });
 
+    it('the sweep re-queues a delivery stuck pending with no job, once', async () => {
+        await move(person, (await latest()).newOwnerEmail === emails.ben ? adminId : benId);
+        const d = await latest();
+        expect(d.status).toBe('pending');
+        const queue = app.get<Queue>(getQueueToken(OWNERSHIP_PUSH_QUEUE));
+        // Redis lost the job.
+        await (await queue.getJob(d.id))?.remove();
+        // Not yet stuck: left alone.
+        await push.sweep();
+        expect(await queue.getJob(d.id)).toBeFalsy();
+        // Stuck: queued again, under the delivery's id; a second pass adds nothing.
+        const later = Date.now() + OWNERSHIP_PUSH_STUCK_MS + 60_000;
+        expect(await push.sweep(later)).toBeGreaterThanOrEqual(1);
+        expect((await queue.getJob(d.id))?.data).toEqual({ workspaceId: workspace, deliveryId: d.id });
+        const again = await push.sweep(later);
+        expect(await queue.getJob(d.id)).toBeTruthy();
+        expect(again).toBe(0);
+        await (await queue.getJob(d.id))?.remove();
+        // Delivered: never swept.
+        expect(await run(d.id)).toBe('done');
+        await push.sweep(later);
+        expect(await queue.getJob(d.id)).toBeFalsy();
+    });
+
     it('an import’s owner fill is never pushed', async () => {
         const base = await delivered((await latest()).eventId);
         const transfer = (base.event as DomainEvent & { transfer: { reason: string | null } }).transfer;
@@ -290,13 +317,14 @@ describe('PNW-765 ownership push to NewswireOS', () => {
     });
 
     it('turned off, a delivery already queued is skipped, not sent; new transfers write nothing', async () => {
-        await move(person, adminId);
+        const to = (await latest()).newOwnerEmail === emails.ben ? adminId : benId;
+        await move(person, to);
         const d = await latest();
         expect(d.status).toBe('pending');
         await toggle(false).expect(200);
         expect(await run(d.id)).toBe('done');
         expect(await latest()).toMatchObject({ id: d.id, status: 'skipped', reasonCode: 'PUSH_OFF' });
-        await move(person, benId);
+        await move(person, to === adminId ? benId : adminId);
         expect((await latest()).id).toBe(d.id);
         expect(newswireos.calls).toHaveLength(0);
     });
