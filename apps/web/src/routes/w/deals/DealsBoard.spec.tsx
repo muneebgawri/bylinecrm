@@ -31,6 +31,7 @@ const stage = (id: string, name: string, position: number): StageView => ({
     probability: 10,
     kind: 'open',
     daysThreshold: null,
+    cadenceDays: null,
     colour: 'accent',
 });
 const STAGES = [stage(NEW_ID, 'New', 1), stage(CONTACTED_ID, 'Contacted', 2)];
@@ -51,6 +52,8 @@ const DEAL: OpportunityView = {
     leadSource: null,
     lastContactedAt: null,
     contactAttempts: 0,
+    cadenceDueAt: null,
+    cadenceOverdue: false,
     amount: { amountMinor: 1_200_000, currency: 'USD' },
     currency: 'USD',
     closeDate: null,

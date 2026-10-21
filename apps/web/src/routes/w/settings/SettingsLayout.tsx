@@ -16,6 +16,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'custom-fields', label: 'Custom fields', to: paths.settingsCustomFields, requires: 'workspace:admin' },
     // Records held by someone other than their company's owner (OWN-2): a manager's to resolve.
     { id: 'ownership', label: 'Ownership', to: paths.settingsOwnership, requires: 'record:transfer' },
+    // CADENCE-1: lapsed leads rotate to the next rep; the cadence per stage, the reps, the dry run.
+    { id: 'rotation', label: 'Rotation', to: paths.settingsRotation, requires: 'pipeline:cadence' },
     // What the recipient guard refused or let a manager through (GUARD-1): reviewers mark events legitimate.
     { id: 'guardrails', label: 'Guardrails', to: paths.settingsGuardrails, requires: 'guardrail:review' },
     // Readable by every member who reads records — the postal address and unsubscribe wording every

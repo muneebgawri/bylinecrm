@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE_NAME, DEFAULT_STAGES } from '@bylinecrm/shared';
+import { DEFAULT_PIPELINE_NAME, DEFAULT_STAGES, defaultCadenceDays } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -25,6 +25,7 @@ export async function seedDefaultPipeline(
                     probability: stage.probability,
                     kind: stage.kind,
                     colour: stage.colour,
+                    cadenceDays: defaultCadenceDays(stage.name, stage.kind),
                 },
             }),
         ),

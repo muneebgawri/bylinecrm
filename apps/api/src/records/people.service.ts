@@ -11,6 +11,7 @@ import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { CompanyOwnership, companyDomainOfAddress } from './company-ownership';
 import { requireCallerMember } from '../infra/caller-member';
+import { RotationService } from '../cadence/rotation.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
@@ -91,6 +92,7 @@ export class PeopleService implements BulkRecords {
         private readonly events: DomainEvents,
         private readonly ownership: CompanyOwnership,
         private readonly transfers: TransfersService,
+        private readonly rotation: RotationService,
     ) {}
 
     /** Live people, or the trash when `deleted`; the page and its total read one `where`. */
@@ -173,7 +175,7 @@ export class PeopleService implements BulkRecords {
         context: WorkspaceRunContext,
         input: PersonInput,
     ): Promise<{ row: PersonRow; event: DomainEvent }> {
-        const ownerId = resolveOwner(context, input.ownerId, undefined);
+        let ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
         // OWN-2: a person at another member's company is theirs — refused here, by name; at a company
         // the saver may hold, linked to it by their address's domain.
@@ -184,6 +186,8 @@ export class PeopleService implements BulkRecords {
         });
         if (placed.companyId) input = { ...input, companyId: placed.companyId };
         else await assertCompanyExists(tx, input.companyId ?? null);
+        // CADENCE-1: a new unowned lead from a route or an import goes to the next rep in turn.
+        ownerId = await this.rotation.intakeOwner(tx, context, ownerId, input.companyId ?? null);
         const custom = await this.customFields.validated(tx, 'person', input.custom ?? {}, 'create');
         assertIdentifiable(input.nameFirst ?? '', input.nameLast ?? '', input.emails?.primary ?? null);
         try {
@@ -392,6 +396,7 @@ export function view(row: PersonRow): PersonView {
         contactStatusOverride: row.contactStatusOverride,
         contactAttempts: row.contactAttempts,
         lastContactedAt: row.lastContactedAt,
+        cadenceOverdue: row.cadenceOverdue,
         country: row.country,
         links: stored<Links>(row.links),
         avatarUrl: row.avatarUrl,

@@ -1,4 +1,4 @@
-import type { RecordObject, SuppressionReason } from '@bylinecrm/shared';
+import { TRANSFER_REASON_CADENCE_ROTATION, type RecordObject, type SuppressionReason } from '@bylinecrm/shared';
 import type { TimelineActivityView } from '../../../api/types';
 import { formatDate, formatDay } from '../../../lib/format';
 import { formatMoney } from '../../../lib/money';
@@ -86,11 +86,19 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
         const linked = isRecord(entry.properties['linked']) ? entry.properties['linked'] : {};
         const name = typeof linked['name'] === 'string' ? linked['name'] : '';
         const reason = isRecord(entry.properties['transfer']) ? entry.properties['transfer']['reason'] : null;
+        // CADENCE-1: why a lead was rotated, in words.
+        const why =
+            reason === TRANSFER_REASON_CADENCE_ROTATION
+                ? 'Rotated: no qualifying touch within its stage’s cadence, nor in the grace after the owner was warned'
+                : reason;
         return {
             ...base,
-            action: `changed the owner ${name}`.trim(),
+            action: (reason === TRANSFER_REASON_CADENCE_ROTATION
+                ? `rotated the lead ${name}`
+                : `changed the owner ${name}`
+            ).trim(),
             family: 'record',
-            ...(typeof reason === 'string' && reason ? { detail: [{ label: reason }] } : {}),
+            ...(typeof why === 'string' && why ? { detail: [{ label: why }] } : {}),
         };
     }
 

@@ -172,9 +172,12 @@ export function DealsList({
                                 </SelectContent>
                             </Select>
                         ) : (
-                            <Badge status={STAGE_TONES[row.original.stage.colour]} dot>
-                                {row.original.stage.name}
-                            </Badge>
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                                <Badge status={STAGE_TONES[row.original.stage.colour]} dot>
+                                    {row.original.stage.name}
+                                </Badge>
+                                {row.original.deal.cadenceOverdue && <Badge status="danger">Overdue</Badge>}
+                            </span>
                         ),
                 }),
                 ...chosen
@@ -298,6 +301,13 @@ export function DealsList({
                     <Badge key="stage" status={STAGE_TONES[stage.colour]} dot>
                         {stage.name}
                     </Badge>,
+                    ...(deal.cadenceOverdue
+                        ? [
+                              <Badge key="overdue" status="danger">
+                                  Overdue
+                              </Badge>,
+                          ]
+                        : []),
                     <span key="days" className={cn('text-xs tabular-nums', quiet && 'text-warning')}>
                         {daysLabel(deal.daysInStage)} in stage{quiet ? ' ⚠' : ''}
                     </span>,

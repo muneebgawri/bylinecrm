@@ -70,6 +70,8 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
         },
         { name: 'lastContactedAt', label: 'Last contacted', kind: 'datetime', sortable: true, groupable: false },
         { name: 'contactAttempts', label: 'Contact attempts', kind: 'number', sortable: true, groupable: false },
+        // CADENCE-1: the contact of an open deal whose follow-up cadence lapsed.
+        { name: 'cadenceOverdue', label: 'Overdue', kind: 'boolean', sortable: false, groupable: true },
         { name: 'position', label: 'Position', kind: 'number', sortable: true, groupable: false },
         { name: 'createdAt', label: 'Created', kind: 'datetime', sortable: true, groupable: false },
         { name: 'updatedAt', label: 'Updated', kind: 'datetime', sortable: true, groupable: false },
@@ -107,6 +109,9 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
         { name: 'nextActivity', label: 'Next activity', kind: 'text', sortable: false, groupable: false },
         { name: 'serviceInterest', label: 'Package/service', kind: 'text', sortable: true, groupable: true },
         { name: 'leadSource', label: 'Lead source', kind: 'text', sortable: true, groupable: true },
+        // CADENCE-1: when the next touch is due, and whether the cadence lapsed.
+        { name: 'cadenceDueAt', label: 'Touch due', kind: 'datetime', sortable: true, groupable: false },
+        { name: 'cadenceOverdue', label: 'Overdue', kind: 'boolean', sortable: false, groupable: true },
         { name: 'position', label: 'Position', kind: 'number', sortable: true, groupable: false },
         { name: 'createdAt', label: 'Created', kind: 'datetime', sortable: true, groupable: false },
         { name: 'updatedAt', label: 'Updated', kind: 'datetime', sortable: true, groupable: false },

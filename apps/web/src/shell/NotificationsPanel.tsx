@@ -1,10 +1,11 @@
+import { TRANSFER_REASON_CADENCE_ROTATION } from '@bylinecrm/shared';
 import { Button, Switch } from '@bylinecrm/ui';
 import { useId, type ReactElement } from 'react';
 import { Link } from 'react-router';
 import { useMarkNotificationsRead, useNotificationSettings, useUpdateNotificationSettings } from '../api/notifications';
 import type { NotificationsView } from '../api/types';
 import { ResponsivePanel } from '../components/ResponsivePanel';
-import { formatRelative } from '../lib/format';
+import { formatDate, formatRelative } from '../lib/format';
 import { paths } from '../routes/paths';
 import { recordPath } from '../routes/w/records/targets';
 
@@ -23,6 +24,8 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     invoice_needs_review: 'Invoice waiting for finance',
     invoice_coverage_lost: 'Refund: deal no longer paid in full',
     guardrail_poach_suspected: 'Another member’s lead mailed',
+    cadence_warning: 'Follow-up overdue',
+    cadence_rotated: 'Lead rotated',
 };
 
 /** What a transfer notification says under its label. */
@@ -39,7 +42,10 @@ function transferLine(item: Item): string {
         case 'transfer_received':
             return `${t.recordLabel} is yours now`;
         default:
-            return `${t.recordLabel} went to ${who(t.to)}`;
+            // CADENCE-1: a rotation says why.
+            return t.reason === TRANSFER_REASON_CADENCE_ROTATION
+                ? `${t.recordLabel} rotated to ${who(t.to)}: its follow-up cadence lapsed`
+                : `${t.recordLabel} went to ${who(t.to)}`;
     }
 }
 
@@ -118,14 +124,18 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
           ? { type: item.transfer.object, id: item.transfer.recordId }
           : item.invoice
             ? { type: 'opportunity' as const, id: item.invoice.opportunityId }
-            : undefined;
+            : item.cadence
+              ? { type: 'opportunity' as const, id: item.cadence.opportunityId }
+              : undefined;
     const title = item.task
         ? item.task.title
         : item.transfer
           ? transferLine(item)
           : item.invoice
             ? `${item.invoice.opportunityName}: ${item.invoice.reference}`
-            : guardrailLine(item);
+            : item.cadence
+              ? `${item.cadence.opportunityName} (${item.cadence.stageName}): touch it by ${formatDate(item.cadence.rotateAt)} or it rotates to the next rep`
+              : guardrailLine(item);
     const to = target ? recordPath(workspaceId, target) : item.guardrail ? paths.settingsGuardrails(workspaceId) : null;
     const targets = item.task?.targets ?? [];
     const body = (

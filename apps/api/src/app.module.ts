@@ -1,3 +1,4 @@
+import { CadenceModule } from './cadence/cadence.module';
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
@@ -66,6 +67,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         TemplatesModule,
         TimelineModule,
         TransfersModule,
+        CadenceModule,
         TrackingModule,
         TwentyImportModule,
         BiginImportModule,

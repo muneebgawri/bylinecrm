@@ -1,4 +1,5 @@
 import {
+    CADENCE_DAYS_MAX,
     LIST_LIMIT_DEFAULT,
     LIST_LIMIT_MAX,
     LOST_REASONS,
@@ -26,6 +27,22 @@ const stageFields = {
     colour: z.enum(STAGE_COLOURS),
 };
 const newStage = z.object(stageFields).partial().required({ name: true, probability: true, colour: true });
+
+export class SetCadenceDto extends createZodDto(
+    z.object({
+        stages: z
+            .array(
+                z.object({
+                    stageId: uuid,
+                    cadenceDays: z.number().int().min(1).max(CADENCE_DAYS_MAX).nullable().meta({
+                        description: 'Days after a deal’s last touch it is due another; null: no cadence.',
+                    }),
+                }),
+            )
+            .min(1)
+            .max(50),
+    }),
+) {}
 
 export class CreatePipelineDto extends createZodDto(
     z.object({

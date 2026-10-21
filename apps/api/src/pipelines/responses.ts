@@ -22,6 +22,10 @@ export const stageView = named(
         probability: z.number().int(),
         kind: z.enum(STAGE_KINDS),
         daysThreshold: z.number().int().nullable(),
+        cadenceDays: z.number().int().nullable().meta({
+            description:
+                'CADENCE-1: an open deal here is due a touch this many days after its last; null (every closed stage): none.',
+        }),
         colour: z.enum(STAGE_COLOURS),
     }),
 );

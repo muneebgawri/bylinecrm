@@ -272,6 +272,40 @@ export class TransfersService {
         await this.events.record(tx, input.silent ? { ...completed, internal: true } : completed);
     }
 
+    /**
+     * CADENCE-1: the rotation's forced move of a lapsed lead from its owner to the next rep, for a job acting for the
+     * workspace (no caller). It is any forced transfer: the unit moves, the old owner hears `transfer_taken`, the new
+     * one `transfer_received`, and `transfer.completed` is announced (NewswireOS included). Proposed and decided by
+     * the receiver, as an import's fill is; `reason` says it was the rotation and `note` says why. Null when the
+     * record is gone or no longer `from`'s.
+     */
+    async rotate(
+        context: WorkspaceRunContext,
+        input: { object: RecordObject; recordId: string; from: string; to: string; reason: string; note: string },
+    ): Promise<TransferView | null> {
+        return this.widened(context, async (tx) => {
+            const wide = widen(context);
+            const head = await findHead(tx, wide, input.object, input.recordId);
+            if (!head || head.ownerId !== input.from || input.from === input.to) return null;
+            const row = await this.complete(tx, wide, {
+                create: {
+                    object: input.object,
+                    recordId: input.recordId,
+                    fromMemberId: input.from,
+                    toMemberId: input.to,
+                    proposedByMemberId: input.to,
+                    decidedByMemberId: input.to,
+                    status: 'forced',
+                    reason: input.reason,
+                    note: input.note,
+                },
+                head,
+                me: input.to,
+            });
+            return view(row, await labelsFor(tx, row));
+        });
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────
 
     /**

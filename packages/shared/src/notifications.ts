@@ -2,6 +2,7 @@ import type { RecordObject, TaskStatus } from './records.js';
 import type { GuardrailSummary } from './guardrails.js';
 import type { InvoiceSummary } from './invoices.js';
 import type { TransferSummary } from './transfers.js';
+import type { CadenceLapseSummary } from './cadence.js';
 
 /**
  * What members are told about their tasks (#192): a task someone else assigned them (a sequence's
@@ -29,6 +30,10 @@ export const NOTIFICATION_KINDS = [
     'invoice_coverage_lost',
     // GUARD-2: a member mailed another member's lead or a customer (to the owner and reviewers).
     'guardrail_poach_suspected',
+    // CADENCE-1: a lead of theirs missed its cadence and rotates after the grace (to the owner).
+    'cadence_warning',
+    // CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).
+    'cadence_rotated',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -52,7 +57,7 @@ export interface TaskSummary {
  * What a notification is about (GUARD-2): one polymorphic target, whatever the kind. The typed summaries below
  * carry what the bell shows of each; new kinds add a target type here rather than a model of their own.
  */
-export const NOTIFICATION_TARGET_TYPES = ['task', 'transfer', 'guardrail', 'invoice'] as const;
+export const NOTIFICATION_TARGET_TYPES = ['task', 'transfer', 'guardrail', 'invoice', 'cadence'] as const;
 export type NotificationTargetType = (typeof NOTIFICATION_TARGET_TYPES)[number];
 export interface NotificationTarget {
     type: NotificationTargetType;
@@ -71,6 +76,8 @@ export interface NotificationView {
     guardrail: GuardrailSummary | null;
     /** The invoice, for an `invoice_*` kind (INV-1); null otherwise. */
     invoice: InvoiceSummary | null;
+    /** The lapse, for `cadence_warning` (CADENCE-1); null otherwise. */
+    cadence: CadenceLapseSummary | null;
     /** ISO 8601. */
     createdAt: string;
     /** ISO 8601; null while unread. */

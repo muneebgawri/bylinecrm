@@ -20,6 +20,7 @@ import {
 } from './byline.constants';
 import type { BylineLeadResult } from './responses';
 import { leadPhone } from './lead-phone';
+import { RotationService } from '../cadence/rotation.service';
 import { dealTo } from './round-robin';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -51,6 +52,7 @@ export class BylineInboundService {
         private readonly companies: CompaniesService,
         private readonly ownership: CompanyOwnership,
         private readonly events: DomainEvents,
+        private readonly rotation: RotationService,
     ) {}
 
     async receive(
@@ -213,7 +215,8 @@ export class BylineInboundService {
     /** The next member on the round-robin list still in the workspace; null for none (the Leads queue). */
     private async nextMember(tx: WorkspaceClient, workspaceId: string): Promise<string | null> {
         const settings = await tx.bylineSettings.findFirst({ select: { id: true, roundRobinMemberIds: true } });
-        if (!settings || settings.roundRobinMemberIds.length === 0) return null;
+        // CADENCE-1: no list of its own — the workspace's rotation deals it, when intake is on.
+        if (!settings || settings.roundRobinMemberIds.length === 0) return this.rotation.dealIntake(tx, workspaceId);
         const members = await tx.workspaceMember.findMany({
             where: { id: { in: settings.roundRobinMemberIds }, leftAt: null },
             select: { id: true },

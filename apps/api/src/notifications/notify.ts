@@ -8,11 +8,14 @@ import type { WorkspaceClient } from '../infra/rls-prisma.service';
  * guardrail event or invoice takes its notifications with it, and the database checks exactly one is set). Each
  * (member, kind, target) is told once — a unique row — so an event delivered again tells nobody twice.
  */
-const COLUMN: Readonly<Record<NotificationTargetType, 'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId'>> = {
+const COLUMN: Readonly<
+    Record<NotificationTargetType, 'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId' | 'cadenceLapseId'>
+> = {
     task: 'taskId',
     transfer: 'transferId',
     guardrail: 'guardrailEventId',
     invoice: 'invoiceId',
+    cadence: 'cadenceLapseId',
 };
 
 /** Tells each member about each target, once per (member, kind, target). Returns how many rows were new. */
@@ -36,7 +39,7 @@ export async function notify(
 
 /** A stored notification's target, read back from whichever typed column is set. */
 export function targetOf(
-    row: Pick<Notification, 'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId'>,
+    row: Pick<Notification, 'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId' | 'cadenceLapseId'>,
 ): NotificationTarget {
     for (const type of Object.keys(COLUMN) as NotificationTargetType[]) {
         const id = row[COLUMN[type]];

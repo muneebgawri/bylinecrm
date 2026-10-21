@@ -17,6 +17,7 @@ const stage = (id: string, name: string, position: number, kind: StageView['kind
     probability: 20,
     kind,
     daysThreshold: null,
+    cadenceDays: null,
     colour: kind === 'won' ? 'ok' : 'accent',
 });
 const STAGES = [
