@@ -240,4 +240,12 @@ export class OutreachComplianceController {
     ): Promise<void> {
         await this.exclusions.remove(id, body.note);
     }
+
+    /** #242: keep a flagged automatic exclusion (its deal was reopened or refunded) and clear the flag. */
+    @Requires('workspace:admin')
+    @Post('exclusions/:exclusionId/dismiss-review')
+    @Returns(outreachExclusionView)
+    dismissExclusionReview(@Param('exclusionId', ParseUUIDPipe) id: string): Promise<OutreachExclusionView> {
+        return this.exclusions.dismissReview(id);
+    }
 }

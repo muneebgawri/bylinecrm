@@ -19347,6 +19347,300 @@
                 "tags": ["sequences"]
             }
         },
+        "/api/w/{workspaceId}/outreach/exclusions/{exclusionId}/dismiss-review": {
+            "post": {
+                "operationId": "outreachCompliance_dismissExclusionReview",
+                "parameters": [
+                    {
+                        "name": "exclusionId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OutreachExclusion"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sequences"]
+            }
+        },
+        "/api/w/{workspaceId}/people/{personId}/contact-status": {
+            "put": {
+                "operationId": "contactStatus_set",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetContactStatusDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Person"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
+        "/api/w/{workspaceId}/outreach/customer-exclusion-settings": {
+            "get": {
+                "operationId": "customerExclusionSettings_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomerExclusionSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sequences"]
+            },
+            "put": {
+                "operationId": "customerExclusionSettings_set",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomerExclusionSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomerExclusionSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["sequences"]
+            }
+        },
         "/api/w/{workspaceId}/mail-assets": {
             "post": {
                 "operationId": "mailAssets_upload",
@@ -25671,6 +25965,39 @@
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "nullable": true
                     },
+                    "lostReasonCode": {
+                        "type": "string",
+                        "enum": [
+                            "price_budget",
+                            "no_response",
+                            "chose_competitor",
+                            "not_ready",
+                            "service_not_suitable",
+                            "timing",
+                            "duplicate_opportunity",
+                            "other"
+                        ]
+                    },
+                    "nextFollowUpDate": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                        "nullable": true
+                    },
+                    "nextActivity": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "nullable": true
+                    },
+                    "serviceInterest": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "nullable": true
+                    },
+                    "leadSource": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "nullable": true
+                    },
                     "custom": {
                         "type": "object",
                         "additionalProperties": {}
@@ -25742,6 +26069,39 @@
                         "type": "string",
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "nullable": true
+                    },
+                    "lostReasonCode": {
+                        "type": "string",
+                        "enum": [
+                            "price_budget",
+                            "no_response",
+                            "chose_competitor",
+                            "not_ready",
+                            "service_not_suitable",
+                            "timing",
+                            "duplicate_opportunity",
+                            "other"
+                        ]
+                    },
+                    "nextFollowUpDate": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                        "nullable": true
+                    },
+                    "nextActivity": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "nullable": true
+                    },
+                    "serviceInterest": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "nullable": true
+                    },
+                    "leadSource": {
+                        "type": "string",
+                        "maxLength": 200,
                         "nullable": true
                     },
                     "custom": {
@@ -26291,6 +26651,20 @@
                             "lostReason": {
                                 "type": "string",
                                 "maxLength": 500
+                            },
+                            "lostReasonCode": {
+                                "description": "Why the deal was lost (#242). Required when `stageId` is a lost stage; `400` without it.",
+                                "type": "string",
+                                "enum": [
+                                    "price_budget",
+                                    "no_response",
+                                    "chose_competitor",
+                                    "not_ready",
+                                    "service_not_suitable",
+                                    "timing",
+                                    "duplicate_opportunity",
+                                    "other"
+                                ]
                             }
                         }
                     }
@@ -27866,6 +28240,38 @@
                     }
                 },
                 "required": ["note"]
+            },
+            "SetContactStatusDto": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "new",
+                            "attempted_contact",
+                            "contacted",
+                            "engaged",
+                            "unresponsive",
+                            "do_not_contact",
+                            "customer",
+                            null
+                        ],
+                        "description": "The status to show whatever is derived; `null` clears it. `do_not_contact` suppresses the primary address instead (needs `outreach:write`); lift the suppression to end it.",
+                        "nullable": true
+                    }
+                },
+                "required": ["status"]
+            },
+            "CustomerExclusionSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "wonExclusionScope": {
+                        "type": "string",
+                        "enum": ["address", "domain"],
+                        "description": "`address`: a won deal excludes its point of contact’s primary address. `domain`: their company’s domain (free-mail domains fall back to the address)."
+                    }
+                },
+                "required": ["wonExclusionScope"]
             },
             "MarkNotificationsReadDto": {
                 "type": "object",
@@ -29958,6 +30364,47 @@
                         "nullable": true,
                         "type": "string"
                     },
+                    "contactStatus": {
+                        "type": "string",
+                        "enum": [
+                            "new",
+                            "attempted_contact",
+                            "contacted",
+                            "engaged",
+                            "unresponsive",
+                            "do_not_contact",
+                            "customer"
+                        ],
+                        "description": "Derived (#242) from mail sent and received, meetings, won deals and the suppression list, unless `contactStatusOverride` is set; `do_not_contact` whenever the primary address is suppressed."
+                    },
+                    "contactStatusOverride": {
+                        "nullable": true,
+                        "description": "A member’s choice, which outranks everything but `do_not_contact`.",
+                        "type": "string",
+                        "enum": [
+                            "new",
+                            "attempted_contact",
+                            "contacted",
+                            "engaged",
+                            "unresponsive",
+                            "do_not_contact",
+                            "customer"
+                        ]
+                    },
+                    "contactAttempts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Derived: messages sent to them."
+                    },
+                    "lastContactedAt": {
+                        "nullable": true,
+                        "description": "Derived: when the last message was sent to them.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
                     "links": {
                         "$ref": "#/components/schemas/Links"
                     },
@@ -30037,6 +30484,10 @@
                     "city",
                     "source",
                     "country",
+                    "contactStatus",
+                    "contactStatusOverride",
+                    "contactAttempts",
+                    "lastContactedAt",
                     "links",
                     "avatarUrl",
                     "position",
@@ -30256,7 +30707,63 @@
                     },
                     "lostReason": {
                         "nullable": true,
+                        "description": "Free text beside `lostReasonCode`, when given.",
                         "type": "string"
+                    },
+                    "lostReasonCode": {
+                        "nullable": true,
+                        "description": "Why the deal was lost (#242): set on every close into a lost stage.",
+                        "type": "string",
+                        "enum": [
+                            "price_budget",
+                            "no_response",
+                            "chose_competitor",
+                            "not_ready",
+                            "service_not_suitable",
+                            "timing",
+                            "duplicate_opportunity",
+                            "other"
+                        ]
+                    },
+                    "nextFollowUpDate": {
+                        "nullable": true,
+                        "description": "A calendar date, `YYYY-MM-DD`; keeps one open follow-up task due that day.",
+                        "type": "string"
+                    },
+                    "followUpTaskId": {
+                        "nullable": true,
+                        "description": "The follow-up task `nextFollowUpDate` keeps, when any.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "nextActivity": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "serviceInterest": {
+                        "nullable": true,
+                        "description": "The package or service the deal is about.",
+                        "type": "string"
+                    },
+                    "leadSource": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "lastContactedAt": {
+                        "nullable": true,
+                        "description": "Derived: when mail was last sent to the point of contact.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "contactAttempts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Derived: messages sent to the point of contact; 0 when the deal has none."
                     },
                     "amount": {
                         "nullable": true,
@@ -30366,6 +30873,14 @@
                     "daysInStage",
                     "closedAt",
                     "lostReason",
+                    "lostReasonCode",
+                    "nextFollowUpDate",
+                    "followUpTaskId",
+                    "nextActivity",
+                    "serviceInterest",
+                    "leadSource",
+                    "lastContactedAt",
+                    "contactAttempts",
                     "amount",
                     "currency",
                     "closeDate",
@@ -35185,6 +35700,18 @@
                         "type": "string",
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "reviewReason": {
+                        "nullable": true,
+                        "description": "#242: an automatic (`won_deal`) exclusion whose deal was reopened or fully refunded waits for an admin: remove it, or dismiss the flag.",
+                        "type": "string",
+                        "enum": ["deal_reopened", "deal_refunded"]
+                    },
+                    "reviewFlaggedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     }
                 },
                 "required": [
@@ -35196,8 +35723,21 @@
                     "source",
                     "externalRef",
                     "note",
-                    "createdAt"
+                    "createdAt",
+                    "reviewReason",
+                    "reviewFlaggedAt"
                 ]
+            },
+            "CustomerExclusionSettings": {
+                "type": "object",
+                "properties": {
+                    "wonExclusionScope": {
+                        "type": "string",
+                        "enum": ["address", "domain"],
+                        "description": "`address`: a won deal excludes its point of contact’s primary address. `domain`: their company’s domain (free-mail domains fall back to the address)."
+                    }
+                },
+                "required": ["wonExclusionScope"]
             },
             "MailAsset": {
                 "type": "object",

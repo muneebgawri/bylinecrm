@@ -121,6 +121,30 @@ export interface OutreachExclusionView {
     externalRef: string | null;
     note: string | null;
     createdAt: string;
+    /**
+     * #242: set when an automatic customer exclusion (`source: won_deal`) may no longer hold: its deal was reopened
+     * (`deal_reopened`) or fully refunded (`deal_refunded`). The exclusion stays until an admin removes it or
+     * dismisses the flag; nothing removes it on its own.
+     */
+    reviewReason: ExclusionReviewReason | null;
+    reviewFlaggedAt: string | null;
+}
+
+export const EXCLUSION_REVIEW_REASONS = ['deal_reopened', 'deal_refunded'] as const;
+export type ExclusionReviewReason = (typeof EXCLUSION_REVIEW_REASONS)[number];
+
+/** The `source` of the exclusion a won deal adds (#242); its `externalRef` is the deal's id. */
+export const WON_DEAL_EXCLUSION_SOURCE = 'won_deal';
+
+/**
+ * What a won deal excludes (#242): its point of contact's primary address, or (an admin's choice, `domain`) their
+ * company's domain, else the address's own domain. A free-mail domain is never excluded whole: the address is.
+ */
+export const WON_EXCLUSION_SCOPES = ['address', 'domain'] as const;
+export type WonExclusionScope = (typeof WON_EXCLUSION_SCOPES)[number];
+
+export interface CustomerExclusionSettingsView {
+    wonExclusionScope: WonExclusionScope;
 }
 
 // ── Sequences (FR-CRMS-5) ────────────────────────────────────────────────────────────────────

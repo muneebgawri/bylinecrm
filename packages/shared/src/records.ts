@@ -161,3 +161,50 @@ export const ATTACHMENT_MIME_ALLOWLIST = [
     'image/webp',
     'image/svg+xml',
 ] as const;
+
+/**
+ * A person's contact status (#242), separate from any deal's stage. Derived from what happened unless a member set
+ * one by hand (the override), with one exception: `do_not_contact` is exactly "the primary address is on the
+ * suppression list". It is never stored as an override (setting it suppresses the address; lifting the suppression
+ * is the way out), and nothing outranks it. In order of precedence:
+ *
+ * - `do_not_contact`: a live suppression for the primary address.
+ * - the member's override, when set.
+ * - `customer`: the point of contact of a live deal in a won stage.
+ * - `engaged`: two or more messages from them, or a meeting with them.
+ * - `contacted`: one message from them.
+ * - `unresponsive`: `UNRESPONSIVE_AFTER_ATTEMPTS` or more messages sent to them, none answered.
+ * - `attempted_contact`: fewer sent, none answered.
+ * - `new`: nothing sent yet.
+ *
+ * Counts, not ages: a status changes only when something happens, so it never goes stale on a list.
+ */
+export const CONTACT_STATUSES = [
+    'new',
+    'attempted_contact',
+    'contacted',
+    'engaged',
+    'unresponsive',
+    'do_not_contact',
+    'customer',
+] as const;
+export type ContactStatus = (typeof CONTACT_STATUSES)[number];
+
+/** What a member may set by hand. `do_not_contact` is set by suppressing the address (the route does it). */
+export type ContactStatusOverride = Exclude<ContactStatus, 'do_not_contact'>;
+export const CONTACT_STATUS_OVERRIDES: readonly ContactStatusOverride[] = CONTACT_STATUSES.filter(
+    (s): s is ContactStatusOverride => s !== 'do_not_contact',
+);
+
+export const CONTACT_STATUS_LABELS: Readonly<Record<ContactStatus, string>> = {
+    new: 'New',
+    attempted_contact: 'Attempted Contact',
+    contacted: 'Contacted',
+    engaged: 'Engaged',
+    unresponsive: 'Unresponsive',
+    do_not_contact: 'Do Not Contact',
+    customer: 'Customer',
+};
+
+/** Messages sent without a reply before a person reads as `unresponsive` (the migration's SQL uses the same 3). */
+export const UNRESPONSIVE_AFTER_ATTEMPTS = 3;

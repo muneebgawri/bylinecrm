@@ -15,6 +15,7 @@ import {
     cn,
     focusRing,
 } from '@bylinecrm/ui';
+import { LOST_REASON_LABELS, LOST_REASONS, type LostReason } from '@bylinecrm/shared';
 import { ListTodo, Mail, StickyNote } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
@@ -29,7 +30,8 @@ import { RecordPicker } from '../../../components/RecordPicker';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
-import { InlineText, messageFor } from './InlineEdit';
+import { InlineSelect, InlineText, messageFor } from './InlineEdit';
+import { LostReasonSelect } from '../deals/LostReasonSelect';
 import { InvoicesPanel } from './InvoicesPanel';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
@@ -181,6 +183,52 @@ export function DealRecord({
                 />
             ),
         },
+        ...(currentStage?.kind === 'lost'
+            ? [
+                  {
+                      field: 'lostReasonCode',
+                      control: (
+                          <InlineSelect
+                              label="Lost reason"
+                              path="lostReasonCode"
+                              value={deal.lostReasonCode}
+                              options={LOST_REASONS.map((r) => ({ value: r, label: LOST_REASON_LABELS[r] }))}
+                              canEdit={edit.allowed}
+                              reason={edit.reason}
+                              onSave={(v) => save({ lostReasonCode: (v ?? 'other') as LostReason })}
+                          />
+                      ),
+                  },
+              ]
+            : []),
+        {
+            field: 'nextFollowUpDate',
+            control: (
+                <InlineText
+                    label="Next follow-up"
+                    path="nextFollowUpDate"
+                    type="date"
+                    value={deal.nextFollowUpDate}
+                    display={(v) => formatDay(v)}
+                    canEdit={edit.allowed}
+                    reason={edit.reason}
+                    onSave={(v) => save({ nextFollowUpDate: v })}
+                />
+            ),
+        },
+        ...(['nextActivity', 'serviceInterest', 'leadSource'] as const).map((field) => ({
+            field,
+            control: (
+                <InlineText
+                    label={fieldTitle(field)}
+                    path={field}
+                    value={deal[field]}
+                    canEdit={edit.allowed}
+                    reason={edit.reason}
+                    onSave={(v) => save({ [field]: v })}
+                />
+            ),
+        })),
         {
             field: 'ownerId',
             control: (
@@ -358,6 +406,15 @@ export function DealRecord({
                         { label: 'Owner', value: deal.ownerId ? (membersById.get(deal.ownerId) ?? '…') : 'Unassigned' },
                         { label: fieldTitle('closeDate'), value: formatDay(deal.closeDate) },
                         { label: 'Probability', value: deal.probability === null ? '—' : `${deal.probability}%` },
+                        { label: 'Next follow-up', value: formatDay(deal.nextFollowUpDate) },
+                        {
+                            label: 'Last contacted',
+                            value: deal.lastContactedAt
+                                ? `${formatDay(deal.lastContactedAt.slice(0, 10))} · ${deal.contactAttempts} sent`
+                                : deal.pointOfContactId
+                                  ? 'Not yet'
+                                  : '—',
+                        },
                         {
                             label: 'Contact',
                             value: deal.pointOfContactId ? (contact.data ? personName(contact.data) : '…') : '—',
@@ -468,10 +525,15 @@ function CloseDialog({
     pending: boolean;
     error: string | null;
     onCancel: () => void;
-    onConfirm: (close: { wonAmount?: { amountMinor: number; currency: string }; lostReason?: string }) => void;
+    onConfirm: (close: {
+        wonAmount?: { amountMinor: number; currency: string };
+        lostReason?: string;
+        lostReasonCode?: LostReason;
+    }) => void;
 }) {
     const won = stage.kind === 'won';
     const [amount, setAmount] = useState(deal.amount ? toMajor(deal.amount).toFixed(minorDigits(deal.currency)) : '');
+    const [reasonCode, setReasonCode] = useState<LostReason | ''>('');
     const [reason, setReason] = useState('');
     return (
         <Dialog open onOpenChange={(o) => !o && onCancel()}>
@@ -494,7 +556,10 @@ function CloseDialog({
                                           currency: deal.currency,
                                       },
                                   }
-                                : { lostReason: reason.trim() },
+                                : {
+                                      ...(reasonCode ? { lostReasonCode: reasonCode } : {}),
+                                      ...(reason.trim() ? { lostReason: reason.trim() } : {}),
+                                  },
                         );
                     }}
                 >
@@ -511,9 +576,14 @@ function CloseDialog({
                                 />
                             </Field>
                         ) : (
-                            <Field label="Lost reason" required>
-                                <Input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
-                            </Field>
+                            <>
+                                <Field label="Lost reason" required>
+                                    <LostReasonSelect value={reasonCode} onChange={setReasonCode} />
+                                </Field>
+                                <Field label="Details" hint="Optional">
+                                    <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+                                </Field>
+                            </>
                         )}
                         {error && (
                             <p role="alert" className="m-0 text-sm text-danger">
@@ -531,7 +601,7 @@ function CloseDialog({
                         form="close-form"
                         variant="primary"
                         shape="square"
-                        disabled={pending || (won ? amount === '' : !reason.trim())}
+                        disabled={pending || (won ? amount === '' : !reasonCode)}
                     >
                         {won ? 'Mark won' : 'Mark lost'}
                     </Button>

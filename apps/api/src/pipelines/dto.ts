@@ -1,4 +1,11 @@
-import { LIST_LIMIT_DEFAULT, LIST_LIMIT_MAX, STAGE_COLOURS, STAGE_KINDS, STAGE_RULE_EVENTS } from '@bylinecrm/shared';
+import {
+    LIST_LIMIT_DEFAULT,
+    LIST_LIMIT_MAX,
+    LOST_REASONS,
+    STAGE_COLOURS,
+    STAGE_KINDS,
+    STAGE_RULE_EVENTS,
+} from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { queryParams } from '../query/dto';
@@ -57,6 +64,10 @@ export class MoveDealDto extends createZodDto(
             .object({
                 wonAmount: money.optional(),
                 lostReason: text(500).optional(),
+                lostReasonCode: z.enum(LOST_REASONS).optional().meta({
+                    description:
+                        'Why the deal was lost (#242). Required when `stageId` is a lost stage; `400` without it.',
+                }),
             })
             .optional(),
     }),

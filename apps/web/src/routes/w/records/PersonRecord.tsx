@@ -1,17 +1,20 @@
 import { Badge, FactGrid, toast } from '@bylinecrm/ui';
+import { CONTACT_STATUS_LABELS, CONTACT_STATUSES, type ContactStatus } from '@bylinecrm/shared';
 import { ListTodo, Mail, Send, StickyNote } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { useSetContactStatus } from '../../../api/customers';
 import { usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';
+import { formatDay } from '../../../lib/format';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AskIntroduction } from './AskIntroduction';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { EnrichmentPanel } from './EnrichmentPanel';
-import { InlineText } from './InlineEdit';
+import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
@@ -44,6 +47,7 @@ export function PersonRecord({
     membersById: ReadonlyMap<string, string>;
 }) {
     const patch = usePatchRecord(workspaceId, 'person', person.id);
+    const setContactStatus = useSetContactStatus(workspaceId, person.id);
     const write = usePermission('record:write');
     const company = useRecord(workspaceId, 'company', person.companyId ?? '');
     const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
@@ -182,6 +186,27 @@ export function PersonRecord({
                             },
                         })
                     }
+                />
+            ),
+        },
+        {
+            field: 'contactStatus',
+            control: (
+                <InlineSelect
+                    label="Contact status"
+                    path="status"
+                    value={person.contactStatus}
+                    options={CONTACT_STATUSES.map((s) => ({
+                        value: s,
+                        label:
+                            s === person.contactStatus && !person.contactStatusOverride && s !== 'do_not_contact'
+                                ? `${CONTACT_STATUS_LABELS[s]} (automatic)`
+                                : CONTACT_STATUS_LABELS[s],
+                    }))}
+                    clearLabel="Automatic"
+                    canEdit={write.allowed}
+                    reason={write.reason}
+                    onSave={(v) => setContactStatus.mutateAsync(v as ContactStatus | null)}
                 />
             ),
         },
@@ -342,6 +367,13 @@ export function PersonRecord({
                             value: person.ownerId ? (membersById.get(person.ownerId) ?? '…') : 'Unassigned',
                         },
                         { label: 'Source', value: sourceLabel(person.createdBy.kind) },
+                        { label: 'Status', value: CONTACT_STATUS_LABELS[person.contactStatus] },
+                        {
+                            label: 'Last contacted',
+                            value: person.lastContactedAt
+                                ? `${formatDay(person.lastContactedAt.slice(0, 10))} · ${person.contactAttempts} sent`
+                                : 'Not yet',
+                        },
                         { label: 'Email', value: person.emails.primary ?? '—' },
                         { label: 'City', value: person.city ?? '—' },
                     ]}

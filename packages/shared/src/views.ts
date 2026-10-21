@@ -1,5 +1,6 @@
 import type { ErrorCode } from './errors.js';
-import { CUSTOM_FIELD_KEY_PATTERN, type CustomFieldType, type RecordObject } from './records.js';
+import { LOST_REASONS } from './pipelines.js';
+import { CONTACT_STATUSES, CUSTOM_FIELD_KEY_PATTERN, type CustomFieldType, type RecordObject } from './records.js';
 
 /**
  * Views, filters, sorting, grouping, export and search: the vocabulary the API and the web app
@@ -59,6 +60,16 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
         { name: 'city', label: 'City', kind: 'text', sortable: false, groupable: true },
         { name: 'companyId', label: 'Company', kind: 'uuid', sortable: false, groupable: true },
         { name: 'ownerId', label: 'Owner', kind: 'uuid', sortable: false, groupable: true },
+        {
+            name: 'contactStatus',
+            label: 'Contact status',
+            kind: 'select',
+            sortable: false,
+            groupable: true,
+            options: CONTACT_STATUSES,
+        },
+        { name: 'lastContactedAt', label: 'Last contacted', kind: 'datetime', sortable: true, groupable: false },
+        { name: 'contactAttempts', label: 'Contact attempts', kind: 'number', sortable: true, groupable: false },
         { name: 'position', label: 'Position', kind: 'number', sortable: true, groupable: false },
         { name: 'createdAt', label: 'Created', kind: 'datetime', sortable: true, groupable: false },
         { name: 'updatedAt', label: 'Updated', kind: 'datetime', sortable: true, groupable: false },
@@ -84,6 +95,18 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
         { name: 'ownerId', label: 'Owner', kind: 'uuid', sortable: false, groupable: true },
         { name: 'pointOfContactId', label: 'Point of contact', kind: 'uuid', sortable: false, groupable: true },
         { name: 'companyId', label: 'Company', kind: 'uuid', sortable: false, groupable: true },
+        {
+            name: 'lostReasonCode',
+            label: 'Lost reason',
+            kind: 'select',
+            sortable: false,
+            groupable: true,
+            options: LOST_REASONS,
+        },
+        { name: 'nextFollowUpDate', label: 'Next follow-up', kind: 'date', sortable: true, groupable: false },
+        { name: 'nextActivity', label: 'Next activity', kind: 'text', sortable: false, groupable: false },
+        { name: 'serviceInterest', label: 'Package/service', kind: 'text', sortable: true, groupable: true },
+        { name: 'leadSource', label: 'Lead source', kind: 'text', sortable: true, groupable: true },
         { name: 'position', label: 'Position', kind: 'number', sortable: true, groupable: false },
         { name: 'createdAt', label: 'Created', kind: 'datetime', sortable: true, groupable: false },
         { name: 'updatedAt', label: 'Updated', kind: 'datetime', sortable: true, groupable: false },

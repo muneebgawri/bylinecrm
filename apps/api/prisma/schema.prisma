@@ -97,18 +97,19 @@ model Workspace {
   trackingTokens TrackingToken[]
   trackingHits   TrackingHit[]
 
-  calendarEvents       CalendarEvent[]
-  calendarEventCopies  CalendarEventCopy[]
-  calendarParticipants CalendarEventParticipant[]
-  calendarSyncStates   CalendarSyncState[]
-  slotlineSettings     SlotlineSettings?
-  newswireosSettings   NewswireosSettings?
-  bylineSettings       BylineSettings?
-  bylineLeads          BylineLead[]
-  dealInvoices         DealInvoice[]
-  ownershipTransfers   OwnershipTransfer[]
-  guardrailEvents      GuardrailEvent[]
-  companyDomains       CompanyDomain[]
+  calendarEvents            CalendarEvent[]
+  calendarEventCopies       CalendarEventCopy[]
+  calendarParticipants      CalendarEventParticipant[]
+  calendarSyncStates        CalendarSyncState[]
+  slotlineSettings          SlotlineSettings?
+  newswireosSettings        NewswireosSettings?
+  bylineSettings            BylineSettings?
+  bylineLeads               BylineLead[]
+  dealInvoices              DealInvoice[]
+  ownershipTransfers        OwnershipTransfer[]
+  guardrailEvents           GuardrailEvent[]
+  companyDomains            CompanyDomain[]
+  customerExclusionSettings CustomerExclusionSettings?
 
   @@map("workspaces")
 }
@@ -524,37 +525,44 @@ model CompanyDomain {
 /// A person (PAR-001/002). The primary email is unique per workspace, case-insensitively,
 /// deleted rows included; the generated `email_primary` column is what the index covers.
 model Person {
-  id           String                   @id @default(uuid()) @db.Uuid
-  workspaceId  String                   @map("workspace_id") @db.Uuid
-  nameFirst    String                   @default("") @map("name_first")
-  nameLast     String                   @default("") @map("name_last")
+  id                    String                   @id @default(uuid()) @db.Uuid
+  workspaceId           String                   @map("workspace_id") @db.Uuid
+  nameFirst             String                   @default("") @map("name_first")
+  nameLast              String                   @default("") @map("name_last")
   /// `Emails` from @bylinecrm/shared.
-  emails       Json                     @default("{\"primary\":null,\"additional\":[]}")
+  emails                Json                     @default("{\"primary\":null,\"additional\":[]}")
   /// `Phones` from @bylinecrm/shared.
-  phones       Json                     @default("{\"primary\":null,\"additional\":[]}")
-  jobTitle     String?                  @map("job_title")
+  phones                Json                     @default("{\"primary\":null,\"additional\":[]}")
+  jobTitle              String?                  @map("job_title")
   /// FR-CRMS-11: where the person came from (a list, an import, a form). Required to enrol in outreach.
-  source       String?
+  source                String?
   /// FR-CRMS-11: ISO 3166-1 alpha-2, upper case (the database checks), when known.
-  country      String?                  @db.Char(2)
-  city         String?
+  country               String?                  @db.Char(2)
+  city                  String?
   /// `Links` from @bylinecrm/shared.
-  links        Json                     @default("{\"linkedin\":null,\"x\":null}")
-  avatarUrl    String?                  @map("avatar_url")
-  position     Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
-  companyId    String?                  @map("company_id") @db.Uuid
-  ownerId      String?                  @map("owner_id") @db.Uuid
-  createdBy    Json                     @map("created_by")
-  custom       Json                     @default("{}")
-  deletedAt    DateTime?                @map("deleted_at") @db.Timestamptz
+  links                 Json                     @default("{\"linkedin\":null,\"x\":null}")
+  avatarUrl             String?                  @map("avatar_url")
+  position              Float                    @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  companyId             String?                  @map("company_id") @db.Uuid
+  ownerId               String?                  @map("owner_id") @db.Uuid
+  createdBy             Json                     @map("created_by")
+  custom                Json                     @default("{}")
+  deletedAt             DateTime?                @map("deleted_at") @db.Timestamptz
   /// Set when this person was a duplicate merged into another (and trashed): the person kept.
-  mergedIntoId String?                  @map("merged_into_id") @db.Uuid
-  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  mergedIntoId          String?                  @map("merged_into_id") @db.Uuid
+  /// #242: what `refresh_contact_status()` derived, or the override, or `do_not_contact` (a live suppression). Never written by Prisma.
+  contactStatus         ContactStatus            @default(new) @map("contact_status")
+  /// #242: a member's choice; never `do_not_contact` (the database checks; that one is the suppression list).
+  contactStatusOverride ContactStatus?           @map("contact_status_override")
+  /// #242, derived: messages sent to them, and when the last one was.
+  contactAttempts       Int                      @default(0) @map("contact_attempts")
+  lastContactedAt       DateTime?                @map("last_contacted_at") @db.Timestamptz
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
   /// Generated by the database from `emails`: the uniqueness index is built on it. Readable, never written.
-  emailPrimary String?                  @default(dbgenerated("lower(NULLIF((emails ->> 'primary'::text), ''::text))")) @map("email_primary")
+  emailPrimary          String?                  @default(dbgenerated("lower(NULLIF((emails ->> 'primary'::text), ''::text))")) @map("email_primary")
   /// Generated by the database (the expression is the migration's; Prisma only knows it exists).
-  search       Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((((((COALESCE(name_first, ''::text) || ' '::text) || COALESCE(name_last, ''::text)) || ' '::text) || COALESCE((emails ->> 'primary'::text), ''::text)) || ' '::text) || COALESCE(job_title, ''::text)))"))
+  search                Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((((((COALESCE(name_first, ''::text) || ' '::text) || COALESCE(name_last, ''::text)) || ' '::text) || COALESCE((emails ->> 'primary'::text), ''::text)) || ' '::text) || COALESCE(job_title, ''::text)))"))
 
   workspace          Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   company            Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -578,8 +586,36 @@ model Person {
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
   @@index([workspaceId, companyId])
+  @@index([workspaceId, contactStatus])
   @@index([search], type: Gin)
   @@map("people")
+}
+
+/// #242: a person's contact status (`CONTACT_STATUSES` in @bylinecrm/shared).
+enum ContactStatus {
+  new
+  attempted_contact
+  contacted
+  engaged
+  unresponsive
+  do_not_contact
+  customer
+
+  @@map("contact_status")
+}
+
+/// #242: why a deal was lost (`LOST_REASONS` in @bylinecrm/shared).
+enum LostReasonCode {
+  price_budget
+  no_response
+  chose_competitor
+  not_ready
+  service_not_suitable
+  timing
+  duplicate_opportunity
+  other
+
+  @@map("lost_reason_code")
 }
 
 /// A field a workspace added to one of its objects (PAR-073/074). Values live in each record's
@@ -645,6 +681,14 @@ model Opportunity {
   /// Written by a close (a move into a won or lost stage), cleared by a reopen.
   closedAt         DateTime?                @map("closed_at") @db.Timestamptz
   lostReason       String?                  @map("lost_reason")
+  /// #242: the picklist reason; set on every close into a lost stage, cleared on a reopen.
+  lostReasonCode   LostReasonCode?          @map("lost_reason_code")
+  /// #242: the next follow-up; setting it keeps one open task (`followUpTaskId`) due that day.
+  nextFollowUpDate DateTime?                @map("next_follow_up_date") @db.Date
+  followUpTaskId   String?                  @map("follow_up_task_id") @db.Uuid
+  nextActivity     String?                  @map("next_activity")
+  serviceInterest  String?                  @map("service_interest")
+  leadSource       String?                  @map("lead_source")
   createdBy        Json                     @map("created_by")
   custom           Json                     @default("{}")
   deletedAt        DateTime?                @map("deleted_at") @db.Timestamptz
@@ -659,6 +703,7 @@ model Opportunity {
   pipeline       Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
   stage          PipelineStage             @relation(fields: [stageId], references: [id], onDelete: Restrict)
   stageHistory   OpportunityStageHistory[]
+  followUpTask   Task?                     @relation("DealFollowUpTask", fields: [followUpTaskId], references: [id], onDelete: SetNull)
 
   mailOutbound       MailOutbound[]
   sequenceEnrolments SequenceEnrolment[]
@@ -868,6 +913,7 @@ model Task {
   sequenceEnrolment SequenceEnrolment? @relation(fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
   sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
   notifications     Notification[]
+  followUpFor       Opportunity[]      @relation("DealFollowUpTask")
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, assigneeId])
@@ -2007,11 +2053,27 @@ model OutreachExclusion {
   createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
   removedAt          DateTime?       @map("removed_at") @db.Timestamptz
   removedNote        String?         @map("removed_note")
+  /// #242: why an automatic (`won_deal`) exclusion needs an admin's look: `deal_reopened` or `deal_refunded`.
+  reviewReason       String?         @map("review_reason")
+  reviewFlaggedAt    DateTime?       @map("review_flagged_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, source, externalRef])
   @@map("outreach_exclusions")
+}
+
+/// #242: how a won deal excludes its customer from outreach. No row means the defaults.
+model CustomerExclusionSettings {
+  workspaceId       String   @id @map("workspace_id") @db.Uuid
+  /// `address` (the point of contact's primary address) or `domain` (their company's; checked by the database).
+  wonExclusionScope String   @default("address") @map("won_exclusion_scope")
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("customer_exclusion_settings")
 }
 
 /// #192: who sees a sequence.

@@ -60,3 +60,64 @@ export const DEFAULT_STAGES: readonly DefaultStage[] = [
 
 /** How many deals a board column carries before it says there are more. */
 export const BOARD_STAGE_LIMIT = 200;
+
+/**
+ * Why a deal was lost (#242): a fixed picklist, required whenever a deal moves into a lost stage. A member picks
+ * one in the move-to-lost dialog (the API refuses a member's close without it); a stage rule or an import that
+ * closes a deal as lost, naming no reason it can map, records `DEFAULT_LOST_REASON`. The free-text `lostReason`
+ * stays beside it for detail.
+ */
+export const LOST_REASONS = [
+    'price_budget',
+    'no_response',
+    'chose_competitor',
+    'not_ready',
+    'service_not_suitable',
+    'timing',
+    'duplicate_opportunity',
+    'other',
+] as const;
+export type LostReason = (typeof LOST_REASONS)[number];
+
+export const LOST_REASON_LABELS: Readonly<Record<LostReason, string>> = {
+    price_budget: 'Price/Budget',
+    no_response: 'No Response',
+    chose_competitor: 'Chose Competitor',
+    not_ready: 'Not Ready',
+    service_not_suitable: 'Service Not Suitable',
+    timing: 'Timing',
+    duplicate_opportunity: 'Duplicate Opportunity',
+    other: 'Other',
+};
+
+/**
+ * What a rule- or import-driven close records when it names no reason it can map. `other` rather than
+ * `no_response`: a rule or an import does not know the prospect went silent, and `other` never claims what nobody
+ * said.
+ */
+export const DEFAULT_LOST_REASON: LostReason = 'other';
+
+/**
+ * The picklist value a free-text reason (an imported CRM's, a legacy deal's) means, or `null` when it names none.
+ * Matches the code (`NO_RESPONSE`), the label (`No Response`) or a few common spellings, case-insensitively.
+ */
+export function lostReasonFromText(text: string | null | undefined): LostReason | null {
+    if (!text) return null;
+    const t = text
+        .toLowerCase()
+        .replace(/[^a-z]+/g, ' ')
+        .trim();
+    if (!t) return null;
+    const patterns: readonly [LostReason, RegExp][] = [
+        ['duplicate_opportunity', /\bduplicate\b/],
+        ['price_budget', /\b(price|pricing|budget|cost|expensive)\b/],
+        ['no_response', /\b(no response|no reply|unresponsive|ghosted|no answer)\b/],
+        ['chose_competitor', /\b(competitor|competition|chose another|went with)\b/],
+        ['not_ready', /\bnot ready\b/],
+        ['service_not_suitable', /\b(not suitable|not a fit|no fit|unsuitable|service not)\b/],
+        ['timing', /\b(timing|bad time|next year|next quarter)\b/],
+        ['other', /^other$/],
+    ];
+    for (const [reason, pattern] of patterns) if (pattern.test(t)) return reason;
+    return null;
+}

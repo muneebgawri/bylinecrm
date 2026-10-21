@@ -52,6 +52,8 @@ export const paths = {
     settingsGoogle: (workspaceId: string) => `/w/${workspaceId}/settings/google`,
     settingsSuppression: (workspaceId: string) => `/w/${workspaceId}/settings/suppression`,
     settingsRegionPolicy: (workspaceId: string) => `/w/${workspaceId}/settings/region-policy`,
+    /** #242: what a won deal excludes from outreach, and the exclusions a reopened or refunded deal flagged. */
+    settingsCustomers: (workspaceId: string) => `/w/${workspaceId}/settings/customers`,
     /** Email verification (P3-5): what each result does at enrolment, and how long a result stands. */
     settingsVerification: (workspaceId: string) => `/w/${workspaceId}/settings/verification`,
     /** Enrichment (P4-2): the free sources on or off, and how long an answer stands. */

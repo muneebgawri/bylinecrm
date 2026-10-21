@@ -1,4 +1,5 @@
 import {
+    LOST_REASONS,
     CUSTOM_FIELD_KEY_PATTERN,
     CUSTOM_FIELD_TYPES,
     LIST_LIMIT_DEFAULT,
@@ -178,6 +179,12 @@ const opportunityFields = {
     ownerId: uuid.nullable(),
     pointOfContactId: uuid.nullable(),
     companyId: uuid.nullable(),
+    /** #242: only on a deal in a lost stage; a close sets it through the move. */
+    lostReasonCode: z.enum(LOST_REASONS),
+    nextFollowUpDate: isoDate.nullable(),
+    nextActivity: nullableText(500),
+    serviceInterest: nullableText(200),
+    leadSource: nullableText(200),
     custom,
 };
 /** Where a new deal starts (P1-2): the default pipeline's first stage unless the caller names one. A move is a route of its own. */
