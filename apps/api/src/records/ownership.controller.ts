@@ -1,11 +1,17 @@
-import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { CompanyDomainView, OwnershipConflictView } from '@bylinecrm/shared';
+import {
+    TRANSFER_COOLING_DAYS_LIMITS,
+    type CompanyDomainView,
+    type OwnershipConflictView,
+    type OwnershipSettingsView,
+} from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { Requires, TenantController } from '../auth/decorators';
 import { named, Returns } from '../openapi/responses';
 import { companyDomainView, ownershipConflictView } from './responses';
+import { TransfersService } from '../transfers/transfers.service';
 import { OwnershipService } from './ownership.service';
 
 class AddCompanyDomainDto extends createZodDto(z.object({ domain: z.string().trim().min(3).max(253) })) {}
@@ -18,6 +24,20 @@ class ResolveConflictsDto extends createZodDto(
             .max(200),
     }),
 ) {}
+
+const ownershipSettingsShape = z.object({
+    transferCoolingDays: z
+        .number()
+        .int()
+        .min(TRANSFER_COOLING_DAYS_LIMITS.min)
+        .max(TRANSFER_COOLING_DAYS_LIMITS.max)
+        .meta({
+            description:
+                'Days after a transfer during which the record cannot go back to the member it left (not offered to them, not accepted by them). Managers and admins are exempt. 0 turns it off.',
+        }),
+});
+class OwnershipSettingsDto extends createZodDto(ownershipSettingsShape) {}
+const ownershipSettingsView = named('OwnershipSettings', ownershipSettingsShape);
 
 const resolvedView = named(
     'OwnershipResolution',
@@ -63,7 +83,25 @@ export class CompanyDomainsController {
 @ApiTags('companies')
 @TenantController('ownership')
 export class OwnershipController {
-    constructor(private readonly ownership: OwnershipService) {}
+    constructor(
+        private readonly ownership: OwnershipService,
+        private readonly transfers: TransfersService,
+    ) {}
+
+    /** The transfer cooling period (owner decision 2); every member may read it. */
+    @Requires('record:read')
+    @Get('settings')
+    @Returns(ownershipSettingsView)
+    settings(): Promise<OwnershipSettingsView> {
+        return this.transfers.settings();
+    }
+
+    @Requires('record:transfer')
+    @Put('settings')
+    @Returns(ownershipSettingsView)
+    setSettings(@Body() body: OwnershipSettingsDto): Promise<OwnershipSettingsView> {
+        return this.transfers.setSettings(body);
+    }
 
     @Requires('record:transfer')
     @Get('conflicts')

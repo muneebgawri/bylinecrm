@@ -71,6 +71,20 @@ describe('settle (INV-1)', () => {
     });
 });
 
+describe('only NewswireOS’s verified counts (INV-1)', () => {
+    it('FR-CRMS-19: an unknown, mis-cased or missing status never attaches an invoice; only `verified` does', () => {
+        for (const status of ['VERIFIED', 'Verified', 'ok', 'approved', 'paid', '', undefined]) {
+            const decision = settle({
+                result: parseLookup({ status, reason_code: null, canonical_reference: 'pi_1', amount_cents: 100 }),
+            });
+            expect(decision === 'retry' ? decision : decision.status, String(status)).not.toBe('verified');
+        }
+        expect(settle({ result: result('verified') })).toMatchObject({ status: 'verified' });
+        // And an invoice that is not verified never covers a deal, whatever its amount.
+        expect(covers({ amountMinor: 100n, currency: 'USD' }, [])).toBe(false);
+    });
+});
+
 describe('covers (INV-1)', () => {
     it('adds verified invoices in the deal currency up to its amount', () => {
         const deal = { amountMinor: 1000n, currency: 'USD' };

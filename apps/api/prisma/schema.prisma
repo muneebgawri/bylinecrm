@@ -113,6 +113,7 @@ model Workspace {
   guardrailEvents               GuardrailEvent[]
   companyDomains                CompanyDomain[]
   customerExclusionSettings     CustomerExclusionSettings?
+  ownershipSettings             OwnershipSettings?
 
   @@map("workspaces")
 }
@@ -2134,6 +2135,18 @@ model CustomerExclusionSettings {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("customer_exclusion_settings")
+}
+
+/// OWN-1 (owner decision 2): Settings → Ownership. No row means the defaults.
+model OwnershipSettings {
+  workspaceId         String   @id @map("workspace_id") @db.Uuid
+  /// Days a transferred record cannot go back to the member it left (0–90, checked by the database; 0 is off).
+  transferCoolingDays Int      @default(14) @map("transfer_cooling_days")
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("ownership_settings")
 }
 
 /// #192: who sees a sequence.

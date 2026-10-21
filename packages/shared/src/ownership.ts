@@ -58,3 +58,24 @@ export interface OwnershipConflictView {
     companyOwnerMemberId: string;
     companyOwnerName: string | null;
 }
+
+/** The transfer cooling period's default and bounds, in days (OWN-1, owner decision 2). `0` turns it off. */
+export const TRANSFER_COOLING_DAYS_DEFAULT = 14;
+export const TRANSFER_COOLING_DAYS_LIMITS = { min: 0, max: 90 } as const;
+
+/** A workspace's ownership settings (Settings → Ownership). */
+export interface OwnershipSettingsView {
+    /**
+     * Days after a transfer during which the record cannot go back to the member it left — not offered to them,
+     * not accepted by them. Managers and admins (`record:transfer`), and their forced transfers, are exempt.
+     */
+    transferCoolingDays: number;
+}
+
+/** What a `409 conflict.transfer_cooling` says in `details`. */
+export interface TransferCoolingDetails {
+    /** ISO 8601: when the member may take the record again. */
+    unlocksAt: string;
+    coolingDays: number;
+    [key: string]: string | number;
+}

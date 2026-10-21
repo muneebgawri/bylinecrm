@@ -64,6 +64,33 @@ describe('GUARD-2 poaching rules', () => {
         expect(poachFindings(facts({ recipients: [{ ...customer, ownerId: X }] }))).toEqual([]);
     });
 
+    it('FR-CRMS-22: in one message to many, only another member’s leads are flagged — in order, lower-cased, nothing else', () => {
+        const mixed = facts({
+            recipients: [
+                recipient({ address: 'Own@Mine.com', personId: 'p-own', companyId: null, ownerId: X }),
+                recipient({ address: 'Dana@Acme.com' }),
+                recipient({ address: 'ana@byline.example', personId: null, companyId: null, ownerId: null }),
+                recipient({ address: 'mia@elsewhere.com', memberId: Y, ownerId: null }),
+                recipient({ address: 'nobody@free.org', personId: 'p-none', companyId: null, ownerId: null }),
+                recipient({ address: 'lee@other.com', personId: 'p-lee', companyId: 'company-2', ownerId: 'member-z' }),
+            ],
+        });
+        expect(poachFindings(mixed)).toEqual([
+            { address: 'dana@acme.com', personId: 'person-1', companyId: 'company-1', ownerId: Y, exclusion: null },
+            {
+                address: 'lee@other.com',
+                personId: 'p-lee',
+                companyId: 'company-2',
+                ownerId: 'member-z',
+                exclusion: null,
+            },
+        ]);
+        // With one owner on the thread, only the other owner's lead is still flagged.
+        expect(poachFindings({ ...mixed, threadMembers: new Set([X, Y]) }).map((f) => f.address)).toEqual([
+            'lee@other.com',
+        ]);
+    });
+
     it('reports an address once however many roles it had', () => {
         expect(
             poachFindings(facts({ recipients: [recipient(), recipient({ address: 'DANA@acme.com' })] })),

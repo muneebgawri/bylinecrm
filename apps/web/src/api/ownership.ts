@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
-import type { CompanyDomainView, OwnershipConflictView } from './types';
+import type { CompanyDomainView, OwnershipConflictView, OwnershipSettingsView } from './types';
 
 /**
  * Company-domain ownership (OWN-2, #201): a company's other domains, and the records that disagree with
@@ -11,10 +11,15 @@ import type { CompanyDomainView, OwnershipConflictView } from './types';
 
 const keys = {
     conflicts: (workspaceId: string) => ['w', workspaceId, 'ownership', 'conflicts'] as const,
+    settings: (workspaceId: string) => ['w', workspaceId, 'ownership', 'settings'] as const,
     domains: (workspaceId: string, companyId: string) => ['w', workspaceId, 'company', companyId, 'domains'] as const,
 };
 
 export const ownership = {
+    settings: (workspaceId: string, signal?: AbortSignal) =>
+        request<OwnershipSettingsView>('GET', workspacePath(workspaceId, '/ownership/settings'), { signal }),
+    setSettings: (workspaceId: string, input: OwnershipSettingsView) =>
+        request<OwnershipSettingsView>('PUT', workspacePath(workspaceId, '/ownership/settings'), { body: input }),
     conflicts: (workspaceId: string, signal?: AbortSignal) =>
         request<OwnershipConflictView[]>('GET', workspacePath(workspaceId, '/ownership/conflicts'), { signal }),
     resolve: (workspaceId: string, items: readonly { object: 'person' | 'opportunity'; recordId: string }[]) =>
@@ -78,5 +83,21 @@ export function useRemoveCompanyDomain(workspaceId: string, companyId: string) {
     return useMutation({
         mutationFn: (domain: string) => ownership.removeDomain(workspaceId, companyId, domain),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.domains(workspaceId, companyId) }),
+    });
+}
+
+/** The transfer cooling period (owner decision 2): days a record cannot go back to the member it left. */
+export function useOwnershipSettings(workspaceId: string) {
+    return useQuery({
+        queryKey: keys.settings(workspaceId),
+        queryFn: ({ signal }) => ownership.settings(workspaceId, signal),
+    });
+}
+
+export function usePutOwnershipSettings(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: OwnershipSettingsView) => ownership.setSettings(workspaceId, input),
+        onSuccess: (view) => client.setQueryData(keys.settings(workspaceId), view),
     });
 }
