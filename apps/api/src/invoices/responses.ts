@@ -11,6 +11,7 @@ export const dealInvoiceView = named(
         id,
         opportunityId: id,
         gateway: z.enum(INVOICE_GATEWAYS),
+        resolvedGateway: z.enum(INVOICE_GATEWAYS).nullable(),
         reference: z.string(),
         canonicalReference: z.string().nullable().meta({ description: 'The reference as NewswireOS names it.' }),
         amountMinor: z.string().meta({ description: 'What the payment must be, in minor units.' }),

@@ -39,6 +39,8 @@ export interface DealInvoiceView {
     gateway: InvoiceGateway;
     reference: string;
     canonicalReference: string | null;
+    /** For a NewswireOS invoice number: the rail NewswireOS resolved it to (newswireos#647). */
+    resolvedGateway: InvoiceGateway | null;
     amountMinor: string;
     /** Refunded so far; a verified invoice with some refunded is partially refunded. */
     refundedAmountMinor: string;

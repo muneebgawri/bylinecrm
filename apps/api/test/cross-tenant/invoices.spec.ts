@@ -365,7 +365,14 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             await run(id);
             expect(newswireos.calls.at(-1)).toEqual({
                 link: { baseUrl: 'https://newswireos.example', apiToken: `nwos_${stamp}` },
-                request: { gateway: 'stripe', reference: ref('pi_ok'), amountCents: 40000, currency: 'usd' },
+                request: {
+                    gateway: 'stripe',
+                    reference: ref('pi_ok'),
+                    amountCents: 40000,
+                    currency: 'usd',
+                    // The company’s domain names the client (newswireos#647); the deal has no contact.
+                    clientDomain: expect.stringMatching(/^partial-.*\.test$/) as string,
+                },
             });
             expect(await one(deal2, id)).toMatchObject({ status: 'verified', canonicalReference: ref('pi_canon') });
             // A partial payment does not cover the deal: the stage rule is not told.
@@ -610,6 +617,101 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             expect(await one(deal, other)).toMatchObject({
                 status: 'needs_review',
                 reasonCode: 'INVOICE_NUMBER_UNRESOLVED',
+            });
+        });
+
+        describe('NewswireOS with holders (newswireos#647)', () => {
+            let clientDeal: string;
+            const contactEmail = `buyer-${stamp}@glusmanlaw.test`;
+            beforeAll(async () => {
+                const company = (
+                    await as(ana)
+                        .post(w('/companies'))
+                        .send({ name: `Glusman ${stamp}`, domain: `glusman-${stamp}.test` })
+                        .expect(201)
+                ).body as { id: string; domain: string };
+                const person = (
+                    await as(ana)
+                        .post(w('/people'))
+                        .send({
+                            nameFirst: 'Buyer',
+                            companyId: company.id,
+                            emails: { primary: contactEmail, additional: [] },
+                        })
+                        .expect(201)
+                ).body as { id: string };
+                clientDeal = (
+                    (
+                        await as(ana)
+                            .post(w('/opportunities'))
+                            .send({
+                                name: `Client deal ${stamp}`,
+                                companyId: company.id,
+                                pointOfContactId: person.id,
+                                amount: { amountMinor: 5_000, currency: 'USD' },
+                            })
+                            .expect(201)
+                    ).body as { id: string }
+                ).id;
+            });
+            const enter = async (reference: string, body: Record<string, unknown>) => {
+                newswireos.answerWire(reference, { amount_cents: 5_000, currency: 'usd', ...body });
+                const id = (
+                    (await add(ana, clientDeal, { gateway: 'newswireos_invoice', reference }).expect(201))
+                        .body as DealInvoiceView
+                ).id;
+                await run(id);
+                return one(clientDeal, id);
+            };
+
+            it('sends who the client is; a same-client hold verifies and keeps the real rail and id', async () => {
+                const number = `INV-202610-same-${stamp}`;
+                const invoice = await enter(number, {
+                    status: 'verified',
+                    gateway: 'stripe',
+                    canonical_reference: ref('pi_resolved'),
+                    already_used: true,
+                    holder: 'same_client',
+                });
+                const asked = newswireos.calls.filter((c) => c.request.reference === number);
+                expect(asked).toHaveLength(1);
+                expect(asked[0]!.request).toMatchObject({
+                    gateway: 'newswireos_invoice',
+                    clientEmails: [contactEmail],
+                    clientDomain: `glusman-${stamp}.test`,
+                });
+                expect(invoice).toMatchObject({
+                    status: 'verified',
+                    reasonCode: 'HELD_BY_SAME_CLIENT',
+                    resolvedGateway: 'stripe',
+                    canonicalReference: ref('pi_resolved'),
+                });
+            });
+
+            it('another client’s release waits for finance; held is asked once more, then waits', async () => {
+                expect(
+                    await enter(`INV-202610-other-${stamp}`, {
+                        status: 'verified',
+                        already_used: true,
+                        holder: 'other_client',
+                    }),
+                ).toMatchObject({ status: 'needs_review', reasonCode: 'HELD_BY_OTHER_CLIENT' });
+                const held = `INV-202610-held-${stamp}`;
+                expect(await enter(held, { status: 'verified', already_used: true, holder: 'held' })).toMatchObject({
+                    status: 'needs_review',
+                    reasonCode: 'ALREADY_USED',
+                });
+                expect(newswireos.calls.filter((c) => c.request.reference === held)).toHaveLength(2);
+            });
+
+            it('its refusals of an invoice number stand as invalid', async () => {
+                expect(
+                    await enter(`INV-202610-void-${stamp}`, {
+                        status: 'invalid',
+                        reason_code: 'INVOICE_VOID',
+                        holder: 'none',
+                    }),
+                ).toMatchObject({ status: 'invalid', reasonCode: 'INVOICE_VOID' });
             });
         });
 

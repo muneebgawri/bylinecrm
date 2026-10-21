@@ -6,6 +6,8 @@ export interface Settlement {
     status: 'verified' | 'invalid' | 'needs_review';
     reasonCode: string | null;
     canonicalReference: string | null;
+    /** For a NewswireOS invoice number: the rail NewswireOS resolved it to. */
+    resolvedGateway?: 'stripe' | 'paypal' | 'crypto_onchain' | 'bank_wire' | null;
     facts: Record<string, unknown>;
 }
 
@@ -19,16 +21,23 @@ export function settle(
     gateway?: string,
 ): Settlement | 'retry' {
     const settled = settleAnswer(outcome);
-    return gateway === 'newswireos_invoice' ? unresolvedInvoiceNumber(settled) : settled;
+    if (settled !== 'retry' && 'result' in outcome && outcome.result.gateway) {
+        settled.resolvedGateway = outcome.result.gateway;
+    }
+    if (gateway !== 'newswireos_invoice') return settled;
+    // A NewswireOS that knows invoice numbers (#647) says who holds the payment; its refusals (`NOT_FOUND`,
+    // `INVOICE_VOID`, `INVOICE_UNPAID`, `NO_PROVIDER_PAYMENT`) then stand as `invalid`.
+    const current = 'result' in outcome && outcome.result.holder !== undefined;
+    return current ? settled : unresolvedInvoiceNumber(settled);
 }
 
-/** NewswireOS's own refusals that mean "cannot resolve this reference", not "this payment is wrong". */
+/** Reasons an older NewswireOS gives for a gateway it does not know. */
 const UNRESOLVED_REASONS: readonly string[] = ['NOT_FOUND', 'UNSUPPORTED_GATEWAY', 'INVALID_GATEWAY'];
 
 /**
- * A NewswireOS invoice number (`INV-202610-000067`, `2GBMDHSF-0002`) is NewswireOS's own reference, which its lookup
- * is being taught to resolve. Until it can, a "not found" or "unsupported gateway" answer (or the 4xx refusing the
- * request) says nothing about the payment: it waits for a person, never `invalid`.
+ * A NewswireOS invoice number (`INV-202610-000067`, `2GBMDHSF-0002`) asked of a NewswireOS before #647: a
+ * "not found" or "unsupported gateway" answer (or the 4xx refusing the request) says nothing about the payment, so
+ * it waits for a person, never `invalid`.
  */
 function unresolvedInvoiceNumber(settled: Settlement | 'retry'): Settlement | 'retry' {
     if (settled === 'retry' || settled.status !== 'invalid') return settled;

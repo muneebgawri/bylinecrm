@@ -90,7 +90,7 @@ describe('covers (INV-1)', () => {
     });
 });
 
-describe('a NewswireOS invoice number (INV-1)', () => {
+describe('a NewswireOS invoice number asked of NewswireOS before #647 (no holder)', () => {
     const gateway = 'newswireos_invoice';
     it('not found, or a gateway NewswireOS cannot resolve yet, waits for a person, never invalid', () => {
         for (const reason of ['NOT_FOUND', 'UNSUPPORTED_GATEWAY']) {
@@ -115,6 +115,53 @@ describe('a NewswireOS invoice number (INV-1)', () => {
         });
         expect(settle({ result: result('invalid', 'NOT_FOUND') }, 'stripe')).toMatchObject({ status: 'invalid' });
         expect(settle({ error: new NewswireosApiError(null, 'down'), finalAttempt: false }, gateway)).toBe('retry');
+    });
+});
+
+describe('the lookup with a holder (newswireos#647)', () => {
+    const wire = (body: Record<string, unknown>) =>
+        parseLookup({ canonical_reference: 'pi_9', amount_cents: 100, currency: 'usd', ...body });
+
+    it('verified with no holder, or a release of the same client, verifies; the same client is recorded', () => {
+        expect(settle({ result: wire({ status: 'verified', holder: 'none', already_used: false }) })).toMatchObject({
+            status: 'verified',
+            reasonCode: null,
+        });
+        expect(
+            settle({ result: wire({ status: 'verified', holder: 'same_client', already_used: true }) }),
+        ).toMatchObject({ status: 'verified', reasonCode: 'HELD_BY_SAME_CLIENT', facts: { holder: 'same_client' } });
+    });
+
+    it('another client’s release waits for finance; held (no client named) waits too', () => {
+        expect(
+            settle({ result: wire({ status: 'verified', holder: 'other_client', already_used: true }) }),
+        ).toMatchObject({ status: 'needs_review', reasonCode: 'HELD_BY_OTHER_CLIENT' });
+        expect(settle({ result: wire({ status: 'verified', holder: 'held', already_used: true }) })).toMatchObject({
+            status: 'needs_review',
+            reasonCode: 'ALREADY_USED',
+        });
+    });
+
+    it('with no holder (an older NewswireOS), already_used decides as before', () => {
+        expect(wire({ status: 'verified', already_used: true })).toMatchObject({
+            status: 'needs_review',
+            reasonCode: 'ALREADY_USED',
+            holder: undefined,
+        });
+    });
+
+    it('a NewswireOS invoice number: its refusals stand as invalid; the real rail and id are kept', () => {
+        for (const reason of ['NOT_FOUND', 'INVOICE_VOID', 'INVOICE_UNPAID', 'NO_PROVIDER_PAYMENT']) {
+            expect(
+                settle(
+                    { result: wire({ status: 'invalid', reason_code: reason, holder: 'none' }) },
+                    'newswireos_invoice',
+                ),
+            ).toMatchObject({ status: 'invalid', reasonCode: reason });
+        }
+        expect(
+            settle({ result: wire({ status: 'verified', holder: 'none', gateway: 'stripe' }) }, 'newswireos_invoice'),
+        ).toMatchObject({ status: 'verified', canonicalReference: 'pi_9', resolvedGateway: 'stripe' });
     });
 });
 

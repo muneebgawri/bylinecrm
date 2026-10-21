@@ -18,7 +18,8 @@ import { recordWhere } from '../records/record-scope';
 import { fillWonDealAmount } from './deal-amount';
 import { covers, settle, type Settlement } from './invoice-decision';
 import { InvoiceQueue } from './invoice-queue';
-import { INVOICE_REASONS } from './invoices.constants';
+import { isFreeMailDomain } from '../enrichment/email-domain';
+import { INVOICE_REASONS, NEWSWIREOS_CLIENT_EMAILS_MAX } from './invoices.constants';
 import {
     NEWSWIREOS_VERIFICATION_PORT,
     type NewswireosLookupResult,
@@ -135,6 +136,7 @@ export class InvoicesService {
                 verifiedAt: null,
                 invalidatedAt: null,
                 canonicalReference: null,
+                resolvedGateway: null,
                 verificationPayload: {},
                 createdById,
                 decidedById: null,
@@ -246,9 +248,10 @@ export class InvoicesService {
             const link = await tx.newswireosSettings.findFirst({
                 select: { baseUrl: true, apiTokenCiphertext: true },
             });
-            return { row, link };
+            const client = row ? await clientOf(tx, row.opportunityId) : { emails: [], domain: null };
+            return { row, link, client };
         });
-        const { row, link } = found;
+        const { row, link, client } = found;
         if (!row || row.status !== 'verifying') return;
 
         let outcome: Settlement | 'retry';
@@ -269,16 +272,22 @@ export class InvoicesService {
         } else {
             let result: NewswireosLookupResult | null = null;
             let error: unknown = null;
+            const nwLink = { baseUrl: link.baseUrl, apiToken: this.secrets.open(link.apiTokenCiphertext) };
+            const ask = (named: boolean) =>
+                this.newswireos.lookup(nwLink, {
+                    gateway: row.gateway as Exclude<typeof row.gateway, 'bank_wire'>,
+                    reference: row.reference,
+                    amountCents: Number(row.amountMinor),
+                    currency: row.currency.toLowerCase(),
+                    ...(named && client.emails.length ? { clientEmails: client.emails } : {}),
+                    ...(named && client.domain ? { clientDomain: client.domain } : {}),
+                });
             try {
-                result = await this.newswireos.lookup(
-                    { baseUrl: link.baseUrl, apiToken: this.secrets.open(link.apiTokenCiphertext) },
-                    {
-                        gateway: row.gateway,
-                        reference: row.reference,
-                        amountCents: Number(row.amountMinor),
-                        currency: row.currency.toLowerCase(),
-                    },
-                );
+                // Always with who the client is (newswireos#647).
+                result = await ask(true);
+                // `held` means NewswireOS was told no client to compare: asked once more with the addresses, if
+                // there are any (a deal with none stays `needs_review`).
+                if (result.holder === 'held' && client.emails.length > 0) result = await ask(true);
             } catch (e) {
                 error = e;
             }
@@ -319,7 +328,11 @@ export class InvoicesService {
                             ],
                         },
                         // Entered as a NewswireOS invoice number: NewswireOS named the payment behind it.
-                        { gateway: 'newswireos_invoice', canonicalReference: { in: change.references } },
+                        {
+                            gateway: 'newswireos_invoice',
+                            resolvedGateway: gateway,
+                            canonicalReference: { in: change.references },
+                        },
                     ],
                 },
             });
@@ -409,6 +422,9 @@ export class InvoicesService {
                 reasonCode: outcome.reasonCode,
                 verifiedAt: outcome.status === 'verified' ? new Date() : null,
                 ...(outcome.canonicalReference ? { canonicalReference: outcome.canonicalReference } : {}),
+                ...(outcome.resolvedGateway && current.gateway === 'newswireos_invoice'
+                    ? { resolvedGateway: outcome.resolvedGateway }
+                    : {}),
                 verificationPayload: {
                     ...(current.verificationPayload as Prisma.JsonObject),
                     ...(outcome.facts as Prisma.InputJsonObject),
@@ -483,6 +499,48 @@ async function invoiceOn(tx: WorkspaceClient, opportunityId: string, invoiceId: 
     return row;
 }
 
+/**
+ * Who the deal's client is, for NewswireOS (newswireos#647): the point of contact's addresses, then the company's
+ * people's, at most `NEWSWIREOS_CLIENT_EMAILS_MAX`; and the company's domain unless it is free mail.
+ */
+async function clientOf(
+    tx: WorkspaceClient,
+    opportunityId: string,
+): Promise<{ emails: string[]; domain: string | null }> {
+    const deal = await tx.opportunity.findUnique({
+        where: { id: opportunityId },
+        select: {
+            pointOfContact: { select: { emails: true, deletedAt: true } },
+            company: { select: { id: true, domain: true } },
+        },
+    });
+    if (!deal) return { emails: [], domain: null };
+    const people = deal.company
+        ? await tx.person.findMany({
+              where: { companyId: deal.company.id, deletedAt: null },
+              select: { emails: true },
+              orderBy: { createdAt: 'asc' },
+              take: NEWSWIREOS_CLIENT_EMAILS_MAX,
+          })
+        : [];
+    const contact = deal.pointOfContact && !deal.pointOfContact.deletedAt ? [deal.pointOfContact] : [];
+    const emails = new Set<string>();
+    for (const p of [...contact, ...people]) {
+        for (const e of addressesOf(p.emails)) {
+            if (emails.size < NEWSWIREOS_CLIENT_EMAILS_MAX) emails.add(e);
+        }
+    }
+    const domain = deal.company?.domain?.trim().toLowerCase() || null;
+    return { emails: [...emails], domain: domain && !isFreeMailDomain(domain) ? domain : null };
+}
+
+/** A person's `emails` column (`{ primary, additional }`), as lower-cased addresses. */
+function addressesOf(value: unknown): string[] {
+    const o = value && typeof value === 'object' ? (value as { primary?: unknown; additional?: unknown }) : {};
+    const all = [o.primary, ...(Array.isArray(o.additional) ? o.additional : [])];
+    return all.filter((e): e is string => typeof e === 'string' && e.includes('@')).map((e) => e.trim().toLowerCase());
+}
+
 /** Whether the deal's verified invoices, net of refunds, cover its amount. */
 async function coverage(tx: WorkspaceClient, opportunityId: string): Promise<boolean> {
     const deal = await tx.opportunity.findUnique({
@@ -539,6 +597,7 @@ export function view(row: Row): DealInvoiceView {
         gateway: row.gateway,
         reference: row.reference,
         canonicalReference: row.canonicalReference,
+        resolvedGateway: row.resolvedGateway,
         amountMinor: row.amountMinor.toString(),
         refundedAmountMinor: row.refundedAmountMinor.toString(),
         currency: row.currency,

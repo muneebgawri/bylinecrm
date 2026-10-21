@@ -40,9 +40,13 @@ const REASON_TEXT: Record<string, string> = {
     PROVIDER_ERROR: 'NewswireOS or the gateway did not answer.',
     UNDER_CONFIRMED: 'Not enough confirmations yet.',
     AMOUNT_MISMATCH: 'The amount or currency does not match.',
-    NOT_FOUND: 'No such payment on the gateway.',
+    NOT_FOUND: 'No such payment (or NewswireOS invoice) found.',
+    INVOICE_VOID: 'The NewswireOS invoice was voided.',
+    NO_PROVIDER_PAYMENT: 'The NewswireOS invoice has no gateway payment behind it.',
+    HELD_BY_OTHER_CLIENT: 'Another client’s release already holds this payment: finance decides.',
+    HELD_BY_SAME_CLIENT: 'Verified: a release of the same client also holds this payment.',
     NOT_SUCCEEDED: 'The payment did not succeed.',
-    INVOICE_UNPAID: 'The invoice is not paid.',
+    INVOICE_UNPAID: 'The invoice is not paid yet.',
     WRONG_PAYEE: 'Not paid to us.',
     REFUNDED: 'Refunded.',
     DISPUTED: 'Charged back or disputed.',
@@ -144,12 +148,17 @@ function InvoiceRow({ workspaceId, invoice }: { workspaceId: string; invoice: De
                 {statusBadge(invoice)}
             </div>
             <span className="text-xs text-text-muted">
-                {GATEWAY_LABEL[invoice.gateway]} · {amount}
+                {GATEWAY_LABEL[invoice.gateway]}
+                {invoice.resolvedGateway &&
+                    ` → ${GATEWAY_LABEL[invoice.resolvedGateway]}${invoice.canonicalReference ? ` ${invoice.canonicalReference}` : ''}`}{' '}
+                · {amount}
                 {net && ` · ${net} after refunds`}
             </span>
-            {why && (invoice.status !== 'verified' || invoice.reasonCode === 'UNDERPAID_WITHIN_TOLERANCE') && (
-                <span className="text-xs text-text-muted">{why}</span>
-            )}
+            {why &&
+                (invoice.status !== 'verified' ||
+                    ['UNDERPAID_WITHIN_TOLERANCE', 'HELD_BY_SAME_CLIENT'].includes(invoice.reasonCode ?? '')) && (
+                    <span className="text-xs text-text-muted">{why}</span>
+                )}
             {invoice.note && <span className="text-xs text-text-muted">“{invoice.note}”</span>}
             {undecided && (verify.allowed || (edit.allowed && invoice.status === 'needs_review')) && (
                 <div className="flex flex-wrap gap-1.5">

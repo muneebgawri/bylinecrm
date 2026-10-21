@@ -32852,6 +32852,11 @@
                         "type": "string",
                         "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
                     },
+                    "resolvedGateway": {
+                        "nullable": true,
+                        "type": "string",
+                        "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
+                    },
                     "reference": {
                         "type": "string"
                     },
@@ -32930,6 +32935,7 @@
                     "id",
                     "opportunityId",
                     "gateway",
+                    "resolvedGateway",
                     "reference",
                     "canonicalReference",
                     "amountMinor",
