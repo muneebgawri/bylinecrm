@@ -108,8 +108,9 @@ export class PipelinesController {
     }
 
     /**
-     * Deletes a stage. With deals in it (trash included) it needs `?moveDealsTo=<open stage id>`:
-     * they move there first, one event each. In the query string, not a body: DELETE bodies do
+     * Deletes a stage. With deals in it (trash included) it needs `?moveDealsTo=<stage id>`: an open
+     * stage, or for a won or lost stage another of the same kind (the deals stay closed; another
+     * closed kind is a 422). They move there first, one event each. In the query string, not a body: DELETE bodies do
      * not reliably survive proxies.
      */
     @Requires('pipeline:configure')

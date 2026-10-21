@@ -156,6 +156,44 @@ describe('FR-CRMS-9: pipeline settings', () => {
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
+    it('FR-CRMS-9: a won stage offers the other won stages first, picked by default, so its deals stay won', async () => {
+        const withClosedWon = { ...pipeline, stages: [...STAGES, stage('s-closed-won', 'Closed Won', 5, 'won')] };
+        const seen = api([
+            (r) => (r.method === 'GET' && r.url.endsWith(`/pipelines/${P}`) ? json(withClosedWon) : undefined),
+            (r) =>
+                r.method === 'DELETE' && r.url.endsWith('/stages/s-won')
+                    ? stageRefusal({ liveDeals: 176, trashedDeals: 0 })
+                    : undefined,
+            (r) =>
+                r.method === 'DELETE' && r.url.endsWith('/stages/s-won?moveDealsTo=s-closed-won')
+                    ? json(null, 204)
+                    : undefined,
+        ]);
+        detail();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for Won' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Delete stage' }));
+        await screen.findByText('Move 176 deals to another stage first.');
+
+        // The same-kind stage is chosen already, and no reopen warning shows for it.
+        const target = screen.getByRole('combobox', { name: 'Move deals to' });
+        expect(target).toHaveTextContent('Closed Won (stays won)');
+        expect(screen.queryByText(/they reopen/)).not.toBeInTheDocument();
+        await userEvent.click(target);
+        const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+        expect(options).toEqual(['Closed Won (stays won)', 'New', 'Contacted', 'Replied']);
+        // Picking an open stage brings the reopen hint back.
+        await userEvent.click(screen.getByRole('option', { name: 'New' }));
+        expect(await screen.findByText('These deals were won; they reopen in an open stage.')).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('combobox', { name: 'Move deals to' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Closed Won (stays won)' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Move deals and delete' }));
+
+        await waitFor(() =>
+            expect(seen.some((r) => r.method === 'DELETE' && r.url.endsWith('?moveDealsTo=s-closed-won'))).toBe(true),
+        );
+    });
+
     it('FR-CRMS-9: over the move limit, the server’s 413 message is shown and the step stays open', async () => {
         api([
             (r) =>

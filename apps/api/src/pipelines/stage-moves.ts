@@ -28,10 +28,12 @@ export type MoveEventType = Extract<DomainEventType, 'deal.stage_changed' | 'dea
 
 /**
  * One move is one event, named by the kind of stage the deal lands in: a close is `deal.won` or
- * `deal.lost` and nothing else; every other move — between open stages, or a reopen out of a won
- * or lost stage — is `deal.stage_changed`. The stage it came from does not enter into it.
+ * `deal.lost` and nothing else; every other move — between open stages, a reopen out of a won or
+ * lost stage, or a closed deal carried to another stage of its own kind (`fromKind` equal to
+ * `toKind`, which is no new close) — is `deal.stage_changed`.
  */
-export function moveEventType(toKind: StageKind): MoveEventType {
+export function moveEventType(toKind: StageKind, fromKind?: StageKind): MoveEventType {
+    if (fromKind === toKind) return 'deal.stage_changed';
     if (toKind === 'won') return 'deal.won';
     if (toKind === 'lost') return 'deal.lost';
     return 'deal.stage_changed';

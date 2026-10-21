@@ -168,7 +168,7 @@ export class PipelinesService {
      * Deletes a stage (P1-2b). A rule pointing at it, or being the pipeline's last stage, refuses.
      * A stage with deals — trashed ones count — goes only when `moveDealsTo` names an open stage of
      * the same pipeline: every deal moves there through the one move service (one history row and,
-     * after commit, one `deal.stage_changed` each, attributed to the caller), then the stage is
+     * after commit, one `deal.stage_changed` each — a won or lost stage's deals may go to another stage of that kind and stay closed, attributed to the caller), then the stage is
      * deleted and positions close the gap, all in one transaction. This is a configuration change
      * over every deal in the stage, so an own-scoped caller — who sees only their own deals — is
      * refused outright rather than half-served; owner scope does not narrow it for anyone else.
@@ -195,6 +195,7 @@ export class PipelinesService {
             const plan = planStageDelete({
                 stageId,
                 pipelineId,
+                stageKind: stage.kind,
                 liveDeals,
                 trashedDeals,
                 rules,
@@ -228,8 +229,8 @@ export class PipelinesService {
                 return this.moves.moveAllInStage(
                     tx,
                     workspaceId,
-                    { id: stage.id, pipelineId: stage.pipelineId, name: stage.name },
-                    { ...plan.target, kind: 'open' },
+                    { id: stage.id, pipelineId: stage.pipelineId, kind: stage.kind, name: stage.name },
+                    plan.target,
                     actor,
                 );
             case 'refuse':
@@ -257,6 +258,10 @@ export class PipelinesService {
                 throw new ValidationFailed('deals move to an open stage; closing them is a member’s decision', [
                     { path: 'moveDealsTo', message: 'choose an open stage' },
                 ]);
+            case 'target_other_kind':
+                throw new UnprocessableEntityException(
+                    `deals of a ${stage.kind} stage move to an open stage or another ${stage.kind} stage`,
+                );
             case 'too_many':
                 throw new TooLarge(`a stage delete moves at most ${plan.limit} deals; this stage holds ${plan.deals}`, {
                     deals: plan.deals,

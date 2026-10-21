@@ -19,7 +19,8 @@ interface DealsInStage {
  * refuses because deals — live or in the trash — are in the stage, the same dialog becomes "Move N
  * deals to…": the counts are the server's (`details.liveDeals` / `details.trashedDeals`), the targets
  * are the pipeline's other OPEN stages (a delete never closes deals; the server refuses a won or lost
- * target anyway), and the move and the delete go in one request (`moveDealsTo`). Any other refusal
+ * target anyway) — except that a won or lost stage lists the other stages of its own kind first, and
+ * picks the first of them: its deals stay closed there, as they were. The move and the delete go in one request (`moveDealsTo`). Any other refusal
  * — a stage rule pointing here, the last stage — is shown in the server's words.
  */
 export function StageDeleteDialog({
@@ -47,7 +48,11 @@ export function StageDeleteDialog({
     };
 
     if (stage === null) return null;
-    const targets = stages.filter((s) => s.kind === 'open' && s.id !== stage.id);
+    const others = stages.filter((s) => s.id !== stage.id);
+    // A won or lost stage's deals may stay closed in another stage of the same kind; those come first.
+    const sameKind = stage.kind === 'open' ? [] : others.filter((s) => s.kind === stage.kind);
+    const targets = [...sameKind, ...others.filter((s) => s.kind === 'open')];
+    const chosen = targets.find((s) => s.id === target);
 
     const deleteOnly = () =>
         remove.mutate(
@@ -59,6 +64,7 @@ export function StageDeleteDialog({
                     const trashed = detailNumber(error, 'trashedDeals');
                     if (live !== undefined && trashed !== undefined && live + trashed > 0) {
                         setInStage({ live, trashed });
+                        setTarget(sameKind[0]?.id);
                         remove.reset();
                     }
                 },
@@ -66,7 +72,7 @@ export function StageDeleteDialog({
         );
 
     const moveAndDelete = () => {
-        const to = targets.find((s) => s.id === target);
+        const to = chosen;
         if (!to || !inStage) return;
         remove.mutate(
             { stageId: stage.id, moveDealsTo: to.id },
@@ -114,14 +120,18 @@ export function StageDeleteDialog({
                     label="Move deals to"
                     value={target}
                     onValueChange={setTarget}
-                    options={targets.map((s) => ({ value: s.id, label: s.name }))}
-                    {...(stage.kind !== 'open' && {
-                        hint: `These deals were ${stage.kind}; they reopen in the stage you choose.`,
-                    })}
+                    options={targets.map((s) => ({
+                        value: s.id,
+                        label: s.kind === 'open' ? s.name : `${s.name} (stays ${s.kind})`,
+                    }))}
+                    {...(stage.kind !== 'open' &&
+                        chosen?.kind !== stage.kind && {
+                            hint: `These deals were ${stage.kind}; they reopen in an open stage.`,
+                        })}
                 />
             ) : (
                 <p className="m-0 text-sm text-text-muted">
-                    This pipeline has no other open stage to move them to. Add one first.
+                    This pipeline has no other stage to move them to. Add one first.
                 </p>
             )}
         </ConfirmDialog>
