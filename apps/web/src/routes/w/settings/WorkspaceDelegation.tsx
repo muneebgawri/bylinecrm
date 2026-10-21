@@ -361,9 +361,8 @@ const ACTION_LABEL: Record<DelegationAuditEntryView['action'], string> = {
     domains_changed: 'Allowed domains changed',
     member_excluded: 'Member excluded',
     member_included: 'Member included',
-    checked: 'Connection checked',
-    mail_sync_started: 'Mail sync started',
-    calendar_sync_started: 'Calendar sync started',
+    sync_started: 'Delegated sync started',
+    sync_failed: 'Delegated sync failed',
 };
 
 function Audit({ workspaceId }: { workspaceId: string }) {

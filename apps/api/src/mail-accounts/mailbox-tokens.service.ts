@@ -172,7 +172,7 @@ export class MailboxTokens {
             minted = await this.delegation.mint(workspaceId, row.email);
         } catch (error) {
             if (error instanceof GoogleOAuthError && DELEGATION_REFUSALS.has(error.error)) {
-                await this.markReconnectNeeded(
+                const changed = await this.markReconnectNeeded(
                     workspaceId,
                     row.id,
                     {
@@ -181,6 +181,8 @@ export class MailboxTokens {
                     },
                     { kind: 'system', id: null },
                 );
+                // #225: audited once per failure run — the move to `reconnect_needed` happens once.
+                if (changed) await this.delegation.noteFailure(workspaceId, row, error.error);
                 throw new MailboxUnavailable('reconnect_needed');
             }
             throw error;

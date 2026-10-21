@@ -29,16 +29,19 @@ export const PERSONAL_MAILBOX_SCOPES = [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE, 
  */
 export const DELEGATION_SCOPES = PERSONAL_MAILBOX_SCOPES;
 
-/** Every change to the delegation and every delegated sync start (#225), as its audit log records them. */
+/**
+ * What the delegation's audit log records (#225): key and domain changes, exclusion toggles, a member's
+ * first delegated sync (and their first again after a gap or an exclusion change), and a delegated sync
+ * failing — once per member until it works again. Not every sync: they run every few minutes.
+ */
 export const DELEGATION_AUDIT_ACTIONS = [
     'key_set',
     'key_removed',
     'domains_changed',
     'member_excluded',
     'member_included',
-    'checked',
-    'mail_sync_started',
-    'calendar_sync_started',
+    'sync_started',
+    'sync_failed',
 ] as const;
 export type DelegationAuditAction = (typeof DELEGATION_AUDIT_ACTIONS)[number];
 

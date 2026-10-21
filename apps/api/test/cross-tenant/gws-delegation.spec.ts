@@ -289,10 +289,34 @@ describe('Google Workspace delegation', () => {
         expect(stored.accessTokenCiphertext).not.toBeNull();
         expect(stored.refreshTokenCiphertext).toBeNull();
 
+        // Two syncs, one audit entry: only the first of a run is recorded.
         const audit = await owner.googleWorkspaceDelegationAudit.findMany({
-            where: { workspaceId: workspace, action: 'mail_sync_started', mailboxId: mailbox.id },
+            where: { workspaceId: workspace, action: 'sync_started', mailboxId: mailbox.id },
         });
-        expect(audit.length).toBe(2);
+        expect(audit.length).toBe(1);
+    });
+
+    it('audits a delegated sync failure once until it works again, then the restart', async () => {
+        const mailbox = (await mailboxAt(syncedEmail))!;
+        const sync = app.get(MailSyncService);
+        const entries = (action: string) =>
+            owner.googleWorkspaceDelegationAudit.count({
+                where: { workspaceId: workspace, action, mailboxId: mailbox.id },
+            });
+        workspaceGoogle.removeUser(syncedEmail);
+        await owner.mailbox.update({ where: { id: mailbox.id }, data: { accessExpiresAt: new Date(0) } });
+        for (let i = 0; i < 3; i++) {
+            await sync.syncMailbox(workspace, mailbox.id, { sleep: () => Promise.resolve() }).catch(() => undefined);
+        }
+        expect((await mailboxAt(syncedEmail))?.status).toBe('reconnect_needed');
+        expect(await entries('sync_failed')).toBe(1);
+
+        workspaceGoogle.addUsers(syncedEmail);
+        expect((await as(admin).post(w(`${G}/check`))).status).toBe(200);
+        await sync.syncMailbox(workspace, mailbox.id, { sleep: () => Promise.resolve() });
+        await sync.syncMailbox(workspace, mailbox.id, { sleep: () => Promise.resolve() });
+        expect(await entries('sync_started')).toBe(2);
+        expect(await entries('sync_failed')).toBe(1);
     });
 
     it('skips an excluded member, and brings them back when included', async () => {
@@ -340,14 +364,16 @@ describe('Google Workspace delegation', () => {
         const actions = (res.body as { action: string }[]).map((a) => a.action);
         for (const action of [
             'key_set',
-            'checked',
             'domains_changed',
             'member_excluded',
             'member_included',
-            'mail_sync_started',
+            'sync_started',
+            'sync_failed',
         ]) {
             expect(actions).toContain(action);
         }
+        // A check is not a change: it is not on the log.
+        expect(actions).not.toContain('checked');
     });
 
     it('never crosses workspaces', async () => {

@@ -862,7 +862,7 @@ export const delegationMembers: DelegationMemberView[] = [
 export const delegationAudit: DelegationAuditEntryView[] = [
     {
         id: '0b1e0000-0000-4000-8000-0000000008c1',
-        action: 'checked',
+        action: 'domains_changed',
         actorMemberId: IDS.member,
         subjectMemberId: null,
         mailboxId: null,

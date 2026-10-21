@@ -31020,9 +31020,8 @@
                             "domains_changed",
                             "member_excluded",
                             "member_included",
-                            "checked",
-                            "mail_sync_started",
-                            "calendar_sync_started"
+                            "sync_started",
+                            "sync_failed"
                         ]
                     },
                     "actorMemberId": {

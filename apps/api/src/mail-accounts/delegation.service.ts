@@ -170,13 +170,10 @@ export class DelegationService {
                         lastError: Prisma.DbNull,
                         accessTokenCiphertext: null,
                         accessExpiresAt: null,
+                        delegationAuditedAt: null,
                     },
                 });
             }
-            await audit(tx, context.workspaceId, 'checked', {
-                actorMemberId: memberId,
-                detail: { subject, granted },
-            });
         });
         await this.reconcile(context.workspaceId);
         return this.describe();
@@ -262,19 +259,51 @@ export class DelegationService {
         return { ...(await this.google.mint(key, subject, scopes)), scopes };
     }
 
-    /** Writes a delegated mailbox's sync start to the audit log; a mailbox with its own grant is not logged. */
+    /**
+     * Audits a delegated mailbox's first sync — the first ever, or the first since it stopped, failed or
+     * was excluded — and none of the syncs after it. A mailbox with its own grant is never logged.
+     */
     async noteSyncStart(
-        mailbox: Pick<MailboxRow, 'id' | 'workspaceId' | 'credentialSource' | 'status' | 'ownerMemberId' | 'email'>,
+        mailbox: Pick<
+            MailboxRow,
+            'id' | 'workspaceId' | 'credentialSource' | 'status' | 'ownerMemberId' | 'email' | 'delegationAuditedAt'
+        >,
         kind: 'mail' | 'calendar',
     ): Promise<void> {
         if (mailbox.credentialSource !== 'delegation' || mailbox.status !== 'connected') return;
-        await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
-            audit(tx, mailbox.workspaceId, kind === 'mail' ? 'mail_sync_started' : 'calendar_sync_started', {
+        if (mailbox.delegationAuditedAt) return;
+        await this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
+            // Mail and calendar sync may start together: one of them claims the entry.
+            const claimed = await tx.mailbox.updateMany({
+                where: { id: mailbox.id, credentialSource: 'delegation', delegationAuditedAt: null },
+                data: { delegationAuditedAt: new Date() },
+            });
+            if (claimed.count === 0) return;
+            await audit(tx, mailbox.workspaceId, 'sync_started', {
                 subjectMemberId: mailbox.ownerMemberId,
                 mailboxId: mailbox.id,
-                detail: { email: mailbox.email },
-            }),
-        );
+                detail: { email: mailbox.email, first: kind },
+            });
+        });
+    }
+
+    /**
+     * Audits a delegated mailbox's sync failing. Called once per failure run — when the mailbox moves to
+     * `reconnect_needed` — so a member's repeated failures are one entry until a sync works again.
+     */
+    async noteFailure(
+        workspaceId: string,
+        mailbox: Pick<MailboxRow, 'id' | 'ownerMemberId' | 'email'>,
+        googleError: string,
+    ): Promise<void> {
+        await this.rls.withWorkspace(workspaceId, async (tx) => {
+            await tx.mailbox.update({ where: { id: mailbox.id }, data: { delegationAuditedAt: null } });
+            await audit(tx, workspaceId, 'sync_failed', {
+                subjectMemberId: mailbox.ownerMemberId,
+                mailboxId: mailbox.id,
+                detail: { email: mailbox.email, error: googleError },
+            });
+        });
     }
 
     /**
@@ -326,6 +355,7 @@ export class DelegationService {
                     ownerMemberId: m.id,
                     grantedScopes: scopes,
                     lastError: Prisma.DbNull,
+                    delegationAuditedAt: null,
                 };
                 if (!row) {
                     await tx.mailbox.create({
@@ -369,7 +399,12 @@ export class DelegationService {
                     status: { not: 'disconnected' },
                     email: { notIn: [...desired] },
                 },
-                data: { status: 'disconnected', accessTokenCiphertext: null, accessExpiresAt: null },
+                data: {
+                    status: 'disconnected',
+                    accessTokenCiphertext: null,
+                    accessExpiresAt: null,
+                    delegationAuditedAt: null,
+                },
             });
         });
     }

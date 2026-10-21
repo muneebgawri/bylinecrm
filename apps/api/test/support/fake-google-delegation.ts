@@ -31,6 +31,11 @@ export class FakeGoogleDelegation implements GoogleDelegationPort {
         for (const e of emails) this.users.add(e.toLowerCase());
     }
 
+    /** A user leaves the Workspace (or is suspended): no token can name them any more. */
+    removeUser(email: string): void {
+        this.users.delete(email.toLowerCase());
+    }
+
     mint(key: ServiceAccountKey, subject: string, scopes: readonly string[]): Promise<DelegatedToken> {
         assertNoOpenTransaction('Google delegation mint');
         this.mints.push({ clientId: key.clientId, subject, scopes: [...scopes] });

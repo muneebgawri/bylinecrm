@@ -3,6 +3,9 @@
 CREATE TYPE "mailbox_credential_source" AS ENUM ('oauth', 'delegation');
 
 ALTER TABLE "mailboxes" ADD COLUMN "credential_source" "mailbox_credential_source" NOT NULL DEFAULT 'oauth';
+-- When the delegated mailbox's current run of syncing was audited; cleared when it stops or fails, so the next
+-- sync after a gap is audited again and the ones in between are not.
+ALTER TABLE "mailboxes" ADD COLUMN "delegation_audited_at" TIMESTAMPTZ;
 
 -- A delegated mailbox is a personal Gmail mailbox without a refresh token of its own.
 ALTER TABLE "mailboxes" ADD CONSTRAINT "mailboxes_delegation_shape"
@@ -64,7 +67,7 @@ ALTER TABLE "google_workspace_delegation_audit" ADD CONSTRAINT "google_workspace
 
 ALTER TABLE "google_workspace_delegation_audit" ADD CONSTRAINT "google_workspace_delegation_audit_action"
     CHECK ("action" IN ('key_set', 'key_removed', 'domains_changed', 'member_excluded', 'member_included',
-                        'checked', 'mail_sync_started', 'calendar_sync_started'));
+                        'sync_started', 'sync_failed'));
 
 -- Row-level security in P0-2's shape.
 ALTER TABLE "google_workspace_delegations" ENABLE ROW LEVEL SECURITY;
