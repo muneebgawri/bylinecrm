@@ -230,9 +230,9 @@ export class OAuthClientsService {
     }
 }
 
-/** Mailboxes in the workspace that hold a grant from the current client. */
+/** Mailboxes in the workspace that hold a grant from the current client (a delegated one holds none, #225). */
 function liveMailboxes(tx: WorkspaceClient): Promise<number> {
-    return tx.mailbox.count({ where: { status: { not: 'disconnected' } } });
+    return tx.mailbox.count({ where: { status: { not: 'disconnected' }, credentialSource: 'oauth' } });
 }
 
 function step(outcome: OAuthCheckOutcome, message: string): { outcome: OAuthCheckOutcome; message: string } {

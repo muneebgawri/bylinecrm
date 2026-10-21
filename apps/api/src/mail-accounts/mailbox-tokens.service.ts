@@ -6,6 +6,7 @@ import { ApiException } from '../infra/errors/api-errors';
 import { RedisService } from '../infra/redis.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
+import { DelegationService } from './delegation.service';
 import { GOOGLE_OAUTH_PORT, GoogleOAuthError, type GoogleOAuthPort } from './google-oauth.port';
 import { TOKEN_LOCK_KEY_PREFIX, TOKEN_REFRESH_SKEW_S } from './mail-accounts.constants';
 import { OAuthClientsService } from './oauth-clients.service';
@@ -49,6 +50,7 @@ export class MailboxTokens {
         private readonly redis: RedisService,
         private readonly clients: OAuthClientsService,
         private readonly events: DomainEvents,
+        private readonly delegation: DelegationService,
         @Inject(GOOGLE_OAUTH_PORT) private readonly google: GoogleOAuthPort,
     ) {}
 
@@ -102,6 +104,8 @@ export class MailboxTokens {
         const row = await this.read(workspaceId, mailboxId);
         const fresh = this.freshToken(row);
         if (fresh) return fresh;
+        // #225: a delegated mailbox has no refresh token; the workspace's service account mints its token.
+        if (row.credentialSource === 'delegation') return this.mintDelegated(workspaceId, row);
         const client = await this.rls.withWorkspace(workspaceId, (tx) => this.clients.storedIn(tx));
         // A client cannot be removed while a mailbox is live, so its absence is a defect, not a state.
         if (!client) throw new Error('a live mailbox has no OAuth client to refresh through');
@@ -156,6 +160,44 @@ export class MailboxTokens {
         return grant.accessToken;
     }
 
+    /**
+     * A new token from the service account (#225), cached on the mailbox like a refreshed one. Google
+     * refusing the delegation — the Admin console no longer authorises the client or a scope, the member
+     * is no longer in the Workspace, the key was removed — moves the mailbox to `reconnect_needed`; an
+     * admin's passing check brings it back.
+     */
+    private async mintDelegated(workspaceId: string, row: MailboxRow): Promise<string> {
+        let minted;
+        try {
+            minted = await this.delegation.mint(workspaceId, row.email);
+        } catch (error) {
+            if (error instanceof GoogleOAuthError && DELEGATION_REFUSALS.has(error.error)) {
+                await this.markReconnectNeeded(
+                    workspaceId,
+                    row.id,
+                    {
+                        code: 'delegation_refused',
+                        message: `Google refused the Workspace delegation (${error.error}); an admin checks it in Settings → Google`,
+                    },
+                    { kind: 'system', id: null },
+                );
+                throw new MailboxUnavailable('reconnect_needed');
+            }
+            throw error;
+        }
+        await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailbox.update({
+                where: { id: row.id },
+                data: {
+                    accessTokenCiphertext: this.secrets.seal(minted.accessToken),
+                    accessExpiresAt: new Date(Date.now() + minted.expiresInS * 1000),
+                    grantedScopes: minted.scopes,
+                },
+            }),
+        );
+        return minted.accessToken;
+    }
+
     private async read(workspaceId: string, mailboxId: string): Promise<MailboxRow> {
         const row = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: mailboxId } }),
@@ -172,6 +214,15 @@ export class MailboxTokens {
         return this.secrets.open(row.accessTokenCiphertext);
     }
 }
+
+/** Google's answers that mean the delegation itself no longer works for this mailbox (#225). */
+const DELEGATION_REFUSALS = new Set([
+    'unauthorized_client',
+    'invalid_grant',
+    'access_denied',
+    'invalid_client',
+    'not_configured',
+]);
 
 /** What `last_error` holds: the reason and when, as JSON. */
 function errorRecord(reason: { code: string; message: string }): Prisma.InputJsonObject {

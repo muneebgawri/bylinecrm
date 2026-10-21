@@ -85,6 +85,10 @@ export const keys = {
     biginImportReuses: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'reuses'] as const,
     biginStageMap: (workspaceId: string) => ['w', workspaceId, 'import', 'bigin', 'stage-map'] as const,
     oauthClientStatus: (workspaceId: string) => ['w', workspaceId, 'mail', 'oauth-client', 'status'] as const,
+    /** Google Workspace delegation (#225): the settings, the members' standing, the audit log. */
+    delegation: (workspaceId: string) => ['w', workspaceId, 'mail', 'google-workspace'] as const,
+    delegationMembers: (workspaceId: string) => ['w', workspaceId, 'mail', 'google-workspace', 'members'] as const,
+    delegationAudit: (workspaceId: string) => ['w', workspaceId, 'mail', 'google-workspace', 'audit'] as const,
     mailboxes: (workspaceId: string) => ['w', workspaceId, 'mailboxes'] as const,
     mailboxSync: (workspaceId: string, mailboxId: string) =>
         ['w', workspaceId, 'mailboxes', mailboxId, 'sync'] as const,

@@ -10,6 +10,10 @@ import type {
     ConnectMailboxInput,
     CreateBlocklistEntryInput,
     CreateSuppressionInput,
+    DelegationAuditEntryView,
+    DelegationMemberView,
+    DelegationView,
+    PatchDelegationInput,
     GoogleOAuthClientStatusView,
     GoogleOAuthClientView,
     MailSettingsView,
@@ -56,6 +60,32 @@ export const oauthClient = {
     remove: (workspaceId: string) => request<void>('DELETE', workspacePath(workspaceId, '/mail/oauth-client')),
     verify: (workspaceId: string) =>
         request<GoogleOAuthClientView>('POST', workspacePath(workspaceId, '/mail/oauth-client/verify')),
+};
+
+/** The workspace's Google Workspace service account with domain-wide delegation (#225); an admin's. */
+export const delegation = {
+    describe: (workspaceId: string, signal?: AbortSignal) =>
+        request<DelegationView>('GET', workspacePath(workspaceId, '/mail/google-workspace'), { signal }),
+    update: (workspaceId: string, input: PatchDelegationInput) =>
+        request<DelegationView>('PATCH', workspacePath(workspaceId, '/mail/google-workspace'), { body: input }),
+    putKey: (workspaceId: string, key: string) =>
+        request<DelegationView>('PUT', workspacePath(workspaceId, '/mail/google-workspace/key'), { body: { key } }),
+    removeKey: (workspaceId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, '/mail/google-workspace/key')),
+    check: (workspaceId: string) =>
+        request<DelegationView>('POST', workspacePath(workspaceId, '/mail/google-workspace/check')),
+    members: (workspaceId: string, signal?: AbortSignal) =>
+        request<DelegationMemberView[]>('GET', workspacePath(workspaceId, '/mail/google-workspace/members'), {
+            signal,
+        }),
+    setMember: (workspaceId: string, memberId: string, excluded: boolean) =>
+        request<DelegationMemberView>('PUT', workspacePath(workspaceId, `/mail/google-workspace/members/${memberId}`), {
+            body: { excluded },
+        }),
+    audit: (workspaceId: string, signal?: AbortSignal) =>
+        request<DelegationAuditEntryView[]>('GET', workspacePath(workspaceId, '/mail/google-workspace/audit'), {
+            signal,
+        }),
 };
 
 /** Connected Google mailboxes (P2-1) and their sync (P2-2). */
@@ -174,6 +204,52 @@ export function useRemoveOAuthClient(workspaceId: string) {
         onSuccess: () => client.invalidateQueries({ queryKey: keys.oauthClient(workspaceId) }),
     });
 }
+
+export const useDelegation = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.delegation(workspaceId),
+        queryFn: ({ signal }) => delegation.describe(workspaceId, signal),
+    });
+
+export const useDelegationMembers = (workspaceId: string, enabled = true) =>
+    useQuery({
+        queryKey: keys.delegationMembers(workspaceId),
+        queryFn: ({ signal }) => delegation.members(workspaceId, signal),
+        enabled,
+    });
+
+export const useDelegationAudit = (workspaceId: string, enabled = true) =>
+    useQuery({
+        queryKey: keys.delegationAudit(workspaceId),
+        queryFn: ({ signal }) => delegation.audit(workspaceId, signal),
+        enabled,
+    });
+
+/** Any delegation write changes who syncs: the settings, the members, the audit log and the mailboxes. */
+function useDelegationWrite<I, O>(workspaceId: string, write: (input: I) => Promise<O>) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: write,
+        onSuccess: () =>
+            Promise.all([
+                client.invalidateQueries({ queryKey: keys.delegation(workspaceId) }),
+                client.invalidateQueries({ queryKey: keys.mailboxes(workspaceId) }),
+            ]),
+    });
+}
+
+export const usePutDelegationKey = (workspaceId: string) =>
+    useDelegationWrite(workspaceId, (key: string) => delegation.putKey(workspaceId, key));
+export const useRemoveDelegationKey = (workspaceId: string) =>
+    useDelegationWrite(workspaceId, () => delegation.removeKey(workspaceId));
+export const useCheckDelegation = (workspaceId: string) =>
+    useDelegationWrite(workspaceId, () => delegation.check(workspaceId));
+export const useUpdateDelegation = (workspaceId: string) =>
+    useDelegationWrite(workspaceId, (input: PatchDelegationInput) => delegation.update(workspaceId, input));
+export const useSetDelegationMember = (workspaceId: string) =>
+    useDelegationWrite(workspaceId, (input: { memberId: string; excluded: boolean }) =>
+        delegation.setMember(workspaceId, input.memberId, input.excluded),
+    );
 
 export const useMailboxes = (workspaceId: string) =>
     useQuery({

@@ -77,3 +77,16 @@ export const OAUTH_CHECK_MESSAGES = {
     redirectAwaitsConnect: 'Confirmed when the first mailbox connects; Google checks it only when a person signs in.',
     redirectProvenByConnect: 'Confirmed: a mailbox connected through this redirect URI.',
 } as const;
+
+/** The JWT grant's type (RFC 7523): a service account's signed assertion exchanged for an access token (#225). */
+export const JWT_BEARER_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
+/** How long a delegation assertion is valid; Google allows at most an hour. */
+export const DELEGATION_ASSERTION_TTL_S = 3600;
+/** A service account's JSON key is a few KB; anything this large is not one. */
+export const SERVICE_ACCOUNT_KEY_MAX = 20_000;
+/** Allowed domains for delegation, at most this many. */
+export const DELEGATION_DOMAINS_MAX = 20;
+/** Audit entries the settings page reads at once. */
+export const DELEGATION_AUDIT_PAGE = 100;
+/** Audit entries older than this are swept (the delegated sync starts make them plentiful). */
+export const DELEGATION_AUDIT_RETENTION_DAYS = 180;

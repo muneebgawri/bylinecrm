@@ -162,7 +162,7 @@ function grant(body: unknown): TokenGrant {
     };
 }
 
-async function send(url: string | URL, init: RequestInit): Promise<Response> {
+export async function send(url: string | URL, init: RequestInit): Promise<Response> {
     try {
         return await fetch(url, { ...init, signal: AbortSignal.timeout(GOOGLE_HTTP_TIMEOUT_MS) });
     } catch {
@@ -171,7 +171,7 @@ async function send(url: string | URL, init: RequestInit): Promise<Response> {
     }
 }
 
-async function json(res: Response): Promise<unknown> {
+export async function json(res: Response): Promise<unknown> {
     try {
         return await res.json();
     } catch {
@@ -179,7 +179,7 @@ async function json(res: Response): Promise<unknown> {
     }
 }
 
-async function errorName(res: Response): Promise<string> {
+export async function errorName(res: Response): Promise<string> {
     try {
         const body = errorResponse.safeParse(await res.json());
         return body.success ? body.data.error : 'unexpected_response';
@@ -188,7 +188,7 @@ async function errorName(res: Response): Promise<string> {
     }
 }
 
-function parse<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
+export function parse<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
     const result = schema.safeParse(body);
     if (!result.success)
         throw new GoogleOAuthError('unexpected_response', null, 'Google answered in an unexpected shape');

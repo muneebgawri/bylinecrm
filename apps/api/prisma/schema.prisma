@@ -45,6 +45,8 @@ model Workspace {
   webhookEndpoints       WebhookEndpoint[]
   webhookDeliveries      WebhookDelivery[]
   googleOAuthClient      GoogleOAuthClient?
+  googleWorkspaceDelegation      GoogleWorkspaceDelegation?
+  googleWorkspaceDelegationAudit GoogleWorkspaceDelegationAudit[]
   mailboxes              Mailbox[]
   emailTemplates         EmailTemplate[]
   mailSettings           WorkspaceMailSettings?
@@ -1139,6 +1141,14 @@ enum MailboxTransport {
   @@map("mailbox_transport")
 }
 
+/// Where a Gmail mailbox's tokens come from (#225): its own OAuth grant, or the workspace's service account.
+enum MailboxCredentialSource {
+  oauth
+  delegation
+
+  @@map("mailbox_credential_source")
+}
+
 enum MailboxStatus {
   connected
   reconnect_needed
@@ -1171,6 +1181,51 @@ model GoogleOAuthClient {
   @@map("google_oauth_clients")
 }
 
+/// The workspace's Google Workspace service account with domain-wide delegation (#225): one per workspace, an
+/// admin's. The JSON key is sealed (`SecretBox`) and never returned; only the account's email and client ID are.
+model GoogleWorkspaceDelegation {
+  workspaceId       String   @id @map("workspace_id") @db.Uuid
+  keyCiphertext     String   @map("key_ciphertext")
+  clientEmail       String   @map("client_email")
+  clientId          String   @map("client_id")
+  privateKeyIdLast4 String   @map("private_key_id_last4")
+  /// Lower case domains whose members' mailboxes and calendars are synced through the service account.
+  allowedDomains    String[] @default([]) @map("allowed_domains")
+  /// Members an admin excluded: never synced through the service account.
+  excludedMemberIds String[] @default([]) @map("excluded_member_ids") @db.Uuid
+  /// The scopes the last check found granted; delegation syncs only once it includes Gmail read.
+  grantedScopes     String[] @default([]) @map("granted_scopes")
+  /// The last check: `{ checkedAt, subject, scopes: [{ scope, granted, error }] }`.
+  lastCheck         Json?    @map("last_check")
+  updatedById       String?  @map("updated_by_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("google_workspace_delegations")
+}
+
+/// The delegation's audit log (#225): every key or setting change and every delegated sync start.
+model GoogleWorkspaceDelegationAudit {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  action          String
+  /// Who did it; null for the sync worker.
+  actorMemberId   String?  @map("actor_member_id") @db.Uuid
+  /// The member it concerns (an exclusion, a sync), when any.
+  subjectMemberId String?  @map("subject_member_id") @db.Uuid
+  mailboxId       String?  @map("mailbox_id") @db.Uuid
+  /// Safe facts only (domains, scopes, an address) — never key material or a token.
+  detail          Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("google_workspace_delegation_audit")
+}
+
 /// A Google mailbox connected to the workspace (P2-1). Its purpose is fixed when it connects. Tokens
 /// are held encrypted and never leave the API; a disconnected mailbox keeps its row (history, the
 /// email's uniqueness) and loses its tokens.
@@ -1184,6 +1239,8 @@ model Mailbox {
   purpose                MailboxPurpose
   /// TRANS-1: `smtp2go` only for a pool mailbox (the database checks); fixed when the mailbox is added.
   transport              MailboxTransport @default(gmail)
+  /// #225: `delegation` — tokens minted by the workspace's service account (no refresh token of its own); `oauth` otherwise.
+  credentialSource       MailboxCredentialSource @default(oauth) @map("credential_source")
   status                 MailboxStatus
   grantedScopes          String[]         @default([]) @map("granted_scopes")
   refreshTokenCiphertext String?          @map("refresh_token_ciphertext")
