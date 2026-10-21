@@ -107,7 +107,15 @@ const PERSON_COLUMNS: ListColumn<PersonView>[] = [
         label: labelOf('person', 'contactStatus'),
         width: 120,
         exportFields: ['contactStatus'],
-        cell: (r) => CONTACT_STATUS_LABELS[r.contactStatus],
+        cell: (r) =>
+            r.cadenceOverdue ? (
+                <span className="inline-flex flex-wrap items-center gap-1">
+                    {CONTACT_STATUS_LABELS[r.contactStatus]}
+                    <Badge status="danger">Overdue</Badge>
+                </span>
+            ) : (
+                CONTACT_STATUS_LABELS[r.contactStatus]
+            ),
     },
     {
         field: 'lastContactedAt',

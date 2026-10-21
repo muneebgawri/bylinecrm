@@ -14,6 +14,7 @@ import {
     UpdatePipelineDto,
     UpdateRuleDto,
     UpdateStageDto,
+    SetCadenceDto,
 } from './dto';
 import {
     PipelinesService,
@@ -94,6 +95,17 @@ export class PipelinesController {
         @Body() body: OrderStagesDto,
     ): Promise<PipelineView> {
         return this.pipelines.orderStages(pipelineId, body.stageIds);
+    }
+
+    /** CADENCE-1: the follow-up cadence of each stage. */
+    @Requires('pipeline:cadence')
+    @Put(':pipelineId/cadence')
+    @Returns(pipelineView)
+    setCadence(
+        @Param('pipelineId', ParseUUIDPipe) pipelineId: string,
+        @Body() body: SetCadenceDto,
+    ): Promise<PipelineView> {
+        return this.pipelines.setCadence(pipelineId, body.stages);
     }
 
     @Requires('pipeline:configure')

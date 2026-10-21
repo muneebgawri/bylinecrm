@@ -22,6 +22,8 @@ export const CAPABILITIES = [
     'view:save',
     'view:share',
     'pipeline:configure',
+    // Edit the follow-up cadence of each stage and the lead rotation (CADENCE-1): its settings and who is in it.
+    'pipeline:cadence',
     // Mail
     'email:send',
     'template:read',
@@ -86,6 +88,7 @@ export const MANAGER_DEFAULT_CAPABILITIES: readonly Capability[] = [
     'mailbox:manage',
     'guardrail:review',
     'invoice:verify',
+    'pipeline:cadence',
 ];
 
 /** What a new workspace's `member` role can do until an admin changes it. */

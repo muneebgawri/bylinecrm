@@ -3,6 +3,9 @@ import {
     DEFAULT_PIPELINE_NAME,
     DEFAULT_STAGES,
     SIGNATURE_STARTER,
+    defaultCadenceDays,
+    type RotationMemberView,
+    type RotationSettingsView,
     SYSTEM_ROLES,
     type Capability,
     type MailboxSignatureView,
@@ -331,6 +334,7 @@ export const people: PersonView[] = [
         contactStatusOverride: null,
         contactAttempts: 4,
         lastContactedAt: at(24 * 2),
+        cadenceOverdue: false,
         city: 'Austin',
         links: { linkedin: { url: 'https://www.linkedin.com/in/danareyes', label: null }, x: null },
         avatarUrl: null,
@@ -355,6 +359,8 @@ export const people: PersonView[] = [
         contactStatusOverride: null,
         contactAttempts: 1,
         lastContactedAt: at(24 * 6),
+        // CADENCE-1: the contact of a deal whose cadence lapsed — the people list's overdue badge.
+        cadenceOverdue: true,
         city: null,
         links: noLinks,
         avatarUrl: null,
@@ -376,6 +382,7 @@ export const stages: StageView[] = DEFAULT_STAGES.map((stage, index) => ({
     probability: stage.probability,
     kind: stage.kind,
     daysThreshold: stage.kind === 'open' ? 14 : null,
+    cadenceDays: defaultCadenceDays(stage.name, stage.kind),
     colour: stage.colour,
 }));
 
@@ -397,6 +404,7 @@ const deal = (
     daysInStage: number,
     companyId: string,
     pointOfContactId: string,
+    overdue = false,
 ): OpportunityView => ({
     id,
     name,
@@ -414,6 +422,8 @@ const deal = (
     leadSource: null,
     lastContactedAt: null,
     contactAttempts: 0,
+    cadenceDueAt: overdue ? at(24 * 2) : at(-24),
+    cadenceOverdue: overdue,
     amount: { amountMinor, currency: 'USD' },
     currency: 'USD',
     closeDate: '2026-10-31',
@@ -431,7 +441,7 @@ const deal = (
 
 export const deals: OpportunityView[] = [
     deal(IDS.deal, 'Series B PR', 2, 12_000_00, 4, IDS.company, IDS.person),
-    deal(IDS.secondDeal, 'IPO wire', 3, 11_000_00, 1, IDS.secondCompany, IDS.secondPerson),
+    deal(IDS.secondDeal, 'IPO wire', 3, 11_000_00, 1, IDS.secondCompany, IDS.secondPerson, true),
     deal(IDS.thirdDeal, 'Product launch', 1, 6_500_00, 21, IDS.company, IDS.person),
     // The first stage holds a deal, so a phone's board — which opens on the first stage — shows a
     // card for the gate's above-the-fold check to measure (states.ts).
@@ -615,6 +625,7 @@ export const notificationsInbox: NotificationsView = {
             transfer: null,
             guardrail: null,
             invoice: null,
+            cadence: null,
             createdAt: at(1),
             readAt: null,
             task: {
@@ -631,6 +642,7 @@ export const notificationsInbox: NotificationsView = {
             transfer: null,
             guardrail: null,
             invoice: null,
+            cadence: null,
             createdAt: at(26),
             readAt: at(25),
             task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },
@@ -1296,6 +1308,47 @@ export const regionPolicyChanges: RegionPolicyChangeView[] = [
 
 /** #242: a won deal's exclusion flagged after a reopen, beside an admin's own. */
 export const customerExclusionSettings: CustomerExclusionSettingsView = { wonExclusionScope: 'address' };
+
+/** CADENCE-1: rotation on for a week; one rep in, one paused until next week. */
+export const rotationSettings: RotationSettingsView = {
+    enabled: true,
+    enabledAt: at(24 * 7),
+    warnAfterDays: 0,
+    graceDays: 7,
+    intakeEnabled: true,
+    mailboxPreference: 'prefer',
+    openLeadCap: null,
+};
+export const rotationMembers: RotationMemberView[] = [
+    {
+        memberId: IDS.member,
+        name: 'Kate Morgan',
+        email: 'kate@byline.example',
+        roleName: 'member',
+        included: true,
+        includedByDefault: true,
+        paused: false,
+        resumeAt: null,
+        weight: 1,
+        hasMailbox: true,
+        openLeads: 3,
+        eligible: true,
+    },
+    {
+        memberId: IDS.secondMember,
+        name: 'Sam Okafor',
+        email: 'sam@byline.example',
+        roleName: 'member',
+        included: true,
+        includedByDefault: true,
+        paused: true,
+        resumeAt: at(-24 * 5),
+        weight: 1,
+        hasMailbox: true,
+        openLeads: 1,
+        eligible: false,
+    },
+];
 
 export const outreachExclusions: OutreachExclusionView[] = [
     {

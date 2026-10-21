@@ -8978,6 +8978,89 @@
                 "tags": ["pipelines"]
             }
         },
+        "/api/w/{workspaceId}/pipelines/{pipelineId}/cadence": {
+            "put": {
+                "operationId": "pipelines_setCadence",
+                "parameters": [
+                    {
+                        "name": "pipelineId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetCadenceDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Pipeline"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["pipelines"]
+            }
+        },
         "/api/w/{workspaceId}/pipelines/{pipelineId}/stages/{stageId}": {
             "patch": {
                 "operationId": "pipelines_updateStage",
@@ -21571,6 +21654,360 @@
                 "tags": ["timeline"]
             }
         },
+        "/api/w/{workspaceId}/rotation/settings": {
+            "get": {
+                "operationId": "rotation_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RotationSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["rotation"]
+            },
+            "put": {
+                "operationId": "rotation_set",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RotationSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RotationSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["rotation"]
+            }
+        },
+        "/api/w/{workspaceId}/rotation/members": {
+            "get": {
+                "operationId": "rotation_members",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RotationMember"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["rotation"]
+            }
+        },
+        "/api/w/{workspaceId}/rotation/members/{memberId}": {
+            "patch": {
+                "operationId": "rotation_setMember",
+                "parameters": [
+                    {
+                        "name": "memberId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RotationMemberDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RotationMember"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["rotation"]
+            }
+        },
+        "/api/w/{workspaceId}/rotation/preview": {
+            "get": {
+                "operationId": "rotation_preview",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RotationPreview"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["rotation"]
+            }
+        },
         "/api/w/{workspaceId}/import/twenty": {
             "get": {
                 "operationId": "twentyImport_overview",
@@ -25695,7 +26132,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 25,
+                        "maxItems": 26,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -25713,6 +26150,7 @@
                                 "view:save",
                                 "view:share",
                                 "pipeline:configure",
+                                "pipeline:cadence",
                                 "email:send",
                                 "template:read",
                                 "template:write",
@@ -25744,7 +26182,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 25,
+                        "maxItems": 26,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -25762,6 +26200,7 @@
                                 "view:save",
                                 "view:share",
                                 "pipeline:configure",
+                                "pipeline:cadence",
                                 "email:send",
                                 "template:read",
                                 "template:write",
@@ -27535,6 +27974,35 @@
                     }
                 },
                 "required": ["stageIds"]
+            },
+            "SetCadenceDto": {
+                "type": "object",
+                "properties": {
+                    "stages": {
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "stageId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "cadenceDays": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 365,
+                                    "description": "Days after a deal’s last touch it is due another; null: no cadence.",
+                                    "nullable": true
+                                }
+                            },
+                            "required": ["stageId", "cadenceDays"]
+                        }
+                    }
+                },
+                "required": ["stages"]
             },
             "UpdateStageDto": {
                 "type": "object",
@@ -29408,6 +29876,78 @@
                 },
                 "required": ["target", "kind", "happenedAt", "title", "source", "idempotencyKey"]
             },
+            "RotationSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Rotation on: lapsed leads warn their owner and, a grace later, rotate. Switching it on stamps `enabledAt`; lapses are measured from then, so an existing backlog never rotates at once."
+                    },
+                    "warnAfterDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 90,
+                        "description": "Days past a missed cadence before the owner is warned."
+                    },
+                    "graceDays": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90,
+                        "description": "Days after the warning, still without a touch, before the lead rotates."
+                    },
+                    "intakeEnabled": {
+                        "type": "boolean",
+                        "description": "New unowned leads are dealt to the next rep in turn."
+                    },
+                    "mailboxPreference": {
+                        "type": "string",
+                        "enum": ["prefer", "require", "ignore"],
+                        "description": "`prefer`: reps with a connected or delegated mailbox, when any has one; `require`: only those; `ignore`."
+                    },
+                    "openLeadCap": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991,
+                        "description": "A rep holding this many open deals is skipped; null: no cap.",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "enabled",
+                    "warnAfterDays",
+                    "graceDays",
+                    "intakeEnabled",
+                    "mailboxPreference",
+                    "openLeadCap"
+                ]
+            },
+            "RotationMemberDto": {
+                "type": "object",
+                "properties": {
+                    "included": {
+                        "description": "In or out of the rotation; null: their role’s default.",
+                        "type": "array",
+                        "items": {
+                            "type": "boolean"
+                        }
+                    },
+                    "paused": {
+                        "type": "boolean"
+                    },
+                    "resumeAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "description": "When the pause ends by itself; setting it pauses.",
+                        "nullable": true
+                    },
+                    "weight": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5
+                    }
+                }
+            },
             "PutTwentyImportSettingsDto": {
                 "type": "object",
                 "properties": {
@@ -30633,6 +31173,7 @@
                                 "view:save",
                                 "view:share",
                                 "pipeline:configure",
+                                "pipeline:cadence",
                                 "email:send",
                                 "template:read",
                                 "template:write",
@@ -30767,6 +31308,7 @@
                                 "view:save",
                                 "view:share",
                                 "pipeline:configure",
+                                "pipeline:cadence",
                                 "email:send",
                                 "template:read",
                                 "template:write",
@@ -30890,6 +31432,365 @@
                     }
                 },
                 "required": ["invite", "token"]
+            },
+            "TransferMember": {
+                "type": "object",
+                "properties": {
+                    "memberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["memberId", "name"]
+            },
+            "Transfer": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordLabel": {
+                        "type": "string",
+                        "description": "The record’s name as it reads now."
+                    },
+                    "from": {
+                        "nullable": true,
+                        "description": "The owner before; null when the record had none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TransferMember"
+                            }
+                        ]
+                    },
+                    "to": {
+                        "$ref": "#/components/schemas/TransferMember"
+                    },
+                    "proposedBy": {
+                        "$ref": "#/components/schemas/TransferMember"
+                    },
+                    "decidedBy": {
+                        "nullable": true,
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TransferMember"
+                            }
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["proposed", "accepted", "declined", "cancelled", "forced"],
+                        "description": "`proposed`: waiting on the receiver. `accepted` / `forced`: the record (and its unit) changed owner. `declined` / `cancelled`: nothing moved."
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "note": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "moved": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["person", "company", "opportunity"]
+                                },
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "label": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["type", "id", "label"]
+                        },
+                        "description": "Every record that moved; empty until it completes."
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "decidedAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "object",
+                    "recordId",
+                    "recordLabel",
+                    "from",
+                    "to",
+                    "proposedBy",
+                    "decidedBy",
+                    "status",
+                    "reason",
+                    "note",
+                    "moved",
+                    "createdAt",
+                    "decidedAt"
+                ]
+            },
+            "RotationSettings": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Rotation on: lapsed leads warn their owner and, a grace later, rotate. Switching it on stamps `enabledAt`; lapses are measured from then, so an existing backlog never rotates at once."
+                    },
+                    "warnAfterDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 90,
+                        "description": "Days past a missed cadence before the owner is warned."
+                    },
+                    "graceDays": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90,
+                        "description": "Days after the warning, still without a touch, before the lead rotates."
+                    },
+                    "intakeEnabled": {
+                        "type": "boolean",
+                        "description": "New unowned leads are dealt to the next rep in turn."
+                    },
+                    "mailboxPreference": {
+                        "type": "string",
+                        "enum": ["prefer", "require", "ignore"],
+                        "description": "`prefer`: reps with a connected or delegated mailbox, when any has one; `require`: only those; `ignore`."
+                    },
+                    "openLeadCap": {
+                        "nullable": true,
+                        "description": "A rep holding this many open deals is skipped; null: no cap.",
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                    },
+                    "enabledAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                },
+                "required": [
+                    "enabled",
+                    "warnAfterDays",
+                    "graceDays",
+                    "intakeEnabled",
+                    "mailboxPreference",
+                    "openLeadCap",
+                    "enabledAt"
+                ]
+            },
+            "RotationMember": {
+                "type": "object",
+                "properties": {
+                    "memberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "roleName": {
+                        "type": "string"
+                    },
+                    "included": {
+                        "type": "boolean"
+                    },
+                    "includedByDefault": {
+                        "type": "boolean",
+                        "description": "Admins and managers are out by default."
+                    },
+                    "paused": {
+                        "type": "boolean"
+                    },
+                    "resumeAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "weight": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "hasMailbox": {
+                        "type": "boolean"
+                    },
+                    "openLeads": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "eligible": {
+                        "type": "boolean",
+                        "description": "Dealt to now."
+                    }
+                },
+                "required": [
+                    "memberId",
+                    "name",
+                    "email",
+                    "roleName",
+                    "included",
+                    "includedByDefault",
+                    "paused",
+                    "resumeAt",
+                    "weight",
+                    "hasMailbox",
+                    "openLeads",
+                    "eligible"
+                ]
+            },
+            "RotationPreview": {
+                "type": "object",
+                "properties": {
+                    "assumedEnabledAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "description": "When rotation is off: as if switched on now."
+                    },
+                    "overdue": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "opportunityId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "opportunityName": {
+                                    "type": "string"
+                                },
+                                "stageName": {
+                                    "type": "string"
+                                },
+                                "cadenceDays": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                },
+                                "owner": {
+                                    "type": "object",
+                                    "properties": {
+                                        "memberId": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "name": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": ["memberId", "name"]
+                                },
+                                "lastTouchAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "dueAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "warnAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "rotateAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                "action": {
+                                    "type": "string",
+                                    "enum": ["warn", "rotate", "waiting"]
+                                },
+                                "to": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                        "memberId": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "name": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": ["memberId", "name"]
+                                }
+                            },
+                            "required": [
+                                "opportunityId",
+                                "opportunityName",
+                                "stageName",
+                                "cadenceDays",
+                                "owner",
+                                "lastTouchAt",
+                                "dueAt",
+                                "warnAt",
+                                "rotateAt",
+                                "action",
+                                "to"
+                            ]
+                        }
+                    }
+                },
+                "required": ["assumedEnabledAt", "overdue", "items"]
             },
             "GoogleOAuthClientCheck": {
                 "type": "object",
@@ -31428,133 +32329,6 @@
                 },
                 "required": ["id", "action", "actorMemberId", "subjectMemberId", "mailboxId", "detail", "createdAt"]
             },
-            "TransferMember": {
-                "type": "object",
-                "properties": {
-                    "memberId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "name": {
-                        "nullable": true,
-                        "type": "string"
-                    }
-                },
-                "required": ["memberId", "name"]
-            },
-            "Transfer": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "object": {
-                        "type": "string",
-                        "enum": ["person", "company", "opportunity"]
-                    },
-                    "recordId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                    },
-                    "recordLabel": {
-                        "type": "string",
-                        "description": "The record’s name as it reads now."
-                    },
-                    "from": {
-                        "nullable": true,
-                        "description": "The owner before; null when the record had none.",
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/TransferMember"
-                            }
-                        ]
-                    },
-                    "to": {
-                        "$ref": "#/components/schemas/TransferMember"
-                    },
-                    "proposedBy": {
-                        "$ref": "#/components/schemas/TransferMember"
-                    },
-                    "decidedBy": {
-                        "nullable": true,
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/TransferMember"
-                            }
-                        ]
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["proposed", "accepted", "declined", "cancelled", "forced"],
-                        "description": "`proposed`: waiting on the receiver. `accepted` / `forced`: the record (and its unit) changed owner. `declined` / `cancelled`: nothing moved."
-                    },
-                    "reason": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "note": {
-                        "nullable": true,
-                        "type": "string"
-                    },
-                    "moved": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "enum": ["person", "company", "opportunity"]
-                                },
-                                "id": {
-                                    "type": "string",
-                                    "format": "uuid",
-                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
-                                },
-                                "label": {
-                                    "type": "string"
-                                }
-                            },
-                            "required": ["type", "id", "label"]
-                        },
-                        "description": "Every record that moved; empty until it completes."
-                    },
-                    "createdAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    },
-                    "decidedAt": {
-                        "nullable": true,
-                        "type": "string",
-                        "format": "date-time",
-                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-                    }
-                },
-                "required": [
-                    "id",
-                    "object",
-                    "recordId",
-                    "recordLabel",
-                    "from",
-                    "to",
-                    "proposedBy",
-                    "decidedBy",
-                    "status",
-                    "reason",
-                    "note",
-                    "moved",
-                    "createdAt",
-                    "decidedAt"
-                ]
-            },
             "RecordSummary": {
                 "type": "object",
                 "properties": {
@@ -31648,6 +32422,10 @@
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     },
+                    "cadenceOverdue": {
+                        "type": "boolean",
+                        "description": "Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed."
+                    },
                     "links": {
                         "$ref": "#/components/schemas/Links"
                     },
@@ -31731,6 +32509,7 @@
                     "contactStatusOverride",
                     "contactAttempts",
                     "lastContactedAt",
+                    "cadenceOverdue",
                     "links",
                     "avatarUrl",
                     "position",
@@ -32008,6 +32787,18 @@
                         "maximum": 9007199254740991,
                         "description": "Derived: messages sent to the point of contact; 0 when the deal has none."
                     },
+                    "cadenceDueAt": {
+                        "nullable": true,
+                        "description": "Derived (CADENCE-1): when the next touch is due under its stage’s cadence; null when no cadence applies (closed, unowned, a customer, excluded or suppressed contact).",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "cadenceOverdue": {
+                        "type": "boolean",
+                        "description": "Derived (CADENCE-1): the cadence lapsed."
+                    },
                     "amount": {
                         "nullable": true,
                         "allOf": [
@@ -32124,6 +32915,8 @@
                     "leadSource",
                     "lastContactedAt",
                     "contactAttempts",
+                    "cadenceDueAt",
+                    "cadenceOverdue",
                     "amount",
                     "currency",
                     "closeDate",
@@ -32687,12 +33480,29 @@
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991
                     },
+                    "cadenceDays": {
+                        "nullable": true,
+                        "description": "CADENCE-1: an open deal here is due a touch this many days after its last; null (every closed stage): none.",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
                     "colour": {
                         "type": "string",
                         "enum": ["neutral", "accent", "info", "ok", "warn", "bad"]
                     }
                 },
-                "required": ["id", "pipelineId", "name", "position", "probability", "kind", "daysThreshold", "colour"]
+                "required": [
+                    "id",
+                    "pipelineId",
+                    "name",
+                    "position",
+                    "probability",
+                    "kind",
+                    "daysThreshold",
+                    "cadenceDays",
+                    "colour"
+                ]
             },
             "Pipeline": {
                 "type": "object",
@@ -36379,16 +37189,18 @@
                                         "guardrail_alert",
                                         "invoice_needs_review",
                                         "invoice_coverage_lost",
-                                        "guardrail_poach_suspected"
+                                        "guardrail_poach_suspected",
+                                        "cadence_warning",
+                                        "cadence_rotated"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`)."
                                 },
                                 "target": {
                                     "type": "object",
                                     "properties": {
                                         "type": {
                                             "type": "string",
-                                            "enum": ["task", "transfer", "guardrail", "invoice"]
+                                            "enum": ["task", "transfer", "guardrail", "invoice", "cadence"]
                                         },
                                         "id": {
                                             "type": "string",
@@ -36666,6 +37478,49 @@
                                         "reasonCode"
                                     ]
                                 },
+                                "cadence": {
+                                    "nullable": true,
+                                    "description": "For `cadence_warning` (CADENCE-1): the lapsed deal, and when it rotates.",
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "opportunityId": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "opportunityName": {
+                                            "type": "string"
+                                        },
+                                        "stageName": {
+                                            "type": "string"
+                                        },
+                                        "dueAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                        },
+                                        "rotateAt": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                        }
+                                    },
+                                    "required": [
+                                        "id",
+                                        "opportunityId",
+                                        "opportunityName",
+                                        "stageName",
+                                        "dueAt",
+                                        "rotateAt"
+                                    ]
+                                },
                                 "createdAt": {
                                     "type": "string",
                                     "format": "date-time",
@@ -36686,6 +37541,7 @@
                                 "transfer",
                                 "guardrail",
                                 "invoice",
+                                "cadence",
                                 "createdAt",
                                 "readAt"
                             ]

@@ -68,6 +68,9 @@ export const personView = named(
             .meta({ description: 'A member’s choice, which outranks everything but `do_not_contact`.' }),
         contactAttempts: z.number().int().meta({ description: 'Derived: messages sent to them.' }),
         lastContactedAt: dateTime.nullable().meta({ description: 'Derived: when the last message was sent to them.' }),
+        cadenceOverdue: z.boolean().meta({
+            description: 'Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed.',
+        }),
         links,
         avatarUrl: z.string().nullable(),
         position: z.number(),
@@ -136,6 +139,11 @@ export const opportunityView = named(
             .number()
             .int()
             .meta({ description: 'Derived: messages sent to the point of contact; 0 when the deal has none.' }),
+        cadenceDueAt: dateTime.nullable().meta({
+            description:
+                'Derived (CADENCE-1): when the next touch is due under its stage’s cadence; null when no cadence applies (closed, unowned, a customer, excluded or suppressed contact).',
+        }),
+        cadenceOverdue: z.boolean().meta({ description: 'Derived (CADENCE-1): the cadence lapsed.' }),
         amount: money.nullable(),
         currency: z.string(),
         closeDate: z.string().nullable().meta({ description: 'A calendar date, `YYYY-MM-DD`.', example: '2026-10-31' }),

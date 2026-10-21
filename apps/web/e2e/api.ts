@@ -93,6 +93,13 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/outreach/region-policy$`), () => data.regionPolicy],
     [new RegExp(`^${W}/outreach/customer-exclusion-settings$`), () => data.customerExclusionSettings],
     [new RegExp(`^${W}/outreach/exclusions$`), () => data.outreachExclusions],
+    // CADENCE-1: Settings → Rotation.
+    [new RegExp(`^${W}/rotation/settings$`), () => data.rotationSettings],
+    [new RegExp(`^${W}/rotation/members$`), () => data.rotationMembers],
+    [
+        new RegExp(`^${W}/rotation/preview$`),
+        () => ({ assumedEnabledAt: data.rotationSettings.enabledAt, overdue: 0, items: [] }),
+    ],
     [new RegExp(`^${W}/outreach/verification$`), () => data.verificationSettings],
     [new RegExp(`^${W}/enrichment/settings$`), () => data.enrichmentSettings],
     [

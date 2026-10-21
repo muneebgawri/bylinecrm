@@ -129,6 +129,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'view:save': 'Save their own views',
     'view:share': 'Share views with the workspace',
     'pipeline:configure': 'Configure pipelines and stage rules',
+    'pipeline:cadence': 'Set follow-up cadences and run the lead rotation',
     'email:send': 'Send email',
     'template:read': 'See email templates',
     'template:write': 'Create and edit email templates',

@@ -19,7 +19,10 @@ import { notify, targetOf } from './notify';
 import { labelled, labelTargets } from './task-labels';
 
 /** GUARD-2: the guardrail notifications a digest lists — those of the last day, once each. */
-const DIGEST_ALERT_KINDS = ['guardrail_poach_suspected'] as const satisfies readonly NotificationKind[];
+const DIGEST_ALERT_KINDS = [
+    'guardrail_poach_suspected',
+    'cadence_warning',
+] as const satisfies readonly NotificationKind[];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** An open task: not done and not deleted. */
@@ -148,7 +151,12 @@ export class TaskNotificationsService {
                             createdAt: { gte: new Date(now.getTime() - DAY_MS) },
                         },
                         orderBy: { createdAt: 'asc' },
-                        select: { guardrailEvent: { select: { message: true } } },
+                        select: {
+                            guardrailEvent: { select: { message: true } },
+                            cadenceLapse: {
+                                select: { stageName: true, rotateAt: true, opportunity: { select: { name: true } } },
+                            },
+                        },
                     });
                     if (tasks.length === 0 && alerts.length === 0) return false;
                     const line = (t: MyTaskView) => ({
@@ -164,7 +172,15 @@ export class TaskNotificationsService {
                         workspaceName: member.workspace.name,
                         overdue: tasks.filter((t) => new Date(t.dueAt!) < startOfDay).map(line),
                         today: tasks.filter((t) => new Date(t.dueAt!) >= startOfDay).map(line),
-                        alerts: alerts.flatMap((a) => (a.guardrailEvent ? [a.guardrailEvent.message] : [])),
+                        alerts: alerts.flatMap((a) =>
+                            a.guardrailEvent
+                                ? [a.guardrailEvent.message]
+                                : a.cadenceLapse
+                                  ? [
+                                        `${a.cadenceLapse.opportunity.name} (${a.cadenceLapse.stageName}) missed its follow-up cadence; it rotates to the next rep on ${a.cadenceLapse.rotateAt.toISOString().slice(0, 10)} unless it is touched.`,
+                                    ]
+                                  : [],
+                        ),
                         path: `/w/${member.workspaceId}/home`,
                     });
                     return true;
@@ -195,6 +211,7 @@ export class TaskNotificationsService {
                     { transferId: { not: null } },
                     { guardrailEventId: { not: null } },
                     { invoiceId: { not: null } },
+                    { cadenceLapseId: { not: null } },
                 ],
             } satisfies Prisma.NotificationWhereInput;
             const rows = await tx.notification.findMany({
@@ -206,6 +223,7 @@ export class TaskNotificationsService {
                     transfer: { include: { from: MEMBER, to: MEMBER } },
                     guardrailEvent: { include: { actor: MEMBER, owner: MEMBER } },
                     invoice: { include: { opportunity: { select: { name: true } } } },
+                    cadenceLapse: { include: { opportunity: { select: { name: true } } } },
                 },
             });
             const labels = await labelTargets(tx, [
@@ -265,6 +283,16 @@ export class TaskNotificationsService {
                               gateway: r.invoice.gateway,
                               reference: r.invoice.reference,
                               reasonCode: r.invoice.reasonCode,
+                          }
+                        : null,
+                    cadence: r.cadenceLapse
+                        ? {
+                              id: r.cadenceLapse.id,
+                              opportunityId: r.cadenceLapse.opportunityId,
+                              opportunityName: r.cadenceLapse.opportunity.name,
+                              stageName: r.cadenceLapse.stageName,
+                              dueAt: r.cadenceLapse.dueAt.toISOString(),
+                              rotateAt: r.cadenceLapse.rotateAt.toISOString(),
                           }
                         : null,
                 })),

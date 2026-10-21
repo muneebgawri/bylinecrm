@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { Actor, DomainEvent, LostReason } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
+import { RotationService } from '../cadence/rotation.service';
 import { CompanyOwnership, isCaller } from './company-ownership';
 import { UnknownReference } from '../infra/errors/api-errors';
 import { DomainEvents } from '../events/domain-events.service';
@@ -109,6 +110,7 @@ export class OpportunitiesService implements BulkRecords {
         private readonly moves: StageMoveService,
         private readonly ownership: CompanyOwnership,
         private readonly tasks: TasksService,
+        private readonly rotation: RotationService,
     ) {}
 
     /** Live deals, or the trash when `deleted`; the page and its total read one `where`. */
@@ -162,7 +164,7 @@ export class OpportunitiesService implements BulkRecords {
             );
         }
         const actor = actorOf(context);
-        const ownerId = resolveOwner(context, input.ownerId, undefined);
+        let ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
         await assertCompanyExists(tx, input.companyId ?? null);
         await assertPersonExists(tx, input.pointOfContactId ?? null);
@@ -181,6 +183,8 @@ export class OpportunitiesService implements BulkRecords {
                 'a deal is with a company: name one, or a point of contact who is at one',
             );
         }
+        // CADENCE-1: a new unowned deal from a route or an import goes to the next rep in turn.
+        ownerId = await this.rotation.intakeOwner(tx, context, ownerId, input.companyId ?? null);
         await this.ownership.checkDeal(context, input.companyId ?? null, ownerId);
         const custom = await this.customFields.validated(tx, 'opportunity', input.custom ?? {}, 'create');
         // A deal always has a currency, amount or not: the workspace's unless the caller named one.
@@ -435,6 +439,8 @@ export function view(row: OpportunityRow): OpportunityView {
         leadSource: row.leadSource,
         lastContactedAt: row.pointOfContact?.lastContactedAt ?? null,
         contactAttempts: row.pointOfContact?.contactAttempts ?? 0,
+        cadenceDueAt: row.cadenceDueAt,
+        cadenceOverdue: row.cadenceOverdue,
         amount: row.amountMinor === null ? null : { amountMinor: Number(row.amountMinor), currency: row.currency },
         currency: row.currency,
         closeDate: row.closeDate ? row.closeDate.toISOString().slice(0, 10) : null,

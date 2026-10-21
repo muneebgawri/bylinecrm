@@ -9,6 +9,7 @@ import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { usePipelineId, useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { CadenceSection } from './CadenceSection';
 import { RulesSection } from './RulesSection';
 import { StageDeleteDialog } from './StageDeleteDialog';
 import { StageEditor } from './StageEditor';
@@ -25,6 +26,7 @@ export function PipelineDetail() {
     const pipeline = usePipeline(workspaceId, pipelineId);
     const rules = useRules(workspaceId, pipelineId);
     const canConfigure = useCan('pipeline:configure');
+    const canCadence = useCan('pipeline:cadence');
     const order = useOrderStages(workspaceId, pipelineId);
     const updateStage = useUpdateStage(workspaceId, pipelineId);
     const [editing, setEditing] = useState<StageView | 'new' | null>(null);
@@ -104,6 +106,12 @@ export function PipelineDetail() {
                         rules={rules.data ?? []}
                         stages={pipeline.data.stages}
                         canConfigure={canConfigure}
+                    />
+                    <CadenceSection
+                        key={pipeline.data.stages.map((s) => `${s.id}:${s.cadenceDays}`).join()}
+                        workspaceId={workspaceId}
+                        pipeline={pipeline.data}
+                        canEdit={canCadence}
                     />
                 </>
             )}

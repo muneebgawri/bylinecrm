@@ -521,9 +521,11 @@ function CardBody({
             : stage?.kind === 'lost'
               ? { label: '✕ Lost', status: 'danger' as const }
               : undefined
-        : quiet
-          ? { label: '⚠ Quiet', status: 'warning' as const }
-          : undefined;
+        : deal.cadenceOverdue
+          ? { label: 'Overdue', status: 'danger' as const }
+          : quiet
+            ? { label: '⚠ Quiet', status: 'warning' as const }
+            : undefined;
     return (
         <DealCard
             reference={shortReference(deal.id)}

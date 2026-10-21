@@ -27,6 +27,7 @@ const stage = (id: string, name: string, position: number, kind: StageView['kind
     probability: 10,
     kind,
     daysThreshold: id === 's-contacted' ? 14 : null,
+    cadenceDays: null,
     colour: kind === 'won' ? 'ok' : kind === 'lost' ? 'bad' : 'accent',
 });
 const STAGES = [
@@ -62,6 +63,8 @@ const deal = (id: string, name: string, stageId: string, days = 2): OpportunityV
     leadSource: null,
     lastContactedAt: null,
     contactAttempts: 0,
+    cadenceDueAt: null,
+    cadenceOverdue: false,
     amount: { amountMinor: 1_200_000, currency: 'USD' },
     currency: 'USD',
     closeDate: '2026-10-31',

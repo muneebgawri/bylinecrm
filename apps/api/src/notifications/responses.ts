@@ -63,6 +63,15 @@ const invoiceSummary = z.object({
     reasonCode: z.string().nullable(),
 });
 
+const cadenceSummary = z.object({
+    id,
+    opportunityId: id,
+    opportunityName: z.string(),
+    stageName: z.string(),
+    dueAt: isoTime,
+    rotateAt: isoTime,
+});
+
 const taskSummary = {
     id,
     title: z.string(),
@@ -78,7 +87,7 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`).',
                 }),
                 target: z
                     .object({ type: z.enum(NOTIFICATION_TARGET_TYPES), id })
@@ -90,6 +99,9 @@ export const notificationsView = named(
                 }),
                 invoice: invoiceSummary.nullable().meta({
                     description: 'For an `invoice_*` kind (INV-1): the invoice waiting for finance, and its deal.',
+                }),
+                cadence: cadenceSummary.nullable().meta({
+                    description: 'For `cadence_warning` (CADENCE-1): the lapsed deal, and when it rotates.',
                 }),
                 createdAt: isoTime,
                 readAt: isoTime.nullable(),

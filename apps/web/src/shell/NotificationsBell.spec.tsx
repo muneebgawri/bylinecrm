@@ -17,6 +17,7 @@ const INBOX: NotificationsView = {
             transfer: null,
             guardrail: null,
             invoice: null,
+            cadence: null,
             createdAt: '2026-10-18T09:00:00Z',
             readAt: null,
             task: {
@@ -33,6 +34,7 @@ const INBOX: NotificationsView = {
             transfer: null,
             guardrail: null,
             invoice: null,
+            cadence: null,
             createdAt: '2026-10-17T09:00:00Z',
             readAt: '2026-10-17T10:00:00Z',
             task: {

@@ -9,6 +9,7 @@ import {
     BOARD_STAGE_LIMIT,
     DEFAULT_STAGES,
     STAGE_DELETE_MOVE_LIMIT,
+    defaultCadenceDays,
     type EventActor,
     type StageColour,
     type StageKind,
@@ -160,7 +161,38 @@ export class PipelinesService {
             if (patch.kind !== undefined) data.kind = patch.kind;
             if (patch.daysThreshold !== undefined) data.daysThreshold = patch.daysThreshold;
             if (patch.colour !== undefined) data.colour = patch.colour;
+            // CADENCE-1: a closed stage has no cadence; a stage reopened takes its default back.
+            if (patch.kind !== undefined && patch.kind !== stage.kind) {
+                data.cadenceDays = defaultCadenceDays(patch.name ?? stage.name, patch.kind);
+            }
             return stageView(await tx.pipelineStage.update({ where: { id: stageId }, data }));
+        });
+    }
+
+    /**
+     * CADENCE-1: sets the follow-up cadence of the pipeline's stages (`pipeline:cadence`). A closed stage takes none;
+     * naming one with a cadence is a 400. The deals' due dates are re-derived at once.
+     */
+    setCadence(
+        pipelineId: string,
+        stages: readonly { stageId: string; cadenceDays: number | null }[],
+    ): Promise<PipelineView> {
+        return this.rls.withWorkspace(async (tx) => {
+            const pipeline = await findPipeline(tx, pipelineId);
+            for (const s of stages) {
+                const stage = pipeline.stages.find((x) => x.id === s.stageId);
+                if (!stage) throw new BadRequestException(`stage ${s.stageId} is not in this pipeline`);
+                if (stage.kind !== 'open' && s.cadenceDays !== null) {
+                    throw new BadRequestException(`${stage.name} is a closed stage: it has no cadence`);
+                }
+                await tx.pipelineStage.update({ where: { id: stage.id }, data: { cadenceDays: s.cadenceDays } });
+            }
+            const deals = await tx.opportunity.findMany({
+                where: { pipelineId, closedAt: null },
+                select: { id: true },
+            });
+            await tx.$queryRaw`SELECT refresh_cadence(${deals.map((d) => d.id)}::uuid[])`;
+            return pipelineView(await findPipeline(tx, pipelineId));
         });
     }
 
@@ -522,6 +554,7 @@ export function stageData(
         probability: input.probability,
         kind: input.kind ?? 'open',
         daysThreshold: input.daysThreshold ?? null,
+        cadenceDays: defaultCadenceDays(input.name, input.kind ?? 'open'),
         colour: input.colour,
     };
 }
@@ -541,6 +574,7 @@ export function stageView(row: StageRow): StageView {
         probability: row.probability,
         kind: row.kind,
         daysThreshold: row.daysThreshold,
+        cadenceDays: row.cadenceDays,
         colour: row.colour as StageColour,
     };
 }
