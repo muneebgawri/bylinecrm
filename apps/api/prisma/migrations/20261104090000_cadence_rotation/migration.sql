@@ -247,5 +247,5 @@ $$;
 REVOKE ALL ON FUNCTION refresh_cadence(uuid[]) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION refresh_cadence(uuid[]) TO bylinecrm_app;
 
--- Every deal's cadence from what is on record (the owner role is not held to row-level security).
-SELECT refresh_cadence(NULL);
+-- Deals get their cadence from the cadence job, in batches (20261105): one statement over every deal held the
+-- tables' locks for over half an hour.

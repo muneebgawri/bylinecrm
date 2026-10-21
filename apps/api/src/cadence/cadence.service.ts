@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
     TRANSFER_REASON_CADENCE_ROTATION,
     type RotationPreviewItem,
@@ -16,10 +17,43 @@ import { RotationService, type RotationRow } from './rotation.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Re-derives the cadence of the given deals (every deal when null) and their contacts' overdue flag. */
-export async function refreshCadence(tx: WorkspaceClient, ids: readonly string[] | null): Promise<void> {
-    if (ids !== null && ids.length === 0) return;
-    await tx.$queryRaw`SELECT refresh_cadence(${ids === null ? null : [...ids]}::uuid[])`;
+/** Re-derives the cadence of the given deals and their contacts' overdue flag. */
+export async function refreshCadence(tx: WorkspaceClient, ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await tx.$queryRaw`SELECT refresh_cadence(${[...ids]}::uuid[])`;
+}
+
+const REFRESH_BATCH = 500;
+
+/**
+ * Re-derives the cadence of a workspace's deals (those `where` picks; by default every open one, and any still
+ * carrying a cadence), a batch per transaction: one statement over every deal would hold their locks for minutes.
+ */
+export async function refreshCadenceInBatches(
+    rls: RlsPrismaService,
+    workspaceId: string,
+    where: Prisma.OpportunityWhereInput = {
+        OR: [{ closedAt: null, deletedAt: null }, { cadenceDueAt: { not: null } }, { cadenceOverdue: true }],
+    },
+): Promise<void> {
+    let after: string | null = null;
+    for (;;) {
+        const last: string | null = await rls.withWorkspace(workspaceId, async (tx) => {
+            const rows = await tx.opportunity.findMany({
+                where: after ? { AND: [where, { id: { gt: after } }] } : where,
+                select: { id: true },
+                orderBy: { id: 'asc' },
+                take: REFRESH_BATCH,
+            });
+            await refreshCadence(
+                tx,
+                rows.map((r) => r.id),
+            );
+            return rows.length === REFRESH_BATCH ? rows[rows.length - 1]!.id : null;
+        });
+        if (!last) return;
+        after = last;
+    }
 }
 
 /** An overdue open deal, as the job weighs it. */
@@ -78,8 +112,8 @@ export class CadenceService {
     }
 
     async runWorkspace(workspaceId: string, now = new Date()): Promise<{ warned: number; rotated: number }> {
+        await refreshCadenceInBatches(this.rls, workspaceId);
         const settings = await this.rls.withWorkspace(workspaceId, async (tx) => {
-            await refreshCadence(tx, null);
             await tx.rotationMember.updateMany({
                 where: { paused: true, resumeAt: { lte: now } },
                 data: { paused: false, resumeAt: null },

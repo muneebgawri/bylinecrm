@@ -18,6 +18,7 @@ import {
 } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { Forbidden, StateConflict, TooLarge, UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
+import { refreshCadenceInBatches } from '../cadence/cadence.service';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -171,13 +172,13 @@ export class PipelinesService {
 
     /**
      * CADENCE-1: sets the follow-up cadence of the pipeline's stages (`pipeline:cadence`). A closed stage takes none;
-     * naming one with a cadence is a 400. The deals' due dates are re-derived at once.
+     * naming one with a cadence is a 400. The deals' due dates are re-derived once it is saved, a batch at a time.
      */
-    setCadence(
+    async setCadence(
         pipelineId: string,
         stages: readonly { stageId: string; cadenceDays: number | null }[],
     ): Promise<PipelineView> {
-        return this.rls.withWorkspace(async (tx) => {
+        const saved = await this.rls.withWorkspace(async (tx) => {
             const pipeline = await findPipeline(tx, pipelineId);
             for (const s of stages) {
                 const stage = pipeline.stages.find((x) => x.id === s.stageId);
@@ -187,13 +188,16 @@ export class PipelinesService {
                 }
                 await tx.pipelineStage.update({ where: { id: stage.id }, data: { cadenceDays: s.cadenceDays } });
             }
-            const deals = await tx.opportunity.findMany({
-                where: { pipelineId, closedAt: null },
-                select: { id: true },
-            });
-            await tx.$queryRaw`SELECT refresh_cadence(${deals.map((d) => d.id)}::uuid[])`;
             return pipelineView(await findPipeline(tx, pipelineId));
         });
+        const context = this.context.get();
+        if (context) {
+            await refreshCadenceInBatches(this.rls, context.workspaceId, {
+                pipelineId,
+                OR: [{ closedAt: null, deletedAt: null }, { cadenceDueAt: { not: null } }],
+            });
+        }
+        return saved;
     }
 
     /**
