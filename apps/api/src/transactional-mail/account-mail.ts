@@ -5,6 +5,7 @@ import {
     passwordResetMail,
     signupInvitationMail,
     taskDigestMail,
+    guardrailAlertMail,
     twentySyncFailingMail,
     biginSyncFailingMail,
     verificationMail,
@@ -152,6 +153,7 @@ export class AccountMail {
             workspaceName: string;
             overdue: Parameters<typeof taskDigestMail>[0]['overdue'];
             today: Parameters<typeof taskDigestMail>[0]['today'];
+            alerts?: string[];
             path: string;
         },
     ): Promise<void> {
@@ -162,6 +164,31 @@ export class AccountMail {
                 to: input.to,
                 idempotencyKey: `task-digest-${input.memberId}-${input.day}`,
                 ...taskDigestMail({ ...input, url: new URL(input.path, this.env.WEB_URL).toString() }),
+            },
+            input.workspaceId,
+        );
+    }
+
+    /** GUARD-2: a `high` guardrail alert, at once; one per member per event. */
+    guardrailAlert(
+        tx: MailTransaction,
+        input: {
+            workspaceId: string;
+            to: string;
+            memberId: string;
+            eventId: string;
+            workspaceName: string;
+            message: string;
+            path: string;
+        },
+    ): Promise<void> {
+        return this.outbox.record(
+            tx,
+            {
+                kind: 'guardrail_alert',
+                to: input.to,
+                idempotencyKey: `guardrail-alert-${input.eventId}-${input.memberId}`,
+                ...guardrailAlertMail({ ...input, url: new URL(input.path, this.env.WEB_URL).toString() }),
             },
             input.workspaceId,
         );

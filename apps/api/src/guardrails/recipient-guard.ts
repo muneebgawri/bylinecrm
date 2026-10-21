@@ -75,6 +75,7 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     recipient_quality: 'medium',
     reply_rate: 'high',
     spam_rate: 'high',
+    poach_suspected: 'medium',
 };
 
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;

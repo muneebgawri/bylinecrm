@@ -607,6 +607,7 @@ export const notificationsInbox: NotificationsView = {
         {
             id: '0b1e0000-0000-4000-8000-000000000a11',
             kind: 'task_assigned',
+            target: { type: 'task', id: myTasks[0]!.id },
             transfer: null,
             guardrail: null,
             invoice: null,
@@ -622,6 +623,7 @@ export const notificationsInbox: NotificationsView = {
         {
             id: '0b1e0000-0000-4000-8000-000000000a12',
             kind: 'task_due',
+            target: { type: 'task', id: tasks[0]!.id },
             transfer: null,
             guardrail: null,
             invoice: null,

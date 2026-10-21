@@ -15,7 +15,12 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { MEMBER_SUMMARY_SELECT } from '../records/summaries';
 import { AccountMail } from '../transactional-mail/account-mail';
 import { MY_TASKS_LIMIT, TASK_DUE_AS_MADE_MS, TASK_DUE_BATCH, TASK_DUE_LOOKBACK_MS } from './notifications.constants';
+import { notify, targetOf } from './notify';
 import { labelled, labelTargets } from './task-labels';
+
+/** GUARD-2: the guardrail notifications a digest lists — those of the last day, once each. */
+const DIGEST_ALERT_KINDS = ['guardrail_poach_suspected'] as const satisfies readonly NotificationKind[];
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** An open task: not done and not deleted. */
 const OPEN = { deletedAt: null, status: { not: 'done' } } satisfies Prisma.TaskWhereInput;
@@ -98,15 +103,30 @@ export class TaskNotificationsService {
 
     /**
      * The morning digest: each member who wants it and holds open tasks due by the end of the day
-     * (UTC) gets one email listing the overdue ones and today's. One per member per day (the outbox's
-     * idempotency key), so running it again that day sends nothing more.
+     * (UTC), or (GUARD-2) was told of a guardrail alert in the last day, gets one email listing the
+     * overdue tasks, today's, and the alerts (who, whom, when, subject — never a body). One per member
+     * per day (the outbox's idempotency key), so running it again that day sends nothing more.
      */
     async sendDigests(now = new Date()): Promise<number> {
         const endOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
         const startOfDay = new Date(endOfDay.getTime() - 24 * 60 * 60 * 1000);
         const day = startOfDay.toISOString().slice(0, 10);
         const members = await this.ownerPrisma.workspaceMember.findMany({
-            where: { taskDigest: true, assignedTasks: { some: { ...OPEN, dueAt: { lt: endOfDay } } } },
+            where: {
+                taskDigest: true,
+                leftAt: null,
+                OR: [
+                    { assignedTasks: { some: { ...OPEN, dueAt: { lt: endOfDay } } } },
+                    {
+                        notifications: {
+                            some: {
+                                kind: { in: [...DIGEST_ALERT_KINDS] },
+                                createdAt: { gte: new Date(now.getTime() - DAY_MS) },
+                            },
+                        },
+                    },
+                ],
+            },
             select: {
                 id: true,
                 workspaceId: true,
@@ -121,7 +141,16 @@ export class TaskNotificationsService {
                     const tasks = (await openTasksIn(tx, member.id)).filter(
                         (t) => t.dueAt !== null && new Date(t.dueAt) < endOfDay,
                     );
-                    if (tasks.length === 0) return false;
+                    const alerts = await tx.notification.findMany({
+                        where: {
+                            memberId: member.id,
+                            kind: { in: [...DIGEST_ALERT_KINDS] },
+                            createdAt: { gte: new Date(now.getTime() - DAY_MS) },
+                        },
+                        orderBy: { createdAt: 'asc' },
+                        select: { guardrailEvent: { select: { message: true } } },
+                    });
+                    if (tasks.length === 0 && alerts.length === 0) return false;
                     const line = (t: MyTaskView) => ({
                         title: t.title,
                         about: t.targets.map((x) => x.label),
@@ -135,6 +164,7 @@ export class TaskNotificationsService {
                         workspaceName: member.workspace.name,
                         overdue: tasks.filter((t) => new Date(t.dueAt!) < startOfDay).map(line),
                         today: tasks.filter((t) => new Date(t.dueAt!) >= startOfDay).map(line),
+                        alerts: alerts.flatMap((a) => (a.guardrailEvent ? [a.guardrailEvent.message] : [])),
                         path: `/w/${member.workspaceId}/home`,
                     });
                     return true;
@@ -174,7 +204,7 @@ export class TaskNotificationsService {
                 include: {
                     task: { select: { id: true, title: true, dueAt: true, ...WITH_TARGETS } },
                     transfer: { include: { from: MEMBER, to: MEMBER } },
-                    guardrailEvent: { include: { actor: MEMBER } },
+                    guardrailEvent: { include: { actor: MEMBER, owner: MEMBER } },
                     invoice: { include: { opportunity: { select: { name: true } } } },
                 },
             });
@@ -190,6 +220,7 @@ export class TaskNotificationsService {
                 items: rows.map((r) => ({
                     id: r.id,
                     kind: r.kind,
+                    target: targetOf(r),
                     createdAt: r.createdAt.toISOString(),
                     readAt: r.readAt?.toISOString() ?? null,
                     task: r.task
@@ -219,6 +250,11 @@ export class TaskNotificationsService {
                               actor: named(r.guardrailEvent.actor),
                               count: Number((r.guardrailEvent.detail as { count?: string } | null)?.count ?? 0),
                               message: r.guardrailEvent.message,
+                              severity: r.guardrailEvent.severity,
+                              owner: named(r.guardrailEvent.owner),
+                              address: r.guardrailEvent.address,
+                              subject: detailOf(r.guardrailEvent.detail).subject ?? null,
+                              sentAt: detailOf(r.guardrailEvent.detail).sentAt ?? null,
                           }
                         : null,
                     invoice: r.invoice
@@ -293,10 +329,17 @@ async function tell(
     kind: NotificationKind,
     taskIds: readonly string[],
 ): Promise<void> {
-    await tx.notification.createMany({
-        data: taskIds.map((taskId) => ({ workspaceId, memberId, kind, taskId })),
-        skipDuplicates: true,
-    });
+    await notify(
+        tx,
+        workspaceId,
+        [memberId],
+        kind,
+        taskIds.map((id) => ({ type: 'task', id })),
+    );
+}
+
+function detailOf(detail: Prisma.JsonValue): Record<string, string | undefined> {
+    return detail && typeof detail === 'object' && !Array.isArray(detail) ? (detail as Record<string, string>) : {};
 }
 
 /** A member's open tasks, soonest due first and no due date last, with what each is about. */

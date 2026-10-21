@@ -33,6 +33,10 @@ import type { TransferMember } from './transfers.js';
  * - `recipient_quality` — a pool send to an address verification finds `invalid` (blocked) or `risky` (warned).
  * - `reply_rate` — a mailbox paused for new recipients: its reply rate fell under the floor.
  * - `spam_rate` — a sending domain's Postmaster spam rate reached the warn line or the kill switch.
+ *
+ * GUARD-2 (FR-CRMS-22), measured from mail that left (Gmail sync and CRM sends alike):
+ * - `poach_suspected` — a member mailed a person, or a company domain, another member owns (not as a reply in a
+ *   thread the owner is on), or a customer on the outreach exclusions. Who, whom, when and subject only.
  */
 export const GUARDRAIL_KINDS = [
     'suppressed',
@@ -54,6 +58,8 @@ export const GUARDRAIL_KINDS = [
     'recipient_quality',
     'reply_rate',
     'spam_rate',
+    // GUARD-2 (FR-CRMS-22): mail seen through sync or sent from the CRM to another member's lead or a customer.
+    'poach_suspected',
 ] as const;
 export type GuardrailKind = (typeof GUARDRAIL_KINDS)[number];
 
@@ -116,6 +122,7 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     recipient_quality: 'Recipient quality',
     reply_rate: 'Reply rate under the floor',
     spam_rate: 'Domain spam rate',
+    poach_suspected: 'Mailed another member’s lead',
 };
 
 /** The kinds that are about a mailbox's sending rather than one recipient (REP-1). */
@@ -168,6 +175,41 @@ export interface GuardrailSummary {
     count: number;
     /** What the event said (REP-1: the alert's own words, for a `guardrail_alert`). */
     message: string;
+    severity: GuardrailSeverity;
+    /** GUARD-2: whose lead it was; null when none (a customer on the exclusions only). */
+    owner: TransferMember | null;
+    /** GUARD-2: whom the mail went to. Never the body. */
+    address: string | null;
+    /** GUARD-2: the mail's subject. Never the body. */
+    subject: string | null;
+    /** GUARD-2: when the mail was sent, ISO 8601. */
+    sentAt: string | null;
+}
+
+/** GUARD-2: a `poach_suspected` event is `high` once a member mailed this many distinct owned leads… */
+export const POACH_HIGH_LEADS = 3;
+/** …within this long. */
+export const POACH_HIGH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** GUARD-2: one alert per (sender, owner, recipient) within this long; a thread of follow-ups tells once. */
+export const POACH_DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * GUARD-2: mail older than this when it is seen is not judged — a mailbox's first sync, or a resync, imports
+ * history, and history must not flood the owners and managers with alerts.
+ */
+export const POACH_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * GUARD-2 admin view: an active member and whether their mail is seen. `syncedVia` says how: their own connected
+ * mailbox, or (#225) Google Workspace delegation; null means mail they send is not seen at all.
+ */
+export interface MailboxCoverageView {
+    memberId: string;
+    name: string | null;
+    email: string;
+    role: string;
+    syncedVia: 'mailbox' | 'delegation' | null;
+    /** Their personal mailboxes and each one's status (none connected = not synced, unless delegated). */
+    mailboxes: { email: string; status: 'connected' | 'reconnect_needed' | 'disconnected' }[];
 }
 
 /**

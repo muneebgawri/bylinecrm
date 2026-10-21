@@ -1,7 +1,9 @@
 import {
     INVOICE_GATEWAYS,
     GUARDRAIL_KINDS,
+    GUARDRAIL_SEVERITIES,
     NOTIFICATION_KINDS,
+    NOTIFICATION_TARGET_TYPES,
     RECORD_OBJECTS,
     TASK_STATUSES,
     TRANSFER_STATUSES,
@@ -45,6 +47,11 @@ const guardrailSummary = z.object({
     actor: transferMember.nullable(),
     count: z.number().int(),
     message: z.string().meta({ description: 'What the event said (REP-1: the alert’s own words).' }),
+    severity: z.enum(GUARDRAIL_SEVERITIES),
+    owner: transferMember.nullable().meta({ description: 'GUARD-2: whose lead it was; null for none.' }),
+    address: z.string().nullable().meta({ description: 'GUARD-2: whom the mail went to.' }),
+    subject: z.string().nullable().meta({ description: 'GUARD-2: the mail’s subject. Never its body.' }),
+    sentAt: isoTime.nullable().meta({ description: 'GUARD-2: when the mail was sent.' }),
 });
 
 const invoiceSummary = z.object({
@@ -71,8 +78,11 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer.',
                 }),
+                target: z
+                    .object({ type: z.enum(NOTIFICATION_TARGET_TYPES), id })
+                    .meta({ description: 'What it is about, whatever the kind (GUARD-2): one polymorphic target.' }),
                 task: z.object(taskSummary).nullable().meta({ description: 'For a `task_*` kind.' }),
                 transfer: transferSummary.nullable().meta({ description: 'For a `transfer_*` kind.' }),
                 guardrail: guardrailSummary.nullable().meta({

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { query, workspacePath } from './endpoints';
-import type { GuardrailEventPage, GuardrailEventView, GuardrailEventsQuery } from './types';
+import type { GuardrailEventPage, GuardrailEventView, GuardrailEventsQuery, MailboxCoverageView } from './types';
 
 /**
  * Guardrails (GUARD-1, #202): what the recipient guard refused, warned of or let a manager through, for
@@ -11,6 +11,7 @@ import type { GuardrailEventPage, GuardrailEventView, GuardrailEventsQuery } fro
 const keys = {
     all: (workspaceId: string) => ['w', workspaceId, 'guardrails'] as const,
     events: (workspaceId: string, q: GuardrailEventsQuery) => ['w', workspaceId, 'guardrails', 'events', q] as const,
+    coverage: (workspaceId: string) => ['w', workspaceId, 'guardrails', 'mailbox-coverage'] as const,
 };
 
 export const guardrails = {
@@ -30,6 +31,8 @@ export const guardrails = {
             ),
             { signal },
         ),
+    mailboxCoverage: (workspaceId: string, signal?: AbortSignal) =>
+        request<MailboxCoverageView[]>('GET', workspacePath(workspaceId, '/guardrails/mailbox-coverage'), { signal }),
     markLegitimate: (workspaceId: string, id: string, reason: string) =>
         request<GuardrailEventView>('POST', workspacePath(workspaceId, `/guardrails/events/${id}/legitimate`), {
             body: { reason },
@@ -40,6 +43,14 @@ export function useGuardrailEvents(workspaceId: string, q: GuardrailEventsQuery)
     return useQuery({
         queryKey: keys.events(workspaceId, q),
         queryFn: ({ signal }) => guardrails.events(workspaceId, q, signal),
+    });
+}
+
+/** GUARD-2: every active member and whether sync sees their mail. */
+export function useMailboxCoverage(workspaceId: string) {
+    return useQuery({
+        queryKey: keys.coverage(workspaceId),
+        queryFn: ({ signal }) => guardrails.mailboxCoverage(workspaceId, signal),
     });
 }
 

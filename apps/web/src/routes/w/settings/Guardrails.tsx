@@ -36,6 +36,7 @@ import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { PausedMailboxes } from './PausedMailboxes';
+import { UnsyncedMembers } from './UnsyncedMembers';
 import { ReputationSettingsDialog } from './ReputationSettingsDialog';
 
 const OUTCOME_LABEL: Record<GuardrailOutcome, string> = {
@@ -86,6 +87,7 @@ export function Guardrails() {
                 many rows, and whether only their own. Mark one legitimate when there was a good reason.
             </p>
             <PausedMailboxes workspaceId={workspaceId} />
+            <UnsyncedMembers workspaceId={workspaceId} />
             <DataTableChrome
                 toolbar={{
                     extra: (

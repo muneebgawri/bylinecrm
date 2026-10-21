@@ -3,6 +3,7 @@ import type { DomainEvents } from '../events/domain-events.service';
 import { recordGuardrailEvents, reviewersIn, type NewGuardrailEvent } from '../guardrails/record';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
+import { notify } from '../notifications/notify';
 
 /** Who a reputation event tells: the mailbox's owner (the sender), and — at `high` — every reviewer. */
 export interface AlertAudience {
@@ -33,17 +34,7 @@ export async function raiseAlert(
         row.dedupeKey !== undefined && row.dedupeKey !== null,
     );
     if (!event) return null;
-    if (told.size > 0) {
-        await tx.notification.createMany({
-            data: [...told].map((memberId) => ({
-                workspaceId: context.workspaceId,
-                memberId,
-                kind: 'guardrail_alert' as const,
-                guardrailEventId: event.id,
-            })),
-            skipDuplicates: true,
-        });
-    }
+    await notify(tx, context.workspaceId, told, 'guardrail_alert', [{ type: 'guardrail', id: event.id }]);
     return event;
 }
 
