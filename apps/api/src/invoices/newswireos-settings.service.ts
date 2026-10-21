@@ -102,6 +102,7 @@ export class NewswireosSettingsService {
                 : null,
             lastDeliveryAt: row?.lastDeliveryAt?.toISOString() ?? null,
             lastDeliveryResult: row?.lastDeliveryResult ?? null,
+            pushOwnership: row?.pushOwnership ?? false,
         };
     }
 }

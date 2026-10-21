@@ -1,13 +1,20 @@
-import { Badge, Button, Field, Input, LoadingRegion, toast } from '@bylinecrm/ui';
+import { Badge, Button, Field, Input, LoadingRegion, Switch, toast } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import {
     useNewswireosSettings,
+    useOwnershipDeliveries,
     usePutNewswireos,
     useRemoveNewswireos,
     useRotateNewswireos,
+    useSetOwnershipPush,
+    useTestOwnershipPush,
 } from '../../../api/invoices';
-import type { NewswireosSettingsView } from '../../../api/types';
+import type {
+    NewswireosOwnershipDeliveryView,
+    NewswireosOwnershipPreview,
+    NewswireosSettingsView,
+} from '../../../api/types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
@@ -108,7 +115,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                     hint={
                         settings.configured
                             ? 'Set. Enter a new one only to replace it.'
-                            : 'A NewswireOS API token with the payment_verification:lookup scope.'
+                            : 'A NewswireOS API token with the payment_verification:lookup scope (and crm:ownership_write to push ownership changes).'
                     }
                     error={local.apiToken ?? fieldErrorAt(put.error, 'apiToken')}
                 >
@@ -188,6 +195,8 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                 </section>
             )}
 
+            {settings.configured && <OwnershipPush workspaceId={workspaceId} settings={settings} />}
+
             <ConfirmDialog
                 open={confirm !== null}
                 onOpenChange={(open) => !open && setConfirm(null)}
@@ -212,5 +221,146 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                 }}
             />
         </div>
+    );
+}
+
+type DeliveryStatus = NewswireosOwnershipDeliveryView['status'];
+const DELIVERY_STATUS: Record<DeliveryStatus, { label: string; status: 'neutral' | 'success' | 'warning' | 'danger' }> =
+    {
+        pending: { label: 'Queued', status: 'neutral' },
+        retrying: { label: 'Retrying', status: 'warning' },
+        delivered: { label: 'Delivered', status: 'success' },
+        not_ready: { label: 'NewswireOS not ready', status: 'warning' },
+        failed: { label: 'Failed', status: 'danger' },
+        skipped: { label: 'Not sent: push off', status: 'neutral' },
+    };
+/** What NewswireOS's codes (and the CRM's own) mean to an admin. */
+const OUTCOME_TEXT: Record<string, string> = {
+    TOKEN_LACKS_SCOPE:
+        'Add the crm:ownership_write scope to the NewswireOS token (Settings → API tokens in NewswireOS).',
+    TOKEN_REFUSED: 'NewswireOS refused the API token: enter a new one above.',
+    BAD_REQUEST: 'NewswireOS could not read the change it was sent.',
+    STALE: 'NewswireOS already has a later change for this record.',
+    NO_AM_FOR_EMAIL: 'The new owner has no account manager in NewswireOS.',
+    NO_CUSTOMER: 'No matching client in NewswireOS.',
+    UNCHANGED: 'NewswireOS already had this owner.',
+    AGENCY_CLIENT: 'An agency client: NewswireOS left its account manager alone.',
+};
+const REASON_TEXT: Record<NewswireosOwnershipDeliveryView['reason'], string> = {
+    transfer: 'Transferred',
+    forced: 'Moved by a manager',
+    first_contact: 'Handed over on first contact',
+};
+
+/**
+ * PNW-765: completed ownership transfers pushed to NewswireOS, so its account managers follow the CRM's owners.
+ * Off by default; while off, nothing is sent. "Send test" sends nothing (NewswireOS reads no test flag yet): it
+ * shows the body a push sends.
+ */
+function OwnershipPush({ workspaceId, settings }: { workspaceId: string; settings: NewswireosSettingsView }) {
+    const set = useSetOwnershipPush(workspaceId);
+    const test = useTestOwnershipPush(workspaceId);
+    const deliveries = useOwnershipDeliveries(workspaceId);
+    const [preview, setPreview] = useState<NewswireosOwnershipPreview | null>(null);
+    const failed = (e: unknown) => toast({ title: 'That did not work', description: failureText(e), tone: 'danger' });
+    return (
+        <section
+            aria-labelledby="newswireos-ownership-title"
+            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+        >
+            <h3 id="newswireos-ownership-title" className="m-0 text-[14px] font-semibold text-text">
+                Ownership changes
+            </h3>
+            <label className="flex items-start gap-3 text-[13px]">
+                <Switch
+                    checked={settings.pushOwnership}
+                    disabled={set.isPending}
+                    onCheckedChange={(on) =>
+                        set.mutate(on, {
+                            onSuccess: () => toast({ title: on ? 'Ownership push on' : 'Ownership push off' }),
+                            onError: failed,
+                        })
+                    }
+                />
+                <span className="flex flex-col gap-0.5">
+                    <span className="font-medium text-text">Push ownership changes to NewswireOS</span>
+                    <span className="text-text-muted">
+                        When a record changes hands here, its account manager in NewswireOS follows. The API token needs
+                        the crm:ownership_write scope. Owners filled in by an import are not pushed, and nothing is sent
+                        while this is off.
+                    </span>
+                </span>
+            </label>
+            <div>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    shape="square"
+                    loading={test.isPending}
+                    onClick={() => test.mutate(undefined, { onSuccess: setPreview, onError: failed })}
+                >
+                    Send test
+                </Button>
+            </div>
+            {preview && (
+                <div className="flex flex-col gap-1 text-[13px]">
+                    <p className="m-0 text-text-muted">
+                        Nothing was sent: NewswireOS does not read a test flag yet. This is what a push sends:
+                    </p>
+                    <pre className="m-0 max-h-64 overflow-auto rounded-md border border-border p-3 text-xs break-all whitespace-pre-wrap">
+                        {JSON.stringify(preview.payload, null, 2)}
+                    </pre>
+                </div>
+            )}
+            <h4 className="m-0 mt-2 text-[13px] font-semibold text-text">Recent deliveries</h4>
+            {deliveries.isError ? (
+                <p className="m-0 text-[13px] text-text-muted">{failureText(deliveries.error)}</p>
+            ) : !deliveries.data ? (
+                <LoadingRegion label="Loading deliveries" className="h-12" />
+            ) : deliveries.data.length === 0 ? (
+                <p className="m-0 text-[13px] text-text-muted">Nothing pushed yet.</p>
+            ) : (
+                <ul aria-label="Recent deliveries" className="m-0 flex list-none flex-col divide-y divide-border p-0">
+                    {deliveries.data.map((d) => (
+                        <DeliveryItem key={d.id} delivery={d} />
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
+function DeliveryItem({ delivery: d }: { delivery: NewswireosOwnershipDeliveryView }) {
+    const badge = DELIVERY_STATUS[d.status];
+    const outcome =
+        d.status === 'delivered'
+            ? d.matched
+                ? 'Matched in NewswireOS.'
+                : (OUTCOME_TEXT[d.reasonCode ?? ''] ?? 'No matching client in NewswireOS.')
+            : d.status === 'not_ready'
+              ? 'NewswireOS does not take ownership changes yet; not retried.'
+              : (OUTCOME_TEXT[d.reasonCode ?? ''] ?? d.lastError);
+    return (
+        <li className="flex flex-col gap-0.5 py-2 text-[13px]">
+            <span className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 font-medium break-words">
+                    {d.recordName || (d.recordType === 'company' ? 'A company' : 'A person')} → {d.newOwnerEmail}
+                </span>
+                <Badge status={badge.status}>{badge.label}</Badge>
+            </span>
+            <span className="text-xs text-text-muted">
+                {REASON_TEXT[d.reason]} · {formatWhen(d.lastAttemptAt ?? d.createdAt)}
+                {d.attempts > 1 ? ` · ${d.attempts} attempts` : ''}
+                {d.reasonCode ? ` · ${d.reasonCode}` : ''}
+            </span>
+            {outcome && <span className="text-xs break-words text-text-muted">{outcome}</span>}
+            {d.customers.length > 0 && (
+                <span className="text-xs break-words text-text-muted">
+                    {d.customers
+                        .map((c) => `Customer ${c.customerId}${c.reasonCode ? `: ${c.reasonCode}` : ''}`)
+                        .join(' · ')}
+                </span>
+            )}
+        </li>
     );
 }

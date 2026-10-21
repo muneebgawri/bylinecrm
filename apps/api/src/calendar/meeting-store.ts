@@ -415,6 +415,7 @@ export class MeetingStore {
                 to: handedTo,
                 target: { type: 'person', id: row.id },
                 reason: `${company.companyName} is theirs; met in a meeting`,
+                firstContact: true,
             });
         }
         return { id: row.id, event, handedTo };

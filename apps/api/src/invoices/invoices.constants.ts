@@ -61,3 +61,37 @@ export const INVOICE_REASONS = {
     refunded: 'REFUNDED',
     disputed: 'DISPUTED',
 } as const;
+
+/**
+ * PNW-765: completed ownership transfers pushed to NewswireOS (token scope `crm:ownership_write`), so its account
+ * managers follow the CRM's owners. One job per delivery (`jobId` is the delivery); NewswireOS not answering, or
+ * answering 5xx/429, is retried with exponential backoff from 10 s (eight tries span about 20 minutes), then the
+ * delivery is `failed`. Any other 4xx is final at once; a 404 is `not_ready` (the route is not deployed yet).
+ */
+export const OWNERSHIP_PUSH_QUEUE = 'newswireos-ownership-push';
+export const OWNERSHIP_PUSH_JOB = 'push';
+export const OWNERSHIP_PUSH_ATTEMPTS = 8;
+export const OWNERSHIP_PUSH_BACKOFF_MS = 10_000;
+export const NEWSWIREOS_OWNERSHIP_PATH = '/api/v1/crm/ownership-changed';
+export const NEWSWIREOS_OWNERSHIP_SCOPE = 'crm:ownership_write';
+/** Deliveries the settings page lists, newest first. */
+export const OWNERSHIP_DELIVERIES_SHOWN = 20;
+/** At most this many addresses go with a push (NewswireOS's limit). `event_id` is a UUID, well under its 200. */
+export const NEWSWIREOS_OWNERSHIP_EMAILS_MAX = 200;
+/** NewswireOS's codes that settle a push for good, whatever status they come with: never retried. */
+export const OWNERSHIP_PUSH_FINAL_CODES: ReadonlySet<string> = new Set(['STALE', 'NO_AM_FOR_EMAIL']);
+/** A delivery's `reasonCode` when the CRM set it rather than NewswireOS. */
+export const OWNERSHIP_PUSH_REASONS = {
+    /** NewswireOS answered 404: the route is not deployed yet. */
+    notReady: 'NEWSWIREOS_NOT_READY',
+    /** NewswireOS's 401: a bad token. */
+    tokenRefused: 'TOKEN_REFUSED',
+    /** NewswireOS's 403: the token lacks `crm:ownership_write`. */
+    tokenLacksScope: 'TOKEN_LACKS_SCOPE',
+    /** NewswireOS's 400: a malformed body. */
+    badRequest: 'BAD_REQUEST',
+    rejected: 'REJECTED',
+    unavailable: 'NEWSWIREOS_UNAVAILABLE',
+    /** The push was turned off, or NewswireOS unlinked, before the delivery went. */
+    pushOff: 'PUSH_OFF',
+} as const;

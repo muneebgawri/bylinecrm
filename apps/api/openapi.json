@@ -13718,6 +13718,214 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/integrations/newswireos/ownership-push": {
+            "put": {
+                "operationId": "newswireosSettings_putOwnershipPush",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutOwnershipPushDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/newswireos/ownership-push/deliveries": {
+            "get": {
+                "operationId": "newswireosSettings_ownershipDeliveries",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/NewswireosOwnershipDelivery"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/newswireos/ownership-push/test": {
+            "post": {
+                "operationId": "newswireosSettings_testOwnershipPush",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosOwnershipPreview"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/api/hooks/newswireos/{token}": {
             "post": {
                 "operationId": "newswireosHook_receive",
@@ -27673,7 +27881,7 @@
                         "description": "NewswireOS’s address, `https://app.newswireos.example`."
                     },
                     "apiToken": {
-                        "description": "A NewswireOS API token with the `payment_verification:lookup` scope. Leave out to keep the current one.",
+                        "description": "A NewswireOS API token with the `payment_verification:lookup` scope (and `crm:ownership_write` to push ownership changes). Leave out to keep the current one.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 500
@@ -27686,6 +27894,16 @@
                     }
                 },
                 "required": ["baseUrl"]
+            },
+            "PutOwnershipPushDto": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "The link’s API token needs the `crm:ownership_write` scope. Off by default."
+                    }
+                },
+                "required": ["enabled"]
             },
             "PutBylineSettingsDto": {
                 "type": "object",
@@ -34417,9 +34635,229 @@
                         "nullable": true,
                         "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.",
                         "type": "string"
+                    },
+                    "pushOwnership": {
+                        "type": "boolean",
+                        "description": "PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default."
                     }
                 },
-                "required": ["configured", "secretSet", "baseUrl", "hookUrl", "lastDeliveryAt", "lastDeliveryResult"]
+                "required": [
+                    "configured",
+                    "secretSet",
+                    "baseUrl",
+                    "hookUrl",
+                    "lastDeliveryAt",
+                    "lastDeliveryResult",
+                    "pushOwnership"
+                ]
+            },
+            "NewswireosOwnershipDelivery": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "eventId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The `transfer.completed` event: the push’s `event_id`."
+                    },
+                    "transferId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordType": {
+                        "type": "string",
+                        "enum": ["person", "company"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordName": {
+                        "type": "string"
+                    },
+                    "newOwnerEmail": {
+                        "type": "string"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "enum": ["transfer", "forced", "first_contact"]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "retrying", "delivered", "not_ready", "failed", "skipped"],
+                        "description": "`retrying`: NewswireOS did not answer, or failed on its side; tried again with backoff. `not_ready`: NewswireOS answered 404 (the route is not deployed yet); not retried. `failed`: refused (any other 4xx), or out of retries. `skipped`: the push was turned off before it went."
+                    },
+                    "attempts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "matched": {
+                        "nullable": true,
+                        "description": "Whether NewswireOS found the client.",
+                        "type": "boolean"
+                    },
+                    "customers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "customerId": {
+                                    "type": "string"
+                                },
+                                "reasonCode": {
+                                    "nullable": true,
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["customerId", "reasonCode"]
+                        },
+                        "description": "The NewswireOS clients the change touched: `REASSIGNED`, `UNCHANGED` or `AGENCY_CLIENT`."
+                    },
+                    "reasonCode": {
+                        "nullable": true,
+                        "description": "NewswireOS’s `reason_code` (`NO_AM_FOR_EMAIL`, `STALE`, `NO_CUSTOMER`, `REASSIGNED`, `UNCHANGED`, `AGENCY_CLIENT`), or `NEWSWIREOS_NOT_READY`, `TOKEN_REFUSED` (401), `TOKEN_LACKS_SCOPE` (403), `BAD_REQUEST` (400), `REJECTED`, `NEWSWIREOS_UNAVAILABLE`, `PUSH_OFF`.",
+                        "type": "string"
+                    },
+                    "httpStatus": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "lastError": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "lastAttemptAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "eventId",
+                    "transferId",
+                    "recordType",
+                    "recordId",
+                    "recordName",
+                    "newOwnerEmail",
+                    "reason",
+                    "status",
+                    "attempts",
+                    "matched",
+                    "customers",
+                    "reasonCode",
+                    "httpStatus",
+                    "lastError",
+                    "lastAttemptAt",
+                    "createdAt"
+                ]
+            },
+            "NewswireosOwnershipPreview": {
+                "type": "object",
+                "properties": {
+                    "sent": {
+                        "type": "boolean",
+                        "enum": [false]
+                    },
+                    "payload": {
+                        "type": "object",
+                        "properties": {
+                            "event_id": {
+                                "type": "string"
+                            },
+                            "occurred_at": {
+                                "type": "string"
+                            },
+                            "record_type": {
+                                "type": "string",
+                                "enum": ["person", "company"]
+                            },
+                            "record": {
+                                "type": "object",
+                                "properties": {
+                                    "byline_id": {
+                                        "type": "string"
+                                    },
+                                    "emails": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "domain": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["byline_id", "emails"]
+                            },
+                            "previous_owner": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["email"]
+                            },
+                            "new_owner": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["email"]
+                            },
+                            "reason": {
+                                "type": "string",
+                                "enum": ["transfer", "forced", "first_contact"]
+                            },
+                            "forced": {
+                                "type": "boolean"
+                            },
+                            "test": {
+                                "type": "boolean",
+                                "enum": [true]
+                            }
+                        },
+                        "required": [
+                            "event_id",
+                            "occurred_at",
+                            "record_type",
+                            "record",
+                            "previous_owner",
+                            "new_owner",
+                            "reason",
+                            "forced",
+                            "test"
+                        ]
+                    }
+                },
+                "required": ["sent", "payload"]
             },
             "NewswireosHookResult": {
                 "type": "object",
