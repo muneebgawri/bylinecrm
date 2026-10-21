@@ -56,8 +56,73 @@ export const newswireosSettingsView = named(
             description:
                 '`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.',
         }),
+        pushOwnership: z.boolean().meta({
+            description:
+                'PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default.',
+        }),
     }),
 );
+
+const ownershipReason = z.enum(['transfer', 'forced', 'first_contact']);
+
+/** PNW-765: one ownership change pushed (or being pushed) to NewswireOS. */
+export const ownershipDeliveryView = named(
+    'NewswireosOwnershipDelivery',
+    z.object({
+        id,
+        eventId: id.meta({ description: 'The `transfer.completed` event: the push’s `event_id`.' }),
+        transferId: id,
+        recordType: z.enum(['person', 'company']),
+        recordId: id,
+        recordName: z.string(),
+        newOwnerEmail: z.string(),
+        reason: ownershipReason,
+        status: z.enum(['pending', 'retrying', 'delivered', 'not_ready', 'failed', 'skipped']).meta({
+            description:
+                '`retrying`: NewswireOS did not answer, or failed on its side; tried again with backoff. `not_ready`: NewswireOS answered 404 (the route is not deployed yet); not retried. `failed`: refused (any other 4xx), or out of retries. `skipped`: the push was turned off before it went.',
+        }),
+        attempts: z.number().int(),
+        matched: z.boolean().nullable().meta({ description: 'Whether NewswireOS found the client.' }),
+        customers: z.array(z.object({ customerId: z.string(), reasonCode: z.string().nullable() })).meta({
+            description: 'The NewswireOS clients the change touched: `REASSIGNED`, `UNCHANGED` or `AGENCY_CLIENT`.',
+        }),
+        reasonCode: z.string().nullable().meta({
+            description:
+                'NewswireOS’s `reason_code` (`NO_AM_FOR_EMAIL`, `STALE`, `NO_CUSTOMER`, `REASSIGNED`, `UNCHANGED`, `AGENCY_CLIENT`), or `NEWSWIREOS_NOT_READY`, `TOKEN_REFUSED` (401), `TOKEN_LACKS_SCOPE` (403), `BAD_REQUEST` (400), `REJECTED`, `NEWSWIREOS_UNAVAILABLE`, `PUSH_OFF`.',
+        }),
+        httpStatus: z.number().int().nullable(),
+        lastError: z.string().nullable(),
+        lastAttemptAt: dateTime.nullable(),
+        createdAt: dateTime,
+    }),
+);
+
+/** PNW-765: the dry run's body. Nothing is sent: NewswireOS's route reads no `test` flag. */
+export const ownershipPushPreview = named(
+    'NewswireosOwnershipPreview',
+    z.object({
+        sent: z.literal(false),
+        payload: z.object({
+            event_id: z.string(),
+            occurred_at: z.string(),
+            record_type: z.enum(['person', 'company']),
+            record: z.object({
+                byline_id: z.string(),
+                emails: z.array(z.string()),
+                domain: z.string().optional(),
+                name: z.string().optional(),
+            }),
+            previous_owner: z.object({ email: z.string() }).nullable(),
+            new_owner: z.object({ email: z.string() }),
+            reason: ownershipReason,
+            forced: z.boolean(),
+            test: z.literal(true),
+        }),
+    }),
+);
+
+export type OwnershipDeliveryView = z.output<typeof ownershipDeliveryView>;
+export type OwnershipPushPreview = z.output<typeof ownershipPushPreview>;
 
 export const newswireosHookResult = named(
     'NewswireosHookResult',

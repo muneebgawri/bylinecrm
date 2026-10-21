@@ -99,23 +99,24 @@ model Workspace {
   trackingTokens TrackingToken[]
   trackingHits   TrackingHit[]
 
-  calendarEvents            CalendarEvent[]
-  calendarEventCopies       CalendarEventCopy[]
-  calendarParticipants      CalendarEventParticipant[]
-  calendarSyncStates        CalendarSyncState[]
-  slotlineSettings          SlotlineSettings?
-  newswireosSettings        NewswireosSettings?
-  bylineSettings            BylineSettings?
-  bylineLeads               BylineLead[]
-  dealInvoices              DealInvoice[]
-  ownershipTransfers        OwnershipTransfer[]
-  guardrailEvents           GuardrailEvent[]
-  companyDomains            CompanyDomain[]
-  customerExclusionSettings CustomerExclusionSettings?
-  ownershipSettings         OwnershipSettings?
-  rotationSettings          RotationSettings?
-  rotationMembers           RotationMember[]
-  cadenceLapses             CadenceLapse[]
+  calendarEvents                CalendarEvent[]
+  calendarEventCopies           CalendarEventCopy[]
+  calendarParticipants          CalendarEventParticipant[]
+  calendarSyncStates            CalendarSyncState[]
+  slotlineSettings              SlotlineSettings?
+  newswireosSettings            NewswireosSettings?
+  newswireosOwnershipDeliveries NewswireosOwnershipDelivery[]
+  bylineSettings                BylineSettings?
+  bylineLeads                   BylineLead[]
+  dealInvoices                  DealInvoice[]
+  ownershipTransfers            OwnershipTransfer[]
+  guardrailEvents               GuardrailEvent[]
+  companyDomains                CompanyDomain[]
+  customerExclusionSettings     CustomerExclusionSettings?
+  ownershipSettings             OwnershipSettings?
+  rotationSettings              RotationSettings?
+  rotationMembers               RotationMember[]
+  cadenceLapses                 CadenceLapse[]
 
   @@map("workspaces")
 }
@@ -3265,6 +3266,8 @@ model NewswireosSettings {
   lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz
   /// `applied`, `unmatched`, `ignored`, `ping`, `bad_signature`.
   lastDeliveryResult  String?   @map("last_delivery_result")
+  /// PNW-765: push completed ownership transfers to NewswireOS (`crm:ownership_write`). Off until an admin turns it on.
+  pushOwnership       Boolean   @default(false) @map("push_ownership")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -3272,6 +3275,39 @@ model NewswireosSettings {
   configuredBy WorkspaceMember @relation(fields: [configuredById], references: [id])
 
   @@map("newswireos_settings")
+}
+
+/// PNW-765: one completed ownership transfer pushed to NewswireOS (`POST /api/v1/crm/ownership-changed`), keyed on
+/// the `transfer.completed` event (its outbox id is the push's `event_id`, so NewswireOS dedupes a redelivery).
+model NewswireosOwnershipDelivery {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  /// The `transfer.completed` outbox event's id: the push's `event_id`.
+  eventId       String    @map("event_id") @db.Uuid
+  transferId    String    @map("transfer_id") @db.Uuid
+  /// `person` or `company`.
+  recordType    String    @map("record_type")
+  recordId      String    @map("record_id") @db.Uuid
+  /// The body sent, exactly.
+  payload       Json
+  /// `pending`, `retrying`, `delivered`, `not_ready` (NewswireOS answered 404), `failed` or `skipped` (push turned off).
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  matched       Boolean?
+  /// NewswireOS's per-client outcome: `[{customer_id, reason_code}]` (`REASSIGNED`, `UNCHANGED`, `AGENCY_CLIENT`).
+  customers     Json      @default("[]")
+  reasonCode    String?   @map("reason_code")
+  httpStatus    Int?      @map("http_status")
+  lastError     String?   @map("last_error")
+  lastAttemptAt DateTime? @map("last_attempt_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, eventId])
+  @@index([workspaceId, createdAt])
+  @@map("newswireos_ownership_deliveries")
 }
 
 /// The workspace's BylineAI link (BYL-1): the secret BylineAI's WEBHOOK connector signs lead deliveries with

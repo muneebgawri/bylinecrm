@@ -69,6 +69,11 @@ export interface TransferEventPayload {
     status: TransferStatus;
     reason: string | null;
     moved: RecordTarget[];
+    /**
+     * A first contact's hand-over (OWN-2): a lead saved straight into the hands of the member who owns its company,
+     * by whoever found it (a member, or a calendar sync). Absent on every other transfer.
+     */
+    firstContact?: true;
     identity: {
         companyDomain: string | null;
         personEmails: string[];

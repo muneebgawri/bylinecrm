@@ -48,10 +48,19 @@ export class PutNewswireosSettingsDto extends createZodDto(
             .meta({ description: 'NewswireOS’s address, `https://app.newswireos.example`.' }),
         apiToken: z.string().min(1).max(NEWSWIREOS_TOKEN_MAX).optional().meta({
             description:
-                'A NewswireOS API token with the `payment_verification:lookup` scope. Leave out to keep the current one.',
+                'A NewswireOS API token with the `payment_verification:lookup` scope (and `crm:ownership_write` to push ownership changes). Leave out to keep the current one.',
         }),
         secret: z.string().min(NEWSWIREOS_SECRET_MIN).max(NEWSWIREOS_SECRET_MAX).optional().meta({
             description: 'The webhook secret NewswireOS minted (`whsec_…`). Leave out to keep the current one.',
+        }),
+    }),
+) {}
+
+/** `PUT /integrations/newswireos/ownership-push` (PNW-765): push completed ownership transfers to NewswireOS, or not. */
+export class PutOwnershipPushDto extends createZodDto(
+    z.object({
+        enabled: z.boolean().meta({
+            description: 'The link’s API token needs the `crm:ownership_write` scope. Off by default.',
         }),
     }),
 ) {}

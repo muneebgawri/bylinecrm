@@ -58,6 +58,8 @@ export class NewswireosApiError extends Error {
     constructor(
         readonly status: number | null,
         message: string,
+        /** NewswireOS's own `reason_code` on a refusal, when it gave one. */
+        readonly reasonCode: string | null = null,
     ) {
         super(message);
         this.name = 'NewswireosApiError';
