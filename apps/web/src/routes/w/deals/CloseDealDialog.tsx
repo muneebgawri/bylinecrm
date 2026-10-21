@@ -1,4 +1,4 @@
-import type { Money } from '@bylinecrm/shared';
+import type { LostReason, Money } from '@bylinecrm/shared';
 import {
     Button,
     Dialog,
@@ -14,6 +14,7 @@ import {
 import { useId, useState, type FormEvent } from 'react';
 import type { MoveDealInput, OpportunityView, StageView } from '../../../api/types';
 import { formatMoney, parseMoneyInput } from '../../../lib/money';
+import { LostReasonSelect } from './LostReasonSelect';
 
 /** What the API's close takes: the won amount, or the lost reason. */
 export type ClosePayload = NonNullable<MoveDealInput['close']>;
@@ -59,6 +60,7 @@ function CloseForm({ request, busy, onConfirm, onCancel }: CloseDealDialogProps 
     const won = stage.kind === 'won';
     const currency = deal.amount?.currency ?? deal.currency;
     const [amountText, setAmountText] = useState(() => (deal.amount ? majorText(deal.amount) : ''));
+    const [reasonCode, setReasonCode] = useState<LostReason | ''>('');
     const [reason, setReason] = useState('');
     const [error, setError] = useState<string | null>(null);
     const formId = useId();
@@ -73,11 +75,11 @@ function CloseForm({ request, busy, onConfirm, onCancel }: CloseDealDialogProps 
             }
             onConfirm(parsed ? { wonAmount: parsed } : {});
         } else {
-            if (!reason.trim()) {
-                setError('Say why it was lost; the reason is kept with the deal.');
+            if (!reasonCode) {
+                setError('Pick why it was lost; the reason is kept with the deal.');
                 return;
             }
-            onConfirm({ lostReason: reason.trim() });
+            onConfirm({ lostReasonCode: reasonCode, ...(reason.trim() ? { lostReason: reason.trim() } : {}) });
         }
     }
 
@@ -108,17 +110,20 @@ function CloseForm({ request, busy, onConfirm, onCancel }: CloseDealDialogProps 
                         />
                     </Field>
                 ) : (
-                    <Field label="Lost reason" required error={error}>
-                        <Textarea
-                            rows={3}
-                            value={reason}
-                            onChange={(e) => {
-                                setReason(e.target.value);
-                                setError(null);
-                            }}
-                            autoFocus
-                        />
-                    </Field>
+                    <div className="flex flex-col gap-3">
+                        <Field label="Lost reason" required error={error}>
+                            <LostReasonSelect
+                                value={reasonCode}
+                                onChange={(r) => {
+                                    setReasonCode(r);
+                                    setError(null);
+                                }}
+                            />
+                        </Field>
+                        <Field label="Details" hint="Optional">
+                            <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+                        </Field>
+                    </div>
                 )}
             </DialogBody>
             <DialogFooter>

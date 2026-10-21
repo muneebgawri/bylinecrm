@@ -18,6 +18,7 @@ import { PipelinesModule } from './pipelines/pipelines.module';
 import { SendingPoolModule } from './sending-pool/sending-pool.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SequencesModule } from './sequences/sequences.module';
+import { CustomersModule } from './customers/customers.module';
 import { MailAssetsModule } from './mail-assets/mail-assets.module';
 import { SignaturesModule } from './signatures/signatures.module';
 import { Smtp2GoModule } from './smtp2go/smtp2go.module';
@@ -55,6 +56,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         SuppressionModule,
         SendingPoolModule,
         SequencesModule,
+        CustomersModule,
         SignaturesModule,
         MailAssetsModule,
         Smtp2GoModule,

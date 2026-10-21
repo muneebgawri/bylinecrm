@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { normaliseEmail, type ExclusionReason, type OutreachExclusionView } from '@bylinecrm/shared';
+import {
+    normaliseEmail,
+    type ExclusionReason,
+    type ExclusionReviewReason,
+    type OutreachExclusionView,
+} from '@bylinecrm/shared';
 import type { OutreachExclusion } from '@prisma/client';
 import { UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
@@ -50,6 +55,18 @@ export class ExclusionsService {
     async remove(id: string, note: string): Promise<void> {
         const removed = await this.rls.withWorkspace((tx) => this.removeIn(tx, id, note));
         if (!removed) throw new NotFoundException('exclusion not found');
+    }
+
+    /** #242: an admin looked at a flagged automatic exclusion and keeps it; the flag goes, the exclusion stays. */
+    async dismissReview(id: string): Promise<OutreachExclusionView> {
+        return this.rls.withWorkspace(async (tx) => {
+            const changed = await tx.outreachExclusion.updateMany({
+                where: { id, removedAt: null },
+                data: { reviewReason: null, reviewFlaggedAt: null },
+            });
+            if (changed.count === 0) throw new NotFoundException('exclusion not found');
+            return view((await tx.outreachExclusion.findUnique({ where: { id } }))!);
+        });
     }
 
     // The writes inside a caller's transaction — the routes above and the Twenty importer (P4-4,
@@ -146,6 +163,8 @@ function view(row: OutreachExclusion): OutreachExclusionView {
         externalRef: row.externalRef,
         note: row.note,
         createdAt: row.createdAt.toISOString(),
+        reviewReason: row.reviewReason as ExclusionReviewReason | null,
+        reviewFlaggedAt: row.reviewFlaggedAt?.toISOString() ?? null,
     };
 }
 

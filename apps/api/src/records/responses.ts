@@ -1,4 +1,6 @@
 import {
+    CONTACT_STATUSES,
+    LOST_REASONS,
     OWNERSHIP_CONFLICT_KINDS,
     BULK_ROW_ERRORS,
     CUSTOM_FIELD_TYPES,
@@ -56,6 +58,16 @@ export const personView = named(
         city: z.string().nullable(),
         source: z.string().nullable(),
         country: z.string().nullable(),
+        contactStatus: z.enum(CONTACT_STATUSES).meta({
+            description:
+                'Derived (#242) from mail sent and received, meetings, won deals and the suppression list, unless `contactStatusOverride` is set; `do_not_contact` whenever the primary address is suppressed.',
+        }),
+        contactStatusOverride: z
+            .enum(CONTACT_STATUSES)
+            .nullable()
+            .meta({ description: 'A member’s choice, which outranks everything but `do_not_contact`.' }),
+        contactAttempts: z.number().int().meta({ description: 'Derived: messages sent to them.' }),
+        lastContactedAt: dateTime.nullable().meta({ description: 'Derived: when the last message was sent to them.' }),
         links,
         avatarUrl: z.string().nullable(),
         position: z.number(),
@@ -104,7 +116,26 @@ export const opportunityView = named(
         stageEnteredAt: dateTime.meta({ description: 'When the deal entered its current stage.' }),
         daysInStage: z.number().int().meta({ description: 'Whole days since `stageEnteredAt`, at read time.' }),
         closedAt: dateTime.nullable(),
-        lostReason: z.string().nullable(),
+        lostReason: z.string().nullable().meta({ description: 'Free text beside `lostReasonCode`, when given.' }),
+        lostReasonCode: z
+            .enum(LOST_REASONS)
+            .nullable()
+            .meta({ description: 'Why the deal was lost (#242): set on every close into a lost stage.' }),
+        nextFollowUpDate: z
+            .string()
+            .nullable()
+            .meta({ description: 'A calendar date, `YYYY-MM-DD`; keeps one open follow-up task due that day.' }),
+        followUpTaskId: id.nullable().meta({ description: 'The follow-up task `nextFollowUpDate` keeps, when any.' }),
+        nextActivity: z.string().nullable(),
+        serviceInterest: z.string().nullable().meta({ description: 'The package or service the deal is about.' }),
+        leadSource: z.string().nullable(),
+        lastContactedAt: dateTime
+            .nullable()
+            .meta({ description: 'Derived: when mail was last sent to the point of contact.' }),
+        contactAttempts: z
+            .number()
+            .int()
+            .meta({ description: 'Derived: messages sent to the point of contact; 0 when the deal has none.' }),
         amount: money.nullable(),
         currency: z.string(),
         closeDate: z.string().nullable().meta({ description: 'A calendar date, `YYYY-MM-DD`.', example: '2026-10-31' }),

@@ -1,5 +1,13 @@
 import { BadRequestException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import type { EventActor, StageChange, StageHistoryReason, StageKind } from '@bylinecrm/shared';
+import {
+    DEFAULT_LOST_REASON,
+    lostReasonFromText,
+    type EventActor,
+    type LostReason,
+    type StageChange,
+    type StageHistoryReason,
+    type StageKind,
+} from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
@@ -14,10 +22,28 @@ export interface DealStageRow {
     stageId: string;
 }
 
-/** What closing a deal records: the amount it won at, or why it was lost. */
+/**
+ * What closing a deal records: the amount it won at, or why it was lost — the picklist reason (#242) and, optionally,
+ * free text beside it.
+ */
 export interface ClosePayload {
     wonAmount?: MoneyInput | undefined;
     lostReason?: string | undefined;
+    lostReasonCode?: LostReason | undefined;
+}
+
+/**
+ * The picklist reason a close into a lost stage records (#242): the one given, else the one the free text names (an
+ * import's `No response`), else — for a rule's or an import's close only — `DEFAULT_LOST_REASON`. A member's close
+ * (`manual`) must name one: `400` otherwise.
+ */
+export function lostReasonFor(close: ClosePayload | undefined, reason: StageHistoryReason): LostReason {
+    const given = close?.lostReasonCode ?? lostReasonFromText(close?.lostReason);
+    if (given) return given;
+    if (reason === 'manual') {
+        throw new BadRequestException('moving a deal into a lost stage needs a lost reason (close.lostReasonCode)');
+    }
+    return DEFAULT_LOST_REASON;
 }
 
 export type MoveOutcome =
@@ -93,7 +119,11 @@ export class StageMoveService {
             throw new BadRequestException(`moving into a ${to.kind} stage needs the close details`);
         }
         const reason: StageHistoryReason = closing ? 'close' : options.reason;
-        const closeColumns = await closeColumnsFor(tx, deal.workspaceId, to.kind, options.close);
+        const close =
+            to.kind === 'lost'
+                ? { ...options.close, lostReasonCode: lostReasonFor(options.close, options.reason) }
+                : options.close;
+        const closeColumns = await closeColumnsFor(tx, deal.workspaceId, to.kind, close);
 
         // Only from the stage it was read in: two movers at once (the outbox relay and a redelivery, two rules) see
         // one move, and the second finds it already done, so a deal is never closed or announced twice.
@@ -208,11 +238,12 @@ async function closeColumnsFor(
     kind: StageKind,
     close: ClosePayload | undefined,
 ): Promise<Prisma.OpportunityUncheckedUpdateInput> {
-    if (kind === 'open') return { closedAt: null, lostReason: null };
+    if (kind === 'open') return { closedAt: null, lostReason: null, lostReasonCode: null };
     const amount = kind === 'won' && close?.wonAmount ? await moneyColumns(tx, workspaceId, close.wonAmount) : {};
     return {
         closedAt: new Date(),
         lostReason: kind === 'lost' ? (close?.lostReason ?? null) : null,
+        lostReasonCode: kind === 'lost' ? (close?.lostReasonCode ?? DEFAULT_LOST_REASON) : null,
         ...(amount.amountMinor !== undefined ? { amountMinor: amount.amountMinor } : {}),
         ...(amount.currency ? { currency: amount.currency } : {}),
     };

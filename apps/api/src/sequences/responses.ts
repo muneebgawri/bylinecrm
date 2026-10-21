@@ -4,6 +4,7 @@ import {
     ENROLMENT_STOP_REASONS,
     ENROLMENT_WARNING_CODES,
     EXCLUSION_REASONS,
+    EXCLUSION_REVIEW_REASONS,
     REGION_CODES,
     SEQUENCE_STATUSES,
     SEQUENCE_VISIBILITIES,
@@ -181,6 +182,11 @@ export const outreachExclusionView = named(
         externalRef: z.string().nullable(),
         note: z.string().nullable(),
         createdAt: isoTime,
+        reviewReason: z.enum(EXCLUSION_REVIEW_REASONS).nullable().meta({
+            description:
+                '#242: an automatic (`won_deal`) exclusion whose deal was reopened or fully refunded waits for an admin: remove it, or dismiss the flag.',
+        }),
+        reviewFlaggedAt: isoTime.nullable(),
     }),
 );
 

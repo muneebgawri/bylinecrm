@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import type { Actor, DomainEvent } from '@bylinecrm/shared';
+import type { Actor, DomainEvent, LostReason } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { CompanyOwnership, isCaller } from './company-ownership';
 import { UnknownReference } from '../infra/errors/api-errors';
@@ -12,6 +12,7 @@ import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf, isEmpty, projectedChanges } from './diff';
+import { syncFollowUpTask } from './follow-up-task';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
 import type { ListQuery } from './people.service';
 import { listScope } from '../query/query.service';
@@ -28,6 +29,7 @@ import {
     stored,
 } from './references';
 import { type OpportunityView } from './responses';
+import { TasksService } from './tasks.service';
 import {
     COMPANY_SUMMARY_SELECT,
     companySummary,
@@ -50,6 +52,13 @@ export interface OpportunityInput {
     ownerId?: string | null | undefined;
     pointOfContactId?: string | null | undefined;
     companyId?: string | null | undefined;
+    /** #242: only on a deal in a lost stage (`422` otherwise); a close sets it through the move. */
+    lostReasonCode?: LostReason | undefined;
+    /** #242: `YYYY-MM-DD`; keeps the deal's follow-up task due that day. */
+    nextFollowUpDate?: string | null | undefined;
+    nextActivity?: string | null | undefined;
+    serviceInterest?: string | null | undefined;
+    leadSource?: string | null | undefined;
     custom?: Record<string, unknown> | undefined;
 }
 
@@ -57,6 +66,11 @@ const DIFF_FIELDS = [
     'name',
     'closedAt',
     'lostReason',
+    'lostReasonCode',
+    'nextFollowUpDate',
+    'nextActivity',
+    'serviceInterest',
+    'leadSource',
     'amount',
     'currency',
     'closeDate',
@@ -77,7 +91,8 @@ export const opportunityInclude = {
     stage: true,
     stageHistory: { orderBy: { enteredAt: 'desc' as const }, take: 1 },
     company: { select: COMPANY_SUMMARY_SELECT },
-    pointOfContact: { select: PERSON_SUMMARY_SELECT },
+    // #242: the deal's Last Contacted and Contact attempts are its point of contact's, derived on the person.
+    pointOfContact: { select: { ...PERSON_SUMMARY_SELECT, contactAttempts: true, lastContactedAt: true } },
     owner: { select: MEMBER_SUMMARY_SELECT },
 } as const;
 type OpportunityRow = Prisma.OpportunityGetPayload<{ include: typeof opportunityInclude }>;
@@ -93,6 +108,7 @@ export class OpportunitiesService implements BulkRecords {
         private readonly events: DomainEvents,
         private readonly moves: StageMoveService,
         private readonly ownership: CompanyOwnership,
+        private readonly tasks: TasksService,
     ) {}
 
     /** Live deals, or the trash when `deleted`; the page and its total read one `where`. */
@@ -128,6 +144,7 @@ export class OpportunitiesService implements BulkRecords {
         const row = await this.rls.withWorkspace(async (tx) => {
             const created = await this.createIn(tx, context, input);
             await this.events.record(tx, created.event);
+            for (const e of created.taskEvents) await this.events.record(tx, e);
             return created.row;
         });
         return view(row);
@@ -138,7 +155,12 @@ export class OpportunitiesService implements BulkRecords {
         tx: WorkspaceClient,
         context: WorkspaceRunContext,
         input: OpportunityInput & { name: string },
-    ): Promise<{ row: OpportunityRow; event: DomainEvent }> {
+    ): Promise<{ row: OpportunityRow; event: DomainEvent; taskEvents: DomainEvent[] }> {
+        if (input.lostReasonCode !== undefined) {
+            throw new UnprocessableEntityException(
+                'a new deal is open: a lost reason is set when it is closed as lost',
+            );
+        }
         const actor = actorOf(context);
         const ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
@@ -179,7 +201,12 @@ export class OpportunitiesService implements BulkRecords {
             },
         });
         await this.moves.place(tx, created, actor, actor.kind === 'import' ? 'import' : 'manual');
-        return { row: await find(tx, context, created.id), event: event(context, 'opportunity.created', created.id) };
+        const taskEvents = created.nextFollowUpDate ? await syncFollowUpTask(tx, context, this.tasks, created) : [];
+        return {
+            row: await find(tx, context, created.id),
+            event: event(context, 'opportunity.created', created.id),
+            taskEvents,
+        };
     }
 
     /** Partial. `amount: null` clears the amount and keeps the currency; `custom` is merged key by key. */
@@ -188,6 +215,7 @@ export class OpportunitiesService implements BulkRecords {
         const { after } = await this.rls.withWorkspace(async (tx) => {
             const result = await this.updateIn(tx, context, id, patch);
             if (result.event) await this.events.record(tx, result.event);
+            for (const e of result.taskEvents) await this.events.record(tx, e);
             return result;
         });
         return view(after);
@@ -219,8 +247,11 @@ export class OpportunitiesService implements BulkRecords {
         context: WorkspaceRunContext,
         id: string,
         patch: OpportunityInput,
-    ): Promise<{ after: OpportunityRow; event: DomainEvent | null }> {
+    ): Promise<{ after: OpportunityRow; event: DomainEvent | null; taskEvents: DomainEvent[] }> {
         const current = await find(tx, context, id);
+        if (patch.lostReasonCode !== undefined && current.stage.kind !== 'lost') {
+            throw new UnprocessableEntityException('a lost reason is set only on a deal in a lost stage');
+        }
         const ownerId = resolveOwner(context, patch.ownerId, current.ownerId);
         if (ownerId !== current.ownerId) await assertOwnerIsMember(tx, ownerId);
         if (patch.companyId != null && patch.companyId !== current.companyId) {
@@ -255,11 +286,19 @@ export class OpportunitiesService implements BulkRecords {
                     };
         const data = { ...compact(fields(patch)), ...money, ownerId, ...(custom ? { custom } : {}) };
         // Nothing would change: no write, no `updated` event, the record as it was.
-        if (isEmpty(projectedChanges(current, data, view, DIFF_FIELDS))) return { after: current, event: null };
-        const after = await tx.opportunity.update({ where: { id }, data, include: opportunityInclude });
+        if (isEmpty(projectedChanges(current, data, view, DIFF_FIELDS))) {
+            return { after: current, event: null, taskEvents: [] };
+        }
+        let after = await tx.opportunity.update({ where: { id }, data, include: opportunityInclude });
+        const followUpMoved =
+            patch.nextFollowUpDate !== undefined &&
+            after.nextFollowUpDate?.getTime() !== current.nextFollowUpDate?.getTime();
+        const taskEvents = followUpMoved ? await syncFollowUpTask(tx, context, this.tasks, after) : [];
+        if (taskEvents.length > 0) after = await find(tx, context, id);
         return {
             after,
             event: event(context, 'opportunity.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),
+            taskEvents,
         };
     }
 
@@ -303,6 +342,16 @@ function fields(input: OpportunityInput) {
         position: input.position,
         pointOfContactId: input.pointOfContactId,
         companyId: input.companyId,
+        lostReasonCode: input.lostReasonCode,
+        nextFollowUpDate:
+            input.nextFollowUpDate === undefined
+                ? undefined
+                : input.nextFollowUpDate === null
+                  ? null
+                  : dateOnly(input.nextFollowUpDate),
+        nextActivity: input.nextActivity,
+        serviceInterest: input.serviceInterest,
+        leadSource: input.leadSource,
     };
 }
 
@@ -378,6 +427,14 @@ export function view(row: OpportunityRow): OpportunityView {
         daysInStage: daysInStage(entered),
         closedAt: row.closedAt,
         lostReason: row.lostReason,
+        lostReasonCode: row.lostReasonCode,
+        nextFollowUpDate: row.nextFollowUpDate ? row.nextFollowUpDate.toISOString().slice(0, 10) : null,
+        followUpTaskId: row.followUpTaskId,
+        nextActivity: row.nextActivity,
+        serviceInterest: row.serviceInterest,
+        leadSource: row.leadSource,
+        lastContactedAt: row.pointOfContact?.lastContactedAt ?? null,
+        contactAttempts: row.pointOfContact?.contactAttempts ?? 0,
         amount: row.amountMinor === null ? null : { amountMinor: Number(row.amountMinor), currency: row.currency },
         currency: row.currency,
         closeDate: row.closeDate ? row.closeDate.toISOString().slice(0, 10) : null,

@@ -88,6 +88,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/suppressions$`), () => data.page(data.suppressions)],
     [new RegExp(`^${W}/outreach/region-policy/changes$`), () => data.regionPolicyChanges],
     [new RegExp(`^${W}/outreach/region-policy$`), () => data.regionPolicy],
+    [new RegExp(`^${W}/outreach/customer-exclusion-settings$`), () => data.customerExclusionSettings],
+    [new RegExp(`^${W}/outreach/exclusions$`), () => data.outreachExclusions],
     [new RegExp(`^${W}/outreach/verification$`), () => data.verificationSettings],
     [new RegExp(`^${W}/enrichment/settings$`), () => data.enrichmentSettings],
     [

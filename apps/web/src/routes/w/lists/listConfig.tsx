@@ -1,4 +1,11 @@
-import { customFieldKey, STANDARD_FIELDS, type RecordObject, type ViewColumn } from '@bylinecrm/shared';
+import {
+    CONTACT_STATUS_LABELS,
+    customFieldKey,
+    LOST_REASON_LABELS,
+    STANDARD_FIELDS,
+    type RecordObject,
+    type ViewColumn,
+} from '@bylinecrm/shared';
 import { Badge } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
 import type {
@@ -94,6 +101,27 @@ const PERSON_COLUMNS: ListColumn<PersonView>[] = [
         width: 150,
         exportFields: ['ownerId'],
         cell: (r) => ownerCell(r.owner),
+    },
+    {
+        field: 'contactStatus',
+        label: labelOf('person', 'contactStatus'),
+        width: 120,
+        exportFields: ['contactStatus'],
+        cell: (r) => CONTACT_STATUS_LABELS[r.contactStatus],
+    },
+    {
+        field: 'lastContactedAt',
+        label: labelOf('person', 'lastContactedAt'),
+        width: 140,
+        exportFields: ['lastContactedAt'],
+        cell: (r) => (r.lastContactedAt ? formatRelative(r.lastContactedAt) : EMPTY),
+    },
+    {
+        field: 'contactAttempts',
+        label: labelOf('person', 'contactAttempts'),
+        width: 110,
+        exportFields: ['contactAttempts'],
+        cell: (r) => <span className="tabular-nums">{r.contactAttempts}</span>,
     },
     {
         field: 'createdAt',
@@ -204,6 +232,41 @@ const OPPORTUNITY_COLUMNS: ListColumn<OpportunityView>[] = [
         cell: (r) => (r.probability === null ? EMPTY : `${r.probability}%`),
     },
     {
+        field: 'nextFollowUpDate',
+        label: labelOf('opportunity', 'nextFollowUpDate'),
+        width: 130,
+        exportFields: ['nextFollowUpDate'],
+        cell: (r) => (r.nextFollowUpDate ? formatDay(r.nextFollowUpDate) : EMPTY),
+    },
+    {
+        field: 'nextActivity',
+        label: labelOf('opportunity', 'nextActivity'),
+        width: 200,
+        exportFields: ['nextActivity'],
+        cell: (r) => text(r.nextActivity),
+    },
+    {
+        field: 'serviceInterest',
+        label: labelOf('opportunity', 'serviceInterest'),
+        width: 160,
+        exportFields: ['serviceInterest'],
+        cell: (r) => text(r.serviceInterest),
+    },
+    {
+        field: 'leadSource',
+        label: labelOf('opportunity', 'leadSource'),
+        width: 140,
+        exportFields: ['leadSource'],
+        cell: (r) => text(r.leadSource),
+    },
+    {
+        field: 'lostReasonCode',
+        label: labelOf('opportunity', 'lostReasonCode'),
+        width: 170,
+        exportFields: ['lostReasonCode'],
+        cell: (r) => (r.lostReasonCode ? LOST_REASON_LABELS[r.lostReasonCode] : EMPTY),
+    },
+    {
         field: 'ownerId',
         label: labelOf('opportunity', 'ownerId'),
         width: 150,
@@ -272,7 +335,7 @@ export function allColumns<O extends RecordObject>(
 
 /** What a list shows before anyone chooses: the identity column and the few most useful. */
 export const DEFAULT_COLUMNS: Readonly<Record<RecordObject, readonly string[]>> = {
-    person: ['nameFirst', 'emailPrimary', 'companyId', 'ownerId', 'city', 'updatedAt'],
+    person: ['nameFirst', 'emailPrimary', 'companyId', 'ownerId', 'contactStatus', 'city', 'updatedAt'],
     company: ['name', 'domain', 'employeeCount', 'arr', 'ownerId', 'updatedAt'],
     // A deal's stage and days in stage are the board's own columns, drawn by the deals list.
     opportunity: ['name', 'companyId', 'amount', 'ownerId', 'closeDate'],

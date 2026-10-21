@@ -54,6 +54,14 @@ const deal = (id: string, name: string, stageId: string, days = 2): OpportunityV
     daysInStage: days,
     closedAt: null,
     lostReason: null,
+    lostReasonCode: null,
+    nextFollowUpDate: null,
+    followUpTaskId: null,
+    nextActivity: null,
+    serviceInterest: null,
+    leadSource: null,
+    lastContactedAt: null,
+    contactAttempts: 0,
     amount: { amountMinor: 1_200_000, currency: 'USD' },
     currency: 'USD',
     closeDate: '2026-10-31',
@@ -400,12 +408,18 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         fireEvent.keyDown(c, { key: ' ' });
         await screen.findByRole('dialog', { name: /as lost/ });
         await user.click(screen.getByRole('button', { name: 'Mark as lost' }));
-        expect(screen.getByText(/Say why it was lost/)).toBeInTheDocument();
+        expect(screen.getByText(/Pick why it was lost/)).toBeInTheDocument();
         expect(moves).toHaveLength(0);
-        await user.type(screen.getByRole('textbox', { name: /Lost reason/ }), 'Went with a competitor');
+        // #242: the reason is a picklist; free text beside it is optional.
+        await user.click(screen.getByRole('combobox', { name: 'Lost reason' }));
+        await user.click(await screen.findByRole('option', { name: 'Chose Competitor' }));
+        await user.type(screen.getByRole('textbox', { name: /Details/ }), 'Went with a competitor');
         await user.click(screen.getByRole('button', { name: 'Mark as lost' }));
         await waitFor(() => expect(moves).toHaveLength(1));
-        expect(moves[0]?.body).toEqual({ stageId: 's-lost', close: { lostReason: 'Went with a competitor' } });
+        expect(moves[0]?.body).toEqual({
+            stageId: 's-lost',
+            close: { lostReasonCode: 'chose_competitor', lostReason: 'Went with a competitor' },
+        });
     });
 
     it('without deal:move cards cannot be picked up, and New deal is absent without deal:edit', async () => {

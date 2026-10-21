@@ -29,6 +29,8 @@ const SECTIONS: readonly { id: string; label: string; to: (workspaceId: string) 
     { id: 'suppression', label: 'Suppression', to: paths.settingsSuppression, requires: 'outreach:write' },
     // Where sequences may enrol (FR-CRMS-12, #141): read with outreach rights; an admin changes it.
     { id: 'region-policy', label: 'Region policy', to: paths.settingsRegionPolicy, requires: 'outreach:write' },
+    // Won deals as customers (#242): the outreach exclusions and what a won deal adds; an admin's.
+    { id: 'customers', label: 'Customers', to: paths.settingsCustomers, requires: 'workspace:admin' },
     // What verification does before an enrolment and a send (P3-5): read with outreach rights; an admin sets the age.
     { id: 'verification', label: 'Verification', to: paths.settingsVerification, requires: 'outreach:write' },
     // What enrichment asks about records (P4-2): read with record rights; an admin changes it.
