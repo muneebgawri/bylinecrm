@@ -23,6 +23,9 @@ import { actorOf } from '../records/actor';
 import { recordWhere } from '../records/record-scope';
 import { MEMBER_SUMMARY_SELECT } from '../records/summaries';
 
+/** The reason on a hand-over that gave an owner to a record that had none, from an import's source (Bigin). */
+export const TRANSFER_REASON_IMPORT_FILL = 'import_fill';
+
 const MEMBER = { select: MEMBER_SUMMARY_SELECT } as const;
 const INCLUDE = { from: MEMBER, to: MEMBER, proposedBy: MEMBER, decidedBy: MEMBER } as const;
 type Row = Prisma.OwnershipTransferGetPayload<{ include: typeof INCLUDE }>;
@@ -230,11 +233,15 @@ export class TransfersService {
      * The hand-over's record, in the caller's transaction: the record (already the receiver's) was saved
      * for them by `from` — a member, or a job acting for one (a calendar sync's lead at a company another
      * member owns). The receiver is told; `transfer.completed` is announced.
+     *
+     * `from` null: an owner given to a record that had none (an import filling it, `TRANSFER_REASON_IMPORT_FILL`);
+     * the receiver proposed and decided it. `notify: false` leaves the receiver's bell alone — a run filling
+     * thousands of records says so in its report instead.
      */
     async recordHandOverIn(
         tx: WorkspaceClient,
         context: WorkspaceRunContext,
-        input: { from: string; to: string; target: RecordTarget; reason: string },
+        input: { from: string | null; to: string; target: RecordTarget; reason: string; notify?: boolean },
     ): Promise<void> {
         const transfer = await tx.ownershipTransfer.create({
             data: {
@@ -243,8 +250,8 @@ export class TransfersService {
                 recordId: input.target.id,
                 fromMemberId: input.from,
                 toMemberId: input.to,
-                proposedByMemberId: input.from,
-                decidedByMemberId: input.from,
+                proposedByMemberId: input.from ?? input.to,
+                decidedByMemberId: input.from ?? input.to,
                 status: 'forced',
                 reason: input.reason,
                 decidedAt: new Date(),
@@ -256,7 +263,7 @@ export class TransfersService {
             input.target.type === 'person'
                 ? await tx.person.findUnique({ where: { id: input.target.id }, select: { emailPrimary: true } })
                 : null;
-        await tell(tx, transfer, input.to, 'transfer_received');
+        if (input.notify !== false) await tell(tx, transfer, input.to, 'transfer_received');
         await this.events.record(
             tx,
             event(context, 'transfer.completed', transfer, [input.target], {

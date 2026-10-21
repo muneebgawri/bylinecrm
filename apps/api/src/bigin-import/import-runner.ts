@@ -44,6 +44,7 @@ import { markdownToRichText } from '../twenty-import/markdown';
 import { BiginApiError } from './bigin.http';
 import { biginStageIndex, chooseStage, type PipelineStageRef, type StageChoice } from './stage-map';
 import { BIGIN_PORT, type BiginApi, type BiginConnection, type BiginRecord } from './bigin.port';
+import { TRANSFER_REASON_IMPORT_FILL, TransfersService } from '../transfers/transfers.service';
 import {
     advanceWindow,
     biginInstant,
@@ -131,6 +132,7 @@ export class BiginImportRunner {
         private readonly moves: StageMoveService,
         private readonly sync: BiginSyncService,
         private readonly auth: AuthService,
+        private readonly transfers: TransfersService,
     ) {}
 
     /** Runs `runId` to its end — succeeded, failed, cancelled — or throws so the queue retries it from its cursor. */
@@ -518,15 +520,49 @@ export class BiginImportRunner {
         const externalId = plainBiginId(record.id);
         if (!externalId) throw new Error('the record has no id');
         const modified = biginInstant(record.Modified_Time);
-        const ownerId = mapped.ownerEmail ? (page.members.get(mapped.ownerEmail) ?? null) : null;
+        const biginOwnerId = mapped.ownerEmail ? (page.members.get(mapped.ownerEmail) ?? null) : null;
+        // A Deal whose Bigin owner is not a member here is its point of contact's, when that person has one.
+        const contactId =
+            module === 'Deals' ? ((mapped as unknown as MappedDeal).input.pointOfContactId ?? null) : null;
+        const ownerId =
+            biginOwnerId ??
+            (contactId
+                ? ((await tx.person.findUnique({ where: { id: contactId }, select: { ownerId: true } }))?.ownerId ??
+                  null)
+                : null);
         const type = LOCAL[module];
         /**
          * The precedence rule (the Twenty sync's, #185): Bigin is the source for the fields it maps, except
          * one edited here after Bigin last modified the record — that keeps BylineCRM's value, and the report
-         * says so. The owner is set when a record is created and never after: who owns it here is BylineCRM's.
+         * says so. The owner is BylineCRM's: set when a record is created, and on a matched record only when
+         * it has none (`ownerFill`). An owner a record has — whoever first contacted or saved the lead — is
+         * never changed. The fill is the import's write, so it is no local edit that holds Bigin's fields back.
          */
+        const ownerFill = async (object: 'company' | 'person' | 'opportunity', localId: string) => {
+            if (!ownerId) return {};
+            const current = await currentOwner(tx, object, localId);
+            return current === null ? { ownerId } : {};
+        };
+        /** A fill written: the hand-over is on the record's ownership history, and the run's report counts it. */
+        const filled = async (
+            object: 'company' | 'person' | 'opportunity',
+            localId: string,
+            fill: { ownerId?: string },
+        ) => {
+            if (!fill.ownerId) return;
+            await this.transfers.recordHandOverIn(tx, context, {
+                from: null,
+                to: fill.ownerId,
+                target: { type: object, id: localId },
+                reason: TRANSFER_REASON_IMPORT_FILL,
+                notify: false,
+            });
+            page.entry.ownersFilled = (page.entry.ownersFilled ?? 0) + 1;
+        };
         const localEdits = async <I extends object>(object: RecordObject, localId: string, input: I): Promise<I> => {
             const edited = await fieldsEditedAfter(tx, { type: object, id: localId }, modified ?? new Date(0));
+            // An edit that left the field empty holds nothing back: Bigin fills a blank, never overwrites a value.
+            for (const field of await blankFields(tx, object, localId, edited)) edited.delete(field);
             const result = withoutLocalEdits(input, edited);
             page.kept.push(...result.kept);
             return result.input;
@@ -578,8 +614,10 @@ export class BiginImportRunner {
                         delete patch.domain;
                         if (holder.id !== found.id) page.kept.push('domain');
                     }
-                    const result = await this.companies.updateIn(tx, context, found.id, patch);
+                    const fill = await ownerFill('company', found.id);
+                    const result = await this.companies.updateIn(tx, context, found.id, { ...patch, ...fill });
                     if (result.event) events.push(result.event);
+                    await filled('company', found.id, fill);
                     await link(found.id);
                     return found.how === 'merged' ? 'merged' : result.event ? 'updated' : 'unchanged';
                 }
@@ -589,8 +627,10 @@ export class BiginImportRunner {
                     // The company is already at this domain (perhaps as one of its other domains): it keeps its own.
                     const { domain: _domain, ...rest } = input;
                     const patch = await localEdits('company', match.id, rest);
-                    const result = await this.companies.updateIn(tx, context, match.id, patch);
+                    const fill = await ownerFill('company', match.id);
+                    const result = await this.companies.updateIn(tx, context, match.id, { ...patch, ...fill });
                     if (result.event) events.push(result.event);
+                    await filled('company', match.id, fill);
                     await link(match.id);
                     return 'merged';
                 }
@@ -638,8 +678,10 @@ export class BiginImportRunner {
                     const edits = await localEdits('person', found.id, input);
                     const patch = await withoutTakenEmail(tx, found.id, edits);
                     if (patch !== edits) page.kept.push('emails');
-                    const result = await this.people.updateIn(tx, context, found.id, patch);
+                    const fill = await ownerFill('person', found.id);
+                    const result = await this.people.updateIn(tx, context, found.id, { ...patch, ...fill });
                     if (result.event) events.push(result.event);
+                    await filled('person', found.id, fill);
                     await link(found.id);
                     return found.how === 'merged' ? 'merged' : result.event ? 'updated' : 'unchanged';
                 }
@@ -648,8 +690,10 @@ export class BiginImportRunner {
                 if (match) {
                     if (match.deletedAt) events.push((await this.people.restoreIn(tx, context, match.id)).event);
                     const patch = await localEdits('person', match.id, input);
-                    const result = await this.people.updateIn(tx, context, match.id, patch);
+                    const fill = await ownerFill('person', match.id);
+                    const result = await this.people.updateIn(tx, context, match.id, { ...patch, ...fill });
                     if (result.event) events.push(result.event);
+                    await filled('person', match.id, fill);
                     await link(match.id);
                     return 'merged';
                 }
@@ -672,8 +716,10 @@ export class BiginImportRunner {
                     // The stage is a move, not a column: an edit here is `stageId` on the timeline.
                     const patch = await localEdits('opportunity', found.id, { ...deal.input, stageId: stage.id });
                     const { stageId: wanted, ...columns } = patch;
-                    const result = await this.opportunities.updateIn(tx, context, found.id, columns);
+                    const fill = await ownerFill('opportunity', found.id);
+                    const result = await this.opportunities.updateIn(tx, context, found.id, { ...columns, ...fill });
                     if (result.event) events.push(result.event);
+                    await filled('opportunity', found.id, fill);
                     let moved = false;
                     if (wanted && result.after.stageId !== stage.id) {
                         const outcome = await this.moves.move(tx, result.after, stage.id, actor, {
@@ -1013,6 +1059,49 @@ function asResult(
 function skip(mapped: { note?: string }, reason: string): 'skipped' {
     mapped.note = reason;
     return 'skipped';
+}
+
+/**
+ * Which of `fields` the record has empty (null, or text that is only spaces). A field that is not a plain
+ * column (emails, phones, an address, an amount) is never called empty here: a local edit of it holds.
+ */
+export async function blankFields(
+    tx: WorkspaceClient,
+    object: RecordObject,
+    id: string,
+    fields: ReadonlySet<string>,
+): Promise<string[]> {
+    if (fields.size === 0) return [];
+    const row: Record<string, unknown> | null =
+        object === 'company'
+            ? await tx.company.findUnique({ where: { id } })
+            : object === 'person'
+              ? await tx.person.findUnique({ where: { id } })
+              : object === 'opportunity'
+                ? await tx.opportunity.findUnique({ where: { id } })
+                : null;
+    if (!row) return [];
+    return [...fields].filter((field) => {
+        if (!(field in row)) return false;
+        const value = row[field];
+        return value === null || (typeof value === 'string' && value.trim() === '');
+    });
+}
+
+/** A record's owner now: null when it has none (`undefined` when there is no such record). */
+async function currentOwner(
+    tx: WorkspaceClient,
+    object: 'company' | 'person' | 'opportunity',
+    id: string,
+): Promise<string | null | undefined> {
+    const select = { ownerId: true } as const;
+    const row =
+        object === 'company'
+            ? await tx.company.findUnique({ where: { id }, select })
+            : object === 'person'
+              ? await tx.person.findUnique({ where: { id }, select })
+              : await tx.opportunity.findUnique({ where: { id }, select });
+    return row === null ? undefined : row.ownerId;
 }
 
 function reportEntry(report: BiginImportObjectReport[], object: BiginImportObject): BiginImportObjectReport {
