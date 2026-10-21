@@ -243,10 +243,15 @@ describe('CADENCE-1 cadence and round-robin rotation', () => {
             expect(moved.cadenceOverdue).toBe(false);
             const transfers = (
                 await as(a.who)
-                    .get(w(`/transfers?object=person&recordId=${stale.person}`))
+                    .get(w(`/transfers?object=opportunity&recordId=${stale.deal}`))
                     .expect(200)
             ).body as TransferView[];
             expect(transfers[0]).toMatchObject({ status: 'forced', reason: 'cadence_rotation' });
+            // Only the deal and its contact (their only open deal): never the contact's company.
+            const contact = await owner.person.findUniqueOrThrow({ where: { id: stale.person } });
+            expect(contact.ownerId).toBe(ids.ben);
+            const company = await owner.company.findUniqueOrThrow({ where: { id: contact.companyId! } });
+            expect(company.ownerId).toBe(ids.ana);
             expect(transfers[0]!.note).toContain('No qualifying touch since');
             expect(await kinds(ana)).toContain('transfer_taken');
             expect(await kinds(mia)).toContain('cadence_rotated');

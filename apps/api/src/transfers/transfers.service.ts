@@ -312,20 +312,31 @@ export class TransfersService {
      * CADENCE-1: the rotation's forced move of a lapsed lead from its owner to the next rep, for a job acting for the
      * workspace (no caller). It is any forced transfer: the unit moves, the old owner hears `transfer_taken`, the new
      * one `transfer_received`, and `transfer.completed` is announced (NewswireOS included). Proposed and decided by
-     * the receiver, as an import's fill is; `reason` says it was the rotation and `note` says why. Null when the
-     * record is gone or no longer `from`'s.
+     * the receiver, as an import's fill is; `reason` says it was the rotation and `note` says why. Unlike other
+     * transfers it moves only the deal, plus its contact alone when `withContact` (never the contact's company or
+     * other deals). Null when the deal is gone or no longer `from`'s.
      */
     async rotate(
         context: WorkspaceRunContext,
-        input: { object: RecordObject; recordId: string; from: string; to: string; reason: string; note: string },
+        input: {
+            recordId: string;
+            withContact?: string | undefined;
+            from: string;
+            to: string;
+            reason: string;
+            note: string;
+        },
     ): Promise<TransferView | null> {
         return this.widened(context, async (tx) => {
             const wide = widen(context);
-            const head = await findHead(tx, wide, input.object, input.recordId);
+            const head = await findHead(tx, wide, 'opportunity', input.recordId);
             if (!head || head.ownerId !== input.from || input.from === input.to) return null;
+            const unit = input.withContact
+                ? await this.widened(context, (w) => contactAlone(w, input.withContact!, input.from))
+                : null;
             const row = await this.complete(tx, wide, {
                 create: {
-                    object: input.object,
+                    object: 'opportunity',
                     recordId: input.recordId,
                     fromMemberId: input.from,
                     toMemberId: input.to,
@@ -337,6 +348,10 @@ export class TransfersService {
                 },
                 head,
                 me: input.to,
+                unit: {
+                    targets: [{ type: 'opportunity', id: head.id }, ...(unit ? [unit.target] : [])],
+                    identity: { companyDomain: null, personEmails: unit?.email ? [unit.email] : [] },
+                },
             });
             return view(row, await labelsFor(tx, row));
         });
@@ -356,16 +371,20 @@ export class TransfersService {
             update?: Row;
             head: Head;
             me: string;
+            /** The records to move, when not the object's usual unit (the rotation's). */
+            unit?: { targets: RecordTarget[]; identity: TransferEventPayload['identity'] };
         },
     ): Promise<Row> {
         const object = (input.create?.object ?? input.update!.object) as RecordObject;
         const from = input.head.ownerId;
         const to = input.create?.toMemberId ?? input.update!.toMemberId;
         const wide = widen(context);
-        const { moved, identity } = await this.widened(context, async (w) => {
-            const unit = await unitOf(w, object, input.head, from);
-            return { moved: unit.targets, identity: unit.identity };
-        });
+        const { moved, identity } = input.unit
+            ? { moved: input.unit.targets, identity: input.unit.identity }
+            : await this.widened(context, async (w) => {
+                  const unit = await unitOf(w, object, input.head, from);
+                  return { moved: unit.targets, identity: unit.identity };
+              });
         const now = new Date();
         const row = input.create
             ? await tx.ownershipTransfer.create({
@@ -434,6 +453,21 @@ async function findHead(
 }
 
 /** What moves with a record (the class comment), and the identities a receiver matches on. */
+/** The rotation's contact on its own, when it is still `from`'s; null otherwise. */
+async function contactAlone(
+    tx: WorkspaceClient,
+    personId: string,
+    from: string,
+): Promise<{ target: RecordTarget; email: string | null } | null> {
+    const person = await tx.person.findFirst({
+        where: { id: personId, deletedAt: null, ownerId: from },
+        select: { id: true, emails: true },
+    });
+    if (!person) return null;
+    const primary = (person.emails as Emails | null)?.primary;
+    return { target: { type: 'person', id: person.id }, email: primary ? primary.toLowerCase() : null };
+}
+
 async function unitOf(
     tx: WorkspaceClient,
     object: RecordObject,

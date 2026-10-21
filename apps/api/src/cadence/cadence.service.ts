@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
     TRANSFER_REASON_CADENCE_ROTATION,
-    type RecordObject,
     type RotationPreviewItem,
     type RotationPreviewView,
 } from '@bylinecrm/shared';
@@ -210,33 +209,47 @@ export class CadenceService {
 
     /** One due lapse, claimed under its row lock: moved to the next rep, or left waiting when nobody is eligible. */
     private async rotateOne(workspaceId: string, lapseId: string, settings: RotationRow, now: Date): Promise<boolean> {
-        return this.rls.withWorkspace(workspaceId, async (tx) => {
+        const moved = await this.rls.withWorkspace(workspaceId, async (tx): Promise<string | null> => {
             const [claimed] = await tx.$queryRaw<{ id: string }[]>`
                 SELECT "id" FROM "cadence_lapses" WHERE "id" = ${lapseId}::uuid AND "resolved_at" IS NULL
                 FOR UPDATE SKIP LOCKED`;
-            if (!claimed) return false;
+            if (!claimed) return null;
             const lapse = await tx.cadenceLapse.findUniqueOrThrow({ where: { id: lapseId } });
             const deal = (await lapsedDeals(tx, now, [lapse.opportunityId]))[0];
             if (!deal || deal.ownerId !== lapse.ownerMemberId) {
                 await resolveLapses(tx, now, [lapse.opportunityId]);
-                return false;
+                return null;
             }
             const to = await this.rotation.deal(tx, workspaceId, { exclude: await this.excluded(tx, deal, now), now });
             if (!to) {
                 await tx.cadenceLapse.update({ where: { id: lapseId }, data: { blockedReason: 'no_eligible_member' } });
-                return false;
+                return null;
             }
-            const target: { object: RecordObject; recordId: string } =
+            // The contact goes too only when every open deal of theirs this owner holds has lapsed: otherwise the
+            // owner keeps the contact for the deals they are still working.
+            const withContact =
                 deal.pointOfContactId && deal.contactOwnerId === deal.ownerId
-                    ? { object: 'person', recordId: deal.pointOfContactId }
-                    : { object: 'opportunity', recordId: deal.id };
+                    ? (await tx.opportunity.count({
+                          where: {
+                              pointOfContactId: deal.pointOfContactId,
+                              ownerId: deal.ownerId,
+                              deletedAt: null,
+                              closedAt: null,
+                              id: { not: deal.id },
+                              NOT: { cadenceLapses: { some: { resolvedAt: null } } },
+                          },
+                      })) === 0
+                        ? deal.pointOfContactId
+                        : undefined
+                    : undefined;
             const context: WorkspaceRunContext = {
                 workspaceId,
                 capabilities: new Set(),
                 actor: { kind: 'system', id: null },
             };
             const transfer = await this.transfers.rotate(context, {
-                ...target,
+                recordId: deal.id,
+                withContact,
                 from: deal.ownerId,
                 to,
                 reason: TRANSFER_REASON_CADENCE_ROTATION,
@@ -247,7 +260,7 @@ export class CadenceService {
             });
             if (!transfer) {
                 await resolveLapses(tx, now, [lapse.opportunityId]);
-                return false;
+                return null;
             }
             await tx.cadenceLapse.update({
                 where: { id: lapseId },
@@ -273,9 +286,13 @@ export class CadenceService {
                 'cadence_rotated',
                 [{ type: 'transfer', id: transfer.id }],
             );
-            await refreshCadence(tx, [deal.id]);
-            return true;
+            return deal.id;
         });
+        if (!moved) return false;
+        // After the lapse's lock is released: the cadence consumer refreshes the deal, then resolves its lapses, so
+        // refreshing it while holding the lapse would deadlock with it.
+        await this.rls.withWorkspace(workspaceId, (tx) => refreshCadence(tx, [moved]));
+        return true;
     }
 
     /**
