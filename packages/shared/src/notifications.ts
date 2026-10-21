@@ -27,6 +27,8 @@ export const NOTIFICATION_KINDS = [
     'invoice_needs_review',
     // INV-1: a refund left a deal's verified invoices short of its amount (to holders of `invoice:verify`).
     'invoice_coverage_lost',
+    // GUARD-2: a member mailed another member's lead or a customer (to the owner and reviewers).
+    'guardrail_poach_suspected',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -46,9 +48,21 @@ export interface TaskSummary {
     targets: LabelledTarget[];
 }
 
+/**
+ * What a notification is about (GUARD-2): one polymorphic target, whatever the kind. The typed summaries below
+ * carry what the bell shows of each; new kinds add a target type here rather than a model of their own.
+ */
+export const NOTIFICATION_TARGET_TYPES = ['task', 'transfer', 'guardrail', 'invoice'] as const;
+export type NotificationTargetType = (typeof NOTIFICATION_TARGET_TYPES)[number];
+export interface NotificationTarget {
+    type: NotificationTargetType;
+    id: string;
+}
+
 export interface NotificationView {
     id: string;
     kind: NotificationKind;
+    target: NotificationTarget;
     /** The task, for a `task_*` kind; null otherwise. */
     task: TaskSummary | null;
     /** The transfer, for a `transfer_*` kind; null otherwise. */
@@ -79,6 +93,6 @@ export interface MyTaskView extends TaskSummary {
 
 /** A member's notification settings in a workspace. */
 export interface NotificationSettings {
-    /** The daily email of tasks due or overdue (on unless the member turned it off). */
+    /** The daily email of tasks due or overdue, and (GUARD-2) guardrail alerts of the last day (on unless turned off). */
     taskDigest: boolean;
 }

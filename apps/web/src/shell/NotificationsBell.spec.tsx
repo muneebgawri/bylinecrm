@@ -13,6 +13,7 @@ const INBOX: NotificationsView = {
         {
             id: 'n-1',
             kind: 'task_assigned',
+            target: { type: 'task', id: 't-1' },
             transfer: null,
             guardrail: null,
             invoice: null,
@@ -28,6 +29,7 @@ const INBOX: NotificationsView = {
         {
             id: 'n-2',
             kind: 'task_due',
+            target: { type: 'task', id: 't-2' },
             transfer: null,
             guardrail: null,
             invoice: null,

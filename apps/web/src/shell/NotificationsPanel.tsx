@@ -22,6 +22,7 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     guardrail_alert: 'Sender reputation',
     invoice_needs_review: 'Invoice waiting for finance',
     invoice_coverage_lost: 'Refund: deal no longer paid in full',
+    guardrail_poach_suspected: 'Another member’s lead mailed',
 };
 
 /** What a transfer notification says under its label. */
@@ -105,7 +106,8 @@ export function NotificationsPanel({
 /** What a guardrail notification says (GUARD-1): who kept being stopped, never what they wrote. */
 function guardrailLine(item: Item): string {
     const g = item.guardrail!;
-    if (item.kind === 'guardrail_alert') return g.message;
+    // GUARD-2: who, whom, when and the subject — the event's own words; never the body.
+    if (item.kind === 'guardrail_alert' || item.kind === 'guardrail_poach_suspected') return g.message;
     return `${g.actor?.name ?? 'A member'} was stopped ${g.count} times today from mailing others’ leads`;
 }
 

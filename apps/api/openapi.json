@@ -28,7 +28,8 @@
                                 "primary_domain",
                                 "recipient_quality",
                                 "reply_rate",
-                                "spam_rate"
+                                "spam_rate",
+                                "poach_suspected"
                             ]
                         }
                     },
@@ -98,6 +99,74 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/GuardrailEventPage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["guardrails"]
+            }
+        },
+        "/api/w/{workspaceId}/guardrails/mailbox-coverage": {
+            "get": {
+                "operationId": "guardrails_mailboxCoverage",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/MailboxCoverage"
+                                    }
                                 }
                             }
                         },
@@ -32399,9 +32468,10 @@
                             "primary_domain",
                             "recipient_quality",
                             "reply_rate",
-                            "spam_rate"
+                            "spam_rate",
+                            "poach_suspected"
                         ],
-                        "description": "Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day)."
+                        "description": "Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day), `poach_suspected` (GUARD-2: mail seen through sync or sent from the CRM to another member’s lead or a customer)."
                     },
                     "outcome": {
                         "type": "string",
@@ -32554,6 +32624,50 @@
                     }
                 },
                 "required": ["items", "nextCursor"]
+            },
+            "MailboxCoverage": {
+                "type": "object",
+                "properties": {
+                    "memberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "name": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "role": {
+                        "type": "string"
+                    },
+                    "syncedVia": {
+                        "nullable": true,
+                        "description": "How their mail is seen: their own connected mailbox, or Google Workspace delegation (#225). Null: not seen at all.",
+                        "type": "string",
+                        "enum": ["mailbox", "delegation"]
+                    },
+                    "mailboxes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "email": {
+                                    "type": "string"
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["connected", "reconnect_needed", "disconnected"]
+                                }
+                            },
+                            "required": ["email", "status"]
+                        }
+                    }
+                },
+                "required": ["memberId", "name", "email", "role", "syncedVia", "mailboxes"]
             },
             "BylineSettings": {
                 "type": "object",
@@ -34858,9 +34972,27 @@
                                         "guardrail_repeat_blocks",
                                         "guardrail_alert",
                                         "invoice_needs_review",
-                                        "invoice_coverage_lost"
+                                        "invoice_coverage_lost",
+                                        "guardrail_poach_suspected"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer."
+                                },
+                                "target": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "enum": ["task", "transfer", "guardrail", "invoice"]
+                                        },
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        }
+                                    },
+                                    "required": ["type", "id"],
+                                    "description": "What it is about, whatever the kind (GUARD-2): one polymorphic target."
                                 },
                                 "task": {
                                     "nullable": true,
@@ -34998,7 +35130,8 @@
                                                 "primary_domain",
                                                 "recipient_quality",
                                                 "reply_rate",
-                                                "spam_rate"
+                                                "spam_rate",
+                                                "poach_suspected"
                                             ]
                                         },
                                         "actor": {
@@ -35026,9 +35159,59 @@
                                         "message": {
                                             "type": "string",
                                             "description": "What the event said (REP-1: the alert’s own words)."
+                                        },
+                                        "severity": {
+                                            "type": "string",
+                                            "enum": ["low", "medium", "high"]
+                                        },
+                                        "owner": {
+                                            "nullable": true,
+                                            "description": "GUARD-2: whose lead it was; null for none.",
+                                            "type": "object",
+                                            "properties": {
+                                                "memberId": {
+                                                    "type": "string",
+                                                    "format": "uuid",
+                                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                                },
+                                                "name": {
+                                                    "nullable": true,
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": ["memberId", "name"]
+                                        },
+                                        "address": {
+                                            "nullable": true,
+                                            "description": "GUARD-2: whom the mail went to.",
+                                            "type": "string"
+                                        },
+                                        "subject": {
+                                            "nullable": true,
+                                            "description": "GUARD-2: the mail’s subject. Never its body.",
+                                            "type": "string"
+                                        },
+                                        "sentAt": {
+                                            "nullable": true,
+                                            "description": "GUARD-2: when the mail was sent.",
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                                         }
                                     },
-                                    "required": ["id", "kind", "actor", "count", "message"]
+                                    "required": [
+                                        "id",
+                                        "kind",
+                                        "actor",
+                                        "count",
+                                        "message",
+                                        "severity",
+                                        "owner",
+                                        "address",
+                                        "subject",
+                                        "sentAt"
+                                    ]
                                 },
                                 "invoice": {
                                     "nullable": true,
@@ -35092,6 +35275,7 @@
                             "required": [
                                 "id",
                                 "kind",
+                                "target",
                                 "task",
                                 "transfer",
                                 "guardrail",

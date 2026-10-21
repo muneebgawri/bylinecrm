@@ -161,6 +161,20 @@ function importSyncFailingMail(
     });
 }
 
+/**
+ * GUARD-2: a `high` poaching alert, at once, to the lead's owner and every reviewer. Who, whom, when and the
+ * subject only — never the message's body.
+ */
+export function guardrailAlertMail(input: { workspaceName: string; message: string; url: string }): RenderedMail {
+    return render(`Guardrail alert in ${input.workspaceName}`, {
+        heading: 'A member mailed another member’s lead',
+        paragraphs: [input.message],
+        action: 'Open Guardrails',
+        url: input.url,
+        footer: `You receive this because you own the lead or review guardrails in ${input.workspaceName} on ${PRODUCT}.`,
+    });
+}
+
 /** One task as a digest lists it: its title, what it is about, and when it was due. */
 interface DigestTask {
     title: string;
@@ -176,13 +190,21 @@ export function taskDigestMail(input: {
     workspaceName: string;
     overdue: DigestTask[];
     today: DigestTask[];
+    /** GUARD-2: guardrail alerts of the last day, as their events say them (who, whom, when, subject). */
+    alerts?: string[];
     url: string;
 }): RenderedMail {
+    const alerts = input.alerts ?? [];
     const line = (t: DigestTask) => `• ${t.title}${t.about.length > 0 ? ` (${t.about.join(', ')})` : ''}, due ${t.due}`;
     const count = input.overdue.length + input.today.length;
-    return render(`${count} ${count === 1 ? 'task' : 'tasks'} due in ${input.workspaceName}`, {
-        heading: 'Your tasks for today',
+    const subject =
+        count > 0
+            ? `${count} ${count === 1 ? 'task' : 'tasks'} due in ${input.workspaceName}`
+            : `${alerts.length} guardrail ${alerts.length === 1 ? 'alert' : 'alerts'} in ${input.workspaceName}`;
+    return render(subject, {
+        heading: count > 0 ? 'Your tasks for today' : 'Guardrail alerts',
         paragraphs: [
+            ...(alerts.length > 0 ? [`Guardrail alerts: ${alerts.length}`, ...alerts.map((a) => `• ${a}`)] : []),
             ...(input.overdue.length > 0 ? [`Overdue: ${input.overdue.length}`, ...input.overdue.map(line)] : []),
             ...(input.today.length > 0 ? [`Due today: ${input.today.length}`, ...input.today.map(line)] : []),
         ],

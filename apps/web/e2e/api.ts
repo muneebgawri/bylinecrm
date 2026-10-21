@@ -112,6 +112,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/ownership/conflicts$`), () => []],
     // GUARD-1: the guardrail events; none in the fixtures.
     [new RegExp(`^${W}/guardrails/events(\\?.*)?$`), () => data.page([])],
+    // GUARD-2: every member's mail is seen in the fixtures; nobody to chase.
+    [new RegExp(`^${W}/guardrails/mailbox-coverage$`), () => []],
     // REP-1: the workspace's sender-reputation thresholds (the defaults).
     [new RegExp(`^${W}/reputation/settings$`), () => ({ ...REPUTATION_DEFAULTS, effectivePrimaryDomain: null })],
     // REP-2: mailboxes paused by the reply-rate floor or the spam-rate kill switch; none in the fixtures.

@@ -4,6 +4,7 @@ import {
     GUARDRAIL_PATHS,
     GUARDRAIL_SEVERITIES,
     type GuardrailEventView,
+    type MailboxCoverageView,
 } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { id, named, page } from '../openapi/responses';
@@ -20,7 +21,7 @@ export const guardrailEventView = named(
         id,
         kind: z.enum(GUARDRAIL_KINDS).meta({
             description:
-                'Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day).',
+                'Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day), `poach_suspected` (GUARD-2: mail seen through sync or sent from the CRM to another member’s lead or a customer).',
         }),
         outcome: z.enum(GUARDRAIL_OUTCOMES).meta({
             description:
@@ -43,6 +44,27 @@ export const guardrailEventView = named(
 );
 
 export const guardrailEventPage = named('GuardrailEventPage', page(guardrailEventView));
+
+/** GUARD-2: an active member and whether the mail they send is seen by sync. */
+export const mailboxCoverageView = named(
+    'MailboxCoverage',
+    z.object({
+        memberId: id,
+        name: z.string().nullable(),
+        email: z.string(),
+        role: z.string(),
+        syncedVia: z.enum(['mailbox', 'delegation']).nullable().meta({
+            description:
+                'How their mail is seen: their own connected mailbox, or Google Workspace delegation (#225). Null: not seen at all.',
+        }),
+        mailboxes: z.array(
+            z.object({ email: z.string(), status: z.enum(['connected', 'reconnect_needed', 'disconnected']) }),
+        ),
+    }),
+);
+
+export type MailboxCoverageViewCheck =
+    Same<z.output<typeof mailboxCoverageView>, MailboxCoverageView> extends true ? true : never;
 
 type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 export type GuardrailEventViewCheck =

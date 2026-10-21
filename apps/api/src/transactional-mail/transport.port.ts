@@ -6,7 +6,8 @@ export type MailKind =
     | 'signup_invitation'
     | 'twenty_sync_failing'
     | 'bigin_sync_failing'
-    | 'task_digest';
+    | 'task_digest'
+    | 'guardrail_alert';
 
 /** One message, rendered and addressed, as a transport sends it. */
 export interface OutgoingMail {
