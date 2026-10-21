@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { covers, settle } from './invoice-decision';
+import { covers, settle, verifiedTotal } from './invoice-decision';
 import { parseLookup } from './newswireos-verification.http';
 import { NewswireosApiError } from './newswireos-verification.port';
 
@@ -87,5 +87,47 @@ describe('covers (INV-1)', () => {
         // Net of refunds.
         expect(covers(deal, [{ amountMinor: 1000n, refundedAmountMinor: 1n, currency: 'USD' }])).toBe(false);
         expect(covers(deal, [{ amountMinor: 1200n, refundedAmountMinor: 200n, currency: 'USD' }])).toBe(true);
+    });
+});
+
+describe('a NewswireOS invoice number (INV-1)', () => {
+    const gateway = 'newswireos_invoice';
+    it('not found, or a gateway NewswireOS cannot resolve yet, waits for a person, never invalid', () => {
+        for (const reason of ['NOT_FOUND', 'UNSUPPORTED_GATEWAY']) {
+            expect(settle({ result: result('invalid', reason) }, gateway)).toMatchObject({
+                status: 'needs_review',
+                reasonCode: 'INVOICE_NUMBER_UNRESOLVED',
+                facts: { newswireosReason: reason },
+            });
+        }
+        for (const status of [400, 404, 422]) {
+            expect(
+                settle({ error: new NewswireosApiError(status, 'unsupported gateway'), finalAttempt: false }, gateway),
+            ).toMatchObject({ status: 'needs_review', reasonCode: 'INVOICE_NUMBER_UNRESOLVED' });
+        }
+    });
+
+    it('a decision NewswireOS did make stands; a gateway id keeps its invalid', () => {
+        expect(settle({ result: result('verified') }, gateway)).toMatchObject({ status: 'verified' });
+        expect(settle({ result: result('invalid', 'AMOUNT_MISMATCH') }, gateway)).toMatchObject({
+            status: 'invalid',
+            reasonCode: 'AMOUNT_MISMATCH',
+        });
+        expect(settle({ result: result('invalid', 'NOT_FOUND') }, 'stripe')).toMatchObject({ status: 'invalid' });
+        expect(settle({ error: new NewswireosApiError(null, 'down'), finalAttempt: false }, gateway)).toBe('retry');
+    });
+});
+
+describe('verifiedTotal (INV-1)', () => {
+    it('adds the verified invoices in the currency, net of refunds, never below zero', () => {
+        expect(verifiedTotal('USD', [])).toBe(0n);
+        expect(
+            verifiedTotal('USD', [
+                { amountMinor: 1000n, refundedAmountMinor: 200n, currency: 'USD' },
+                { amountMinor: 500n, currency: 'USD' },
+                { amountMinor: 9000n, currency: 'EUR' },
+            ]),
+        ).toBe(1300n);
+        expect(verifiedTotal('USD', [{ amountMinor: 100n, refundedAmountMinor: 100n, currency: 'USD' }])).toBe(0n);
     });
 });

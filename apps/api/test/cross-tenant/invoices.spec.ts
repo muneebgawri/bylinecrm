@@ -491,6 +491,126 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             });
             expect(won).toHaveLength(1);
             expect((won[0]!.payload as unknown as DomainEvent).actor).toMatchObject({ kind: 'rule' });
+            // An amount the deal had is never overwritten.
+            const amount = (
+                await as(ana)
+                    .get(w(`/opportunities/${covered}`))
+                    .expect(200)
+            ).body as {
+                amount: { amountMinor: number } | null;
+            };
+            expect(amount.amount).toMatchObject({ amountMinor: 2_000 });
+        });
+
+        const dealAmount = async (dealId: string) =>
+            (
+                (
+                    await as(ana)
+                        .get(w(`/opportunities/${dealId}`))
+                        .expect(200)
+                ).body as {
+                    amount: { amountMinor: number; currency: string } | null;
+                }
+            ).amount;
+        const amountEvents = (dealId: string) =>
+            owner.outboxEvent.findMany({
+                where: {
+                    workspaceId: workspace,
+                    type: 'opportunity.updated',
+                    payload: { path: ['recordId'], equals: dealId },
+                },
+            });
+
+        it('a deal with no amount closed Won by the rule takes its verified invoices’ total, net of refunds', async () => {
+            const bare = await newDeal(ana, `Bare won ${stamp}`, null);
+            newswireos.answer(ref('pi_bare_won'), FakeNewswireos.decided('verified'));
+            const id = (
+                (
+                    await add(ana, bare, {
+                        gateway: 'stripe',
+                        reference: ref('pi_bare_won'),
+                        expectedAmountMinor: '1250',
+                    }).expect(201)
+                ).body as DealInvoiceView
+            ).id;
+            await run(id);
+            // Still open: verifying alone sets nothing.
+            expect(await dealAmount(bare)).toBeNull();
+            const [event] = await outboxEvents(id);
+            await app.get(StageRulesService).apply(event!);
+            expect(await dealAmount(bare)).toMatchObject({ amountMinor: 1_250, currency: 'USD' });
+            const updated = await amountEvents(bare);
+            expect(updated).toHaveLength(1);
+            expect(updated[0]!.payload).toMatchObject({
+                actor: { kind: 'rule' },
+                diff: { amount: { from: null, to: { amountMinor: 1_250, currency: 'USD' } } },
+            });
+            // A second verified invoice on the now-priced deal changes nothing.
+            newswireos.answer(ref('pi_bare_won2'), FakeNewswireos.decided('verified'));
+            const second = (
+                (
+                    await add(ana, bare, {
+                        gateway: 'stripe',
+                        reference: ref('pi_bare_won2'),
+                        expectedAmountMinor: '400',
+                    }).expect(201)
+                ).body as DealInvoiceView
+            ).id;
+            await run(second);
+            expect(await dealAmount(bare)).toMatchObject({ amountMinor: 1_250 });
+            expect(await amountEvents(bare)).toHaveLength(1);
+        });
+
+        it('a verified invoice on a deal already Won with no amount sets it', async () => {
+            const bare = await newDeal(ana, `Won bare ${stamp}`, null);
+            await as(admin)
+                .post(w(`/opportunities/${bare}/move`))
+                .send({ stageId: target.id, close: {} })
+                .expect(201);
+            expect(await dealAmount(bare)).toBeNull();
+            newswireos.answer(ref('pi_after_won'), FakeNewswireos.decided('verified'));
+            const id = (
+                (
+                    await add(ana, bare, {
+                        gateway: 'stripe',
+                        reference: ref('pi_after_won'),
+                        expectedAmountMinor: '900',
+                    }).expect(201)
+                ).body as DealInvoiceView
+            ).id;
+            await run(id);
+            expect(await dealAmount(bare)).toMatchObject({ amountMinor: 900, currency: 'USD' });
+            const [updated] = await amountEvents(bare);
+            expect(updated!.payload).toMatchObject({ actor: { kind: 'system' }, diff: { amount: { from: null } } });
+        });
+
+        it('a NewswireOS invoice number is asked as such; one NewswireOS cannot resolve yet waits for finance', async () => {
+            const invoiceNumber = `INV-202610-${stamp}`;
+            newswireos.answer(invoiceNumber, new NewswireosApiError(422, 'unsupported gateway'));
+            const id = (
+                (await add(ana, deal, { gateway: 'newswireos_invoice', reference: invoiceNumber }).expect(201))
+                    .body as DealInvoiceView
+            ).id;
+            await run(id, false);
+            expect(newswireos.calls.at(-1)!.request).toMatchObject({
+                gateway: 'newswireos_invoice',
+                reference: invoiceNumber,
+            });
+            expect(await one(deal, id)).toMatchObject({
+                status: 'needs_review',
+                reasonCode: 'INVOICE_NUMBER_UNRESOLVED',
+            });
+            const notFound = `2GBMDHSF-${stamp}`;
+            newswireos.answer(notFound, FakeNewswireos.decided('invalid', 'NOT_FOUND'));
+            const other = (
+                (await add(ana, deal, { gateway: 'newswireos_invoice', reference: notFound }).expect(201))
+                    .body as DealInvoiceView
+            ).id;
+            await run(other);
+            expect(await one(deal, other)).toMatchObject({
+                status: 'needs_review',
+                reasonCode: 'INVOICE_NUMBER_UNRESOLVED',
+            });
         });
 
         it('a refund on the signed hook takes the invoice back; a wrong signature or token is refused', async () => {

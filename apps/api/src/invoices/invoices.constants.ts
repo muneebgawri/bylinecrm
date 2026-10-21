@@ -49,6 +49,11 @@ export const INVOICE_REASONS = {
     alreadyUsed: 'ALREADY_USED',
     providerError: 'PROVIDER_ERROR',
     badRequest: 'BAD_REQUEST',
+    /**
+     * NewswireOS could not resolve a NewswireOS invoice number (not found, or the gateway is not supported yet): a
+     * person checks it, since the payment may well be fine.
+     */
+    invoiceNumberUnresolved: 'INVOICE_NUMBER_UNRESOLVED',
     noDecision: 'NO_DECISION',
     manual: 'MANUAL',
     refunded: 'REFUNDED',

@@ -3024,6 +3024,8 @@ enum InvoiceGateway {
   paypal
   crypto_onchain
   bank_wire
+  /// A NewswireOS invoice number (`INV-202610-000067`), resolved by NewswireOS to its payment.
+  newswireos_invoice
 
   @@map("invoice_gateway")
 }

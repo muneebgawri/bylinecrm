@@ -16,6 +16,34 @@ export interface Settlement {
  */
 export function settle(
     outcome: { result: NewswireosLookupResult } | { error: unknown; finalAttempt: boolean },
+    gateway?: string,
+): Settlement | 'retry' {
+    const settled = settleAnswer(outcome);
+    return gateway === 'newswireos_invoice' ? unresolvedInvoiceNumber(settled) : settled;
+}
+
+/** NewswireOS's own refusals that mean "cannot resolve this reference", not "this payment is wrong". */
+const UNRESOLVED_REASONS: readonly string[] = ['NOT_FOUND', 'UNSUPPORTED_GATEWAY', 'INVALID_GATEWAY'];
+
+/**
+ * A NewswireOS invoice number (`INV-202610-000067`, `2GBMDHSF-0002`) is NewswireOS's own reference, which its lookup
+ * is being taught to resolve. Until it can, a "not found" or "unsupported gateway" answer (or the 4xx refusing the
+ * request) says nothing about the payment: it waits for a person, never `invalid`.
+ */
+function unresolvedInvoiceNumber(settled: Settlement | 'retry'): Settlement | 'retry' {
+    if (settled === 'retry' || settled.status !== 'invalid') return settled;
+    const reason = settled.reasonCode ?? '';
+    if (reason !== INVOICE_REASONS.badRequest && !UNRESOLVED_REASONS.includes(reason)) return settled;
+    return {
+        status: 'needs_review',
+        reasonCode: INVOICE_REASONS.invoiceNumberUnresolved,
+        canonicalReference: settled.canonicalReference,
+        facts: { ...settled.facts, newswireosReason: reason },
+    };
+}
+
+function settleAnswer(
+    outcome: { result: NewswireosLookupResult } | { error: unknown; finalAttempt: boolean },
 ): Settlement | 'retry' {
     if ('result' in outcome) {
         const { status, reasonCode, canonicalReference, facts } = outcome.result;
@@ -59,8 +87,16 @@ export function covers(
 ): boolean {
     if (verified.length === 0) return false;
     if (deal.amountMinor === null) return true;
+    return verifiedTotal(deal.currency, verified) >= deal.amountMinor;
+}
+
+/** What a deal's verified invoices add up to in `currency`, net of refunds (never below zero). */
+export function verifiedTotal(
+    currency: string,
+    verified: readonly { amountMinor: bigint; refundedAmountMinor?: bigint; currency: string }[],
+): bigint {
     const sum = verified
-        .filter((i) => i.currency === deal.currency)
+        .filter((i) => i.currency === currency)
         .reduce((a, i) => a + i.amountMinor - (i.refundedAmountMinor ?? 0n), 0n);
-    return sum >= deal.amountMinor;
+    return sum > 0n ? sum : 0n;
 }

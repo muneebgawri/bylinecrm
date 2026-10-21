@@ -10,7 +10,8 @@ export interface NewswireosLink {
 }
 
 export interface NewswireosLookupRequest {
-    gateway: 'stripe' | 'paypal' | 'crypto_onchain';
+    /** `newswireos_invoice`: `reference` is NewswireOS's own invoice number (`INV-202610-000067`, `2GBMDHSF-0002`). */
+    gateway: 'stripe' | 'paypal' | 'crypto_onchain' | 'newswireos_invoice';
     reference: string;
     /** Minor units, > 0. */
     amountCents: number;

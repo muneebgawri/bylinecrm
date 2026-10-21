@@ -26586,7 +26586,7 @@
                 "properties": {
                     "gateway": {
                         "type": "string",
-                        "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                        "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
                     },
                     "reference": {
                         "type": "string",
@@ -32850,7 +32850,7 @@
                     },
                     "gateway": {
                         "type": "string",
-                        "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                        "enum": ["newswireos_invoice", "stripe", "paypal", "crypto_onchain", "bank_wire"]
                     },
                     "reference": {
                         "type": "string"
@@ -34531,7 +34531,13 @@
                                         },
                                         "gateway": {
                                             "type": "string",
-                                            "enum": ["stripe", "paypal", "crypto_onchain", "bank_wire"]
+                                            "enum": [
+                                                "newswireos_invoice",
+                                                "stripe",
+                                                "paypal",
+                                                "crypto_onchain",
+                                                "bank_wire"
+                                            ]
                                         },
                                         "reference": {
                                             "type": "string"

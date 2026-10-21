@@ -4,7 +4,7 @@
  */
 
 /** The rails a reference can be on. `bank_wire` has no feed: it always waits for a person. */
-export const INVOICE_GATEWAYS = ['stripe', 'paypal', 'crypto_onchain', 'bank_wire'] as const;
+export const INVOICE_GATEWAYS = ['newswireos_invoice', 'stripe', 'paypal', 'crypto_onchain', 'bank_wire'] as const;
 export type InvoiceGateway = (typeof INVOICE_GATEWAYS)[number];
 
 /**

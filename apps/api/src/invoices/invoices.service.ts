@@ -1,6 +1,12 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { Actor, DealInvoiceView, DomainEvent, InvoiceGateway } from '@bylinecrm/shared';
+import {
+    INVOICE_GATEWAYS,
+    type Actor,
+    type DealInvoiceView,
+    type DomainEvent,
+    type InvoiceGateway,
+} from '@bylinecrm/shared';
 import { DomainEvents } from '../events/domain-events.service';
 import { requireCallerMember } from '../infra/caller-member';
 import { ApiException } from '../infra/errors/api-errors';
@@ -9,6 +15,7 @@ import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { actorOf } from '../records/actor';
 import { recordWhere } from '../records/record-scope';
+import { fillWonDealAmount } from './deal-amount';
 import { covers, settle, type Settlement } from './invoice-decision';
 import { InvoiceQueue } from './invoice-queue';
 import { INVOICE_REASONS } from './invoices.constants';
@@ -275,7 +282,9 @@ export class InvoicesService {
             } catch (e) {
                 error = e;
             }
-            outcome = result ? settle({ result }) : settle({ error, finalAttempt: opts.finalAttempt });
+            outcome = result
+                ? settle({ result }, row.gateway)
+                : settle({ error, finalAttempt: opts.finalAttempt }, row.gateway);
             if (outcome === 'retry') {
                 this.logger.warn(`invoice ${invoiceId}: NewswireOS did not answer; trying again`);
                 throw error instanceof Error ? error : new Error('NewswireOS did not answer');
@@ -293,15 +302,25 @@ export class InvoicesService {
      * Returns how many invoices changed.
      */
     async applyPaymentState(workspaceId: string, change: PaymentStateChange): Promise<number> {
-        const gateways: readonly string[] = ['stripe', 'paypal', 'crypto_onchain', 'bank_wire'];
-        if (!gateways.includes(change.gateway) || change.references.length === 0) return 0;
+        if (!(INVOICE_GATEWAYS as readonly string[]).includes(change.gateway) || change.references.length === 0) {
+            return 0;
+        }
         const gateway = change.gateway as InvoiceGateway;
         const actor: Actor = { kind: 'system', id: null };
         return this.rls.withWorkspace(workspaceId, async (tx) => {
             const rows = await tx.dealInvoice.findMany({
                 where: {
-                    gateway,
-                    OR: [{ reference: { in: change.references } }, { canonicalReference: { in: change.references } }],
+                    OR: [
+                        {
+                            gateway,
+                            OR: [
+                                { reference: { in: change.references } },
+                                { canonicalReference: { in: change.references } },
+                            ],
+                        },
+                        // Entered as a NewswireOS invoice number: NewswireOS named the payment behind it.
+                        { gateway: 'newswireos_invoice', canonicalReference: { in: change.references } },
+                    ],
                 },
             });
             let changed = 0;
@@ -400,8 +419,12 @@ export class InvoicesService {
         });
         if (count === 0) return null;
         const row = (await tx.dealInvoice.findUnique({ where: { id: invoiceId } }))!;
-        if (row.status === 'verified')
+        if (row.status === 'verified') {
             await this.events.record(tx, await this.event(tx, 'invoice.verified', row, actor));
+            // A deal already Won with no amount takes what its verified invoices add up to; an open one does when
+            // the `invoice.verified` rule closes it (`StageRulesService`).
+            await fillWonDealAmount(tx, this.events, row.opportunityId, actor);
+        }
         if (row.status === 'needs_review') await notifyReviewers(tx, workspaceId, row.id);
         return row;
     }

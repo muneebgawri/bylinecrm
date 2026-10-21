@@ -22,6 +22,7 @@ import { formatMoney, parseMoneyInput, toMajor } from '../../../lib/money';
 import { RailCard, RailEmpty, RailLoading } from './RailCard';
 
 const GATEWAY_LABEL: Record<InvoiceGateway, string> = {
+    newswireos_invoice: 'NewswireOS invoice',
     stripe: 'Stripe',
     paypal: 'PayPal',
     crypto_onchain: 'Crypto (on-chain)',
@@ -46,6 +47,16 @@ const REASON_TEXT: Record<string, string> = {
     REFUNDED: 'Refunded.',
     DISPUTED: 'Charged back or disputed.',
     MANUAL: 'Decided by hand.',
+    INVOICE_NUMBER_UNRESOLVED: 'NewswireOS could not look up this invoice number yet: finance checks it by hand.',
+};
+
+/** What to enter as the reference, by what it was paid with. */
+const REFERENCE_HINT: Record<InvoiceGateway, string> = {
+    newswireos_invoice: 'The invoice number in NewswireOS, like INV-202610-000067 or 2GBMDHSF-0002.',
+    stripe: 'A Stripe pi_/ch_/in_ id.',
+    paypal: 'A PayPal capture or invoice number.',
+    crypto_onchain: 'The transaction hash.',
+    bank_wire: 'The transfer’s reference, as on the bank statement.',
 };
 
 function statusBadge(invoice: DealInvoiceView) {
@@ -95,7 +106,7 @@ export function InvoicesPanel({ workspaceId, deal }: { workspaceId: string; deal
             ) : list.isError ? (
                 <RailEmpty>The invoices could not be loaded.</RailEmpty>
             ) : list.data.length === 0 ? (
-                <RailEmpty>No invoices. Add a payment’s reference to verify it.</RailEmpty>
+                <RailEmpty>No invoices. Add the NewswireOS invoice number to verify the payment.</RailEmpty>
             ) : (
                 <ul className="m-0 list-none p-0">
                     {list.data.map((invoice) => (
@@ -207,7 +218,7 @@ function InvoiceRow({ workspaceId, invoice }: { workspaceId: string; invoice: De
 
 function AddInvoice({ workspaceId, deal, onDone }: { workspaceId: string; deal: OpportunityView; onDone: () => void }) {
     const action = useInvoiceAction(workspaceId, deal.id);
-    const [gateway, setGateway] = useState<InvoiceGateway>('stripe');
+    const [gateway, setGateway] = useState<InvoiceGateway>('newswireos_invoice');
     const [reference, setReference] = useState('');
     const [amount, setAmount] = useState(deal.amount ? String(toMajor(deal.amount)) : '');
     const [local, setLocal] = useState<string | null>(null);
@@ -215,7 +226,13 @@ function AddInvoice({ workspaceId, deal, onDone }: { workspaceId: string; deal: 
     const submit = (event: FormEvent) => {
         event.preventDefault();
         const money = amount.trim() ? parseMoneyInput(amount, deal.currency) : null;
-        if (!reference.trim()) return setLocal('Enter the payment’s reference.');
+        if (!reference.trim()) {
+            return setLocal(
+                gateway === 'newswireos_invoice'
+                    ? 'Enter the NewswireOS invoice number.'
+                    : 'Enter the payment’s reference.',
+            );
+        }
         if (amount.trim() && (!money || money.amountMinor <= 0)) return setLocal('Enter the amount paid.');
         if (!money && !deal.amount) return setLocal('The deal has no amount: enter the amount paid.');
         setLocal(null);
@@ -260,8 +277,8 @@ function AddInvoice({ workspaceId, deal, onDone }: { workspaceId: string; deal: 
                 </Select>
             </Field>
             <Field
-                label="Reference"
-                hint="A Stripe pi_/ch_/in_ id, a PayPal capture or invoice number, a transaction hash."
+                label={gateway === 'newswireos_invoice' ? 'Invoice number' : 'Reference'}
+                hint={REFERENCE_HINT[gateway]}
                 error={local ?? fieldErrorAt(action.error, 'reference')}
             >
                 <Input
