@@ -308,7 +308,7 @@ function MailboxTable({
                                             Reconnect
                                         </DropdownMenuItem>
                                     )}
-                                    {m.status !== 'disconnected' && (
+                                    {m.status !== 'disconnected' && m.credentialSource !== 'delegation' && (
                                         <DropdownMenuItem
                                             destructive
                                             onSelect={() => {
@@ -353,6 +353,18 @@ function MailboxTable({
 }
 
 function MailboxStatus({ mailbox }: { mailbox: MailboxView }) {
+    const badge = <MailboxStatusBadge mailbox={mailbox} />;
+    if (mailbox.credentialSource !== 'delegation' || mailbox.status === 'disconnected') return badge;
+    // #225: a member's mailbox the workspace's service account syncs; their own connection would replace it.
+    return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+            {badge}
+            <span className="text-xs text-text-muted">Synced via Workspace delegation</span>
+        </span>
+    );
+}
+
+function MailboxStatusBadge({ mailbox }: { mailbox: MailboxView }) {
     if (mailbox.status === 'connected') {
         return (
             <Badge status="success" dot>

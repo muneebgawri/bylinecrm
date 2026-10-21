@@ -6,6 +6,7 @@ import { ReputationMonitor } from '../reputation/reputation-monitor';
 import { DomainEvents } from '../events/domain-events.service';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { DelegationService } from '../mail-accounts/delegation.service';
 import { MailboxTokens, MailboxUnavailable } from '../mail-accounts/mailbox-tokens.service';
 import { mapPool } from '../infra/map-pool';
 import { GMAIL_PORT, GmailApiError, type GmailPort, type GmailRawMessage } from './gmail.port';
@@ -81,6 +82,7 @@ export class MailSyncService {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly tokens: MailboxTokens,
+        private readonly delegation: DelegationService,
         private readonly quota: GmailQuota,
         private readonly events: DomainEvents,
         @Inject(GMAIL_PORT) private readonly gmail: GmailPort,
@@ -100,6 +102,8 @@ export class MailSyncService {
         const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailbox.findUnique({ where: { id: mailboxId } }),
         );
+        // #225: every delegated sync start is audited.
+        if (mailbox) await this.delegation.noteSyncStart(mailbox, 'mail');
         // An SMTP2Go mailbox (TRANS-1) has no Gmail to read; what it sends is stored by `storeSent`.
         if (!mailbox || mailbox.transport !== 'gmail') return skipped;
         if (mailbox.status !== 'connected') {

@@ -19,6 +19,7 @@ import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { WorkspaceDelegation } from './WorkspaceDelegation';
 
 /**
  * Google setup (doc 50 §E, FR-CRMS-1, D-237): the workspace's own OAuth client, in four steps an
@@ -38,7 +39,14 @@ export function GoogleSetup() {
                 OAuth client. Nothing is shared with other workspaces, and the app only ever asks Google for mail send
                 and read access and read-only calendar access.
             </p>
-            {admin ? <AdminSetup workspaceId={workspaceId} /> : <MemberStatus workspaceId={workspaceId} />}
+            {admin ? (
+                <>
+                    <AdminSetup workspaceId={workspaceId} />
+                    <WorkspaceDelegation workspaceId={workspaceId} />
+                </>
+            ) : (
+                <MemberStatus workspaceId={workspaceId} />
+            )}
         </section>
     );
 }

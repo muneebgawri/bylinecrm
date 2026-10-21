@@ -2,6 +2,8 @@ import { MAILBOX_PURPOSES } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import {
+    DELEGATION_DOMAINS_MAX,
+    SERVICE_ACCOUNT_KEY_MAX,
     GOOGLE_CLIENT_ID_MAX,
     GOOGLE_CLIENT_ID_PATTERN,
     GOOGLE_CLIENT_SECRET_MAX,
@@ -46,3 +48,22 @@ export class OAuthCallbackQueryDto extends createZodDto(
         scope: z.string().max(2000).optional(),
     }),
 ) {}
+
+/** A service account's JSON key (#225), as the file's text. Stored sealed; never returned. */
+export class PutDelegationKeyDto extends createZodDto(
+    z.object({ key: z.string().min(1).max(SERVICE_ACCOUNT_KEY_MAX) }),
+) {}
+
+const DOMAIN = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/** The domains whose members sync through the service account (#225). */
+export class PatchDelegationDto extends createZodDto(
+    z.object({
+        allowedDomains: z
+            .array(z.string().trim().toLowerCase().regex(DOMAIN, 'not a domain name, like example.com'))
+            .max(DELEGATION_DOMAINS_MAX),
+    }),
+) {}
+
+/** An admin's per-member toggle (#225): an excluded member is never synced through the service account. */
+export class PutDelegationMemberDto extends createZodDto(z.object({ excluded: z.boolean() })) {}

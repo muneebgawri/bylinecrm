@@ -150,6 +150,10 @@ export type GoogleOAuthClientView = Schemas['GoogleOAuthClient'];
 /** What every member may know: whether Google is set up, and nothing about the client itself. */
 export type GoogleOAuthClientStatusView = Schemas['GoogleOAuthClientStatus'];
 export type GoogleOAuthClientCheckView = Schemas['GoogleOAuthClientCheck'];
+export type DelegationView = Schemas['GoogleWorkspaceDelegation'];
+export type DelegationMemberView = Schemas['GoogleWorkspaceDelegationMember'];
+export type DelegationAuditEntryView = Schemas['GoogleWorkspaceDelegationAuditEntry'];
+export type PatchDelegationInput = Loose<Schemas['PatchDelegationDto']>;
 export type PutOAuthClientInput = Loose<Schemas['PutOAuthClientDto']>;
 export type MailboxView = Schemas['Mailbox'];
 export type MailboxConnectStartView = Schemas['MailboxConnectStart'];

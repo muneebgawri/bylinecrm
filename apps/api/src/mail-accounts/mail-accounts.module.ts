@@ -1,8 +1,16 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { DelegationService } from './delegation.service';
+import { GoogleDelegationHttp } from './google-delegation.http';
+import { GOOGLE_DELEGATION_PORT } from './google-delegation.port';
 import { GoogleOAuthHttp } from './google-oauth.http';
 import { GOOGLE_OAUTH_PORT } from './google-oauth.port';
-import { MailOAuthCallbackController, MailboxesController, OAuthClientController } from './mail-accounts.controllers';
+import {
+    DelegationController,
+    MailOAuthCallbackController,
+    MailboxesController,
+    OAuthClientController,
+} from './mail-accounts.controllers';
 import { MailboxTokens } from './mailbox-tokens.service';
 import { MailboxesService } from './mailboxes.service';
 import { OAuthClientsService } from './oauth-clients.service';
@@ -17,13 +25,15 @@ import { OAuthClientsService } from './oauth-clients.service';
  */
 @Module({
     imports: [AuthModule],
-    controllers: [OAuthClientController, MailboxesController, MailOAuthCallbackController],
+    controllers: [DelegationController, OAuthClientController, MailboxesController, MailOAuthCallbackController],
     providers: [
         { provide: GOOGLE_OAUTH_PORT, useClass: GoogleOAuthHttp },
+        { provide: GOOGLE_DELEGATION_PORT, useFactory: () => new GoogleDelegationHttp() },
+        DelegationService,
         OAuthClientsService,
         MailboxesService,
         MailboxTokens,
     ],
-    exports: [MailboxTokens, MailboxesService, OAuthClientsService, GOOGLE_OAUTH_PORT],
+    exports: [MailboxTokens, MailboxesService, OAuthClientsService, DelegationService, GOOGLE_OAUTH_PORT],
 })
 export class MailAccountsModule {}

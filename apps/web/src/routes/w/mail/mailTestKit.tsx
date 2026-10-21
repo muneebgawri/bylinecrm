@@ -19,6 +19,7 @@ export const mailbox = (over: Partial<MailboxView> = {}): MailboxView => ({
     label: null,
     purpose: 'personal',
     transport: 'gmail',
+    credentialSource: 'oauth',
     status: 'connected',
     grantedScopes: [],
     lastError: null,
