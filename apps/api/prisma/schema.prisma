@@ -3058,6 +3058,7 @@ model OwnershipTransfer {
 
   // One open proposal per record — the partial unique index `ownership_transfers_open_record_key` in the migration.
   @@index([workspaceId, object, recordId, createdAt(sort: Desc)])
+  @@index([moved(ops: JsonbPathOps)], type: Gin, map: "ownership_transfers_moved_idx")
   @@index([workspaceId, toMemberId, status])
   @@index([workspaceId, fromMemberId, status])
   @@map("ownership_transfers")

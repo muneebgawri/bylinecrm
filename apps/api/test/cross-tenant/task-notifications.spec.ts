@@ -200,7 +200,8 @@ describe('#192 task notifications: the bell, due reminders and the daily digest'
     });
 
     it('sends each member one morning digest of what is due or overdue — nothing when nothing is, never twice a day, never once turned off', async () => {
-        const morning = new Date(Date.now() + 5 * HOUR);
+        // 08:00 UTC tomorrow: an hour later is the same day whenever the test runs.
+        const morning = new Date(Math.floor(Date.now() / (24 * HOUR)) * 24 * HOUR + 32 * HOUR);
         await owner.task.create({
             data: {
                 workspaceId: workspace,
