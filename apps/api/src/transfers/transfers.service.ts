@@ -235,13 +235,14 @@ export class TransfersService {
      * member owns). The receiver is told; `transfer.completed` is announced.
      *
      * `from` null: an owner given to a record that had none (an import filling it, `TRANSFER_REASON_IMPORT_FILL`);
-     * the receiver proposed and decided it. `notify: false` leaves the receiver's bell alone — a run filling
-     * thousands of records says so in its report instead.
+     * the receiver proposed and decided it. `silent` (a fill) leaves the receiver's bell alone — a run filling
+     * thousands of records says so in its report instead — and its `transfer.completed` is `internal`: on the
+     * timeline, never sent to a webhook.
      */
     async recordHandOverIn(
         tx: WorkspaceClient,
         context: WorkspaceRunContext,
-        input: { from: string | null; to: string; target: RecordTarget; reason: string; notify?: boolean },
+        input: { from: string | null; to: string; target: RecordTarget; reason: string; silent?: boolean },
     ): Promise<void> {
         const transfer = await tx.ownershipTransfer.create({
             data: {
@@ -263,14 +264,12 @@ export class TransfersService {
             input.target.type === 'person'
                 ? await tx.person.findUnique({ where: { id: input.target.id }, select: { emailPrimary: true } })
                 : null;
-        if (input.notify !== false) await tell(tx, transfer, input.to, 'transfer_received');
-        await this.events.record(
-            tx,
-            event(context, 'transfer.completed', transfer, [input.target], {
-                companyDomain: null,
-                personEmails: person?.emailPrimary ? [person.emailPrimary] : [],
-            }),
-        );
+        if (!input.silent) await tell(tx, transfer, input.to, 'transfer_received');
+        const completed = event(context, 'transfer.completed', transfer, [input.target], {
+            companyDomain: null,
+            personEmails: person?.emailPrimary ? [person.emailPrimary] : [],
+        });
+        await this.events.record(tx, input.silent ? { ...completed, internal: true } : completed);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────

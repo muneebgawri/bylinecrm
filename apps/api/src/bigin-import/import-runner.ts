@@ -555,7 +555,7 @@ export class BiginImportRunner {
                 to: fill.ownerId,
                 target: { type: object, id: localId },
                 reason: TRANSFER_REASON_IMPORT_FILL,
-                notify: false,
+                silent: true,
             });
             page.entry.ownersFilled = (page.entry.ownersFilled ?? 0) + 1;
         };

@@ -1082,6 +1082,16 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 reason: 'import_fill',
             });
             expect(await owner.notification.count({ where: { transferId: transfer.id } })).toBe(0);
+            // Kept here (timeline, history), never sent to a webhook as a transfer.
+            const announced = await owner.outboxEvent.findFirstOrThrow({
+                where: {
+                    workspaceId: workspace,
+                    type: 'transfer.completed',
+                    payload: { path: ['recordId'], equals: transfer.id },
+                },
+            });
+            expect((announced.payload as { internal?: boolean }).internal).toBe(true);
+            expect(await owner.webhookDelivery.count({ where: { eventId: announced.id } })).toBe(0);
             expect(await owner.ownershipTransfer.count({ where: { recordId: keptId } })).toBe(0);
 
             const dealOwner = async (externalId: string) =>
