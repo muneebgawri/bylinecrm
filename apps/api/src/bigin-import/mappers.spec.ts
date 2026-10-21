@@ -1,7 +1,16 @@
 import { plainBiginId } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 import { outcomeError } from './bigin-sync.service';
-import { lookupId, mapAccount, mapContact, mapDeal, mapNote, phoneFrom, type BiginLinkIndex } from './mappers';
+import {
+    lookupId,
+    mapAccount,
+    mapContact,
+    mapDeal,
+    mapNote,
+    phoneFrom,
+    referencesOf,
+    type BiginLinkIndex,
+} from './mappers';
 
 const links: BiginLinkIndex = {
     resolve: (object, id) => (typeof id === 'string' ? `${object}:${id}` : null),
@@ -87,6 +96,32 @@ describe('FR-CRMS-25 BIGIN-1 Bigin mappers', () => {
         expect(mapNote({ id: '8', Note_Content: 'x', $se_module: 'Tasks' }, links)).toEqual({
             skip: 'its record is not in BylineCRM',
         });
+    });
+
+    it('a note paged by token (v2, no `$se_module`) still lands on its parent: by `Parent_Id.module`, else by its id in any module', () => {
+        expect(
+            mapNote(
+                { id: '9', Note_Content: 'hi', Parent_Id: { id: '5', module: { api_name: 'Deals', id: '1' } } },
+                links,
+            ),
+        ).toMatchObject({ input: { targets: [{ type: 'opportunity', id: 'Deals:5' }] } });
+        const onlyAccount: BiginLinkIndex = {
+            resolve: (object, id) => (object === 'Accounts' && lookupId(id) === '4' ? 'company-4' : null),
+        };
+        expect(
+            mapNote({ id: '10', Note_Content: 'hi', Parent_Id: { id: '4', name: 'Acme' } }, onlyAccount),
+        ).toMatchObject({
+            input: { targets: [{ type: 'company', id: 'company-4' }] },
+        });
+        expect(mapNote({ id: '11', Note_Content: 'hi', Parent_Id: { id: '99' } }, { resolve: () => null })).toEqual({
+            skip: 'its record is not in BylineCRM',
+        });
+        expect(referencesOf('Notes', { id: '10', Parent_Id: { id: '4' } })).toEqual([
+            { object: 'Notes', id: '10' },
+            { object: 'Contacts', id: '4' },
+            { object: 'Accounts', id: '4' },
+            { object: 'Deals', id: '4' },
+        ]);
     });
 
     it('fail loudly: a scheduled run that left records unwritten counts against the schedule, saying how many', () => {
