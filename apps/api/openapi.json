@@ -8884,7 +8884,7 @@
                         "name": "moveDealsTo",
                         "required": false,
                         "in": "query",
-                        "description": "An open stage of the same pipeline; required when the stage holds deals.",
+                        "description": "The stage of the same pipeline to move the deals to; required when the stage holds deals. An open stage (won or lost deals reopen there), or — when the deleted stage is won or lost — another stage of that same kind, where the deals stay closed with their won amount, lost reason and closed date. A closed stage of another kind is refused (422).",
                         "schema": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",

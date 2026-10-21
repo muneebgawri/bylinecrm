@@ -74,8 +74,9 @@ export class HistoryQueryDto extends createZodDto(
 /** `DELETE …/stages/:stageId?moveDealsTo=<id>`: where the stage's deals go before it does (P1-2b). */
 export class DeleteStageQueryDto extends createZodDto(
     z.object({
-        moveDealsTo: uuid
-            .optional()
-            .meta({ description: 'An open stage of the same pipeline; required when the stage holds deals.' }),
+        moveDealsTo: uuid.optional().meta({
+            description:
+                'The stage of the same pipeline to move the deals to; required when the stage holds deals. An open stage (won or lost deals reopen there), or — when the deleted stage is won or lost — another stage of that same kind, where the deals stay closed with their won amount, lost reason and closed date. A closed stage of another kind is refused (422).',
+        }),
     }),
 ) {}

@@ -38,6 +38,8 @@ interface Deal {
     id: string;
     stageId: string;
     closedAt: string | null;
+    lostReason?: string | null;
+    amount?: { amountMinor: number; currency: string } | null;
 }
 interface ErrorBody {
     code: string;
@@ -284,6 +286,104 @@ describe('FR-CRMS-9 deleting a stage by moving its deals', () => {
                 .expect(200)
         ).body as Deal;
         expect(reopened).toMatchObject({ stageId: target.id, closedAt: null });
+    });
+
+    async function addStage(p: Pipeline, name: string, kind: 'won' | 'lost'): Promise<Stage> {
+        return (
+            await as(admin)
+                .post(w(`/pipelines/${p.id}/stages`))
+                .send({ name, kind, probability: kind === 'won' ? 100 : 0, colour: kind === 'won' ? 'ok' : 'bad' })
+                .expect(201)
+        ).body as Stage;
+    }
+
+    it('keeps deals of a deleted won or lost stage closed when the target is of the same kind', async () => {
+        const p = await freshPipeline('Same kind');
+        const won = byName(p, 'Won');
+        const lost = byName(p, 'Lost');
+        const closedWon = await addStage(p, 'Closed Won', 'won');
+        const closedLost = await addStage(p, 'Closed Lost', 'lost');
+        const winner = await deal(p, 'Was won', byName(p, 'New').id);
+        const loser = await deal(p, 'Was lost', byName(p, 'New').id);
+        await as(admin)
+            .post(w(`/opportunities/${winner.id}/move`))
+            .send({ stageId: won.id, close: { wonAmount: { amountMinor: 12_300 } } })
+            .expect(201);
+        await as(admin)
+            .post(w(`/opportunities/${loser.id}/move`))
+            .send({ stageId: lost.id, close: { lostReason: 'budget' } })
+            .expect(201);
+        const before = await Promise.all(
+            [winner, loser].map(
+                async (d) =>
+                    (
+                        await as(admin)
+                            .get(w(`/opportunities/${d.id}`))
+                            .expect(200)
+                    ).body as Deal,
+            ),
+        );
+        await events.reset();
+
+        await as(admin)
+            .delete(w(`/pipelines/${p.id}/stages/${won.id}?moveDealsTo=${closedWon.id}`))
+            .expect(204);
+        await as(admin)
+            .delete(w(`/pipelines/${p.id}/stages/${lost.id}?moveDealsTo=${closedLost.id}`))
+            .expect(204);
+
+        const after = await Promise.all(
+            [winner, loser].map(
+                async (d) =>
+                    (
+                        await as(admin)
+                            .get(w(`/opportunities/${d.id}`))
+                            .expect(200)
+                    ).body as Deal,
+            ),
+        );
+        expect(after[0]).toMatchObject({
+            stageId: closedWon.id,
+            closedAt: before[0]!.closedAt,
+            amount: before[0]!.amount,
+        });
+        expect(after[0]!.amount?.amountMinor).toBe(12_300);
+        expect(after[1]).toMatchObject({ stageId: closedLost.id, closedAt: before[1]!.closedAt, lostReason: 'budget' });
+
+        // One plain move event each — no fresh deal.won / deal.lost, so nothing that reacts to a close runs again.
+        const recorded = await events.read();
+        expect(recorded.map((e) => e.type)).toEqual(['deal.stage_changed', 'deal.stage_changed']);
+        for (const e of recorded) {
+            expect((e as { stage?: { reason?: string } }).stage?.reason).toBe('stage_deleted');
+        }
+        const history = (
+            await as(admin)
+                .get(w(`/opportunities/${winner.id}/history`))
+                .expect(200)
+        ).body as {
+            toStageId: string;
+            reason: string;
+        }[];
+        expect(history[0]).toMatchObject({ toStageId: closedWon.id, reason: 'stage_deleted' });
+    });
+
+    it('refuses a closed target of the other kind with 422: a won deal never becomes lost by a delete', async () => {
+        const p = await freshPipeline('Other kind');
+        const won = byName(p, 'Won');
+        const winner = await deal(p, 'Stays won', byName(p, 'New').id);
+        await as(admin)
+            .post(w(`/opportunities/${winner.id}/move`))
+            .send({ stageId: won.id, close: {} })
+            .expect(201);
+        await as(admin)
+            .delete(w(`/pipelines/${p.id}/stages/${won.id}?moveDealsTo=${byName(p, 'Lost').id}`))
+            .expect(422);
+        const still = (
+            await as(admin)
+                .get(w(`/opportunities/${winner.id}`))
+                .expect(200)
+        ).body as Deal;
+        expect(still.stageId).toBe(won.id);
     });
 
     it('refuses a won or lost target, naming the field', async () => {

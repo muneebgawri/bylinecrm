@@ -21,7 +21,15 @@ export interface ClosePayload {
 }
 
 export type MoveOutcome =
-    { outcome: 'moved'; change: StageChange; toKind: StageKind } | { outcome: 'already' } | { outcome: 'backward' };
+    | {
+          outcome: 'moved';
+          change: StageChange;
+          toKind: StageKind;
+          /** Set when the deal stayed closed across the move (won to won, lost to lost): not a new close. */
+          fromKind?: StageKind;
+      }
+    | { outcome: 'already' }
+    | { outcome: 'backward' };
 
 /**
  * The one writer of a deal's stage. A new deal is placed through `place`; every later change —
@@ -114,29 +122,36 @@ export class StageMoveService {
     }
 
     /**
-     * Moves every deal in `from` — trashed ones included — into `to`, an open stage of the same
-     * pipeline, because `from` is being deleted (P1-2b). Set-based (one update, one batch of history
-     * rows) so a stage with thousands of deals moves inside one short transaction; every deal still
-     * gets its history row and, once the caller announces the returned moves, exactly one event.
-     * The target is open, so a deal that was won or lost is reopened (its close columns cleared) —
-     * the same rule `move` applies.
+     * Moves every deal in `from` — trashed ones included — into `to`, a stage of the same pipeline,
+     * because `from` is being deleted (P1-2b). Set-based (one update, one batch of history rows) so a
+     * stage with thousands of deals moves inside one short transaction; every deal still gets its
+     * history row and, once the caller announces the returned moves, exactly one event.
+     * An open target reopens a won or lost deal (its close columns cleared) — the same rule `move`
+     * applies. A target of the same closed kind as `from` (won to won, lost to lost) only changes the
+     * stage: closed date, won amount and lost reason stay, and the event is `deal.stage_changed`, so
+     * nothing that reacts to a fresh close runs again.
      */
     async moveAllInStage(
         tx: WorkspaceClient,
         workspaceId: string,
-        from: { id: string; pipelineId: string; name: string },
+        from: { id: string; pipelineId: string; kind: StageKind; name: string },
         to: { id: string; pipelineId: string; kind: StageKind; name: string },
         actor: EventActor,
     ): Promise<{ dealId: string; moved: Extract<MoveOutcome, { outcome: 'moved' }> }[]> {
-        if (to.pipelineId !== from.pipelineId || to.kind !== 'open') {
-            throw new Error('moveAllInStage moves into an open stage of the same pipeline only');
+        const stayClosed = to.kind !== 'open' && to.kind === from.kind;
+        if (to.pipelineId !== from.pipelineId || (to.kind !== 'open' && !stayClosed)) {
+            throw new Error(
+                'moveAllInStage moves into an open stage, or one of its own closed kind, of the same pipeline',
+            );
         }
         const deals = await tx.opportunity.findMany({ where: { stageId: from.id }, select: { id: true } });
         if (deals.length === 0) return [];
         const reason: StageHistoryReason = 'stage_deleted';
         await tx.opportunity.updateMany({
             where: { stageId: from.id },
-            data: { stageId: to.id, ...(await closeColumnsFor(tx, workspaceId, 'open', undefined)) },
+            data: stayClosed
+                ? { stageId: to.id }
+                : { stageId: to.id, ...(await closeColumnsFor(tx, workspaceId, 'open', undefined)) },
         });
         await tx.opportunityStageHistory.createMany({
             data: deals.map((deal) => ({
@@ -151,7 +166,12 @@ export class StageMoveService {
             })),
         });
         const change: StageChange = { pipelineId: from.pipelineId, fromStageId: from.id, toStageId: to.id, reason };
-        return deals.map((deal) => ({ dealId: deal.id, moved: { outcome: 'moved', toKind: 'open', change } }));
+        return deals.map((deal) => ({
+            dealId: deal.id,
+            moved: stayClosed
+                ? { outcome: 'moved', toKind: to.kind, fromKind: from.kind, change }
+                : { outcome: 'moved', toKind: 'open', change },
+        }));
     }
 
     /**
@@ -169,7 +189,7 @@ export class StageMoveService {
         moved: Extract<MoveOutcome, { outcome: 'moved' }>,
     ): Promise<void> {
         return this.events.record(tx, {
-            type: moveEventType(moved.toKind),
+            type: moveEventType(moved.toKind, moved.fromKind),
             object: 'opportunity',
             workspaceId,
             actor,

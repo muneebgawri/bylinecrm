@@ -35,6 +35,12 @@ describe('moveEventType', () => {
         // The source stage does not enter into it: a reopen lands in an open stage.
         expect(moveEventType('open')).toBe('deal.stage_changed');
     });
+
+    it('names a closed deal carried to another stage of its own kind deal.stage_changed: no new close', () => {
+        expect(moveEventType('won', 'won')).toBe('deal.stage_changed');
+        expect(moveEventType('lost', 'lost')).toBe('deal.stage_changed');
+        expect(moveEventType('won', 'open')).toBe('deal.won');
+    });
 });
 
 describe('daysInStage', () => {
