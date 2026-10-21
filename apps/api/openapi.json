@@ -7966,6 +7966,144 @@
                 "tags": ["companies"]
             }
         },
+        "/api/w/{workspaceId}/ownership/settings": {
+            "get": {
+                "operationId": "ownership_settings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnershipSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            },
+            "put": {
+                "operationId": "ownership_setSettings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnershipSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnershipSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
         "/api/w/{workspaceId}/ownership/conflicts": {
             "get": {
                 "operationId": "ownership_conflicts",
@@ -27482,6 +27620,18 @@
                 },
                 "required": ["domain"]
             },
+            "OwnershipSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "transferCoolingDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 90,
+                        "description": "Days after a transfer during which the record cannot go back to the member it left (not offered to them, not accepted by them). Managers and admins are exempt. 0 turns it off."
+                    }
+                },
+                "required": ["transferCoolingDays"]
+            },
             "ResolveConflictsDto": {
                 "type": "object",
                 "properties": {
@@ -30561,6 +30711,7 @@
                             "conflict",
                             "conflict.unique",
                             "conflict.company_owned",
+                            "conflict.transfer_cooling",
                             "gone",
                             "payload_too_large",
                             "unsupported_media_type",
@@ -33441,6 +33592,18 @@
                     }
                 },
                 "required": ["person", "company", "opportunity"]
+            },
+            "OwnershipSettings": {
+                "type": "object",
+                "properties": {
+                    "transferCoolingDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 90,
+                        "description": "Days after a transfer during which the record cannot go back to the member it left (not offered to them, not accepted by them). Managers and admins are exempt. 0 turns it off."
+                    }
+                },
+                "required": ["transferCoolingDays"]
             },
             "OwnershipResolution": {
                 "type": "object",

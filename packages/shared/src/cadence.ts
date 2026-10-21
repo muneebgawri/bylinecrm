@@ -9,9 +9,6 @@ import type { StageKind } from './pipelines.js';
 /** The reason on a transfer the rotation forced. */
 export const TRANSFER_REASON_CADENCE_ROTATION = 'cadence_rotation';
 
-/** A member who handed a lead on is not dealt it back for this long (the transfer cooling period, #253). */
-export const ROTATION_COOLING_DAYS = 14;
-
 /** A planned follow-up defers a deal's due date, at most this many days past its last touch. */
 export const CADENCE_FOLLOW_UP_MAX_DAYS = 14;
 

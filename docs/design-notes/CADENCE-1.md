@@ -49,8 +49,8 @@ and shows what would warn and when it would rotate, with the projected receiver.
   `require` one, or `ignore`), an optional cap on open leads, and per-member weights (1–5, default 1).
 - **Picking:** eligible members in a stable order, each repeated by weight; a per-workspace pointer
   (`rotation_settings.cursor`) read under `SELECT … FOR UPDATE`, so concurrent intakes and rotations deal one after
-  the other. The previous owner is never the target, nor (the 14-day cooling of #253) a member who handed this lead on
-  in the last 14 days. No eligible member: the lapse waits and is retried next hour.
+  the other. The previous owner is never the target, nor a member it was transferred away from within the workspace's
+  transfer cooling period (Settings → Ownership, #253; 14 days by default). No eligible member: the lapse waits and is retried next hour.
 - **Intake:** a new unowned lead — BylineAI inbound (when its own round-robin list is empty), a person or deal saved
   without an owner by an API key or a job (web and inbound routes, imports) at a company nobody owns — goes to the
   next eligible member, when intake is on.

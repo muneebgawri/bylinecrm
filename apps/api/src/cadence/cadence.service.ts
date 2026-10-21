@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-    ROTATION_COOLING_DAYS,
     TRANSFER_REASON_CADENCE_ROTATION,
     type RecordObject,
     type RotationPreviewItem,
@@ -11,6 +10,7 @@ import { PrismaService } from '../infra/prisma.service';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
+import { coolingDays } from '../transfers/transfer-cooling';
 import { TransfersService } from '../transfers/transfers.service';
 import { eligible, pick, round } from './rotation-picker';
 import { RotationService, type RotationRow } from './rotation.service';
@@ -278,12 +278,17 @@ export class CadenceService {
         });
     }
 
-    /** Never the owner it lapsed under, nor (the cooling period) anyone who handed this lead on lately. */
+    /**
+     * Never the owner it lapsed under, nor anyone it was transferred away from within the workspace's transfer
+     * cooling period (Settings → Ownership, #253): the rotation does not hand a lead back to whom it just left.
+     */
     private async excluded(tx: WorkspaceClient, deal: Lapsed, now: Date): Promise<Set<string>> {
+        const days = await coolingDays(tx);
+        if (days <= 0) return new Set([deal.ownerId]);
         const handed = await tx.$queryRaw<{ from_member_id: string }[]>`
             SELECT DISTINCT "from_member_id" FROM "ownership_transfers"
             WHERE "from_member_id" IS NOT NULL AND "status" IN ('accepted', 'forced')
-              AND "decided_at" >= ${new Date(now.getTime() - ROTATION_COOLING_DAYS * DAY_MS)}
+              AND "decided_at" > ${new Date(now.getTime() - days * DAY_MS)}
               AND ("moved" @> jsonb_build_array(jsonb_build_object('type', 'opportunity', 'id', ${deal.id}::text))
                    OR ("record_id" = ${deal.id}::uuid AND "object" = 'opportunity'))`;
         return new Set([deal.ownerId, ...handed.map((h) => h.from_member_id)]);
