@@ -1009,4 +1009,117 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect(await owner.biginStageMapping.count({ where: { biginStage: 'Injected' } })).toBe(0);
         });
     });
+
+    describe('owners and blanks filled from Bigin', () => {
+        it('an empty owner gets Bigin’s (recorded as a hand-over), an owner is never changed; a blank local first name is filled', async () => {
+            const fill = await as(admin)
+                .post(w('/companies'))
+                .send({ name: 'Fill Co', domain: `fill-${stamp}.example` });
+            const kept = await as(admin)
+                .post(w('/companies'))
+                .send({ name: 'Kept Co', domain: `kept-${stamp}.example` });
+            const glusman = await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'J',
+                    nameLast: 'Glusman',
+                    emails: { primary: `glusman-${stamp}@x.example`, additional: [] },
+                });
+            expect([fill.status, kept.status, glusman.status], JSON.stringify(glusman.body)).toEqual([201, 201, 201]);
+            const fillId = (fill.body as { id: string }).id;
+            const keptId = (kept.body as { id: string }).id;
+            const glusmanId = (glusman.body as { id: string }).id;
+            // As the Twenty import left them: no owner.
+            await owner.company.update({ where: { id: fillId }, data: { ownerId: null } });
+            await owner.person.update({ where: { id: glusmanId }, data: { ownerId: null } });
+
+            const [fillAccount, keptAccount] = bigin.seed('Accounts', [
+                { Account_Name: 'Fill Co', Website: `https://fill-${stamp}.example`, Owner: ownerOf(memberEmail) },
+                { Account_Name: 'Kept Co', Website: `https://kept-${stamp}.example`, Owner: ownerOf(memberEmail) },
+            ]);
+            const [contact] = bigin.seed('Contacts', [
+                {
+                    First_Name: 'Jeffrey',
+                    Last_Name: 'Glusman',
+                    Email: `glusman-${stamp}@x.example`,
+                    Owner: ownerOf(memberEmail),
+                },
+            ]);
+            const [byContact, unowned] = bigin.seed('Deals', [
+                // Bigin's owner is no member here: the deal is its point of contact's.
+                {
+                    Deal_Name: 'Jeffrey Glusman',
+                    Stage: 'New',
+                    Contact_Name: { id: contact!.id },
+                    Owner: ownerOf('nobody@else.example'),
+                },
+                { Deal_Name: 'Nobody’s deal', Stage: 'New', Owner: ownerOf('nobody@else.example') },
+            ]);
+            // Edited here after Bigin's change, leaving the first name empty: a blank holds nothing back.
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const blanked = await as(admin)
+                .patch(w(`/people/${glusmanId}`))
+                .send({ nameFirst: '' });
+            expect(blanked.status, JSON.stringify(blanked.body)).toBe(200);
+
+            const run = await runToEnd('changes');
+            expect(run.status).toBe('succeeded');
+            expect((await linkOf('Accounts', fillAccount!.id))!.localId).toBe(fillId);
+            expect((await linkOf('Accounts', keptAccount!.id))!.localId).toBe(keptId);
+            expect((await owner.company.findUniqueOrThrow({ where: { id: fillId } })).ownerId).toBe(memberMemberId);
+            expect((await owner.company.findUniqueOrThrow({ where: { id: keptId } })).ownerId).toBe(adminMemberId);
+            const person = await owner.person.findUniqueOrThrow({ where: { id: glusmanId } });
+            expect(person).toMatchObject({ nameFirst: 'Jeffrey', ownerId: memberMemberId });
+            expect(reportOf(run, 'Accounts').ownersFilled).toBe(1);
+            expect(reportOf(run, 'Contacts').ownersFilled).toBe(1);
+
+            const transfer = await owner.ownershipTransfer.findFirstOrThrow({ where: { recordId: fillId } });
+            expect(transfer).toMatchObject({
+                object: 'company',
+                fromMemberId: null,
+                toMemberId: memberMemberId,
+                status: 'forced',
+                reason: 'import_fill',
+            });
+            expect(await owner.notification.count({ where: { transferId: transfer.id } })).toBe(0);
+            // Kept here (timeline, history), never sent to a webhook as a transfer.
+            const announced = await owner.outboxEvent.findFirstOrThrow({
+                where: {
+                    workspaceId: workspace,
+                    type: 'transfer.completed',
+                    payload: { path: ['recordId'], equals: transfer.id },
+                },
+            });
+            expect((announced.payload as { internal?: boolean }).internal).toBe(true);
+            expect(await owner.webhookDelivery.count({ where: { eventId: announced.id } })).toBe(0);
+            expect(await owner.ownershipTransfer.count({ where: { recordId: keptId } })).toBe(0);
+
+            const dealOwner = async (externalId: string) =>
+                (
+                    await owner.opportunity.findUniqueOrThrow({
+                        where: { id: (await linkOf('Deals', externalId))!.localId },
+                    })
+                ).ownerId;
+            expect(await dealOwner(byContact!.id)).toBe(memberMemberId);
+            expect(await dealOwner(unowned!.id)).toBeNull();
+
+            // A point of contact added in Bigin later: the unowned deal is filled from them.
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            bigin.update('Deals', unowned!.id, { Contact_Name: { id: contact!.id } });
+            const again = await runToEnd('changes');
+            expect(again.status).toBe('succeeded');
+            expect(await dealOwner(unowned!.id)).toBe(memberMemberId);
+            expect(reportOf(again, 'Deals').ownersFilled).toBe(1);
+            const dealId = (await linkOf('Deals', unowned!.id))!.localId;
+            expect(await owner.ownershipTransfer.count({ where: { recordId: dealId, reason: 'import_fill' } })).toBe(1);
+
+            // The fill is the import's: no local edit, so Bigin's next change to the deal applies.
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            bigin.update('Deals', unowned!.id, { Deal_Name: 'Somebody’s deal' });
+            const third = await runToEnd('changes');
+            expect(reportOf(third, 'Deals').kept).toEqual([]);
+            expect((await owner.opportunity.findUniqueOrThrow({ where: { id: dealId } })).name).toBe('Somebody’s deal');
+            expect(await dealOwner(unowned!.id)).toBe(memberMemberId);
+        });
+    });
 });

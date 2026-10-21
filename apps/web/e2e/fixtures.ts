@@ -1682,6 +1682,7 @@ export const biginImportRun: BiginImportRunView = {
             unknownStages:
                 object === 'Deals' ? [{ externalId: '5725767000000412001', stage: 'Pending Press Release' }] : [],
             reused: object === 'Contacts' ? 1 : 0,
+            ownersFilled: 0,
         };
     }),
     error: null,

@@ -63,6 +63,10 @@ export const biginImportObjectReport = named(
             description:
                 'Contacts edited in Bigin to hold a different person: the earlier person kept, a new one made, the link moved.',
         }),
+        ownersFilled: z.number().int().meta({
+            description:
+                "Matched records with no owner given Bigin's owner (a deal without one: its point of contact's). Existing owners are never changed.",
+        }),
     }),
 );
 
