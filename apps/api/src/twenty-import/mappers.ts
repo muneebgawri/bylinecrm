@@ -239,18 +239,16 @@ export function mapTask(
     };
 }
 
-export type MappedLeadLookup =
-    | { action: 'exclude'; address: string; accountManagerName: string | null }
-    | { action: 'release'; address: string }
-    | Skip;
+/**
+ * Why every lead lookup is skipped. Twenty's lookup is rebuilt hourly from its contacts' owners (an AM's "is this
+ * address someone's already?"), not a list of clients: the ownership it shows comes here with the people, and
+ * anti-poaching (GUARD-2) acts on that. Clients are excluded from NewswireOS's own accounts instead.
+ */
+export const LEAD_LOOKUP_SKIP = 'Twenty contact ownership, imported with the people; not a client list';
 
-/** FR-CRMS-10: a lead lookup says an account manager works an address — or no longer does. */
-export function mapLeadLookup(record: TwentyRecord): MappedLeadLookup {
-    const address = emailOf(record.email);
-    if (!address) return { skip: 'no address' };
-    const status = text(record.status)?.toLowerCase();
-    if (status === 'assigned') return { action: 'exclude', address, accountManagerName: text(record.assignedToName) };
-    return { action: 'release', address };
+/** FR-CRMS-10, revised: a lead lookup no longer excludes its address (see `LEAD_LOOKUP_SKIP`). */
+export function mapLeadLookup(_record: TwentyRecord): Skip {
+    return { skip: LEAD_LOOKUP_SKIP };
 }
 
 const LEAD_VIEW_FIELDS = new Set([

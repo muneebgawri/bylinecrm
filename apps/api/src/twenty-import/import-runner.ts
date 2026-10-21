@@ -4,7 +4,6 @@ import {
     TWENTY_IMPORT_ERROR_MESSAGE_MAX,
     type TwentyImportMode,
     TWENTY_IMPORT_OBJECTS,
-    TWENTY_IMPORT_SOURCE,
     TWENTY_LIST_VIEW_PREFIX,
     TWENTY_LISTS_FIELD_KEY,
     emptyObjectReport,
@@ -36,7 +35,6 @@ import { OpportunitiesService } from '../records/opportunities.service';
 import { PeopleService, type PersonInput } from '../records/people.service';
 import { defaultCurrency, stored } from '../records/references';
 import { TasksService } from '../records/tasks.service';
-import { ExclusionsService } from '../sequences/exclusions.service';
 import { TemplatesService } from '../templates/templates.service';
 import { ViewsService } from '../views/views.service';
 import { customValuesFor, definitionsNeeded, type InferredCustom } from './custom-fields-sync';
@@ -53,6 +51,7 @@ import {
 import {
     isSkip,
     mapCompany,
+    LEAD_LOOKUP_SKIP,
     mapLeadLookup,
     mapLeadView,
     mapMessageCampaign,
@@ -67,7 +66,6 @@ import {
     type MappedOpportunity,
 } from './mappers';
 import { fieldsEditedAfter } from '../timeline/timeline.service';
-import { TWENTY_RELEASE_NOTE } from './twenty-import.constants';
 import { readConnection } from './twenty-import.settings';
 import { withoutLocalEdits } from './twenty-sync';
 import { TwentySyncService } from './twenty-sync.service';
@@ -164,7 +162,7 @@ function referencesOf(object: TwentyImportObject, record: TwentyRecord): LinkRef
  * records, so a run that dies resumes from the page after the last one committed and never
  * counts a record twice. Every object is read page by page from Twenty — outside any transaction
  * — and each page is written through the services the routes use (people, companies, deals,
- * notes, tasks, exclusions, views, templates), as the import (`actor: { kind: 'import' }`), so an
+ * notes, tasks, views, templates), as the import (`actor: { kind: 'import' }`), so an
  * imported record is validated, placed in its pipeline and announced through the outbox like any
  * other. A record maps by its Twenty id (`twenty_import_links`); one already mapped is updated
  * where it differs and otherwise left alone; one that matches an existing record by its unique
@@ -189,7 +187,6 @@ export class TwentyImportRunner {
         private readonly notes: NotesService,
         private readonly tasks: TasksService,
         private readonly moves: StageMoveService,
-        private readonly exclusions: ExclusionsService,
         private readonly views: ViewsService,
         private readonly templates: TemplatesService,
         private readonly sync: TwentySyncService,
@@ -483,10 +480,8 @@ export class TwentyImportRunner {
                 return withCustom(mapNote(record, links));
             case 'tasks':
                 return withCustom(mapTask(record, links));
-            case 'leadLookups': {
-                const lookup = mapLeadLookup(record);
-                return 'skip' in lookup ? { skip: lookup.skip, custom: {} } : { custom: {}, input: lookup };
-            }
+            case 'leadLookups':
+                return { skip: mapLeadLookup(record).skip, custom: {} };
             case 'leadViews': {
                 // The person Twenty names and the lead's address ride beside the input: the write finds who it is.
                 const lead = mapLeadView(record, links);
@@ -729,48 +724,8 @@ export class TwentyImportRunner {
                 await link('task', created.row.id);
                 return 'created';
             }
-            case 'leadLookups': {
-                const lookup = mapped.input as Exclude<ReturnType<typeof mapLeadLookup>, { skip: string }>;
-                if (lookup.action === 'exclude') {
-                    const live = await tx.outreachExclusion.findFirst({
-                        where: { address: lookup.address, removedAt: null },
-                    });
-                    if (live) {
-                        await link('exclusion', live.id);
-                        if (
-                            live.source === TWENTY_IMPORT_SOURCE &&
-                            live.accountManagerName !== lookup.accountManagerName
-                        ) {
-                            await tx.outreachExclusion.update({
-                                where: { id: live.id },
-                                data: { accountManagerName: lookup.accountManagerName, externalRef: record.id },
-                            });
-                            return 'updated';
-                        }
-                        return 'unchanged';
-                    }
-                    const added = await this.exclusions.addIn(tx, workspaceId, {
-                        address: lookup.address,
-                        reason: 'account_managed',
-                        accountManagerName: lookup.accountManagerName,
-                        source: TWENTY_IMPORT_SOURCE,
-                        externalRef: record.id,
-                    });
-                    await link('exclusion', added.id);
-                    return 'created';
-                }
-                const ours = await tx.outreachExclusion.findFirst({
-                    where: {
-                        removedAt: null,
-                        source: TWENTY_IMPORT_SOURCE,
-                        OR: [{ externalRef: record.id }, { address: lookup.address }],
-                    },
-                });
-                if (!ours) return skip(mapped, 'not excluded here');
-                await this.exclusions.removeIn(tx, ours.id, TWENTY_RELEASE_NOTE);
-                await link('exclusion', ours.id);
-                return 'updated';
-            }
+            case 'leadLookups':
+                return skip(mapped, LEAD_LOOKUP_SKIP);
             case 'messageLists': {
                 const { name } = mapped.input as { name: string };
                 const viewName = `${TWENTY_LIST_VIEW_PREFIX}${name}`;

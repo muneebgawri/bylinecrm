@@ -98,7 +98,7 @@ const money = (amountMicros: number | null, currencyCode: string | null) => ({ a
  * (the key sealed, never shown again), the counts before a run, a run that maps every object by its
  * Twenty id into the records BylineCRM has — merging into existing people and companies by email and
  * domain, closing imported deals through the one stage writer, attaching notes and tasks, turning
- * lead lookups into FR-CRMS-10 exclusions — a repeated run that changes nothing, a `changes` run that
+ * lead lookups skipped (Twenty ownership, not clients) — a repeated run that changes nothing, a `changes` run that
  * reads only what moved, a cancel, and one workspace never seeing another's import.
  */
 describe('P4-4 (doc 48 §11) Twenty importer', () => {
@@ -550,7 +550,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             expect(counts(by.opportunities!)).toEqual({ ...zero, read: 3, created: 3 });
             expect(counts(by.notes!)).toEqual({ ...zero, read: 2, created: 1, skipped: 1 });
             expect(counts(by.tasks!)).toEqual({ ...zero, read: 1, created: 1 });
-            expect(counts(by.leadLookups!)).toEqual({ ...zero, read: 2, created: 1, skipped: 1 });
+            expect(counts(by.leadLookups!)).toEqual({ ...zero, read: 2, skipped: 2 });
             expect(counts(by.leadViews!)).toEqual({ ...zero, read: 2, created: 1, updated: 1 });
             expect(counts(by.messageLists!)).toEqual({ ...zero, read: 1, created: 1 });
             expect(counts(by.messageListMembers!)).toEqual({ ...zero, read: 2, updated: 1, skipped: 1 });
@@ -721,25 +721,10 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             ]);
         });
 
-        it('FR-CRMS-10: an assigned lead lookup is an outreach exclusion naming its account manager, from Twenty', async () => {
+        it('FR-CRMS-10, revised: an assigned lead lookup excludes nothing (it is ownership, not a client)', async () => {
             const res = await as(admin).get(w('/outreach/exclusions'));
             expect(res.status).toBe(200);
-            const rows = res.body as {
-                address: string | null;
-                reason: string;
-                accountManagerName: string | null;
-                source: string;
-                externalRef: string | null;
-            }[];
-            expect(rows).toEqual([
-                expect.objectContaining({
-                    address: `raphael-${stamp}@comexposium.example`,
-                    reason: 'account_managed',
-                    accountManagerName: 'Tom Lane',
-                    source: TWENTY_IMPORT_SOURCE,
-                    externalRef: ids.l1,
-                }),
-            ]);
+            expect(res.body).toEqual([]);
         });
 
         it('lead views: a lead with a Twenty person adds its fields to them; one without becomes a person', async () => {
@@ -815,7 +800,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
                 opportunities: 3,
                 notes: 1,
                 tasks: 1,
-                leadLookups: 1,
+                leadLookups: 0,
                 leadViews: 2,
                 messageLists: 1,
                 messageCampaigns: 1,
@@ -836,7 +821,7 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             }
             expect(counts(reportOf(run, 'people'))).toEqual({ ...zero, read: 3, unchanged: 3 });
             expect(counts(reportOf(run, 'opportunities'))).toEqual({ ...zero, read: 3, unchanged: 3 });
-            expect(counts(reportOf(run, 'leadLookups'))).toEqual({ ...zero, read: 2, unchanged: 1, skipped: 1 });
+            expect(counts(reportOf(run, 'leadLookups'))).toEqual({ ...zero, read: 2, skipped: 2 });
             expect(await owner.person.count({ where: { workspaceId: workspace } })).toBe(before);
             expect(await owner.opportunityStageHistory.count({ where: { workspaceId: workspace } })).toBe(5);
         });
@@ -854,13 +839,13 @@ describe('P4-4 (doc 48 §11) Twenty importer', () => {
             expect(run.since).toBe(lastStart);
             expect(counts(reportOf(run, 'people'))).toEqual({ ...zero, read: 1, updated: 1 });
             expect(counts(reportOf(run, 'companies'))).toEqual(zero);
-            expect(counts(reportOf(run, 'leadLookups'))).toEqual({ ...zero, read: 1, updated: 1 });
+            expect(counts(reportOf(run, 'leadLookups'))).toEqual({ ...zero, read: 1, skipped: 1 });
             expect(counts(reportOf(run, 'opportunities'))).toEqual({ ...zero, read: 1, updated: 1 });
 
             const matthew = (await people()).find((p) => p.emails.primary === 'matthew.croteau@roberthalf.com')!;
             expect(matthew.jobTitle).toBe('CMO');
             const exclusions = (await as(admin).get(w('/outreach/exclusions'))).body as unknown[];
-            expect(exclusions, 'the released address is no longer excluded').toEqual([]);
+            expect(exclusions, 'a lead lookup never excludes an address').toEqual([]);
             const open = (await deals()).find((d) => d.name === 'Open deal')!;
             expect(open.stage).toMatchObject({ name: 'Proposal', kind: 'open' });
         });
