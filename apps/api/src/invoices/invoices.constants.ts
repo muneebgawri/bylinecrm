@@ -23,6 +23,8 @@ export const NEWSWIREOS_HOOK_PATH = '/api/hooks/newswireos';
  * NewswireOS minted (`whsec_…`, pasted into Byline). It also sends `x-webhook-id` and `x-webhook-event`.
  */
 export const NEWSWIREOS_SIGNATURE_HEADER = 'x-webhook-signature';
+/** The delivery's id, the same on every retry: what a timeline event (PNW-766) is de-duplicated on. */
+export const NEWSWIREOS_WEBHOOK_ID_HEADER = 'x-webhook-id';
 export const NEWSWIREOS_SECRET_MIN = 1;
 export const NEWSWIREOS_SECRET_MAX = 500;
 /** A delivery's `id` is remembered this long, so a redelivery is acknowledged and not applied again. */
@@ -102,3 +104,33 @@ export const OWNERSHIP_PUSH_REASONS = {
     /** The push was turned off, or NewswireOS unlinked, before the delivery went. */
     pushOff: 'PUSH_OFF',
 } as const;
+
+/**
+ * PNW-766 (doc 11 §8s): won deals pushed to NewswireOS (token scope `crm:client_write`), which makes their contacts
+ * clients. The same delivery rules as the ownership push: one job per delivery, eight tries with exponential backoff
+ * from 10 s for no answer, a 5xx or a 429; any other 4xx final at once; a 404 `not_ready`. The CRM's own reason codes
+ * are `OWNERSHIP_PUSH_REASONS`'.
+ */
+export const DEAL_WON_PUSH_QUEUE = 'newswireos-deal-won-push';
+export const DEAL_WON_PUSH_JOB = 'push';
+export const NEWSWIREOS_DEAL_WON_PATH = '/api/v1/crm/deal-won';
+export const NEWSWIREOS_DEAL_WON_SCOPE = 'crm:client_write';
+
+/**
+ * PNW-766: the NewswireOS events the hook puts on the timeline (FR-CRM-6c), in NewswireOS's own names. Each becomes
+ * an `external.newswireos_<event>` entry, source `newswireos`, keyed on the delivery's id.
+ */
+export const NEWSWIREOS_TIMELINE_EVENTS = [
+    'client.created',
+    'order.paid',
+    'invoice.paid',
+    'distribution.completed',
+    'am.assigned',
+] as const;
+export type NewswireosTimelineEventType = (typeof NEWSWIREOS_TIMELINE_EVENTS)[number];
+export const NEWSWIREOS_TIMELINE_SOURCE = 'newswireos';
+/** The source of an exclusion NewswireOS's clients make (the client sync's and the hook's), and its note. */
+export const NEWSWIREOS_CLIENT_SOURCE = 'newswireos';
+export const NEWSWIREOS_CLIENT_NOTE = 'NewswireOS client';
+/** NewswireOS's `am.assigned` title: `Account manager: <name or email>`. */
+export const NEWSWIREOS_AM_TITLE_PREFIX = 'Account manager:';

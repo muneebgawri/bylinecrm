@@ -146,6 +146,26 @@ describe('wordsFor', () => {
         expect(words.detail?.[0]?.label).toMatch(/1,200/);
     });
 
+    it('names NewswireOS’s hook entries by the product, with their title (PNW-766)', () => {
+        const words = wordsFor(
+            entry({
+                kind: 'external.newswireos_invoice_paid',
+                actor: { kind: 'external', id: 'newswireos' },
+                properties: {
+                    title: 'Invoice INV-202610-000074 paid',
+                    amount: { amountMinor: 49900, currency: 'USD' },
+                },
+            }),
+            names,
+        );
+        expect(words).toMatchObject({
+            actor: 'NewswireOS',
+            action: 'Invoice INV-202610-000074 paid',
+            family: 'external',
+        });
+        expect(words.detail?.[0]?.label).toMatch(/499/);
+    });
+
     it('reads a rule-made stage move with both stages', () => {
         const words = wordsFor(
             entry({

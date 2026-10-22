@@ -15,6 +15,7 @@ import {
     newswireosHookRateKey,
 } from './invoices.constants';
 import { InvoicesService, type PaymentStateChange } from './invoices.service';
+import { NewswireosTimelineService, parseTimeline } from './newswireos-timeline.service';
 import type { NewswireosHookResult } from './responses';
 
 const TYPES: readonly PaymentStateChange['type'][] = ['payment.refunded', 'payment.disputed', 'payment.verified'];
@@ -23,7 +24,9 @@ const TYPES: readonly PaymentStateChange['type'][] = ['payment.refunded', 'payme
  * Takes a NewswireOS payment-state delivery (INV-1): a refund or chargeback takes back the invoices on that
  * payment (`invoice.invalidated`); finance verifying one in NewswireOS settles an invoice waiting for it. The URL's
  * token names the workspace (read through the owner client, as Slotline's hook does); the raw body must be signed
- * with the workspace's secret, checked in constant time, or nothing is read. Replays change nothing.
+ * with the workspace's secret, checked in constant time, or nothing is read. Replays change nothing. The same hook
+ * takes NewswireOS's client activity for the timeline (PNW-766, `NewswireosTimelineService`); anything else is
+ * acknowledged and dropped.
  */
 @Injectable()
 export class NewswireosHookService {
@@ -35,6 +38,7 @@ export class NewswireosHookService {
         private readonly invoices: InvoicesService,
         private readonly limiter: RateLimiter,
         private readonly redis: RedisService,
+        private readonly timeline: NewswireosTimelineService,
     ) {}
 
     async receive(
@@ -43,6 +47,7 @@ export class NewswireosHookService {
         signature: string | undefined,
         body: unknown,
         clientIp: string,
+        webhookId?: string,
     ): Promise<NewswireosHookResult> {
         const settings = await this.ownerPrisma.newswireosSettings.findUnique({
             where: { hookTokenHash: hashToken(token) },
@@ -61,6 +66,13 @@ export class NewswireosHookService {
             await this.record(workspaceId, 'bad_signature');
             await this.refused(clientIp);
             throw new ApiException(401, 'unauthorized', 'the delivery is not signed with this hook’s secret');
+        }
+        // PNW-766: client activity for the timeline, on the same hook and secret; de-duplicated on its stored row.
+        const timeline = parseTimeline(body, webhookId);
+        if (timeline !== null) {
+            const result = timeline === 'ignored' ? timeline : await this.timeline.apply(workspaceId, timeline);
+            await this.record(workspaceId, result);
+            return { result };
         }
         const delivery = parse(body);
         if (delivery === 'ignored') {

@@ -61,6 +61,7 @@ import type {
     SlotlineSettingsView,
     DealInvoiceView,
     NewswireosSettingsView,
+    NewswireosDealWonDeliveryView,
     NewswireosOwnershipDeliveryView,
     BylineSettingsView,
     Smtp2GoMailboxView,
@@ -1965,6 +1966,7 @@ export const newswireosSettings: NewswireosSettingsView = {
     lastDeliveryAt: at(3),
     lastDeliveryResult: 'applied',
     pushOwnership: true,
+    pushDealWon: true,
 };
 
 /** PNW-765: ownership changes pushed to NewswireOS: one matched, one waiting for NewswireOS's route. */
@@ -2009,6 +2011,50 @@ export const newswireosOwnershipDeliveries: NewswireosOwnershipDeliveryView[] = 
         lastError: 'NewswireOS answered 404',
         lastAttemptAt: at(5),
         createdAt: at(5),
+    },
+];
+
+/** PNW-766: won deals pushed to NewswireOS: one made a client, one a colleague of an existing one. */
+export const newswireosDealWonDeliveries: NewswireosDealWonDeliveryView[] = [
+    {
+        id: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e11',
+        eventId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e12',
+        opportunityId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e13',
+        personId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e14',
+        companyId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e15',
+        dealName: 'Northwind launch',
+        contactEmail: 'dana@northwind.example',
+        ownerEmail: 'maya@example.com',
+        status: 'delivered',
+        attempts: 1,
+        customerId: '1042',
+        parentCustomerId: null,
+        reasonCode: 'CREATED',
+        amReasonCode: 'REASSIGNED',
+        httpStatus: 200,
+        lastError: null,
+        lastAttemptAt: at(2),
+        createdAt: at(2),
+    },
+    {
+        id: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e16',
+        eventId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e17',
+        opportunityId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e18',
+        personId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e19',
+        companyId: '7e0c5a3e-5c1b-4e7a-9d8f-0a1b2c3d4e15',
+        dealName: 'Northwind Q4 package',
+        contactEmail: 'lee@northwind.example',
+        ownerEmail: 'maya@example.com',
+        status: 'delivered',
+        attempts: 1,
+        customerId: '1080',
+        parentCustomerId: '1042',
+        reasonCode: 'COLLEAGUE',
+        amReasonCode: 'UNCHANGED',
+        httpStatus: 200,
+        lastError: null,
+        lastAttemptAt: at(4),
+        createdAt: at(4),
     },
 ];
 

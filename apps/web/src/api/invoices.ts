@@ -4,6 +4,7 @@ import { workspacePath } from './endpoints';
 import type {
     CreateInvoiceInput,
     DealInvoiceView,
+    NewswireosDealWonDeliveryView,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
     NewswireosSettingsView,
@@ -20,6 +21,8 @@ const keys = {
     newswireos: (workspaceId: string) => ['w', workspaceId, 'integrations', 'newswireos'] as const,
     ownershipDeliveries: (workspaceId: string) =>
         ['w', workspaceId, 'integrations', 'newswireos', 'ownership-deliveries'] as const,
+    dealWonDeliveries: (workspaceId: string) =>
+        ['w', workspaceId, 'integrations', 'newswireos', 'deal-won-deliveries'] as const,
 };
 
 const base = (workspaceId: string, dealId: string) => workspacePath(workspaceId, `/opportunities/${dealId}/invoices`);
@@ -97,6 +100,16 @@ const newswireos = {
             'POST',
             workspacePath(workspaceId, '/integrations/newswireos/ownership-push/test'),
         ),
+    setDealWonPush: (workspaceId: string, enabled: boolean) =>
+        request<NewswireosSettingsView>('PUT', workspacePath(workspaceId, '/integrations/newswireos/deal-won-push'), {
+            body: { enabled },
+        }),
+    dealWonDeliveries: (workspaceId: string, signal?: AbortSignal) =>
+        request<NewswireosDealWonDeliveryView[]>(
+            'GET',
+            workspacePath(workspaceId, '/integrations/newswireos/deal-won-push/deliveries'),
+            { signal },
+        ),
 };
 
 export const useNewswireosSettings = (workspaceId: string) =>
@@ -136,3 +149,16 @@ export const useOwnershipDeliveries = (workspaceId: string) =>
 /** PNW-765: the dry run. Nothing is sent; the body a push would send comes back. */
 export const useTestOwnershipPush = (workspaceId: string) =>
     useMutation({ mutationFn: () => newswireos.testOwnershipPush(workspaceId) });
+
+/** PNW-766: push won deals to NewswireOS, which makes their contacts clients, or stop. */
+export const useSetDealWonPush = (workspaceId: string) =>
+    useNewswireosWrite(workspaceId, (enabled: boolean) => newswireos.setDealWonPush(workspaceId, enabled));
+
+/** PNW-766: the latest won deals pushed to NewswireOS; looked at again while one is still going. */
+export const useDealWonDeliveries = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.dealWonDeliveries(workspaceId),
+        queryFn: ({ signal }) => newswireos.dealWonDeliveries(workspaceId, signal),
+        refetchInterval: (q) =>
+            q.state.data?.some((d) => d.status === 'pending' || d.status === 'retrying') ? 5000 : false,
+    });
