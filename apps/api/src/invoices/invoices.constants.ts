@@ -134,5 +134,3 @@ export const NEWSWIREOS_TIMELINE_SOURCE = 'newswireos';
 /** The source of an exclusion NewswireOS's clients make (the client sync's and the hook's), and its note. */
 export const NEWSWIREOS_CLIENT_SOURCE = 'newswireos';
 export const NEWSWIREOS_CLIENT_NOTE = 'NewswireOS client';
-/** NewswireOS's `am.assigned` title: `Account manager: <name or email>`. */
-export const NEWSWIREOS_AM_TITLE_PREFIX = 'Account manager:';

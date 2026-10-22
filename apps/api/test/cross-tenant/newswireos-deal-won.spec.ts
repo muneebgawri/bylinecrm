@@ -586,6 +586,7 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
                 kind: 'am.assigned',
                 title: 'Account manager: Mia Lopez',
                 url: 'https://x.test/',
+                account_manager: { id: 'am_1', name: 'Mia Lopez', email: 'mia@newswireos.test' },
                 client: client({ email: fresh }),
             }).expect(200);
             await hook('client.created', {
@@ -618,6 +619,7 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
                 kind: 'am.assigned',
                 title: 'Account manager: Ola',
                 url: 'https://x.test/',
+                account_manager: { id: 'am_2', name: 'Ola', email: 'ola@newswireos.test' },
                 client: client({ email: looked }),
             }).expect(200);
             await hook('client.created', {
