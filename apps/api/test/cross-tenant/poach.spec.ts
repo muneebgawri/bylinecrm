@@ -273,7 +273,7 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         expect(await detector.judge(workspace, (await synced({ to: [`colleague-${stamp}@example.com`] })).id)).toBe(0);
     });
 
-    it('flags a won-deal customer on the exclusions; the third lead in 7 days is high and emails at once', async () => {
+    it('flags a won-deal customer on the exclusions; the third lead in 7 days is high, and no one is emailed', async () => {
         const before = mailTo(emails.mia, 'guardrail_alert').length;
         expect(
             await detector.judge(workspace, (await synced({ to: [`cy@cust-${stamp}.test`], subject: 'Renewal' })).id),
@@ -282,10 +282,7 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         expect(event).toMatchObject({ address: `cy@cust-${stamp}.test`, owner: null, severity: 'high' });
         expect(event!.message).toContain('won_deal');
         await deliverMail(app);
-        const alerts = mailTo(emails.mia, 'guardrail_alert');
-        expect(alerts).toHaveLength(before + 1);
-        expect(alerts.at(-1)!.text).toContain('Renewal');
-        expect(alerts.at(-1)!.text).not.toContain('Secret pricing');
+        expect(mailTo(emails.mia, 'guardrail_alert')).toHaveLength(before);
         expect(mailTo(emails.ana, 'guardrail_alert')).toHaveLength(0);
     });
 

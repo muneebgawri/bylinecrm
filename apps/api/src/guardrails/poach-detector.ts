@@ -25,13 +25,19 @@ import { recordGuardrailEvents, reviewersIn } from './record';
  * Gmail or sent from the CRM; both are stored by mail sync's one writer, which announces `email.sent` /
  * `email.received` — is judged once: each recipient owned by another member (not as a reply in a thread that
  * member is on), or on the outreach exclusions, is a `poach_suspected` guardrail event (`warned`: the mail has
- * left). The lead's owner and every reviewer (managers, admins) are told in the bell and the daily digest, and at
- * `high` by email at once. Notifications say who, whom, when and the subject — never the body.
+ * left). The lead's owner and every reviewer (managers, admins) are told in the bell and the daily digest; the email
+ * at once at `high` is off (`POACH_EMAIL_AT_ONCE`). Notifications say who, whom, when and the subject — never the body.
  *
  * Noise kept down: mail older than `POACH_LOOKBACK_MS` when seen (a first sync's history) is not judged; members
  * and the workspace's own domains are internal; free-mail domains never match a company; pool (sequence) mail is
  * the enrolment guard's; and one alert per sender, owner and lead within `POACH_DEDUPE_WINDOW_MS`.
  */
+/**
+ * Whether a `high` alert is also emailed at once. Off: delegated sync made every rep's mail visible, and the alerts
+ * (mostly a first sync's backlog and leads a shared mailbox owns) flooded inboxes. The bell and the digest still tell.
+ */
+const POACH_EMAIL_AT_ONCE = false;
+
 @Injectable()
 export class PoachDetector {
     constructor(
@@ -192,7 +198,8 @@ export class PoachDetector {
         );
         if (!event) return false;
         await notify(tx, context.workspaceId, told, 'guardrail_poach_suspected', [{ type: 'guardrail', id: event.id }]);
-        if (severity === 'high') await this.emailAtOnce(tx, context.workspaceId, event.id, told, text);
+        if (POACH_EMAIL_AT_ONCE && severity === 'high')
+            await this.emailAtOnce(tx, context.workspaceId, event.id, told, text);
         return true;
     }
 
