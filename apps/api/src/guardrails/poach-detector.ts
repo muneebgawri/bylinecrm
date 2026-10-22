@@ -9,8 +9,10 @@ import { notify } from '../notifications/notify';
 import { companyDomainOfAddress, normalisedDomain } from '../records/company-ownership';
 import { exclusionHits } from '../sequences/exclusions.service';
 import { AccountMail } from '../transactional-mail/account-mail';
+import { effectiveOwner, guardrailSettings } from './guardrail-settings';
 import {
     domainOf,
+    isCalendarMail,
     leadKey,
     poachFindings,
     poachMessage,
@@ -25,18 +27,16 @@ import { recordGuardrailEvents, reviewersIn } from './record';
  * Gmail or sent from the CRM; both are stored by mail sync's one writer, which announces `email.sent` /
  * `email.received` — is judged once: each recipient owned by another member (not as a reply in a thread that
  * member is on), or on the outreach exclusions, is a `poach_suspected` guardrail event (`warned`: the mail has
- * left). The lead's owner and every reviewer (managers, admins) are told in the bell and the daily digest; the email
- * at once at `high` is off (`POACH_EMAIL_AT_ONCE`). Notifications say who, whom, when and the subject — never the body.
+ * left). The lead's owner and every reviewer (managers, admins) are told in the bell and the daily digest; at `high`
+ * also by email at once, when an admin turned that on (Settings → Guardrails; off by default — delegated sync made
+ * every rep's mail visible, and the emails flooded inboxes). Notifications say who, whom, when and the subject —
+ * never the body.
  *
- * Noise kept down: mail older than `POACH_LOOKBACK_MS` when seen (a first sync's history) is not judged; members
- * and the workspace's own domains are internal; free-mail domains never match a company; pool (sequence) mail is
- * the enrolment guard's; and one alert per sender, owner and lead within `POACH_DEDUPE_WINDOW_MS`.
+ * Noise kept down: mail older than `POACH_LOOKBACK_MS` when seen (a first sync's history) is not judged; calendar
+ * invitations and answers are not judged; members and the workspace's own domains are internal; free-mail domains
+ * never match a company; a lead a shared mailbox owns (outreach@, Settings → Guardrails) is nobody's; pool
+ * (sequence) mail is the enrolment guard's; and one alert per sender, owner and lead within `POACH_DEDUPE_WINDOW_MS`.
  */
-/**
- * Whether a `high` alert is also emailed at once. Off: delegated sync made every rep's mail visible, and the alerts
- * (mostly a first sync's backlog and leads a shared mailbox owns) flooded inboxes. The bell and the digest still tell.
- */
-const POACH_EMAIL_AT_ONCE = false;
 
 @Injectable()
 export class PoachDetector {
@@ -63,12 +63,14 @@ export class PoachDetector {
             });
             if (!message) return 0;
             if (now.getTime() - message.sentAt.getTime() > POACH_LOOKBACK_MS) return 0;
+            if (isCalendarMail(message.subject)) return 0;
             const fromAddress = message.fromAddress.toLowerCase();
             const sender = await senderOf(tx, message.participants, fromAddress);
             if (!sender) return 0;
 
+            const settings = await guardrailSettings(tx);
             const recipients = message.participants.filter((p) => p.role !== 'from');
-            const facts = await readRecipients(tx, recipients);
+            const facts = await readRecipients(tx, recipients, new Set(settings.sharedMailboxMemberIds));
             const thread = await tx.mailParticipant.findMany({
                 where: { message: { threadId: message.threadId } },
                 select: { role: true, address: true, memberId: true, message: { select: { sentAt: true } } },
@@ -92,6 +94,7 @@ export class PoachDetector {
                 if (await this.recentlyAlerted(tx, sender.memberId, finding, now)) continue;
                 const ok = await this.raise(tx, context, {
                     finding,
+                    emailAtOnce: settings.poachEmailAtOnce,
                     sender,
                     fromAddress,
                     message,
@@ -129,6 +132,8 @@ export class PoachDetector {
         context: WorkspaceRunContext,
         input: {
             finding: PoachFinding;
+            /** Settings → Guardrails: a `high` alert is also emailed at once. */
+            emailAtOnce: boolean;
             sender: { memberId: string; name: string };
             fromAddress: string;
             message: { id: string; threadId: string; subject: string; sentAt: Date };
@@ -198,7 +203,7 @@ export class PoachDetector {
         );
         if (!event) return false;
         await notify(tx, context.workspaceId, told, 'guardrail_poach_suspected', [{ type: 'guardrail', id: event.id }]);
-        if (POACH_EMAIL_AT_ONCE && severity === 'high')
+        if (input.emailAtOnce && severity === 'high')
             await this.emailAtOnce(tx, context.workspaceId, event.id, told, text);
         return true;
     }
@@ -270,10 +275,14 @@ async function senderOf(
     return member ? { memberId: member.id, name: member.user.displayName ?? member.user.email } : null;
 }
 
-/** What the workspace knows of each recipient: the person, their company, the owner, an exclusion. */
+/**
+ * What the workspace knows of each recipient: the person, their company, the owner (none when it is a shared
+ * mailbox), an exclusion.
+ */
 async function readRecipients(
     tx: WorkspaceClient,
     recipients: readonly { address: string; personId: string | null; memberId: string | null }[],
+    sharedMailboxes: ReadonlySet<string>,
 ): Promise<PoachRecipient[]> {
     const addresses = [...new Set(recipients.map((r) => r.address.toLowerCase()))];
     if (addresses.length === 0) return [];
@@ -328,7 +337,10 @@ async function readRecipients(
             memberId: r.memberId,
             personId: person?.id ?? null,
             companyId: company?.id ?? null,
-            ownerId: person?.ownerId ?? company?.ownerId ?? null,
+            // A shared mailbox's person reads as unowned: their company's owner, if any, is the owner (as GUARD-1 reads it).
+            ownerId:
+                effectiveOwner(person?.ownerId ?? null, sharedMailboxes) ??
+                effectiveOwner(company?.ownerId ?? null, sharedMailboxes),
             exclusion: hit ? { source: hit.source, reason: hit.reason } : null,
         };
     });

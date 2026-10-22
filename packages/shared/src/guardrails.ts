@@ -198,6 +198,23 @@ export const POACH_DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
  */
 export const POACH_LOOKBACK_MS = 48 * 60 * 60 * 1000;
 
+/** GUARD-2: how many members an admin may mark as shared mailboxes. */
+export const GUARDRAIL_SHARED_MAILBOXES_MAX = 50;
+
+/**
+ * Settings → Guardrails (GUARD-2), set by admins; no row means the defaults (both off / empty).
+ *
+ * - `poachEmailAtOnce` — a `high` poaching alert is also emailed to the owner and the reviewers at once. Off by
+ *   default: the bell and the daily digest always tell.
+ * - `sharedMailboxMemberIds` — members that are shared mailboxes (an `outreach@` many people send from). Leads they
+ *   own are treated as nobody's by the recipient guard (GUARD-1) and the poaching detector (GUARD-2): any member may
+ *   mail them, with no block and no alert. Ownership itself is not changed.
+ */
+export interface GuardrailSettingsView {
+    poachEmailAtOnce: boolean;
+    sharedMailboxMemberIds: string[];
+}
+
 /**
  * GUARD-2 admin view: an active member and whether their mail is seen. `syncedVia` says how: their own connected
  * mailbox, or (#225) Google Workspace delegation; null means mail they send is not seen at all.

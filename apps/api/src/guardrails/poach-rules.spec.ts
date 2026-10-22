@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import { syncedMembers, type SyncSource } from './mailbox-coverage';
+import { effectiveOwner } from './guardrail-settings';
 import {
+    isCalendarMail,
     isInternal,
     poachFindings,
     poachMessage,
@@ -135,5 +137,47 @@ describe('GUARD-2 mailbox coverage sources', () => {
             ['a', 'mailbox'],
             ['b', 'delegation'],
         ]);
+    });
+});
+
+describe('GUARD-2 calendar mail', () => {
+    it('knows a calendar’s own invitations and answers, in any case, and nothing else', () => {
+        for (const subject of [
+            'Invitation: Intro call @ Thu Oct 22, 2026 3pm - 3:30pm (PDT) (dana@acme.com)',
+            'Updated invitation: Intro call @ Fri Oct 23, 2026',
+            'Updated invitation with note: Intro call @ Fri Oct 23, 2026',
+            'Invitation with note: Demo',
+            'Accepted: Intro call @ Thu Oct 22, 2026',
+            'Declined: Intro call',
+            'Tentatively accepted: Intro call',
+            'Canceled event: Intro call @ Thu Oct 22, 2026',
+            'Cancelled event with note: Intro call',
+            'Canceled: Weekly sync',
+            'Tentative: Weekly sync',
+            'New Time Proposed: Weekly sync',
+            'INVITATION: Demo',
+            '  updated event: Demo',
+        ])
+            expect(isCalendarMail(subject), subject).toBe(true);
+        for (const subject of [
+            'Quick intro',
+            'Re: Invitation: Demo',
+            'Your invitation to our webinar',
+            'Accepted offer — next steps',
+            '',
+        ])
+            expect(isCalendarMail(subject), subject).toBe(false);
+    });
+});
+
+describe('GUARD-1/2 shared mailboxes', () => {
+    it('reads a lead a shared mailbox owns as nobody’s; any other owner stands', () => {
+        const shared = new Set(['outreach']);
+        expect(effectiveOwner('outreach', shared)).toBeNull();
+        expect(effectiveOwner(Y, shared)).toBe(Y);
+        expect(effectiveOwner(null, shared)).toBeNull();
+        expect(
+            poachFindings(facts({ recipients: [recipient({ ownerId: effectiveOwner('outreach', shared) })] })),
+        ).toEqual([]);
     });
 });

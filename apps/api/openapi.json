@@ -210,6 +210,144 @@
                 "tags": ["guardrails"]
             }
         },
+        "/api/w/{workspaceId}/guardrails/settings": {
+            "get": {
+                "operationId": "guardrails_settings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GuardrailSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["guardrails"]
+            },
+            "put": {
+                "operationId": "guardrails_setSettings",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GuardrailSettingsDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GuardrailSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["guardrails"]
+            }
+        },
         "/api/w/{workspaceId}/guardrails/events/{eventId}/legitimate": {
             "post": {
                 "operationId": "guardrails_markLegitimate",
@@ -26193,6 +26331,26 @@
             }
         },
         "schemas": {
+            "GuardrailSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "poachEmailAtOnce": {
+                        "type": "boolean",
+                        "description": "A `high` poaching alert is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default."
+                    },
+                    "sharedMailboxMemberIds": {
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "description": "Members that are shared mailboxes (an outreach@ many people send from). Leads they own are treated as nobody’s by the recipient guard and the poaching detector — any member may mail them, with no block and no alert. Ownership is not changed. Each must be a member of the workspace."
+                    }
+                },
+                "required": ["poachEmailAtOnce", "sharedMailboxMemberIds"]
+            },
             "MarkLegitimateDto": {
                 "type": "object",
                 "properties": {
@@ -34894,6 +35052,26 @@
                     }
                 },
                 "required": ["memberId", "name", "email", "role", "syncedVia", "mailboxes"]
+            },
+            "GuardrailSettings": {
+                "type": "object",
+                "properties": {
+                    "poachEmailAtOnce": {
+                        "type": "boolean",
+                        "description": "A `high` poaching alert is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default."
+                    },
+                    "sharedMailboxMemberIds": {
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "description": "Members that are shared mailboxes (an outreach@ many people send from). Leads they own are treated as nobody’s by the recipient guard and the poaching detector — any member may mail them, with no block and no alert. Ownership is not changed. Each must be a member of the workspace."
+                    }
+                },
+                "required": ["poachEmailAtOnce", "sharedMailboxMemberIds"]
             },
             "BylineSettings": {
                 "type": "object",
