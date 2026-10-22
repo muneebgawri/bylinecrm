@@ -300,6 +300,19 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
         expect((await owner.person.findUniqueOrThrow({ where: { id: benLead } })).ownerId).toBe(benId);
     });
 
+    it('lets anyone mail a lead a member who has left owns; exclusions still hold', async () => {
+        await owner.workspaceMember.update({ where: { id: benId }, data: { leftAt: new Date() } });
+        try {
+            const res = await mail(ana, anaMailbox, benLead);
+            expect(res.status, JSON.stringify(res.body)).toBe(202);
+            expect(err(await mail(ana, anaMailbox, customerLead)).details?.reason).toBe('excluded_customer');
+        } finally {
+            await owner.workspaceMember.update({ where: { id: benId }, data: { leftAt: null } });
+        }
+        expect((await mail(ana, anaMailbox, benLead)).status).toBe(422);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: benLead } })).ownerId).toBe(benId);
+    });
+
     it('checks a scheduled send again at its time: a lead that changed hands meanwhile is not sent', async () => {
         const later = await lead(ana, 'sam');
         const res = await mail(ana, anaMailbox, later, { sendAt: new Date(Date.now() + 3_600_000).toISOString() });

@@ -348,6 +348,16 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         expect(await detector.judge(workspace, (await synced({ to: [`pooled@pooled-${stamp}.test`] })).id)).toBe(1);
     });
 
+    it('treats a lead a member who has left owns as nobody’s: no alert', async () => {
+        await lead(outreach, `gone@gone-${stamp}.test`);
+        await owner.workspaceMember.update({ where: { id: outreachId }, data: { leftAt: new Date() } });
+        try {
+            expect(await detector.judge(workspace, (await synced({ to: [`gone@gone-${stamp}.test`] })).id)).toBe(0);
+        } finally {
+            await owner.workspaceMember.update({ where: { id: outreachId }, data: { leftAt: null } });
+        }
+    });
+
     it('does not judge calendar invitations or answers to another member’s lead', async () => {
         await lead(ben, `cal@cal-${stamp}.test`);
         for (const subject of [

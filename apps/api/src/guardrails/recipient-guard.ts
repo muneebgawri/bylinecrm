@@ -16,7 +16,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { CompanyOwnership, companyDomainOfAddress, type DomainCompany } from '../records/company-ownership';
 import { exclusionHits, exclusionMessage } from '../sequences/exclusions.service';
 import { SuppressionService } from '../suppression/suppression.service';
-import { effectiveOwner, guardrailSettings } from './guardrail-settings';
+import { effectiveOwner, guardrailSettings, ownerlessMembers } from './guardrail-settings';
 import { recordGuardrailEvents, reviewersIn } from './record';
 
 /** One address an outbound path is about to reach, and the person it is, when the caller knows. */
@@ -122,8 +122,8 @@ export class RecipientGuarded extends ApiException {
  * 5. **`cold_to_known`** — enrolling in a sequence someone already in a two-way thread with the workspace:
  *    a warning for the person's owner (or a manager), a block for anyone else.
  *
- * A lead a shared mailbox owns (Settings → Guardrails: outreach@, which many people send from) is nobody's here:
- * 3–5 read its owner as none, so any member may mail it. Its ownership is not changed.
+ * A lead a shared mailbox (Settings → Guardrails: outreach@, which many people send from) or a member who has left
+ * owns is nobody's here: 3–5 read its owner as none, so any member may mail it. Its ownership is not changed.
  *
  * A holder of `record:transfer` (managers, admins) is not refused 3–5 — the attempt is kept as `allowed`.
  * A job or API key with no member is not judged on 3–5 (there is nobody whose lead it would take).
@@ -323,8 +323,9 @@ async function readFacts(
     domains: ReadonlyMap<string, DomainCompany | null>,
 ) {
     const excluded = await exclusionHits(tx, addresses);
-    // Shared mailboxes own leads nobody is kept from: their people, companies and deals read as unowned.
-    const shared = new Set((await guardrailSettings(tx)).sharedMailboxMemberIds);
+    // Shared mailboxes and members who have left own leads nobody is kept from: their people, companies and deals
+    // read as unowned.
+    const shared = await ownerlessMembers(tx, await guardrailSettings(tx));
     const unshared = (c: DomainCompany): DomainCompany =>
         c.ownerId !== null && shared.has(c.ownerId) ? { ...c, ownerId: null, ownerName: null } : c;
     const domainCompanies = new Map([...domains].map(([d, c]) => [d, c ? unshared(c) : null]));
