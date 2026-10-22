@@ -9,6 +9,7 @@ import {
     SESSION_COOKIE,
     SYSTEM_ROLES,
     type GuardrailEventView,
+    type GuardrailSettingsView,
     type MailboxCoverageView,
     type NotificationsView,
 } from '@bylinecrm/shared';
@@ -65,17 +66,20 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         ana: `poach-ana-${stamp}@example.com`,
         ben: `poach-ben-${stamp}@example.com`,
         mia: `poach-mia-${stamp}@example.com`,
+        outreach: `poach-outreach-${stamp}@example.com`,
         other: `poach-other-${stamp}@example.com`,
     };
     let admin: Browser;
     let ana: Browser;
     let ben: Browser;
     let mia: Browser;
+    let outreach: Browser;
     let otherAdmin: Browser;
     let workspace: string;
     let otherWorkspace: string;
     let anaId: string;
     let benId: string;
+    let outreachId: string;
     const benCompanyDomain = `benco-${stamp}.test`;
     const benLeadAddress = `bo@bo-${stamp}.test`;
     let benLead: string;
@@ -198,9 +202,11 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         ana = await join(emails.ana, SYSTEM_ROLES.member);
         ben = await join(emails.ben, SYSTEM_ROLES.member);
         mia = await join(emails.mia, SYSTEM_ROLES.manager);
+        outreach = await join(emails.outreach, SYSTEM_ROLES.member);
         const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
         anaId = members.find((m) => m.email === emails.ana)!.id;
         benId = members.find((m) => m.email === emails.ben)!.id;
+        outreachId = members.find((m) => m.email === emails.outreach)!.id;
 
         const clientId = `445-${stamp.replace(/[^a-z0-9]/g, '')}.apps.googleusercontent.com`;
         const secret = `GOCSPX-poach-${stamp}`;
@@ -284,6 +290,76 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         await deliverMail(app);
         expect(mailTo(emails.mia, 'guardrail_alert')).toHaveLength(before);
         expect(mailTo(emails.ana, 'guardrail_alert')).toHaveLength(0);
+    });
+
+    it('emails a high alert at once only when an admin turned it on (Settings → Guardrails)', async () => {
+        const settings = async (who: Browser) =>
+            (await as(who).get(w('/guardrails/settings')).expect(200)).body as GuardrailSettingsView;
+        expect(await settings(mia)).toEqual({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] });
+        expect(
+            (await as(mia).put(w('/guardrails/settings')).send({ poachEmailAtOnce: true, sharedMailboxMemberIds: [] }))
+                .status,
+        ).toBe(403);
+        await as(admin)
+            .put(w('/guardrails/settings'))
+            .send({ poachEmailAtOnce: true, sharedMailboxMemberIds: [] })
+            .expect(200);
+        expect((await settings(mia)).poachEmailAtOnce).toBe(true);
+
+        const before = mailTo(emails.mia, 'guardrail_alert').length;
+        await owner.outreachExclusion.create({
+            data: { workspaceId: workspace, address: `cz@cust-${stamp}.test`, reason: 'customer', source: 'won_deal' },
+        });
+        expect(
+            await detector.judge(workspace, (await synced({ to: [`cz@cust-${stamp}.test`], subject: 'Upsell' })).id),
+        ).toBe(1);
+        await deliverMail(app);
+        const alerts = mailTo(emails.mia, 'guardrail_alert');
+        expect(alerts).toHaveLength(before + 1);
+        expect(alerts.at(-1)!.text).toContain('Upsell');
+        expect(alerts.at(-1)!.text).not.toContain('Secret pricing');
+        expect(mailTo(emails.ana, 'guardrail_alert')).toHaveLength(0);
+        await as(admin)
+            .put(w('/guardrails/settings'))
+            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] })
+            .expect(200);
+    });
+
+    it('treats a lead a shared mailbox owns as nobody’s: no alert; its ownership stands', async () => {
+        const pooled = await lead(outreach, `pooled@pooled-${stamp}.test`);
+        // Shared mailboxes must be members of this workspace.
+        expect(
+            (
+                await as(admin)
+                    .put(w('/guardrails/settings'))
+                    .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [otherWorkspace] })
+            ).status,
+        ).toBe(422);
+        await as(admin)
+            .put(w('/guardrails/settings'))
+            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [outreachId] })
+            .expect(200);
+        expect(await detector.judge(workspace, (await synced({ to: [`pooled@pooled-${stamp}.test`] })).id)).toBe(0);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: pooled } })).ownerId).toBe(outreachId);
+        await as(admin)
+            .put(w('/guardrails/settings'))
+            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] })
+            .expect(200);
+        expect(await detector.judge(workspace, (await synced({ to: [`pooled@pooled-${stamp}.test`] })).id)).toBe(1);
+    });
+
+    it('does not judge calendar invitations or answers to another member’s lead', async () => {
+        await lead(ben, `cal@cal-${stamp}.test`);
+        for (const subject of [
+            'Invitation: Intro @ Thu Oct 22, 2026 3pm',
+            'Updated invitation with note: Intro',
+            'accepted: Intro',
+            'Cancelled event: Intro',
+        ])
+            expect(await detector.judge(workspace, (await synced({ to: [`cal@cal-${stamp}.test`], subject })).id)).toBe(
+                0,
+            );
+        expect(await detector.judge(workspace, (await synced({ to: [`cal@cal-${stamp}.test`] })).id)).toBe(1);
     });
 
     it('does not judge history: mail older than the lookback (a first sync) raises nothing', async () => {

@@ -116,7 +116,8 @@ model Workspace {
   companyDomains                CompanyDomain[]
   customerExclusionSettings     CustomerExclusionSettings?
   ownershipSettings             OwnershipSettings?
-  rotationSettings              RotationSettings?
+  guardrailSettings             GuardrailSettings?
+  rotationSettings             RotationSettings?
   rotationMembers               RotationMember[]
   cadenceLapses                 CadenceLapse[]
 
@@ -2171,6 +2172,20 @@ model OwnershipSettings {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("ownership_settings")
+}
+
+/// GUARD-2: Settings → Guardrails. No row means the defaults (no email at once, no shared mailboxes).
+model GuardrailSettings {
+  workspaceId            String   @id @map("workspace_id") @db.Uuid
+  /// A `high` poaching alert is also emailed at once (the bell and the digest always tell).
+  poachEmailAtOnce       Boolean  @default(false) @map("poach_email_at_once")
+  /// Members that are shared mailboxes (outreach@): leads they own count as nobody's to GUARD-1 and GUARD-2.
+  sharedMailboxMemberIds String[] @default([]) @map("shared_mailbox_member_ids") @db.Uuid
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("guardrail_settings")
 }
 
 /// #192: who sees a sequence.

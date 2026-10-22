@@ -216,6 +216,7 @@ export type SuppressionPage = Schemas['SuppressionPage'];
 export type GuardrailEventView = Schemas['GuardrailEvent'];
 export type GuardrailEventPage = Schemas['GuardrailEventPage'];
 export type MailboxCoverageView = Schemas['MailboxCoverage'];
+export type GuardrailSettingsView = Schemas['GuardrailSettings'];
 export type GuardrailEventsQuery = Loose<
     NonNullable<paths['/api/w/{workspaceId}/guardrails/events']['get']['parameters']['query']>
 >;

@@ -27,7 +27,7 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { useGuardrailEvents, useMarkLegitimate } from '../../../api/guardrails';
+import { useGuardrailEvents, useGuardrailSettings, useMarkLegitimate } from '../../../api/guardrails';
 import { useReputationSettings } from '../../../api/reputation';
 import { useCan } from '../../../auth/capabilities';
 import type { GuardrailEventView, GuardrailEventsQuery } from '../../../api/types';
@@ -35,6 +35,7 @@ import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { GuardrailSettingsDialog } from './GuardrailSettingsDialog';
 import { PausedMailboxes } from './PausedMailboxes';
 import { UnsyncedMembers } from './UnsyncedMembers';
 import { ReputationSettingsDialog } from './ReputationSettingsDialog';
@@ -73,6 +74,8 @@ export function Guardrails() {
     const admin = useCan('workspace:admin');
     const reputation = useReputationSettings(workspaceId, admin);
     const [editingReputation, setEditingReputation] = useState(false);
+    const settings = useGuardrailSettings(workspaceId, admin);
+    const [editingPoaching, setEditingPoaching] = useState(false);
     const rows = events.data?.items ?? [];
 
     return (
@@ -121,6 +124,11 @@ export function Guardrails() {
                             {admin && reputation.data && (
                                 <Button shape="square" size="sm" onClick={() => setEditingReputation(true)}>
                                     Sender reputation
+                                </Button>
+                            )}
+                            {admin && settings.data && (
+                                <Button shape="square" size="sm" onClick={() => setEditingPoaching(true)}>
+                                    Poaching alerts
                                 </Button>
                             )}
                         </div>
@@ -186,6 +194,13 @@ export function Guardrails() {
                 }}
             />
             <MarkLegitimateDialog workspaceId={workspaceId} event={marking} onClose={() => setMarking(null)} />
+            {editingPoaching && settings.data && (
+                <GuardrailSettingsDialog
+                    workspaceId={workspaceId}
+                    settings={settings.data}
+                    onClose={() => setEditingPoaching(false)}
+                />
+            )}
             {editingReputation && reputation.data && (
                 <ReputationSettingsDialog
                     workspaceId={workspaceId}

@@ -16,6 +16,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { CompanyOwnership, companyDomainOfAddress, type DomainCompany } from '../records/company-ownership';
 import { exclusionHits, exclusionMessage } from '../sequences/exclusions.service';
 import { SuppressionService } from '../suppression/suppression.service';
+import { effectiveOwner, guardrailSettings } from './guardrail-settings';
 import { recordGuardrailEvents, reviewersIn } from './record';
 
 /** One address an outbound path is about to reach, and the person it is, when the caller knows. */
@@ -120,6 +121,9 @@ export class RecipientGuarded extends ApiException {
  *    A reply in a thread that member is on is not poaching (a colleague cc'd them in).
  * 5. **`cold_to_known`** — enrolling in a sequence someone already in a two-way thread with the workspace:
  *    a warning for the person's owner (or a manager), a block for anyone else.
+ *
+ * A lead a shared mailbox owns (Settings → Guardrails: outreach@, which many people send from) is nobody's here:
+ * 3–5 read its owner as none, so any member may mail it. Its ownership is not changed.
  *
  * A holder of `record:transfer` (managers, admins) is not refused 3–5 — the attempt is kept as `allowed`.
  * A job or API key with no member is not judged on 3–5 (there is nobody whose lead it would take).
@@ -319,6 +323,11 @@ async function readFacts(
     domains: ReadonlyMap<string, DomainCompany | null>,
 ) {
     const excluded = await exclusionHits(tx, addresses);
+    // Shared mailboxes own leads nobody is kept from: their people, companies and deals read as unowned.
+    const shared = new Set((await guardrailSettings(tx)).sharedMailboxMemberIds);
+    const unshared = (c: DomainCompany): DomainCompany =>
+        c.ownerId !== null && shared.has(c.ownerId) ? { ...c, ownerId: null, ownerName: null } : c;
+    const domainCompanies = new Map([...domains].map(([d, c]) => [d, c ? unshared(c) : null]));
 
     const ids = [...new Set(recipients.flatMap((r) => (r.personId ? [r.personId] : [])))];
     const people = await tx.person.findMany({
@@ -328,8 +337,8 @@ async function readFacts(
     });
     const facts: PersonFact[] = people.map((p) => ({
         id: p.id,
-        ownerId: p.ownerId,
-        ownerName: p.owner?.user.displayName ?? null,
+        ownerId: effectiveOwner(p.ownerId, shared),
+        ownerName: effectiveOwner(p.ownerId, shared) ? (p.owner?.user.displayName ?? null) : null,
         companyId: p.companyId,
         address: p.emailPrimary,
     }));
@@ -346,17 +355,22 @@ async function readFacts(
     const companies = new Map<string, DomainCompany>(
         linked.map((c) => [
             c.id,
-            { companyId: c.id, companyName: c.name, ownerId: c.ownerId, ownerName: c.owner?.user.displayName ?? null },
+            unshared({
+                companyId: c.id,
+                companyName: c.name,
+                ownerId: c.ownerId,
+                ownerName: c.owner?.user.displayName ?? null,
+            }),
         ]),
     );
-    for (const c of domains.values()) if (c) companies.set(c.companyId, c);
+    for (const c of domainCompanies.values()) if (c) companies.set(c.companyId, c);
 
     const deals = await tx.opportunity.findMany({
         where: {
             companyId: { in: [...companies.keys()] },
             deletedAt: null,
             closedAt: null,
-            ownerId: { not: null },
+            ownerId: { not: null, notIn: [...shared] },
             stage: { kind: 'open' },
         },
         select: { id: true, name: true, companyId: true, ownerId: true, owner: NAMED },
@@ -415,7 +429,7 @@ async function readFacts(
             const domain = companyDomainOfAddress(r.address);
             return (
                 (person?.companyId ? companies.get(person.companyId) : undefined) ??
-                (domain ? domains.get(domain) : null) ??
+                (domain ? domainCompanies.get(domain) : null) ??
                 null
             );
         },
