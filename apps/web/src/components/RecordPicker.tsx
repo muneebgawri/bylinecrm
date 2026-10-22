@@ -1,9 +1,21 @@
-import { Button, Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, cn } from '@bylinecrm/ui';
+import {
+    Button,
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    cn,
+    toast,
+} from '@bylinecrm/ui';
 import type { RecordObject } from '@bylinecrm/shared';
-import { Check, ChevronsUpDown, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { messageFor } from '../routes/w/records/InlineEdit';
+import { ApiError } from '../api/client';
 import { useSearch } from '../api/lists';
+import { failureText } from '../lib/errors';
 import { useDebounced } from '../lib/useDebounced';
 import { ResponsivePanel } from './ResponsivePanel';
 
@@ -25,6 +37,11 @@ export interface RecordPickerProps {
     onChange: (id: string | null) => Promise<unknown> | void;
     /** Told the name of a record when it is chosen, for a caller that shows it elsewhere. */
     onResolved?: ((id: string, title: string) => void) | undefined;
+    /**
+     * Makes a new record named as typed, offered as `Create <label> "<typed>"` when no match has that name;
+     * absent (the member may not create one), nothing is offered. Resolves the new record, which is then chosen.
+     */
+    onCreate?: ((name: string) => Promise<{ id: string; title: string }>) | undefined;
     canEdit?: boolean;
     /** Why editing is not offered (FR-CRMS-UI-6). */
     reason?: string | undefined;
@@ -47,6 +64,7 @@ export function RecordPicker({
     placeholder,
     onChange,
     onResolved,
+    onCreate,
     canEdit = true,
     reason,
     id,
@@ -60,6 +78,19 @@ export function RecordPicker({
     const results = useSearch(workspaceId, open ? term : '', [object], PICKER_RESULTS);
     const hits = results.data?.[object] ?? [];
     const shown = value ? (valueLabel ?? '…') : (placeholder ?? clearLabel ?? '—');
+    /** A record the API named when a create was refused as a duplicate (a company already at that domain). */
+    const [existing, setExisting] = useState<{ id: string; title: string } | null>(null);
+    const [creating, setCreating] = useState(false);
+    const typed = term.trim();
+    const noun = label.toLowerCase();
+    // Offered once the search for what was typed has answered, and only when nothing found has that name.
+    const offerCreate =
+        onCreate !== undefined &&
+        typed !== '' &&
+        typed === q.trim() &&
+        results.data !== undefined &&
+        !results.isFetching &&
+        !hits.some((hit) => hit.title.trim().toLowerCase() === typed.toLowerCase());
 
     if (!canEdit) {
         return (
@@ -69,19 +100,51 @@ export function RecordPicker({
         );
     }
 
-    const choose = async (next: string | null) => {
+    const choose = async (next: string | null): Promise<boolean> => {
         setOpen(false);
         setQ('');
-        if (next === value) return;
+        setExisting(null);
+        if (next === value) return true;
         setPending(true);
         try {
             await onChange(next);
             setError(null);
+            return true;
         } catch (e) {
             setError(messageFor(e, `${object}Id`));
+            return false;
         } finally {
             setPending(false);
         }
+    };
+
+    /** Creates the record and chooses it; a refusal keeps the picker open with the API's words in a toast. */
+    const create = async (name: string) => {
+        if (!onCreate || creating) return;
+        setCreating(true);
+        let created: { id: string; title: string };
+        try {
+            created = await onCreate(name);
+        } catch (e) {
+            const companyId = e instanceof ApiError ? e.details['companyId'] : undefined;
+            if (e instanceof ApiError && e.code === 'conflict.company_owned' && typeof companyId === 'string') {
+                // Another company already has this one's domain: offer that one rather than make a twin.
+                const companyName = String(e.details['companyName'] ?? 'Another company');
+                setExisting({ id: companyId, title: companyName });
+                toast({
+                    tone: 'danger',
+                    title: `${companyName} already has that domain.`,
+                    description: 'Choose it instead.',
+                });
+            } else {
+                toast({ tone: 'danger', title: `Could not create ${noun} “${name}”.`, description: failureText(e) });
+            }
+            return;
+        } finally {
+            setCreating(false);
+        }
+        onResolved?.(created.id, created.title);
+        if (await choose(created.id)) toast({ tone: 'success', title: `Created ${noun} “${created.title}”.` });
     };
 
     return (
@@ -91,7 +154,10 @@ export function RecordPicker({
                 open={open}
                 onOpenChange={(next) => {
                     setOpen(next);
-                    if (!next) setQ('');
+                    if (!next) {
+                        setQ('');
+                        setExisting(null);
+                    }
                 }}
                 widthClass="w-[min(22rem,calc(100vw-2rem))]"
                 trigger={
@@ -110,7 +176,14 @@ export function RecordPicker({
                 }
             >
                 <Command shouldFilter={false} className="bg-surface" label={`Search ${label.toLowerCase()}`}>
-                    <CommandInput value={q} onValueChange={setQ} placeholder={`Search ${label.toLowerCase()}…`} />
+                    <CommandInput
+                        value={q}
+                        onValueChange={(next) => {
+                            setQ(next);
+                            setExisting(null);
+                        }}
+                        placeholder={`Search ${label.toLowerCase()}…`}
+                    />
                     <CommandList>
                         {term.trim() === '' ? (
                             <p className="m-0 px-2 py-4 text-center text-sm text-text-muted">Type to search.</p>
@@ -147,6 +220,30 @@ export function RecordPicker({
                                         {hit.id === value && <Check aria-hidden />}
                                     </CommandItem>
                                 ))}
+                            </CommandGroup>
+                        )}
+                        {existing && (
+                            <CommandGroup heading="Already has that domain">
+                                <CommandItem
+                                    value={`__existing__${existing.id}`}
+                                    onSelect={() => {
+                                        onResolved?.(existing.id, existing.title);
+                                        void choose(existing.id);
+                                    }}
+                                >
+                                    <span className="min-w-0 flex-1 truncate">{existing.title}</span>
+                                    {existing.id === value && <Check aria-hidden />}
+                                </CommandItem>
+                            </CommandGroup>
+                        )}
+                        {offerCreate && (
+                            <CommandGroup>
+                                <CommandItem value="__create__" disabled={creating} onSelect={() => void create(typed)}>
+                                    <Plus aria-hidden />
+                                    <span className="min-w-0 flex-1 truncate">
+                                        Create {noun} "{typed}"
+                                    </span>
+                                </CommandItem>
                             </CommandGroup>
                         )}
                     </CommandList>

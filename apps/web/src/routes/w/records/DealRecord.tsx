@@ -27,6 +27,7 @@ import { formatDate, formatDay } from '../../../lib/format';
 import { fieldLabel, fieldTitle } from './fields';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
 import { RecordPicker } from '../../../components/RecordPicker';
+import { useCompanyCreator } from '../../../components/useCompanyCreator';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
@@ -66,6 +67,7 @@ export function DealRecord({
     const history = useDealHistory(workspaceId, deal.id);
     const company = useRecord(workspaceId, 'company', deal.companyId ?? '');
     const contact = useRecord(workspaceId, 'person', deal.pointOfContactId ?? '');
+    const createCompany = useCompanyCreator(workspaceId, contact.data?.emails.primary);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
     const [closing, setClosing] = useState<StageView | null>(null);
@@ -255,6 +257,7 @@ export function DealRecord({
                     canEdit={edit.allowed}
                     reason={edit.reason}
                     onChange={(v) => save({ companyId: v })}
+                    onCreate={createCompany}
                 />
             ),
         },

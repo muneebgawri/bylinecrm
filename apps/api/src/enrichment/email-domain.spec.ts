@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { companyDomainOfAddress } from '@bylinecrm/shared';
 import { companyDomainOf, isFreeMailDomain, personCountryOf } from './email-domain';
 
 /** The email-addresses source (P4-2, FR-CRMS-15): facts an address itself carries, no network. */
@@ -16,6 +17,14 @@ describe('FR-CRMS-15 the email-addresses source', () => {
             expect(isFreeMailDomain(domain), domain).toBe(true);
         }
         expect(isFreeMailDomain('acme.example')).toBe(false);
+    });
+
+    it('reads the company domain a person’s address is at, and none at free mail', () => {
+        expect(companyDomainOfAddress('Dana@WWW.Acme.example')).toBe('acme.example');
+        expect(companyDomainOfAddress('dana@gmail.com')).toBeNull();
+        expect(companyDomainOfAddress('dana@localhost')).toBeNull();
+        expect(companyDomainOfAddress('no-at-sign')).toBeNull();
+        expect(companyDomainOfAddress(null)).toBeNull();
     });
 
     it('reads a company’s domain as the one most of its people write from, free mail excluded', () => {

@@ -1,15 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { EnrichmentFactKey, EnrichmentObject } from '@bylinecrm/shared';
+import { isFreeMailDomain, type EnrichmentFactKey, type EnrichmentObject } from '@bylinecrm/shared';
 import { inferCountry } from '../sequences/country';
 import type { Enricher, EnrichmentFinding, EnrichmentSubject } from './enricher.port';
 
-/** Providers whose domain says nothing about a company: a person there is simply a person with mail. */
-const FREE_MAIL =
-    /^(gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton|protonmail|gmx|mail|yandex|zoho|fastmail|hey|tutanota|tuta|pm)\.[a-z.]+$/i;
-
-export function isFreeMailDomain(domain: string): boolean {
-    return FREE_MAIL.test(domain.trim().toLowerCase());
-}
+/** The free-mail list lives in `@bylinecrm/shared`, where the web app reads it too. */
+export { isFreeMailDomain };
 
 function domainOf(email: string): string | null {
     const at = email.lastIndexOf('@');

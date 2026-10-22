@@ -19,6 +19,22 @@ export function bareDomain(value: string): string {
         .replace(/^www\./, '');
 }
 
+/** Providers whose domain says nothing about a company: a person there is simply a person with mail. */
+const FREE_MAIL =
+    /^(gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton|protonmail|gmx|mail|yandex|zoho|fastmail|hey|tutanota|tuta|pm)\.[a-z.]+$/i;
+
+export function isFreeMailDomain(domain: string): boolean {
+    return FREE_MAIL.test(domain.trim().toLowerCase());
+}
+
+/** The bare domain an address is at when it can be a company's; null for free mail or no domain. */
+export function companyDomainOfAddress(address: string | null | undefined): string | null {
+    const at = address ? address.lastIndexOf('@') : -1;
+    if (!address || at <= 0) return null;
+    const domain = bareDomain(address.slice(at + 1));
+    return domain.includes('.') && !isFreeMailDomain(domain) ? domain : null;
+}
+
 /** What a `409 conflict.company_owned` says in `details`. */
 export interface CompanyOwnedDetails {
     companyId: string;
