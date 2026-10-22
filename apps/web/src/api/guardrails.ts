@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { query, workspacePath } from './endpoints';
-import type { GuardrailEventPage, GuardrailEventView, GuardrailEventsQuery, MailboxCoverageView } from './types';
+import type {
+    GuardrailEventPage,
+    GuardrailEventView,
+    GuardrailEventsQuery,
+    GuardrailSettingsView,
+    MailboxCoverageView,
+} from './types';
 
 /**
  * Guardrails (GUARD-1, #202): what the recipient guard refused, warned of or let a manager through, for
@@ -12,6 +18,7 @@ const keys = {
     all: (workspaceId: string) => ['w', workspaceId, 'guardrails'] as const,
     events: (workspaceId: string, q: GuardrailEventsQuery) => ['w', workspaceId, 'guardrails', 'events', q] as const,
     coverage: (workspaceId: string) => ['w', workspaceId, 'guardrails', 'mailbox-coverage'] as const,
+    settings: (workspaceId: string) => ['w', workspaceId, 'guardrails', 'settings'] as const,
 };
 
 export const guardrails = {
@@ -33,6 +40,10 @@ export const guardrails = {
         ),
     mailboxCoverage: (workspaceId: string, signal?: AbortSignal) =>
         request<MailboxCoverageView[]>('GET', workspacePath(workspaceId, '/guardrails/mailbox-coverage'), { signal }),
+    settings: (workspaceId: string, signal?: AbortSignal) =>
+        request<GuardrailSettingsView>('GET', workspacePath(workspaceId, '/guardrails/settings'), { signal }),
+    updateSettings: (workspaceId: string, input: GuardrailSettingsView) =>
+        request<GuardrailSettingsView>('PUT', workspacePath(workspaceId, '/guardrails/settings'), { body: input }),
     markLegitimate: (workspaceId: string, id: string, reason: string) =>
         request<GuardrailEventView>('POST', workspacePath(workspaceId, `/guardrails/events/${id}/legitimate`), {
             body: { reason },
@@ -60,5 +71,22 @@ export function useMarkLegitimate(workspaceId: string) {
         mutationFn: ({ id, reason }: { id: string; reason: string }) =>
             guardrails.markLegitimate(workspaceId, id, reason),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.all(workspaceId) }),
+    });
+}
+
+/** GUARD-2's settings: high poaching alerts emailed at once, and the shared mailboxes (read by reviewers, set by admins). */
+export function useGuardrailSettings(workspaceId: string, enabled = true) {
+    return useQuery({
+        queryKey: keys.settings(workspaceId),
+        queryFn: ({ signal }) => guardrails.settings(workspaceId, signal),
+        enabled,
+    });
+}
+
+export function useUpdateGuardrailSettings(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: GuardrailSettingsView) => guardrails.updateSettings(workspaceId, input),
+        onSuccess: (saved) => client.setQueryData(keys.settings(workspaceId), saved),
     });
 }

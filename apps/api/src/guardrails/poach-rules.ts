@@ -84,6 +84,22 @@ export function poachFindings(facts: PoachFacts): PoachFinding[] {
 }
 
 /**
+ * What a calendar's own mail starts its subject with: Google Calendar's invitations, updates and answers ("Updated
+ * invitation with note:", "Tentatively accepted:", "Canceled event:") and Outlook's ("Canceled:", "Tentative:",
+ * "New Time Proposed:"). Sync keeps no MIME parts, so the subject is the signal.
+ */
+const CALENDAR_SUBJECT =
+    /^\s*(?:(?:updated )?invitation(?: with note)?|updated event|accepted|declined|tentative(?:ly accepted)?|cancell?ed(?: event)?(?: with note)?|new time proposed|proposed new time)\s*:/i;
+
+/**
+ * Whether a message is a calendar invitation or an answer to one: it went out because a member put a lead on (or
+ * answered) a meeting, not because they wrote to them — never poaching.
+ */
+export function isCalendarMail(subject: string): boolean {
+    return CALENDAR_SUBJECT.test(subject);
+}
+
+/**
  * The severity ladder: a first contact is `medium`; once the sender has reached `POACH_HIGH_LEADS` distinct leads
  * (this one included) in the window, `high`.
  */

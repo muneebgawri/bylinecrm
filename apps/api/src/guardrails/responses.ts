@@ -8,6 +8,7 @@ import {
 } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { id, named, page } from '../openapi/responses';
+import { guardrailSettingsShape } from './dto';
 
 const dateTime = z.iso.datetime();
 
@@ -69,3 +70,5 @@ export type MailboxCoverageViewCheck =
 type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 export type GuardrailEventViewCheck =
     Same<z.output<typeof guardrailEventView>, GuardrailEventView> extends true ? true : never;
+
+export const guardrailSettingsView = named('GuardrailSettings', guardrailSettingsShape);

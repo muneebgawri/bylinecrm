@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { GuardrailEventView, MailboxCoverageView } from '@bylinecrm/shared';
+import type { GuardrailEventView, GuardrailSettingsView, MailboxCoverageView } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { requireCallerMember } from '../infra/caller-member';
-import { StateConflict } from '../infra/errors/api-errors';
+import { StateConflict, UnknownReference } from '../infra/errors/api-errors';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { paginate, type Page } from '../records/list-query';
 import type { ListGuardrailEventsQuery } from './dto';
+import { guardrailSettings } from './guardrail-settings';
 import { mailboxCoverage } from './mailbox-coverage';
 
 const MEMBER = { select: { id: true, user: { select: { displayName: true } } } } as const;
@@ -50,6 +51,30 @@ export class GuardrailsService {
     mailboxCoverage(): Promise<MailboxCoverageView[]> {
         this.current();
         return this.rls.withWorkspace((tx) => mailboxCoverage(tx));
+    }
+
+    /** GUARD-2's settings (no row: the defaults). */
+    settings(): Promise<GuardrailSettingsView> {
+        this.current();
+        return this.rls.withWorkspace((tx) => guardrailSettings(tx));
+    }
+
+    /** Admins: each shared mailbox must be an active member of this workspace. */
+    async setSettings(input: GuardrailSettingsView): Promise<GuardrailSettingsView> {
+        const { workspaceId } = this.current();
+        const ids = [...new Set(input.sharedMailboxMemberIds)];
+        return this.rls.withWorkspace(async (tx) => {
+            const found = await tx.workspaceMember.count({ where: { id: { in: ids }, leftAt: null } });
+            if (found !== ids.length)
+                throw new UnknownReference('sharedMailboxMemberIds', 'every shared mailbox must be a member');
+            const data = { poachEmailAtOnce: input.poachEmailAtOnce, sharedMailboxMemberIds: ids };
+            const row = await tx.guardrailSettings.upsert({
+                where: { workspaceId },
+                create: { workspaceId, ...data },
+                update: data,
+            });
+            return { poachEmailAtOnce: row.poachEmailAtOnce, sharedMailboxMemberIds: row.sharedMailboxMemberIds };
+        });
     }
 
     /** Once: an event already marked is a `409`, so the first reviewer's reason stands. */
