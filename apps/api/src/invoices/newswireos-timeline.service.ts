@@ -33,6 +33,8 @@ export interface TimelineDelivery {
     amount: Money | null;
     /** Null for an agency's invoice: kept, unmatched. */
     client: TimelineClient | null;
+    /** `am.assigned`'s `data.account_manager.name`; null when it carries none. */
+    accountManager: string | null;
     payload: unknown;
 }
 
@@ -176,8 +178,12 @@ async function writeEntry(
     });
 }
 
-/** The account manager an `am.assigned` names, from its title (`Account manager: <name>`); null when it names none. */
-export function amOf(delivery: Pick<TimelineDelivery, 'title'>): string | null {
+/**
+ * The account manager an `am.assigned` names: `data.account_manager.name`, else (a sender from before that field) its
+ * title (`Account manager: <name>`); null when it names none.
+ */
+export function amOf(delivery: Pick<TimelineDelivery, 'title' | 'accountManager'>): string | null {
+    if (delivery.accountManager) return delivery.accountManager.replace(/\s+/g, ' ');
     const title = delivery.title.trim();
     if (!title.startsWith(NEWSWIREOS_AM_TITLE_PREFIX)) return null;
     const name = title.slice(NEWSWIREOS_AM_TITLE_PREFIX.length).trim().replace(/\s+/g, ' ');
@@ -255,6 +261,7 @@ export function parseTimeline(body: unknown, webhookId: string | undefined): Tim
     const amountCents = data['amount_cents'];
     const currency = text(data['currency'], 3);
     const c = record(data['client']);
+    const am = record(data['account_manager']);
     const url = text(data['url'], 2048);
     return {
         id,
@@ -276,6 +283,7 @@ export function parseTimeline(body: unknown, webhookId: string | undefined): Tim
                   bylineCompanyId: text(c['byline_company_id'], 200),
               }
             : null,
+        accountManager: text(am?.['name'], 200),
         payload: body,
     };
 }

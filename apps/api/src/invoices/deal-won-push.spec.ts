@@ -137,9 +137,21 @@ describe('PNW-766 timeline deliveries', () => {
         expect(parsed).toMatchObject({ url: null });
     });
 
-    it('the account manager is the am.assigned title’s name', () => {
-        expect(amOf({ title: 'Account manager: Mia  Lopez' })).toBe('Mia Lopez');
-        expect(amOf({ title: 'Account manager: ' })).toBeNull();
-        expect(amOf({ title: 'Client account created' })).toBeNull();
+    it('the account manager is am.assigned’s data.account_manager name', () => {
+        const parsed = parseTimeline(
+            envelope('am.assigned', {
+                title: 'Account manager: Someone Else',
+                account_manager: { id: 'u1', name: ' Mia  Lopez ', email: 'mia@example.com' },
+            }),
+            'e',
+        );
+        expect(parsed).toMatchObject({ accountManager: 'Mia  Lopez' });
+        expect(amOf(parsed as { title: string; accountManager: string | null })).toBe('Mia Lopez');
+    });
+
+    it('without data.account_manager, the account manager is the title’s name', () => {
+        expect(amOf({ title: 'Account manager: Mia  Lopez', accountManager: null })).toBe('Mia Lopez');
+        expect(amOf({ title: 'Account manager: ', accountManager: null })).toBeNull();
+        expect(amOf({ title: 'Client account created', accountManager: null })).toBeNull();
     });
 });
