@@ -3,7 +3,14 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, TWENTY_IMPORT_SOURCE, type DomainEvent } from '@bylinecrm/shared';
+import {
+    CSRF_COOKIE,
+    CSRF_HEADER,
+    SESSION_COOKIE,
+    SYSTEM_ROLES,
+    TWENTY_IMPORT_SOURCE,
+    type DomainEvent,
+} from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
@@ -15,7 +22,7 @@ import { NEWSWIREOS_DEAL_WON_PORT } from '../../src/invoices/deal-won-push.port'
 import { DealWonPushService } from '../../src/invoices/deal-won-push.service';
 import { NEWSWIREOS_SIGNATURE_HEADER } from '../../src/invoices/invoices.constants';
 import { NewswireosApiError } from '../../src/invoices/newswireos-verification.port';
-import type { DealWonDeliveryView } from '../../src/invoices/responses';
+import type { DealWonDeliveryView, DealWonPushPreview } from '../../src/invoices/responses';
 import { FakeNewswireosDealWon } from '../support/fake-newswireos-deal-won';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
@@ -270,6 +277,36 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
             expect((await owner.company.findUniqueOrThrow({ where: { id: companyId } })).newswireosCustomerId).toBe(
                 'cus_1',
             );
+            // The records API shows both, read-only; another workspace reads neither.
+            expect(
+                (
+                    await as(a.who)
+                        .get(w(`/people/${personId}`))
+                        .expect(200)
+                ).body,
+            ).toMatchObject({
+                newswireosCustomerId: 'cus_1',
+            });
+            expect(
+                (
+                    await as(a.who)
+                        .get(w(`/companies/${companyId}`))
+                        .expect(200)
+                ).body,
+            ).toMatchObject({
+                newswireosCustomerId: 'cus_1',
+            });
+            const write = await http()
+                .patch(w(`/people/${personId}`))
+                .set('Cookie', a.who.cookie)
+                .set(CSRF_HEADER, a.who.csrf)
+                .send({ newswireosCustomerId: 'cus_forged' });
+            expect(write.status).toBeLessThan(500);
+            expect((await owner.person.findUniqueOrThrow({ where: { id: personId } })).newswireosCustomerId).toBe(
+                'cus_1',
+            );
+            expect((await as(b.who).get(w(`/people/${personId}`, b.id))).status).toBe(404);
+            expect((await as(b.who).get(w(`/companies/${companyId}`, b.id))).status).toBe(404);
             // Done is done.
             expect(await run(d.id)).toBe('done');
             expect(newswireos.calls).toHaveLength(1);
@@ -361,6 +398,63 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
             expect(await run(d.id)).toBe('done');
             expect(await latest()).toMatchObject({ id: d.id, status: 'skipped', reasonCode: 'PUSH_OFF' });
             expect(newswireos.calls).toHaveLength(0);
+        });
+    });
+
+    describe('"Send test" for won deals', () => {
+        const test = (ws = a) => as(ws.who).post(w('/integrations/newswireos/deal-won-push/test', ws.id));
+
+        it('sends and writes nothing; shows the body a push would send for the latest won deal that qualifies', async () => {
+            const count = () => owner.newswireosDealWonDelivery.count({ where: { workspaceId: a.id } });
+            const deal = await winDeal(`Preview ${stamp}`);
+            const before = await count();
+            // A later win whose contact has no email does not qualify: the one before it is shown.
+            await winDeal(`Preview no email ${stamp}`, await newPerson('Nomail', companyId));
+            const preview = (await test().expect(200)).body as DealWonPushPreview;
+            expect(preview).toMatchObject({ sent: false, found: true, opportunityId: deal });
+            expect(preview.payload).toEqual({
+                event_id: expect.any(String) as string,
+                occurred_at: expect.any(String) as string,
+                deal: { byline_id: deal, name: `Preview ${stamp}`, amount_minor: 250_000, currency: 'USD' },
+                company: { byline_id: companyId, name: 'Acme', domain },
+                contact: { byline_id: personId, email: `ana@${domain}`, name: 'Ana Test' },
+                owner: { email: a.email },
+            });
+            expect(newswireos.calls).toHaveLength(0);
+            expect(await count()).toBe(before);
+        });
+
+        it('answers found: false with no qualifying deal; an admin’s only', async () => {
+            expect((await test(b).expect(200)).body).toEqual({
+                sent: false,
+                found: false,
+                opportunityId: null,
+                payload: null,
+            });
+            const member = `deal-won-member-${stamp}@example.test`;
+            const roles = (await as(a.who).get(w('/roles')).expect(200)).body as { id: string; name: string }[];
+            const invite = await as(a.who)
+                .post(w('/invites'))
+                .send({ email: member, roleId: roles.find((r) => r.name === SYSTEM_ROLES.member)!.id })
+                .expect(201);
+            const joined = await http()
+                .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+                .send({ password: 'correct horse battery staple' })
+                .expect(201);
+            await verifyAddress(app, http, member);
+            expect((await as(browserFrom(joined)).post(w('/integrations/newswireos/deal-won-push/test'))).status).toBe(
+                403,
+            );
+            expect(newswireos.calls).toHaveLength(0);
+        });
+
+        it('cross-tenant: another workspace’s test never reads this workspace’s won deals', async () => {
+            expect(((await test().expect(200)).body as DealWonPushPreview).found).toBe(true);
+            const theirs = (await test(b).expect(200)).body as DealWonPushPreview;
+            expect(theirs).toMatchObject({ found: false, payload: null });
+            expect(
+                (await as(b.who).post(w('/integrations/newswireos/deal-won-push/test'))).status,
+            ).toBeGreaterThanOrEqual(403);
         });
     });
 
@@ -492,6 +586,7 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
                 kind: 'am.assigned',
                 title: 'Account manager: Mia Lopez',
                 url: 'https://x.test/',
+                account_manager: { id: 'am_1', name: 'Mia Lopez', email: 'mia@newswireos.test' },
                 client: client({ email: fresh }),
             }).expect(200);
             await hook('client.created', {
@@ -524,6 +619,7 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
                 kind: 'am.assigned',
                 title: 'Account manager: Ola',
                 url: 'https://x.test/',
+                account_manager: { id: 'am_2', name: 'Ola', email: 'ola@newswireos.test' },
                 client: client({ email: looked }),
             }).expect(200);
             await hook('client.created', {

@@ -22,11 +22,13 @@ import { OwnershipPushService } from './ownership-push.service';
 import {
     dealInvoiceView,
     dealWonDeliveryView,
+    dealWonPushPreview,
     newswireosHookResult,
     newswireosSettingsView,
     ownershipDeliveryView,
     ownershipPushPreview,
     type DealWonDeliveryView,
+    type DealWonPushPreview,
     type NewswireosHookResult,
     type NewswireosSettingsView,
     type OwnershipDeliveryView,
@@ -176,6 +178,15 @@ export class NewswireosSettingsController {
     @Returns([dealWonDeliveryView])
     dealWonDeliveries(): Promise<DealWonDeliveryView[]> {
         return this.dealWon.deliveries();
+    }
+
+    /** PNW-766: a dry run. Nothing is sent; the body a push would send for the latest won deal that qualifies. */
+    @Requires('workspace:admin')
+    @HttpCode(200)
+    @Post('deal-won-push/test')
+    @Returns(dealWonPushPreview)
+    testDealWonPush(): Promise<DealWonPushPreview> {
+        return this.dealWon.preview();
     }
 }
 

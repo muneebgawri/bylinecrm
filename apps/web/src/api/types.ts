@@ -180,6 +180,7 @@ export type NewswireosSettingsView = Schemas['NewswireosSettings'];
 export type PutNewswireosSettingsInput = Loose<Schemas['PutNewswireosSettingsDto']>;
 export type NewswireosOwnershipDeliveryView = Schemas['NewswireosOwnershipDelivery'];
 export type NewswireosOwnershipPreview = Schemas['NewswireosOwnershipPreview'];
+export type NewswireosDealWonPreview = Schemas['NewswireosDealWonPreview'];
 export type NewswireosDealWonDeliveryView = Schemas['NewswireosDealWonDelivery'];
 export type BylineSettingsView = Schemas['BylineSettings'];
 export type PutBylineSettingsInput = Loose<Schemas['PutBylineSettingsDto']>;

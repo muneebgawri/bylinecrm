@@ -5,7 +5,6 @@ import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { normalisedDomain } from '../records/company-ownership';
 import {
-    NEWSWIREOS_AM_TITLE_PREFIX,
     NEWSWIREOS_CLIENT_NOTE,
     NEWSWIREOS_CLIENT_SOURCE,
     NEWSWIREOS_TIMELINE_EVENTS,
@@ -178,16 +177,9 @@ async function writeEntry(
     });
 }
 
-/**
- * The account manager an `am.assigned` names: `data.account_manager.name`, else (a sender from before that field) its
- * title (`Account manager: <name>`); null when it names none.
- */
-export function amOf(delivery: Pick<TimelineDelivery, 'title' | 'accountManager'>): string | null {
-    if (delivery.accountManager) return delivery.accountManager.replace(/\s+/g, ' ');
-    const title = delivery.title.trim();
-    if (!title.startsWith(NEWSWIREOS_AM_TITLE_PREFIX)) return null;
-    const name = title.slice(NEWSWIREOS_AM_TITLE_PREFIX.length).trim().replace(/\s+/g, ' ');
-    return name === '' ? null : name.slice(0, 200);
+/** The account manager an `am.assigned` names: `data.account_manager.name`; null when it carries none. */
+export function amOf(delivery: Pick<TimelineDelivery, 'accountManager'>): string | null {
+    return delivery.accountManager ? delivery.accountManager.replace(/\s+/g, ' ') : null;
 }
 
 /**

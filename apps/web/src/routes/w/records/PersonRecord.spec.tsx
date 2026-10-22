@@ -19,12 +19,12 @@ const empty = () =>
         },
     ]);
 
-const page = (capabilities: Capability[]) =>
+const page = (capabilities: Capability[], shown = person) =>
     renderAt(
         [
             route(
                 '/w/:workspaceId/people/:personId',
-                <PersonRecord workspaceId={WS} person={person} layout="page" membersById={new Map()} />,
+                <PersonRecord workspaceId={WS} person={shown} layout="page" membersById={new Map()} />,
             ),
         ],
         `/w/${WS}/people/${person.id}`,
@@ -45,6 +45,24 @@ describe('#192 the person page’s “Enrol in sequence”', () => {
         empty();
         page(['record:read', 'record:write', 'email:send', 'sequence:enrol']);
         expect((await screen.findAllByRole('button', { name: /Enrol/ }))[0]).toBeEnabled();
+    });
+});
+
+describe('PNW-766 a person’s NewswireOS client', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('is shown read-only once a won-deal push set it', async () => {
+        empty();
+        page(['record:read', 'record:write'], { ...person, newswireosCustomerId: 'cus_42' });
+        expect(await screen.findByText('NewswireOS client')).toBeInTheDocument();
+        expect(screen.getByText('cus_42').tagName).toBe('SPAN');
+    });
+
+    it('has no row while it is unset', async () => {
+        empty();
+        page(['record:read', 'record:write']);
+        expect(await screen.findByRole('heading', { name: 'Dana Reyes' })).toBeInTheDocument();
+        expect(screen.queryByText('NewswireOS client')).toBeNull();
     });
 });
 

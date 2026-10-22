@@ -14290,6 +14290,71 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/integrations/newswireos/deal-won-push/test": {
+            "post": {
+                "operationId": "newswireosSettings_testDealWonPush",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosDealWonPreview"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/api/hooks/newswireos/{token}": {
             "post": {
                 "operationId": "newswireosHook_receive",
@@ -32579,6 +32644,11 @@
                         "type": "boolean",
                         "description": "Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed."
                     },
+                    "newswireosCustomerId": {
+                        "nullable": true,
+                        "description": "Read-only (PNW-766): their NewswireOS client, from its answer to the latest won-deal push.",
+                        "type": "string"
+                    },
                     "links": {
                         "$ref": "#/components/schemas/Links"
                     },
@@ -32663,6 +32733,7 @@
                     "contactAttempts",
                     "lastContactedAt",
                     "cadenceOverdue",
+                    "newswireosCustomerId",
                     "links",
                     "avatarUrl",
                     "position",
@@ -32745,6 +32816,11 @@
                     "icp": {
                         "type": "boolean"
                     },
+                    "newswireosCustomerId": {
+                        "nullable": true,
+                        "description": "Read-only (PNW-766): its NewswireOS client, the first a won-deal push gave it.",
+                        "type": "string"
+                    },
                     "position": {
                         "type": "number"
                     },
@@ -32801,6 +32877,7 @@
                     "address",
                     "links",
                     "icp",
+                    "newswireosCustomerId",
                     "position",
                     "ownerId",
                     "owner",
@@ -35898,6 +35975,99 @@
                     "lastAttemptAt",
                     "createdAt"
                 ]
+            },
+            "NewswireosDealWonPreview": {
+                "type": "object",
+                "properties": {
+                    "sent": {
+                        "type": "boolean",
+                        "enum": [false]
+                    },
+                    "found": {
+                        "type": "boolean"
+                    },
+                    "opportunityId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "payload": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                            "event_id": {
+                                "type": "string",
+                                "description": "Made up: a real push’s is its `deal.won` event."
+                            },
+                            "occurred_at": {
+                                "type": "string"
+                            },
+                            "deal": {
+                                "type": "object",
+                                "properties": {
+                                    "byline_id": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "amount_minor": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                    },
+                                    "currency": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["byline_id", "name"]
+                            },
+                            "company": {
+                                "type": "object",
+                                "properties": {
+                                    "byline_id": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "domain": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["byline_id", "name"]
+                            },
+                            "contact": {
+                                "type": "object",
+                                "properties": {
+                                    "byline_id": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["byline_id", "email"]
+                            },
+                            "owner": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["email"]
+                            }
+                        },
+                        "required": ["event_id", "occurred_at", "deal", "company", "contact", "owner"]
+                    }
+                },
+                "required": ["sent", "found", "opportunityId", "payload"]
             },
             "NewswireosOwnershipDelivery": {
                 "type": "object",

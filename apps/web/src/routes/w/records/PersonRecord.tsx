@@ -16,7 +16,7 @@ import { AttachmentsPanel } from './AttachmentsPanel';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
-import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
+import { newswireosClientRow, OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
@@ -281,6 +281,7 @@ export function PersonRecord({
                 />
             ),
         },
+        ...newswireosClientRow(person.newswireosCustomerId),
     ];
 
     const actions: RecordAction[] = [

@@ -13,7 +13,7 @@ import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
-import { OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
+import { newswireosClientRow, OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
@@ -176,6 +176,7 @@ export function CompanyRecord({
                 />
             ),
         },
+        ...newswireosClientRow(company.newswireosCustomerId),
     ];
 
     const actions: RecordAction[] = [
