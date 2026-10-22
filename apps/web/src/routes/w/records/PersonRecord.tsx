@@ -8,6 +8,7 @@ import { usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';
+import { useCompanyCreator } from '../../../components/useCompanyCreator';
 import { formatDay } from '../../../lib/format';
 import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
@@ -50,6 +51,7 @@ export function PersonRecord({
     const setContactStatus = useSetContactStatus(workspaceId, person.id);
     const write = usePermission('record:write');
     const company = useRecord(workspaceId, 'company', person.companyId ?? '');
+    const createCompany = useCompanyCreator(workspaceId, person.emails.primary);
     const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
@@ -249,6 +251,7 @@ export function PersonRecord({
                     canEdit={write.allowed}
                     reason={write.reason}
                     onChange={(v) => save({ companyId: v })}
+                    onCreate={createCompany}
                 />
             ),
         },
