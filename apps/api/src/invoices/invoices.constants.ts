@@ -115,6 +115,8 @@ export const DEAL_WON_PUSH_QUEUE = 'newswireos-deal-won-push';
 export const DEAL_WON_PUSH_JOB = 'push';
 export const NEWSWIREOS_DEAL_WON_PATH = '/api/v1/crm/deal-won';
 export const NEWSWIREOS_DEAL_WON_SCOPE = 'crm:client_write';
+/** PNW-766: how many of the latest won deals "Send test" looks through for one that qualifies. */
+export const DEAL_WON_PREVIEW_SCAN = 50;
 
 /**
  * PNW-766: the NewswireOS events the hook puts on the timeline (FR-CRM-6c), in NewswireOS's own names. Each becomes

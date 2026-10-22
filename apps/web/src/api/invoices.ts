@@ -5,6 +5,7 @@ import type {
     CreateInvoiceInput,
     DealInvoiceView,
     NewswireosDealWonDeliveryView,
+    NewswireosDealWonPreview,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
     NewswireosSettingsView,
@@ -110,6 +111,11 @@ const newswireos = {
             workspacePath(workspaceId, '/integrations/newswireos/deal-won-push/deliveries'),
             { signal },
         ),
+    testDealWonPush: (workspaceId: string) =>
+        request<NewswireosDealWonPreview>(
+            'POST',
+            workspacePath(workspaceId, '/integrations/newswireos/deal-won-push/test'),
+        ),
 };
 
 export const useNewswireosSettings = (workspaceId: string) =>
@@ -162,3 +168,7 @@ export const useDealWonDeliveries = (workspaceId: string) =>
         refetchInterval: (q) =>
             q.state.data?.some((d) => d.status === 'pending' || d.status === 'retrying') ? 5000 : false,
     });
+
+/** PNW-766: the dry run. Nothing is sent; the body a push would send for the latest won deal that qualifies. */
+export const useTestDealWonPush = (workspaceId: string) =>
+    useMutation({ mutationFn: () => newswireos.testDealWonPush(workspaceId) });

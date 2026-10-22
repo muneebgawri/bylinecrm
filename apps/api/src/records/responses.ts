@@ -71,6 +71,9 @@ export const personView = named(
         cadenceOverdue: z.boolean().meta({
             description: 'Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed.',
         }),
+        newswireosCustomerId: z.string().nullable().meta({
+            description: 'Read-only (PNW-766): their NewswireOS client, from its answer to the latest won-deal push.',
+        }),
         links,
         avatarUrl: z.string().nullable(),
         position: z.number(),
@@ -98,6 +101,9 @@ export const companyView = named(
         address,
         links,
         icp: z.boolean(),
+        newswireosCustomerId: z.string().nullable().meta({
+            description: 'Read-only (PNW-766): its NewswireOS client, the first a won-deal push gave it.',
+        }),
         position: z.number(),
         ownerId: id.nullable(),
         owner,

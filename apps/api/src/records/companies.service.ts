@@ -297,6 +297,7 @@ export function view(row: CompanyRow): CompanyView {
         address: stored<Address>(row.address),
         links: stored<Links>(row.links),
         icp: row.icp,
+        newswireosCustomerId: row.newswireosCustomerId,
         position: row.position,
         ownerId: row.ownerId,
         owner: memberSummary(row.owner),

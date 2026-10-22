@@ -26,6 +26,7 @@ export const FIELD_LABELS: Readonly<Record<string, string>> = {
     arr: 'ARR',
     address: 'address',
     icp: 'ideal customer',
+    newswireosCustomerId: 'NewswireOS client',
     amount: 'amount',
     closedAt: 'closed',
     probability: 'probability',

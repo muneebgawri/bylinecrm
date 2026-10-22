@@ -104,6 +104,36 @@ export const dealWonDeliveryView = named(
 
 export type DealWonDeliveryView = z.output<typeof dealWonDeliveryView>;
 
+/**
+ * PNW-766: the dry run's body, for the latest won deal that qualifies. Nothing is sent: NewswireOS's route reads no
+ * `test` flag. `found` false (and `payload` null) when no won deal has a contact with an email, a company and an owner.
+ */
+export const dealWonPushPreview = named(
+    'NewswireosDealWonPreview',
+    z.object({
+        sent: z.literal(false),
+        found: z.boolean(),
+        opportunityId: id.nullable(),
+        payload: z
+            .object({
+                event_id: z.string().meta({ description: 'Made up: a real push’s is its `deal.won` event.' }),
+                occurred_at: z.string(),
+                deal: z.object({
+                    byline_id: z.string(),
+                    name: z.string(),
+                    amount_minor: z.number().int().optional(),
+                    currency: z.string().optional(),
+                }),
+                company: z.object({ byline_id: z.string(), name: z.string(), domain: z.string().optional() }),
+                contact: z.object({ byline_id: z.string(), email: z.string(), name: z.string().optional() }),
+                owner: z.object({ email: z.string() }),
+            })
+            .nullable(),
+    }),
+);
+
+export type DealWonPushPreview = z.output<typeof dealWonPushPreview>;
+
 const ownershipReason = z.enum(['transfer', 'forced', 'first_contact']);
 
 /** PNW-765: one ownership change pushed (or being pushed) to NewswireOS. */

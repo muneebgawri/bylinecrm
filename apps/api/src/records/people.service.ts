@@ -397,6 +397,7 @@ export function view(row: PersonRow): PersonView {
         contactAttempts: row.contactAttempts,
         lastContactedAt: row.lastContactedAt,
         cadenceOverdue: row.cadenceOverdue,
+        newswireosCustomerId: row.newswireosCustomerId,
         country: row.country,
         links: stored<Links>(row.links),
         avatarUrl: row.avatarUrl,

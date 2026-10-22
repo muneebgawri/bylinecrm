@@ -10,10 +10,12 @@ import {
     useRotateNewswireos,
     useSetDealWonPush,
     useSetOwnershipPush,
+    useTestDealWonPush,
     useTestOwnershipPush,
 } from '../../../api/invoices';
 import type {
     NewswireosDealWonDeliveryView,
+    NewswireosDealWonPreview,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
     NewswireosSettingsView,
@@ -383,11 +385,14 @@ const DEAL_WON_TEXT: Record<string, string> = {
 
 /**
  * PNW-766: won deals pushed to NewswireOS, which makes the deal's contact a client with the deal owner's account
- * manager. Off by default; while off, nothing is sent.
+ * manager. Off by default; while off, nothing is sent. "Send test" sends nothing: it shows the body a push would
+ * send for the latest won deal that qualifies.
  */
 function DealWonPush({ workspaceId, settings }: { workspaceId: string; settings: NewswireosSettingsView }) {
     const set = useSetDealWonPush(workspaceId);
+    const test = useTestDealWonPush(workspaceId);
     const deliveries = useDealWonDeliveries(workspaceId);
+    const [preview, setPreview] = useState<NewswireosDealWonPreview | null>(null);
     const failed = (e: unknown) => toast({ title: 'That did not work', description: failureText(e), tone: 'danger' });
     return (
         <section
@@ -417,6 +422,34 @@ function DealWonPush({ workspaceId, settings }: { workspaceId: string; settings:
                     </span>
                 </span>
             </label>
+            <div>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    shape="square"
+                    loading={test.isPending}
+                    onClick={() => test.mutate(undefined, { onSuccess: setPreview, onError: failed })}
+                >
+                    Send test
+                </Button>
+            </div>
+            {preview &&
+                (preview.payload ? (
+                    <div className="flex flex-col gap-1 text-[13px]">
+                        <p className="m-0 text-text-muted">
+                            Nothing was sent. This is what a push sends for the latest won deal that qualifies,{' '}
+                            {preview.payload.deal.name || 'unnamed'}:
+                        </p>
+                        <pre className="m-0 max-h-64 overflow-auto rounded-md border border-border p-3 text-xs break-all whitespace-pre-wrap">
+                            {JSON.stringify(preview.payload, null, 2)}
+                        </pre>
+                    </div>
+                ) : (
+                    <p className="m-0 text-[13px] text-text-muted">
+                        Nothing was sent: no won deal qualifies yet. A deal qualifies when its contact has an email, and
+                        it has a company and an owner (its own, or its contact’s).
+                    </p>
+                ))}
             <h4 className="m-0 mt-2 text-[13px] font-semibold text-text">Recent deliveries</h4>
             {deliveries.isError ? (
                 <p className="m-0 text-[13px] text-text-muted">{failureText(deliveries.error)}</p>

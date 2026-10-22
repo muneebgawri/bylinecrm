@@ -16,6 +16,21 @@ export interface PropertyRow {
     control: ReactNode;
 }
 
+/**
+ * PNW-766: the record's NewswireOS client, read-only (a won-deal push writes it); no row until it has one. Plain
+ * text: NewswireOS has no client page to link to.
+ */
+export function newswireosClientRow(customerId: string | null): PropertyRow[] {
+    return customerId
+        ? [
+              {
+                  field: 'newswireosCustomerId',
+                  control: <span className="block px-1 pt-1.5 text-[13px] break-all">{customerId}</span>,
+              },
+          ]
+        : [];
+}
+
 /** The left column: a heading, then label/value rows; custom fields follow the standard ones. */
 export function PropertiesColumn({
     workspaceId,

@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { Queue } from 'bullmq';
 import type { DeliveredEvent } from '../events/outbox-consumer';
 import { ApiException } from '../infra/errors/api-errors';
@@ -9,6 +10,7 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { SecretBox } from '../infra/secret-box';
 import { NEWSWIREOS_DEAL_WON_PORT, type DealWonBody, type NewswireosDealWonPort } from './deal-won-push.port';
 import {
+    DEAL_WON_PREVIEW_SCAN,
     DEAL_WON_PUSH_JOB,
     DEAL_WON_PUSH_QUEUE,
     OWNERSHIP_DELIVERIES_SHOWN,
@@ -17,7 +19,7 @@ import {
     OWNERSHIP_PUSH_SWEEP_MAX,
 } from './invoices.constants';
 import { NewswireosApiError } from './newswireos-verification.port';
-import type { DealWonDeliveryView } from './responses';
+import type { DealWonDeliveryView, DealWonPushPreview } from './responses';
 
 export interface DealWonPushJob {
     workspaceId: string;
@@ -67,7 +69,10 @@ export class DealWonPushService {
                 where: { workspaceId_eventId: { workspaceId, eventId: delivered.id } },
             });
             if (existing) return existing;
-            const built = await bodyFor(tx, delivered);
+            const built = await bodyFor(tx, delivered.event.recordId, {
+                id: delivered.id,
+                occurredAt: delivered.event.occurredAt,
+            });
             if (!built) return null;
             return tx.newswireosDealWonDelivery.create({
                 data: {
@@ -214,21 +219,50 @@ export class DealWonPushService {
             ).map(deliveryView),
         );
     }
+
+    /**
+     * A dry run: the body a push would send for the latest won deal that qualifies (a contact with an email, a
+     * company, an owner), with a made-up `event_id` (a real push's is its `deal.won` event). Nothing is sent or
+     * written; `found` false when no won deal qualifies. Looks at the latest `DEAL_WON_PREVIEW_SCAN` won deals only.
+     */
+    async preview(): Promise<DealWonPushPreview> {
+        return this.rls.withWorkspace(async (tx) => {
+            const deals = await tx.opportunity.findMany({
+                where: {
+                    deletedAt: null,
+                    stage: { kind: 'won' },
+                    pointOfContact: { deletedAt: null, emailPrimary: { not: null } },
+                },
+                select: { id: true, closedAt: true },
+                orderBy: [{ closedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+                take: DEAL_WON_PREVIEW_SCAN,
+            });
+            for (const deal of deals) {
+                const built = await bodyFor(tx, deal.id, {
+                    id: randomUUID(),
+                    occurredAt: (deal.closedAt ?? new Date()).toISOString(),
+                });
+                if (built) return { sent: false, found: true, opportunityId: deal.id, payload: built.body };
+            }
+            return { sent: false, found: false, opportunityId: null, payload: null };
+        });
+    }
 }
 
 /**
- * The body for a won deal: the deal, its company (the deal's, else its contact's), its contact and its owner (the
- * deal's, else the contact's or the company's). Null when NewswireOS could not take it: no contact with an email,
- * no company, no owner, or the deal is no longer won.
+ * The body for a won deal, sent as `event` (the push's `event_id` and `occurred_at`): the deal, its company (the
+ * deal's, else its contact's), its contact and its owner (the deal's, else the contact's or the company's). Null
+ * when NewswireOS could not take it: no contact with an email, no company, no owner, or the deal is no longer won.
  */
 async function bodyFor(
     tx: WorkspaceClient,
-    delivered: DeliveredEvent,
+    dealId: string,
+    event: { id: string; occurredAt: string },
 ): Promise<{ body: DealWonBody; personId: string; companyId: string } | null> {
     const ownerEmail = { select: { user: { select: { email: true } } } } as const;
     const company = { select: { id: true, name: true, domain: true, owner: ownerEmail } } as const;
     const deal = await tx.opportunity.findUnique({
-        where: { id: delivered.event.recordId },
+        where: { id: dealId },
         select: {
             id: true,
             name: true,
@@ -263,8 +297,8 @@ async function bodyFor(
         personId: contact.id,
         companyId: at.id,
         body: {
-            event_id: delivered.id,
-            occurred_at: delivered.event.occurredAt,
+            event_id: event.id,
+            occurred_at: event.occurredAt,
             deal: {
                 byline_id: deal.id,
                 name: deal.name,
