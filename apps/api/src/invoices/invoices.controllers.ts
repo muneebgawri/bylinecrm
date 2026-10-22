@@ -5,24 +5,28 @@ import type { DealInvoiceView } from '@bylinecrm/shared';
 import { Public, Requires, TenantController } from '../auth/decorators';
 import type { RequestWithRawBody } from '../infra/errors/body-parsing';
 import { Returns } from '../openapi/responses';
+import { DealWonPushService } from './deal-won-push.service';
 import {
     CreateInvoiceDto,
+    PutDealWonPushDto,
     PutNewswireosSettingsDto,
     PutOwnershipPushDto,
     RejectInvoiceDto,
     VerifyInvoiceDto,
 } from './dto';
-import { NEWSWIREOS_HOOK_PATH, NEWSWIREOS_SIGNATURE_HEADER } from './invoices.constants';
+import { NEWSWIREOS_HOOK_PATH, NEWSWIREOS_SIGNATURE_HEADER, NEWSWIREOS_WEBHOOK_ID_HEADER } from './invoices.constants';
 import { InvoicesService } from './invoices.service';
 import { NewswireosHookService } from './newswireos-hook.service';
 import { NewswireosSettingsService } from './newswireos-settings.service';
 import { OwnershipPushService } from './ownership-push.service';
 import {
     dealInvoiceView,
+    dealWonDeliveryView,
     newswireosHookResult,
     newswireosSettingsView,
     ownershipDeliveryView,
     ownershipPushPreview,
+    type DealWonDeliveryView,
     type NewswireosHookResult,
     type NewswireosSettingsView,
     type OwnershipDeliveryView,
@@ -99,6 +103,7 @@ export class NewswireosSettingsController {
     constructor(
         private readonly settings: NewswireosSettingsService,
         private readonly ownership: OwnershipPushService,
+        private readonly dealWon: DealWonPushService,
     ) {}
 
     @Requires('workspace:admin')
@@ -155,9 +160,29 @@ export class NewswireosSettingsController {
     testOwnershipPush(): Promise<OwnershipPushPreview> {
         return this.ownership.preview();
     }
+
+    /** PNW-766: pushes won deals to NewswireOS, which makes their contacts clients, or stops. `404` without a link. */
+    @Requires('workspace:admin')
+    @Put('deal-won-push')
+    @Returns(newswireosSettingsView)
+    async putDealWonPush(@Body() body: PutDealWonPushDto): Promise<NewswireosSettingsView> {
+        await this.dealWon.setEnabled(body.enabled);
+        return this.settings.get();
+    }
+
+    /** PNW-766: the latest won deals pushed to NewswireOS, newest first. */
+    @Requires('workspace:admin')
+    @Get('deal-won-push/deliveries')
+    @Returns([dealWonDeliveryView])
+    dealWonDeliveries(): Promise<DealWonDeliveryView[]> {
+        return this.dealWon.deliveries();
+    }
 }
 
-/** Where NewswireOS posts refunds and chargebacks: public; the token names the workspace, the signature proves it. */
+/**
+ * Where NewswireOS posts refunds and chargebacks, and (PNW-766) its client activity for the timeline: public; the
+ * token names the workspace, the signature proves it.
+ */
 @ApiTags('invoices')
 @Controller(NEWSWIREOS_HOOK_PATH.replace(/^\/api\//, ''))
 @Public()
@@ -170,9 +195,10 @@ export class NewswireosHookController {
     receive(
         @Param('token') token: string,
         @Headers(NEWSWIREOS_SIGNATURE_HEADER) signature: string | undefined,
+        @Headers(NEWSWIREOS_WEBHOOK_ID_HEADER) webhookId: string | undefined,
         @Req() req: Request & RequestWithRawBody,
         @Body() body: unknown,
     ): Promise<NewswireosHookResult> {
-        return this.hook.receive(token, req.rawBody, signature, body, req.ip ?? '');
+        return this.hook.receive(token, req.rawBody, signature, body, req.ip ?? '', webhookId);
     }
 }

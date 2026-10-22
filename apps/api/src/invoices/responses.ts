@@ -54,14 +54,55 @@ export const newswireosSettingsView = named(
         lastDeliveryAt: dateTime.nullable(),
         lastDeliveryResult: z.string().nullable().meta({
             description:
-                '`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.',
+                '`applied` (a payment change applied, or a NewswireOS event put on a timeline), `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.',
         }),
         pushOwnership: z.boolean().meta({
             description:
                 'PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default.',
         }),
+        pushDealWon: z.boolean().meta({
+            description:
+                'PNW-766: whether won deals are pushed to NewswireOS, which makes their contacts clients (the token needs `crm:client_write`). Off by default.',
+        }),
     }),
 );
+
+const pushStatus = z.enum(['pending', 'retrying', 'delivered', 'not_ready', 'failed', 'skipped']);
+
+/** PNW-766: one won deal pushed (or being pushed) to NewswireOS. */
+export const dealWonDeliveryView = named(
+    'NewswireosDealWonDelivery',
+    z.object({
+        id,
+        eventId: id.meta({ description: 'The `deal.won` event: the push’s `event_id`.' }),
+        opportunityId: id,
+        personId: id.meta({ description: 'The deal’s contact: NewswireOS’s `customer_id` is kept on it.' }),
+        companyId: id,
+        dealName: z.string(),
+        contactEmail: z.string(),
+        ownerEmail: z.string(),
+        status: pushStatus.meta({
+            description:
+                'As an ownership delivery’s: `retrying` (no answer, or NewswireOS failed on its side), `not_ready` (404), `failed` (any other 4xx, or out of retries), `skipped` (the push was turned off before it went).',
+        }),
+        attempts: z.number().int(),
+        customerId: z.string().nullable().meta({ description: 'The NewswireOS client; null for `NOT_A_CLIENT`.' }),
+        parentCustomerId: z.string().nullable().meta({ description: 'A colleague’s: the client it was added to.' }),
+        reasonCode: z.string().nullable().meta({
+            description:
+                'NewswireOS’s `reason_code` (`CREATED`, `LINKED`, `COLLEAGUE`, `AGENCY_CLIENT`, `NOT_A_CLIENT`), or the CRM’s own as for an ownership delivery (`TOKEN_LACKS_SCOPE`, `PUSH_OFF`, …).',
+        }),
+        amReasonCode: z.string().nullable().meta({
+            description: '`REASSIGNED`, `UNCHANGED`, `NO_AM_FOR_EMAIL` or `AGENCY_CLIENT`.',
+        }),
+        httpStatus: z.number().int().nullable(),
+        lastError: z.string().nullable(),
+        lastAttemptAt: dateTime.nullable(),
+        createdAt: dateTime,
+    }),
+);
+
+export type DealWonDeliveryView = z.output<typeof dealWonDeliveryView>;
 
 const ownershipReason = z.enum(['transfer', 'forced', 'first_contact']);
 

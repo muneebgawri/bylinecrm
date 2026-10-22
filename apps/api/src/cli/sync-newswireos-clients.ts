@@ -2,11 +2,14 @@ import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { TWENTY_IMPORT_SOURCE } from '@bylinecrm/shared';
 import { parseEnv } from '../config/env';
+import { NEWSWIREOS_CLIENT_NOTE as CLIENT_NOTE, NEWSWIREOS_CLIENT_SOURCE } from '../invoices/invoices.constants';
 
-/** The source of an exclusion this sync owns: a NewswireOS client account. */
-export const NEWSWIREOS_CLIENT_SOURCE = 'newswireos';
+/**
+ * The source of an exclusion this sync owns: a NewswireOS client account. The hook keeps it current between syncs
+ * (PNW-766: `client.created`, `am.assigned`).
+ */
+export { NEWSWIREOS_CLIENT_SOURCE };
 
-const CLIENT_NOTE = 'NewswireOS client';
 const LOOKUP_REMOVED_NOTE = 'Twenty lead lookup: an owned contact, not a NewswireOS client';
 const GONE_NOTE = 'No longer a NewswireOS client';
 

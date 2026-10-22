@@ -2,15 +2,18 @@ import { Badge, Button, Field, Input, LoadingRegion, Switch, toast } from '@byli
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import {
+    useDealWonDeliveries,
     useNewswireosSettings,
     useOwnershipDeliveries,
     usePutNewswireos,
     useRemoveNewswireos,
     useRotateNewswireos,
+    useSetDealWonPush,
     useSetOwnershipPush,
     useTestOwnershipPush,
 } from '../../../api/invoices';
 import type {
+    NewswireosDealWonDeliveryView,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
     NewswireosSettingsView,
@@ -22,8 +25,8 @@ import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 
 const RESULT_TEXT: Record<string, string> = {
-    applied: 'A refund or chargeback was applied to an invoice.',
-    unmatched: 'A payment change arrived for no invoice in this workspace.',
+    applied: 'A refund or chargeback was applied to an invoice, or client activity was put on a timeline.',
+    unmatched: 'A delivery arrived for no invoice or record in this workspace; it was kept.',
     ignored: 'A delivery the CRM does not read was acknowledged.',
     duplicate: 'NewswireOS redelivered an event already applied; it was acknowledged.',
     bad_signature: 'A delivery was refused: it was not signed with this secret.',
@@ -115,7 +118,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                     hint={
                         settings.configured
                             ? 'Set. Enter a new one only to replace it.'
-                            : 'A NewswireOS API token with the payment_verification:lookup scope (and crm:ownership_write to push ownership changes).'
+                            : 'A NewswireOS API token with the payment_verification:lookup scope (and crm:ownership_write to push ownership changes, crm:client_write to push won deals).'
                     }
                     error={local.apiToken ?? fieldErrorAt(put.error, 'apiToken')}
                 >
@@ -185,7 +188,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                     <p className="m-0 text-[13px] text-text-muted">
                         {settings.lastDeliveryAt
                             ? `${RESULT_TEXT[settings.lastDeliveryResult ?? ''] ?? 'A delivery arrived.'} Last delivery ${formatWhen(settings.lastDeliveryAt)}.`
-                            : 'A verified invoice that is refunded or charged back stops counting when NewswireOS says so.'}
+                            : 'A verified invoice that is refunded or charged back stops counting when NewswireOS says so. Client activity sent to the same URL (new clients, paid orders and invoices, distributions, account managers) goes on the matching person’s or company’s timeline.'}
                     </p>
                     <div>
                         <Button type="button" variant="secondary" shape="square" onClick={() => setConfirm('rotate')}>
@@ -196,6 +199,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
             )}
 
             {settings.configured && <OwnershipPush workspaceId={workspaceId} settings={settings} />}
+            {settings.configured && <DealWonPush workspaceId={workspaceId} settings={settings} />}
 
             <ConfirmDialog
                 open={confirm !== null}
@@ -359,6 +363,106 @@ function DeliveryItem({ delivery: d }: { delivery: NewswireosOwnershipDeliveryVi
                     {d.customers
                         .map((c) => `Customer ${c.customerId}${c.reasonCode ? `: ${c.reasonCode}` : ''}`)
                         .join(' · ')}
+                </span>
+            )}
+        </li>
+    );
+}
+
+/** What NewswireOS's answer to a won deal means to an admin (its codes, then the CRM's own as for ownership). */
+const DEAL_WON_TEXT: Record<string, string> = {
+    CREATED: 'A new client account was made in NewswireOS (no invitation is sent).',
+    LINKED: 'Linked to the client account the contact already has.',
+    COLLEAGUE: 'Added as a colleague of the company’s existing client.',
+    AGENCY_CLIENT: 'Linked to an agency’s client: NewswireOS left its account manager alone.',
+    NOT_A_CLIENT: 'The address is a NewswireOS staff account: nothing was made.',
+    TOKEN_LACKS_SCOPE: 'Add the crm:client_write scope to the NewswireOS token (Settings → API tokens in NewswireOS).',
+    TOKEN_REFUSED: 'NewswireOS refused the API token: enter a new one above.',
+    BAD_REQUEST: 'NewswireOS could not read the deal it was sent.',
+};
+
+/**
+ * PNW-766: won deals pushed to NewswireOS, which makes the deal's contact a client with the deal owner's account
+ * manager. Off by default; while off, nothing is sent.
+ */
+function DealWonPush({ workspaceId, settings }: { workspaceId: string; settings: NewswireosSettingsView }) {
+    const set = useSetDealWonPush(workspaceId);
+    const deliveries = useDealWonDeliveries(workspaceId);
+    const failed = (e: unknown) => toast({ title: 'That did not work', description: failureText(e), tone: 'danger' });
+    return (
+        <section
+            aria-labelledby="newswireos-deal-won-title"
+            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+        >
+            <h3 id="newswireos-deal-won-title" className="m-0 text-[14px] font-semibold text-text">
+                Won deals
+            </h3>
+            <label className="flex items-start gap-3 text-[13px]">
+                <Switch
+                    checked={settings.pushDealWon}
+                    disabled={set.isPending}
+                    onCheckedChange={(on) =>
+                        set.mutate(on, {
+                            onSuccess: () => toast({ title: on ? 'Won-deal push on' : 'Won-deal push off' }),
+                            onError: failed,
+                        })
+                    }
+                />
+                <span className="flex flex-col gap-0.5">
+                    <span className="font-medium text-text">Make won deals’ contacts NewswireOS clients</span>
+                    <span className="text-text-muted">
+                        When a deal is won here, its contact becomes a client in NewswireOS (or is linked to the client
+                        they already are), with the deal owner as account manager. Only deals whose contact has an email
+                        are sent. The API token needs the crm:client_write scope; nothing is sent while this is off.
+                    </span>
+                </span>
+            </label>
+            <h4 className="m-0 mt-2 text-[13px] font-semibold text-text">Recent deliveries</h4>
+            {deliveries.isError ? (
+                <p className="m-0 text-[13px] text-text-muted">{failureText(deliveries.error)}</p>
+            ) : !deliveries.data ? (
+                <LoadingRegion label="Loading won-deal deliveries" className="h-12" />
+            ) : deliveries.data.length === 0 ? (
+                <p className="m-0 text-[13px] text-text-muted">Nothing pushed yet.</p>
+            ) : (
+                <ul
+                    aria-label="Recent won-deal deliveries"
+                    className="m-0 flex list-none flex-col divide-y divide-border p-0"
+                >
+                    {deliveries.data.map((d) => (
+                        <DealWonItem key={d.id} delivery={d} />
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
+function DealWonItem({ delivery: d }: { delivery: NewswireosDealWonDeliveryView }) {
+    const badge = DELIVERY_STATUS[d.status];
+    const outcome =
+        d.status === 'not_ready'
+            ? 'NewswireOS does not take won deals yet; not retried.'
+            : (DEAL_WON_TEXT[d.reasonCode ?? ''] ?? d.lastError);
+    return (
+        <li className="flex flex-col gap-0.5 py-2 text-[13px]">
+            <span className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 font-medium break-words">
+                    {d.dealName || 'A deal'} · {d.contactEmail}
+                </span>
+                <Badge status={badge.status}>{badge.label}</Badge>
+            </span>
+            <span className="text-xs text-text-muted">
+                Owner {d.ownerEmail} · {formatWhen(d.lastAttemptAt ?? d.createdAt)}
+                {d.attempts > 1 ? ` · ${d.attempts} attempts` : ''}
+                {d.reasonCode ? ` · ${d.reasonCode}` : ''}
+                {d.amReasonCode ? ` · AM ${d.amReasonCode}` : ''}
+            </span>
+            {outcome && <span className="text-xs break-words text-text-muted">{outcome}</span>}
+            {d.customerId && (
+                <span className="text-xs break-words text-text-muted">
+                    Customer {d.customerId}
+                    {d.parentCustomerId ? ` · colleague of ${d.parentCustomerId}` : ''}
                 </span>
             )}
         </li>

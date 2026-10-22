@@ -14147,6 +14147,149 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/integrations/newswireos/deal-won-push": {
+            "put": {
+                "operationId": "newswireosSettings_putDealWonPush",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutDealWonPushDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/newswireos/deal-won-push/deliveries": {
+            "get": {
+                "operationId": "newswireosSettings_dealWonDeliveries",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/NewswireosDealWonDelivery"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/api/hooks/newswireos/{token}": {
             "post": {
                 "operationId": "newswireosHook_receive",
@@ -28499,7 +28642,7 @@
                         "description": "NewswireOS’s address, `https://app.newswireos.example`."
                     },
                     "apiToken": {
-                        "description": "A NewswireOS API token with the `payment_verification:lookup` scope (and `crm:ownership_write` to push ownership changes). Leave out to keep the current one.",
+                        "description": "A NewswireOS API token with the `payment_verification:lookup` scope (and `crm:ownership_write` to push ownership changes, `crm:client_write` to push won deals). Leave out to keep the current one.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 500
@@ -28519,6 +28662,16 @@
                     "enabled": {
                         "type": "boolean",
                         "description": "The link’s API token needs the `crm:ownership_write` scope. Off by default."
+                    }
+                },
+                "required": ["enabled"]
+            },
+            "PutDealWonPushDto": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "The link’s API token needs the `crm:client_write` scope. Off by default."
                     }
                 },
                 "required": ["enabled"]
@@ -35606,12 +35759,16 @@
                     },
                     "lastDeliveryResult": {
                         "nullable": true,
-                        "description": "`applied`, `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.",
+                        "description": "`applied` (a payment change applied, or a NewswireOS event put on a timeline), `unmatched`, `ignored`, `duplicate` (a redelivery), `bad_signature` or `no_secret`.",
                         "type": "string"
                     },
                     "pushOwnership": {
                         "type": "boolean",
                         "description": "PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default."
+                    },
+                    "pushDealWon": {
+                        "type": "boolean",
+                        "description": "PNW-766: whether won deals are pushed to NewswireOS, which makes their contacts clients (the token needs `crm:client_write`). Off by default."
                     }
                 },
                 "required": [
@@ -35621,7 +35778,125 @@
                     "hookUrl",
                     "lastDeliveryAt",
                     "lastDeliveryResult",
-                    "pushOwnership"
+                    "pushOwnership",
+                    "pushDealWon"
+                ]
+            },
+            "NewswireosDealWonDelivery": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "eventId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The `deal.won` event: the push’s `event_id`."
+                    },
+                    "opportunityId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b",
+                        "description": "The deal’s contact: NewswireOS’s `customer_id` is kept on it."
+                    },
+                    "companyId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "dealName": {
+                        "type": "string"
+                    },
+                    "contactEmail": {
+                        "type": "string"
+                    },
+                    "ownerEmail": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "retrying", "delivered", "not_ready", "failed", "skipped"],
+                        "description": "As an ownership delivery’s: `retrying` (no answer, or NewswireOS failed on its side), `not_ready` (404), `failed` (any other 4xx, or out of retries), `skipped` (the push was turned off before it went)."
+                    },
+                    "attempts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "customerId": {
+                        "nullable": true,
+                        "description": "The NewswireOS client; null for `NOT_A_CLIENT`.",
+                        "type": "string"
+                    },
+                    "parentCustomerId": {
+                        "nullable": true,
+                        "description": "A colleague’s: the client it was added to.",
+                        "type": "string"
+                    },
+                    "reasonCode": {
+                        "nullable": true,
+                        "description": "NewswireOS’s `reason_code` (`CREATED`, `LINKED`, `COLLEAGUE`, `AGENCY_CLIENT`, `NOT_A_CLIENT`), or the CRM’s own as for an ownership delivery (`TOKEN_LACKS_SCOPE`, `PUSH_OFF`, …).",
+                        "type": "string"
+                    },
+                    "amReasonCode": {
+                        "nullable": true,
+                        "description": "`REASSIGNED`, `UNCHANGED`, `NO_AM_FOR_EMAIL` or `AGENCY_CLIENT`.",
+                        "type": "string"
+                    },
+                    "httpStatus": {
+                        "nullable": true,
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    },
+                    "lastError": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "lastAttemptAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "eventId",
+                    "opportunityId",
+                    "personId",
+                    "companyId",
+                    "dealName",
+                    "contactEmail",
+                    "ownerEmail",
+                    "status",
+                    "attempts",
+                    "customerId",
+                    "parentCustomerId",
+                    "reasonCode",
+                    "amReasonCode",
+                    "httpStatus",
+                    "lastError",
+                    "lastAttemptAt",
+                    "createdAt"
                 ]
             },
             "NewswireosOwnershipDelivery": {

@@ -44,6 +44,11 @@ const ACTIONS: Record<string, string> = {
     restored: 'restored',
 };
 
+/** An integration's source key, as a person reads it (PNW-766: NewswireOS's client activity). */
+const INTEGRATION_NAMES: Record<string, string> = {
+    newswireos: 'NewswireOS',
+};
+
 const THING: Record<string, string> = {
     note: 'a note',
     task: 'a task',
@@ -262,7 +267,7 @@ function actorName(entry: TimelineActivityView, names: NameSources): string {
         case 'sync':
             return 'Sync';
         case 'external':
-            return entry.actor.id ?? 'An integration';
+            return (entry.actor.id && INTEGRATION_NAMES[entry.actor.id]) ?? entry.actor.id ?? 'An integration';
         case 'system':
             return 'The system';
     }
