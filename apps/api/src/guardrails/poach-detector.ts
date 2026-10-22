@@ -9,7 +9,7 @@ import { notify } from '../notifications/notify';
 import { companyDomainOfAddress, normalisedDomain } from '../records/company-ownership';
 import { exclusionHits } from '../sequences/exclusions.service';
 import { AccountMail } from '../transactional-mail/account-mail';
-import { effectiveOwner, guardrailSettings } from './guardrail-settings';
+import { effectiveOwner, guardrailSettings, ownerlessMembers } from './guardrail-settings';
 import {
     domainOf,
     isCalendarMail,
@@ -34,8 +34,8 @@ import { recordGuardrailEvents, reviewersIn } from './record';
  *
  * Noise kept down: mail older than `POACH_LOOKBACK_MS` when seen (a first sync's history) is not judged; calendar
  * invitations and answers are not judged; members and the workspace's own domains are internal; free-mail domains
- * never match a company; a lead a shared mailbox owns (outreach@, Settings → Guardrails) is nobody's; pool
- * (sequence) mail is the enrolment guard's; and one alert per sender, owner and lead within `POACH_DEDUPE_WINDOW_MS`.
+ * never match a company; a lead a shared mailbox (outreach@, Settings → Guardrails) or a member who has left owns
+ * is nobody's; pool (sequence) mail is the enrolment guard's; and one alert per sender, owner and lead within `POACH_DEDUPE_WINDOW_MS`.
  */
 
 @Injectable()
@@ -70,7 +70,7 @@ export class PoachDetector {
 
             const settings = await guardrailSettings(tx);
             const recipients = message.participants.filter((p) => p.role !== 'from');
-            const facts = await readRecipients(tx, recipients, new Set(settings.sharedMailboxMemberIds));
+            const facts = await readRecipients(tx, recipients, await ownerlessMembers(tx, settings));
             const thread = await tx.mailParticipant.findMany({
                 where: { message: { threadId: message.threadId } },
                 select: { role: true, address: true, memberId: true, message: { select: { sentAt: true } } },
