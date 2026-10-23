@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { request } from './client';
+import { ApiError, request } from './client';
 import { query, workspacePath } from './endpoints';
 import { keys } from './queries';
 import type { RecordTarget } from '@bylinecrm/shared';
@@ -113,11 +113,29 @@ export const useRecordDrafts = (workspaceId: string, target: RecordTarget, enabl
         enabled,
     });
 
-/** Discards a draft, and drops it from every record's list. */
+/** The key every discard of a draft runs under: an open composer watches it, so a draft discarded anywhere is gone. */
+export const discardDraftKey = (workspaceId: string) => [...keys.mailDraftsAll(workspaceId), 'discard'] as const;
+
+/**
+ * Discards a draft — the one discard, from its composer or from the record's activity — and drops it from every
+ * record's list. One already gone (sent or discarded elsewhere) is discarded as asked.
+ */
 export function useDiscardDraft(workspaceId: string) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: (draftId: string) => mail.discardDraft(workspaceId, draftId),
+        mutationKey: discardDraftKey(workspaceId),
+        mutationFn: async (draftId: string) => {
+            try {
+                await mail.discardDraft(workspaceId, draftId);
+            } catch (error) {
+                if (!(error instanceof ApiError) || error.status !== 404) throw error;
+            }
+        },
+        onSuccess: (_none, draftId) =>
+            client.setQueriesData<MailDraftPage>(
+                { queryKey: keys.mailDraftsAll(workspaceId) },
+                (page) => page && { ...page, items: page.items.filter((d) => d.id !== draftId) },
+            ),
         onSettled: () => client.invalidateQueries({ queryKey: keys.mailDraftsAll(workspaceId) }),
     });
 }
