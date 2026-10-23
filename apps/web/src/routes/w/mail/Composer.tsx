@@ -1,4 +1,4 @@
-import { MAIL_FOLLOW_UPS_MAX, lintCompose, type RichText } from '@bylinecrm/shared';
+import { MAIL_FOLLOW_UPS_MAX, MAIL_SEND_RECIPIENTS_MAX, lintCompose, type RichText } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
@@ -14,24 +14,34 @@ import {
 } from '@bylinecrm/ui';
 import { useMutation } from '@tanstack/react-query';
 import { CalendarClock, FileText, Mail, Plus, X } from 'lucide-react';
-import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Link } from 'react-router';
 import { templates } from '../../../api/templates';
-import { useSendMail } from '../../../api/mail';
+import { useRecordDrafts, useSendMail } from '../../../api/mail';
 import { useMailboxes } from '../../../api/mailAdmin';
 import { useMailboxSignature } from '../../../api/signatures';
 import { useTemplates } from '../../../api/templates';
-import type { EmailTemplateView, MailboxView } from '../../../api/types';
+import type { EmailTemplateView, MailDraftView, MailboxView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { ResponsivePanel } from '../../../components/ResponsivePanel';
 import { RichTextEditor, type RichTextHandle } from '../../../components/rich-text/RichTextEditor';
 import { failureText } from '../../../lib/errors';
+import { formatWhen } from '../../../lib/format';
 import { paths } from '../../paths';
 import { docToSubject, subjectToDoc } from '../templates/subject';
 import {
+    EMPTY_DOC,
     canAddFollowUp,
+    draftContent,
     emptyVariables,
+    hasDraftContent,
+    parseAddresses,
+    recipientLabel,
+    stateFromDraft,
+    withRecipient,
+    type ComposerState,
+    type CopyRecipient,
     emptyVariablesText,
     followUpProblem,
     isBlank,
@@ -44,6 +54,7 @@ import {
     type FollowUpDraft,
     type TemplateFill,
 } from './compose';
+import { useDraftSaver, type DraftSaveState } from './draftSave';
 import { SchedulePicker } from './SchedulePicker';
 import { fromLocalInput, senderTimeZone, toLocalInput } from './schedule';
 
@@ -83,6 +94,12 @@ export interface ComposerProps {
     onSent?: () => void;
     /** Offers a Discard button (a sheet, a reply); the inline composer has none. */
     onDiscard?: () => void;
+    /**
+     * The record composer's drafts: what is written is saved as the member's own draft for this person (on a
+     * deal, for the person on that deal) as they write and when the composer closes, and put back when it opens
+     * again; Send or Schedule deletes it, and "Discard draft" does. A reply has none.
+     */
+    drafts?: boolean;
     handle?: Ref<ComposerHandle>;
     className?: string;
 }
@@ -189,10 +206,41 @@ function MailboxGate(props: ComposerProps & { person: ComposerPerson; formHandle
             </div>
         );
     }
-    return <ComposerForm {...props} mailboxes={own} />;
+    return props.drafts && !reply ? (
+        <DraftGate {...props} mailboxes={own} />
+    ) : (
+        <ComposerForm {...props} mailboxes={own} initialDraft={null} />
+    );
 }
 
-const EMPTY_DOC: RichText = { type: 'doc', content: [{ type: 'paragraph' }] };
+type FormProps = ComposerProps & { person: ComposerPerson; mailboxes: MailboxView[]; formHandle: Ref<ComposerHandle> };
+
+/**
+ * The record composer's draft (the caller's own, for this person — on a deal, for the person on that deal), read
+ * before the form so the form starts from it. A draft that cannot be read leaves the composer usable: it starts
+ * empty, says so, and its first save finds the draft there (`409`) and offers it.
+ */
+function DraftGate(props: FormProps) {
+    const drafts = useRecordDrafts(props.workspaceId, { type: 'person', id: props.person.id });
+    // "Load that version" (another tab's) starts the form again from it.
+    const [reloaded, setReloaded] = useState<{ view: MailDraftView; generation: number } | null>(null);
+    // The form starts from the draft as the server has it now — another tab may have saved since this one last
+    // read — and, once open, is never taken down by a later read (its own saves refresh the list).
+    const [open, setOpen] = useState(false);
+    const ready = open || (!drafts.isPending && !drafts.isFetching);
+    if (ready && !open) setOpen(true);
+    if (!ready) return <Skeleton className="h-40 rounded-lg" aria-label="Loading your draft" />;
+    const found = drafts.data?.items.find((d) => d.dealId === (props.dealId ?? null)) ?? null;
+    return (
+        <ComposerForm
+            key={reloaded?.generation ?? 0}
+            {...props}
+            initialDraft={reloaded?.view ?? found}
+            draftLoadFailed={drafts.isError}
+            onReloadDraft={(view) => setReloaded((r) => ({ view, generation: (r?.generation ?? 0) + 1 }))}
+        />
+    );
+}
 
 function ComposerForm({
     workspaceId,
@@ -204,30 +252,57 @@ function ComposerForm({
     onDiscard,
     mailboxes,
     formHandle,
-}: ComposerProps & { person: ComposerPerson; mailboxes: MailboxView[]; formHandle: Ref<ComposerHandle> }) {
+    drafts,
+    initialDraft,
+    draftLoadFailed,
+    onReloadDraft,
+}: FormProps & {
+    initialDraft: MailDraftView | null;
+    draftLoadFailed?: boolean;
+    onReloadDraft?: (view: MailDraftView) => void;
+}) {
     const id = useId();
-    const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? '');
-    const [alsoTo, setAlsoTo] = useState<{ id: string; name: string }[]>([]);
-    const [subject, setSubject] = useState<RichText>(EMPTY_DOC);
-    const [body, setBody] = useState<RichText>(EMPTY_DOC);
+    const saveDrafts = !!drafts && !reply;
+    // A saved draft puts back everything the composer held (taken once, when the form mounts).
+    const [restored] = useState(() => (initialDraft ? stateFromDraft(person.id, initialDraft) : null));
+    const [mailboxId, setMailboxId] = useState(
+        mailboxes.find((m) => m.id === restored?.mailboxId)?.id ?? mailboxes[0]?.id ?? '',
+    );
+    const [alsoTo, setAlsoTo] = useState<{ id: string; name: string }[]>(() => [...(restored?.alsoTo ?? [])]);
+    const [cc, setCc] = useState<CopyRecipient[]>(() => [...(restored?.cc ?? [])]);
+    const [bcc, setBcc] = useState<CopyRecipient[]>(() => [...(restored?.bcc ?? [])]);
+    // Cc and Bcc are behind a toggle, as in any mail client — open from the start when the draft has some.
+    const [copies, setCopies] = useState(() => cc.length + bcc.length > 0);
+    const [subject, setSubject] = useState<RichText>(restored?.subject ?? EMPTY_DOC);
+    const [body, setBody] = useState<RichText>(restored?.body ?? EMPTY_DOC);
     const [fill, setFill] = useState<TemplateFill | null>(null);
     const [missing, setMissing] = useState<string[]>([]);
     // The editors take their content when they mount: a template fill or a reset remounts them.
     const [generation, setGeneration] = useState(0);
     const [error, setError] = useState<string | null>(null);
     // Follow-ups queued behind this email, each in its thread; `followUpKey` names their rows.
-    const [followUps, setFollowUps] = useState<FollowUpDraft[]>([]);
+    const [followUps, setFollowUps] = useState<FollowUpDraft[]>(() => [...(restored?.followUps ?? [])]);
     const followUpKey = useRef(0);
+    // The time picked to schedule it, kept with the draft until it is scheduled.
+    const [scheduledFor, setScheduledFor] = useState<Date | null>(restored?.sendAt ?? null);
     const subjectRef = useRef<RichTextHandle>(null);
     const bodyRef = useRef<RichTextHandle>(null);
     const send = useSendMail(workspaceId);
     // The signature (#193): the mailbox's as shown, until the sender edits or removes it for this message —
     // then this message's own, for that mailbox only; choosing another mailbox shows its signature.
     const mailboxSignature = useMailboxSignature(workspaceId, mailboxId);
-    const [ownSignature, setOwnSignature] = useState<{ mailboxId: string; doc: RichText | null } | null>(null);
+    const [ownSignature, setOwnSignature] = useState<{ mailboxId: string; doc: RichText | null } | null>(() =>
+        restored && restored.signature !== undefined ? { mailboxId, doc: restored.signature } : null,
+    );
     const signatureTouched = ownSignature?.mailboxId === mailboxId;
     const signature = signatureTouched ? ownSignature.doc : (mailboxSignature.data?.effective ?? null);
     const signatureLocked = Object.values(mailboxSignature.data?.locked ?? {}).some(Boolean);
+    const saver = useDraftSaver({
+        workspaceId,
+        personId: person.id,
+        dealId,
+        initial: saveDrafts ? initialDraft : null,
+    });
 
     useImperativeHandle(
         formHandle,
@@ -261,6 +336,60 @@ function ComposerForm({
         setFill(filled);
         setGeneration((g) => g + 1);
     };
+
+    // A draft filled from a template: the template as it is now, so the composer can tell whether the draft still
+    // is it (it sends as the template) or was edited (it sends as written), and which of its variables are empty.
+    const restoredTemplate = useRef(restored?.templateId ?? null);
+    const previewTemplate = preview.mutateAsync;
+    useEffect(() => {
+        const templateId = restoredTemplate.current;
+        restoredTemplate.current = null;
+        if (!templateId) return;
+        void (async () => {
+            try {
+                const template = await templates.get(workspaceId, templateId);
+                const rendered = await previewTemplate(template);
+                setMissing(rendered.missing);
+                setFill({
+                    templateId: template.id,
+                    name: template.name,
+                    subject: subjectToDoc(template.subject),
+                    body: template.body,
+                });
+            } catch {
+                // The template is gone or cannot be read: the draft sends as written, which it says.
+            }
+        })();
+    }, [workspaceId, previewTemplate]);
+
+    const state: ComposerState = {
+        mailboxId,
+        alsoTo,
+        cc,
+        bcc,
+        subject,
+        body,
+        templateId: fill?.templateId ?? null,
+        signature: signatureTouched ? signature : undefined,
+        sendAt: scheduledFor,
+        followUps,
+    };
+    const content = draftContent(person.id, state, senderTimeZone());
+    const contentJson = JSON.stringify(content);
+    // Every change is saved as the draft a moment later — not what the form opened with, and not an empty composer
+    // that has no draft yet.
+    const opened = useRef(contentJson);
+    useEffect(() => {
+        if (!saveDrafts || contentJson === opened.current) return;
+        opened.current = '';
+        if (saver.draftId() === null && saver.state.kind === 'none' && !hasDraftContent(state)) return;
+        saver.change(content);
+        // `state` and `content` are this change's; `contentJson` says when they changed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [contentJson, saveDrafts]);
+
+    const recipients = 1 + alsoTo.length + cc.length + bcc.length;
+    const roomFor = MAIL_SEND_RECIPIENTS_MAX - recipients;
 
     const empty = emptyVariables(subject, body, missing);
     // REP-2: what spam filters punish, as warnings — never a block. A reply is a conversation, not bulk.
@@ -297,6 +426,22 @@ function ComposerForm({
     const changeFollowUp = (key: string, change: Partial<FollowUpDraft>) =>
         setFollowUps((list) => list.map((f) => (f.key === key ? { ...f, ...change } : f)));
 
+    /** Back to an empty composer: after a send, or a draft discarded. */
+    const reset = () => {
+        setSubject(EMPTY_DOC);
+        setBody(EMPTY_DOC);
+        setFill(null);
+        setMissing([]);
+        setAlsoTo([]);
+        setCc([]);
+        setBcc([]);
+        setCopies(false);
+        setOwnSignature(null);
+        setFollowUps([]);
+        setScheduledFor(null);
+        setGeneration((g) => g + 1);
+    };
+
     const submit = async (sendAt?: Date, timeZone?: string) => {
         setError(null);
         const problem = followUpProblem(followUps, (sendAt ?? new Date()).getTime(), Date.now());
@@ -304,11 +449,16 @@ function ComposerForm({
             setError(problem);
             throw new Error(problem);
         }
+        // The draft goes with the send: no save may land after it to bring it back.
+        const draftId = saveDrafts ? await saver.settle() : null;
         const input = sendInput({
             mailboxId,
             personId: person.id,
             dealId,
             alsoTo: alsoTo.map((p) => p.id),
+            cc,
+            bcc,
+            draftId: draftId ?? undefined,
             subject,
             body,
             fill,
@@ -325,17 +475,25 @@ function ComposerForm({
             const refused = refusedVariables(e);
             if (refused.length) setMissing((m) => [...new Set([...m, ...refused])]);
             setError(failureText(e));
+            // Not sent: the draft keeps what is written.
+            if (saveDrafts) saver.change(content);
             throw e;
         }
-        setSubject(EMPTY_DOC);
-        setBody(EMPTY_DOC);
-        setFill(null);
-        setMissing([]);
-        setAlsoTo([]);
-        setOwnSignature(null);
-        setFollowUps([]);
-        setGeneration((g) => g + 1);
+        if (saveDrafts) saver.sent();
+        reset();
         onSent?.();
+    };
+
+    const discardDraft = async () => {
+        setError(null);
+        try {
+            await saver.discard();
+        } catch (e) {
+            setError(`The draft could not be discarded: ${failureText(e)}`);
+            return;
+        }
+        reset();
+        onDiscard?.();
     };
 
     return (
@@ -365,30 +523,34 @@ function ComposerForm({
                         {person.name}
                     </Badge>
                     {alsoTo.map((p) => (
-                        <Badge key={p.id} shape="pill" className="gap-1 pr-0.5 text-text">
-                            {p.name}
-                            <button
-                                type="button"
-                                aria-label={`Remove ${p.name}`}
-                                onClick={() => setAlsoTo((list) => list.filter((x) => x.id !== p.id))}
-                                className={cn(
-                                    'grid size-4.5 place-items-center rounded-full hover:bg-surface max-md:size-touch',
-                                    focusRing,
-                                )}
-                            >
-                                <X aria-hidden className="size-3" />
-                            </button>
-                        </Badge>
+                        <RecipientChip
+                            key={p.id}
+                            label={p.name}
+                            onRemove={() => setAlsoTo((list) => list.filter((x) => x.id !== p.id))}
+                        />
                     ))}
-                    {!reply && (
+                    {!reply && roomFor > 0 && (
                         <RecipientAdder
                             workspaceId={workspaceId}
+                            label="Add recipient"
                             exclude={[person.id, ...alsoTo.map((p) => p.id)]}
                             onAdd={(p) => setAlsoTo((list) => [...list, p])}
                         />
                     )}
+                    {!copies && (
+                        <Button
+                            size="xs"
+                            shape="square"
+                            variant="ghost"
+                            aria-expanded={false}
+                            onClick={() => setCopies(true)}
+                        >
+                            Cc/Bcc
+                        </Button>
+                    )}
                 </div>
                 <div className="ml-auto flex items-center gap-2">
+                    {saveDrafts && <DraftChip state={saver.state} />}
                     {fill && (
                         <span className="text-xs">
                             Template <b className="font-medium text-text">{fill.name}</b>
@@ -406,6 +568,45 @@ function ComposerForm({
                     />
                 </div>
             </div>
+            {copies && (
+                <div className="flex flex-col gap-1.5 border-b border-border px-3.5 py-2 text-[13px] text-text-muted">
+                    <CopyField workspaceId={workspaceId} field="Cc" list={cc} room={roomFor} onChange={setCc} />
+                    <CopyField workspaceId={workspaceId} field="Bcc" list={bcc} room={roomFor} onChange={setBcc} />
+                </div>
+            )}
+            {saver.state.kind === 'conflict' && (
+                <div
+                    role="alert"
+                    className="flex flex-wrap items-center gap-2 border-b border-border bg-warning-soft px-3.5 py-2 text-[13px]"
+                >
+                    <span>
+                        This draft was saved in another tab {formatWhen(saver.state.theirs.updatedAt)}. Saving here is
+                        paused.
+                    </span>
+                    <span className="ml-auto flex gap-2">
+                        <Button
+                            size="xs"
+                            shape="square"
+                            variant="secondary"
+                            onClick={() => {
+                                if (saver.state.kind !== 'conflict') return;
+                                saver.abandon();
+                                onReloadDraft?.(saver.state.theirs);
+                            }}
+                        >
+                            Load that version
+                        </Button>
+                        <Button size="xs" shape="square" onClick={() => void saver.keepMine()}>
+                            Keep mine
+                        </Button>
+                    </span>
+                </div>
+            )}
+            {draftLoadFailed && saver.state.kind === 'none' && (
+                <p className="m-0 border-b border-border px-3.5 py-1.5 text-xs text-text-muted">
+                    Your saved draft could not be loaded; what you write now is saved as you go.
+                </p>
+            )}
             <div className="border-b border-border bg-surface">
                 <RichTextEditor
                     key={`subject-${generation}`}
@@ -531,16 +732,24 @@ function ComposerForm({
                     Add follow-up
                 </Button>
                 <div className="ml-auto flex items-center gap-2">
-                    {onDiscard && (
-                        <Button size="sm" shape="square" variant="ghost" onClick={onDiscard}>
-                            Discard
-                        </Button>
-                    )}
+                    {saveDrafts
+                        ? (saver.state.kind !== 'none' || hasDraftContent(state) || onDiscard) && (
+                              <Button size="sm" shape="square" variant="ghost" onClick={() => void discardDraft()}>
+                                  Discard draft
+                              </Button>
+                          )
+                        : onDiscard && (
+                              <Button size="sm" shape="square" variant="ghost" onClick={onDiscard}>
+                                  Discard
+                              </Button>
+                          )}
                     <SchedulePicker
                         title="Schedule send"
                         confirm="Schedule send"
+                        initial={scheduledFor ?? undefined}
                         pending={send.isPending}
                         error={error ?? undefined}
+                        onValueChange={setScheduledFor}
                         onConfirm={(at, zone) => submit(at, zone)}
                         trigger={
                             <Button
@@ -647,13 +856,155 @@ function FollowUpRow({
     );
 }
 
-/** Adds another person as a recipient, through the one record picker. */
+/** A recipient's chip, with its remove button. */
+function RecipientChip({ label, title, onRemove }: { label: string; title?: string; onRemove: () => void }) {
+    return (
+        <Badge shape="pill" className="gap-1 pr-0.5 text-text" title={title}>
+            {label}
+            <button
+                type="button"
+                aria-label={`Remove ${label}`}
+                onClick={onRemove}
+                className={cn(
+                    'grid size-4.5 place-items-center rounded-full hover:bg-surface max-md:size-touch',
+                    focusRing,
+                )}
+            >
+                <X aria-hidden className="size-3" />
+            </button>
+        </Badge>
+    );
+}
+
+/**
+ * Cc or Bcc: anyone — a person picked from the CRM, or any address typed (or pasted, several at once) and taken
+ * on Enter, a comma or leaving the field. An address that is not one says so and stays to be fixed. The API's
+ * recipient guard judges each one as it does To; nobody is added to the CRM by being copied.
+ */
+function CopyField({
+    workspaceId,
+    field,
+    list,
+    room,
+    onChange,
+}: {
+    workspaceId: string;
+    field: 'Cc' | 'Bcc';
+    list: readonly CopyRecipient[];
+    /** How many more recipients the message takes (to, cc and bcc together). */
+    room: number;
+    onChange: (list: CopyRecipient[]) => void;
+}) {
+    const id = useId();
+    const [text, setText] = useState('');
+    const [problem, setProblem] = useState<string | null>(null);
+
+    const take = (value: string = text) => {
+        const { addresses, invalid } = parseAddresses(value);
+        const fits = addresses.slice(0, Math.max(room, 0));
+        if (fits.length) onChange(fits.reduce((acc, address) => withRecipient(acc, { address }), [...list]));
+        setText(invalid.join(' '));
+        setProblem(
+            invalid.length
+                ? `${invalid.map((i) => `“${i}”`).join(', ')} ${invalid.length === 1 ? 'is not an email address' : 'are not email addresses'}`
+                : fits.length < addresses.length
+                  ? `At most ${MAIL_SEND_RECIPIENTS_MAX} recipients on one email`
+                  : null,
+        );
+    };
+
+    return (
+        <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label={field}>
+                <span aria-hidden className="w-7">
+                    {field}
+                </span>
+                {list.map((r) => (
+                    <RecipientChip
+                        key={'personId' in r ? r.personId : r.address}
+                        label={recipientLabel(r)}
+                        onRemove={() => onChange(list.filter((x) => x !== r))}
+                    />
+                ))}
+                {room > 0 && (
+                    <>
+                        <input
+                            type="text"
+                            inputMode="email"
+                            autoComplete="off"
+                            aria-label={`${field} address`}
+                            aria-invalid={problem ? true : undefined}
+                            aria-describedby={problem ? `${id}-problem` : undefined}
+                            placeholder="Type an address"
+                            value={text}
+                            onChange={(e) => {
+                                setText(e.target.value);
+                                setProblem(null);
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+                                    e.preventDefault();
+                                    take();
+                                } else if (e.key === 'Backspace' && text === '' && list.length > 0) {
+                                    onChange(list.slice(0, -1));
+                                }
+                            }}
+                            onPaste={(e) => {
+                                const pasted = e.clipboardData.getData('text');
+                                if (!/[\s,;]/.test(pasted.trim())) return;
+                                e.preventDefault();
+                                take(`${text} ${pasted}`);
+                            }}
+                            onBlur={() => {
+                                if (text.trim()) take();
+                            }}
+                            className={cn(
+                                'h-7 min-w-40 flex-1 rounded-md bg-transparent px-1.5 text-[13px] text-text outline-none placeholder:text-text-faint',
+                                focusRing,
+                            )}
+                        />
+                        <RecipientAdder
+                            workspaceId={workspaceId}
+                            label={`Add ${field} person`}
+                            exclude={list.flatMap((r) => ('personId' in r ? [r.personId] : []))}
+                            onAdd={(p) => onChange(withRecipient(list, { personId: p.id, name: p.name }))}
+                        />
+                    </>
+                )}
+            </div>
+            {problem && (
+                <p id={`${id}-problem`} className="m-0 pl-8.5 text-xs text-danger">
+                    {problem}
+                </p>
+            )}
+        </div>
+    );
+}
+
+/** Where the composer's draft stands, beside the template: saving, saved (and when), or not saved. */
+function DraftChip({ state }: { state: DraftSaveState }) {
+    if (state.kind === 'none' || state.kind === 'conflict') return null;
+    return (
+        <span role="status" className="flex items-center gap-1.5 text-xs">
+            <Badge status={state.kind === 'failed' ? 'warning' : 'neutral'}>Draft</Badge>
+            {state.kind === 'saving'
+                ? 'Saving…'
+                : state.kind === 'saved'
+                  ? `Saved ${formatWhen(state.at)}`
+                  : 'Not saved — tried again as you write'}
+        </span>
+    );
+}
+
+/** Adds a person as a recipient, through the one record picker. */
 function RecipientAdder({
     workspaceId,
+    label,
     exclude,
     onAdd,
 }: {
     workspaceId: string;
+    label: string;
     exclude: readonly string[];
     onAdd: (person: { id: string; name: string }) => void;
 }) {
@@ -662,7 +1013,7 @@ function RecipientAdder({
         <RecordPicker
             workspaceId={workspaceId}
             object="person"
-            label="Add recipient"
+            label={label}
             placeholder="Add person"
             value={null}
             onResolved={(personId, title) => names.current.set(personId, title)}

@@ -244,6 +244,12 @@ export type MailOutboundView = Schemas['MailOutbound'];
 export type MailOutboundStatus = MailOutboundView['status'];
 export type MailRecordSendsPage = Schemas['MailRecordSendsPage'];
 export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
+/** A composer draft (the caller's own) and what it holds: the composer's state, unfinished as it may be. */
+export type MailDraftView = Schemas['MailDraft'];
+export type MailDraftPage = Schemas['MailDraftPage'];
+export type MailDraftContent = Loose<Schemas['SaveMailDraftDto']['content']>;
+export type CreateMailDraftInput = Loose<Schemas['CreateMailDraftDto']>;
+export type SaveMailDraftInput = Loose<Schemas['SaveMailDraftDto']>;
 export type MailThreadView = Schemas['MailThread'];
 export type MailMessageView = Schemas['MailMessage'];
 export type MailParticipantView = MailMessageView['participants'][number];

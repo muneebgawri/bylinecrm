@@ -1,5 +1,6 @@
 import type {
     EmailTemplateView,
+    MailDraftView,
     MailboxView,
     MailMessageView,
     MailOutboundView,
@@ -137,6 +138,27 @@ export const recordSendsRoute =
     (items: MailOutboundView[] = []): FakeRoute =>
     (r) =>
         isRecordSends(r) ? json({ items, nextCursor: null }) : undefined;
+
+/** One of the caller's drafts (Dana's, no deal), at version 1. */
+export const mailDraft = (over: Partial<MailDraftView> = {}): MailDraftView => ({
+    id: '0b1e0000-0000-4000-8000-0000000000f1',
+    personId: PERSON.id,
+    dealId: null,
+    content: {},
+    version: 1,
+    createdAt: AT,
+    updatedAt: AT,
+    ...over,
+});
+
+/** Whether a request is the record-drafts list (`GET /mail/drafts?…`). */
+export const isDraftList = (r: { method: string; url: string }) => r.method === 'GET' && /\/mail\/drafts\?/.test(r.url);
+
+/** Every request for a record's drafts answers with these. */
+export const draftsRoute =
+    (items: MailDraftView[] = []): FakeRoute =>
+    (r) =>
+        isDraftList(r) ? json({ items, nextCursor: null }) : undefined;
 
 /** A timeline with no entries; the record's other reads answered empty. */
 export const quietRecordRoutes: FakeRoute[] = [

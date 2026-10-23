@@ -30,6 +30,7 @@ import type { RetryOptions } from '../mail-sync/retry';
 import { actorOf } from '../records/actor';
 import { paginate } from '../records/list-query';
 import { readableTargets } from '../records/targets';
+import { aboutRecord } from './record-about';
 import { assertCanChangeSend, canChangeSend, readableSends, type SendAccessCaller } from './send-access';
 import { recordWhere } from '../records/record-scope';
 import { SignaturesService } from '../signatures/signatures.service';
@@ -52,6 +53,7 @@ import {
     MAIL_SEND_QUEUE,
     MAIL_SEND_STALE_MS,
 } from './mail-send.constants';
+import { deleteOwnDraft } from './mail-drafts.service';
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
 import type { MailOutboundView, MailRecordSendsPage, MailScheduledPage, MailSendAccepted } from './responses';
@@ -93,6 +95,8 @@ export interface SendInput {
     timeZone?: string | undefined;
     /** Follow-ups queued behind this send, each later than the one before, sent in its thread. */
     followUps?: FollowUpInput[] | undefined;
+    /** The caller's draft this was written in: deleted with the send. */
+    draftId?: string | undefined;
 }
 
 /** One queued follow-up: when, and what it says (a template, or a body and perhaps a subject of its own). */
@@ -108,7 +112,9 @@ export interface FollowUpInput {
  * follow-up's (`followUp`) is its predecessor's mailbox, person, deal, recipients and signature with its own
  * words; it is built as a reply to its predecessor's stored copy (`replyToMessageId`, set at its time).
  */
-type PersonalRequest = Omit<SendInput, 'sendAt' | 'timeZone' | 'followUps'> & { followUp?: boolean | undefined };
+type PersonalRequest = Omit<SendInput, 'sendAt' | 'timeZone' | 'followUps' | 'draftId'> & {
+    followUp?: boolean | undefined;
+};
 type StoredRequest = PersonalRequest | OutreachRequest;
 
 /**
@@ -347,6 +353,8 @@ export class MailSendService {
                 await this.announce(tx, 'email.scheduled', context, f.id);
                 follows = f.id;
             }
+            // The draft it was written in goes with it: sent (or scheduled) is no longer a draft.
+            if (input.draftId) await deleteOwnDraft(tx, context, input.draftId);
             return created;
         });
         const job: MailSendJob = { workspaceId: context.workspaceId, messageId: row.id };
@@ -446,9 +454,12 @@ export class MailSendService {
             const scope = recordWhere(context, false);
             const person = await tx.person.findFirst({ where: { id: input.personId, ...scope } });
             if (!person) throw new NotFoundException('person not found');
+            // One address is one recipient across to, cc and bcc: it stays in the first field it is in.
+            const seen = new Set<string>();
             const resolve = (list: RecipientInput[] | undefined, field: RecipientField) =>
-                resolveRecipients(tx, context, list ?? [], field);
+                resolveRecipients(tx, context, list ?? [], field, seen);
             const to = input.to ? await resolve(input.to, 'to') : [primaryOf(person, 'personId', 'to')];
+            for (const r of to) seen.add(r.address);
             const member = await tx.workspaceMember.findUniqueOrThrow({
                 where: { id: memberId },
                 // The person's display name (P1-UI-10): one per person, read wherever a member is named.
@@ -793,7 +804,7 @@ export class MailSendService {
             if ((await readableTargets(tx, [target])).length === 0) {
                 throw new ApiException(404, 'not_found', 'target not found');
             }
-            const about = await sendsAbout(tx, target);
+            const about = await aboutRecord(tx, target);
             if (!about) return { items: [], nextCursor: null };
             const page = await paginate(limit, cursor, (args) =>
                 tx.mailOutbound.findMany({
@@ -1705,7 +1716,7 @@ async function chainStart(tx: WorkspaceClient, id: string): Promise<string> {
 
 /** What a scheduled send keeps of its request: everything but its timing. */
 function storedRequest(input: SendInput): PersonalRequest {
-    const { sendAt: _sendAt, timeZone: _timeZone, ...rest } = input;
+    const { sendAt: _sendAt, timeZone: _timeZone, draftId: _draftId, ...rest } = input;
     return rest;
 }
 
@@ -1773,9 +1784,10 @@ async function resolveRecipients(
     context: WorkspaceRunContext,
     list: RecipientInput[],
     field: RecipientField,
+    /** Addresses already in an earlier field: one address is one recipient across to, cc and bcc. */
+    seen: Set<string> = new Set(),
 ): Promise<SendRecipient[]> {
     const out: SendRecipient[] = [];
-    const seen = new Set<string>();
     for (const [index, entry] of list.entries()) {
         let recipient: SendRecipient;
         if ('personId' in entry) {
@@ -1824,26 +1836,6 @@ function gmailError(error: GmailApiError): SendErrorRecord {
 
 function internalError(): SendErrorRecord {
     return { code: 'internal', message: 'the send failed; it will be retried', at: new Date().toISOString() };
-}
-
-/**
- * Which sends a record is about: a person's own, a deal's (written from it), a company's people's.
- * `null` when there can be none (a company with no live people).
- */
-async function sendsAbout(tx: WorkspaceClient, target: RecordTarget): Promise<Prisma.MailOutboundWhereInput | null> {
-    switch (target.type) {
-        case 'person':
-            return { personId: target.id };
-        case 'opportunity':
-            return { dealId: target.id };
-        case 'company': {
-            const people = await tx.person.findMany({
-                where: { companyId: target.id, deletedAt: null },
-                select: { id: true },
-            });
-            return people.length > 0 ? { personId: { in: people.map((p) => p.id) } } : null;
-        }
-    }
 }
 
 function view(

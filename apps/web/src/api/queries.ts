@@ -127,6 +127,10 @@ export const keys = {
     mailRecordSends: (workspaceId: string, target: RecordTarget) =>
         ['w', workspaceId, 'mail', 'record-sends', target.type, target.id] as const,
     mailThread: (workspaceId: string, threadId: string) => ['w', workspaceId, 'mail', 'threads', threadId] as const,
+    /** The caller's composer drafts: every record's, and one record's (`mailDrafts(…, target)`). */
+    mailDraftsAll: (workspaceId: string) => ['w', workspaceId, 'mail', 'drafts'] as const,
+    mailDrafts: (workspaceId: string, target: RecordTarget) =>
+        ['w', workspaceId, 'mail', 'drafts', target.type, target.id] as const,
     /** The sends made in this tab: held by the client so a send shows before the server has stored it. */
     mailSession: (workspaceId: string) => ['w', workspaceId, 'mail', 'session'] as const,
 };

@@ -25,6 +25,7 @@ export function SchedulePicker({
     pending,
     error,
     onConfirm,
+    onValueChange,
 }: {
     trigger: ReactElement;
     title: string;
@@ -36,6 +37,8 @@ export function SchedulePicker({
     /** The server's refusal, in its words. */
     error?: string | undefined;
     onConfirm: (at: Date, timeZone: string) => Promise<unknown> | void;
+    /** Told the time as it is picked, before it is confirmed (a composer keeps it in its draft). */
+    onValueChange?: ((at: Date | null) => void) | undefined;
 }) {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState('');
@@ -105,6 +108,7 @@ export function SchedulePicker({
                     onChange={(e) => {
                         setValue(e.target.value);
                         setProblem(null);
+                        onValueChange?.(fromLocalInput(e.target.value));
                     }}
                 />
                 <p id={`${id}-zones`} className="m-0 flex flex-col gap-0.5 text-xs text-text-muted">

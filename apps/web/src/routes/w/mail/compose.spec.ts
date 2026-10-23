@@ -4,15 +4,22 @@ import { ApiError } from '../../../api/client';
 import type { MailboxView } from '../../../api/types';
 import { subjectToDoc } from '../templates/subject';
 import {
+    EMPTY_DOC,
+    draftContent,
     followUpProblem,
     emptyVariables,
     emptyVariablesText,
+    hasDraftContent,
     isBlank,
     ownSendingMailboxes,
+    parseAddresses,
     placesSignature,
     refusedVariables,
     sendInput,
     sendsAsTemplate,
+    stateFromDraft,
+    withRecipient,
+    type ComposerState,
     type Draft,
 } from './compose';
 
@@ -234,5 +241,98 @@ describe('queued follow-ups in the request', () => {
             { path: 'followUps.0.person.city', message: 'has no value' },
         ]);
         expect(refusedVariables(refused)).toEqual(['person.city']);
+    });
+});
+
+describe('cc and bcc', () => {
+    it('reads typed or pasted addresses by the one address rule, and says which are not', () => {
+        expect(parseAddresses(' Pat@Client.example, b@two.example;<c@three.example> nope ')).toEqual({
+            addresses: ['pat@client.example', 'b@two.example', 'c@three.example'],
+            invalid: ['nope'],
+        });
+        expect(parseAddresses('')).toEqual({ addresses: [], invalid: [] });
+    });
+
+    it('adds a recipient once, and sends people by id and addresses as typed', () => {
+        const once = withRecipient(withRecipient([], { address: 'a@x.example' }), { address: 'a@x.example' });
+        expect(once).toEqual([{ address: 'a@x.example' }]);
+        const input = sendInput({
+            mailboxId: 'mb-1',
+            personId: 'p-1',
+            alsoTo: [],
+            cc: [{ personId: 'p-2', name: 'Sam' }, { address: 'a@x.example' }],
+            bcc: [{ address: 'b@x.example' }],
+            draftId: 'd-1',
+            subject: subjectToDoc('Hi'),
+            body: subjectToDoc('Hello'),
+            fill: null,
+            timeZone: 'UTC',
+        });
+        expect(input).toMatchObject({
+            cc: [{ personId: 'p-2' }, { address: 'a@x.example' }],
+            bcc: [{ address: 'b@x.example' }],
+            draftId: 'd-1',
+        });
+        expect(input).not.toHaveProperty('to');
+    });
+});
+
+describe('drafts', () => {
+    const state = (over: Partial<ComposerState> = {}): ComposerState => ({
+        mailboxId: 'mb-1',
+        alsoTo: [],
+        cc: [],
+        bcc: [],
+        subject: EMPTY_DOC,
+        body: EMPTY_DOC,
+        templateId: null,
+        signature: undefined,
+        sendAt: null,
+        followUps: [],
+        ...over,
+    });
+
+    it('an empty composer is nothing to keep; a subject, a recipient or a follow-up is', () => {
+        expect(hasDraftContent(state())).toBe(false);
+        expect(hasDraftContent(state({ subject: subjectToDoc('Hi') }))).toBe(true);
+        expect(hasDraftContent(state({ cc: [{ address: 'a@x.example' }] }))).toBe(true);
+    });
+
+    it('keeps everything the composer holds, and puts it back as it was', () => {
+        const at = new Date('2026-11-02T09:00:00.000Z');
+        const held = state({
+            alsoTo: [{ id: 'p-2', name: 'Sam Lee' }],
+            cc: [{ personId: 'p-3', name: 'Ann' }, { address: 'a@x.example' }],
+            bcc: [{ address: 'b@x.example' }],
+            subject: subjectToDoc('About {{company.name}}'),
+            body: subjectToDoc('Hello'),
+            templateId: 't-1',
+            signature: null,
+            sendAt: at,
+            followUps: [{ key: 'f', sendAt: null, subject: EMPTY_DOC, body: subjectToDoc('Nudge') }],
+        });
+        const content = draftContent('p-1', held, 'Europe/London');
+        expect(content).toMatchObject({
+            mailboxId: 'mb-1',
+            to: [{ personId: 'p-1' }, { personId: 'p-2', name: 'Sam Lee' }],
+            subject: 'About {{company.name}}',
+            templateId: 't-1',
+            signature: null,
+            sendAt: at.toISOString(),
+            timeZone: 'Europe/London',
+            followUps: [{ sendAt: null, subject: '' }],
+        });
+        const back = stateFromDraft('p-1', { content: content as never });
+        expect(back).toMatchObject({
+            mailboxId: 'mb-1',
+            alsoTo: [{ id: 'p-2', name: 'Sam Lee' }],
+            cc: held.cc,
+            bcc: held.bcc,
+            templateId: 't-1',
+            signature: null,
+            sendAt: at,
+        });
+        expect(back.followUps).toHaveLength(1);
+        expect(draftContent('p-1', back, 'Europe/London')).toEqual(content);
     });
 });
