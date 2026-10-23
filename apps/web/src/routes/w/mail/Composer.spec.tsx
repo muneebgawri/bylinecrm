@@ -24,6 +24,7 @@ const accepted = (status: 'queued' | 'scheduled' = 'queued', sendAt: string | nu
             sendAt,
             senderTimeZone: sendAt ? 'Europe/London' : null,
             recipientTimeZone: null,
+            followUps: [],
         },
         202,
     );
@@ -301,5 +302,66 @@ describe('#193 the signature', () => {
         await write('Hello', 'Hi Dana');
         await userEvent.click(screen.getByRole('button', { name: 'Send' }));
         expect(JSON.stringify((await sent(seen))['signature'])).toContain('(on the road)');
+    });
+});
+
+describe('queued follow-ups: the compose box queues emails that go later in the same thread', () => {
+    const sendRoute: FakeRoute = (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined);
+
+    it('adds a follow-up row with a time in the sender’s zone and the thread’s subject, and sends it with the email', async () => {
+        const seen = composer([mailboxesRoute(MAILBOXES), sendRoute]);
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+        const followUps = screen.getByRole('list', { name: 'Follow-ups' });
+        expect(within(followUps).getByText('Follow-up 1')).toBeInTheDocument();
+        expect(
+            within(followUps).getByText(new RegExp(Intl.DateTimeFormat().resolvedOptions().timeZone)),
+        ).toBeInTheDocument();
+        // Nothing written yet: Send waits for the follow-up's message.
+        expect(screen.getByText('Write each follow-up’s message.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+
+        const at = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+        at.setSeconds(0, 0);
+        fireEvent.change(screen.getByLabelText('Follow-up 1 send time'), { target: { value: toLocalInput(at) } });
+        await userEvent.type(screen.getByRole('textbox', { name: 'Follow-up 1 message' }), 'Any thoughts?');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        const body = seen.find((r) => r.url.endsWith('/mail/send'))?.body as {
+            followUps: { sendAt: string; subject?: string; body: unknown }[];
+        };
+        expect(body.followUps).toHaveLength(1);
+        expect(body.followUps[0]!.sendAt).toBe(at.toISOString());
+        // No subject of its own: the server gives it the thread's `Re: Hello`.
+        expect(body.followUps[0]).not.toHaveProperty('subject');
+        expect(JSON.stringify(body.followUps[0]!.body)).toContain('Any thoughts?');
+    });
+
+    it('refuses a follow-up timed before the email it follows, sending nothing', async () => {
+        const seen = composer([mailboxesRoute(MAILBOXES), sendRoute]);
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+        await userEvent.type(screen.getByRole('textbox', { name: 'Follow-up 1 message' }), 'Nudge');
+        await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+        await userEvent.type(screen.getByRole('textbox', { name: 'Follow-up 2 message' }), 'Nudge again');
+        const first = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        fireEvent.change(screen.getByLabelText('Follow-up 2 send time'), { target: { value: toLocalInput(first) } });
+        fireEvent.change(screen.getByLabelText('Follow-up 1 send time'), {
+            target: { value: toLocalInput(new Date(first.getTime() + 60 * 60 * 1000)) },
+        });
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'Follow-up 2: pick a time after the email before it.',
+        );
+        expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(false);
+    });
+
+    it('removes a follow-up row', async () => {
+        composer([mailboxesRoute(MAILBOXES)]);
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Remove follow-up 1' }));
+        expect(screen.queryByRole('list', { name: 'Follow-ups' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
     });
 });

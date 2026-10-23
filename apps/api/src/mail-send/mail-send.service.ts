@@ -6,6 +6,7 @@ import {
     type TrackingCounts,
     MAIL_SEND_HORIZON_DAYS,
     MAIL_SEND_MIN_LEAD_SECONDS,
+    type Actor,
     type DomainEvent,
     type Emails,
     type MailOutboundStatus,
@@ -24,6 +25,7 @@ import { MailboxesService } from '../mail-accounts/mailboxes.service';
 import { GMAIL_PORT, GmailApiError, type GmailPort, type GmailSent } from '../mail-sync/gmail.port';
 import { GMAIL_UNITS } from '../mail-sync/mail-sync.constants';
 import { MailSyncService } from '../mail-sync/mail-sync.service';
+import { hasReplyFrom } from '../mail-sync/replies';
 import type { RetryOptions } from '../mail-sync/retry';
 import { actorOf } from '../records/actor';
 import { paginate } from '../records/list-query';
@@ -57,6 +59,7 @@ import { PoolRefusal, SendingPoolService } from '../sending-pool/sending-pool.se
 import { RecipientSuppressed } from '../suppression/suppression.service';
 import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
 import { gmailShapeOf } from './mime-read';
+import { THREAD_PARENT_WAIT_MS, followAfter } from './thread-follow';
 import { SMTP2GO_PROVIDER_PREFIX } from '../smtp2go/smtp2go.constants';
 import { SMTP2GO_PORT, Smtp2GoError, type Smtp2GoPort } from '../smtp2go/smtp2go.port';
 
@@ -88,10 +91,24 @@ export interface SendInput {
     sendAt?: string | undefined;
     /** The sender's IANA zone, echoed back; never used to compute `sendAt`. */
     timeZone?: string | undefined;
+    /** Follow-ups queued behind this send, each later than the one before, sent in its thread. */
+    followUps?: FollowUpInput[] | undefined;
 }
 
-/** What a scheduled send was asked to be: the request without its timing, kept to build it again later. */
-type PersonalRequest = Omit<SendInput, 'sendAt' | 'timeZone'>;
+/** One queued follow-up: when, and what it says (a template, or a body and perhaps a subject of its own). */
+export interface FollowUpInput {
+    sendAt: string;
+    templateId?: string | undefined;
+    subject?: string | undefined;
+    body?: RichText | undefined;
+}
+
+/**
+ * What a scheduled send was asked to be: the request without its timing, kept to build it again later. A queued
+ * follow-up's (`followUp`) is its predecessor's mailbox, person, deal, recipients and signature with its own
+ * words; it is built as a reply to its predecessor's stored copy (`replyToMessageId`, set at its time).
+ */
+type PersonalRequest = Omit<SendInput, 'sendAt' | 'timeZone' | 'followUps'> & { followUp?: boolean | undefined };
 type StoredRequest = PersonalRequest | OutreachRequest;
 
 /**
@@ -163,10 +180,40 @@ class Unsendable extends ApiException {
     }
 }
 
-/** A message built and checked, ready to store: the outcome of `prepare`. */
 /** When a send is prepared: at its request (sent now), at its request but sent later, or at its time. */
 type SendMoment = 'request' | 'later' | 'due';
 
+/** What `prepare` is told beside the request. */
+interface PrepareOptions {
+    /** A send later, at its request: the time it is set to go — what the reputation gate judges it for. */
+    at?: Date | null | undefined;
+    /** A queued follow-up at its request: the subject of the email it follows, as built (its `Re:` is this). */
+    threadSubject?: string | undefined;
+    /**
+     * Whether the recipient guard writes its audit (default). A follow-up at its request asks it quietly: the
+     * email it follows asked for the same recipients a moment ago, and wrote it once. At its time it writes its own.
+     */
+    audit?: boolean | undefined;
+}
+
+/** A follow-up of a request, built and checked, with its own ids: what `compose` stores. */
+interface QueuedFollowUp {
+    id: string;
+    rfc822MessageId: string;
+    sendAt: Date;
+    request: PersonalRequest;
+    prepared: Prepared;
+}
+
+/** Why a queued follow-up was called off, as kept on its row (`lastError`) — where every send's reason is. */
+type FollowUpStop = 'replied' | 'previous_failed' | 'previous_cancelled';
+const FOLLOW_UP_STOPS: Readonly<Record<FollowUpStop, string>> = {
+    replied: 'the person answered in the thread; this follow-up was not sent',
+    previous_failed: 'an earlier email in its thread failed; this follow-up was not sent',
+    previous_cancelled: 'an earlier email in its thread was cancelled; this follow-up was not sent',
+};
+
+/** A message built and checked, ready to store: the outcome of `prepare`. */
 interface Prepared {
     mailboxId: string;
     memberId: string;
@@ -235,8 +282,12 @@ export class MailSendService {
         // The send's id is fixed before the message is built: the MIME carries it (X-BylineCRM-Id).
         const id = randomUUID();
         const rfc822MessageId = newMessageId();
-        const prepared = await this.prepare(input, { id, rfc822MessageId }, sendAt ? 'later' : 'request');
+        const prepared = await this.prepare(input, { id, rfc822MessageId }, sendAt ? 'later' : 'request', {
+            at: sendAt,
+        });
+        const followUps = await this.prepareFollowUps(input, prepared);
 
+        // The send and its follow-ups exist together or not at all.
         const row = await this.rls.withWorkspace(async (tx) => {
             const created = await tx.mailOutbound.create({
                 data: {
@@ -269,6 +320,33 @@ export class MailSendService {
                 },
             });
             if (sendAt) await this.announce(tx, 'email.scheduled', context, created.id);
+            let follows = created.id;
+            for (const f of followUps) {
+                await tx.mailOutbound.create({
+                    data: {
+                        id: f.id,
+                        workspaceId: context.workspaceId,
+                        mailboxId: f.prepared.mailboxId,
+                        senderMemberId: f.prepared.memberId,
+                        personId: input.personId,
+                        dealId: input.dealId ?? null,
+                        templateId: f.request.templateId ?? null,
+                        followsOutboundId: follows,
+                        rfc822MessageId: f.rfc822MessageId,
+                        ...addressesOf(f.prepared),
+                        subject: f.prepared.subject,
+                        bodySimhash: f.prepared.fingerprint.simhash,
+                        subjectKey: f.prepared.fingerprint.subjectKey,
+                        status: 'scheduled',
+                        mime: null,
+                        sendAt: f.sendAt,
+                        senderTimeZone: input.timeZone ?? null,
+                        request: f.request as unknown as Prisma.InputJsonValue,
+                    },
+                });
+                await this.announce(tx, 'email.scheduled', context, f.id);
+                follows = f.id;
+            }
             return created;
         });
         const job: MailSendJob = { workspaceId: context.workspaceId, messageId: row.id };
@@ -276,13 +354,56 @@ export class MailSendService {
             jobId: row.id,
             ...(sendAt ? { delay: Math.max(0, sendAt.getTime() - Date.now()) } : {}),
         });
+        for (const f of followUps) {
+            const next: MailSendJob = { workspaceId: context.workspaceId, messageId: f.id };
+            await this.queue.add('send', next, { jobId: f.id, delay: Math.max(0, f.sendAt.getTime() - Date.now()) });
+        }
         return {
             messageId: row.id,
             status: sendAt ? 'scheduled' : 'queued',
             sendAt,
             senderTimeZone: row.senderTimeZone,
             recipientTimeZone: null,
+            followUps: followUps.map((f) => ({ messageId: f.id, sendAt: f.sendAt })),
         };
+    }
+
+    /**
+     * The request's follow-ups, each built and checked now as a scheduled send is — every check it will pass again
+     * at its time: the recipient guard, the reputation gate for the time it is set to go, every variable filled.
+     * Each is the first email's mailbox, person, deal, recipients and signature with its own words; with no subject
+     * of its own it takes the thread's (`Re: <first subject>`). A refusal names the follow-up's own fields.
+     */
+    private async prepareFollowUps(input: SendInput, first: Prepared): Promise<QueuedFollowUp[]> {
+        const out: QueuedFollowUp[] = [];
+        for (const [index, f] of (input.followUps ?? []).entries()) {
+            const sendAt = scheduledTime(f.sendAt, Date.now(), `followUps.${index}.sendAt`);
+            const request: PersonalRequest = {
+                mailboxId: input.mailboxId,
+                personId: input.personId,
+                ...(input.dealId ? { dealId: input.dealId } : {}),
+                ...(input.to ? { to: input.to } : {}),
+                ...(input.cc ? { cc: input.cc } : {}),
+                ...(input.bcc ? { bcc: input.bcc } : {}),
+                ...(input.signature !== undefined ? { signature: input.signature } : {}),
+                ...(f.templateId ? { templateId: f.templateId } : {}),
+                ...(f.subject !== undefined ? { subject: f.subject } : {}),
+                ...(f.body !== undefined ? { body: f.body } : {}),
+                followUp: true,
+            };
+            const send = { id: randomUUID(), rfc822MessageId: newMessageId() };
+            try {
+                const prepared = await this.prepare(request, send, 'later', {
+                    at: sendAt,
+                    threadSubject: first.subject,
+                    audit: false,
+                });
+                out.push({ ...send, sendAt, request, prepared });
+            } catch (error) {
+                throw error instanceof ApiException ? forFollowUp(error, index) : error;
+            }
+        }
+        return out;
     }
 
     /**
@@ -294,17 +415,19 @@ export class MailSendService {
         input: StoredRequest,
         send: { id: string; rfc822MessageId: string },
         when: SendMoment,
+        options: PrepareOptions = {},
     ): Promise<Prepared> {
         return 'kind' in input && input.kind === 'outreach'
             ? this.prepareOutreach(input, send)
-            : this.preparePersonal(input as PersonalRequest, send, when);
+            : this.preparePersonal(input as PersonalRequest, send, when, options);
     }
 
-    /** A member's own send from their personal mailbox (P2-3). */
+    /** A member's own send from their personal mailbox (P2-3), or a follow-up of one. */
     private async preparePersonal(
         input: PersonalRequest,
         send: { id: string; rfc822MessageId: string },
         when: SendMoment,
+        options: PrepareOptions,
     ): Promise<Prepared> {
         const context = this.current();
         const memberId = context.memberId;
@@ -386,29 +509,37 @@ export class MailSendService {
         });
         if (!rendered.sendable) throw new Unsendable(rendered.missing);
         // A reply with no subject of its own takes the parent's, as written — never rendered, so
-        // braces in someone else's subject are not variables.
-        const subject =
-            parent && !input.templateId && (input.subject === undefined || input.subject === '')
-                ? replySubject(parent.subject)
-                : rendered.subject;
+        // braces in someone else's subject are not variables. A queued follow-up always does, template or
+        // not (another subject would leave the thread): at its request, the subject of the email it follows.
+        const ownSubject = input.subject !== undefined && input.subject !== '';
+        const thread = input.followUp
+            ? (parent?.subject ?? options.threadSubject)
+            : parent && !input.templateId
+              ? parent.subject
+              : undefined;
+        const subject = thread !== undefined && !ownSubject ? replySubject(thread) : rendered.subject;
 
-        // GUARD-1: the recipient guard, as this sender — at the request, and again at a scheduled send's time.
+        // GUARD-1: the recipient guard, as this sender — at the request, and again at a scheduled send's time. A
+        // queued follow-up is judged as the mail it is, not as an answer: no thread it is in excuses it.
         await this.policy.assertSendable(context.workspaceId, [...recipients.to, ...recipients.cc, ...recipients.bcc], {
             path: when === 'due' ? 'scheduled_send' : parent ? 'reply' : 'send',
             outreach: false,
-            replyToMessageId: parent?.id ?? null,
+            replyToMessageId: input.followUp ? null : (parent?.id ?? null),
+            ...(options.audit === false ? { record: false } : {}),
         });
 
-        // REP-1: a message that starts a thread passes the mailbox's budget and repetition rules — now, or (a
-        // send later) at its time, when the day it counts against is known. A reply is never judged.
+        // REP-1: mail the member sets going — a message that starts a thread, or a queued follow-up — passes the
+        // mailbox's budget and repetition rules: at the request (a send later: for the time it goes, with what is
+        // already set to go then) and again at a scheduled send's time. A reply is never judged.
         const print = fingerprint(subject, rendered.text);
-        if (!parent && when !== 'later') {
+        if (!parent || input.followUp) {
             await this.reputation.assertPersonalSend({
                 mailboxId: mailbox.id,
                 sendId: send.id,
                 recipients: [...recipients.to, ...recipients.cc, ...recipients.bcc],
                 fingerprint: print,
                 path: when === 'due' ? 'scheduled_send' : 'send',
+                ...(when === 'later' && options.at ? { now: options.at } : {}),
             });
         }
 
@@ -704,7 +835,11 @@ export class MailSendService {
                 where: { id, status: 'scheduled' },
                 data: { status: 'cancelled', cancelledAt: new Date(), request: Prisma.DbNull },
             });
-            if (result.count > 0) await this.announce(tx, 'email.cancelled', context, id);
+            if (result.count > 0) {
+                await this.announce(tx, 'email.cancelled', context, id);
+                // Its follow-ups would answer a message that never went: they go with it.
+                await this.cancelFollowUps(tx, context.workspaceId, id, 'previous_cancelled', actorOf(context));
+            }
             return result;
         });
         if (changed.count === 0) {
@@ -764,6 +899,7 @@ export class MailSendService {
         const sendAt = scheduledTime(input.sendAt);
         const row = await this.changeableSend(id);
         if (row.status !== 'scheduled') throw notScheduled(row.status);
+        await this.assertChainOrder(row, sendAt);
         const changed = await this.rls.withWorkspace((tx) =>
             tx.mailOutbound.updateMany({
                 where: { id, status: 'scheduled' },
@@ -1032,8 +1168,9 @@ export class MailSendService {
      * A scheduled send's time has come: build and check it again, as its sender's role, the mailbox
      * and the person stand now. Any refusal fails it — `unsendable` (naming the variables),
      * `forbidden`, the mailbox's state, `not_found` — never a partial send. A send whose time passed
-     * long ago is failed as `stale`. The row moves `scheduled` → `queued` only if nobody cancelled it
-     * meanwhile.
+     * long ago is failed as `stale`. A queued follow-up goes by the thread rule (`followUpStep`): it waits for
+     * the email before it, is called off with it, or is built as a reply to it. The row moves `scheduled` →
+     * `queued` only if nobody cancelled it meanwhile.
      */
     private async activate(
         workspaceId: string,
@@ -1060,14 +1197,17 @@ export class MailSendService {
                 at: new Date(now).toISOString(),
             });
         }
+        let request = row.request as unknown as StoredRequest;
+        if (row.followsOutboundId) {
+            const follow = await this.followUpStep(workspaceId, row);
+            if (follow.kind === 'wait') throw new SendNotDue(THREAD_PARENT_WAIT_MS);
+            if (follow.kind === 'stop') return this.stopFollowUp(workspaceId, row.id, follow.reason);
+            request = { ...(request as PersonalRequest), replyToMessageId: follow.parentMessageId };
+        }
         let prepared: Prepared;
         try {
             prepared = await this.context.run(sender.context, () =>
-                this.prepare(
-                    row.request as unknown as StoredRequest,
-                    { id: row.id, rfc822MessageId: row.rfc822MessageId },
-                    'due',
-                ),
+                this.prepare(request, { id: row.id, rfc822MessageId: row.rfc822MessageId }, 'due'),
             );
         } catch (error) {
             if (!(error instanceof HttpException)) throw error;
@@ -1112,7 +1252,10 @@ export class MailSendService {
                 where: { id, status: 'scheduled' },
                 data: { status: 'failed', lastError: error as unknown as Prisma.InputJsonValue },
             });
-            if (result.count === 1) await this.announceFailure(tx, workspaceId, id, error);
+            if (result.count === 1) {
+                await this.announceFailure(tx, workspaceId, id, error);
+                await this.cancelFollowUps(tx, workspaceId, id, 'previous_failed', SYSTEM);
+            }
             return result;
         });
         return changed.count === 1 ? 'failed' : this.lostTo(workspaceId, id);
@@ -1291,8 +1434,12 @@ export class MailSendService {
                 where: { id, status: { in: ['queued', 'sending'] } },
                 data: { status: 'failed', lastError: record },
             });
-            if (changed.count === 1) await this.announceFailure(tx, workspaceId, id, error);
-            else await tx.mailOutbound.updateMany({ where: { id, status: 'failed' }, data: { lastError: record } });
+            if (changed.count === 1) {
+                await this.announceFailure(tx, workspaceId, id, error);
+                await this.cancelFollowUps(tx, workspaceId, id, 'previous_failed', SYSTEM);
+            } else {
+                await tx.mailOutbound.updateMany({ where: { id, status: 'failed' }, data: { lastError: record } });
+            }
         });
     }
 
@@ -1314,6 +1461,172 @@ export class MailSendService {
         } as DomainEvent);
     }
 
+    // ── Queued follow-ups ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Where a queued follow-up stands at its time, by the thread rule a sequence's step uses (`followAfter`): the
+     * email it follows gone and stored → it answers that copy, unless the person has written in the thread since
+     * the first email went (the backstop for an `email.replied` still on its way); not gone or not stored yet →
+     * it waits; failed or cancelled → it is called off.
+     */
+    private followUpStep(
+        workspaceId: string,
+        row: OutboundRow,
+    ): Promise<{ kind: 'wait' } | { kind: 'stop'; reason: FollowUpStop } | { kind: 'reply'; parentMessageId: string }> {
+        return this.rls.withWorkspace(workspaceId, async (tx) => {
+            const earlier = await tx.mailOutbound.findUnique({
+                where: { id: row.followsOutboundId! },
+                select: {
+                    status: true,
+                    mailboxId: true,
+                    mailMessageId: true,
+                    mailMessage: { select: { threadId: true } },
+                },
+            });
+            if (!earlier) return { kind: 'stop', reason: 'previous_cancelled' };
+            const follow = followAfter(earlier);
+            if (follow.kind === 'wait') return follow;
+            if (follow.kind === 'broken') {
+                return { kind: 'stop', reason: follow.status === 'failed' ? 'previous_failed' : 'previous_cancelled' };
+            }
+            const first = await tx.mailOutbound.findUniqueOrThrow({
+                where: { id: await chainStart(tx, row.id) },
+                select: { sentAt: true },
+            });
+            const replied = await hasReplyFrom(tx, {
+                addresses: [...row.toAddresses, ...row.ccAddresses],
+                since: first.sentAt ?? new Date(0),
+                threadId: earlier.mailMessage?.threadId,
+            });
+            return replied
+                ? { kind: 'stop', reason: 'replied' }
+                : { kind: 'reply', parentMessageId: follow.parentMessageId };
+        });
+    }
+
+    /** Calls off a follow-up at its time, and every one after it. */
+    private async stopFollowUp(
+        workspaceId: string,
+        id: string,
+        reason: FollowUpStop,
+    ): Promise<'cancelled' | 'skipped'> {
+        const changed = await this.rls.withWorkspace(workspaceId, async (tx) => {
+            const result = await tx.mailOutbound.updateMany({
+                where: { id, status: 'scheduled' },
+                data: cancelledBy(reason),
+            });
+            if (result.count === 1) {
+                await this.recordCancelled(tx, workspaceId, SYSTEM, id);
+                await this.cancelFollowUps(tx, workspaceId, id, reason, SYSTEM);
+            }
+            return result;
+        });
+        return changed.count === 1 ? 'cancelled' : this.lostTo(workspaceId, id);
+    }
+
+    /**
+     * The person answered one of our sends (`email.replied`, the event that stops a sequence on a reply): every
+     * follow-up still queued in that send's chain is called off — when the answer is from one of its recipients
+     * (by address, or as the person it is about). Idempotent: a follow-up no longer scheduled is left alone.
+     * Returns how many were called off.
+     */
+    async stopFollowUpsOnReply(event: DomainEvent): Promise<number> {
+        const reply = event.reply;
+        if (event.type !== 'email.replied' || !reply) return 0;
+        return this.rls.withWorkspace(event.workspaceId, async (tx) => {
+            const answered = await tx.mailOutbound.findUnique({
+                where: { id: reply.inReplyToOutboundId },
+                select: { id: true, personId: true, toAddresses: true, ccAddresses: true },
+            });
+            if (!answered) return 0;
+            const from = event.email?.from.toLowerCase();
+            const recipient =
+                (from !== undefined && [...answered.toAddresses, ...answered.ccAddresses].includes(from)) ||
+                (answered.personId !== null && reply.personIds.includes(answered.personId));
+            if (!recipient) return 0;
+            const start = await chainStart(tx, answered.id);
+            return (await this.cancelFollowUps(tx, event.workspaceId, start, 'replied', SYSTEM)).length;
+        });
+    }
+
+    /**
+     * Calls off every follow-up still scheduled after `afterId` in its chain, in the caller's transaction: each
+     * `cancelled` with the reason kept as its `lastError`, announced (`email.cancelled`), its job dropped after
+     * commit. Returns the ones it called off.
+     */
+    private async cancelFollowUps(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        afterId: string,
+        reason: FollowUpStop,
+        actor: Actor,
+    ): Promise<string[]> {
+        const cancelled: string[] = [];
+        let frontier = [afterId];
+        while (frontier.length > 0) {
+            const next = await tx.mailOutbound.findMany({
+                where: { followsOutboundId: { in: frontier } },
+                select: { id: true },
+            });
+            frontier = next.map((r) => r.id);
+            for (const id of frontier) {
+                const result = await tx.mailOutbound.updateMany({
+                    where: { id, status: 'scheduled' },
+                    data: cancelledBy(reason),
+                });
+                if (result.count === 0) continue;
+                await this.recordCancelled(tx, workspaceId, actor, id);
+                cancelled.push(id);
+            }
+        }
+        if (cancelled.length > 0) {
+            afterCommit('MailSendService.cancelFollowUps', () => {
+                for (const id of cancelled) void this.dropJob(id);
+            });
+        }
+        return cancelled;
+    }
+
+    /**
+     * A follow-up stays after the email it follows and before the one after it (`422` otherwise): moved out of
+     * order it would wait on its predecessor, or answer the wrong message.
+     */
+    private async assertChainOrder(row: OutboundRow, sendAt: Date): Promise<void> {
+        const { before, after } = await this.rls.withWorkspace(async (tx) => ({
+            before: row.followsOutboundId
+                ? await tx.mailOutbound.findUnique({
+                      where: { id: row.followsOutboundId },
+                      select: { status: true, sendAt: true },
+                  })
+                : null,
+            after: await tx.mailOutbound.findFirst({
+                where: { followsOutboundId: row.id, status: 'scheduled' },
+                select: { sendAt: true },
+            }),
+        }));
+        if (before?.status === 'scheduled' && before.sendAt && sendAt <= before.sendAt) {
+            throw new ApiException(422, 'unprocessable', 'a follow-up goes after the email it follows', [
+                { path: 'sendAt', message: `after ${before.sendAt.toISOString()}` },
+            ]);
+        }
+        if (after?.sendAt && sendAt >= after.sendAt) {
+            throw new ApiException(422, 'unprocessable', 'this email goes before its follow-up', [
+                { path: 'sendAt', message: `before ${after.sendAt.toISOString()}` },
+            ]);
+        }
+    }
+
+    private recordCancelled(tx: WorkspaceClient, workspaceId: string, actor: Actor, recordId: string): Promise<void> {
+        return this.events.record(tx, {
+            type: 'email.cancelled',
+            object: 'email',
+            workspaceId,
+            actor,
+            occurredAt: new Date().toISOString(),
+            recordId,
+        } as DomainEvent);
+    }
+
     private async recordError(workspaceId: string, id: string, error: SendErrorRecord): Promise<void> {
         await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailOutbound.update({ where: { id }, data: { lastError: error as unknown as Prisma.InputJsonValue } }),
@@ -1331,22 +1644,63 @@ export class MailSendService {
  * A scheduled send's time, checked against the clock: at least `MAIL_SEND_MIN_LEAD_SECONDS` away
  * (sooner is a send now) and at most `MAIL_SEND_HORIZON_DAYS` ahead.
  */
-function scheduledTime(iso: string, now = Date.now()): Date {
+function scheduledTime(iso: string, now = Date.now(), path = 'sendAt'): Date {
     const at = new Date(iso);
     if (at.getTime() < now + MAIL_SEND_MIN_LEAD_SECONDS * 1000) {
         throw new ValidationFailed('a scheduled send is for later', [
             {
-                path: 'sendAt',
+                path,
                 message: `at least ${MAIL_SEND_MIN_LEAD_SECONDS} seconds from now; leave it out to send now`,
             },
         ]);
     }
     if (at.getTime() > now + MAIL_SEND_HORIZON_DAYS * 24 * 60 * 60 * 1000) {
         throw new ValidationFailed('a scheduled send is too far ahead', [
-            { path: 'sendAt', message: `at most ${MAIL_SEND_HORIZON_DAYS} days ahead` },
+            { path, message: `at most ${MAIL_SEND_HORIZON_DAYS} days ahead` },
         ]);
     }
     return at;
+}
+
+/** No member acts: a job, sync, a cascade. */
+const SYSTEM: Actor = { kind: 'system', id: null };
+
+/** A follow-up called off: cancelled, with why kept where a send's reason is kept. */
+function cancelledBy(reason: FollowUpStop): Prisma.MailOutboundUpdateManyMutationInput {
+    const record: SendErrorRecord = {
+        code: `follow_up.${reason}`,
+        message: FOLLOW_UP_STOPS[reason],
+        at: new Date().toISOString(),
+    };
+    return {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        request: Prisma.DbNull,
+        lastError: record as unknown as Prisma.InputJsonValue,
+    };
+}
+
+/** A follow-up's refusal, its fields named under the follow-up (`followUps.<i>.…`). */
+function forFollowUp(error: ApiException, index: number): ApiException {
+    const at = `followUps.${index}`;
+    const fields = error.fieldErrors?.map((f) => ({ ...f, path: f.path.startsWith(at) ? f.path : `${at}.${f.path}` }));
+    return new ApiException(
+        error.getStatus(),
+        error.code,
+        `follow-up ${index + 1}: ${error.message}`,
+        fields?.length ? fields : [{ path: at, message: error.message }],
+        error.details,
+    );
+}
+
+/** The first email of a send's follow-up chain (the send itself when it follows none). */
+async function chainStart(tx: WorkspaceClient, id: string): Promise<string> {
+    let current = id;
+    for (;;) {
+        const row = await tx.mailOutbound.findUnique({ where: { id: current }, select: { followsOutboundId: true } });
+        if (!row?.followsOutboundId) return current;
+        current = row.followsOutboundId;
+    }
 }
 
 /** What a scheduled send keeps of its request: everything but its timing. */
@@ -1511,6 +1865,7 @@ function view(
         dealId: row.dealId,
         templateId: row.templateId,
         replyToMessageId: row.replyToMessageId,
+        followsOutboundId: row.followsOutboundId,
         senderMemberId: row.senderMemberId,
         canChange: canChangeSend(caller, row),
         canRetry: row.status === 'failed' && canChangeSend(caller, row) && retryRefusal(row) === null,

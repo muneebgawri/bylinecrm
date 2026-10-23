@@ -29170,6 +29170,49 @@
                     "timeZone": {
                         "type": "string",
                         "maxLength": 64
+                    },
+                    "followUps": {
+                        "description": "Up to 5 follow-ups, each later than the one before (and than `sendAt`), sent in this send's thread as replies — each once the one before has gone; called off when the person answers, or an earlier one fails or is cancelled.",
+                        "maxItems": 5,
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "sendAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                                    "description": "Send later: ISO 8601 with an offset, at least MAIL_SEND_MIN_LEAD_SECONDS from now and at most MAIL_SEND_HORIZON_DAYS ahead."
+                                },
+                                "templateId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "subject": {
+                                    "type": "string",
+                                    "maxLength": 300
+                                },
+                                "body": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "enum": ["doc"]
+                                        },
+                                        "content": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/SendMailDto__schema0"
+                                            }
+                                        }
+                                    },
+                                    "required": ["type"]
+                                }
+                            },
+                            "required": ["sendAt"],
+                            "additionalProperties": false
+                        }
                     }
                 },
                 "required": ["mailboxId", "personId"]
@@ -37514,9 +37557,31 @@
                         "nullable": true,
                         "enum": [null],
                         "description": "The recipient’s time zone. Not known yet — inferred later from enrichment (Phase 3) — so always null: show “recipient’s zone unknown”, never a guess."
+                    },
+                    "followUps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "messageId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "sendAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                }
+                            },
+                            "required": ["messageId", "sendAt"]
+                        },
+                        "description": "The follow-ups queued behind it, in order: each `scheduled` at its `sendAt`."
                     }
                 },
-                "required": ["messageId", "status", "sendAt", "senderTimeZone", "recipientTimeZone"]
+                "required": ["messageId", "status", "sendAt", "senderTimeZone", "recipientTimeZone", "followUps"]
             },
             "MailOutbound": {
                 "type": "object",
@@ -37583,6 +37648,14 @@
                     "replyToMessageId": {
                         "nullable": true,
                         "description": "The stored message this one answers.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "followsOutboundId": {
+                        "nullable": true,
+                        "description": "A queued follow-up: the send it follows, in whose thread it goes as a reply once that one has gone. Null otherwise.",
                         "type": "string",
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -37715,6 +37788,7 @@
                     "dealId",
                     "templateId",
                     "replyToMessageId",
+                    "followsOutboundId",
                     "senderMemberId",
                     "canChange",
                     "canRetry",

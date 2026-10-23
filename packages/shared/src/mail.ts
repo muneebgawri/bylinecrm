@@ -178,6 +178,13 @@ export const MAIL_SEND_MIN_LEAD_SECONDS = 60;
 export const MAIL_SEND_HORIZON_DAYS = 90;
 
 /**
+ * Follow-ups one send may queue behind it, each later than the one before and sent in its thread: as a reply to
+ * the previous, once that one has gone; called off when the person answers, or an earlier one fails or is
+ * cancelled. The composer offers the same number.
+ */
+export const MAIL_FOLLOW_UPS_MAX = 5;
+
+/**
  * What `email.replied` says about the reply (P2-3): the inbound message, the CRM message it answers,
  * its thread, the people who wrote it and the deals it concerns. The stage rules read `related`;
  * this is for webhooks and the timeline's readers.

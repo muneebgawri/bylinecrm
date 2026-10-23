@@ -4,6 +4,7 @@ import { ApiError } from '../../../api/client';
 import type { MailboxView } from '../../../api/types';
 import { subjectToDoc } from '../templates/subject';
 import {
+    followUpProblem,
     emptyVariables,
     emptyVariablesText,
     isBlank,
@@ -181,5 +182,57 @@ describe('#193 placesSignature', () => {
                 }),
             ),
         ).toBe(true);
+    });
+});
+
+describe('queued follow-ups in the request', () => {
+    const now = Date.parse('2026-10-20T09:00:00.000Z');
+    const DAY = 24 * 60 * 60 * 1000;
+    const followUp = (days: number, body: RichText = doc(para(text('Nudge')))) => ({
+        key: `f-${days}`,
+        sendAt: new Date(now + days * DAY),
+        subject: doc(para()),
+        body,
+    });
+    const draft = (over: Partial<Draft> = {}): Draft => ({
+        mailboxId: 'mb-1',
+        personId: 'p-1',
+        alsoTo: [],
+        subject: subjectToDoc('Hello'),
+        body: doc(para(text('Hi'))),
+        fill: null,
+        timeZone: 'Europe/London',
+        ...over,
+    });
+
+    it('sends each follow-up’s time, body and only a subject of its own, with the sender’s zone', () => {
+        const input = sendInput(
+            draft({ followUps: [followUp(2), { ...followUp(4), subject: subjectToDoc('Still keen?') }] }),
+        );
+        expect(input.timeZone).toBe('Europe/London');
+        expect(input.followUps).toEqual([
+            { sendAt: new Date(now + 2 * DAY).toISOString(), body: doc(para(text('Nudge'))) },
+            { sendAt: new Date(now + 4 * DAY).toISOString(), body: doc(para(text('Nudge'))), subject: 'Still keen?' },
+        ]);
+        expect(sendInput(draft())).not.toHaveProperty('followUps');
+    });
+
+    it('names the first follow-up that cannot go: no message, a bad time, or out of order', () => {
+        expect(followUpProblem([followUp(2), followUp(4)], now, now)).toBeNull();
+        expect(followUpProblem([followUp(2, doc(para()))], now, now)).toBe('Follow-up 1: write a message.');
+        expect(followUpProblem([followUp(2), followUp(1)], now, now)).toBe(
+            'Follow-up 2: pick a time after the email before it.',
+        );
+        expect(followUpProblem([followUp(2)], now + 3 * DAY, now)).toBe(
+            'Follow-up 1: pick a time after the email before it.',
+        );
+        expect(followUpProblem([followUp(200)], now, now)).toMatch(/^Follow-up 1: pick a time within/);
+    });
+
+    it('reads a refused follow-up’s empty variable as the variable', () => {
+        const refused = new ApiError(422, 'unprocessable', 'empty', [
+            { path: 'followUps.0.person.city', message: 'has no value' },
+        ]);
+        expect(refusedVariables(refused)).toEqual(['person.city']);
     });
 });

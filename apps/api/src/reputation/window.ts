@@ -11,13 +11,19 @@ const NO_ID = '00000000-0000-0000-0000-000000000000';
  * `In-Reply-To`). Recipients who are workspace members are not counted for synced mail. A synced message
  * not fingerprinted yet is fingerprinted here, once (its two derived columns are the only ones the app
  * may update). `exceptOutboundId`: the send being judged.
+ *
+ * A queued follow-up is counted although it goes as a reply: it is mail the member set going, not an answer to
+ * anyone, so it is judged like new mail and counts like it — its recipient once, as the set of addresses does.
+ * With `until` (the gate), sends still scheduled for the window count too: judged for a time ahead — a scheduled
+ * send at its request — the window is the one around that time, and what is already set to go in it is part of it.
  */
 export async function newThreadMail(
     tx: WorkspaceClient,
     mailboxId: string,
     since: Date,
-    exceptOutboundId?: string,
+    options: { exceptOutboundId?: string | undefined; until?: Date | undefined } = {},
 ): Promise<WindowEntry[]> {
+    const scheduledUntil = options.until ?? null;
     const crm = await tx.$queryRaw<
         {
             addresses: string[];
@@ -27,14 +33,15 @@ export async function newThreadMail(
         }[]
     >`
         SELECT to_addresses || cc_addresses || bcc_addresses AS addresses, body_simhash, subject_key,
-               coalesce(sent_at, last_attempt_at, created_at) AS at
+               coalesce(sent_at, last_attempt_at, send_at, created_at) AS at
         FROM mail_outbound
         WHERE mailbox_id = ${mailboxId}::uuid
-          AND reply_to_message_id IS NULL
+          AND (reply_to_message_id IS NULL OR follows_outbound_id IS NOT NULL)
           AND sequence_enrolment_id IS NULL
-          AND status IN ('queued', 'sending', 'sent')
-          AND coalesce(sent_at, last_attempt_at, created_at) >= ${since}
-          AND id <> ${exceptOutboundId ?? NO_ID}::uuid`;
+          AND (status IN ('queued', 'sending', 'sent')
+               OR (status = 'scheduled' AND send_at <= ${scheduledUntil}::timestamptz))
+          AND coalesce(sent_at, last_attempt_at, send_at, created_at) >= ${since}
+          AND id <> ${options.exceptOutboundId ?? NO_ID}::uuid`;
     const synced = await tx.$queryRaw<
         {
             id: string;

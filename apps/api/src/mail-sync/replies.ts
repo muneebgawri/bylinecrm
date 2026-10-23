@@ -140,3 +140,24 @@ export async function replyEventFor(
         reply,
     };
 }
+
+/**
+ * Whether any of `addresses` has written since `since` — in one thread when `threadId` is given, anywhere
+ * otherwise. The backstop a sequence (before every step) and a queued follow-up (at its time) both read, in case
+ * the `email.replied` that stops them is still on its way.
+ */
+export async function hasReplyFrom(
+    tx: WorkspaceClient,
+    where: { addresses: readonly string[]; since: Date; threadId?: string | undefined },
+): Promise<boolean> {
+    if (where.addresses.length === 0) return false;
+    const reply = await tx.mailMessage.findFirst({
+        where: {
+            fromAddress: { in: [...where.addresses], mode: 'insensitive' },
+            sentAt: { gt: where.since },
+            ...(where.threadId ? { threadId: where.threadId } : {}),
+        },
+        select: { id: true },
+    });
+    return reply !== null;
+}

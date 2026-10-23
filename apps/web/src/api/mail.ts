@@ -171,7 +171,7 @@ export function useSendMail(workspaceId: string) {
                 accepted,
             };
             client.setQueryData<SessionSend[]>(keys.mailSession(workspaceId), (list = []) => [entry, ...list]);
-            if (accepted.status === 'scheduled') {
+            if (accepted.status === 'scheduled' || accepted.followUps.length > 0) {
                 void client.invalidateQueries({ queryKey: keys.mailRecordSendsAll(workspaceId) });
             }
         },

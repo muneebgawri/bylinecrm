@@ -19,6 +19,8 @@ export interface GuardedSend {
     path: Exclude<GuardPath, 'sequence_enrol'>;
     outreach: boolean;
     replyToMessageId: string | null;
+    /** Write the guard's audit (default); `false` asks it quietly, for a check already written once. */
+    record?: boolean;
 }
 
 /**
