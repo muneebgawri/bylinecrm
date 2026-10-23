@@ -1,8 +1,9 @@
-import { SIGNATURE_PLACEMENT_VARIABLE, type RichText, type RichTextNode } from '@bylinecrm/shared';
+import { MAIL_FOLLOW_UPS_MAX, SIGNATURE_PLACEMENT_VARIABLE, type RichText, type RichTextNode } from '@bylinecrm/shared';
 import { ApiError } from '../../../api/client';
 import type { MailboxView, SendMailInput } from '../../../api/types';
 import { templateVariablePaths } from '../templates/preview';
 import { docToSubject } from '../templates/subject';
+import { scheduleProblem } from './schedule';
 
 /**
  * The record composer's rules (doc 50 §A, FR-CRMS-2/3), apart from its screen so each is stated
@@ -87,6 +88,50 @@ export interface Draft {
     signature?: RichText | null | undefined;
     sendAt?: Date | undefined;
     timeZone: string;
+    /** Follow-ups queued behind it, in order; each goes in its thread as a reply, unless the person answers. */
+    followUps?: readonly FollowUpDraft[] | undefined;
+}
+
+/**
+ * A follow-up as the composer holds it: when it goes (in the sender's zone, as the picker reads it), and what it
+ * says — an empty subject is the thread's (`Re: …`, the server's), a body is required.
+ */
+export interface FollowUpDraft {
+    /** A stable key for the row; never sent. */
+    key: string;
+    sendAt: Date | null;
+    subject: RichText;
+    body: RichText;
+}
+
+/** How long after the one before a new follow-up row starts: three days, the usual nudge. */
+const FOLLOW_UP_GAP_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Where a new follow-up row starts: three days after the one before it (or after `from`, the first email). */
+export function nextFollowUpAt(followUps: readonly FollowUpDraft[], from: number): Date {
+    const last = followUps.at(-1)?.sendAt?.getTime() ?? from;
+    return new Date(Math.max(last, from) + FOLLOW_UP_GAP_MS);
+}
+
+/** Whether another follow-up may be added. */
+export const canAddFollowUp = (followUps: readonly FollowUpDraft[]) => followUps.length < MAIL_FOLLOW_UPS_MAX;
+
+/**
+ * Why the follow-ups cannot go as they are, in words — the first problem, naming the follow-up; null when they can.
+ * Each needs a message and a time the API takes (`scheduleProblem`), later than the email before it (`first`: the
+ * first email's time — now for a send now). The API checks the same again.
+ */
+export function followUpProblem(followUps: readonly FollowUpDraft[], first: number, now: number): string | null {
+    let previous = first;
+    for (const [index, f] of followUps.entries()) {
+        const which = `Follow-up ${index + 1}`;
+        if (isBlank(f.body)) return `${which}: write a message.`;
+        const time = scheduleProblem(f.sendAt, now);
+        if (time) return `${which}: ${time.charAt(0).toLowerCase()}${time.slice(1)}`;
+        if (f.sendAt!.getTime() <= previous) return `${which}: pick a time after the email before it.`;
+        previous = f.sendAt!.getTime();
+    }
+    return null;
 }
 
 const same = (a: RichText, b: RichText) => JSON.stringify(a) === JSON.stringify(b);
@@ -125,12 +170,28 @@ export function sendInput(draft: Draft): SendMailInput {
             : { body: draft.body, ...(subject !== '' ? { subject } : {}) }),
         ...(draft.replyToMessageId ? { replyToMessageId: draft.replyToMessageId } : {}),
         ...(draft.signature !== undefined ? { signature: draft.signature } : {}),
-        ...(draft.sendAt ? { sendAt: draft.sendAt.toISOString(), timeZone: draft.timeZone } : {}),
+        ...(draft.sendAt || draft.followUps?.length ? { timeZone: draft.timeZone } : {}),
+        ...(draft.sendAt ? { sendAt: draft.sendAt.toISOString() } : {}),
+        ...(draft.followUps?.length
+            ? {
+                  followUps: draft.followUps.map((f) => {
+                      const subject = docToSubject(f.subject);
+                      return {
+                          sendAt: f.sendAt!.toISOString(),
+                          body: f.body,
+                          ...(subject !== '' ? { subject } : {}),
+                      };
+                  }),
+              }
+            : {}),
     };
 }
 
-/** The variables a refused send named as empty (`422 unprocessable`, one field error per path). */
+/**
+ * The variables a refused send named as empty (`422 unprocessable`, one field error per path) — a follow-up's
+ * under its own `followUps.<n>.`, read as the variable it names.
+ */
 export function refusedVariables(error: unknown): string[] {
     if (!(error instanceof ApiError) || error.status !== 422 || error.code !== 'unprocessable') return [];
-    return error.fieldErrors.map((f) => f.path).filter((path) => path.includes('.'));
+    return error.fieldErrors.map((f) => f.path.replace(/^followUps\.\d+\./, '')).filter((path) => path.includes('.'));
 }

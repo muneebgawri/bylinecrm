@@ -90,6 +90,7 @@ describe('FR-CRMS-4: the thread view', () => {
                               sendAt: null,
                               senderTimeZone: null,
                               recipientTimeZone: null,
+                              followUps: [],
                           },
                           202,
                       )

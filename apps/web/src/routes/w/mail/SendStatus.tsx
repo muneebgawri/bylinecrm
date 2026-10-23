@@ -13,7 +13,23 @@ export function pendingAction(send: PendingSend): string {
     // Until the server has built it, a subject is as written: its variables read as their names.
     const text = send.subject.replace(/\{\{\s*([^}]+?)\s*\}\}/g, '$1');
     const subject = text ? `“${text}”` : 'an email';
-    return send.status === 'scheduled' ? `scheduled ${subject}` : `emailed ${subject}`;
+    // A queued follow-up says so, and which: it goes in the thread of the email before it.
+    const what = send.followsOutboundId
+        ? `follow-up${send.followUpNumber ? ` ${send.followUpNumber}` : ''} ${subject}`
+        : subject;
+    return send.status === 'scheduled' ? `scheduled ${what}` : `emailed ${what}`;
+}
+
+/** What cancelling a send calls off: it, and the follow-ups still scheduled after it. */
+export function cancelText(send: PendingSend): string {
+    const it = `“${send.subject || 'This email'}” will not be sent.`;
+    const later =
+        send.laterFollowUps === 0
+            ? ''
+            : send.laterFollowUps === 1
+              ? ' Nor will the follow-up after it.'
+              : ` Nor will the ${send.laterFollowUps} follow-ups after it.`;
+    return `${it}${later} This cannot be undone.`;
 }
 
 /** Why a send failed, in words: the API's message, and the variables that had no value. */
@@ -74,7 +90,7 @@ export function SendStatus({ workspaceId, send }: { workspaceId: string; send: P
                         if (!open) cancel.reset();
                     }}
                     title="Cancel this send?"
-                    body={`“${send.subject || 'This email'}” will not be sent. This cannot be undone.`}
+                    body={cancelText(send)}
                     confirm="Cancel send"
                     pending={cancel.isPending}
                     error={cancel.error ? failureText(cancel.error) : undefined}

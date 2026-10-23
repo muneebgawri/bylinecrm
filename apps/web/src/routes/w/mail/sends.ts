@@ -33,6 +33,42 @@ export interface PendingSend {
     session: SessionSend | null;
     /** Clicks and indicative opens once sent (P3-4); zeros before. */
     tracking: TrackingCountsView;
+    /** A queued follow-up: the send it follows in its thread. Null otherwise. */
+    followsOutboundId: string | null;
+    /** A follow-up's place in its chain (1 for the first follow-up), when the sends before it are listed. */
+    followUpNumber: number | null;
+    /** The follow-ups still scheduled after this send: cancelling it calls them off too. */
+    laterFollowUps: number;
+}
+
+/**
+ * Links the chains: each follow-up's number among the sends listed (counted back to the first email), and how many
+ * follow-ups are still scheduled after each send.
+ */
+export function linkFollowUps(sends: readonly Omit<PendingSend, 'followUpNumber' | 'laterFollowUps'>[]): PendingSend[] {
+    const byId = new Map(sends.map((s) => [s.messageId, s]));
+    const after = new Map<string, string[]>();
+    for (const s of sends) {
+        if (s.followsOutboundId)
+            after.set(s.followsOutboundId, [...(after.get(s.followsOutboundId) ?? []), s.messageId]);
+    }
+    const number = (s: (typeof sends)[number]): number | null => {
+        if (!s.followsOutboundId) return null;
+        let n = 1;
+        let previous = s.followsOutboundId;
+        // Counted back while the earlier ones are listed; a send not listed (sent and on the timeline) ends the walk.
+        for (let p = byId.get(previous); p?.followsOutboundId; p = byId.get(previous)) {
+            n += 1;
+            previous = p.followsOutboundId;
+        }
+        return n;
+    };
+    const later = (id: string): number =>
+        (after.get(id) ?? []).reduce(
+            (sum, next) => sum + (byId.get(next)?.status === 'scheduled' ? 1 : 0) + later(next),
+            0,
+        );
+    return sends.map((s) => ({ ...s, followUpNumber: number(s), laterFollowUps: later(s.messageId) }));
 }
 
 /** Whether this tab's send is about this record: its person, or the deal it was written from. */
@@ -74,7 +110,7 @@ export function usePendingSends(
     const statuses = useOutboundMessages(workspaceId, ids);
 
     const pending = useMemo(() => {
-        const list: PendingSend[] = [];
+        const list: Omit<PendingSend, 'followUpNumber' | 'laterFollowUps'>[] = [];
         ids.forEach((id, i) => {
             const own = mine.find((s) => s.messageId === id) ?? null;
             const view = statuses[i]?.data ?? held.find((s) => s.id === id);
@@ -97,9 +133,10 @@ export function usePendingSends(
                 threadId: view?.threadId ?? null,
                 session: own,
                 tracking: view?.tracking ?? { clicks: 0, uniqueClicks: 0, opens: 0 },
+                followsOutboundId: view?.followsOutboundId ?? null,
             });
         });
-        return list;
+        return linkFollowUps(list);
     }, [ids, mine, held, statuses, onTimeline]);
 
     // A send that has gone, and again once its copy is stored, is on the records it concerns: read

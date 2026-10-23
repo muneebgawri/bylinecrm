@@ -1,4 +1,4 @@
-import { MAIL_OUTBOUND_STATUSES, MAIL_SEND_RECIPIENTS_MAX } from '@bylinecrm/shared';
+import { MAIL_FOLLOW_UPS_MAX, MAIL_OUTBOUND_STATUSES, MAIL_SEND_RECIPIENTS_MAX } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { signatureDoc } from '../signatures/dto';
@@ -42,6 +42,27 @@ const timeZone = z
     .refine(isTimeZone, { message: 'not a time zone this server knows (IANA, e.g. Europe/London)' });
 
 /**
+ * A follow-up queued behind the send: when it goes, and what it says — a template, or a body with an optional
+ * subject of its own (left out, it is the thread's: `Re: <first subject>`). Everything else is the send's.
+ */
+const followUp = z
+    .object({
+        sendAt,
+        templateId: z.uuid().optional(),
+        subject: templateSubject.optional(),
+        body: templateBody.optional(),
+    })
+    .strict()
+    .superRefine((input, ctx) => {
+        if (input.templateId !== undefined && input.body !== undefined) {
+            ctx.addIssue({ code: 'custom', path: ['body'], message: 'send a template or a body, not both' });
+        }
+        if (input.templateId === undefined && input.body === undefined) {
+            ctx.addIssue({ code: 'custom', path: ['body'], message: 'a body, or a templateId' });
+        }
+    });
+
+/**
  * `POST /mail/send` (P2-3). The message is either a template (`templateId`) or written here
  * (`subject` + `body`, in the template subset, variables allowed) — exactly one of the two. It is
  * about `personId` (the variables' person, and the default recipient) and optionally `dealId`. A
@@ -66,8 +87,28 @@ export class SendMailDto extends createZodDto(
             }),
             sendAt: sendAt.optional(),
             timeZone: timeZone.optional(),
+            followUps: z
+                .array(followUp)
+                .max(MAIL_FOLLOW_UPS_MAX)
+                .optional()
+                .meta({
+                    description: `Up to ${MAIL_FOLLOW_UPS_MAX} follow-ups, each later than the one before (and than \`sendAt\`), sent in this send's thread as replies — each once the one before has gone; called off when the person answers, or an earlier one fails or is cancelled.`,
+                }),
         })
         .superRefine((input, ctx) => {
+            // Each follow-up after the email before it; a follow-up of a send now is checked against the clock.
+            let previous = input.sendAt === undefined ? null : Date.parse(input.sendAt);
+            for (const [index, f] of (input.followUps ?? []).entries()) {
+                const at = Date.parse(f.sendAt);
+                if (previous !== null && at <= previous) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['followUps', index, 'sendAt'],
+                        message: 'later than the email before it',
+                    });
+                }
+                previous = at;
+            }
             if (input.templateId !== undefined) {
                 for (const field of ['subject', 'body'] as const) {
                     if (input[field] !== undefined) {

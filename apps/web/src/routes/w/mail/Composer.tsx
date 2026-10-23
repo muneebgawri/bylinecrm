@@ -1,7 +1,8 @@
-import { lintCompose, type RichText } from '@bylinecrm/shared';
+import { MAIL_FOLLOW_UPS_MAX, lintCompose, type RichText } from '@bylinecrm/shared';
 import {
     Badge,
     Button,
+    Input,
     Select,
     SelectContent,
     SelectItem,
@@ -12,7 +13,7 @@ import {
     focusRing,
 } from '@bylinecrm/ui';
 import { useMutation } from '@tanstack/react-query';
-import { CalendarClock, FileText, Mail, X } from 'lucide-react';
+import { CalendarClock, FileText, Mail, Plus, X } from 'lucide-react';
 import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Link } from 'react-router';
 import { templates } from '../../../api/templates';
@@ -29,18 +30,22 @@ import { failureText } from '../../../lib/errors';
 import { paths } from '../../paths';
 import { docToSubject, subjectToDoc } from '../templates/subject';
 import {
+    canAddFollowUp,
     emptyVariables,
     emptyVariablesText,
+    followUpProblem,
     isBlank,
+    nextFollowUpAt,
     ownSendingMailboxes,
     placesSignature,
     refusedVariables,
     sendInput,
     sendsAsTemplate,
+    type FollowUpDraft,
     type TemplateFill,
 } from './compose';
 import { SchedulePicker } from './SchedulePicker';
-import { senderTimeZone } from './schedule';
+import { fromLocalInput, senderTimeZone, toLocalInput } from './schedule';
 
 /** The person the mail is to and about: the record's person, or a deal's point of contact. */
 export interface ComposerPerson {
@@ -210,6 +215,9 @@ function ComposerForm({
     // The editors take their content when they mount: a template fill or a reset remounts them.
     const [generation, setGeneration] = useState(0);
     const [error, setError] = useState<string | null>(null);
+    // Follow-ups queued behind this email, each in its thread; `followUpKey` names their rows.
+    const [followUps, setFollowUps] = useState<FollowUpDraft[]>([]);
+    const followUpKey = useRef(0);
     const subjectRef = useRef<RichTextHandle>(null);
     const bodyRef = useRef<RichTextHandle>(null);
     const send = useSendMail(workspaceId);
@@ -263,17 +271,39 @@ function ComposerForm({
     });
     const blank = isBlank(body);
     const noSubject = !reply && docToSubject(subject).trim() === '';
-    const blocked = empty.length > 0 || blank || noSubject || preview.isPending;
+    const followUpBlank = followUps.some((f) => isBlank(f.body));
+    const blocked = empty.length > 0 || blank || noSubject || followUpBlank || preview.isPending;
     const why = empty.length
         ? emptyVariablesText(empty, person.name)
         : blank
           ? 'Write a message to send.'
           : noSubject
             ? 'Add a subject to send.'
-            : null;
+            : followUpBlank
+              ? 'Write each follow-up’s message.'
+              : null;
+    // A follow-up with no subject of its own takes the thread's, as the server will.
+    const threadSubject = `Re: ${(docToSubject(subject) || reply?.subject || '…').replace(/^re:\s*/i, '')}`;
+
+    const addFollowUp = () => {
+        followUpKey.current += 1;
+        const key = `follow-up-${followUpKey.current}`;
+        const now = Date.now();
+        setFollowUps((list) => [
+            ...list,
+            { key, sendAt: nextFollowUpAt(list, now), subject: EMPTY_DOC, body: EMPTY_DOC },
+        ]);
+    };
+    const changeFollowUp = (key: string, change: Partial<FollowUpDraft>) =>
+        setFollowUps((list) => list.map((f) => (f.key === key ? { ...f, ...change } : f)));
 
     const submit = async (sendAt?: Date, timeZone?: string) => {
         setError(null);
+        const problem = followUpProblem(followUps, (sendAt ?? new Date()).getTime(), Date.now());
+        if (problem) {
+            setError(problem);
+            throw new Error(problem);
+        }
         const input = sendInput({
             mailboxId,
             personId: person.id,
@@ -286,6 +316,7 @@ function ComposerForm({
             signature: signatureTouched ? signature : undefined,
             sendAt,
             timeZone: timeZone ?? senderTimeZone(),
+            followUps,
         });
         const subjectText = docToSubject(subject) || (reply ? `Re: ${reply.subject.replace(/^re:\s*/i, '')}` : '');
         try {
@@ -302,6 +333,7 @@ function ComposerForm({
         setMissing([]);
         setAlsoTo([]);
         setOwnSignature(null);
+        setFollowUps([]);
         setGeneration((g) => g + 1);
         onSent?.();
     };
@@ -441,6 +473,21 @@ function ComposerForm({
                     </div>
                 )
             )}
+            {followUps.length > 0 && (
+                <ol aria-label="Follow-ups" className="m-0 list-none border-t border-border p-0">
+                    {followUps.map((f, index) => (
+                        <FollowUpRow
+                            key={`${f.key}-${generation}`}
+                            followUp={f}
+                            number={index + 1}
+                            threadSubject={threadSubject}
+                            missing={missing}
+                            onChange={(change) => changeFollowUp(f.key, change)}
+                            onRemove={() => setFollowUps((list) => list.filter((x) => x.key !== f.key))}
+                        />
+                    ))}
+                </ol>
+            )}
             <div className="flex flex-wrap items-center gap-2 border-t border-border px-3.5 py-2.5">
                 {why && (
                     <p
@@ -468,6 +515,21 @@ function ComposerForm({
                         ))}
                     </ul>
                 )}
+                <Button
+                    size="sm"
+                    shape="square"
+                    variant="ghost"
+                    disabled={!canAddFollowUp(followUps)}
+                    title={
+                        canAddFollowUp(followUps)
+                            ? 'Queue an email that goes in this thread later, unless they answer'
+                            : `At most ${MAIL_FOLLOW_UPS_MAX} follow-ups`
+                    }
+                    onClick={addFollowUp}
+                >
+                    <Plus aria-hidden />
+                    Add follow-up
+                </Button>
                 <div className="ml-auto flex items-center gap-2">
                     {onDiscard && (
                         <Button size="sm" shape="square" variant="ghost" onClick={onDiscard}>
@@ -506,6 +568,82 @@ function ComposerForm({
                 </div>
             </div>
         </div>
+    );
+}
+
+/**
+ * One queued follow-up: when it goes, in the sender's zone (the picker's rule; the API checks again), its subject —
+ * empty is the thread's `Re: …` — and its message, in the composer's own editors. It goes in the thread as a reply
+ * to the email before it, and not at all if the person answers first.
+ */
+function FollowUpRow({
+    followUp,
+    number,
+    threadSubject,
+    missing,
+    onChange,
+    onRemove,
+}: {
+    followUp: FollowUpDraft;
+    number: number;
+    threadSubject: string;
+    missing: readonly string[];
+    onChange: (change: Partial<FollowUpDraft>) => void;
+    onRemove: () => void;
+}) {
+    const id = useId();
+    const zone = senderTimeZone();
+    return (
+        <li className="border-b border-dashed border-border last:border-b-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface-raised px-3.5 py-2 text-[13px] text-text-muted">
+                <span className="font-medium text-text">Follow-up {number}</span>
+                <label htmlFor={`${id}-at`}>Sends</label>
+                <Input
+                    id={`${id}-at`}
+                    type="datetime-local"
+                    aria-label={`Follow-up ${number} send time`}
+                    aria-describedby={`${id}-zone`}
+                    value={followUp.sendAt ? toLocalInput(followUp.sendAt) : ''}
+                    onChange={(e) => onChange({ sendAt: fromLocalInput(e.target.value) })}
+                    className="h-7 w-auto text-[13px]"
+                />
+                <span id={`${id}-zone`} className="text-xs">
+                    {zone} · unless they answer first
+                </span>
+                <Button
+                    size="xs"
+                    shape="square"
+                    variant="ghost"
+                    className="ml-auto"
+                    aria-label={`Remove follow-up ${number}`}
+                    onClick={onRemove}
+                >
+                    <X aria-hidden />
+                </Button>
+            </div>
+            <div className="border-y border-border bg-surface">
+                <RichTextEditor
+                    profile="subject"
+                    value={followUp.subject}
+                    onChange={(doc) => onChange({ subject: doc })}
+                    aria-label={`Follow-up ${number} subject`}
+                    placeholder={threadSubject}
+                    missingVariables={missing}
+                    className="rounded-none border-0"
+                />
+            </div>
+            <div className="bg-surface">
+                <RichTextEditor
+                    profile="template"
+                    value={followUp.body}
+                    onChange={(doc) => onChange({ body: doc })}
+                    aria-label={`Follow-up ${number} message`}
+                    placeholder="Write the follow-up…"
+                    missingVariables={missing}
+                    className="rounded-none border-0 [&_.rich-text]:min-h-20"
+                />
+            </div>
+        </li>
     );
 }
 

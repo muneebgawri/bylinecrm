@@ -39,6 +39,10 @@ export interface PersonalSendCheck {
     recipients: readonly JudgedRecipient[];
     fingerprint: Fingerprint;
     path: Extract<GuardrailPath, 'send' | 'scheduled_send'>;
+    /**
+     * The moment judged: now, or — a scheduled send at its request — the time it is set to go, so its window is
+     * the 24 hours before then, with the sends already set to go in it.
+     */
     now?: Date;
 }
 
@@ -56,9 +60,10 @@ interface Verdict {
  * leaves — its new-recipient budget for the rolling 24 hours and hour, and the repetition rules (a near-identical
  * body to too many distinct people in 24 hours: "use a sequence from the pool"; the same subject to too many is a
  * warning, once a day, and the send goes). A reply
- * is never judged. Every refusal is a guardrail event (`blocked`); the first bulk pattern of a member's day tells
+ * is never judged; a queued follow-up is (it goes as a reply, but nobody wrote to the member). Every refusal is a guardrail event (`blocked`); the first bulk pattern of a member's day tells
  * the reviewers. The counts include what the mailbox sent outside the CRM (Gmail sync), so a budget spent in
- * Gmail is spent here too. Judged at the send's request and, for a scheduled send, at its time.
+ * Gmail is spent here too. Judged at the send's request — a scheduled send's for the time it is set to go — and,
+ * for a scheduled send, again at its time.
  *
  * Soft limits: two sends judged at the same moment can both pass (no lock is held across a send); the next one
  * sees both.
@@ -96,12 +101,10 @@ export class ReputationGate {
                 };
             }
             const s = await reputationSettingsIn(tx);
-            const entries = await newThreadMail(
-                tx,
-                check.mailboxId,
-                new Date(now.getTime() - REPUTATION_WINDOW_MS),
-                check.sendId,
-            );
+            const entries = await newThreadMail(tx, check.mailboxId, new Date(now.getTime() - REPUTATION_WINDOW_MS), {
+                exceptOutboundId: check.sendId,
+                until: now,
+            });
             for (const [window, span, limit] of [
                 ['day', REPUTATION_WINDOW_MS, s.dailyNewRecipients],
                 ['hour', REPUTATION_HOUR_MS, s.hourlyNewRecipients],

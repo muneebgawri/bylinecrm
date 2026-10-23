@@ -17,6 +17,7 @@ import {
     MAIL_SEND_MAINTENANCE_QUEUE,
     MAIL_SEND_QUEUE,
 } from './mail-send.constants';
+import { MailFollowUpsConsumer } from './follow-ups.consumer';
 import { MailSendController } from './mail-send.controller';
 import { MailSendService } from './mail-send.service';
 import { MailSendWorkers } from './mail-send.workers';
@@ -59,7 +60,7 @@ import { MailSendSweep } from './sweep';
         }),
     ],
     controllers: [MailSendController],
-    providers: [MailSendService, MailSendWorkers, MailSendSweep, SendPolicy],
+    providers: [MailSendService, MailSendWorkers, MailSendSweep, SendPolicy, MailFollowUpsConsumer],
     exports: [MailSendService],
 })
 export class MailSendModule {}

@@ -19,7 +19,14 @@ const session = (id: string): SessionSend => ({
     dealId: null,
     subject: 'Hello',
     input: { mailboxId: 'mb-1', personId: PERSON.id, subject: 'Hello', body: { type: 'doc', content: [] } },
-    accepted: { messageId: id, status: 'queued', sendAt: null, senderTimeZone: null, recipientTimeZone: null },
+    accepted: {
+        messageId: id,
+        status: 'queued',
+        sendAt: null,
+        senderTimeZone: null,
+        recipientTimeZone: null,
+        followUps: [],
+    },
 });
 
 /** Answers `GET /mail/messages/:id` with each view in turn, then the last one for good. */
@@ -390,5 +397,49 @@ describe('FR-CRMS-4: stored mail on the timeline opens its thread', () => {
         const seen = timeline([]);
         await userEvent.click(await screen.findByRole('button', { name: 'Emails' }));
         await waitFor(() => expect(seen.some((r) => r.url.includes('kinds=linked-email'))).toBe(true));
+    });
+});
+
+describe('queued follow-ups on the timeline', () => {
+    const first = outbound({
+        id: 'out-20',
+        status: 'scheduled',
+        subject: 'Hello',
+        sendAt: '2026-12-01T09:00:00.000Z',
+        senderTimeZone: 'Europe/London',
+    });
+    const followUp = (id: string, follows: string, day: string) =>
+        outbound({
+            id,
+            status: 'scheduled',
+            subject: 'Re: Hello',
+            sendAt: `2026-12-${day}T09:00:00.000Z`,
+            senderTimeZone: 'Europe/London',
+            followsOutboundId: follows,
+        });
+    const one = followUp('out-21', 'out-20', '04');
+    const two = followUp('out-22', 'out-21', '07');
+
+    it('shows each follow-up as one of its chain, and cancelling the first says its follow-ups go with it', async () => {
+        stubApi([
+            recordSendsRoute([two, one, first]),
+            statusRoute('out-20', [first]),
+            statusRoute('out-21', [one]),
+            statusRoute('out-22', [two]),
+            ...quietRecordRoutes,
+        ]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByText(/scheduled follow-up 1 “Re: Hello”/)).toBeInTheDocument();
+        expect(screen.getByText(/scheduled follow-up 2 “Re: Hello”/)).toBeInTheDocument();
+        expect(screen.getByText(/scheduled “Hello”/)).toBeInTheDocument();
+        const cancels = screen.getAllByRole('button', { name: 'Cancel send' });
+        // Newest first: the first email's line is the last.
+        await userEvent.click(cancels.at(-1)!);
+        const dialog = await screen.findByRole('dialog', { name: 'Cancel this send?' });
+        expect(dialog).toHaveTextContent('Nor will the 2 follow-ups after it.');
     });
 });

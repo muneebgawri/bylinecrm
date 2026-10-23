@@ -117,7 +117,7 @@ model Workspace {
   customerExclusionSettings     CustomerExclusionSettings?
   ownershipSettings             OwnershipSettings?
   guardrailSettings             GuardrailSettings?
-  rotationSettings             RotationSettings?
+  rotationSettings              RotationSettings?
   rotationMembers               RotationMember[]
   cadenceLapses                 CadenceLapse[]
 
@@ -1534,6 +1534,9 @@ model MailOutbound {
   /// The sequence step this send is (P3-3); null for 1:1 mail.
   sequenceEnrolmentId     String?            @map("sequence_enrolment_id") @db.Uuid
   sequenceStepId          String?            @map("sequence_step_id") @db.Uuid
+  /// A queued follow-up: the send it follows in the same thread — built as a reply to that one's stored copy
+  /// once it has gone; cancelled when that one fails or is cancelled, or when the person answers. Null otherwise.
+  followsOutboundId       String?            @map("follows_outbound_id") @db.Uuid
   createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamptz
   updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1556,12 +1559,16 @@ model MailOutbound {
   sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
   waitingEnrolment  SequenceEnrolment? @relation("EnrolmentWaitingSend")
 
+  follows   MailOutbound?  @relation("MailOutboundFollowUps", fields: [followsOutboundId], references: [id], onDelete: SetNull)
+  followUps MailOutbound[] @relation("MailOutboundFollowUps")
+
   @@index([workspaceId, senderMemberId, createdAt(sort: Desc)])
   @@index([mailboxId, providerThreadId])
   @@index([workspaceId, mailMessageId])
   @@index([status, sendAt])
   @@index([providerRfc822MessageId])
   @@index([sequenceEnrolmentId])
+  @@index([followsOutboundId])
   @@map("mail_outbound")
 }
 

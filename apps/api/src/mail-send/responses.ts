@@ -24,6 +24,9 @@ export const mailSendAccepted = named(
         sendAt: dateTime.nullable().meta({ description: 'When a scheduled send goes (UTC); null for a send now.' }),
         senderTimeZone: timeZoneEcho,
         recipientTimeZone,
+        followUps: z
+            .array(z.object({ messageId: id, sendAt: dateTime }))
+            .meta({ description: 'The follow-ups queued behind it, in order: each `scheduled` at its `sendAt`.' }),
     }),
 );
 export type MailSendAccepted = z.output<typeof mailSendAccepted>;
@@ -45,6 +48,10 @@ export const mailOutboundView = named(
         dealId: id.nullable(),
         templateId: id.nullable(),
         replyToMessageId: id.nullable().meta({ description: 'The stored message this one answers.' }),
+        followsOutboundId: id.nullable().meta({
+            description:
+                'A queued follow-up: the send it follows, in whose thread it goes as a reply once that one has gone. Null otherwise.',
+        }),
         senderMemberId: id.meta({ description: 'The member who sent (or scheduled) it.' }),
         canChange: z.boolean().meta({
             description: 'Whether the caller may reschedule or cancel it: its sender or an admin (#133).',

@@ -70,6 +70,7 @@ export const outbound = (over: Partial<MailOutboundView> = {}): MailOutboundView
     dealId: null,
     templateId: null,
     replyToMessageId: null,
+    followsOutboundId: null,
     senderMemberId: 'm-1',
     canChange: true,
     canRetry: false,

@@ -1615,6 +1615,7 @@ export const scheduledSends: MailOutboundView[] = [
         dealId: null,
         templateId: null,
         replyToMessageId: null,
+        followsOutboundId: null,
         senderMemberId: IDS.member,
         canChange: true,
         canRetry: false,

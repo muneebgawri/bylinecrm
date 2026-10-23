@@ -9,6 +9,8 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { afterCommit } from '../infra/transaction-scope';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { MailSendService } from '../mail-send/mail-send.service';
+import { THREAD_PARENT_WAIT_MS, followAfter } from '../mail-send/thread-follow';
+import { hasReplyFrom } from '../mail-sync/replies';
 import { SendingPoolService } from '../sending-pool/sending-pool.service';
 import { SuppressionService } from '../suppression/suppression.service';
 import { RenderService } from '../templates/render.service';
@@ -47,8 +49,6 @@ export type RunOutcome =
 
 /** A job may fire this early (Redis timers are not exact). */
 const EARLY_TOLERANCE_MS = 1000;
-/** A reply-in-thread step whose parent send is not stored yet waits this long for the next sync. */
-const PARENT_WAIT_MS = 5 * 60_000;
 
 type EnrolmentRow = Prisma.SequenceEnrolmentGetPayload<{
     include: {
@@ -186,13 +186,15 @@ export class SequenceRunner {
         let parentId: string | null = null;
         if (step.replyInThread) {
             const previous = await this.previousSend(workspaceId, e.id);
-            if (!previous) {
+            // The thread rule a member's queued follow-up uses too (`followAfter`); only a sent step is read here.
+            const follow = previous ? followAfter(previous) : null;
+            if (!follow) {
                 mailboxId = await this.pool.pick(workspaceId, now);
-            } else if (!previous.mailMessageId) {
-                return this.reschedule(workspaceId, e, new Date(now.getTime() + PARENT_WAIT_MS), window, zone);
+            } else if (follow.kind !== 'reply') {
+                return this.reschedule(workspaceId, e, new Date(now.getTime() + THREAD_PARENT_WAIT_MS), window, zone);
             } else {
-                mailboxId = previous.mailboxId;
-                parentId = previous.mailMessageId;
+                mailboxId = follow.mailboxId;
+                parentId = follow.parentMessageId;
             }
         } else {
             mailboxId = await this.pool.pick(workspaceId, now);
@@ -411,10 +413,7 @@ export class SequenceRunner {
         const address = primaryAddress(e);
         if (!address) return { reason: 'suppressed', detail: 'the person has no email address' };
         const found = await this.rls.withWorkspace(e.workspaceId, async (tx) => {
-            const reply = await tx.mailMessage.findFirst({
-                where: { fromAddress: { equals: address, mode: 'insensitive' }, sentAt: { gt: e.enrolledAt } },
-                select: { id: true },
-            });
+            const reply = await hasReplyFrom(tx, { addresses: [address], since: e.enrolledAt });
             const excluded = (await this.exclusions.check(tx, [address])).get(address) ?? null;
             const policy = await this.regions.allowedIn(tx);
             const deal =
@@ -492,7 +491,7 @@ export class SequenceRunner {
             tx.mailOutbound.findFirst({
                 where: { sequenceEnrolmentId: enrolmentId, status: 'sent' },
                 orderBy: { sentAt: 'desc' },
-                select: { mailboxId: true, mailMessageId: true },
+                select: { status: true, mailboxId: true, mailMessageId: true },
             }),
         );
     }
