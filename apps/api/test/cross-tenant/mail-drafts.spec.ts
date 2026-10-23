@@ -18,6 +18,7 @@ import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
+import { MailSendService } from '../../src/mail-send/mail-send.service';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
@@ -70,6 +71,7 @@ describe('mail drafts, and cc/bcc to any address', () => {
     let app: INestApplication;
     let http: () => request.Agent;
     let owner: PrismaService;
+    let send: MailSendService;
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
 
@@ -156,6 +158,7 @@ describe('mail drafts, and cc/bcc to any address', () => {
         await app.init();
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         owner = app.get(PrismaService);
+        send = app.get(MailSendService);
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -338,6 +341,76 @@ describe('mail drafts, and cc/bcc to any address', () => {
             await as(admin)
                 .delete(w(`/mail/drafts/${d.id}`))
                 .expect(204);
+        });
+    });
+
+    describe('a reply’s draft', () => {
+        /** A message the member sent Dana, stored in the member's mailbox: what a reply answers. */
+        async function storedMessage(): Promise<{ id: string; threadId: string }> {
+            const sent = await message({ subject: `Thread ${stamp}` });
+            expect(sent.status, JSON.stringify(sent.body)).toBe(202);
+            const outboundId = (sent.body as { messageId: string }).messageId;
+            expect(await send.deliver(workspace, outboundId, { sleep: () => Promise.resolve() })).toBe('sent');
+            const view = (await as(member).get(w(`/mail/messages/${outboundId}`))).body as {
+                mailMessageId: string;
+                threadId: string;
+            };
+            return { id: view.mailMessageId, threadId: view.threadId };
+        }
+
+        it('is keyed by the message it answers, apart from the person’s new email, and names its thread', async () => {
+            const parent = await storedMessage();
+            const asNew = await draft(member, { personId: danaId, content: { subject: 'New email' } });
+            const reply = await draft(member, {
+                personId: danaId,
+                replyToMessageId: parent.id,
+                content: { body: body(para(t('Thanks!'))) },
+            });
+            expect(reply).toMatchObject({ replyToMessageId: parent.id, threadId: parent.threadId, dealId: null });
+            const again = await as(member)
+                .post(w('/mail/drafts'))
+                .send({ personId: danaId, replyToMessageId: parent.id, content: {} });
+            expect(again.status).toBe(409);
+            expect(err(again).details).toMatchObject({ draftId: reply.id });
+
+            const listed = await as(member).get(w(`/mail/drafts?target=person:${danaId}`));
+            expect((listed.body as { items: Draft[] }).items.map((d) => d.id).sort()).toEqual(
+                [asNew.id, reply.id].sort(),
+            );
+            await as(member)
+                .delete(w(`/mail/drafts/${asNew.id}`))
+                .expect(204);
+            await as(member)
+                .delete(w(`/mail/drafts/${reply.id}`))
+                .expect(204);
+        });
+
+        it('only to a message in a mailbox of the caller’s own — nobody else’s, no other workspace’s', async () => {
+            const parent = await storedMessage();
+            const admins = await as(admin)
+                .post(w('/mail/drafts'))
+                .send({ personId: danaId, replyToMessageId: parent.id, content: {} });
+            expect(admins.status).toBe(404);
+            const others = await as(otherAdmin)
+                .post(w('/mail/drafts', otherWorkspace))
+                .send({ personId: danaId, replyToMessageId: parent.id, content: {} });
+            expect(others.status).toBe(404);
+        });
+
+        it('sending the reply deletes it; a refused reply keeps it', async () => {
+            const parent = await storedMessage();
+            const reply = await draft(member, { personId: danaId, replyToMessageId: parent.id, content: {} });
+            const refused = await message({
+                replyToMessageId: parent.id,
+                draftId: reply.id,
+                cc: [{ address: eveAddress }],
+            });
+            expect(refused.status).toBe(422);
+            expect((await as(member).get(w(`/mail/drafts/${reply.id}`))).status).toBe(200);
+
+            const sent = await message({ replyToMessageId: parent.id, draftId: reply.id, subject: undefined });
+            expect(sent.status, JSON.stringify(sent.body)).toBe(202);
+            expect((await as(member).get(w(`/mail/drafts/${reply.id}`))).status).toBe(404);
         });
     });
 

@@ -11,13 +11,16 @@ import type { MailDraftContent } from './dto';
 import { aboutRecord } from './record-about';
 import type { MailDraftPage, MailDraftView } from './responses';
 
-type DraftRow = Prisma.MailDraftGetPayload<object>;
+/** A reply's draft reads the thread of the message it answers, so its line can open that thread. */
+const WITH_THREAD = { replyTo: { select: { threadId: true } } } as const;
+type DraftRow = Prisma.MailDraftGetPayload<{ include: typeof WITH_THREAD }>;
 
 /**
- * Composer drafts: the message a member is writing on a record, kept as they write (the composer saves a moment
- * after each change, and on leaving) so nothing is lost to a closed panel, a reload or a crash. A draft is its
- * author's alone — the workspace's row-level security, and every query here by the caller's member — and one per
- * composer: a person's, or a person's on a deal (`409` for a second; the composer then reads the one there is).
+ * Composer drafts: the message a member is writing — on a record, or as a reply in a thread — kept as they write
+ * (the composer saves a moment after each change, and on leaving) so nothing is lost to a closed panel, a reload or
+ * a crash. A draft is its author's alone — the workspace's row-level security, and every query here by the caller's
+ * member — and one per composer: a person's, a person's on a deal, or a reply to one message (`409` for a second;
+ * the composer then reads the one there is).
  *
  * Each save names the version it replaces; a draft saved meanwhile elsewhere (another tab) is a `409` naming the
  * version it is now, never a silent overwrite — the composer offers to load that one or keep its own. Sending or
@@ -44,6 +47,7 @@ export class MailDraftsService {
                 tx.mailDraft.findMany({
                     where: { ...about, authorMemberId: author },
                     orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+                    include: WITH_THREAD,
                     ...args,
                 }),
             );
@@ -58,12 +62,19 @@ export class MailDraftsService {
 
     /**
      * A new draft in one composer — about a person the caller can read, and a deal they can read when it is
-     * written from one. A draft there already is a `409` naming it (`details.draftId`).
+     * written from one; a reply's, to a message in a mailbox of the caller's own (the one rule a reply's send has:
+     * it goes from a mailbox the message is in). A draft there already is a `409` naming it (`details.draftId`).
      */
-    async create(input: { personId: string; dealId?: string | undefined; content: MailDraftContent }) {
+    async create(input: {
+        personId: string;
+        dealId?: string | undefined;
+        replyToMessageId?: string | undefined;
+        content: MailDraftContent;
+    }): Promise<MailDraftView> {
         const context = this.current();
         const author = authorOf(context);
         const dealId = input.dealId ?? null;
+        const replyToMessageId = input.replyToMessageId ?? null;
         try {
             return await this.rls.withWorkspace(async (tx) => {
                 const targets: RecordTarget[] = [
@@ -73,14 +84,22 @@ export class MailDraftsService {
                 if ((await readableTargets(tx, targets)).length !== targets.length) {
                     throw new ApiException(404, 'not_found', dealId ? 'person or deal not found' : 'person not found');
                 }
+                if (replyToMessageId) {
+                    const held = await tx.mailMessageCopy.count({
+                        where: { messageId: replyToMessageId, mailbox: { ownerMemberId: author } },
+                    });
+                    if (held === 0) throw new ApiException(404, 'not_found', 'message not found');
+                }
                 const row = await tx.mailDraft.create({
                     data: {
                         workspaceId: context.workspaceId,
                         authorMemberId: author,
                         personId: input.personId,
                         dealId,
+                        replyToMessageId,
                         content: input.content as Prisma.InputJsonValue,
                     },
+                    include: WITH_THREAD,
                 });
                 return view(row);
             });
@@ -88,7 +107,7 @@ export class MailDraftsService {
             if (!uniqueViolation(error)) throw error;
             const existing = await this.rls.withWorkspace((tx) =>
                 tx.mailDraft.findFirst({
-                    where: { authorMemberId: author, personId: input.personId, dealId },
+                    where: { authorMemberId: author, personId: input.personId, dealId, replyToMessageId },
                     select: { id: true, version: true },
                 }),
             );
@@ -152,7 +171,10 @@ function authorOf(context: WorkspaceRunContext): string {
 
 /** The caller's draft, or `404` — another member's reads as missing, as it would on any record route. */
 async function ownDraft(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<DraftRow> {
-    const row = await tx.mailDraft.findFirst({ where: { id, authorMemberId: authorOf(context) } });
+    const row = await tx.mailDraft.findFirst({
+        where: { id, authorMemberId: authorOf(context) },
+        include: WITH_THREAD,
+    });
     if (!row) throw new ApiException(404, 'not_found', 'draft not found');
     return row;
 }
@@ -169,6 +191,8 @@ function view(row: DraftRow): MailDraftView {
         id: row.id,
         personId: row.personId,
         dealId: row.dealId,
+        replyToMessageId: row.replyToMessageId,
+        threadId: row.replyTo?.threadId ?? null,
         content: row.content as MailDraftContent,
         version: row.version,
         createdAt: row.createdAt,

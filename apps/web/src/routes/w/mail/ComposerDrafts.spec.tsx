@@ -6,7 +6,18 @@ import type { MailDraftView } from '../../../api/types';
 import { apiError, json, renderAt, route, stubApi, type FakeRoute } from '../settings/settingsTestKit';
 import { Composer } from './Composer';
 import { DRAFT_SAVE_DELAY_MS } from './draftSave';
-import { PERSON, WS, draftsRoute, mailDraft, mailbox, mailboxesRoute } from './mailTestKit';
+import { TimelinePanel } from '../records/TimelinePanel';
+import {
+    PERSON,
+    WS,
+    draftsRoute,
+    isDraftList,
+    mailDraft,
+    mailbox,
+    mailboxesRoute,
+    quietRecordRoutes,
+    recordSendsRoute,
+} from './mailTestKit';
 
 const CAN_SEND: Capability[] = ['email:send', 'mailbox:read', 'template:read', 'record:read'];
 const doc = (text: string) => ({
@@ -216,5 +227,51 @@ describe('drafts: saved as you write, on leaving, and put back', () => {
         await userEvent.click(within(alert).getByRole('button', { name: 'Load that version' }));
         await waitFor(() => expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveTextContent('Theirs'));
         expect(screen.getByRole('textbox', { name: 'Message' })).toHaveTextContent('From the other tab');
+    });
+});
+
+describe('Discard on the record’s activity', () => {
+    it('discards the draft open in the composer: the composer empties and does not save it back', async () => {
+        const saved = mailDraft({ content: { subject: 'Second thoughts', body: doc('Maybe not') } });
+        let deleted = false;
+        const seen = stubApi([
+            mailboxesRoute([mailbox({ id: 'mb-mine' })]),
+            (r) => (isDraftList(r) ? json({ items: deleted ? [] : [saved], nextCursor: null }) : undefined),
+            (r) => {
+                if (r.method !== 'DELETE' || !r.url.endsWith(`/mail/drafts/${saved.id}`)) return undefined;
+                deleted = true;
+                return new Response(null, { status: 204 });
+            },
+            recordSendsRoute(),
+            ...quietRecordRoutes,
+        ]);
+        renderAt(
+            [
+                route(
+                    '/w/:workspaceId/people/:id',
+                    <>
+                        <Composer workspaceId={WS} person={PERSON} drafts />
+                        <TimelinePanel workspaceId={WS} target={{ type: 'person', id: PERSON.id }} />
+                    </>,
+                ),
+            ],
+            `/w/${WS}/people/${PERSON.id}`,
+            CAN_SEND,
+        );
+        expect(await screen.findByRole('textbox', { name: 'Subject' })).toHaveTextContent('Second thoughts');
+        expect(await screen.findByText('started a draft “Second thoughts”')).toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Discard this draft?' });
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Discard draft' }));
+
+        await waitFor(() =>
+            expect(screen.getByRole('textbox', { name: 'Subject' })).not.toHaveTextContent('Second thoughts'),
+        );
+        await waitFor(() => expect(screen.queryByText('started a draft “Second thoughts”')).not.toBeInTheDocument());
+        await new Promise((resolve) => setTimeout(resolve, DRAFT_SAVE_DELAY_MS + 500));
+        expect(seen.some((r) => r.method === 'PUT' || (r.method === 'POST' && r.url.endsWith('/mail/drafts')))).toBe(
+            false,
+        );
     });
 });

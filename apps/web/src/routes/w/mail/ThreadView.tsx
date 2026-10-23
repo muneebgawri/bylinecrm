@@ -1,9 +1,10 @@
-import { Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
+import { Badge, Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
 import { EyeOff, Paperclip, Reply } from 'lucide-react';
 import { useState } from 'react';
-import { useMailThread } from '../../../api/mail';
+import { useMailThread, useRecordDrafts } from '../../../api/mail';
 import { useRecord } from '../../../api/records';
 import type { MailMessageView, MailThreadView } from '../../../api/types';
+import { useCan } from '../../../auth/capabilities';
 import { EmailFrame } from '../../../components/EmailFrame';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
@@ -130,6 +131,13 @@ function ReplyArea({
 }) {
     const [open, setOpen] = useState(false);
     const personId = newest ? replyPersonId(newest) : null;
+    // A reply drafted in this thread before: the button says so, and the composer opens with it.
+    const drafts = useRecordDrafts(
+        workspaceId,
+        { type: 'person', id: personId ?? '' },
+        useCan('email:send') && !!personId,
+    );
+    const drafted = drafts.data?.items.some((d) => d.threadId === thread.id) ?? false;
     if (!newest) return null;
     if (!newest.bodiesVisible) {
         return (
@@ -150,8 +158,9 @@ function ReplyArea({
             <div>
                 <Button size="sm" shape="square" variant="secondary" onClick={() => setOpen(true)}>
                     <Reply aria-hidden />
-                    Reply
+                    {drafted ? 'Continue reply' : 'Reply'}
                 </Button>
+                {drafted && <Badge className="ml-2">Draft</Badge>}
             </div>
         );
     }
@@ -159,7 +168,12 @@ function ReplyArea({
         <ReplyComposer
             workspaceId={workspaceId}
             personId={personId}
-            reply={{ messageId: newest.id, mailboxIds: newest.mailboxIds, subject: thread.subject }}
+            reply={{
+                messageId: newest.id,
+                mailboxIds: newest.mailboxIds,
+                subject: thread.subject,
+                threadId: thread.id,
+            }}
             onClose={() => setOpen(false)}
         />
     );
@@ -190,6 +204,7 @@ function ReplyComposer({
             workspaceId={workspaceId}
             person={{ id: person.data.id, name: personName(person.data), email: person.data.emails.primary }}
             reply={reply}
+            drafts
             autoFocus
             onSent={onClose}
             onDiscard={onClose}

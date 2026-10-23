@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json, renderAt, route, stubApi, type FakeRoute } from '../settings/settingsTestKit';
-import { PERSON, WS, mailbox, mailboxesRoute, message, thread } from './mailTestKit';
+import { PERSON, WS, draftsRoute, mailDraft, mailbox, mailboxesRoute, message, thread } from './mailTestKit';
 import { BODY_HIDDEN, ThreadView } from './ThreadView';
 
 const CAN_SEND: Capability[] = ['email:send', 'mailbox:read', 'record:read'];
@@ -102,6 +102,73 @@ describe('FR-CRMS-4: the thread view', () => {
         await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
         expect(seen.find((r) => r.url.endsWith('/mail/send'))?.body).toMatchObject({
             mailboxId: 'mb-1',
+            personId: PERSON.id,
+            replyToMessageId: 'msg-1',
+        });
+    });
+
+    it('a reply drafted in this thread: “Continue reply” opens it, and sending names the draft', async () => {
+        const drafted = mailDraft({
+            replyToMessageId: 'msg-0',
+            threadId: 'th-1',
+            content: {
+                mailboxId: 'mb-1',
+                body: {
+                    type: 'doc',
+                    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Half a reply' }] }],
+                },
+            },
+        });
+        const seen = view([
+            threadRoute(thread()),
+            personRoute,
+            mailboxesRoute([mailbox()]),
+            draftsRoute([drafted, mailDraft({ id: 'new-email', content: { subject: 'Not this one' } })]),
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/mail/send')
+                    ? json(
+                          {
+                              messageId: 'out-1',
+                              status: 'queued',
+                              sendAt: null,
+                              senderTimeZone: null,
+                              recipientTimeZone: null,
+                              followUps: [],
+                          },
+                          202,
+                      )
+                    : undefined,
+        ]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Continue reply' }));
+        expect(await screen.findByRole('textbox', { name: 'Message' })).toHaveTextContent('Half a reply');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        expect(seen.find((r) => r.url.endsWith('/mail/send'))?.body).toMatchObject({
+            replyToMessageId: 'msg-1',
+            draftId: drafted.id,
+        });
+    });
+
+    it('saves a new reply as a draft against the message it answers', async () => {
+        const seen = view([
+            threadRoute(thread()),
+            personRoute,
+            mailboxesRoute([mailbox()]),
+            draftsRoute(),
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/mail/drafts')
+                    ? json(mailDraft({ replyToMessageId: 'msg-1', threadId: 'th-1' }), 201)
+                    : undefined,
+        ]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Reply' }));
+        await userEvent.type(await screen.findByRole('textbox', { name: 'Message' }), 'Thanks');
+        await waitFor(
+            () => expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/mail/drafts'))).toBe(true),
+            {
+                timeout: 6_000,
+            },
+        );
+        expect(seen.find((r) => r.method === 'POST' && r.url.endsWith('/mail/drafts'))?.body).toMatchObject({
             personId: PERSON.id,
             replyToMessageId: 'msg-1',
         });

@@ -144,6 +144,8 @@ export const mailDraft = (over: Partial<MailDraftView> = {}): MailDraftView => (
     id: '0b1e0000-0000-4000-8000-0000000000f1',
     personId: PERSON.id,
     dealId: null,
+    replyToMessageId: null,
+    threadId: null,
     content: {},
     version: 1,
     createdAt: AT,

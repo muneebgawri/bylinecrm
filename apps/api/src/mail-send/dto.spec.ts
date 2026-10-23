@@ -107,6 +107,13 @@ describe('a draft’s content', () => {
         expect(draft({ attachments: [] })).toEqual(['content']);
     });
 
+    it('a reply’s draft names the message it answers, by id', () => {
+        const reply = (replyToMessageId: unknown) =>
+            CreateMailDraftDto.schema.safeParse({ personId: base.personId, replyToMessageId, content: {} }).success;
+        expect(reply('00000000-0000-4000-8000-000000000009')).toBe(true);
+        expect(reply('msg-1')).toBe(false);
+    });
+
     it('a save names the version it replaces', () => {
         expect(SaveMailDraftDto.schema.safeParse({ content: {} }).success).toBe(false);
         expect(SaveMailDraftDto.schema.safeParse({ version: 2, content: {} }).success).toBe(true);

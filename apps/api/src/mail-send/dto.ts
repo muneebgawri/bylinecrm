@@ -218,6 +218,10 @@ export class CreateMailDraftDto extends createZodDto(
         .object({
             personId: z.uuid(),
             dealId: z.uuid().optional(),
+            replyToMessageId: z.uuid().optional().meta({
+                description:
+                    'A reply’s draft: the message it answers — one in a mailbox of the caller’s own, as a reply’s send needs.',
+            }),
             content: mailDraftContent,
         })
         .strict(),

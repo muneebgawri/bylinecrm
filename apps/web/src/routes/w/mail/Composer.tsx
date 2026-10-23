@@ -75,6 +75,8 @@ export interface ComposerReply {
     messageId: string;
     mailboxIds: readonly string[];
     subject: string;
+    /** The thread it is in: a reply's draft is restored for the thread, whichever of its messages it answered. */
+    threadId: string;
 }
 
 export interface ComposerHandle {
@@ -97,7 +99,8 @@ export interface ComposerProps {
     /**
      * The record composer's drafts: what is written is saved as the member's own draft for this person (on a
      * deal, for the person on that deal) as they write and when the composer closes, and put back when it opens
-     * again; Send or Schedule deletes it, and "Discard draft" does. A reply has none.
+     * again; Send or Schedule deletes it, and "Discard draft" does. A reply's draft is the thread's: saved against
+     * the message it answers, restored when the reply is opened again in that thread.
      */
     drafts?: boolean;
     handle?: Ref<ComposerHandle>;
@@ -206,7 +209,7 @@ function MailboxGate(props: ComposerProps & { person: ComposerPerson; formHandle
             </div>
         );
     }
-    return props.drafts && !reply ? (
+    return props.drafts ? (
         <DraftGate {...props} mailboxes={own} />
     ) : (
         <ComposerForm {...props} mailboxes={own} initialDraft={null} />
@@ -230,7 +233,14 @@ function DraftGate(props: FormProps) {
     const ready = open || (!drafts.isPending && !drafts.isFetching);
     if (ready && !open) setOpen(true);
     if (!ready) return <Skeleton className="h-40 rounded-lg" aria-label="Loading your draft" />;
-    const found = drafts.data?.items.find((d) => d.dealId === (props.dealId ?? null)) ?? null;
+    // This composer's draft: the record's (and deal's) new email, or — for a reply — the reply in this thread.
+    const reply = props.reply;
+    const found =
+        drafts.data?.items.find(
+            (d) =>
+                d.dealId === (props.dealId ?? null) &&
+                (reply ? d.threadId === reply.threadId : d.replyToMessageId === null),
+        ) ?? null;
     return (
         <ComposerForm
             key={reloaded?.generation ?? 0}
@@ -262,7 +272,7 @@ function ComposerForm({
     onReloadDraft?: (view: MailDraftView) => void;
 }) {
     const id = useId();
-    const saveDrafts = !!drafts && !reply;
+    const saveDrafts = !!drafts;
     // A saved draft puts back everything the composer held (taken once, when the form mounts).
     const [restored] = useState(() => (initialDraft ? stateFromDraft(person.id, initialDraft) : null));
     const [mailboxId, setMailboxId] = useState(
@@ -301,7 +311,11 @@ function ComposerForm({
         workspaceId,
         personId: person.id,
         dealId,
+        // A reply's draft keeps the message it was started against; a new one answers the thread's newest.
+        replyToMessageId: reply ? (initialDraft?.replyToMessageId ?? reply.messageId) : undefined,
         initial: saveDrafts ? initialDraft : null,
+        // Discarded from the record's activity while open here: the composer empties with it.
+        onDiscarded: () => reset(),
     });
 
     useImperativeHandle(

@@ -137,6 +137,10 @@ export const mailDraftView = named(
         id,
         personId: id.meta({ description: 'The person the draft is to and about.' }),
         dealId: id.nullable().meta({ description: 'The deal it is written from; null for the person’s own composer.' }),
+        replyToMessageId: id.nullable().meta({
+            description: 'A reply’s draft: the message it answers. Null for a new email’s.',
+        }),
+        threadId: id.nullable().meta({ description: 'A reply’s draft: the thread it is in. Null for a new email’s.' }),
         content: mailDraftContentView.meta({
             description: 'The composer’s state, unfinished as it may be: what the last save was given.',
         }),
