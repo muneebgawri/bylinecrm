@@ -4,11 +4,15 @@ import { query, workspacePath } from './endpoints';
 import { keys } from './queries';
 import type { RecordTarget } from '@bylinecrm/shared';
 import type {
+    CreateMailDraftInput,
+    MailDraftPage,
+    MailDraftView,
     MailOutboundView,
     MailRecordSendsPage,
     MailSendAcceptedView,
     MailThreadView,
     RescheduleMailInput,
+    SaveMailDraftInput,
     SendMailInput,
 } from './types';
 
@@ -65,7 +69,58 @@ export const mail = {
         ),
     thread: (workspaceId: string, threadId: string, signal?: AbortSignal) =>
         request<MailThreadView>('GET', workspacePath(workspaceId, `/mail/threads/${threadId}`), { signal }),
+    /** The caller's own drafts about one record, last edited first. */
+    drafts: (workspaceId: string, target: RecordTarget, signal?: AbortSignal) =>
+        request<MailDraftPage>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/mail/drafts${query({ target: `${target.type}:${target.id}`, limit: MAIL_DRAFTS_PAGE })}`,
+            ),
+            { signal },
+        ),
+    draft: (workspaceId: string, draftId: string, signal?: AbortSignal) =>
+        request<MailDraftView>('GET', workspacePath(workspaceId, `/mail/drafts/${draftId}`), { signal }),
+    /** A new draft in one composer; one there already is `409` naming it (`details.draftId`). */
+    createDraft: (workspaceId: string, input: CreateMailDraftInput, options: { keepalive?: boolean } = {}) =>
+        request<MailDraftView>('POST', workspacePath(workspaceId, '/mail/drafts'), { body: input, ...options }),
+    /** Saves over `version`; a draft saved elsewhere since is `409` naming the version it is now. */
+    saveDraft: (
+        workspaceId: string,
+        draftId: string,
+        input: SaveMailDraftInput,
+        options: { keepalive?: boolean } = {},
+    ) =>
+        request<MailDraftView>('PUT', workspacePath(workspaceId, `/mail/drafts/${draftId}`), {
+            body: input,
+            ...options,
+        }),
+    discardDraft: (workspaceId: string, draftId: string) =>
+        request<void>('DELETE', workspacePath(workspaceId, `/mail/drafts/${draftId}`)),
 };
+
+/** How many of a record's drafts the page reads: one per composer it has (the person's, each deal's). */
+export const MAIL_DRAFTS_PAGE = 25;
+
+/**
+ * The caller's drafts about a record (a company's: its people's) — what its composer restores and its activity
+ * shows. A draft is its author's alone, so only someone who may send mail has any.
+ */
+export const useRecordDrafts = (workspaceId: string, target: RecordTarget, enabled = true) =>
+    useQuery({
+        queryKey: keys.mailDrafts(workspaceId, target),
+        queryFn: ({ signal }) => mail.drafts(workspaceId, target, signal),
+        enabled,
+    });
+
+/** Discards a draft, and drops it from every record's list. */
+export function useDiscardDraft(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (draftId: string) => mail.discardDraft(workspaceId, draftId),
+        onSettled: () => client.invalidateQueries({ queryKey: keys.mailDraftsAll(workspaceId) }),
+    });
+}
 
 /** How many of a record's sends one page holds. */
 export const MAIL_RECORD_SENDS_PAGE = 25;
@@ -174,6 +229,8 @@ export function useSendMail(workspaceId: string) {
             if (accepted.status === 'scheduled' || accepted.followUps.length > 0) {
                 void client.invalidateQueries({ queryKey: keys.mailRecordSendsAll(workspaceId) });
             }
+            // The draft it was written in went with it (the API deletes it in the send's transaction).
+            if (input.send.draftId) void client.invalidateQueries({ queryKey: keys.mailDraftsAll(workspaceId) });
         },
     });
 }

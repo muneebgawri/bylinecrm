@@ -30,7 +30,8 @@ export function RecordCompose({
     const inline = useRef<ComposerHandle>(null);
     useImperativeHandle(handle, () => ({ start: () => (phone ? setOpen(true) : inline.current?.focus()) }), [phone]);
 
-    const common = { workspaceId, person, dealId, ...(noPerson ? { noPerson } : {}) };
+    // The record's composer keeps a draft: closing the sheet, or leaving the page, saves it; opening it restores it.
+    const common = { workspaceId, person, dealId, drafts: true, ...(noPerson ? { noPerson } : {}) };
     if (!phone) return <Composer {...common} handle={inline} />;
     const name = person?.name ?? 'this person';
     return (

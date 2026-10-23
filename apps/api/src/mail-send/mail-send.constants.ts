@@ -66,6 +66,11 @@ export const MAIL_SCHEDULED_LIMIT_MAX = 100;
 /** A page of a record's sends (#104, `GET /mail/messages`). */
 export const MAIL_RECORD_SENDS_LIMIT_DEFAULT = 25;
 export const MAIL_RECORD_SENDS_LIMIT_MAX = 100;
+/** A page of the caller's drafts about a record (`GET /mail/drafts`). */
+export const MAIL_DRAFTS_LIMIT_DEFAULT = 25;
+export const MAIL_DRAFTS_LIMIT_MAX = 100;
+/** A draft keeps the name the composer showed for a person recipient, at most this long. */
+export const MAIL_DRAFT_NAME_MAX = 200;
 
 /** Failure codes a retry would meet again unchanged (#134): such a send offers no Retry. */
 export const MAIL_SEND_NOT_RETRYABLE: ReadonlySet<string> = new Set(['recipient.suppressed']);

@@ -84,6 +84,11 @@ export interface RequestOptions {
     /** JSON, or a `FormData` for a file upload (sent as multipart; the browser sets the boundary). */
     body?: unknown;
     signal?: AbortSignal | undefined;
+    /**
+     * Let the request outlive the page (`fetch`'s `keepalive`): a write made as the tab closes — a composer's
+     * draft saved on `pagehide` — still reaches the API. Small bodies only (the browser caps them at 64 KiB).
+     */
+    keepalive?: boolean | undefined;
 }
 
 /**
@@ -144,6 +149,7 @@ function send(method: Method, path: string, options: RequestOptions): Promise<Re
     if (multipart) init.body = options.body as FormData;
     else if (options.body !== undefined) init.body = JSON.stringify(options.body);
     if (options.signal) init.signal = options.signal;
+    if (options.keepalive) init.keepalive = true;
     return fetch(`${API_BASE}${path}`, init);
 }
 

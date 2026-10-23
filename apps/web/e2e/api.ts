@@ -160,6 +160,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
     [new RegExp(`^${W}/mail/messages$`), (_m, url) => data.page(recordSends(url))],
     [new RegExp(`^${W}/mail/messages/${ID}$`), (m) => byId(data.scheduledSends, m[1])],
+    // The caller's composer drafts: none in the fixtures, so every composer opens empty.
+    [new RegExp(`^${W}/mail/drafts$`), () => data.page([])],
     [new RegExp(`^${W}/mail/threads/${ID}$`), (m) => byId([data.thread], m[1])],
     [
         new RegExp(`^${W}/search$`),

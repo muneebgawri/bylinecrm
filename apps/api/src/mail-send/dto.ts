@@ -4,17 +4,23 @@ import { z } from 'zod';
 import { signatureDoc } from '../signatures/dto';
 import { templateBody, templateSubject } from '../templates/dto';
 import {
+    MAIL_DRAFT_NAME_MAX,
+    MAIL_DRAFTS_LIMIT_DEFAULT,
+    MAIL_DRAFTS_LIMIT_MAX,
     MAIL_RECORD_SENDS_LIMIT_DEFAULT,
     MAIL_RECORD_SENDS_LIMIT_MAX,
     MAIL_SCHEDULED_LIMIT_DEFAULT,
     MAIL_SCHEDULED_LIMIT_MAX,
 } from './mail-send.constants';
 
-/** A recipient: a person in the CRM (their primary address), or an address. */
-const recipient = z.union([
-    z.object({ personId: z.uuid() }).strict(),
-    z.object({ address: z.email().max(254) }).strict(),
-]);
+/**
+ * A recipient: a person in the CRM (their primary address), or any address — someone not in the CRM included
+ * (cc'ing a colleague at the client, say). An address is never made a person by sending to it. Every one, in
+ * to, cc or bcc alike, passes the recipient guard and counts toward the mailbox's budget.
+ */
+const personRecipient = z.object({ personId: z.uuid() }).strict();
+const addressRecipient = z.object({ address: z.email().max(254) }).strict();
+const recipient = z.union([personRecipient, addressRecipient]);
 const recipients = z.array(recipient).max(MAIL_SEND_RECIPIENTS_MAX);
 
 /** An IANA time zone the runtime knows (`Europe/London`); `UTC` included. */
@@ -94,6 +100,10 @@ export class SendMailDto extends createZodDto(
                 .meta({
                     description: `Up to ${MAIL_FOLLOW_UPS_MAX} follow-ups, each later than the one before (and than \`sendAt\`), sent in this send's thread as replies — each once the one before has gone; called off when the person answers, or an earlier one fails or is cancelled.`,
                 }),
+            draftId: z.uuid().optional().meta({
+                description:
+                    'The caller’s draft this message was written in (`/mail/drafts`): deleted with the send, in the same transaction. A draft already gone is no error.',
+            }),
         })
         .superRefine((input, ctx) => {
             // Each follow-up after the email before it; a follow-up of a send now is checked against the clock.
@@ -156,5 +166,78 @@ export class ListRecordSendsQueryDto extends createZodDto(
             .meta({ description: 'Comma-separated statuses, e.g. `failed,scheduled`.' }),
         cursor: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(MAIL_RECORD_SENDS_LIMIT_MAX).default(MAIL_RECORD_SENDS_LIMIT_DEFAULT),
+    }),
+) {}
+
+/**
+ * A draft's recipient: as a send's, and for a person the name the composer showed — kept so a restored draft
+ * names them without a lookup; never sent.
+ */
+const draftRecipient = z.union([
+    personRecipient.extend({ name: z.string().max(MAIL_DRAFT_NAME_MAX).optional() }),
+    addressRecipient,
+]);
+const draftRecipients = z.array(draftRecipient).max(MAIL_SEND_RECIPIENTS_MAX);
+
+/**
+ * What a draft holds: the composer's state, unfinished as it may be — every field optional, nothing checked but
+ * shape and size (the send checks the rest). `to` is the send's (`personId` first); `templateId` the template it
+ * was filled from; `signature` this message's own (absent: the mailbox's); `sendAt` the time picked to schedule it.
+ */
+export const mailDraftContent = z
+    .object({
+        mailboxId: z.uuid().nullable().optional(),
+        to: draftRecipients.optional(),
+        cc: draftRecipients.optional(),
+        bcc: draftRecipients.optional(),
+        templateId: z.uuid().nullable().optional(),
+        subject: templateSubject.optional(),
+        body: templateBody.optional(),
+        signature: signatureDoc.nullable().optional(),
+        sendAt: z.iso.datetime({ offset: true }).nullable().optional(),
+        timeZone: timeZone.optional(),
+        followUps: z
+            .array(
+                z
+                    .object({
+                        sendAt: z.iso.datetime({ offset: true }).nullable().optional(),
+                        subject: templateSubject.optional(),
+                        body: templateBody.optional(),
+                    })
+                    .strict(),
+            )
+            .max(MAIL_FOLLOW_UPS_MAX)
+            .optional(),
+    })
+    .strict();
+export type MailDraftContent = z.output<typeof mailDraftContent>;
+
+/** `POST /mail/drafts` — the caller's draft in one composer: a person's, or a person's on a deal. */
+export class CreateMailDraftDto extends createZodDto(
+    z
+        .object({
+            personId: z.uuid(),
+            dealId: z.uuid().optional(),
+            content: mailDraftContent,
+        })
+        .strict(),
+) {}
+
+/** `PUT /mail/drafts/:draftId` — the draft's new content, naming the version it replaces (`409` if it changed). */
+export class SaveMailDraftDto extends createZodDto(
+    z
+        .object({
+            version: z.number().int().min(1).meta({ description: 'The version this content replaces.' }),
+            content: mailDraftContent,
+        })
+        .strict(),
+) {}
+
+/** `GET /mail/drafts?target=` — the caller's own drafts about one record, last edited first. */
+export class ListMailDraftsQueryDto extends createZodDto(
+    z.object({
+        target: z.string().min(1).meta({ description: '`person:<uuid>`, `company:<uuid>` or `opportunity:<uuid>`.' }),
+        cursor: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(MAIL_DRAFTS_LIMIT_MAX).default(MAIL_DRAFTS_LIMIT_DEFAULT),
     }),
 ) {}

@@ -25,8 +25,24 @@ export const json = (body: unknown, status = 200) =>
     });
 
 /** The API's one error envelope (P1-1d), as the server sends it; `fieldErrors` as a refused body carries them. */
-export const apiError = (status: number, code: string, message: string, fieldErrors?: FieldError[]) =>
-    json({ statusCode: status, code, message, requestId: 'req-test', ...(fieldErrors ? { fieldErrors } : {}) }, status);
+export const apiError = (
+    status: number,
+    code: string,
+    message: string,
+    fieldErrors?: FieldError[],
+    details?: Record<string, string | number | boolean>,
+) =>
+    json(
+        {
+            statusCode: status,
+            code,
+            message,
+            requestId: 'req-test',
+            ...(fieldErrors ? { fieldErrors } : {}),
+            ...(details ? { details } : {}),
+        },
+        status,
+    );
 
 /**
  * Stubs `fetch` with an ordered list of routes; the first that answers wins. Every request is

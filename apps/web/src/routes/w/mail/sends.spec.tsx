@@ -7,7 +7,16 @@ import { createQueryClient, keys } from '../../../api/queries';
 import type { MailOutboundView, TimelineActivityView } from '../../../api/types';
 import { TimelinePanel } from '../records/TimelinePanel';
 import { json, renderAt, route, stubApi, type FakeRoute } from '../settings/settingsTestKit';
-import { PERSON, WS, isRecordSends, outbound, quietRecordRoutes, recordSendsRoute } from './mailTestKit';
+import {
+    PERSON,
+    WS,
+    draftsRoute,
+    isRecordSends,
+    mailDraft,
+    outbound,
+    quietRecordRoutes,
+    recordSendsRoute,
+} from './mailTestKit';
 
 const CAN_SEND: Capability[] = ['email:send', 'mailbox:read', 'record:read'];
 const READ_ONLY: Capability[] = ['record:read'];
@@ -441,5 +450,32 @@ describe('queued follow-ups on the timeline', () => {
         await userEvent.click(cancels.at(-1)!);
         const dialog = await screen.findByRole('dialog', { name: 'Cancel this send?' });
         expect(dialog).toHaveTextContent('Nor will the 2 follow-ups after it.');
+    });
+});
+
+describe('drafts on the record’s activity', () => {
+    it('shows the caller’s drafts above the sends: this composer’s, and one on a deal a link away', async () => {
+        timeline([
+            draftsRoute([
+                mailDraft({ content: { subject: 'About {{company.name}}' } }),
+                mailDraft({ id: 'draft-2', dealId: 'deal-1', content: {} }),
+            ]),
+        ]);
+        expect(await screen.findByText('started a draft “About company.name”')).toBeInTheDocument();
+        expect(screen.getByText('In the email box above')).toBeInTheDocument();
+        expect(screen.getByText('started a draft')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Open on its deal' })).toHaveAttribute('href', `/w/${WS}/deals/deal-1`);
+        expect(screen.getAllByText('Draft')).toHaveLength(2);
+    });
+
+    it('reads no drafts for a role that cannot send mail', async () => {
+        const seen = stubApi([recordSendsRoute(), ...quietRecordRoutes]);
+        renderAt(
+            [route('/w/:workspaceId/people/:id', <TimelinePanel workspaceId={WS} target={target} />)],
+            `/w/${WS}/people/${PERSON.id}`,
+            READ_ONLY,
+        );
+        await screen.findByText('Nothing yet');
+        expect(seen.some((r) => r.url.includes('/mail/drafts'))).toBe(false);
     });
 });

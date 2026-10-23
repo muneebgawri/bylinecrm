@@ -53,6 +53,7 @@ model Workspace {
   signatureSettings              WorkspaceSignatureSettings?
   logos                          WorkspaceLogo[]
   mailAssets                     MailAsset[]
+  mailDrafts                     MailDraft[]
   mailThreads                    MailThread[]
   mailMessages                   MailMessage[]
   mailboxThreads                 MailboxThread[]
@@ -296,6 +297,7 @@ model WorkspaceMember {
   createdBlocklist       BlocklistEntry[]       @relation("BlocklistCreator")
 
   mailOutbound MailOutbound[] @relation("MailOutboundSender")
+  mailDrafts   MailDraft[]
 
   createdSuppressions Suppression[] @relation("SuppressionCreator")
   removedSuppressions Suppression[] @relation("SuppressionRemover")
@@ -593,6 +595,7 @@ model Person {
   mailParticipations MailParticipant[]
 
   mailOutbound MailOutbound[]
+  mailDrafts   MailDraft[]
 
   suppressions       Suppression[]
   unsubscribeTokens  UnsubscribeToken[]
@@ -731,6 +734,7 @@ model Opportunity {
   followUpTask   Task?                     @relation("DealFollowUpTask", fields: [followUpTaskId], references: [id], onDelete: SetNull)
 
   mailOutbound       MailOutbound[]
+  mailDrafts         MailDraft[]
   sequenceEnrolments SequenceEnrolment[]
   invoices           DealInvoice[]
   cadenceLapses      CadenceLapse[]
@@ -1439,6 +1443,34 @@ model MailAsset {
 
   @@index([workspaceId, createdAt])
   @@map("mail_assets")
+}
+
+/// A message being written in a record's composer, saved as its author goes (the composer's autosave) and on
+/// leaving it — private to its author. One per (author, person, deal or none): reopening the composer in that
+/// context restores it. Sending or scheduling it deletes it. `content` is the composer's state as the API's
+/// `MailDraftContent` (recipients, subject, body, template, signature, schedule, follow-ups), checked for shape
+/// and size only: a draft may be unfinished. `version` guards every write — a write naming another version is a
+/// `409`, never a silent overwrite of another tab's.
+model MailDraft {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  authorMemberId String   @map("author_member_id") @db.Uuid
+  personId       String   @map("person_id") @db.Uuid
+  dealId         String?  @map("deal_id") @db.Uuid
+  content        Json
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    WorkspaceMember @relation(fields: [authorMemberId], references: [id], onDelete: Cascade)
+  person    Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
+  deal      Opportunity?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // One draft per (author, person, deal or none): a unique index NULLS NOT DISTINCT, in the migration.
+  @@index([workspaceId, authorMemberId, personId])
+  @@index([dealId])
+  @@map("mail_drafts")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

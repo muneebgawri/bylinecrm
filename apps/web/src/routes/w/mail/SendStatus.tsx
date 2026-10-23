@@ -1,17 +1,23 @@
-import { Badge, Button } from '@bylinecrm/ui';
+import type { RecordTarget } from '@bylinecrm/shared';
+import { Badge, Button, cn, focusRing } from '@bylinecrm/ui';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useCancelMail, useRescheduleMail, useRetryMail } from '../../../api/mail';
+import type { MailDraftView } from '../../../api/types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { hasTracking, trackingText } from '../../../lib/tracking';
+import { paths } from '../../paths';
 import { formatSendAt } from './schedule';
 import { SchedulePicker } from './SchedulePicker';
 import type { PendingSend } from './sends';
 
+/** A subject as written, before the server builds it: its variables read as their names. */
+const asWritten = (subject: string) => subject.replace(/\{\{\s*([^}]+?)\s*\}\}/g, '$1').trim();
+
 /** The words a pending send's line starts with. */
 export function pendingAction(send: PendingSend): string {
-    // Until the server has built it, a subject is as written: its variables read as their names.
-    const text = send.subject.replace(/\{\{\s*([^}]+?)\s*\}\}/g, '$1');
+    const text = asWritten(send.subject);
     const subject = text ? `“${text}”` : 'an email';
     // A queued follow-up says so, and which: it goes in the thread of the email before it.
     const what = send.followsOutboundId
@@ -142,5 +148,50 @@ export function SendStatus({ workspaceId, send }: { workspaceId: string; send: P
         <Badge status="neutral" role="status">
             Sending…
         </Badge>
+    );
+}
+
+/** The words a draft's line on the record's activity starts with. */
+export function draftAction(draft: Pick<MailDraftView, 'content'>): string {
+    const text = asWritten(draft.content.subject ?? '');
+    return text ? `started a draft “${text}”` : 'started a draft';
+}
+
+/** Whether a draft is the one this record page's own composer opens with. */
+export function draftIsHere(draft: Pick<MailDraftView, 'personId' | 'dealId'>, target: RecordTarget): boolean {
+    return target.type === 'opportunity'
+        ? draft.dealId === target.id
+        : target.type === 'person' && draft.personId === target.id && draft.dealId === null;
+}
+
+/**
+ * A draft under its line on the record's activity — the caller's own (no one else sees it): marked a draft, and
+ * where it is written — in this page's composer, or on its deal's or person's page, a link away.
+ */
+export function DraftStatus({
+    workspaceId,
+    draft,
+    target,
+}: {
+    workspaceId: string;
+    draft: Pick<MailDraftView, 'personId' | 'dealId'>;
+    target: RecordTarget;
+}) {
+    return (
+        <>
+            <Badge status="info">Draft</Badge>
+            {draftIsHere(draft, target) ? (
+                <span className="text-xs text-text-muted">In the email box above</span>
+            ) : (
+                <Link
+                    to={
+                        draft.dealId ? paths.deal(workspaceId, draft.dealId) : paths.person(workspaceId, draft.personId)
+                    }
+                    className={cn('text-xs text-accent underline', focusRing)}
+                >
+                    {draft.dealId ? 'Open on its deal' : 'Open on the person'}
+                </Link>
+            )}
+        </>
     );
 }

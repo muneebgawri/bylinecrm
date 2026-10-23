@@ -15,14 +15,15 @@ import { useQueries } from '@tanstack/react-query';
 import { ArrowRightLeft, CalendarDays, DollarSign, FileText, Mail, Paperclip, Pencil, SquareCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
+import { useRecordDrafts } from '../../../api/mail';
 import { people } from '../../../api/records';
 import { keys } from '../../../api/queries';
 import { useMembersSummary, useTimeline } from '../../../api/records';
-import type { TimelineActivityView } from '../../../api/types';
-import { useMembership } from '../../../auth/capabilities';
+import type { MailDraftView, TimelineActivityView } from '../../../api/types';
+import { useCan, useMembership } from '../../../auth/capabilities';
 import { formatWhen } from '../../../lib/format';
 import { usePendingSends, type PendingSend } from '../mail/sends';
-import { SendStatus, pendingAction } from '../mail/SendStatus';
+import { DraftStatus, SendStatus, draftAction, pendingAction } from '../mail/SendStatus';
 import { withThread } from '../mail/thread';
 import { wordsFor, type TimelineWords } from './timeline-items';
 
@@ -82,6 +83,8 @@ export function TimelinePanel({
     );
     const pending = usePendingSends(workspaceId, target, stored);
     const showPending = filter === 'all' || filter === 'emails';
+    // The caller's own drafts about the record, above its sends: only someone who may send mail writes any.
+    const drafts = useRecordDrafts(workspaceId, target, useCan('email:send'));
 
     const me = useMembership()?.memberId ?? null;
     const memberNames = useMemo(
@@ -139,10 +142,11 @@ export function TimelinePanel({
     }, [entries, memberNames, names, target, stageNames, location.search]);
     const shown = useMemo(
         () => [
+            ...(showPending ? (drafts.data?.items ?? []).map((d) => draftItem(workspaceId, d, target)) : []),
             ...(showPending ? pending.sends.map((p) => pendingItem(workspaceId, p, me, memberNames)) : []),
             ...items,
         ],
-        [showPending, pending, items, workspaceId, me, memberNames],
+        [showPending, drafts.data, pending, items, workspaceId, target, me, memberNames],
     );
 
     return (
@@ -255,6 +259,20 @@ function pendingItem(
         time: send.status === 'scheduled' ? 'Not sent yet' : send.createdAt ? formatWhen(send.createdAt) : 'Just now',
         ...(send.status !== 'scheduled' && send.createdAt ? { dateTime: send.createdAt } : {}),
         chips: <SendStatus workspaceId={workspaceId} send={send} />,
+    };
+}
+
+/** One of the caller's drafts about the record: "You started a draft “…”", when it was last saved. */
+function draftItem(workspaceId: string, draft: MailDraftView, target: RecordTarget): ActivityItem {
+    return {
+        id: `draft-${draft.id}`,
+        icon: <Mail />,
+        tone: 'neutral',
+        actor: 'You',
+        action: draftAction(draft),
+        time: formatWhen(draft.updatedAt),
+        dateTime: draft.updatedAt,
+        chips: <DraftStatus workspaceId={workspaceId} draft={draft} target={target} />,
     };
 }
 

@@ -1,6 +1,6 @@
 import { MAIL_OUTBOUND_STATUSES } from '@bylinecrm/shared';
 import { z } from 'zod';
-import { dateTime, id, named, page } from '../openapi/responses';
+import { dateTime, id, named, page, richText } from '../openapi/responses';
 import { trackingCounts } from '../tracking/responses';
 
 /** Sending (P2-3, P2-5) as the API returns it. */
@@ -99,3 +99,56 @@ export type MailScheduledPage = z.output<typeof mailScheduledPage>;
 
 export const mailRecordSendsPage = named('MailRecordSendsPage', page(mailOutboundView));
 export type MailRecordSendsPage = z.output<typeof mailRecordSendsPage>;
+
+const draftRecipient = z.union([
+    z.object({ personId: id, name: z.string().optional() }),
+    z.object({ address: z.string() }),
+]);
+
+/** A draft's content as saved: `MailDraftContent` in the request, every field as it was given. */
+const mailDraftContentView = named(
+    'MailDraftContent',
+    z.object({
+        mailboxId: id.nullable().optional(),
+        to: z.array(draftRecipient).optional(),
+        cc: z.array(draftRecipient).optional(),
+        bcc: z.array(draftRecipient).optional(),
+        templateId: id.nullable().optional(),
+        subject: z.string().optional(),
+        body: richText.optional(),
+        signature: richText.nullable().optional(),
+        sendAt: z.string().nullable().optional(),
+        timeZone: z.string().optional(),
+        followUps: z
+            .array(
+                z.object({
+                    sendAt: z.string().nullable().optional(),
+                    subject: z.string().optional(),
+                    body: richText.optional(),
+                }),
+            )
+            .optional(),
+    }),
+);
+
+export const mailDraftView = named(
+    'MailDraft',
+    z.object({
+        id,
+        personId: id.meta({ description: 'The person the draft is to and about.' }),
+        dealId: id.nullable().meta({ description: 'The deal it is written from; null for the person’s own composer.' }),
+        content: mailDraftContentView.meta({
+            description: 'The composer’s state, unfinished as it may be: what the last save was given.',
+        }),
+        version: z
+            .number()
+            .int()
+            .meta({ description: 'Name it in the next save: a draft saved elsewhere meanwhile is `409`.' }),
+        createdAt: dateTime,
+        updatedAt: dateTime,
+    }),
+);
+export type MailDraftView = z.output<typeof mailDraftView>;
+
+export const mailDraftPage = named('MailDraftPage', page(mailDraftView));
+export type MailDraftPage = z.output<typeof mailDraftPage>;

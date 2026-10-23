@@ -18,6 +18,8 @@ import {
     MAIL_SEND_QUEUE,
 } from './mail-send.constants';
 import { MailFollowUpsConsumer } from './follow-ups.consumer';
+import { MailDraftsController } from './mail-drafts.controller';
+import { MailDraftsService } from './mail-drafts.service';
 import { MailSendController } from './mail-send.controller';
 import { MailSendService } from './mail-send.service';
 import { MailSendWorkers } from './mail-send.workers';
@@ -59,8 +61,8 @@ import { MailSendSweep } from './sweep';
             defaultJobOptions: { removeOnComplete: true, removeOnFail: true },
         }),
     ],
-    controllers: [MailSendController],
-    providers: [MailSendService, MailSendWorkers, MailSendSweep, SendPolicy, MailFollowUpsConsumer],
+    controllers: [MailSendController, MailDraftsController],
+    providers: [MailSendService, MailDraftsService, MailSendWorkers, MailSendSweep, SendPolicy, MailFollowUpsConsumer],
     exports: [MailSendService],
 })
 export class MailSendModule {}
