@@ -41,16 +41,22 @@ export async function membersByAddress(
  * Mail concerns the CRM's records only when a mailbox that is not a service inbox holds it (SVC-1). A service inbox
  * (media@, pr@) is synced so an integration can read it; what only it holds is matched to no person and filed on no
  * record. The moment a member's or a pool mailbox holds the same message, it concerns its people as any mail does.
+ * A message no mailbox holds a copy of (one a migration or importer wrote) is not a service inbox's: it is on records.
  * Over a row source with the message's id as `mp.message_id`.
  */
 const ON_RECORDS = Prisma.sql`
-    EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
-            WHERE c.message_id = mp.message_id AND b.purpose <> 'service')`;
+    NOT (EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
+                 WHERE c.message_id = mp.message_id AND b.purpose = 'service')
+         AND NOT EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
+                         WHERE c.message_id = mp.message_id AND b.purpose <> 'service'))`;
 
 /** Whether only service inboxes hold this message (SVC-1): its participants are then matched to no one. */
 export async function heldOnlyByServiceInboxes(tx: WorkspaceClient, messageId: string): Promise<boolean> {
-    const held = await tx.mailMessageCopy.count({ where: { messageId, mailbox: { purpose: { not: 'service' } } } });
-    return held === 0;
+    const [service, other] = await Promise.all([
+        tx.mailMessageCopy.count({ where: { messageId, mailbox: { purpose: 'service' } } }),
+        tx.mailMessageCopy.count({ where: { messageId, mailbox: { purpose: { not: 'service' } } } }),
+    ]);
+    return service > 0 && other === 0;
 }
 
 /**
