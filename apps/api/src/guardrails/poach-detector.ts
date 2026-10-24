@@ -254,7 +254,8 @@ export class PoachDetectorConsumer implements OutboxConsumer {
 
 /**
  * The member who sent it: the `from` participant's member, else the owner of the personal mailbox with that
- * address. Mail from a pool mailbox is a sequence's (the enrolment guard's), so it has no sender here.
+ * address. Mail from a pool mailbox is a sequence's (the enrolment guard's), so it has no sender here; nor has
+ * mail from a service inbox (SVC-1), a shared address outside the guardrails, whoever connected it.
  */
 async function senderOf(
     tx: WorkspaceClient,
@@ -265,7 +266,7 @@ async function senderOf(
         where: { email: fromAddress },
         select: { purpose: true, ownerMemberId: true },
     });
-    if (mailbox?.purpose === 'pool') return null;
+    if (mailbox?.purpose === 'pool' || mailbox?.purpose === 'service') return null;
     const memberId = participants.find((p) => p.role === 'from')?.memberId ?? mailbox?.ownerMemberId ?? null;
     if (!memberId) return null;
     const member = await tx.workspaceMember.findUnique({

@@ -1,4 +1,4 @@
-import { MAILBOX_PAUSE_CODES } from '@bylinecrm/shared';
+import { MAILBOX_PAUSE_CODES, MAILBOX_PURPOSES } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { named } from '../openapi/responses';
 
@@ -53,7 +53,7 @@ export const pausedMailboxList = named(
         z.object({
             mailboxId: z.uuid(),
             email: z.string(),
-            purpose: z.enum(['personal', 'pool']),
+            purpose: z.enum(MAILBOX_PURPOSES),
             pausedAt: z.iso.datetime(),
             pause: z.object({
                 code: z.enum(MAILBOX_PAUSE_CODES),

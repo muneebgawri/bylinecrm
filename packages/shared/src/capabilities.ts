@@ -36,6 +36,11 @@ export const CAPABILITIES = [
     // Mailboxes and workspace
     'mailbox:read',
     'mailbox:manage',
+    // An integration's reads of synced mail (SVC-1): every message a service inbox holds, bodies included; and how much
+    // mail each sender has sent per day — counts only, mail already sent (a scheduled send counts once it goes). In no
+    // default role: an admin grants them to the role of the key an integration (NewswireOS) holds.
+    'mail:service_read',
+    'mail:sent_counts',
     // Guardrails (GUARD-1, FR-CRMS-21): read the events, mark one legitimate, and be told of repeated blocks.
     'guardrail:review',
     // Invoices (INV-1, FR-CRMS-19): verify or reject an invoice by hand (one NewswireOS could not decide, or

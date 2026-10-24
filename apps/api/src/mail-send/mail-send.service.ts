@@ -445,6 +445,9 @@ export class MailSendService {
         if (mailbox.purpose === 'pool') {
             throw new ApiException(403, 'forbidden', 'a pool mailbox sends only through sequences');
         }
+        if (mailbox.purpose === 'service') {
+            throw new ApiException(403, 'forbidden', 'a service inbox is read, never sent from');
+        }
         if (mailbox.ownerMemberId !== memberId) {
             throw new ApiException(403, 'forbidden', 'mail is sent from your own personal mailbox');
         }
