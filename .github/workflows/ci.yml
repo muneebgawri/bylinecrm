@@ -141,6 +141,7 @@ jobs:
             - uses: ./.github/actions/ui-browser
             - run: pnpm --filter @bylinecrm/ui build-storybook
             - run: pnpm --filter @bylinecrm/ui test:a11y
+            - run: pnpm --filter @bylinecrm/ui test:layout
 
     visual:
         runs-on: ubuntu-latest

@@ -24,6 +24,9 @@ export const DialogContent = forwardRef<
                 className={cn(
                     'fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4',
                     'rounded-lg border border-border bg-surface-raised p-6 text-text shadow-md',
+                    // Never taller than the window: a long dialog scrolls inside itself, and DialogFooter
+                    // stays in view at its bottom (bylinecrm#271).
+                    'max-h-[calc(100dvh-2rem)] overflow-y-auto',
                     // On phones every dialog is a bottom sheet: full width, anchored to the bottom,
                     // clear of the home indicator, scrolling inside itself (FR-CRMS-UI-12).
                     'max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:max-w-none',
@@ -68,6 +71,22 @@ export function DialogBody({ className, ...props }: HTMLAttributes<HTMLDivElemen
     return <div className={cn('text-sm', className)} {...props} />;
 }
 
+/**
+ * Sticky at the bottom of a dialog that scrolls, on the panel's own surface, so the actions are never scrolled away
+ * — also when a `<form>` wraps the body and the footer (bylinecrm#271). In a dialog that fits, nothing moves.
+ */
 export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-    return <div className={cn('flex justify-end gap-2', className)} {...props} />;
+    return (
+        <div
+            className={cn(
+                'sticky flex justify-end gap-2 bg-surface-raised',
+                // Reach the panel's bottom edge, covering its padding, so nothing scrolls into view beneath the
+                // actions; each negative margin is cancelled by the same padding, so a dialog that fits is unchanged.
+                '-bottom-6 -mb-6 pb-6',
+                'max-md:bottom-[calc(-1*max(1.25rem,env(safe-area-inset-bottom)))] max-md:mb-[calc(-1*max(1.25rem,env(safe-area-inset-bottom)))] max-md:pb-[max(1.25rem,env(safe-area-inset-bottom))]',
+                className,
+            )}
+            {...props}
+        />
+    );
 }
