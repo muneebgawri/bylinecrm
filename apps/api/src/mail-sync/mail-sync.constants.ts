@@ -77,3 +77,9 @@ export const MAIL_THREADS_LIMIT_MAX = 100;
  * once; the second attempt of the run that lost finds the message and stores its copy beside it.
  */
 export const STORE_ATTEMPTS = 2;
+
+/** An integration's page of service-inbox mail (SVC-1). */
+export const SERVICE_MAIL_LIMIT_DEFAULT = 100;
+export const SERVICE_MAIL_LIMIT_MAX = 200;
+/** How many sender addresses one integration read may name (SVC-1). */
+export const INTEGRATION_SENDERS_MAX = 200;

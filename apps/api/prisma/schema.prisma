@@ -1160,6 +1160,8 @@ model WebhookDelivery {
 enum MailboxPurpose {
   personal
   pool
+  /// SVC-1: a shared inbox read for an integration — mail only, no calendar or sending, on no record.
+  service
 
   @@map("mailbox_purpose")
 }

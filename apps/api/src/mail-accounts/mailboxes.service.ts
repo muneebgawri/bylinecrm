@@ -3,6 +3,7 @@ import {
     GMAIL_SCOPES,
     MAILBOX_PURPOSES,
     PERSONAL_MAILBOX_SCOPES,
+    SERVICE_MAILBOX_SCOPES,
     POSTMASTER_SCOPES,
     type MailboxConnectResult,
     type MailboxPurpose,
@@ -248,6 +249,9 @@ export class MailboxesService {
                 'a connection is made by a member signing in to Google, not by an API key',
             );
         }
+        if (!context.capabilities.has(connectCapability(purpose))) {
+            throw new ApiException(403, 'forbidden', `connecting a ${purpose} mailbox is an admin's`);
+        }
         const client = await this.rls.withWorkspace((tx) => this.clients.storedIn(tx));
         if (!client) {
             throw new ApiException(409, 'conflict', 'no Google OAuth client is configured; an admin sets one up first');
@@ -319,7 +323,7 @@ export class MailboxesService {
         }
         if (pending.purpose === 'postmaster') return end(await this.finishPostmaster(pending, client.rowId, grant));
         const purpose: MailboxPurpose = pending.purpose;
-        const assessment = assessGrant(grant.scopes);
+        const assessment = assessGrant(grant.scopes, purpose === 'service' ? SERVICE_MAILBOX_SCOPES : GMAIL_SCOPES);
         if (!assessment.ok) return end(assessment.result);
         if (!grant.refreshToken) return end('no_refresh_token');
         try {
@@ -456,9 +460,7 @@ export class MailboxesService {
         const membership = await this.memberships.find(pending.userId, pending.workspaceId);
         if (!membership || membership.memberId !== pending.memberId) return false;
         const access = await this.roles.access(pending.workspaceId, membership.roleId);
-        return (
-            access?.capabilities.has(pending.purpose === 'postmaster' ? 'workspace:admin' : 'mailbox:manage') ?? false
-        );
+        return access?.capabilities.has(connectCapability(pending.purpose)) ?? false;
     }
 
     /** The mailbox if the caller may see it; otherwise `404`, never a hint that it exists. */
@@ -490,7 +492,17 @@ export class MailboxesService {
  */
 function scopesFor(purpose: ConnectPurpose): readonly string[] {
     if (purpose === 'postmaster') return POSTMASTER_SCOPES;
+    // A service inbox is read, never sent from (SVC-1).
+    if (purpose === 'service') return SERVICE_MAILBOX_SCOPES;
     return purpose === 'personal' ? PERSONAL_MAILBOX_SCOPES : GMAIL_SCOPES;
+}
+
+/**
+ * Who connects what: a member's mailbox or a pool takes `mailbox:manage`; the Postmaster Tools account and a service
+ * inbox (SVC-1) — whose mail an integration may read, bodies included — are an admin's.
+ */
+function connectCapability(purpose: ConnectPurpose): 'workspace:admin' | 'mailbox:manage' {
+    return purpose === 'postmaster' || purpose === 'service' ? 'workspace:admin' : 'mailbox:manage';
 }
 
 function isAdmin(context: WorkspaceRunContext): boolean {

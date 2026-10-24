@@ -7,6 +7,8 @@ import { BlocklistService } from './blocklist.service';
 import { GmailHttp } from './gmail.http';
 import { GMAIL_PORT } from './gmail.port';
 import { BlocklistController, MailThreadsController, MailboxSyncController } from './mail-sync.controllers';
+import { IntegrationMailController } from './integration-mail.controller';
+import { IntegrationMailService } from './integration-mail.service';
 import { MAIL_SYNC_JOB_ATTEMPTS, MAIL_SYNC_JOB_BACKOFF_MS, MAIL_SYNC_QUEUE } from './mail-sync.constants';
 import { MailReadService } from './mail-read.service';
 import { MailSyncService } from './mail-sync.service';
@@ -35,12 +37,13 @@ import { GmailQuota } from './quota';
             },
         }),
     ],
-    controllers: [MailThreadsController, MailboxSyncController, BlocklistController],
+    controllers: [MailThreadsController, MailboxSyncController, BlocklistController, IntegrationMailController],
     providers: [
         { provide: GMAIL_PORT, useClass: GmailHttp },
         GmailQuota,
         MailSyncService,
         MailReadService,
+        IntegrationMailService,
         BlocklistService,
         MailSyncWorkers,
         MailSyncSubscriber,

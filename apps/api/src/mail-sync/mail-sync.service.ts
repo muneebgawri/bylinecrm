@@ -20,7 +20,14 @@ import {
     SKIPPED_LABELS,
     STORE_ATTEMPTS,
 } from './mail-sync.constants';
-import { membersByAddress, personsByAddress, recordTargetsForPeople } from './matching';
+import {
+    heldOnlyByServiceInboxes,
+    membersByAddress,
+    personsByAddress,
+    recordTargetsForPeople,
+    rematchMessage,
+} from './matching';
+import { reconcileMessageTargets } from './reconcile';
 import { parseGmailMessage, type ParsedMessage } from './parse-message';
 import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
 import { GmailQuota } from './quota';
@@ -368,8 +375,15 @@ export class MailSyncService {
             // Another mailbox stored it first: this mailbox holds a copy, and its Gmail thread is
             // the message's conversation unless the mailbox already threads it elsewhere.
             const mailboxThreadId = mapped?.id ?? (await this.mapThread(tx, mailbox, parsed, existing.threadId));
+            // SVC-1: mail only service inboxes held was on no record; a member's or a pool mailbox holding it puts
+            // it on the records of the people it concerns, as if this copy had come first.
+            const reaches = mailbox.purpose !== 'service' && (await heldOnlyByServiceInboxes(tx, existing.id));
             await tx.mailMessageCopy.create({ data: copy(existing.id, mailboxThreadId) });
             if (direction === 'outbound') await linkSend(existing.id, existing.rfc822MessageId);
+            if (reaches) {
+                const changed = await rematchMessage(tx, existing.id);
+                await this.events.recordAll(tx, await reconcileMessageTargets(tx, mailbox.workspaceId, changed));
+            }
             return true;
         }
 
@@ -384,8 +398,10 @@ export class MailSyncService {
             ).id;
         const mailboxThreadId = mapped?.id ?? (await this.mapThread(tx, mailbox, parsed, threadId));
         const addresses = parsed.participants.map((p) => p.address);
+        // SVC-1: a service inbox's mail is matched to no person, so it is on no record and replies to no send.
+        const onRecords = mailbox.purpose !== 'service';
         const [people, members, sentFromWorkspace] = await Promise.all([
-            personsByAddress(tx, addresses),
+            onRecords ? personsByAddress(tx, addresses) : Promise.resolve(new Map<string, string>()),
             membersByAddress(tx, addresses),
             direction === 'outbound'
                 ? Promise.resolve(true)
@@ -440,20 +456,22 @@ export class MailSyncService {
             .filter((p) => p.role === 'from')
             .map((p) => people.get(p.address))
             .filter((id): id is string => id !== undefined);
-        const replied = await replyEventFor(
-            tx,
-            mailbox,
-            {
-                id: row.id,
-                threadId,
-                from: row.fromAddress,
-                inReplyTo: row.inReplyTo,
-                references: row.references,
-                sentAt: row.sentAt,
-            },
-            email,
-            fromPeople,
-        );
+        const replied = !onRecords
+            ? null
+            : await replyEventFor(
+                  tx,
+                  mailbox,
+                  {
+                      id: row.id,
+                      threadId,
+                      from: row.fromAddress,
+                      inReplyTo: row.inReplyTo,
+                      references: row.references,
+                      sentAt: row.sentAt,
+                  },
+                  email,
+                  fromPeople,
+              );
         // A bounce report a pool mailbox received is recorded with it (P3-2).
         const bounced =
             mailbox.purpose === 'pool' && parsed.bounce
