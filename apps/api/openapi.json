@@ -15386,6 +15386,206 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/integrations/mail/service-messages": {
+            "get": {
+                "operationId": "integrationMail_serviceMessages",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "required": false,
+                        "in": "query",
+                        "description": "Only mail from these senders (comma-separated).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "since",
+                        "required": true,
+                        "in": "query",
+                        "description": "Stored at or after this instant (ISO 8601).",
+                        "schema": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "until",
+                        "required": false,
+                        "in": "query",
+                        "description": "Stored before this instant (ISO 8601).",
+                        "schema": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minimum": 1,
+                            "maximum": 200,
+                            "default": 100,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ServiceMailPage"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["integrations"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/mail/sent-counts": {
+            "get": {
+                "operationId": "integrationMail_sentCounts",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "required": true,
+                        "in": "query",
+                        "description": "The senders to count (comma-separated).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "day",
+                        "required": true,
+                        "in": "query",
+                        "description": "A UTC day, `YYYY-MM-DD`.",
+                        "schema": {
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SentCounts"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["integrations"]
+            }
+        },
         "/api/w/{workspaceId}/mail/send": {
             "post": {
                 "operationId": "mailSend_compose",
@@ -26883,7 +27083,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 26,
+                        "maxItems": 28,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -26911,6 +27111,8 @@
                                 "sequence:enrol",
                                 "mailbox:read",
                                 "mailbox:manage",
+                                "mail:service_read",
+                                "mail:sent_counts",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -26933,7 +27135,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 26,
+                        "maxItems": 28,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -26961,6 +27163,8 @@
                                 "sequence:enrol",
                                 "mailbox:read",
                                 "mailbox:manage",
+                                "mail:service_read",
+                                "mail:sent_counts",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -29169,7 +29373,7 @@
                 "properties": {
                     "purpose": {
                         "type": "string",
-                        "enum": ["personal", "pool"]
+                        "enum": ["personal", "pool", "service"]
                     }
                 },
                 "required": ["purpose"]
@@ -29184,7 +29388,7 @@
                     },
                     "purpose": {
                         "type": "string",
-                        "enum": ["personal", "pool"]
+                        "enum": ["personal", "pool", "service"]
                     }
                 }
             },
@@ -32539,6 +32743,8 @@
                                 "sequence:enrol",
                                 "mailbox:read",
                                 "mailbox:manage",
+                                "mail:service_read",
+                                "mail:sent_counts",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -32674,6 +32880,8 @@
                                 "sequence:enrol",
                                 "mailbox:read",
                                 "mailbox:manage",
+                                "mail:service_read",
+                                "mail:sent_counts",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -33329,7 +33537,7 @@
                     },
                     "purpose": {
                         "type": "string",
-                        "enum": ["personal", "pool"],
+                        "enum": ["personal", "pool", "service"],
                         "description": "Fixed when the mailbox connects."
                     },
                     "transport": {
@@ -36801,7 +37009,7 @@
                         },
                         "purpose": {
                             "type": "string",
-                            "enum": ["personal", "pool"]
+                            "enum": ["personal", "pool", "service"]
                         },
                         "pausedAt": {
                             "type": "string",
@@ -37835,6 +38043,96 @@
                     }
                 },
                 "required": ["entry", "purged"]
+            },
+            "ServiceMailMessage": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "from": {
+                        "type": "string",
+                        "description": "The sender, lower case."
+                    },
+                    "subject": {
+                        "type": "string"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The plain-text body (empty when the message had none)."
+                    },
+                    "sentAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "description": "The message's own Date header: sender-controlled, never page on it.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "storedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "description": "When the CRM stored it: monotonic, what the page is ordered by.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": ["id", "from", "subject", "text", "sentAt", "storedAt"]
+            },
+            "ServiceMailPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ServiceMailMessage"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["items", "nextCursor"]
+            },
+            "SentCounts": {
+                "type": "object",
+                "properties": {
+                    "day": {
+                        "type": "string",
+                        "description": "`YYYY-MM-DD`, UTC."
+                    },
+                    "complete": {
+                        "type": "boolean",
+                        "description": "The day has ended: its counts will not grow."
+                    },
+                    "senders": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "address": {
+                                    "type": "string"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                },
+                                "lastSentAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                }
+                            },
+                            "required": ["address", "count", "lastSentAt"]
+                        }
+                    }
+                },
+                "required": ["day", "complete", "senders"]
             },
             "WorkspaceLogo": {
                 "type": "object",

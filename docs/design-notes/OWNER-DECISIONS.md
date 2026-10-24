@@ -82,3 +82,16 @@ keep the current behaviour. Decision 2 is built: see its section. Decision 6 is 
 - **Recommendation.** 60 days, as a workspace setting, flag only (nothing moves automatically). This is what
   makes the strict ownership rule workable for the team.
 - **Status: SUPERSEDED (2026-10-21, Matt)** — to be replaced by cadence plus round-robin lead rotation (design pending). The dormancy flag is not to be built.
+
+## 7. Service inboxes and NewswireOS's mail reads (SVC-1)
+
+- **Question.** Twenty is shut down. NewswireOS read partner confirmations and staff email counts from Twenty's synced
+  mail. media@ and pr@ are to be connected without their contacts or calendar synced and outside the poaching
+  guardrails. How does NewswireOS get the confirmations' text, which BylineCRM shows only to a mailbox's owner?
+- **Options.** (A) the integration key reads bodies of mail from listed partner senders, in any inbox; (B) it reads
+  everything service inboxes hold and nothing in personal inboxes; (C) BylineCRM parses the confirmations itself.
+- **Recommendation.** A — it keeps the coverage Twenty gave (84 of 140 Korewire messages went to one person's inbox
+  only) with the narrowest exposure, and partner parsing stays in NewswireOS.
+- **Status: DECIDED (2026-10-24, Matt)** — B. A new `service` mailbox purpose (mail only, admin-connected, read
+  scope, no calendar, no sending, on no record, outside the guardrails); partners write to or copy media@. Scheduled
+  sends are left out of the sent counts. See `SVC-1.md`.

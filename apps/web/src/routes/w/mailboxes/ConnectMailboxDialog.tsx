@@ -12,13 +12,15 @@ import {
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { useConnectMailbox } from '../../../api/mailAdmin';
+import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { leaveFor } from '../../../lib/leaveFor';
 
-/** The two purposes in the words a member chooses between (the API's `personal | pool`). */
+/** The purposes in the words a member chooses between (the API's `personal | pool | service`). */
 export const PURPOSE_LABEL: Record<MailboxPurpose, string> = {
     personal: 'Personal',
     pool: 'Shared outreach',
+    service: 'Service inbox',
 };
 
 const PURPOSES: readonly RadioOption<MailboxPurpose>[] = [
@@ -36,6 +38,16 @@ const PURPOSES: readonly RadioOption<MailboxPurpose>[] = [
     },
 ];
 
+/** SVC-1: offered to admins only — an integration may read everything a service inbox holds. */
+const SERVICE_PURPOSE: RadioOption<MailboxPurpose> = {
+    value: 'service',
+    label: 'Service inbox',
+    description:
+        'A shared address an integration reads, such as the one partners send confirmations to. Read only: no calendar, ' +
+        'no sending, its mail is filed on no record and the guardrails do not look at it. NewswireOS can read every ' +
+        'message it holds.',
+};
+
 /**
  * Starts a Google connect (FR-CRMS-1): the member chooses what the mailbox is for — which cannot
  * change later — and the browser leaves for Google's consent screen. Google sends it back to the
@@ -51,6 +63,7 @@ export function ConnectMailboxDialog({
     onOpenChange: (open: boolean) => void;
 }) {
     const connect = useConnectMailbox(workspaceId);
+    const admin = useCan('workspace:admin');
     const [purpose, setPurpose] = useState<MailboxPurpose>('personal');
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -68,13 +81,14 @@ export function ConnectMailboxDialog({
                 <DialogTitle>Connect a mailbox</DialogTitle>
                 <DialogDescription>
                     You sign in to Google next and allow send and read access — nothing broader. A personal mailbox also
-                    asks to read your calendar, so your meetings count towards your KPIs.
+                    asks to read your calendar, so your meetings count towards your KPIs. A service inbox asks only to
+                    read mail.
                 </DialogDescription>
                 <form onSubmit={submit}>
                     <DialogBody className="flex flex-col gap-4">
                         <RadioGroup
                             legend="What is this mailbox for?"
-                            options={PURPOSES}
+                            options={admin ? [...PURPOSES, SERVICE_PURPOSE] : PURPOSES}
                             value={purpose}
                             onValueChange={setPurpose}
                         />

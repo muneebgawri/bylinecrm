@@ -109,6 +109,7 @@ export const CAPABILITY_AREA_LABEL: Record<string, string> = {
     outreach: 'Outreach',
     sequence: 'Sequences',
     mailbox: 'Mailboxes',
+    mail: 'Synced mail, for integrations',
     guardrail: 'Guardrails',
     invoice: 'Invoices',
     workspace: 'Workspace',
@@ -139,6 +140,9 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'sequence:enrol': 'Enrol people in sequences',
     'mailbox:read': 'See mailboxes',
     'mailbox:manage': 'Connect and manage mailboxes',
+    'mail:service_read':
+        'Read everything service inboxes hold, bodies included (for an integration such as NewswireOS)',
+    'mail:sent_counts': 'Read how many emails each sender sent per day — counts only (for an integration)',
     'guardrail:review': 'Review guardrail events and hear of repeated blocks',
     'invoice:verify': 'Verify or refuse invoices by hand, and hear of ones waiting for finance',
     'workspace:admin': 'Administer the workspace',

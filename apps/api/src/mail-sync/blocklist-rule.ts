@@ -1,12 +1,12 @@
-import { blocklistCovers } from '@bylinecrm/shared';
+import { blocklistCovers, type MailboxPurpose } from '@bylinecrm/shared';
 
 /**
  * The blocklist rule, in one place: the importer passes a message over with it, and a new entry
  * purges stored mail with it (P2-2).
  *
  * Which entries apply to a mailbox: the workspace's (no member) always; a member's personal entries
- * only to that member's **personal** mailboxes — a pool mailbox is the workspace's outreach, not
- * anyone's own inbox.
+ * only to that member's **personal** mailboxes — a pool mailbox is the workspace's outreach, and a
+ * service inbox (SVC-1) a shared address, not anyone's own inbox.
  */
 export interface BlocklistEntryLike {
     value: string;
@@ -16,7 +16,7 @@ export interface BlocklistEntryLike {
 export interface MailboxLike {
     email: string;
     ownerMemberId: string;
-    purpose: 'personal' | 'pool';
+    purpose: MailboxPurpose;
 }
 
 export function entriesFor(mailbox: MailboxLike, entries: readonly BlocklistEntryLike[]): string[] {

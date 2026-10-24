@@ -130,3 +130,35 @@ export type MailboxSyncView = z.output<typeof mailboxSyncView>;
 export type MailboxSyncTriggered = z.output<typeof mailboxSyncTriggered>;
 export type BlocklistEntryView = z.output<typeof blocklistEntryView>;
 export type BlocklistEntryCreated = z.output<typeof blocklistEntryCreated>;
+
+/** One message a service inbox holds, as an integration reads it (SVC-1). */
+export const serviceMailMessage = named(
+    'ServiceMailMessage',
+    z.object({
+        id,
+        from: z.string().meta({ description: 'The sender, lower case.' }),
+        subject: z.string(),
+        text: z.string().meta({ description: 'The plain-text body (empty when the message had none).' }),
+        sentAt: dateTime.meta({ description: "The message's own Date header: sender-controlled, never page on it." }),
+        storedAt: dateTime.meta({ description: 'When the CRM stored it: monotonic, what the page is ordered by.' }),
+    }),
+);
+export type ServiceMailMessage = z.infer<typeof serviceMailMessage>;
+export const serviceMailPage = named('ServiceMailPage', page(serviceMailMessage));
+
+/** How much each sender sent on one UTC day (SVC-1): mail already sent, so a scheduled send counts once it goes. */
+export const sentCountsView = named(
+    'SentCounts',
+    z.object({
+        day: z.string().meta({ description: '`YYYY-MM-DD`, UTC.' }),
+        complete: z.boolean().meta({ description: 'The day has ended: its counts will not grow.' }),
+        senders: z.array(
+            z.object({
+                address: z.string(),
+                count: z.number().int(),
+                lastSentAt: dateTime,
+            }),
+        ),
+    }),
+);
+export type SentCountsView = z.infer<typeof sentCountsView>;

@@ -35,9 +35,21 @@ export const POSTMASTER_SCOPES = [POSTMASTER_TRAFFIC_SCOPE, POSTMASTER_DOMAIN_SC
  */
 export const GMAIL_BROAD_SCOPE = 'https://mail.google.com/';
 
-/** What a mailbox is for. Fixed when it connects; changing it means disconnecting and connecting again. */
-export const MAILBOX_PURPOSES = ['personal', 'pool'] as const;
+/**
+ * What a mailbox is for. Fixed when it connects; changing it means disconnecting and connecting again.
+ *
+ * - `personal` — a member's own mailbox: synced, sends 1:1 mail, its calendar read (CAL-1), its mail filed on the
+ *   records it concerns, its sends judged by the guardrails.
+ * - `pool` — an outreach sending mailbox (P3-2).
+ * - `service` — a shared inbox read for an integration (SVC-1), e.g. the address partners send confirmations to.
+ *   Mail only, read only: no calendar, no sending, its mail on no record, outside the guardrails. Its mail is what a
+ *   key holding `mail:service_read` may read, bodies included. Only an admin connects one.
+ */
+export const MAILBOX_PURPOSES = ['personal', 'pool', 'service'] as const;
 export type MailboxPurpose = (typeof MAILBOX_PURPOSES)[number];
+
+/** A service inbox is read, never sent from (SVC-1): Gmail's read scope alone. */
+export const SERVICE_MAILBOX_SCOPES = [GMAIL_READONLY_SCOPE] as const;
 
 /**
  * How a mailbox's mail leaves (TRANS-1): through its Gmail grant, or — a pool mailbox only, never personal or 1:1
