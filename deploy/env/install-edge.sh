@@ -104,7 +104,10 @@ fi
 # Render, then write through a temp name the edge's `*.conf` include does not match, then rename
 # (atomic). The placeholders are the only variable parts; everything else is reviewed text.
 tmp="$DYN/.$BYLINECRM_EDGE_CONF.tmp"
-sed -e "s/__HOST__/$HOST/g" -e "s/__ENV__/$BYLINECRM_ENV/g" -e "s/__WEB_UPSTREAM__/$WEB_UPSTREAM/g" "$SRC" >"$tmp"
+# `# cloudflare-only` lines stay only for an environment behind Cloudflare's proxy (lib.sh).
+drop_cf=()
+[ "$BYLINECRM_EDGE_CLOUDFLARE_ONLY" = 1 ] || drop_cf=(-e '/# cloudflare-only$/d')
+sed ${drop_cf[@]+"${drop_cf[@]}"} -e "s/__HOST__/$HOST/g" -e "s/__ENV__/$BYLINECRM_ENV/g" -e "s/__WEB_UPSTREAM__/$WEB_UPSTREAM/g" "$SRC" >"$tmp"
 chmod 644 "$tmp"
 mv -f "$tmp" "$TARGET"
 
