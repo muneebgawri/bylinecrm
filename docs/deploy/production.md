@@ -36,9 +36,12 @@ Run on the server unless marked **Mac**. Check first that no NewswireOS deploy i
    `staging.crm`, `crm.pinionnewswire.com` is one subdomain level, which Cloudflare's Universal SSL
    covers, and the edge already takes the visitor's address from `CF-Connecting-IP` for requests that
    come from Cloudflare's published ranges (its `set_real_ip_from` block) and leaves every other
-   request's address alone — so the same server block serves both modes and nothing restricts by IP.
-   If proxied, set Cloudflare's SSL mode to **Full (strict)** so Cloudflare verifies the origin's
-   Let's Encrypt certificate; certbot's HTTP-01 renewals keep working through the proxy.
+   request's address alone. Production's HTTPS block **refuses every connection that is not from
+   Cloudflare** (`BYLINECRM_EDGE_CLOUDFLARE_ONLY=1` in `lib.sh`; `return 444` on the edge's
+   `$via_cloudflare`, pressboard#448), so the record **must be Proxied** before step 7 serves anyone —
+   a scanner that finds the origin IP cannot step around Cloudflare's firewall. Port 80 stays open
+   (redirect and ACME only). Set Cloudflare's SSL mode to **Full (strict)** so Cloudflare verifies the
+   origin's Let's Encrypt certificate; certbot's HTTP-01 renewals keep working through the proxy.
 2. **Upload this release's deploy files (Mac):**
    `SYNC=$(git rev-parse origin/main); git archive --format=tar $SYNC deploy/env | ssh newswireos-vps "mkdir -p /opt/bylinecrm/releases/$SYNC && tar -x -C /opt/bylinecrm/releases/$SYNC"`.
    Below, `<rel>` is `/opt/bylinecrm/releases/$SYNC/deploy/env`.
@@ -72,8 +75,10 @@ Run on the server unless marked **Mac**. Check first that no NewswireOS deploy i
     single-use set-password link valid 30 minutes — no password is ever printed (#101). Sign-up is
     closed (`SIGNUP_MODE=closed`, P0-14): every workspace is created at `/platform/workspaces`.
 11. **Backups:** `bash <rel>/install-backup.sh production` (below), then run one by hand and read it.
-12. **Cloudflare proxy (optional, after step 6):** flip the `crm` record to Proxied, SSL mode Full
-    (strict). Check `curl -sI https://crm.pinionnewswire.com/health` still answers 200.
+12. **Cloudflare proxy (required, after step 6):** flip the `crm` record to Proxied, SSL mode Full
+    (strict). Check `curl -sI https://crm.pinionnewswire.com/health` answers 200, and that
+    `curl -sk --resolve crm.pinionnewswire.com:443:169.58.194.188 https://crm.pinionnewswire.com/health`
+    gets no answer (the origin refuses direct connections).
 
 ## Routine deploy (Mac)
 
