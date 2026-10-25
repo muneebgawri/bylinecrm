@@ -1,12 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * The two browser gates, one harness. Both run against the static Storybook build served on a
+ * The browser gates, one harness. All run against the static Storybook build served on a
  * fixed port in Chromium at one viewport:
  *
  *   a11y    axe on every story at WCAG 2.1 AA — any violation fails (a11y.spec.ts)
  *   visual  a screenshot of every story against a committed baseline — ANY pixel fails
  *           (visual.spec.ts)
+ *   layout  what one screenshot cannot show — a tall dialog in short windows (layout.spec.ts)
  *
  * Baselines are produced on the CI runner (see ../README.md, "Visual baselines"), never on a
  * developer machine — a Mac and a Linux runner rasterise text differently, so a local baseline
@@ -35,6 +36,7 @@ export default defineConfig({
     projects: [
         { name: 'a11y', testMatch: 'a11y.spec.ts' },
         { name: 'visual', testMatch: 'visual.spec.ts' },
+        { name: 'layout', testMatch: 'layout.spec.ts' },
     ],
     webServer: {
         // sirv-cli lets the PORT and HOST environment variables override its flags, so a shell (or
