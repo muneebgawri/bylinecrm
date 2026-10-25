@@ -200,7 +200,7 @@ export class AuthController {
     @HttpCode(204)
     @Post('password/forgot')
     async forgotPassword(@Body() body: ForgotPasswordDto, @Req() req: Request): Promise<void> {
-        await this.auth.requestPasswordReset(body.email, req.ip ?? '');
+        await this.auth.requestPasswordReset(body.email, req.ip ?? '', req.get('user-agent') ?? '');
     }
 
     /**
