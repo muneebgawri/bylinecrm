@@ -150,13 +150,10 @@ export const serviceMailPage = named('ServiceMailPage', page(serviceMailMessage)
 /** One audience's share of a sender's mail: messages reaching it, and the distinct people reached (PNW-926). */
 const audienceCounts = z.object({
     messages: z.number().int().meta({ description: 'Messages with at least one recipient in this audience.' }),
-    people: z
-        .number()
-        .int()
-        .meta({
-            description:
-                'Distinct people (or, for an address the CRM has no person for, addresses) reached over the range.',
-        }),
+    people: z.number().int().meta({
+        description:
+            'Distinct people (or, for an address the CRM has no person for, addresses) reached over the range.',
+    }),
 });
 
 export const sentCountsView = named(
