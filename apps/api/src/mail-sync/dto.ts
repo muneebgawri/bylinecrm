@@ -53,10 +53,31 @@ export class ServiceMailQueryDto extends createZodDto(
     }),
 ) {}
 
-/** `GET /integrations/mail/sent-counts` (SVC-1): how much each sender sent on one UTC day. */
+/** The longest range one sent-counts question may span (PNW-926): a month's KPIs and their margin. */
+export const SENT_COUNTS_RANGE_DAYS_MAX = 62;
+
+/**
+ * `GET /integrations/mail/sent-counts` (SVC-1): how much each sender sent on one UTC day — or, with `through`, over the
+ * days `day`…`through` inclusive, where a distinct person is counted once across the range (PNW-926).
+ */
 export class SentCountsQueryDto extends createZodDto(
-    z.object({
-        from: addressList.meta({ description: 'The senders to count (comma-separated).' }),
-        day: z.iso.date().meta({ description: 'A UTC day, `YYYY-MM-DD`.' }),
-    }),
+    z
+        .object({
+            from: addressList.meta({ description: 'The senders to count (comma-separated).' }),
+            day: z.iso.date().meta({ description: 'A UTC day, `YYYY-MM-DD` — the first of the range.' }),
+            through: z.iso
+                .date()
+                .optional()
+                .meta({ description: 'The last UTC day of the range, inclusive (default: `day`). At most 62 days.' }),
+        })
+        .refine((q) => !q.through || q.through >= q.day, {
+            message: '`through` is on or after `day`',
+            path: ['through'],
+        })
+        .refine(
+            (q) =>
+                !q.through ||
+                (Date.parse(q.through) - Date.parse(q.day)) / 86_400_000 + 1 <= SENT_COUNTS_RANGE_DAYS_MAX,
+            { message: `a range spans at most ${SENT_COUNTS_RANGE_DAYS_MAX} days`, path: ['through'] },
+        ),
 ) {}

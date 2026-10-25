@@ -61,3 +61,19 @@ a service inbox and so not read. Partners write to, or copy, media@ for their co
 mail on no record, nor after a person is created; on the record once a member's mailbox holds it; the service-mail
 read (bodies, no personal mail, paging, capability, workspace isolation); sent counts (counts only, closed day, a
 scheduled send left out, capability).
+
+## Sent mail by audience (PNW-926, owner 2026-10-25)
+
+An account manager's mail to existing customers and to leads/prospects are different KPIs: how many customers they
+keep in touch with, and how many prospects they are trying to convert. `sent-counts` counts each sent message by its
+recipients (to, cc, bcc):
+
+- **customer** — a live outreach exclusion (every one is a customer: a NewswireOS client, `account_managed`, or a won
+  deal, `customer`; by address or by domain), or a person whose contact status is Customer;
+- **prospect** — any other person in the CRM;
+- neither — a colleague (a workspace member), or an address the CRM has no person for.
+
+Per sender and audience: `messages` (with at least one recipient in it — a message to both counts in both) and
+`people` (distinct, by person, or by address when there is none). `through` makes the question a range of up to 62
+days, so distinct people over a month are counted once — per-day distincts do not add up. Still counts only: never a
+recipient's address, never a body.
