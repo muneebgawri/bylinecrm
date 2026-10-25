@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { ENV, type Env } from './config/env';
 import { bodyParsers, parserErrors } from './infra/errors/body-parsing';
 import { requestId } from './infra/errors/request-id';
 import { openApiDocument } from './openapi/document';
@@ -52,6 +53,10 @@ export function configureApp(app: NestExpressApplication): NestExpressApplicatio
     // The client IP for rate limiting comes from the proxy's header once one is in front of us.
     app.set('trust proxy', 1);
     app.enableShutdownHooks();
-    SwaggerModule.setup(`${API_PREFIX}/docs`, app, openApiDocument(app));
+    // Not in production: a public map of every endpoint helps nobody but a scanner. The contract
+    // on disk is written from `openApiDocument`, not from this route, so it is unaffected.
+    if (app.get<Env>(ENV).NODE_ENV !== 'production') {
+        SwaggerModule.setup(`${API_PREFIX}/docs`, app, openApiDocument(app));
+    }
     return app;
 }

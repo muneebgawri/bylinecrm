@@ -7,6 +7,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../../src/app.module';
 import { APP_OPTIONS, configureApp, createApp } from '../../src/app';
+import { RESET_REQUEST_ADDRESS_MAX, RESET_REQUEST_IP_MAX } from '../../src/auth/auth.constants';
 import { hashToken } from '../../src/auth/tokens';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
@@ -253,6 +254,28 @@ describe('#93 transactional mail', () => {
                 .send({ token: verifyToken, password: 'a different long passphrase' })
                 .expect(400);
             expect(res.body).toMatchObject({ code: 'token.invalid' });
+        });
+
+        it('one address takes at most RESET_REQUEST_ADDRESS_MAX requests per window, however many IPs ask', async () => {
+            const email = `nobody-flood-${stamp}@example.test`;
+            const from = (n: number) =>
+                http().post('/api/auth/password/forgot').set('X-Forwarded-For', `198.51.100.${n}`);
+            for (let n = 1; n <= RESET_REQUEST_ADDRESS_MAX; n++) await from(n).send({ email }).expect(204);
+            await from(RESET_REQUEST_ADDRESS_MAX + 1)
+                .send({ email })
+                .expect(429);
+        });
+
+        it('one IP takes at most RESET_REQUEST_IP_MAX requests per window, across addresses', async () => {
+            const from = () => http().post('/api/auth/password/forgot').set('X-Forwarded-For', '203.0.113.7');
+            for (let n = 1; n <= RESET_REQUEST_IP_MAX; n++) {
+                await from()
+                    .send({ email: `nobody-probe-${n}-${stamp}@example.test` })
+                    .expect(204);
+            }
+            await from()
+                .send({ email: `nobody-probe-last-${stamp}@example.test` })
+                .expect(429);
         });
     });
 
