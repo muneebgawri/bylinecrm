@@ -31,9 +31,15 @@ export const PASSWORD_RESET_TTL_S = 30 * 60;
 /** New verification links one account may ask for per window (#93). */
 export const VERIFY_RESEND_MAX = 5;
 export const VERIFY_RESEND_WINDOW_S = 60 * 60;
-/** Password-reset requests per address+IP, and per IP, per window (#93). Over either: `429`. */
-export const RESET_REQUEST_MAX = 5;
-export const RESET_REQUEST_IP_MAX = 20;
+/**
+ * Password-reset requests per window (#93): per address+IP, per address from any IP (so rotating
+ * IPs cannot flood one inbox), and per IP across addresses (so one host cannot probe many). Over
+ * any: `429`. The address+IP cap stays below the address cap, so one noisy IP cannot spend the
+ * whole address budget and lock the real person out of resetting.
+ */
+export const RESET_REQUEST_MAX = 3;
+export const RESET_REQUEST_ADDRESS_MAX = 6;
+export const RESET_REQUEST_IP_MAX = 5;
 export const RESET_REQUEST_WINDOW_S = 60 * 60;
 
 /** `last_used_at` on an API key is written at most this often. */

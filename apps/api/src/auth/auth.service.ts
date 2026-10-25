@@ -4,6 +4,7 @@ import {
     GoneException,
     Inject,
     Injectable,
+    Logger,
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import {
     INVITE_TTL_S,
     LOGIN_MAX_ATTEMPTS,
     LOGIN_WINDOW_S,
+    RESET_REQUEST_ADDRESS_MAX,
     RESET_REQUEST_IP_MAX,
     RESET_REQUEST_MAX,
     RESET_REQUEST_WINDOW_S,
@@ -61,6 +63,8 @@ type OwnerTx = Prisma.TransactionClient;
  */
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         @Inject(ENV) private readonly env: Env,
         private readonly ownerPrisma: PrismaService,
@@ -387,19 +391,27 @@ export class AuthService {
      * "Forgot password" (#93). The caller learns nothing: the answer is the same whether or not an
      * account has this address, and mail goes only to an existing account. A provider-only account
      * gets the link too — holding the mailbox is the proof the provider gave. Rate-limited per
-     * address+IP and per IP; over either is `429` with no detail.
+     * address+IP, per address and per IP; over any is `429` with no detail. Every request is
+     * logged with its IP and user agent, so an unexpected reset mail can be traced to its sender.
      */
-    async requestPasswordReset(rawEmail: string, ip: string): Promise<void> {
+    async requestPasswordReset(rawEmail: string, ip: string, userAgent: string): Promise<void> {
         const email = normaliseEmail(rawEmail);
         const overIp = await this.limiter.hit(`reset-ip:${ip}`, RESET_REQUEST_IP_MAX, RESET_REQUEST_WINDOW_S);
-        const overAddress = await this.limiter.hit(`reset:${email}:${ip}`, RESET_REQUEST_MAX, RESET_REQUEST_WINDOW_S);
-        if (overIp || overAddress) throw new TooManyAttempts('too many requests; try again later');
-        await this.ownerPrisma.$transaction(async (tx) => {
+        const overAddress = await this.limiter.hit(`reset:${email}`, RESET_REQUEST_ADDRESS_MAX, RESET_REQUEST_WINDOW_S);
+        const overPair = await this.limiter.hit(`reset:${email}:${ip}`, RESET_REQUEST_MAX, RESET_REQUEST_WINDOW_S);
+        const trail = `password reset for ${email} from ${ip} (${JSON.stringify(userAgent)})`;
+        if (overIp || overAddress || overPair) {
+            this.logger.warn(`${trail}: rate-limited`);
+            throw new TooManyAttempts('too many requests; try again later');
+        }
+        const mailed = await this.ownerPrisma.$transaction(async (tx) => {
             const user = await tx.user.findUnique({ where: { email } });
-            if (!user) return;
+            if (!user) return false;
             const link = await this.links.issue(tx, 'password_reset', user.id, email);
             await this.mail.passwordReset(tx, email, link);
+            return true;
         });
+        this.logger.log(`${trail}: ${mailed ? 'link mailed' : 'no such account'}`);
         this.mail.kick();
     }
 
