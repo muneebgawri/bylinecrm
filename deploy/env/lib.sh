@@ -22,6 +22,8 @@ bylinecrm_env() {
             : "${BYLINECRM_VALKEY_MEM:=128m}"
             : "${BYLINECRM_VALKEY_MAXMEMORY:=96mb}"
             : "${BYLINECRM_WEB_MEM:=64m}"
+            # Not behind Cloudflare's proxy (two levels deep, outside Universal SSL): direct is the only way in.
+            : "${BYLINECRM_EDGE_CLOUDFLARE_ONLY:=0}"
             ;;
         production)
             : "${BYLINECRM_RUNTIME:=/opt/bylinecrm-production-runtime}"
@@ -31,6 +33,8 @@ bylinecrm_env() {
             : "${BYLINECRM_VALKEY_MEM:=192m}"
             : "${BYLINECRM_VALKEY_MAXMEMORY:=160mb}"
             : "${BYLINECRM_WEB_MEM:=64m}"
+            # Behind Cloudflare's proxy: the edge refuses a connection that did not come from it.
+            : "${BYLINECRM_EDGE_CLOUDFLARE_ONLY:=1}"
             ;;
         *)
             echo "bylinecrm: unknown environment '${env}' (staging | production)" >&2
@@ -62,7 +66,7 @@ bylinecrm_env() {
         BYLINECRM_RELEASES BYLINECRM_API_MEM BYLINECRM_POSTGRES_MEM BYLINECRM_VALKEY_MEM \
         BYLINECRM_VALKEY_MAXMEMORY BYLINECRM_WEB_MEM BYLINECRM_MIGRATE_MEM BYLINECRM_EDGE_CONF \
         BYLINECRM_WEB_ALIAS BYLINECRM_APP_ENV BYLINECRM_PG_ENV BYLINECRM_BACKUP_DIR \
-        BYLINECRM_BACKUP_REMOTE BYLINECRM_RCLONE_CONF
+        BYLINECRM_BACKUP_REMOTE BYLINECRM_RCLONE_CONF BYLINECRM_EDGE_CLOUDFLARE_ONLY
 }
 
 # Reads BYLINECRM_BACKUP_REMOTE and BYLINECRM_RCLONE_CONF from the environment's backup.env (#166)

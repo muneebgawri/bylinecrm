@@ -13,7 +13,14 @@
 # Behind Cloudflare's proxy (an option for production — crm.pinionnewswire.com is one subdomain level,
 # which Universal SSL covers): the edge's http block already rewrites $remote_addr from
 # CF-Connecting-IP for requests that come from Cloudflare's published ranges and leaves every other
-# request's address as it is, so this file needs nothing for either mode and restricts nothing by IP.
+# request's address as it is.
+#
+# Lines ending `# cloudflare-only` are kept only where BYLINECRM_EDGE_CLOUDFLARE_ONLY=1 (production,
+# lib.sh) and deleted by install-edge.sh elsewhere. They refuse (444, no answer) any HTTPS connection
+# whose connecting address is not a Cloudflare edge — `$via_cloudflare`, generated in the edge's
+# nginx.conf from the same list as its real-IP ranges (pressboard#448) — so a client that finds the
+# origin IP cannot step around Cloudflare's firewall. Port 80 stays open: it only redirects and serves
+# the ACME challenge.
 
 server {
     listen 80;
@@ -45,6 +52,8 @@ server {
     # Not embedded anywhere yet. When the NewswireOS shell embeds the CRM (P5-3) this becomes a
     # Content-Security-Policy frame-ancestors list naming that host.
     add_header X-Frame-Options "DENY" always;
+
+    if ($via_cloudflare = 0) { return 444; } # cloudflare-only
 
     resolver 127.0.0.11 valid=10s ipv6=off;
     set $bylinecrm_web http://__WEB_UPSTREAM__:80;
