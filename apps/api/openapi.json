@@ -15518,7 +15518,18 @@
                         "name": "day",
                         "required": true,
                         "in": "query",
-                        "description": "A UTC day, `YYYY-MM-DD`.",
+                        "description": "A UTC day, `YYYY-MM-DD` — the first of the range.",
+                        "schema": {
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "through",
+                        "required": false,
+                        "in": "query",
+                        "description": "The last UTC day of the range, inclusive (default: `day`). At most 62 days.",
                         "schema": {
                             "format": "date",
                             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
@@ -38102,11 +38113,15 @@
                 "properties": {
                     "day": {
                         "type": "string",
-                        "description": "`YYYY-MM-DD`, UTC."
+                        "description": "`YYYY-MM-DD`, UTC — the first day counted."
+                    },
+                    "through": {
+                        "type": "string",
+                        "description": "`YYYY-MM-DD`, UTC — the last day counted, inclusive."
                     },
                     "complete": {
                         "type": "boolean",
-                        "description": "The day has ended: its counts will not grow."
+                        "description": "The range has ended: its counts will not grow."
                     },
                     "senders": {
                         "type": "array",
@@ -38119,20 +38134,59 @@
                                 "count": {
                                     "type": "integer",
                                     "minimum": -9007199254740991,
-                                    "maximum": 9007199254740991
+                                    "maximum": 9007199254740991,
+                                    "description": "Messages sent."
                                 },
                                 "lastSentAt": {
                                     "example": "2026-10-09T09:30:00.000Z",
                                     "type": "string",
                                     "format": "date-time",
                                     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "customers": {
+                                    "type": "object",
+                                    "properties": {
+                                        "messages": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991,
+                                            "description": "Messages with at least one recipient in this audience."
+                                        },
+                                        "people": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991,
+                                            "description": "Distinct people (or, for an address the CRM has no person for, addresses) reached over the range."
+                                        }
+                                    },
+                                    "required": ["messages", "people"],
+                                    "description": "Mail to customers (PNW-926): a live outreach exclusion — a NewswireOS client, a won deal, by address or domain — or a person whose contact status is Customer."
+                                },
+                                "prospects": {
+                                    "type": "object",
+                                    "properties": {
+                                        "messages": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991,
+                                            "description": "Messages with at least one recipient in this audience."
+                                        },
+                                        "people": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991,
+                                            "description": "Distinct people (or, for an address the CRM has no person for, addresses) reached over the range."
+                                        }
+                                    },
+                                    "required": ["messages", "people"],
+                                    "description": "Mail to leads and prospects (PNW-926): any other person in the CRM."
                                 }
                             },
-                            "required": ["address", "count", "lastSentAt"]
+                            "required": ["address", "count", "lastSentAt", "customers", "prospects"]
                         }
                     }
                 },
-                "required": ["day", "complete", "senders"]
+                "required": ["day", "through", "complete", "senders"]
             },
             "WorkspaceLogo": {
                 "type": "object",

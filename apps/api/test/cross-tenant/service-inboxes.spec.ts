@@ -393,10 +393,13 @@ describe('service inboxes', () => {
                 complete: true,
                 senders: [{ address: adminEmail, count: 2 }],
             });
+            // Counts only — the audiences are counts too (PNW-926), never an address or a body.
             expect(Object.keys((res.body as { senders: object[] }).senders[0]!).sort()).toEqual([
                 'address',
                 'count',
+                'customers',
                 'lastSentAt',
+                'prospects',
             ]);
         });
 
@@ -409,6 +412,105 @@ describe('service inboxes', () => {
             const path = `/integrations/mail/sent-counts?from=${adminEmail}&day=${day(-1)}`;
             expect((await withKey(serviceKey, path)).status).toBe(403);
             expect((await withKey(bareKey, path)).status).toBe(403);
+        });
+    });
+    /**
+     * PNW-926 (owner 2026-10-25): an account manager's mail to customers and to leads/prospects are different KPIs —
+     * how many customers they talk to, and how many prospects they are trying to convert. Each sent message is counted
+     * by its recipients: a customer is a live outreach exclusion (a NewswireOS client, a won deal — by address or by
+     * domain) or a person whose contact status is Customer; a prospect is any other person in the CRM; colleagues and
+     * addresses the CRM does not know are neither. Per audience, the messages and the distinct people they reached.
+     */
+    describe('sent mail by audience', () => {
+        const day = (offset: number) => new Date(Date.now() + offset * DAY).toISOString().slice(0, 10);
+        const kim = `kim-${stamp}@buyer.example`;
+        const lee = `lee-${stamp}@prospect.example`;
+        const custDomain = `client-${stamp.replace(/[^a-z0-9]/g, '')}.example`;
+        const buyer = `buyer@${custDomain}`;
+        const stranger = `stranger-${stamp}@nowhere.example`;
+
+        beforeAll(async () => {
+            const person = async (first: string, email: string) => {
+                const res = await as(admin)
+                    .post(w('/people'))
+                    .send({ nameFirst: first, nameLast: 'Test', emails: { primary: email, additional: [] } });
+                expect(res.status, JSON.stringify(res.body)).toBe(201);
+                return (res.body as { id: string }).id;
+            };
+            const kimId = await person('Kim', kim);
+            await person('Lee', lee);
+            const status = await http()
+                .put(w(`/people/${kimId}/contact-status`))
+                .set('Cookie', admin.cookie)
+                .set(CSRF_HEADER, admin.csrf)
+                .send({ status: 'customer' });
+            expect(status.status, JSON.stringify(status.body)).toBe(200);
+            const exclusion = await as(admin)
+                .post(w('/outreach/exclusions'))
+                .send({ domain: custDomain, reason: 'account_managed' });
+            expect(exclusion.status, JSON.stringify(exclusion.body)).toBe(201);
+
+            const base = new Date(`${day(-2)}T08:00:00.000Z`).getTime();
+            const sends: string[][] = [[kim], [buyer], [dana], [dana], [lee], [memberEmail], [stranger], [dana, kim]];
+            for (const [i, to] of sends.entries()) {
+                gmail.deliver(adminEmail, {
+                    from: adminEmail,
+                    to,
+                    subject: `Audience ${i}`,
+                    text: 'x',
+                    date: new Date(base + i * 60_000),
+                    labels: ['SENT'],
+                });
+            }
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+        });
+
+        it('PNW-926: counts a day’s mail to customers and to prospects apart — messages and distinct people', async () => {
+            const res = await withKey(countsKey, `/integrations/mail/sent-counts?from=${adminEmail}&day=${day(-2)}`);
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            expect(res.body).toMatchObject({
+                day: day(-2),
+                through: day(-2),
+                complete: true,
+                senders: [
+                    {
+                        address: adminEmail,
+                        count: 8,
+                        // Kim by contact status, the buyer by the domain exclusion; one message reached both audiences.
+                        customers: { messages: 3, people: 2 },
+                        // Dana and Lee. The colleague and the stranger are neither.
+                        prospects: { messages: 4, people: 2 },
+                    },
+                ],
+            });
+        });
+
+        it('PNW-926: a range counts distinct people over the whole range, not per day added up', async () => {
+            const res = await withKey(
+                countsKey,
+                `/integrations/mail/sent-counts?from=${adminEmail}&day=${day(-2)}&through=${day(-1)}`,
+            );
+            expect(res.status, JSON.stringify(res.body)).toBe(200);
+            // Yesterday's two messages went to Dana again: two more messages, no new person.
+            expect(res.body).toMatchObject({
+                day: day(-2),
+                through: day(-1),
+                complete: true,
+                senders: [{ count: 10, customers: { messages: 3, people: 2 }, prospects: { messages: 6, people: 2 } }],
+            });
+        });
+
+        it('PNW-926: a range ends on or after its first day, and spans at most 62 days', async () => {
+            const back = await withKey(
+                countsKey,
+                `/integrations/mail/sent-counts?from=${adminEmail}&day=${day(-1)}&through=${day(-2)}`,
+            );
+            expect(back.status).toBe(400);
+            const long = await withKey(
+                countsKey,
+                `/integrations/mail/sent-counts?from=${adminEmail}&day=${day(-70)}&through=${day(-1)}`,
+            );
+            expect(long.status).toBe(400);
         });
     });
 });

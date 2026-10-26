@@ -147,16 +147,33 @@ export type ServiceMailMessage = z.infer<typeof serviceMailMessage>;
 export const serviceMailPage = named('ServiceMailPage', page(serviceMailMessage));
 
 /** How much each sender sent on one UTC day (SVC-1): mail already sent, so a scheduled send counts once it goes. */
+/** One audience's share of a sender's mail: messages reaching it, and the distinct people reached (PNW-926). */
+const audienceCounts = z.object({
+    messages: z.number().int().meta({ description: 'Messages with at least one recipient in this audience.' }),
+    people: z.number().int().meta({
+        description:
+            'Distinct people (or, for an address the CRM has no person for, addresses) reached over the range.',
+    }),
+});
+
 export const sentCountsView = named(
     'SentCounts',
     z.object({
-        day: z.string().meta({ description: '`YYYY-MM-DD`, UTC.' }),
-        complete: z.boolean().meta({ description: 'The day has ended: its counts will not grow.' }),
+        day: z.string().meta({ description: '`YYYY-MM-DD`, UTC — the first day counted.' }),
+        through: z.string().meta({ description: '`YYYY-MM-DD`, UTC — the last day counted, inclusive.' }),
+        complete: z.boolean().meta({ description: 'The range has ended: its counts will not grow.' }),
         senders: z.array(
             z.object({
                 address: z.string(),
-                count: z.number().int(),
+                count: z.number().int().meta({ description: 'Messages sent.' }),
                 lastSentAt: dateTime,
+                customers: audienceCounts.meta({
+                    description:
+                        'Mail to customers (PNW-926): a live outreach exclusion — a NewswireOS client, a won deal, by address or domain — or a person whose contact status is Customer.',
+                }),
+                prospects: audienceCounts.meta({
+                    description: 'Mail to leads and prospects (PNW-926): any other person in the CRM.',
+                }),
             }),
         ),
     }),
