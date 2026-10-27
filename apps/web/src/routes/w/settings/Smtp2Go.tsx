@@ -13,6 +13,7 @@ import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** An SMTP2Go API key as SMTP2Go issues them (the API checks it too). */
 const API_KEY = /^api-[A-Za-z0-9]{16,64}$/;
@@ -35,10 +36,7 @@ export function Smtp2Go() {
     const mailboxes = useSmtp2GoMailboxes(workspaceId);
     if (mailboxes.isError) throw mailboxes.error;
     return (
-        <section aria-labelledby="smtp2go-title" className="max-w-3xl">
-            <h2 id="smtp2go-title" className="m-0 mb-1 text-base font-semibold">
-                SMTP2Go
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
                 A pool mailbox can send its sequences through SMTP2Go instead of Gmail, from a domain SMTP2Go signs for.
                 It is gated, warmed up and paused like any pool mailbox. Personal and 1:1 mail never go through SMTP2Go.

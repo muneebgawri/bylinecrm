@@ -13,6 +13,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 const KIND_LABEL: Record<OwnershipConflictView['kind'], string> = {
     domain_owned_by_other: 'Address at their company',
@@ -47,10 +48,7 @@ export function Ownership() {
         );
 
     return (
-        <section aria-labelledby="ownership-title">
-            <h2 id="ownership-title" className="sr-only">
-                Ownership
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID}>
             <CoolingSettings />
             <h3 className="m-0 mb-1 mt-6 text-sm font-semibold">Conflicts</h3>
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">

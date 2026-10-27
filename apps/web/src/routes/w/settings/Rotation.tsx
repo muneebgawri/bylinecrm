@@ -15,6 +15,7 @@ import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { CadenceSection } from './CadenceSection';
 import { SelectField, SwitchRow } from './fields';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 const MAILBOX_TEXT: Readonly<Record<MailboxPreference, string>> = {
     prefer: 'Prefer reps with a connected mailbox',
@@ -62,10 +63,7 @@ export function Rotation() {
         setMember.mutate({ memberId: row.memberId, patch }, { onError });
 
     return (
-        <section aria-labelledby="rotation-title" className="grid gap-6">
-            <h2 id="rotation-title" className="sr-only">
-                Rotation
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="grid gap-6">
             <p className="m-0 max-w-[65ch] text-[13px] text-text-muted">
                 Every open lead is due a touch — an email or reply, a call or note, a completed task, a meeting, or a
                 stage move — by its stage’s cadence. One missed cadence warns its owner; if the grace passes without a

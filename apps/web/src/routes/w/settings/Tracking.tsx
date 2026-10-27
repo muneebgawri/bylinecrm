@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /**
  * Tracking (P3-4, FR-CRMS-8): the workspace's short-link domain, the CNAME to publish for it, and
@@ -24,10 +25,7 @@ export function Tracking() {
     const settings = useTrackingSettings(workspaceId);
     if (settings.isError) throw settings.error;
     return (
-        <section aria-labelledby="tracking-title" className="max-w-3xl">
-            <h2 id="tracking-title" className="m-0 mb-1 text-base font-semibold">
-                Tracking
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
                 Links in outreach email are shortened through a domain of yours, so a click is recorded on the person’s
                 timeline and may move a deal by a stage rule. An open is only ever indicative: mail clients and security

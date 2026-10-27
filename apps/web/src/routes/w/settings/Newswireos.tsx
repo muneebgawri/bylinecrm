@@ -25,6 +25,7 @@ import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 const RESULT_TEXT: Record<string, string> = {
     applied: 'A refund or chargeback was applied to an invoice, or client activity was put on a timeline.',
@@ -45,10 +46,7 @@ export function Newswireos() {
     const settings = useNewswireosSettings(workspaceId);
     if (settings.isError) throw settings.error;
     return (
-        <section aria-labelledby="newswireos-title" className="max-w-3xl">
-            <h2 id="newswireos-title" className="m-0 mb-1 text-base font-semibold">
-                NewswireOS
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
                 An invoice entered on a deal is checked by NewswireOS against the gateway (Stripe, PayPal, on-chain)
                 before it counts: paid, to us, for the right amount, and not refunded. Without a link, every invoice

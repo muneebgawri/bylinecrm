@@ -17,14 +17,15 @@ import {
     useTheme,
     type Theme,
 } from '@bylinecrm/ui';
-import { Check, ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
-import { NavLink, useNavigate } from 'react-router';
+import { ArrowLeft, Check, ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router';
 import { useLogout, useProfile, useWorkspaces } from '../api/queries';
 import type { MembershipSummary, WorkspaceView } from '../api/types';
 import { can, useMembership } from '../auth/capabilities';
 import { paths } from '../routes/paths';
 import { LogoMark } from './LogoMark';
 import { NAV, type NavGroup, type NavItem } from './nav';
+import { SETTINGS_NAV } from './settingsNav';
 
 export const THEME_LABELS: Record<Theme, string> = { light: 'Light', dark: 'Dark', system: 'System' };
 export const THEME_ICONS: Record<Theme, typeof Sun> = { light: Sun, dark: Moon, system: Monitor };
@@ -45,7 +46,8 @@ function visibleItems(group: NavGroup, membership: MembershipSummary | null): re
 
 /**
  * The 240px sidebar: workspace switcher at the top, four nav groups, the user card at the
- * bottom. Collapsed, it shows icons with tooltips and keeps the same structure.
+ * bottom. Collapsed, it shows icons with tooltips and keeps the same structure. Under `/settings`
+ * the groups are settings' sections behind a way back to the app, so there is only ever one sidebar.
  *
  * A group is never a heading with nothing under it (P1-UI-10): until the membership is known, each
  * gated item is a loading row in its place (so nothing shifts when it resolves); once known, a
@@ -54,14 +56,19 @@ function visibleItems(group: NavGroup, membership: MembershipSummary | null): re
 export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, onOpenProfile }: SidebarProps) {
     const membership = useMembership();
     const known = membership !== null;
+    const { pathname } = useLocation();
+    const settingsRoot = paths.settings(workspaceId);
+    const inSettings = pathname === settingsRoot || pathname.startsWith(`${settingsRoot}/`);
+    const groups: readonly NavGroup[] = inSettings ? SETTINGS_NAV : NAV;
     return (
         <aside
             aria-label="Sidebar"
             className="flex h-full min-w-0 flex-col gap-1.5 overflow-y-auto border-r border-border bg-surface px-3 py-3.5"
         >
             <WorkspaceSwitcher workspaceId={workspaceId} collapsed={collapsed} />
-            <nav aria-label="Primary" className="flex flex-col gap-1.5">
-                {NAV.map((group) => {
+            {inSettings && <BackToApp workspaceId={workspaceId} collapsed={collapsed} onNavigate={onNavigate} />}
+            <nav aria-label={inSettings ? 'Settings' : 'Primary'} className="flex flex-col gap-1.5">
+                {groups.map((group) => {
                     const items = known ? visibleItems(group, membership) : group.items;
                     if (items.length === 0) return null;
                     return (
@@ -93,6 +100,39 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
             </nav>
             <UserCard collapsed={collapsed} onOpenShortcuts={onOpenShortcuts} onOpenProfile={onOpenProfile} />
         </aside>
+    );
+}
+
+/** Settings' way out: back to the workspace's home, where the app's own groups are. */
+function BackToApp({
+    workspaceId,
+    collapsed,
+    onNavigate,
+}: {
+    workspaceId: string;
+    collapsed: boolean;
+    onNavigate?: (() => void) | undefined;
+}) {
+    const link = (
+        <Link
+            to={paths.home(workspaceId)}
+            onClick={onNavigate}
+            className={cn(
+                'flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 font-[450] text-text-muted transition-colors hover:bg-surface-raised hover:text-text',
+                collapsed && 'justify-center px-0',
+                focusRing,
+            )}
+        >
+            <ArrowLeft aria-hidden className="size-4.25 shrink-0" />
+            <span className={cn('truncate', collapsed && 'sr-only')}>Back to app</span>
+        </Link>
+    );
+    if (!collapsed) return link;
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{link}</TooltipTrigger>
+            <TooltipContent side="right">Back to app</TooltipContent>
+        </Tooltip>
     );
 }
 

@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** A region as a row heading (capitalised; `REGION_LABELS` is phrased for a refusal's sentence). */
 const REGION_NAME: Record<RegionCode, string> = {
@@ -47,10 +48,7 @@ export function RegionPolicy() {
     if (changes.isError) throw changes.error;
 
     return (
-        <section aria-labelledby="region-policy-title">
-            <h2 id="region-policy-title" className="sr-only">
-                Region policy
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID}>
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">
                 Sequences enrol a person only if outreach to their region is allowed. EU, UK and Canada are blocked
                 until you state your own lawful basis for contacting them.

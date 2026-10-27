@@ -9,6 +9,7 @@ import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** The shortest webhook secret the API accepts. */
 const SECRET_MIN = 16;
@@ -32,10 +33,7 @@ export function Byline() {
     if (settings.isError) throw settings.error;
     if (members.isError) throw members.error;
     return (
-        <section aria-labelledby="byline-title" className="max-w-3xl">
-            <h2 id="byline-title" className="m-0 mb-1 text-base font-semibold">
-                BylineAI
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
                 Leads BylineAI finds and a reviewer approves come in here. A lead at a company someone owns is theirs;
                 at any other company it goes to the members picked below, in turn, who then own that company too. With

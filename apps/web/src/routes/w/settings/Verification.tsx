@@ -12,6 +12,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** What verification can find, and what the enrolment check does with each (doc 48 FR-CRMS-14). */
 const RESULTS: readonly {
@@ -56,10 +57,7 @@ export function Verification() {
     const settings = useVerificationSettings(workspaceId);
     if (settings.isError) throw settings.error;
     return (
-        <section aria-labelledby="verification-title" className="max-w-3xl">
-            <h2 id="verification-title" className="m-0 mb-1 text-base font-semibold">
-                Verification
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
                 Before a person is enrolled in a sequence, and again before each email step, their address is checked:
                 its form, whether its domain has a mail server, and whether it is a throwaway mailbox or a role address.

@@ -21,6 +21,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { countries } from '../../../lib/countries';
 import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /**
  * What every outreach email carries in its locked footer (FR-CRMS-7, FR-CRMS-12): the workspace's
@@ -79,10 +80,7 @@ export function MailSettings() {
     const settings = useMailSettings(workspaceId);
     if (settings.isError) throw settings.error;
     return (
-        <section aria-labelledby="mail-settings-title" className="max-w-2xl">
-            <h2 id="mail-settings-title" className="m-0 mb-1 text-base font-semibold">
-                Mail
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-2xl">
             <p className="m-0 mb-5 text-[13px] text-text-muted">
                 Every outreach email ends with this address and an unsubscribe notice. They are required by law in most
                 places mail is sent, and an outreach template cannot be sent until the address is set.

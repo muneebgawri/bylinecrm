@@ -23,7 +23,7 @@ import { ApiError } from '../../../api/client';
 import { CopyValue } from '../../../components/CopyValue';
 import { useApiKeys, useCreateApiKey, useRevokeApiKey, useRoles } from '../../../api/team';
 import { useWorkspaceId } from '../../params';
-import { formatDate } from './SettingsLayout';
+import { formatDate } from '../../../lib/format';
 
 export function ApiKeys() {
     const workspaceId = useWorkspaceId();

@@ -8,6 +8,7 @@ import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** Slotline's page for a webhook that fires for every booking on the site (an instance admin's). */
 const SLOTLINE_PLATFORM_WEBHOOK_PATH = '/settings/developer/webhooks/new?platform=true';
@@ -36,10 +37,7 @@ export function Slotline() {
     const settings = useSlotlineSettings(workspaceId);
     if (settings.isError) throw settings.error;
     return (
-        <section aria-labelledby="slotline-title" className="max-w-3xl">
-            <h2 id="slotline-title" className="m-0 mb-1 text-base font-semibold">
-                Slotline
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
                 Bookings made on your Slotline booking site count as the organising member’s meetings: they show on the
                 Team page, the people who booked become that member’s leads, and the meeting is on their records’

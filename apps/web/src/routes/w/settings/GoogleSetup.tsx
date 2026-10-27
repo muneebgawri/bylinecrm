@@ -20,6 +20,7 @@ import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { WorkspaceDelegation } from './WorkspaceDelegation';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /**
  * Google setup (doc 50 §E, FR-CRMS-1, D-237): the workspace's own OAuth client, in four steps an
@@ -30,10 +31,7 @@ export function GoogleSetup() {
     const workspaceId = useWorkspaceId();
     const admin = useCan('workspace:admin');
     return (
-        <section aria-labelledby="google-setup-title" className="max-w-3xl">
-            <h2 id="google-setup-title" className="m-0 mb-1 text-base font-semibold">
-                Google
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 text-[13px] text-text-muted">
                 Mail is read and sent, and members’ calendars read for meetings, through this workspace’s own Google
                 OAuth client. Nothing is shared with other workspaces, and the app only ever asks Google for mail send
