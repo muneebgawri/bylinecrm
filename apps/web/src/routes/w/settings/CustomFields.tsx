@@ -34,7 +34,7 @@ import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 import { SelectField, SwitchRow } from './fields';
 import { FIELD_KEY_PATTERN, fieldKeyFromLabel } from './settingsText';
-import { formatDate } from './SettingsLayout';
+import { formatDate } from '../../../lib/format';
 
 /** The record kinds a field can belong to, as the tabs name them. */
 const OBJECTS: readonly { id: RecordObject; label: string; template: string }[] = [

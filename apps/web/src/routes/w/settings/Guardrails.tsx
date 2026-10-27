@@ -39,6 +39,7 @@ import { GuardrailSettingsDialog } from './GuardrailSettingsDialog';
 import { PausedMailboxes } from './PausedMailboxes';
 import { UnsyncedMembers } from './UnsyncedMembers';
 import { ReputationSettingsDialog } from './ReputationSettingsDialog';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 const OUTCOME_LABEL: Record<GuardrailOutcome, string> = {
     blocked: 'Blocked',
@@ -79,10 +80,7 @@ export function Guardrails() {
     const rows = events.data?.items ?? [];
 
     return (
-        <section aria-labelledby="guardrails-title">
-            <h2 id="guardrails-title" className="sr-only">
-                Guardrails
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID}>
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">
                 Every send, reply, scheduled send and sequence passes the recipient guard. These are the times it
                 stopped someone mailing another member’s lead, a prospect in negotiation, a customer or a suppressed

@@ -21,7 +21,7 @@ import { useCreateInvite, useMembers, useRemoveMember, useRoles, useSetMemberRol
 import { failureText } from '../../../lib/errors';
 import type { MemberView } from '../../../api/types';
 import { useWorkspaceId } from '../../params';
-import { formatDate } from './SettingsLayout';
+import { formatDate } from '../../../lib/format';
 
 export function Members() {
     const workspaceId = useWorkspaceId();

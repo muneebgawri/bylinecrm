@@ -20,6 +20,7 @@ import {
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 const REVIEW_TEXT: Readonly<Record<NonNullable<OutreachExclusionView['reviewReason']>, string>> = {
     deal_reopened: 'Deal reopened',
@@ -45,10 +46,7 @@ export function Customers() {
     );
 
     return (
-        <section aria-labelledby="customers-title">
-            <h2 id="customers-title" className="sr-only">
-                Customers
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID}>
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">
                 When a deal is won, its point of contact is excluded from outreach so no cold sequence reaches a
                 customer. If the deal is reopened or refunded, the exclusion stays and is flagged here for you.

@@ -33,6 +33,7 @@ import { formatDate } from '../../../lib/format';
 import { SUPPRESSION_REASON_LABEL } from '../../../lib/suppression';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useWorkspaceId } from '../../params';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 type Tab = 'all' | SuppressionReason;
 
@@ -76,10 +77,7 @@ export function Suppression() {
     const rows = list.data?.pages.flatMap((page) => page.items) ?? [];
 
     return (
-        <section aria-labelledby="suppression-title">
-            <h2 id="suppression-title" className="sr-only">
-                Suppression
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID}>
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">
                 Nobody in the workspace can send to these addresses, and sequences never enrol them. Unsubscribes and
                 spam complaints are the person’s own choice: only they can undo them.

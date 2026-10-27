@@ -54,6 +54,7 @@ import { RichTextEditor, type RichTextHandle } from '../../../components/rich-te
 import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
 import { SelectField } from './fields';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 const APPLIES_TEXT: Record<MailboxSignatureView['applies'], string> = {
     own: 'Its own signature',
@@ -82,11 +83,8 @@ export function Signatures() {
     const pool = isAdmin ? live.filter((m) => m.purpose === 'pool') : [];
 
     return (
-        <section aria-labelledby="signatures-title" className="flex max-w-3xl flex-col gap-6">
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="flex max-w-3xl flex-col gap-6">
             <div>
-                <h2 id="signatures-title" className="m-0 mb-1 text-base font-semibold">
-                    Signatures
-                </h2>
                 <p className="m-0 max-w-[70ch] text-[13px] text-text-muted">
                     A signature goes at the end of the mail a mailbox sends — your own emails and replies, and a
                     sequence’s steps above the unsubscribe footer. Every signature starts with the company logo and your

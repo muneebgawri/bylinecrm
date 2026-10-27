@@ -55,6 +55,7 @@ import { failureText } from '../../../lib/errors';
 import { formatDate, formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { CreateMembersOption, type CreateMembersChoice } from './CreateMembersOption';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /**
  * The Bigin importer's screen (BIGIN-1, FR-CRMS-25): connect Zoho Bigin, sync it one way into BylineCRM by
@@ -65,10 +66,7 @@ export function ImportBigin() {
     const workspaceId = useWorkspaceId();
     const admin = useCan('workspace:admin');
     return (
-        <section aria-labelledby="import-bigin-title" className="max-w-4xl">
-            <h2 id="import-bigin-title" className="m-0 mb-1 text-base font-semibold">
-                Import from Bigin
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-4xl">
             <p className="m-0 mb-5 text-[13px] text-text-muted">
                 Syncs Zoho Bigin into BylineCRM, one way. Every record is mapped by its Bigin id, so a run can be
                 repeated: what changed is updated, what did not is left alone, and nothing is imported twice — not even

@@ -57,6 +57,7 @@ import { formatDate, formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { CreateMembersOption } from './CreateMembersOption';
 import { paths } from '../../paths';
+import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /**
  * The importer screen (P4-UI-2, doc 48 §11): connect a Twenty workspace, see what it holds beside
@@ -67,10 +68,7 @@ export function ImportTwenty() {
     const workspaceId = useWorkspaceId();
     const admin = useCan('workspace:admin');
     return (
-        <section aria-labelledby="import-twenty-title" className="max-w-4xl">
-            <h2 id="import-twenty-title" className="m-0 mb-1 text-base font-semibold">
-                Import from Twenty
-            </h2>
+        <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-4xl">
             <p className="m-0 mb-5 text-[13px] text-text-muted">
                 Reads a Twenty workspace through its API and maps every record by its Twenty id, so the import can be
                 run again: what changed is updated, what did not is left alone, and nothing is imported twice.
