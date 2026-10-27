@@ -1,7 +1,7 @@
 import { GMAIL_BROAD_SCOPE, GMAIL_READONLY_SCOPE, GMAIL_SCOPES, GMAIL_SEND_SCOPE } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 import { GOOGLE_ENDPOINTS } from './mail-accounts.constants';
-import { assessGrant, authorizeUrl, codeChallengeS256, randomToken } from './oauth-flow';
+import { assessGrant, authorizeUrl, codeChallengeS256, randomToken, requiredScopes } from './oauth-flow';
 
 describe('the connect request', () => {
     const url = authorizeUrl({
@@ -55,17 +55,29 @@ describe('PKCE and state', () => {
 
 describe('which grants are held', () => {
     it('both narrow scopes: held', () => {
-        expect(assessGrant([GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE])).toEqual({ ok: true });
+        expect(assessGrant([GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE], requiredScopes('personal'))).toEqual({ ok: true });
     });
 
     it('full mailbox access: refused, even alongside the narrow scopes', () => {
-        const result = assessGrant([GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE, GMAIL_BROAD_SCOPE]);
+        const result = assessGrant(
+            [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE, GMAIL_BROAD_SCOPE],
+            requiredScopes('personal'),
+        );
         expect(result).toMatchObject({ ok: false, result: 'scope_too_broad' });
     });
 
     it('a narrow scope missing: refused, naming it', () => {
-        const result = assessGrant([GMAIL_SEND_SCOPE]);
+        const result = assessGrant([GMAIL_SEND_SCOPE], requiredScopes('personal'));
         expect(result).toMatchObject({ ok: false, result: 'scope_missing' });
         expect(result.ok ? '' : result.detail).toContain(GMAIL_READONLY_SCOPE);
+    });
+
+    it('PNW-960: a service inbox needs only to read — the read scope alone is held, and its absence is not', () => {
+        expect(assessGrant([GMAIL_READONLY_SCOPE], requiredScopes('service'))).toEqual({ ok: true });
+        expect(assessGrant([], requiredScopes('service'))).toMatchObject({ ok: false, result: 'scope_missing' });
+        expect(assessGrant([GMAIL_READONLY_SCOPE, GMAIL_BROAD_SCOPE], requiredScopes('service'))).toMatchObject({
+            ok: false,
+            result: 'scope_too_broad',
+        });
     });
 });
