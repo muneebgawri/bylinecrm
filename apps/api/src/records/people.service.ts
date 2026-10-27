@@ -19,7 +19,7 @@ import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
 import { recordWhere, resolveOwner } from './record-scope';
 import { assertCompanyExists, assertOwnerIsMember, compact, stored } from './references';
-import { type PersonView } from './responses';
+import { type AddressCheckView, type PersonView } from './responses';
 import { COMPANY_SUMMARY_SELECT, companySummary, MEMBER_SUMMARY_SELECT, memberSummary } from './summaries';
 export type { PersonView } from './responses';
 
@@ -113,6 +113,12 @@ export class PeopleService implements BulkRecords {
             const totals = await countTotal((take) => countRows(tx, 'person', where, take), scope.candidatesCapped);
             return { items: page.items.map(view), nextCursor: page.nextCursor, ...totals };
         });
+    }
+
+    /** Before a person is created: is the address free, and if not, whose person has it (`conflict` says the same). */
+    async addressCheck(email: string): Promise<AddressCheckView> {
+        const holder = await this.ownership.addressHolder(this.current(), email);
+        return { available: holder === null, holder };
     }
 
     get(id: string): Promise<PersonView> {

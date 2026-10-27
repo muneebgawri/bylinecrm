@@ -86,6 +86,23 @@ export const personView = named(
         ...trash,
     }),
 );
+/** Whether a primary address is free; when not, whose person holds it — by name only (OWN-2's rule). */
+export const addressCheckView = named(
+    'AddressCheck',
+    z.object({
+        available: z.boolean(),
+        holder: z
+            .object({
+                ownerName: z.string().nullable().meta({ description: 'Null when the person has no owner.' }),
+                trashed: z
+                    .boolean()
+                    .meta({ description: 'The person is in the trash, where it still holds the address.' }),
+            })
+            .nullable(),
+    }),
+);
+export type AddressCheckView = z.output<typeof addressCheckView>;
+
 export const personPage = named('PersonPage', countedPage(personView));
 
 /** A company (PAR-005). */

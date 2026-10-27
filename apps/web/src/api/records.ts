@@ -5,6 +5,7 @@ import { API_BASE, request, requestFile } from './client';
 import { query, targetParam, workspacePath, type ExportBody, type ExportParams, type ListParams } from './endpoints';
 import { keys } from './queries';
 import type {
+    AddressCheckView,
     AttachmentView,
     BulkInput,
     BulkResultView,
@@ -82,7 +83,14 @@ function recordRoutes<View, Page, Input>(segment: string) {
     };
 }
 
-export const people = recordRoutes<PersonView, PersonPage, PersonInput>('people');
+export const people = {
+    ...recordRoutes<PersonView, PersonPage, PersonInput>('people'),
+    /** Before a create: is this primary address free, and if not, whose person has it. */
+    addressCheck: (workspaceId: string, email: string, signal?: AbortSignal) =>
+        request<AddressCheckView>('GET', workspacePath(workspaceId, `/people/address-check${query({ email })}`), {
+            signal,
+        }),
+};
 
 export const companies = recordRoutes<CompanyView, CompanyPage, CompanyInput>('companies');
 

@@ -98,6 +98,9 @@ export class CreatePersonDto extends createZodDto(
         })
         .partial(),
 ) {}
+/** `GET /people/address-check`: is this primary address free for a new person? */
+export class AddressCheckQueryDto extends createZodDto(z.object({ email: emailAddress })) {}
+
 export class UpdatePersonDto extends createZodDto(z.object(personFields).partial()) {}
 
 const companyFields = {

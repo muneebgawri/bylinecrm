@@ -3401,6 +3401,82 @@
                 "tags": ["people"]
             }
         },
+        "/api/w/{workspaceId}/people/address-check": {
+            "get": {
+                "operationId": "people_addressCheck",
+                "parameters": [
+                    {
+                        "name": "email",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "maxLength": 254,
+                            "format": "email",
+                            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AddressCheck"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["people"]
+            }
+        },
         "/api/w/{workspaceId}/people/{personId}": {
             "get": {
                 "operationId": "people_get",
@@ -34128,6 +34204,31 @@
                     "createdAt",
                     "updatedAt"
                 ]
+            },
+            "AddressCheck": {
+                "type": "object",
+                "properties": {
+                    "available": {
+                        "type": "boolean"
+                    },
+                    "holder": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                            "ownerName": {
+                                "nullable": true,
+                                "description": "Null when the person has no owner.",
+                                "type": "string"
+                            },
+                            "trashed": {
+                                "type": "boolean",
+                                "description": "The person is in the trash, where it still holds the address."
+                            }
+                        },
+                        "required": ["ownerName", "trashed"]
+                    }
+                },
+                "required": ["available", "holder"]
             },
             "PersonPage": {
                 "type": "object",

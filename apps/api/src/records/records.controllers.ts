@@ -14,6 +14,7 @@ import { CustomFieldsService, type CustomFieldView } from './custom-fields/custo
 import {
     CreateCompanyDto,
     CreateCustomFieldDto,
+    AddressCheckQueryDto,
     CreatePersonDto,
     ListCustomFieldsQueryDto,
     ListQueryDto,
@@ -23,9 +24,18 @@ import {
 } from './dto';
 import type { CountedPage } from './list-query';
 import { PeopleService, type PersonView } from './people.service';
+import type { AddressCheckView } from './responses';
 import { Returns, ReturnsFile } from '../openapi/responses';
 import { groupView } from '../query/responses';
-import { bulkResultView, companyPage, companyView, customFieldView, personPage, personView } from './responses';
+import {
+    addressCheckView,
+    bulkResultView,
+    companyPage,
+    companyView,
+    customFieldView,
+    personPage,
+    personView,
+} from './responses';
 
 /**
  * Records live under `/api/w/:workspaceId`, so the workspace guard has already placed the caller;
@@ -110,6 +120,13 @@ export class PeopleController {
     @Returns(personPage)
     listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<PersonView>> {
         return this.people.list(query, true);
+    }
+
+    @Requires('record:write')
+    @Get('address-check')
+    @Returns(addressCheckView)
+    addressCheck(@Query() query: AddressCheckQueryDto): Promise<AddressCheckView> {
+        return this.people.addressCheck(query.email);
     }
 
     @Requires('record:read')
