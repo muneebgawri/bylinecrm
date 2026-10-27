@@ -25,7 +25,7 @@ import { CONNECT_STATE_KEY_PREFIX, CONNECT_STATE_TTL_S } from './mail-accounts.c
 import { DelegationService } from './delegation.service';
 import { MailboxTokens, MailboxUnavailable, type MailboxErrorRecord } from './mailbox-tokens.service';
 import { OAuthClientsService } from './oauth-clients.service';
-import { assessGrant, authorizeUrl, codeChallengeS256, randomToken } from './oauth-flow';
+import { assessGrant, authorizeUrl, codeChallengeS256, randomToken, requiredScopes } from './oauth-flow';
 import type { ConnectStart, MailboxCheck, MailboxDisconnected, MailboxView } from './responses';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
@@ -211,7 +211,7 @@ export class MailboxesService {
         try {
             const accessToken = await this.tokens.getAccessToken(context.workspaceId, id);
             const scopes = await this.google.grantedScopes(accessToken);
-            const assessment = assessGrant(scopes);
+            const assessment = assessGrant(scopes, requiredScopes(row.purpose));
             if (assessment.ok) {
                 await this.rls.withWorkspace((tx) =>
                     tx.mailbox.update({ where: { id }, data: { grantedScopes: scopes } }),
@@ -323,7 +323,7 @@ export class MailboxesService {
         }
         if (pending.purpose === 'postmaster') return end(await this.finishPostmaster(pending, client.rowId, grant));
         const purpose: MailboxPurpose = pending.purpose;
-        const assessment = assessGrant(grant.scopes, purpose === 'service' ? SERVICE_MAILBOX_SCOPES : GMAIL_SCOPES);
+        const assessment = assessGrant(grant.scopes, requiredScopes(purpose));
         if (!assessment.ok) return end(assessment.result);
         if (!grant.refreshToken) return end('no_refresh_token');
         try {
