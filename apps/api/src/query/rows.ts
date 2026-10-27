@@ -86,9 +86,12 @@ export async function rowIds(
     return rows.map((r) => r.id);
 }
 
-/** A field's value on a row: the column, or the key of the `custom` object. */
+/** A field's value on a row: the column, the value at a path into a JSON column, or the key of the `custom` object. */
 export function cellOf(row: RecordRow, field: ResolvedField): unknown {
     if (field.storage === 'column') return row[field.column];
-    const custom = row.custom as Record<string, unknown> | null | undefined;
-    return custom?.[field.key];
+    const [column, path] = field.storage === 'json' ? [field.column, field.path] : ['custom', [field.key]];
+    return path.reduce<unknown>(
+        (at, key) => (at !== null && typeof at === 'object' ? (at as Record<string, unknown>)[key] : undefined),
+        row[column],
+    );
 }

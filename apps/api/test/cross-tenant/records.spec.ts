@@ -282,6 +282,8 @@ describe('records', () => {
                 .send({ nameFirst: 'Dana', emails: { primary: `dana-${stamp}@acme.test`, additional: [] } })
                 .expect(409);
             expect(dup.body).toMatchObject({ code: 'conflict.unique', fieldErrors: [{ path: 'emails.primary' }] });
+            // Whose it is, so the saver knows whom to ask.
+            expect((dup.body as { message: string }).message).toMatch(/exists, (owned by \S.*|with no owner)$/);
 
             await as(admin)
                 .post(w('/companies'))
@@ -301,10 +303,11 @@ describe('records', () => {
             await as(admin)
                 .delete(w(`/people/${(created.body as Person).id}`))
                 .expect(204);
-            await as(admin)
+            const again = await as(admin)
                 .post(w('/people'))
                 .send({ nameFirst: 'Again', emails: { primary: `gone-${stamp}@x.test`, additional: [] } })
                 .expect(409);
+            expect((again.body as { message: string }).message).toMatch(/, in the trash$/);
         });
 
         it('a person needs a name or a primary email', async () => {

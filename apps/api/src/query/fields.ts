@@ -12,11 +12,15 @@ import type { FieldDefinition } from '../records/custom-fields/custom-values';
 
 /**
  * A field the query machinery can act on: the shared descriptor, plus where it lives — a column
- * of the model (by its Prisma name) or a key of the record's `custom` JSON. The one place the
- * API's field names meet the database's.
+ * of the model (by its Prisma name), a path into one of its JSON columns, or a key of the record's
+ * `custom` JSON. The one place the API's field names meet the database's.
  */
 export type ResolvedField = FieldDescriptor &
-    ({ storage: 'column'; column: string } | { storage: 'custom'; key: string });
+    (
+        | { storage: 'column'; column: string }
+        | { storage: 'json'; column: string; path: readonly string[] }
+        | { storage: 'custom'; key: string }
+    );
 
 /**
  * The column each standard field's API name maps to, where the two differ. Money fields are
@@ -29,16 +33,24 @@ const COLUMN_BY_NAME: Readonly<Record<RecordObject, Readonly<Record<string, stri
     opportunity: { amount: 'amountMinor' },
 };
 
+/** Standard fields read from inside a JSON column (a composite), by path; they filter and export, never sort. */
+const JSON_PATH_BY_NAME: Readonly<Record<RecordObject, Readonly<Record<string, readonly [string, ...string[]]>>>> = {
+    person: { phonePrimary: ['phones', 'primary', 'number'], phoneExtension: ['phones', 'primary', 'extension'] },
+    company: {},
+    opportunity: {},
+};
+
 /**
  * Every field of an object the caller may name: the standard ones, then the workspace's custom
  * ones, then `id` (filterable and exportable by name, never offered as a default column).
  */
 export function resolveFields(object: RecordObject, definitions: readonly FieldDefinition[]): ResolvedField[] {
-    const standard: ResolvedField[] = STANDARD_FIELDS[object].map((f) => ({
-        ...f,
-        storage: 'column',
-        column: COLUMN_BY_NAME[object][f.name] ?? f.name,
-    }));
+    const standard: ResolvedField[] = STANDARD_FIELDS[object].map((f) => {
+        const json = JSON_PATH_BY_NAME[object][f.name];
+        return json
+            ? { ...f, storage: 'json', column: json[0], path: json.slice(1) }
+            : { ...f, storage: 'column', column: COLUMN_BY_NAME[object][f.name] ?? f.name };
+    });
     const id: ResolvedField = { ...ID_FIELD, storage: 'column', column: 'id' };
     const custom: ResolvedField[] = definitions.map((d) => ({
         name: customFieldName(d.key),

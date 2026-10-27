@@ -78,7 +78,7 @@ export class ExportService {
 
 /** The columns to write: the named ones in the order named, or every standard field. */
 function chosenColumns(fields: readonly ResolvedField[], raw: string | undefined): ResolvedField[] {
-    if (raw === undefined || raw === '') return fields.filter((f) => f.storage === 'column');
+    if (raw === undefined || raw === '') return fields.filter((f) => f.storage !== 'custom');
     const names = raw.split(',').map((n) => n.trim());
     if (new Set(names).size !== names.length) throw new BadRequestException('columns: a field is named twice');
     return names.map((n) => fieldNamed(fields, n, 'columns'));

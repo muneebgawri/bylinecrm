@@ -203,7 +203,7 @@ export class PeopleService implements BulkRecords {
             });
             return { row, event: event(context, 'person.created', row.id) };
         } catch (error) {
-            throw uniqueViolation(error) ? conflict() : error;
+            throw uniqueViolation(error) ? await this.conflict(context, input.emails?.primary) : error;
         }
     }
 
@@ -258,8 +258,17 @@ export class PeopleService implements BulkRecords {
                 event: event(context, 'person.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),
             };
         } catch (error) {
-            throw uniqueViolation(error) ? conflict() : error;
+            throw uniqueViolation(error) ? await this.conflict(context, patch.emails?.primary) : error;
         }
+    }
+
+    /** The address is taken: says by whose person, so the saver knows whom to ask (no more of it is shown). */
+    private async conflict(context: WorkspaceRunContext, address: string | null | undefined): Promise<UniqueConflict> {
+        const holder = await this.ownership.addressHolder(context, address).catch(() => null);
+        if (!holder) return new UniqueConflict('a person with that primary email exists', 'emails.primary');
+        const whose = holder.ownerName ? `owned by ${holder.ownerName}` : 'with no owner';
+        const where = holder.trashed ? ', in the trash' : '';
+        return new UniqueConflict(`a person with that primary email exists, ${whose}${where}`, 'emails.primary');
     }
 
     async removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }> {
@@ -376,10 +385,6 @@ function assertIdentifiable(nameFirst: string, nameLast: string, primaryEmail: s
 
 function notFound(): NotFoundException {
     return new NotFoundException('person not found');
-}
-
-function conflict(): UniqueConflict {
-    return new UniqueConflict('a person with that primary email exists', 'emails.primary');
 }
 
 export function view(row: PersonRow): PersonView {

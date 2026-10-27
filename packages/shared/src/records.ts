@@ -75,6 +75,8 @@ export type Phone = {
     number: string;
     /** ISO 3166-1 alpha-2, upper case. */
     countryCode: string;
+    /** Digits dialled once connected; absent when there is none. */
+    extension?: string | undefined;
 };
 
 export type Phones = {

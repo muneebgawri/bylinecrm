@@ -228,6 +228,26 @@ export class CompanyOwnership {
         return [...(await duplicateCompanies(tx)), ...listed];
     }
 
+    /**
+     * Who holds the person saved under this primary address, read like a domain's owner: across the caller's
+     * scope, by name only. Trashed people count, as they do for the unique address. Null when there is none.
+     */
+    async addressHolder(
+        context: WorkspaceRunContext,
+        address: string | null | undefined,
+    ): Promise<{ ownerName: string | null; trashed: boolean } | null> {
+        if (!address) return null;
+        return this.widened(context, async (tx) => {
+            const person = await tx.person.findFirst({
+                where: { emailPrimary: address.trim().toLowerCase() },
+                select: { deletedAt: true, owner: { select: { user: { select: { displayName: true } } } } },
+            });
+            return person
+                ? { ownerName: person.owner?.user.displayName ?? null, trashed: person.deletedAt !== null }
+                : null;
+        });
+    }
+
     private widened<T>(context: WorkspaceRunContext, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
         const { ownerScopeMemberId: _scope, ...wide } = context;
         return this.context.run(wide, () => this.rls.withWorkspace(context.workspaceId, fn));

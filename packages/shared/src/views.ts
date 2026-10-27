@@ -56,6 +56,8 @@ export const STANDARD_FIELDS: Readonly<Record<RecordObject, readonly FieldDescri
         { name: 'nameFirst', label: 'First name', kind: 'text', sortable: true, groupable: false },
         { name: 'nameLast', label: 'Last name', kind: 'text', sortable: true, groupable: false },
         { name: 'emailPrimary', label: 'Email', kind: 'text', sortable: false, groupable: false },
+        { name: 'phonePrimary', label: 'Phone', kind: 'text', sortable: false, groupable: false },
+        { name: 'phoneExtension', label: 'Phone ext.', kind: 'text', sortable: false, groupable: false },
         { name: 'jobTitle', label: 'Job title', kind: 'text', sortable: true, groupable: true },
         { name: 'city', label: 'City', kind: 'text', sortable: false, groupable: true },
         { name: 'companyId', label: 'Company', kind: 'uuid', sortable: false, groupable: true },

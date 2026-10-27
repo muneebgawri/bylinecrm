@@ -167,28 +167,52 @@ export function PersonRecord({
         {
             field: 'phones',
             control: (
-                <InlineText
-                    label="Phone"
-                    path="phones.primary.number"
-                    type="tel"
-                    value={person.phones.primary ? `${person.phones.primary.number}` : null}
-                    placeholder="digits only"
-                    canEdit={write.allowed}
-                    reason={write.reason}
-                    onSave={(v) =>
-                        save({
-                            phones: {
-                                ...person.phones,
-                                primary: v
-                                    ? {
-                                          number: v.replace(/\D/g, ''),
-                                          countryCode: person.phones.primary?.countryCode ?? 'US',
-                                      }
-                                    : null,
-                            },
-                        })
-                    }
-                />
+                <div className="flex items-start gap-2">
+                    <InlineText
+                        className="min-w-0 flex-1"
+                        label="Phone"
+                        path="phones.primary.number"
+                        type="tel"
+                        value={person.phones.primary ? `${person.phones.primary.number}` : null}
+                        placeholder="digits only"
+                        canEdit={write.allowed}
+                        reason={write.reason}
+                        onSave={(v) =>
+                            save({
+                                phones: {
+                                    ...person.phones,
+                                    primary: v
+                                        ? {
+                                              ...person.phones.primary,
+                                              number: v.replace(/\D/g, ''),
+                                              countryCode: person.phones.primary?.countryCode ?? 'US',
+                                          }
+                                        : null,
+                                },
+                            })
+                        }
+                    />
+                    <InlineText
+                        className="w-28 shrink-0"
+                        label="Ext."
+                        path="phones.primary.extension"
+                        type="tel"
+                        display={(v) => `ext. ${v}`}
+                        value={person.phones.primary?.extension ?? null}
+                        placeholder="Ext."
+                        canEdit={write.allowed && person.phones.primary !== null}
+                        reason={write.allowed ? 'Add a phone number first.' : write.reason}
+                        onSave={(v) => {
+                            const primary = person.phones.primary;
+                            if (!primary) return Promise.resolve();
+                            const { extension: _, ...number } = primary;
+                            const extension = v?.replace(/\D/g, '');
+                            return save({
+                                phones: { ...person.phones, primary: extension ? { ...number, extension } : number },
+                            });
+                        }}
+                    />
+                </div>
             ),
         },
         {

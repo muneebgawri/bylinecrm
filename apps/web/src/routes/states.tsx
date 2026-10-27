@@ -1,6 +1,8 @@
 import { Button, EmptyState, LoadingRegion, Skeleton } from '@bylinecrm/ui';
+import { useEffect, useState } from 'react';
 import { isRouteErrorResponse, Link, useNavigate, useRouteError } from 'react-router';
 import { ApiError } from '../api/client';
+import { isStaleBuild, mayReloadForNewBuild, reloadForNewBuild } from '../lib/staleBuild';
 import { LogoMark } from '../shell/LogoMark';
 import { paths } from './paths';
 
@@ -47,14 +49,21 @@ export function AuthSkeleton() {
 
 /**
  * A route's error boundary: says what happened, offers retry and a way back. A 403 and a 404
- * get their own words; everything else is shown with the message the API or the browser gave.
+ * get their own words; everything else is shown with the message the API or the browser gave. Code from
+ * before a deploy that is no longer served reloads the page instead (`staleBuild`).
  */
 export function RouteError() {
     const error = useRouteError();
+    const [reloading] = useState(() => isStaleBuild(error) && mayReloadForNewBuild());
+    useEffect(() => {
+        if (reloading) reloadForNewBuild();
+    }, [reloading]);
     const navigate = useNavigate();
     const status = error instanceof ApiError ? error.status : isRouteErrorResponse(error) ? error.status : undefined;
     const message =
         error instanceof Error ? error.message : isRouteErrorResponse(error) ? error.statusText : String(error);
+
+    if (reloading) return <RouteSkeleton />;
 
     const title = status === 403 ? 'You cannot open this' : status === 404 ? 'Not found' : 'Something went wrong';
     const body =

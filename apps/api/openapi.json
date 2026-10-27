@@ -27660,6 +27660,10 @@
                                     "countryCode": {
                                         "type": "string",
                                         "pattern": "^[A-Z]{2}$"
+                                    },
+                                    "extension": {
+                                        "type": "string",
+                                        "pattern": "^[0-9]{1,10}$"
                                     }
                                 },
                                 "required": ["number", "countryCode"],
@@ -27679,6 +27683,10 @@
                                         "countryCode": {
                                             "type": "string",
                                             "pattern": "^[A-Z]{2}$"
+                                        },
+                                        "extension": {
+                                            "type": "string",
+                                            "pattern": "^[0-9]{1,10}$"
                                         }
                                     },
                                     "required": ["number", "countryCode"]
@@ -27825,6 +27833,10 @@
                                     "countryCode": {
                                         "type": "string",
                                         "pattern": "^[A-Z]{2}$"
+                                    },
+                                    "extension": {
+                                        "type": "string",
+                                        "pattern": "^[0-9]{1,10}$"
                                     }
                                 },
                                 "required": ["number", "countryCode"],
@@ -27844,6 +27856,10 @@
                                         "countryCode": {
                                             "type": "string",
                                             "pattern": "^[A-Z]{2}$"
+                                        },
+                                        "extension": {
+                                            "type": "string",
+                                            "pattern": "^[0-9]{1,10}$"
                                         }
                                     },
                                     "required": ["number", "countryCode"]
@@ -32310,6 +32326,10 @@
                             },
                             "countryCode": {
                                 "type": "string"
+                            },
+                            "extension": {
+                                "description": "Digits dialled once connected; absent when there is none.",
+                                "type": "string"
                             }
                         },
                         "required": ["number", "countryCode"]
@@ -32323,6 +32343,10 @@
                                     "type": "string"
                                 },
                                 "countryCode": {
+                                    "type": "string"
+                                },
+                                "extension": {
+                                    "description": "Digits dialled once connected; absent when there is none.",
                                     "type": "string"
                                 }
                             },

@@ -71,9 +71,10 @@ function compileNode(node: FilterNode, fields: readonly ResolvedField[]): Compil
         throw new BadRequestException(`filter: ${node.op} does not apply to ${node.field} (${field.kind})`);
     }
     const value = checkedValue(field, node);
-    return field.storage === 'column'
-        ? columnCondition(field.column, field.kind, node.op, value)
-        : customCondition(field.key, field.kind, node.op, value);
+    if (field.storage === 'column') return columnCondition(field.column, field.kind, node.op, value);
+    return field.storage === 'json'
+        ? jsonCondition(field.column, field.path, field.kind, node.op, value)
+        : jsonCondition('custom', [field.key], field.kind, node.op, value);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,8 +168,14 @@ function columnCondition(column: string, kind: FieldKind, op: FilterOperator, va
 // case-sensitive — Prisma's JSON filters take no `mode` — and the design note says so.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function customCondition(key: string, kind: FieldKind, op: FilterOperator, value: unknown): CompiledWhere {
-    const at = (filter: Record<string, unknown>) => ({ custom: { path: [key], ...filter } });
+function jsonCondition(
+    column: string,
+    path: readonly string[],
+    kind: FieldKind,
+    op: FilterOperator,
+    value: unknown,
+): CompiledWhere {
+    const at = (filter: Record<string, unknown>) => ({ [column]: { path: [...path], ...filter } });
     const notNull = at({ not: Prisma.AnyNull });
     switch (op) {
         case 'eq':
