@@ -78,6 +78,8 @@ export type TaskPage = Schemas['TaskPage'];
 export type TimelinePage = Schemas['TimelinePage'];
 
 export type PersonInput = Loose<Schemas['UpdatePersonDto']>;
+/** Whether a primary address is free for a new person, and whose person holds it when not. */
+export type AddressCheckView = Schemas['AddressCheck'];
 export type PersonCreateInput = Loose<Schemas['CreatePersonDto']>;
 export type CompanyInput = Loose<Schemas['UpdateCompanyDto']>;
 export type CompanyCreateInput = Loose<Schemas['CreateCompanyDto']>;

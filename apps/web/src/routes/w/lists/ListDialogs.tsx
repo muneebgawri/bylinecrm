@@ -21,7 +21,8 @@ import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
-import type { BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
+import { people } from '../../../api/records';
+import type { AddressCheckView, BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
 import { failureText } from '../../../lib/errors';
 import { LIST_COPY, type ListObject } from './listConfig';
 
@@ -182,7 +183,11 @@ export function AssignOwnerDialog<O extends RecordObject>({
     );
 }
 
-/** Adds a person (name, email) or a company (name, domain); everything else is edited on its record. */
+/**
+ * Adds a person or a company (name, domain); everything else is edited on its record. A person starts
+ * from the address: it is checked first, so a lead someone already has is caught before any typing,
+ * by whose it is; then the name, title and phone. A lead with no address skips the check.
+ */
 export function CreateRecordDialog<O extends ListObject>({
     workspaceId,
     object,
@@ -197,19 +202,62 @@ export function CreateRecordDialog<O extends ListObject>({
     const create = useCreateRecord(workspaceId, object);
     const [a, setA] = useState('');
     const [b, setB] = useState('');
-    const [c, setC] = useState('');
+    const [email, setEmail] = useState('');
+    const [jobTitle, setJobTitle] = useState('');
+    const [phone, setPhone] = useState('');
+    const [extension, setExtension] = useState('');
+    /** A person's step: the address first, then the rest once it is known to be free (or left out). */
+    const [step, setStep] = useState<'email' | 'details'>('email');
+    const [checking, setChecking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     /** OWN-2: the company is another member's; the lead can be saved for them instead. */
     const [owned, setOwned] = useState<{ ownerName: string; companyName: string } | null>(null);
     const copy = LIST_COPY[object];
     const person = object === 'person';
+    const askingEmail = person && step === 'email';
+
+    const checkEmail = async () => {
+        const address = email.trim();
+        if (!address) return;
+        setChecking(true);
+        try {
+            const check = await people.addressCheck(workspaceId, address);
+            if (check.holder) {
+                setError(takenText(check.holder));
+                return;
+            }
+            setError(null);
+            setStep('details');
+        } catch (err) {
+            setError(failureText(err));
+        } finally {
+            setChecking(false);
+        }
+    };
+
+    const withoutEmail = () => {
+        setEmail('');
+        setError(null);
+        setStep('details');
+    };
 
     const save = async (handToOwner: boolean) => {
+        const digits = phone.replace(/\D/g, '');
+        const ext = extension.replace(/\D/g, '');
         const input: PersonInput | CompanyInput = person
             ? {
                   nameFirst: a.trim(),
                   nameLast: b.trim(),
-                  emails: { primary: c.trim() || null, additional: [] },
+                  emails: { primary: email.trim() || null, additional: [] },
+                  ...(jobTitle.trim() ? { jobTitle: jobTitle.trim() } : {}),
+                  ...(digits
+                      ? {
+                            phones: {
+                                primary: { number: digits, countryCode: 'US', ...(ext ? { extension: ext } : {}) },
+                                additional: [],
+                            },
+                        }
+                      : {}),
                   ...(handToOwner ? { handToOwner: true } : {}),
               }
             : { name: a.trim(), ...(b.trim() ? { domain: b.trim() } : {}) };
@@ -239,7 +287,8 @@ export function CreateRecordDialog<O extends ListObject>({
     };
     const submit = async (e: FormEvent) => {
         e.preventDefault();
-        await save(false);
+        if (askingEmail) await checkEmail();
+        else await save(false);
     };
 
     return (
@@ -247,10 +296,55 @@ export function CreateRecordDialog<O extends ListObject>({
             <DialogContent>
                 <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
                     <DialogTitle>{copy.add}</DialogTitle>
-                    <DialogDescription>Everything else is filled in on the record.</DialogDescription>
+                    <DialogDescription>
+                        {askingEmail
+                            ? 'Start with their email: we check nobody has them yet.'
+                            : 'Everything else is filled in on the record.'}
+                    </DialogDescription>
                     <DialogBody className="flex flex-col gap-3">
-                        {person ? (
+                        {askingEmail ? (
                             <>
+                                <Field label="Email" required>
+                                    <Input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => {
+                                            setEmail(e.target.value);
+                                            setError(null);
+                                        }}
+                                        autoFocus
+                                        autoComplete="off"
+                                    />
+                                </Field>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    shape="square"
+                                    className="self-start"
+                                    onClick={withoutEmail}
+                                >
+                                    No email? Continue without one
+                                </Button>
+                            </>
+                        ) : person ? (
+                            <>
+                                <div className="flex items-center gap-2 text-sm">
+                                    <span className="text-text-muted">Email</span>
+                                    <span className="min-w-0 truncate">{email.trim() || 'None'}</span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        shape="square"
+                                        className="ml-auto"
+                                        onClick={() => {
+                                            setStep('email');
+                                            setOwned(null);
+                                            setError(null);
+                                        }}
+                                    >
+                                        Change
+                                    </Button>
+                                </div>
                                 <Field label="First name" required>
                                     <Input
                                         value={a}
@@ -262,14 +356,33 @@ export function CreateRecordDialog<O extends ListObject>({
                                 <Field label="Last name">
                                     <Input value={b} onChange={(e) => setB(e.target.value)} autoComplete="off" />
                                 </Field>
-                                <Field label="Email">
+                                <Field label="Job title">
                                     <Input
-                                        type="email"
-                                        value={c}
-                                        onChange={(e) => setC(e.target.value)}
+                                        value={jobTitle}
+                                        onChange={(e) => setJobTitle(e.target.value)}
                                         autoComplete="off"
                                     />
                                 </Field>
+                                <div className="flex gap-2">
+                                    <Field label="Phone" className="min-w-0 flex-1">
+                                        <Input
+                                            type="tel"
+                                            value={phone}
+                                            onChange={(e) => setPhone(e.target.value)}
+                                            placeholder="digits only"
+                                            autoComplete="off"
+                                        />
+                                    </Field>
+                                    <Field label="Ext." className="w-24 shrink-0">
+                                        <Input
+                                            type="tel"
+                                            value={extension}
+                                            onChange={(e) => setExtension(e.target.value)}
+                                            disabled={!phone.trim()}
+                                            autoComplete="off"
+                                        />
+                                    </Field>
+                                </div>
                             </>
                         ) : (
                             <>
@@ -307,18 +420,38 @@ export function CreateRecordDialog<O extends ListObject>({
                         <Button shape="square" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button
-                            type="submit"
-                            shape="square"
-                            variant="primary"
-                            loading={create.isPending}
-                            disabled={!a.trim()}
-                        >
-                            {copy.add}
-                        </Button>
+                        {askingEmail ? (
+                            <Button
+                                type="submit"
+                                shape="square"
+                                variant="primary"
+                                loading={checking}
+                                disabled={!email.trim()}
+                            >
+                                Continue
+                            </Button>
+                        ) : (
+                            <Button
+                                type="submit"
+                                shape="square"
+                                variant="primary"
+                                loading={create.isPending}
+                                disabled={!a.trim()}
+                            >
+                                {copy.add}
+                            </Button>
+                        )}
                     </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>
     );
+}
+
+/** A taken address, said by whose person has it — what the saver needs to know whom to ask. */
+function takenText(holder: NonNullable<AddressCheckView['holder']>): string {
+    const whose = holder.ownerName
+        ? `${holder.ownerName} already has this person`
+        : 'This person is already saved, with no owner';
+    return holder.trashed ? `${whose}, in the trash.` : `${whose}.`;
 }

@@ -310,6 +310,22 @@ describe('records', () => {
             expect((again.body as { message: string }).message).toMatch(/, in the trash$/);
         });
 
+        it('checks an address before a create: free, or whose person holds it', async () => {
+            await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Held', emails: { primary: `held-${stamp}@x.test`, additional: [] } })
+                .expect(201);
+            const taken = await as(admin)
+                .get(w(`/people/address-check?email=${encodeURIComponent(`HELD-${stamp}@x.test`)}`))
+                .expect(200);
+            expect(taken.body).toMatchObject({ available: false, holder: { trashed: false } });
+            const free = await as(admin)
+                .get(w(`/people/address-check?email=${encodeURIComponent(`free-${stamp}@x.test`)}`))
+                .expect(200);
+            expect(free.body).toEqual({ available: true, holder: null });
+            await as(admin).get(w('/people/address-check?email=not-an-address')).expect(400);
+        });
+
         it('a person needs a name or a primary email', async () => {
             await as(admin).post(w('/people')).send({ city: 'Nowhere' }).expect(422);
         });
