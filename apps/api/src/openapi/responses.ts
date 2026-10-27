@@ -88,7 +88,11 @@ export const actor = named('Actor', z.object({ kind: z.enum(ACTOR_KINDS), id: id
 
 export const emails = named('Emails', z.object({ primary: z.string().nullable(), additional: z.array(z.string()) }));
 
-const phone = z.object({ number: z.string(), countryCode: z.string() });
+const phone = z.object({
+    number: z.string(),
+    countryCode: z.string(),
+    extension: z.string().optional().meta({ description: 'Digits dialled once connected; absent when there is none.' }),
+});
 export const phones = named('Phones', z.object({ primary: phone.nullable(), additional: z.array(phone) }));
 
 const link = z.object({ url: z.string(), label: z.string().nullable() });

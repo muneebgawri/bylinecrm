@@ -55,6 +55,12 @@ export function personName(row: PersonView): string {
     return `${row.nameFirst} ${row.nameLast}`.trim() || row.emails.primary || 'Unnamed person';
 }
 
+/** A phone as it reads: the number, then its extension when it has one. */
+export function phoneText(phone: PersonView['phones']['primary']): string | null {
+    if (!phone) return null;
+    return phone.extension ? `${phone.number} ext. ${phone.extension}` : phone.number;
+}
+
 /** A row's owner by the name the API embedded (P1-4a); "No owner" when there is none. */
 export function ownerCell(owner: MemberSummaryView | null): ReactNode {
     if (!owner) return <Badge status="warning">No owner</Badge>;
@@ -79,6 +85,13 @@ const PERSON_COLUMNS: ListColumn<PersonView>[] = [
         width: 220,
         exportFields: ['emailPrimary'],
         cell: (r) => text(r.emails.primary),
+    },
+    {
+        field: 'phonePrimary',
+        label: labelOf('person', 'phonePrimary'),
+        width: 160,
+        exportFields: ['phonePrimary', 'phoneExtension'],
+        cell: (r) => text(phoneText(r.phones.primary)),
     },
     {
         field: 'companyId',

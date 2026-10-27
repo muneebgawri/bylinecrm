@@ -39,6 +39,15 @@ describe('compileFilter: standard fields', () => {
         });
     });
 
+    it('a phone filters at its path inside the phones composite', () => {
+        expect(compileFilter({ and: [{ field: 'phonePrimary', op: 'contains', value: '888' }] }, person)).toEqual({
+            AND: [{ phones: { path: ['primary', 'number'], string_contains: '888' } }],
+        });
+        expect(compileFilter({ and: [{ field: 'phoneExtension', op: 'not_null' }] }, person)).toEqual({
+            AND: [{ phones: { path: ['primary', 'extension'], not: Prisma.AnyNull } }],
+        });
+    });
+
     it('dates become Date values; a datetime takes an offset', () => {
         const where = compileFilter({ and: [{ field: 'closeDate', op: 'lt', value: '2026-12-31' }] }, opportunity);
         expect(where).toEqual({ AND: [{ closeDate: { lt: new Date('2026-12-31') } }] });

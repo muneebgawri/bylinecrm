@@ -435,7 +435,7 @@ export function combined(survivor: MergeablePerson, dup: MergeablePerson) {
     const emails: Emails = { primary, additional: all.filter((e) => e !== primary) };
     const sp = (survivor.phones ?? { primary: null, additional: [] }) as Phones;
     const dp = (dup.phones ?? { primary: null, additional: [] }) as Phones;
-    const phoneKey = (p: Phone) => `${p.countryCode}:${p.number.replace(/\D/g, '')}`;
+    const phoneKey = (p: Phone) => `${p.countryCode}:${p.number.replace(/\D/g, '')}x${p.extension ?? ''}`;
     const phonePrimary = sp.primary ?? dp.primary ?? null;
     const seen = new Set(phonePrimary ? [phoneKey(phonePrimary)] : []);
     const phoneAdditional: Phone[] = [];

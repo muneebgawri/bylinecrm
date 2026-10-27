@@ -41,6 +41,10 @@ const emails = z.object({ primary: emailAddress.nullable(), additional: z.array(
 const phone = z.object({
     number: z.string().regex(/^[0-9]{3,15}$/, 'digits only, without the country code'),
     countryCode: z.string().regex(/^[A-Z]{2}$/, 'ISO 3166-1 alpha-2, upper case'),
+    extension: z
+        .string()
+        .regex(/^[0-9]{1,10}$/, 'digits only')
+        .optional(),
 });
 const phones = z.object({ primary: phone.nullable(), additional: z.array(phone).max(20).default([]) });
 const link = z.object({ url, label: nullableText(120) });
