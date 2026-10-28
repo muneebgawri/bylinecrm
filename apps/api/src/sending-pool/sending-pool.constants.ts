@@ -16,6 +16,13 @@ export const SENDING_DOMAIN_CHECK_EVERY_MS = 5 * 60 * 1000;
 /** Domains one pass checks, the most overdue first. */
 export const SENDING_DOMAIN_CHECK_BATCH = 50;
 
+/**
+ * TRANS-1: a pool mailbox pauses when its provider rejected this many of its latest sends in a row for a reason on
+ * our side (`smtp2go.rejected`: an unverified sender, a sandboxed or broken key) — a mailbox set up wrong rejects
+ * everything, so a few in a row is enough, and a rate would wait for the sample size. Test sends never count.
+ */
+export const SENDING_POOL_REJECT_PAUSE_AFTER = 3;
+
 /** The longest a resume note may be. */
 export const MAILBOX_RESUME_NOTE_MAX = 500;
 

@@ -67,8 +67,8 @@ export const MAILBOX_CREDENTIAL_SOURCES = ['oauth', 'delegation'] as const;
 export type MailboxCredentialSource = (typeof MAILBOX_CREDENTIAL_SOURCES)[number];
 
 /**
- * What SMTP2Go's webhook made of its last delivery to a pool mailbox (TRANS-1): a bounce, complaint, open or click
- * recorded; one already recorded (`duplicate`); one for no send of this mailbox (`unmatched`); an event the CRM does
+ * What SMTP2Go's webhook made of its last delivery to a pool mailbox (TRANS-1): a bounce, complaint, open, click,
+ * reject, unsubscribe or delivery recorded; one already recorded (`duplicate`); one for no send of this mailbox (`unmatched`); an event the CRM does
  * not read, or an open/click our own short links already count (`ignored`); or refused (`bad_secret`).
  */
 export const SMTP2GO_HOOK_RESULTS = ['recorded', 'duplicate', 'unmatched', 'ignored', 'bad_secret'] as const;

@@ -34,6 +34,7 @@ import type { TransferMember } from './transfers.js';
  * - `recipient_quality` — a pool send to an address verification finds `invalid` (blocked) or `risky` (warned).
  * - `reply_rate` — a mailbox paused for new recipients: its reply rate fell under the floor.
  * - `spam_rate` — a sending domain's Postmaster spam rate reached the warn line or the kill switch.
+ * - `rejected_sends` (TRANS-1) — a pool mailbox paused: SMTP2Go rejected its last sends for a reason on our side.
  *
  * GUARD-2 (FR-CRMS-22), measured from mail that left (Gmail sync and CRM sends alike):
  * - `poach_suspected` — a member mailed a person, or a company domain, another member owns (not as a reply in a
@@ -59,6 +60,8 @@ export const GUARDRAIL_KINDS = [
     'recipient_quality',
     'reply_rate',
     'spam_rate',
+    // TRANS-1: a pool mailbox paused because its provider rejected its last sends (sender or key misconfigured).
+    'rejected_sends',
     // GUARD-2 (FR-CRMS-22): mail seen through sync or sent from the CRM to another member's lead or a customer.
     'poach_suspected',
     // Lead pools: mail to a customer or prospect of another workspace in this one's pool.
@@ -125,6 +128,7 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     recipient_quality: 'Recipient quality',
     reply_rate: 'Reply rate under the floor',
     spam_rate: 'Domain spam rate',
+    rejected_sends: 'Sends rejected by SMTP2Go',
     poach_suspected: 'Mailed another member’s lead',
     pooled_customer: 'Another workspace’s customer or prospect',
 };
@@ -140,6 +144,7 @@ export const REPUTATION_GUARDRAIL_KINDS: readonly GuardrailKind[] = [
     'recipient_quality',
     'reply_rate',
     'spam_rate',
+    'rejected_sends',
 ];
 
 /** One guardrail event, as the Guardrails page reads it. */

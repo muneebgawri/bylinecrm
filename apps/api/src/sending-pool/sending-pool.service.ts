@@ -22,6 +22,7 @@ import { raiseAlert } from '../reputation/alerts';
 import { pauseMailbox } from '../reputation/pause';
 import { primaryDomainIn, reputationSettingsIn } from '../reputation/settings';
 import { sendingDomainOf } from './pool-mailbox';
+import { SENDING_POOL_REJECT_PAUSE_AFTER } from './sending-pool.constants';
 import { PostmasterService } from './postmaster.service';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
@@ -137,6 +138,7 @@ export class SendingPoolService {
             FROM mail_outbound
             WHERE mailbox_id = ${mailboxId}::uuid
               AND status IN ('sending', 'sent')
+              AND NOT is_test
               AND coalesce(sent_at, last_attempt_at) >= ${since}
               AND id <> ${exceptId ?? '00000000-0000-0000-0000-000000000000'}::uuid`;
         return row?.used ?? 0;
@@ -188,7 +190,8 @@ export class SendingPoolService {
             const [row] = await tx.$queryRaw<{ last: Date | null }[]>`
                 SELECT max(greatest(sent_at, last_attempt_at, send_at)) AS last
                 FROM mail_outbound
-                WHERE mailbox_id = ${mailboxId}::uuid AND status IN ('scheduled', 'queued', 'sending', 'sent')`;
+                WHERE mailbox_id = ${mailboxId}::uuid AND status IN ('scheduled', 'queued', 'sending', 'sent')
+                  AND NOT is_test`;
             const span = settings.jitterMaxSeconds - settings.jitterMinSeconds;
             const gapMs = (settings.jitterMinSeconds + Math.random() * span) * 1000;
             const spaced = row?.last ? row.last.getTime() + gapMs : 0;
@@ -212,7 +215,7 @@ export class SendingPoolService {
             const settings = await this.settingsIn(tx);
             const since = new Date(now.getTime() - settings.rateWindowDays * SENDING_POOL_WINDOW_MS);
             const sends = await tx.mailOutbound.count({
-                where: { mailboxId, status: 'sent', sentAt: { gte: since } },
+                where: { mailboxId, status: 'sent', isTest: false, sentAt: { gte: since } },
             });
             if (sends < settings.rateMinSample) return;
             const [bounces, complaints] = await Promise.all([
@@ -239,6 +242,59 @@ export class SendingPoolService {
                 });
                 return;
             }
+        });
+    }
+
+    /**
+     * TRANS-1: pauses a pool mailbox whose provider rejected its last `SENDING_POOL_REJECT_PAUSE_AFTER` sends in a
+     * row for a reason on our side (`smtp2go.rejected` — an unverified sender, a sandboxed or broken key: a
+     * misconfigured mailbox rejects everything, so no rate's sample size is waited for), through the one pause write
+     * the rates use, and tells the owner and every reviewer in the bell. A reject because the recipient was on
+     * SMTP2Go's suppressions (`smtp2go.rejected_suppressed`), any other outcome, and test sends break or skip the
+     * run. Idempotent like `evaluate`: a paused mailbox keeps its first reason. Called by the outbox consumer after
+     * each such reject.
+     */
+    async evaluateRejects(workspaceId: string, mailboxId: string, now = new Date()): Promise<void> {
+        await this.rls.withWorkspace(workspaceId, async (tx) => {
+            await tx.$queryRaw`SELECT id FROM mailboxes WHERE id = ${mailboxId}::uuid FOR UPDATE`;
+            const mailbox = await tx.mailbox.findUnique({ where: { id: mailboxId } });
+            if (!mailbox || mailbox.purpose !== 'pool' || mailbox.pausedAt) return;
+            const since = mailbox.resumedAt ?? new Date(0);
+            const latest = await tx.mailOutbound.findMany({
+                where: { mailboxId, isTest: false, sentAt: { gte: since }, status: { in: ['sent', 'failed'] } },
+                orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+                take: SENDING_POOL_REJECT_PAUSE_AFTER,
+                select: { status: true, lastError: true },
+            });
+            const rejected = latest.filter(
+                (o) => o.status === 'failed' && (o.lastError as { code?: string } | null)?.code === 'smtp2go.rejected',
+            );
+            if (latest.length < SENDING_POOL_REJECT_PAUSE_AFTER || rejected.length < latest.length) return;
+            const reason = (rejected[0]!.lastError as { message?: string }).message ?? 'SMTP2Go rejected it';
+            const message = `SMTP2Go rejected the last ${rejected.length} sends for a reason on our side (latest: ${reason}); check the sender and the API key in SMTP2Go`;
+            await this.pause(tx, workspaceId, mailboxId, {
+                code: 'rejected_sends',
+                message,
+                rateBps: 10_000,
+                thresholdBps: 10_000,
+                sends: rejected.length,
+                at: now.toISOString(),
+            });
+            await raiseAlert(
+                tx,
+                this.events,
+                { workspaceId, capabilities: new Set() },
+                {
+                    kind: 'rejected_sends',
+                    outcome: 'blocked',
+                    severity: 'high',
+                    path: 'pool_send',
+                    actorMemberId: mailbox.ownerMemberId,
+                    message: `${mailbox.email} is paused: ${message}`,
+                    detail: { mailboxId, rejected: String(rejected.length) },
+                },
+                { owner: mailbox.ownerMemberId, reviewers: true },
+            );
         });
     }
 
@@ -474,6 +530,7 @@ export class SendingPoolService {
             FROM mail_outbound
             WHERE mailbox_id = ${mailbox.id}::uuid
               AND status IN ('sending', 'sent')
+              AND NOT is_test
               AND coalesce(sent_at, last_attempt_at) >= ${since}
               AND id <> ${exceptId ?? '00000000-0000-0000-0000-000000000000'}::uuid`;
         return {

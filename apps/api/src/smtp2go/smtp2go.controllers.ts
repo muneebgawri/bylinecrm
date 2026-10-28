@@ -5,7 +5,13 @@ import type { Request } from 'express';
 import { Public, Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
 import { AddSmtp2GoMailboxDto, PutSmtp2GoKeyDto } from './dto';
-import { smtp2goHookResult, smtp2goMailboxView, type Smtp2GoMailboxView } from './responses';
+import {
+    smtp2goHookResult,
+    smtp2goMailboxView,
+    smtp2goTestResult,
+    type Smtp2GoMailboxView,
+    type Smtp2GoTestResult,
+} from './responses';
 import { Smtp2GoHookService } from './smtp2go-hook.service';
 import { Smtp2GoMailboxesService } from './smtp2go-mailboxes.service';
 import { SMTP2GO_HOOK_PATH } from './smtp2go.constants';
@@ -53,6 +59,19 @@ export class PoolSmtpMailboxesController {
     @Returns(smtp2goMailboxView)
     rotate(@Param('mailboxId', ParseUUIDPipe) mailboxId: string): Promise<Smtp2GoMailboxView> {
         return this.mailboxes.rotateSecret(mailboxId);
+    }
+
+    /**
+     * "Send test": one message through this mailbox's SMTP2Go key to the admin's own address — past sequences and
+     * the pool's gate, never past the suppression list — so its webhook events show on this page. `200` whether it
+     * went or was refused (`outcome`); rate-limited per mailbox.
+     */
+    @Requires('workspace:admin')
+    @HttpCode(200)
+    @Post(':mailboxId/test')
+    @Returns(smtp2goTestResult)
+    test(@Param('mailboxId', ParseUUIDPipe) mailboxId: string): Promise<Smtp2GoTestResult> {
+        return this.mailboxes.sendTest(mailboxId);
     }
 }
 
