@@ -75,8 +75,11 @@ hits, the URL. The mailbox records the last delivery's time and result (`recorde
 ## Domains
 
 An SMTP2Go mailbox's domain is enrolled and gated like any pool domain. The SPF step passes `include:spf.smtp2go.com`
-as well as Google's; the admin gives the DKIM selector SMTP2Go assigned (`s123456`) when adding the mailbox (or later
-on the domain). DMARC is unchanged.
+as well as Google's; the admin gives the DKIM selector SMTP2Go assigned (`s123456`) when adding the mailbox. It is
+added to the domain's `extraDkimSelectors`, never replacing the primary `dkimSelector` (Gmail's, `google`): one domain
+may have Gmail and SMTP2Go mailboxes. The check reads every selector the domain's senders use — the primary while a
+Gmail-transport mailbox sends from it (or when no other is known), plus each extra — and DKIM passes only when each
+has a key; a failure names the selector missing. DMARC is unchanged.
 
 ## API and UI
 

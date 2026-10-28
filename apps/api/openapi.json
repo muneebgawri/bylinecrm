@@ -36534,8 +36534,16 @@
                     },
                     "dkimSelector": {
                         "type": "string",
-                        "description": "Checked at `<selector>._domainkey.<domain>`.",
+                        "description": "The primary (Gmail) selector, checked at `<selector>._domainkey.<domain>` while a Gmail mailbox sends from the domain or no other selector is known.",
                         "example": "google"
+                    },
+                    "extraDkimSelectors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Other selectors the domain’s senders sign with (an SMTP2Go mailbox’s, TRANS-1); each is checked.",
+                        "example": ["s875364"]
                     },
                     "status": {
                         "type": "string",
@@ -36742,6 +36750,7 @@
                     "id",
                     "domain",
                     "dkimSelector",
+                    "extraDkimSelectors",
                     "status",
                     "lastCheck",
                     "checkedAt",

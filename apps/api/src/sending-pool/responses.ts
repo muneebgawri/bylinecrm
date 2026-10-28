@@ -29,9 +29,16 @@ export const sendingDomainView = named(
             description:
                 'Lower case: what follows the @ of a connected mailbox, or a domain the connected Postmaster Tools account lists (#190).',
         }),
-        dkimSelector: z
-            .string()
-            .meta({ description: 'Checked at `<selector>._domainkey.<domain>`.', example: 'google' }),
+        dkimSelector: z.string().meta({
+            description:
+                'The primary (Gmail) selector, checked at `<selector>._domainkey.<domain>` while a Gmail mailbox sends from the domain or no other selector is known.',
+            example: 'google',
+        }),
+        extraDkimSelectors: z.array(z.string()).meta({
+            description:
+                'Other selectors the domain’s senders sign with (an SMTP2Go mailbox’s, TRANS-1); each is checked.',
+            example: ['s875364'],
+        }),
         status: z.enum(['unchecked', 'pass', 'fail']).meta({
             description:
                 'A pool mailbox sends only while its domain is `pass` (FR-CRMS-13); a personal domain is monitored, never blocked.',

@@ -179,7 +179,10 @@ export const SPAM_RATE_HISTORY_DAYS = 30;
 export interface SendingDomainView {
     id: string;
     domain: string;
+    /** The primary (Gmail) DKIM selector. */
     dkimSelector: string;
+    /** Other selectors the domain's senders sign with (an SMTP2Go mailbox's, TRANS-1); each is checked. */
+    extraDkimSelectors: string[];
     status: SendingDomainStatus;
     lastCheck: DomainCheck | null;
     checkedAt: string | null;

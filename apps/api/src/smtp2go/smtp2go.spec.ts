@@ -151,7 +151,7 @@ describe('TRANS-1 / FR-CRMS-13 a sending domain for SMTP2Go', () => {
                 's123._domainkey.out.example': ['v=DKIM1; k=rsa; p=MIGf'],
                 '_dmarc.out.example': ['v=DMARC1; p=quarantine'],
             })[name] ?? [];
-        const check = evaluateDomain('out.example', 's123', txt);
+        const check = evaluateDomain('out.example', ['s123'], txt);
         expect(check.spf).toMatchObject({ outcome: 'pass', message: expect.stringContaining('SMTP2Go') });
         expect(check.dkim.outcome).toBe('pass');
     });
