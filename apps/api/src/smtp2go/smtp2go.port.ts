@@ -18,6 +18,13 @@ export interface Smtp2GoPort {
      * only, and never logged.
      */
     sendMime(apiKey: string, mime: string): Promise<Smtp2GoSent>;
+
+    /**
+     * Why SMTP2Go's suppressions hold an address (`/suppression/view`), as SMTP2Go names it (`unsubscribe`, `spam`,
+     * `bounce`, `manual`, `compliance`), lower-cased; null when it holds no suppression for it. A `Smtp2GoError` when
+     * SMTP2Go cannot say (no `/suppression/view` permission on the key, unreachable).
+     */
+    suppressionOf(apiKey: string, address: string): Promise<string | null>;
 }
 
 /**

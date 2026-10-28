@@ -76,9 +76,13 @@ Event names are the webhook's (`processed`, `delivered`, `open`, `click`, `bounc
 `resubscribe`, `reject`); the activity API's past-tense names (`rejected`, `unsubscribed`, `opened`, `clicked`) are
 read as the same events, and keyed as them, so either spelling redelivered changes nothing. A `reject` is SMTP2Go refusing the message after taking the API call. Its docs name two causes and give no fixed
 wording: the address is on SMTP2Go's own suppressions (filled from hard bounces, spam complaints and its unsubscribe
-footer), or the sender is unverified / the key sandboxed. The reason text decides (`rejectedRecipient`): one naming a
-suppression, an unsubscribe, a spam complaint or a hard bounce is the recipient's, and the address is suppressed here
-too as the matching reason (a suppression whose kind is not said suppresses nothing). Anything else is ours: when a
+footer), or the sender is unverified / the key sandboxed. SMTP2Go's suppressions decide (`whoseReject`): the hook reads
+them back for the address (`/suppression/view`, so the key needs that permission besides `/email/mime`) — held is the
+recipient's, and the address is suppressed here too as SMTP2Go's reason maps (`unsubscribe` → unsubscribe, `spam` →
+complaint, `bounce` → hard bounce, `manual`/`compliance`/anything else → manual); not held is ours. Only when they cannot
+be read (no permission, SMTP2Go unreachable) does the reason text decide (`rejectedRecipient`): one naming a
+suppression, an unsubscribe, a spam complaint or a hard bounce is the recipient's (a suppression whose kind is not said
+suppresses nothing). Anything else is ours: when a
 pool mailbox's last 3 sends in a row (`SENDING_POOL_REJECT_PAUSE_AFTER`, since its last resume; test sends left out)
 were all rejected on our side, the pool's pause write pauses it (`rejected_sends`, shown on Pool health) and a
 `rejected_sends` guardrail event tells its owner and every reviewer in the bell, as the reply-rate floor does. A run
