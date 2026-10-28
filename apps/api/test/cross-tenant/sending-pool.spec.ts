@@ -421,6 +421,24 @@ describe('FR-CRMS-6 / FR-CRMS-13 sending pool', () => {
             expect((await checkDomain(badDomain)).status).toBe('pass');
             const id = await queuePoolSend(mailbox[badAddress]!, `dns-ok-${stamp}@acme.example`);
             expect(await send.deliver(workspace, id, noWait)).toBe('sent');
+            // TRANS-1: another selector the domain's senders use (an SMTP2Go mailbox's) is checked beside
+            // Gmail's, never instead of it — without its key the domain fails, naming it.
+            await owner.sendingDomain.update({ where: { id: domain.id }, data: { extraDkimSelectors: ['s875364'] } });
+            const both = await checkDomain(badDomain);
+            expect(both).toMatchObject({
+                status: 'fail',
+                dkimSelector: 'mail',
+                extraDkimSelectors: ['s875364'],
+                lastCheck: { dkim: { message: expect.stringContaining(`s875364._domainkey.${badDomain}`) } },
+            });
+            expect(both.lastCheck!.dkim.message).not.toContain(`mail._domainkey`);
+            dns.set(`s875364._domainkey.${badDomain}`, 'v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEB');
+            expect((await checkDomain(badDomain)).lastCheck!.dkim).toEqual({
+                outcome: 'pass',
+                message: `DKIM keys found at mail._domainkey.${badDomain}, s875364._domainkey.${badDomain}`,
+            });
+            await owner.sendingDomain.update({ where: { id: domain.id }, data: { extraDkimSelectors: [] } });
+            dns.set(`s875364._domainkey.${badDomain}`);
             // Broken again for the other tests.
             dns.set(badDomain);
             dns.set(`_dmarc.${badDomain}`);

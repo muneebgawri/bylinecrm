@@ -236,7 +236,7 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             expect(row.transportKeyCiphertext).not.toContain(apiKey);
             expect(row.warmupStartedAt).not.toBeNull();
             const domainRow = await owner.sendingDomain.findFirstOrThrow({ where: { workspaceId: workspace, domain } });
-            expect(domainRow).toMatchObject({ dkimSelector: 's123', status: 'pass' });
+            expect(domainRow).toMatchObject({ dkimSelector: 'google', extraDkimSelectors: ['s123'], status: 'pass' });
         });
 
         it('refuses a malformed key and an address already connected', async () => {

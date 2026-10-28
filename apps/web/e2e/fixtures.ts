@@ -1032,6 +1032,10 @@ export const slotlineSettings: SlotlineSettingsView = {
     lastDeliveryResult: 'stored',
     unmatchedOrganizers: 0,
     lastUnmatchedOrganizer: null,
+    catchUp: false,
+    catchUpThrough: null,
+    lastCatchUpAt: null,
+    lastCatchUpResult: null,
 };
 
 /** Kate's calendar (CAL-1): read a few minutes ago. */
@@ -1193,6 +1197,7 @@ export const sendingPool: SendingPoolView = {
                 id: IDS.sendingDomain,
                 domain: 'example.com',
                 dkimSelector: 'google',
+                extraDkimSelectors: [],
                 status: 'pass',
                 lastCheck: {
                     spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },
@@ -1230,6 +1235,7 @@ export const sendingDomains: SendingDomainView[] = [
         id: '0b1e0000-0000-4000-8000-0000000008a4',
         domain: 'partners.example',
         dkimSelector: 'google',
+        extraDkimSelectors: [],
         status: 'fail',
         lastCheck: {
             spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },
@@ -1258,6 +1264,7 @@ export const sendingDomains: SendingDomainView[] = [
         id: '0b1e0000-0000-4000-8000-0000000008a5',
         domain: 'newsroom.example',
         dkimSelector: 'google',
+        extraDkimSelectors: [],
         status: 'pass',
         lastCheck: {
             spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },

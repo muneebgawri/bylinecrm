@@ -14,6 +14,7 @@ const DOMAIN: SendingDomainView = {
     id: 'd-2',
     domain: 'pinionpartners.co',
     dkimSelector: 'google',
+    extraDkimSelectors: [],
     status: 'fail',
     lastCheck: {
         spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },

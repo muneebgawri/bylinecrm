@@ -22,6 +22,30 @@ export interface SlotlineApiPort {
 
 export const SLOTLINE_API_PORT = Symbol('SLOTLINE_API_PORT');
 
+/** One page of Slotline's admin route `GET /api/admin/bookings/changes`. */
+export interface SlotlineBookingChanges {
+    /** Each booking's fields, named as in a webhook delivery's `payload` (read by `slotlineDeliveryFor`). */
+    bookings: Record<string, unknown>[];
+    nextCursor: string | null;
+    /** The window's end on Slotline's clock: the next page is asked with it, and a finished pass keeps it. */
+    until: string;
+}
+
+/**
+ * Slotline's admin route, server to server with the instance's admin key (`SLOTLINE_ADMIN_API_KEY`, not a
+ * member's): every user's bookings created or changed after `since`, up to `until` (Slotline's now when left
+ * out), a page at a time. The same HTTP adapter; its own port, as only the catch-up uses it.
+ */
+export interface SlotlineAdminApiPort {
+    bookingChanges(
+        baseUrl: string,
+        adminKey: string,
+        page: { since: Date; until?: string | undefined; cursor?: string | undefined },
+    ): Promise<SlotlineBookingChanges>;
+}
+
+export const SLOTLINE_ADMIN_API_PORT = Symbol('SLOTLINE_ADMIN_API_PORT');
+
 /** Slotline refused or did not answer. `status` is null when there was no answer. The key is never in the message. */
 export class SlotlineApiError extends Error {
     constructor(

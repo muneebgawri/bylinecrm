@@ -58,6 +58,7 @@ export function domainView(row: DomainRow, uses: DomainUses, now = new Date()): 
         id: row.id,
         domain: row.domain,
         dkimSelector: row.dkimSelector,
+        extraDkimSelectors: row.extraDkimSelectors,
         status: row.status,
         lastCheck: (row.lastCheck as unknown as DomainCheck | null) ?? null,
         checkedAt: row.checkedAt?.toISOString() ?? null,

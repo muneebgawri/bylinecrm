@@ -20,6 +20,18 @@ export const slotlineSettingsView = named(
             description: 'Bookings whose organiser is no member, by sign-in address or personal mailbox.',
         }),
         lastUnmatchedOrganizer: z.string().nullable(),
+        catchUp: z.boolean().meta({
+            description:
+                'Whether Slotline’s admin key is set: bookings whose delivery never arrived are read from its admin route periodically. Never the key.',
+        }),
+        catchUpThrough: dateTime
+            .nullable()
+            .meta({ description: 'Changes up to here (Slotline’s clock) have been caught up.' }),
+        lastCatchUpAt: dateTime.nullable(),
+        lastCatchUpResult: z
+            .string()
+            .nullable()
+            .meta({ description: '`ok`, with what was done with the bookings read, or `failed: <why>`.' }),
     }),
 );
 

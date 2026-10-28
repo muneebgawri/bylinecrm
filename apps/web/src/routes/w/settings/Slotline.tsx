@@ -58,21 +58,29 @@ function SlotlineForm({ workspaceId, settings }: { workspaceId: string; settings
     const remove = useRemoveSlotline(workspaceId);
     const [baseUrl, setBaseUrl] = useState(settings.baseUrl ?? 'https://');
     const [secret, setSecret] = useState('');
-    const [local, setLocal] = useState<{ baseUrl?: string | undefined; secret?: string | undefined }>({});
+    const [catchUpKey, setCatchUpKey] = useState('');
+    const [local, setLocal] = useState<{
+        baseUrl?: string | undefined;
+        secret?: string | undefined;
+        catchUpKey?: string | undefined;
+    }>({});
     const [confirm, setConfirm] = useState<'rotate' | 'remove' | null>(null);
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        const errors: { baseUrl?: string | undefined; secret?: string | undefined } = {};
+        const errors: { baseUrl?: string | undefined; secret?: string | undefined; catchUpKey?: string | undefined } =
+            {};
         if (!/^https:\/\/[^/\s]+/i.test(baseUrl.trim())) errors.baseUrl = 'Enter the booking site’s https address.';
         if (!settings.configured && secret.length < SECRET_MIN)
             errors.secret = `Enter the webhook’s secret: at least ${SECRET_MIN} characters.`;
         if (settings.configured && secret !== '' && secret.length < SECRET_MIN)
             errors.secret = `At least ${SECRET_MIN} characters, or leave it empty to keep the current one.`;
+        if (catchUpKey !== '' && catchUpKey.length < SECRET_MIN)
+            errors.catchUpKey = `At least ${SECRET_MIN} characters, or leave it empty to keep the current one.`;
         setLocal(errors);
-        if (errors.baseUrl || errors.secret) return;
+        if (errors.baseUrl || errors.secret || errors.catchUpKey) return;
         put.mutate(
-            { baseUrl: baseUrl.trim(), ...(secret ? { secret } : {}) },
+            { baseUrl: baseUrl.trim(), ...(secret ? { secret } : {}), ...(catchUpKey ? { catchUpKey } : {}) },
             {
                 onSuccess: () =>
                     toast({
@@ -125,6 +133,26 @@ function SlotlineForm({ workspaceId, settings }: { workspaceId: string; settings
                         onChange={(e) => {
                             setSecret(e.target.value);
                             setLocal((l) => ({ ...l, secret: undefined }));
+                        }}
+                        className="max-w-[28rem]"
+                    />
+                </Field>
+                <Field
+                    label="Catch-up key (optional)"
+                    hint={
+                        settings.catchUp
+                            ? `Set. ${settings.lastCatchUpAt ? `Last catch-up ${formatWhen(settings.lastCatchUpAt)}: ${settings.lastCatchUpResult ?? ''}.` : 'No catch-up has run yet.'}`
+                            : 'Slotline’s SLOTLINE_ADMIN_API_KEY. Slotline never resends a booking the CRM missed while down; with this key, the CRM reads them back every 15 minutes.'
+                    }
+                    error={local.catchUpKey ?? fieldErrorAt(put.error, 'catchUpKey')}
+                >
+                    <Input
+                        type="password"
+                        autoComplete="new-password"
+                        value={catchUpKey}
+                        onChange={(e) => {
+                            setCatchUpKey(e.target.value);
+                            setLocal((l) => ({ ...l, catchUpKey: undefined }));
                         }}
                         className="max-w-[28rem]"
                     />

@@ -4,7 +4,7 @@ import { DEFAULT_DKIM_SELECTOR, SENDING_DOMAIN_RECHECK_MS, type SendingDomainVie
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
-import { domainCheckNames, evaluateDomain } from './domain-checks';
+import { dkimSelectorsToCheck, domainCheckNames, evaluateDomain, type TxtAnswer } from './domain-checks';
 import { DOMAIN_WITH_RATE, domainUsesIn, domainView, type DomainRow } from './domain-view';
 import { DNS_PORT, DnsLookupFailed, type DnsPort } from './dns.port';
 import { nextPostmasterReadAt, nextUtcDay } from './postmaster-schedule';
@@ -173,29 +173,34 @@ export class SendingDomainsService {
     }
 
     private async run(workspaceId: string, row: DomainRow): Promise<DomainRow> {
-        const names = domainCheckNames(row.domain, row.dkimSelector);
-        const looked = new Map<string, string[] | DnsLookupFailed>();
+        // Every selector the domain's senders sign with (TRANS-1): Gmail's only while a Gmail mailbox sends from it.
+        const gmailSends = await this.rls.withWorkspace(workspaceId, async (tx) =>
+            Boolean(
+                await tx.mailbox.findFirst({
+                    where: {
+                        status: { not: 'disconnected' },
+                        transport: 'gmail',
+                        email: { endsWith: `@${row.domain}` },
+                    },
+                    select: { id: true },
+                }),
+            ),
+        );
+        const selectors = dkimSelectorsToCheck(row, gmailSends);
+        const names = domainCheckNames(row.domain, selectors);
+        const looked = new Map<string, TxtAnswer>();
         await Promise.all(
-            Object.values(names).map(async (name) => {
+            [names.spf, ...names.dkim, names.dmarc].map(async (name) => {
                 try {
                     looked.set(name, await this.dns.resolveTxt(name));
                 } catch (error) {
                     if (!(error instanceof DnsLookupFailed)) throw error;
-                    looked.set(name, error);
+                    // A lookup that could not be made fails its step with the reason, whatever it would have read.
+                    looked.set(name, { failure: `could not look up ${error.lookedUp}: ${error.reason}` });
                 }
             }),
         );
-        const failed = [...looked.values()].filter((v): v is DnsLookupFailed => v instanceof DnsLookupFailed);
-        const check = evaluateDomain(row.domain, row.dkimSelector, (name) => {
-            const value = looked.get(name);
-            return Array.isArray(value) ? value : [];
-        });
-        // A lookup that could not be made fails its step with the reason, whatever it would have read.
-        for (const error of failed) {
-            const step = (Object.keys(names) as (keyof typeof names)[]).find((k) => names[k] === error.lookedUp);
-            if (step)
-                check[step] = { outcome: 'fail', message: `could not look up ${error.lookedUp}: ${error.reason}` };
-        }
+        const check = evaluateDomain(row.domain, selectors, (name) => looked.get(name) ?? []);
         const passed = check.spf.outcome === 'pass' && check.dkim.outcome === 'pass' && check.dmarc.outcome === 'pass';
         const now = new Date();
         // Postmaster Tools is asked only when the domain is due for it (#183): a day's reading is read
