@@ -32,15 +32,18 @@ export class Smtp2GoHttp implements Smtp2GoPort {
             throw new Smtp2GoError(0, reached ? 'unconfirmed' : 'retry', reached ? 'timeout' : 'unreachable');
         }
         const body = (await res.json().catch(() => null)) as {
-            data?: { succeeded?: number; email_id?: string; error_code?: string; failures?: unknown[] };
+            data?: { succeeded?: number; email_id?: string; error_code?: string; error?: string; failures?: unknown[] };
         } | null;
         if (res.ok && body?.data?.email_id && (body.data.succeeded ?? 0) >= 1) {
             return { emailId: body.data.email_id };
         }
         const reason = typeof body?.data?.error_code === 'string' ? body.data.error_code.slice(0, 80) : 'error';
-        if (res.ok) throw new Smtp2GoError(res.status, 'refused', reason);
-        if (res.status === 429 || res.status === 503) throw new Smtp2GoError(res.status, 'retry', reason);
-        if (res.status >= 500) throw new Smtp2GoError(res.status, 'unconfirmed', reason);
-        throw new Smtp2GoError(res.status, 'refused', reason);
+        const failure = body?.data?.failures?.find((f): f is string => typeof f === 'string');
+        const words = typeof body?.data?.error === 'string' ? body.data.error : failure;
+        const detail = words ? words.trim().slice(0, 200) || null : null;
+        if (res.ok) throw new Smtp2GoError(res.status, 'refused', reason, detail);
+        if (res.status === 429 || res.status === 503) throw new Smtp2GoError(res.status, 'retry', reason, detail);
+        if (res.status >= 500) throw new Smtp2GoError(res.status, 'unconfirmed', reason, detail);
+        throw new Smtp2GoError(res.status, 'refused', reason, detail);
     }
 }
