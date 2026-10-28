@@ -34,7 +34,7 @@ import { GmailQuota } from './quota';
 import { identityKeyOf, recountThread, threadOfReferenced } from './threads';
 import { emailSummaryOf } from './summary';
 import { linkOutbound, replyEventFor } from './replies';
-import { withGmailRetry, type RetryOptions } from './retry';
+import { rateLimitedRuns, withGmailRetry, type RateLimitRecord, type RetryOptions } from './retry';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
 
@@ -58,6 +58,8 @@ type SyncErrorRecord = {
     code: string;
     message: string;
     at: string;
+    /** Consecutive runs that ended rate-limited, this one included (`rateLimitedRuns`); absent for any other failure. */
+    rateLimitedRuns?: number;
 };
 
 /** Thrown inside a run when Gmail no longer has history after the stored cursor. */
@@ -526,13 +528,20 @@ export class MailSyncService {
 
     private async recordStopped(mailbox: MailboxRow, error: SyncErrorRecord): Promise<void> {
         const status: MailSyncStatus = 'failed';
-        await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
-            tx.mailboxSyncState.upsert({
+        await this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
+            // A run that ends rate-limited counts on from the last one, which is what the tick's cool-down reads.
+            const previous = await tx.mailboxSyncState.findUnique({
                 where: { mailboxId: mailbox.id },
-                create: { mailboxId: mailbox.id, workspaceId: mailbox.workspaceId, status, lastError: error },
-                update: { status, lastError: error },
-            }),
-        );
+                select: { lastError: true },
+            });
+            const runs = rateLimitedRuns(error, (previous?.lastError ?? null) as RateLimitRecord | null);
+            const lastError: SyncErrorRecord = runs ? { ...error, rateLimitedRuns: runs } : error;
+            await tx.mailboxSyncState.upsert({
+                where: { mailboxId: mailbox.id },
+                create: { mailboxId: mailbox.id, workspaceId: mailbox.workspaceId, status, lastError },
+                update: { status, lastError },
+            });
+        });
     }
 
     /**

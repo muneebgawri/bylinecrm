@@ -1,3 +1,4 @@
+import { GMAIL_RATE_LIMIT_REASONS } from './mail-sync.constants';
 /**
  * Everything mail sync (P2-2) and sending (P2-3) ask Gmail, behind one interface. The HTTP adapter
  * (`gmail.http.ts`) is the only code that calls Gmail; tests bind an in-memory fake
@@ -85,9 +86,14 @@ export class GmailApiError extends Error {
         this.name = 'GmailApiError';
     }
 
-    /** Worth retrying the same request after a wait: throttled, a server error, or no answer. */
+    /** Gmail's per-user rate limit, which it answers with a 403 rather than a 429. */
+    get rateLimited(): boolean {
+        return this.status === 429 || (this.status === 403 && GMAIL_RATE_LIMIT_REASONS.has(this.reason));
+    }
+
+    /** Worth retrying the same request after a wait: throttled (a 429, or Gmail's 403 rate limits), a server error, or no answer. */
     get transient(): boolean {
-        return this.status === null || this.status === 429 || this.status >= 500;
+        return this.status === null || this.rateLimited || (this.status !== null && this.status >= 500);
     }
 }
 
