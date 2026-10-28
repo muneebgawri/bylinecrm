@@ -11,7 +11,15 @@ import { AppModule } from '../../src/app.module';
 import { CalendarSyncService } from '../../src/calendar/calendar-sync.service';
 import { GOOGLE_CALENDAR_PORT } from '../../src/calendar/google-calendar.port';
 import { RateLimiter } from '../../src/auth/rate-limiter.service';
-import { slotlineHookRateKey } from '../../src/calendar/slotline/slotline.constants';
+import {
+    SLOTLINE_ADMIN_API_PORT,
+    SlotlineApiError,
+    type SlotlineAdminApiPort,
+    type SlotlineBookingChanges,
+} from '../../src/calendar/slotline/slotline-api.port';
+import { SlotlineCatchUpService } from '../../src/calendar/slotline/slotline-catch-up.service';
+import { SLOTLINE_CATCH_UP_OVERLAP_MS, slotlineHookRateKey } from '../../src/calendar/slotline/slotline.constants';
+import { assertNoOpenTransaction } from '../../src/infra/transaction-scope';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
@@ -75,6 +83,26 @@ async function clearHookLimit(app: INestApplication): Promise<void> {
 }
 const SECRET = 'slotline-webhook-secret-for-tests';
 
+/** Slotline's admin route, in memory: it hands out the pages it is given, in order; none left, it is down. */
+class FakeSlotlineAdminApi implements SlotlineAdminApiPort {
+    pages: SlotlineBookingChanges[] = [];
+    readonly calls: { baseUrl: string; key: string; until: string | undefined; cursor: string | undefined }[] = [];
+    readonly since: Date[] = [];
+
+    async bookingChanges(
+        baseUrl: string,
+        key: string,
+        page: { since: Date; until?: string | undefined; cursor?: string | undefined },
+    ): Promise<SlotlineBookingChanges> {
+        assertNoOpenTransaction('Slotline bookingChanges');
+        this.calls.push({ baseUrl, key, until: page.until, cursor: page.cursor });
+        this.since.push(page.since);
+        const next = this.pages.shift();
+        if (!next) throw new SlotlineApiError(null, 'Slotline did not answer (network)');
+        return structuredClone(next);
+    }
+}
+
 /**
  * Slotline bookings end to end (CAL-2): the workspace's booking site posts signed webhook deliveries to a public
  * hook; each booking becomes its organiser's copy of the meeting, with the same rules as a Google Calendar
@@ -89,6 +117,7 @@ describe('Slotline bookings', () => {
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
     const calendar = new FakeGoogleCalendar(google);
+    const adminApi = new FakeSlotlineAdminApi();
 
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
@@ -187,6 +216,8 @@ describe('Slotline bookings', () => {
             .useValue(gmail)
             .overrideProvider(GOOGLE_CALENDAR_PORT)
             .useValue(calendar)
+            .overrideProvider(SLOTLINE_ADMIN_API_PORT)
+            .useValue(adminApi)
             .compile();
         app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
         await app.init();
@@ -497,6 +528,93 @@ describe('Slotline bookings', () => {
             );
             expect(res.body).toEqual({ result: 'cancelled' });
             const row = await owner.calendarEvent.findFirst({ where: { workspaceId: workspace, icalUid: ical } });
+            expect(row?.status).toBe('cancelled');
+        });
+    });
+
+    describe('catch-up', () => {
+        const KEY = 'slotline-admin-key-for-tests';
+        const listed = (uid: string, fields: Record<string, unknown> = {}) => {
+            const { payload } = booking('BOOKING_CREATED', { uid, iCalUID: `ical-${uid}@Slotline`, ...fields });
+            return {
+                ...payload,
+                createdAt: new Date().toISOString(),
+                rescheduled: false,
+                rescheduleUid: null,
+                ...fields,
+            };
+        };
+
+        it('an admin sets Slotline’s admin key; it is sealed and never shown', async () => {
+            const put = await as(admin)
+                .put(w('/integrations/slotline'))
+                .send({ baseUrl: 'https://bookings.example.com', catchUpKey: KEY });
+            expect(put.status, JSON.stringify(put.body)).toBe(200);
+            expect(put.body).toMatchObject({ catchUp: true, catchUpThrough: null });
+            expect(JSON.stringify(put.body)).not.toContain(KEY);
+            const row = await owner.slotlineSettings.findFirst({ where: { workspaceId: workspace } });
+            expect(row?.catchUpKeyCiphertext).not.toContain(KEY);
+        });
+
+        it('stores a booking whose delivery never arrived, leaves one already stored, and pages to the end', async () => {
+            const a = `cu-a-${stamp}`;
+            const b = `cu-b-${stamp}`;
+            expect(
+                (await deliver(hookPath, booking('BOOKING_CREATED', { uid: a, iCalUID: `ical-${a}@Slotline` }))).body,
+            ).toEqual({ result: 'stored' });
+            const before = await owner.calendarEvent.count({ where: { workspaceId: workspace } });
+            await log.reset();
+            const until = new Date().toISOString();
+            adminApi.pages = [
+                { bookings: [listed(a), listed(b)], nextCursor: '2', until },
+                // The booking a reschedule replaced: cancelled, sharing `a`'s UID — `a` must stay as it is.
+                {
+                    bookings: [
+                        listed(`cu-old-${stamp}`, {
+                            iCalUID: `ical-${a}@Slotline`,
+                            status: 'CANCELLED',
+                            rescheduled: true,
+                        }),
+                    ],
+                    nextCursor: null,
+                    until,
+                },
+            ];
+            expect(await app.get(SlotlineCatchUpService).catchUp(workspace)).toBe(3);
+            expect(adminApi.calls).toEqual([
+                { baseUrl: 'https://bookings.example.com', key: KEY, until: undefined, cursor: undefined },
+                { baseUrl: 'https://bookings.example.com', key: KEY, until, cursor: '2' },
+            ]);
+            expect(await owner.calendarEvent.count({ where: { workspaceId: workspace } })).toBe(before + 1);
+            const rows = await owner.calendarEvent.findMany({
+                where: { workspaceId: workspace, icalUid: { in: [`ical-${a}@Slotline`, `ical-${b}@Slotline`] } },
+                select: { status: true },
+            });
+            expect(rows.map((r) => r.status)).toEqual(['confirmed', 'confirmed']);
+            expect((await log.read()).filter((e) => e.type === 'meeting.booked')).toHaveLength(1);
+            const view = (await as(admin).get(w('/integrations/slotline'))).body as Record<string, unknown>;
+            expect(view).toMatchObject({ catchUpThrough: until, lastCatchUpResult: 'ok: 2 stored, 1 skipped' });
+        });
+
+        it('applies a cancellation it missed, from just before the last pass’s end; a failed pass keeps its place', async () => {
+            const b = `cu-b-${stamp}`;
+            const through = (await owner.slotlineSettings.findFirst({ where: { workspaceId: workspace } }))!
+                .catchUpThrough!;
+            adminApi.calls.length = 0;
+            adminApi.pages = [];
+            await expect(app.get(SlotlineCatchUpService).catchUp(workspace)).rejects.toThrow();
+            const failed = await owner.slotlineSettings.findFirst({ where: { workspaceId: workspace } });
+            expect(failed?.catchUpThrough).toEqual(through);
+            expect(failed?.lastCatchUpResult).toMatch(/^failed: /);
+
+            adminApi.pages = [
+                { bookings: [listed(b, { status: 'CANCELLED' })], nextCursor: null, until: new Date().toISOString() },
+            ];
+            expect(await app.get(SlotlineCatchUpService).catchUp(workspace)).toBe(1);
+            expect(adminApi.since.at(-1)!.getTime()).toBe(through.getTime() - SLOTLINE_CATCH_UP_OVERLAP_MS);
+            const row = await owner.calendarEvent.findFirst({
+                where: { workspaceId: workspace, icalUid: `ical-${b}@Slotline` },
+            });
             expect(row?.status).toBe('cancelled');
         });
     });

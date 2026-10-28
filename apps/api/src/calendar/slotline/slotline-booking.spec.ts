@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { parseSlotlineDelivery } from './slotline-booking';
+import { parseSlotlineDelivery, slotlineDeliveryFor } from './slotline-booking';
 import { signed } from './slotline-hook.service';
 
 /** A delivery as Slotline (Cal.com) sends one: `{ triggerEvent, createdAt, payload }`. */
@@ -100,5 +100,63 @@ describe('signed (CAL-2)', () => {
         expect(signed(body, good, 'another-secret-entirely')).toBe(false);
         expect(signed(body, undefined, secret)).toBe(false);
         expect(signed(body, 'no-secret-provided', secret)).toBe(false);
+    });
+});
+
+describe('a booking from Slotline’s admin route, as the delivery it would have been', () => {
+    /** As `GET /api/admin/bookings/changes` lists a booking. */
+    const listed = (fields: Record<string, unknown> = {}) => ({
+        uid: 'bk-1',
+        iCalUID: 'bk-1@Slotline',
+        title: 'Intro call',
+        status: 'ACCEPTED',
+        startTime: '2026-10-20T13:00:00.000Z',
+        endTime: '2026-10-20T13:30:00.000Z',
+        location: 'integrations:google:meet',
+        videoCallUrl: 'https://meet.example/abc',
+        organizer: { email: 'sam@pinion.example', name: 'Sam Okafor' },
+        attendees: [{ email: 'dana@acme.example', name: 'Dana Reyes' }],
+        createdAt: '2026-10-15T10:00:00.000Z',
+        updatedAt: null,
+        rescheduled: false,
+        rescheduleUid: null,
+        ...fields,
+    });
+    const read = (fields: Record<string, unknown> = {}) => {
+        const body = slotlineDeliveryFor(listed(fields));
+        return body === null ? null : parseSlotlineDelivery(body);
+    };
+
+    it('an accepted booking is its creation, booked when it was created, with its video link', () => {
+        const delivery = read();
+        expect(delivery).toMatchObject({ kind: 'booking', uid: 'bk-1', rescheduled: false, replaces: null });
+        if (delivery?.kind !== 'booking') throw new Error('not a booking');
+        expect(delivery.meeting).toMatchObject({
+            providerEventId: 'bk-1@Slotline',
+            status: 'confirmed',
+            conferenceUrl: 'https://meet.example/abc',
+            bookedAt: new Date('2026-10-15T10:00:00.000Z'),
+        });
+        expect(delivery.meeting.attendees.map((a) => a.address)).toEqual(['sam@pinion.example', 'dana@acme.example']);
+    });
+
+    it('a pending booking is a request; a booking from a reschedule is the reschedule', () => {
+        const pending = read({ status: 'PENDING' });
+        expect(pending?.kind === 'booking' && pending.meeting.status).toBe('tentative');
+        expect(read({ uid: 'bk-2', rescheduleUid: 'bk-1', iCalUID: null })).toMatchObject({
+            kind: 'booking',
+            rescheduled: true,
+            replaces: 'slotline:bk-1',
+        });
+    });
+
+    it('a cancelled or rejected booking calls the meeting off', () => {
+        expect(read({ status: 'CANCELLED' })).toMatchObject({ kind: 'cancel', providerEventId: 'bk-1@Slotline' });
+        expect(read({ status: 'REJECTED' })).toMatchObject({ kind: 'cancel' });
+    });
+
+    it('the booking a reschedule replaced is left: it shares the moved meeting’s UID, and no cancellation was sent', () => {
+        expect(read({ status: 'CANCELLED', rescheduled: true })).toBeNull();
+        expect(read({ status: 'AWAITING_HOST' })).toBeNull();
     });
 });

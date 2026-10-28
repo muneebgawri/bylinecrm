@@ -30,7 +30,11 @@ export class SlotlineSettingsService {
         return this.rls.withWorkspace(async (tx) => this.view(await tx.slotlineSettings.findFirst()));
     }
 
-    async put(input: { baseUrl: string; secret?: string | undefined }): Promise<SlotlineSettingsView> {
+    async put(input: {
+        baseUrl: string;
+        secret?: string | undefined;
+        catchUpKey?: string | null | undefined;
+    }): Promise<SlotlineSettingsView> {
         const context = this.context.get()!;
         if (!context.memberId) {
             throw new ApiException(403, 'forbidden', 'Slotline is set up by a member signed in, not by an API key');
@@ -42,11 +46,17 @@ export class SlotlineSettingsService {
                 throw new ApiException(400, 'validation.failed', 'the webhook’s secret is needed the first time');
             }
             const secret = input.secret ? { secretCiphertext: this.secrets.seal(input.secret) } : {};
+            // A new key (or another site) is another Slotline's history: the catch-up starts again from its lookback.
+            const catchUp: { catchUpKeyCiphertext?: string | null; catchUpThrough?: null } = {};
+            if (input.catchUpKey !== undefined) {
+                catchUp.catchUpKeyCiphertext = input.catchUpKey === null ? null : this.secrets.seal(input.catchUpKey);
+            }
+            if (input.catchUpKey !== undefined || existing?.baseUrl !== baseUrl) catchUp.catchUpThrough = null;
             if (existing) {
                 return this.view(
                     await tx.slotlineSettings.update({
                         where: { id: existing.id },
-                        data: { baseUrl, ...secret, configuredById: context.memberId! },
+                        data: { baseUrl, ...secret, ...catchUp, configuredById: context.memberId! },
                     }),
                 );
             }
@@ -59,6 +69,7 @@ export class SlotlineSettingsService {
                         secretCiphertext: this.secrets.seal(input.secret!),
                         hookTokenHash: hashToken(token),
                         hookTokenCiphertext: this.secrets.seal(token),
+                        ...(input.catchUpKey ? { catchUpKeyCiphertext: this.secrets.seal(input.catchUpKey) } : {}),
                         configuredById: context.memberId!,
                     },
                 }),
@@ -101,6 +112,10 @@ export class SlotlineSettingsService {
             lastDeliveryResult: row?.lastDeliveryResult ?? null,
             unmatchedOrganizers: row?.unmatchedOrganizers ?? 0,
             lastUnmatchedOrganizer: row?.lastUnmatchedOrganizer ?? null,
+            catchUp: Boolean(row?.catchUpKeyCiphertext),
+            catchUpThrough: row?.catchUpThrough ?? null,
+            lastCatchUpAt: row?.lastCatchUpAt ?? null,
+            lastCatchUpResult: row?.lastCatchUpResult ?? null,
         };
     }
 }

@@ -14,6 +14,10 @@ const empty: SlotlineSettingsView = {
     lastDeliveryResult: null,
     unmatchedOrganizers: 0,
     lastUnmatchedOrganizer: null,
+    catchUp: false,
+    catchUpThrough: null,
+    lastCatchUpAt: null,
+    lastCatchUpResult: null,
 };
 const connected: SlotlineSettingsView = {
     ...empty,
@@ -82,5 +86,37 @@ describe('CAL-2 Settings → Slotline', { timeout: 20_000 }, () => {
         open();
         expect(await screen.findByText('Secret does not match')).toBeInTheDocument();
         expect(screen.getByText(/2 bookings were left/)).toHaveTextContent('stranger@acme.example');
+    });
+
+    it('takes Slotline’s admin key for the catch-up, and says how the last one went', async () => {
+        let current: SlotlineSettingsView = connected;
+        const seen = stubApi([
+            (r) => (r.method === 'GET' && r.url.endsWith('/integrations/slotline') ? json(current) : undefined),
+            (r) => {
+                if (r.method !== 'PUT' || !r.url.endsWith('/integrations/slotline')) return undefined;
+                current = {
+                    ...connected,
+                    catchUp: true,
+                    lastCatchUpAt: '2026-10-15T09:00:00Z',
+                    lastCatchUpResult: 'ok: 2 stored',
+                };
+                return json(current);
+            },
+        ]);
+        open();
+        await userEvent.type(await screen.findByLabelText(/Catch-up key/), 'short');
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(await screen.findByText(/at least 16 characters/i)).toBeInTheDocument();
+        expect(seen.find((r) => r.method === 'PUT')).toBeUndefined();
+
+        await userEvent.type(screen.getByLabelText(/Catch-up key/), '-admin-key-long-enough');
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() =>
+            expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({
+                baseUrl: 'https://bookings.acme.example',
+                catchUpKey: 'short-admin-key-long-enough',
+            }),
+        );
+        expect(await screen.findByText(/Last catch-up .*ok: 2 stored/)).toBeInTheDocument();
     });
 });

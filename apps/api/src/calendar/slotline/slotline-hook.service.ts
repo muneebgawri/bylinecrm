@@ -9,7 +9,7 @@ import { SecretBox } from '../../infra/secret-box';
 import { membersByAddress } from '../../mail-sync/matching';
 import { insidersFor, MeetingStore, type CopyKey, type CopyOrigin, type WriteScope } from '../meeting-store';
 import type { SlotlineHookResult } from './responses';
-import { parseSlotlineDelivery } from './slotline-booking';
+import { parseSlotlineDelivery, type SlotlineDelivery } from './slotline-booking';
 import {
     SLOTLINE_HOOK_FAILURE_LIMIT,
     SLOTLINE_HOOK_FAILURE_WINDOW_S,
@@ -70,11 +70,22 @@ export class SlotlineHookService {
         }
 
         const delivery = parseSlotlineDelivery(body);
-        if (delivery.kind === 'ping' || delivery.kind === 'ignored') {
-            await this.record(workspaceId, delivery.kind);
-            return { result: delivery.kind };
-        }
+        const result = await this.ingest(settings, delivery);
+        await this.record(workspaceId, result, delivery.kind === 'booking' ? delivery.organizer : undefined);
+        return { result };
+    }
 
+    /**
+     * What is done with a delivery once read — by the hook, and by the catch-up for a booking whose delivery
+     * never arrived — so a booking is stored by one set of rules however it came, and reading it twice is
+     * harmless.
+     */
+    async ingest(
+        settings: { id: string; workspaceId: string },
+        delivery: SlotlineDelivery,
+    ): Promise<SlotlineHookResult['result']> {
+        if (delivery.kind === 'ping' || delivery.kind === 'ignored') return delivery.kind;
+        const { workspaceId } = settings;
         const scope: WriteScope = {
             workspaceId,
             context: { workspaceId, capabilities: new Set(), actor: { kind: 'sync', id: settings.id } },
@@ -86,15 +97,13 @@ export class SlotlineHookService {
             await this.meetings.store(scope, (tx) =>
                 this.meetings.cancel(tx, key, delivery.providerEventId, { identityKey: delivery.providerEventId }),
             );
-            await this.record(workspaceId, 'cancelled');
-            return { result: 'cancelled' };
+            return 'cancelled';
         }
 
         const origin = await this.originFor(scope, delivery.organizer);
         if (!origin) {
-            await this.record(workspaceId, 'unmatched', delivery.organizer);
             this.logger.log(`workspace ${workspaceId}: a Slotline booking organised by no member`);
-            return { result: 'unmatched' };
+            return 'unmatched';
         }
         await this.meetings.store(scope, async (tx) => {
             // A reschedule of a booking that had no iCalendar UID cannot be told from a new one but by the uid it
@@ -107,8 +116,7 @@ export class SlotlineHookService {
                 mayReopen: delivery.rescheduled,
             });
         });
-        await this.record(workspaceId, 'stored');
-        return { result: 'stored' };
+        return 'stored';
     }
 
     /**
@@ -147,7 +155,9 @@ export class SlotlineHookService {
         });
     }
 
-    private async record(workspaceId: string, result: string, unmatched?: string): Promise<void> {
+    /** The hook's health on the settings row; `organizer` is counted only when the booking was unmatched. */
+    private async record(workspaceId: string, result: string, organizer?: string): Promise<void> {
+        const unmatched = result === 'unmatched' ? organizer : undefined;
         await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.slotlineSettings.updateMany({
                 data: {

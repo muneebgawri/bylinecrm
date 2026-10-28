@@ -6,6 +6,8 @@ import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
 import { CALENDAR_SYNC_EVERY_MS, CALENDAR_SYNC_QUEUE, CALENDAR_SYNC_WORKER_CONCURRENCY } from './calendar.constants';
 import { CalendarSyncService } from './calendar-sync.service';
+import { SlotlineCatchUpService } from './slotline/slotline-catch-up.service';
+import { SLOTLINE_CATCH_UP_EVERY_MS } from './slotline/slotline.constants';
 
 /** A calendar's sync job. Its id is the mailbox's, so one calendar has at most one queued or running job. */
 export interface CalendarSyncJob {
@@ -15,6 +17,8 @@ export interface CalendarSyncJob {
 
 const SYNC_JOB = 'sync';
 const TICK_JOB = 'tick';
+/** Slotline's catch-up rides the calendar worker: it is bookings into the same meeting store. */
+const SLOTLINE_CATCH_UP_JOB = 'slotline-catch-up';
 
 /**
  * Puts calendar syncs on the queue, and (in a worker process, `CALENDAR_SYNC_WORKER`) runs them. A tick
@@ -32,6 +36,7 @@ export class CalendarSyncWorkers implements OnApplicationBootstrap, OnModuleDest
         @Inject(ENV) private readonly env: Env,
         private readonly ownerPrisma: PrismaService,
         private readonly sync: CalendarSyncService,
+        private readonly slotline: SlotlineCatchUpService,
         @InjectQueue(CALENDAR_SYNC_QUEUE) private readonly queue: Queue,
     ) {}
 
@@ -51,6 +56,11 @@ export class CalendarSyncWorkers implements OnApplicationBootstrap, OnModuleDest
         });
         this.worker.on('error', (error) => this.logger.error(`worker ${CALENDAR_SYNC_QUEUE}: ${error.message}`));
         await this.queue.upsertJobScheduler(TICK_JOB, { every: CALENDAR_SYNC_EVERY_MS }, { name: TICK_JOB });
+        await this.queue.upsertJobScheduler(
+            SLOTLINE_CATCH_UP_JOB,
+            { every: SLOTLINE_CATCH_UP_EVERY_MS },
+            { name: SLOTLINE_CATCH_UP_JOB },
+        );
     }
 
     async onModuleDestroy(): Promise<void> {
@@ -59,6 +69,7 @@ export class CalendarSyncWorkers implements OnApplicationBootstrap, OnModuleDest
 
     private async process(job: Job): Promise<unknown> {
         if (job.name === TICK_JOB) return this.tick();
+        if (job.name === SLOTLINE_CATCH_UP_JOB) return this.catchUpSlotline();
         if (job.name === SYNC_JOB) {
             const { workspaceId, mailboxId } = job.data as CalendarSyncJob;
             return this.sync.syncCalendar(workspaceId, mailboxId);
@@ -76,5 +87,21 @@ export class CalendarSyncWorkers implements OnApplicationBootstrap, OnModuleDest
         let queued = 0;
         for (const m of mailboxes) if (await this.enqueue({ workspaceId: m.workspaceId, mailboxId: m.id })) queued += 1;
         return queued;
+    }
+
+    /**
+     * A Slotline catch-up pass for every workspace that has one, one after another. A workspace whose pass
+     * fails has it recorded on its settings and is tried again at the next tick; the others are not held up.
+     */
+    private async catchUpSlotline(): Promise<number> {
+        let read = 0;
+        for (const workspaceId of await this.slotline.workspaces()) {
+            try {
+                read += (await this.slotline.catchUp(workspaceId)) ?? 0;
+            } catch {
+                // Recorded and logged by the pass.
+            }
+        }
+        return read;
     }
 }
