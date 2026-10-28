@@ -6,6 +6,7 @@ import { PrismaService } from '../infra/prisma.service';
 import { DelegationService } from '../mail-accounts/delegation.service';
 import { MAIL_SYNC_EVERY_MS, MAIL_SYNC_QUEUE, MAIL_SYNC_WORKER_CONCURRENCY } from './mail-sync.constants';
 import { MailSyncService } from './mail-sync.service';
+import { rateLimitCooldownUntil, type RateLimitRecord } from './retry';
 
 /** A mailbox's sync job. Its id is the mailbox's, so one mailbox has at most one queued or running job. */
 export interface MailSyncJob {
@@ -79,10 +80,16 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
         const mailboxes = await this.ownerPrisma.mailbox.findMany({
             // An SMTP2Go mailbox (TRANS-1) has no Gmail to read: its replies arrive in its Reply-To mailbox.
             where: { status: 'connected', transport: 'gmail' },
-            select: { id: true, workspaceId: true },
+            select: { id: true, workspaceId: true, syncState: { select: { lastError: true } } },
         });
         let queued = 0;
-        for (const m of mailboxes) if (await this.enqueue({ workspaceId: m.workspaceId, mailboxId: m.id })) queued += 1;
+        const now = Date.now();
+        for (const m of mailboxes) {
+            // A mailbox whose last run ended rate-limited waits out its cool-down: asking Gmail again every tick kept
+            // the per-user limit tripped for days (the service inboxes, from 2026-10-25).
+            if (rateLimitCooldownUntil((m.syncState?.lastError ?? null) as RateLimitRecord | null) > now) continue;
+            if (await this.enqueue({ workspaceId: m.workspaceId, mailboxId: m.id })) queued += 1;
+        }
         return queued;
     }
 }

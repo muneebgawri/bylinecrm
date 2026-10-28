@@ -62,6 +62,15 @@ export const MAIL_LINE_MAX_CHARS = 1_000;
 export const MAIL_SYNC_QUEUE = 'mail-sync';
 /** How often every connected mailbox is synced incrementally. */
 export const MAIL_SYNC_EVERY_MS = 2 * 60 * 1000;
+/**
+ * Gmail's per-user rate limits (`403 rateLimitExceeded` / `userRateLimitExceeded`): a request refused with one is retried
+ * with the backoff, and a mailbox whose run still ends rate-limited is not synced again by the tick until it has cooled
+ * down — BASE after the first such run, doubling with each consecutive one, at most CAP. Gmail asks for exponential
+ * backoff; retrying every tick kept the limit tripped for days.
+ */
+export const GMAIL_RATE_LIMIT_REASONS: ReadonlySet<string> = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
+export const MAIL_SYNC_RATE_LIMIT_COOLDOWN_BASE_MS = 5 * 60 * 1000;
+export const MAIL_SYNC_RATE_LIMIT_COOLDOWN_CAP_MS = 2 * 60 * 60 * 1000;
 /** Mailbox runs at once in one worker process. */
 export const MAIL_SYNC_WORKER_CONCURRENCY = 4;
 /** A failed run is retried this many times, with the queue's exponential backoff from this base. */
