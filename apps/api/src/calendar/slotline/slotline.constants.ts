@@ -33,6 +33,18 @@ export const SLOTLINE_HOOK_FAILURE_LIMIT = 30;
 export const SLOTLINE_HOOK_FAILURE_WINDOW_S = 600;
 export const slotlineHookRateKey = (ip: string) => `slotline-hook:${ip}`;
 
+/**
+ * The catch-up: Slotline never retries a failed delivery, so every workspace with the admin key has its
+ * booking changes read again this often, through the hook's own ingest. A pass re-reads this much before the
+ * last one's end, for a booking whose change committed late; reading a booking twice changes nothing. A
+ * first pass reaches this far back. Pages are of this many bookings.
+ */
+export const SLOTLINE_CATCH_UP_EVERY_MS = 15 * 60 * 1000;
+export const SLOTLINE_CATCH_UP_OVERLAP_MS = 5 * 60 * 1000;
+export const SLOTLINE_CATCH_UP_FIRST_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+export const SLOTLINE_CATCH_UP_PAGE = 100;
+export const SLOTLINE_CATCH_UP_KEY_MIN = 16;
+
 /** Slotline's v2 API (#196): how long a call may take, and the version event types are asked in. */
 export const SLOTLINE_API_TIMEOUT_MS = 10_000;
 export const SLOTLINE_API_EVENT_TYPES_VERSION = '2024-06-14';

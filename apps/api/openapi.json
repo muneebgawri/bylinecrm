@@ -32354,6 +32354,13 @@
                         "type": "string",
                         "minLength": 16,
                         "maxLength": 200
+                    },
+                    "catchUpKey": {
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 200,
+                        "description": "Slotline’s `SLOTLINE_ADMIN_API_KEY`: bookings the hook missed are read from its admin route. Leave out to keep the current one; `null` stops the catch-up.",
+                        "nullable": true
                     }
                 },
                 "required": ["baseUrl"]
@@ -36037,6 +36044,30 @@
                     "lastUnmatchedOrganizer": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "catchUp": {
+                        "type": "boolean",
+                        "description": "Whether Slotline’s admin key is set: bookings whose delivery never arrived are read from its admin route periodically. Never the key."
+                    },
+                    "catchUpThrough": {
+                        "nullable": true,
+                        "description": "Changes up to here (Slotline’s clock) have been caught up.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastCatchUpAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "lastCatchUpResult": {
+                        "nullable": true,
+                        "description": "`ok`, with what was done with the bookings read, or `failed: <why>`.",
+                        "type": "string"
                     }
                 },
                 "required": [
@@ -36047,7 +36078,11 @@
                     "lastDeliveryAt",
                     "lastDeliveryResult",
                     "unmatchedOrganizers",
-                    "lastUnmatchedOrganizer"
+                    "lastUnmatchedOrganizer",
+                    "catchUp",
+                    "catchUpThrough",
+                    "lastCatchUpAt",
+                    "lastCatchUpResult"
                 ]
             },
             "SlotlineHookResult": {

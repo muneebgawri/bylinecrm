@@ -15,6 +15,9 @@ import { LeadSuggestionsService } from './lead-suggestions.service';
 import { MeetingStore } from './meeting-store';
 import { MeetingsService } from './meetings.service';
 import { SlotlineHookController, SlotlineSettingsController } from './slotline/slotline.controllers';
+import { SlotlineApiHttp } from './slotline/slotline-api.http';
+import { SLOTLINE_ADMIN_API_PORT } from './slotline/slotline-api.port';
+import { SlotlineCatchUpService } from './slotline/slotline-catch-up.service';
 import { SlotlineHookService } from './slotline/slotline-hook.service';
 import { SlotlineSettingsService } from './slotline/slotline-settings.service';
 
@@ -53,6 +56,8 @@ import { SlotlineSettingsService } from './slotline/slotline-settings.service';
         LeadSuggestionsService,
         SlotlineSettingsService,
         SlotlineHookService,
+        SlotlineCatchUpService,
+        { provide: SLOTLINE_ADMIN_API_PORT, useClass: SlotlineApiHttp },
     ],
 })
 export class CalendarModule {}

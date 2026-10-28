@@ -3015,6 +3015,14 @@ model SlotlineSettings {
   /// Bookings whose organiser is no member (by sign-in address or personal mailbox), and the last such address.
   unmatchedOrganizers    Int       @default(0) @map("unmatched_organizers")
   lastUnmatchedOrganizer String?   @map("last_unmatched_organizer")
+  /// The catch-up (Slotline doesn't retry a failed delivery): the key of Slotline's admin route
+  /// `GET /api/admin/bookings/changes` (its `SLOTLINE_ADMIN_API_KEY`), sealed; none, no catch-up.
+  catchUpKeyCiphertext   String?   @map("catch_up_key_ciphertext")
+  /// Slotline's own `until` of the last complete pass: the next one reads changes after it.
+  catchUpThrough         DateTime? @map("catch_up_through") @db.Timestamptz
+  lastCatchUpAt          DateTime? @map("last_catch_up_at") @db.Timestamptz
+  /// `ok` (with how many bookings were read), or why the pass failed.
+  lastCatchUpResult      String?   @map("last_catch_up_result")
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

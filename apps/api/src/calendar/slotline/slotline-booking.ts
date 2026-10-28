@@ -118,6 +118,35 @@ export function parseSlotlineDelivery(body: unknown): SlotlineDelivery {
     };
 }
 
+/**
+ * A booking as Slotline's admin route lists it, as the webhook delivery its last change sent — or would have,
+ * had the CRM been up — so the catch-up reads it through `parseSlotlineDelivery`, the hook's own reading. Null
+ * for the booking a reschedule replaced: Slotline marks it cancelled but sends no cancellation for it (it
+ * shares its iCalendar UID with the new booking, whose reschedule moved the meeting), nor for a status the
+ * hook never hears about.
+ */
+export function slotlineDeliveryFor(booking: Record<string, unknown>): unknown {
+    if (booking['rescheduled'] === true) return null;
+    const status = text(booking['status']).toUpperCase();
+    const accepted = text(booking['rescheduleUid']) ? 'BOOKING_RESCHEDULED' : 'BOOKING_CREATED';
+    const trigger = (
+        {
+            ACCEPTED: accepted,
+            PENDING: 'BOOKING_REQUESTED',
+            CANCELLED: 'BOOKING_CANCELLED',
+            REJECTED: 'BOOKING_REJECTED',
+        } as Record<string, string>
+    )[status];
+    if (!trigger) return null;
+    const videoCallUrl = text(booking['videoCallUrl']);
+    return {
+        triggerEvent: trigger,
+        // A creation's delivery is sent as it is booked: the booking's own creation is when it was booked.
+        createdAt: booking['createdAt'],
+        payload: { ...booking, ...(videoCallUrl ? { videoCallData: { url: videoCallUrl } } : {}) },
+    };
+}
+
 function record(value: unknown): Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
         ? (value as Record<string, unknown>)
