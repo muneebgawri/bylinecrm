@@ -3175,6 +3175,7 @@ enum GuardrailKind {
   spam_rate
   /// GUARD-2: mail that left (Gmail sync or a CRM send) to another member's lead, or to a customer on the exclusions.
   poach_suspected
+  pooled_customer
 
   @@map("guardrail_kind")
 }

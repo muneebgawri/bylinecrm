@@ -29,7 +29,8 @@
                                 "recipient_quality",
                                 "reply_rate",
                                 "spam_rate",
-                                "poach_suspected"
+                                "poach_suspected",
+                                "pooled_customer"
                             ]
                         }
                     },
@@ -36182,7 +36183,8 @@
                             "recipient_quality",
                             "reply_rate",
                             "spam_rate",
-                            "poach_suspected"
+                            "poach_suspected",
+                            "pooled_customer"
                         ],
                         "description": "Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day), `poach_suspected` (GUARD-2: mail seen through sync or sent from the CRM to another member’s lead or a customer)."
                     },
@@ -39719,7 +39721,8 @@
                                                 "recipient_quality",
                                                 "reply_rate",
                                                 "spam_rate",
-                                                "poach_suspected"
+                                                "poach_suspected",
+                                                "pooled_customer"
                                             ]
                                         },
                                         "actor": {

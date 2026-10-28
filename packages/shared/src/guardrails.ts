@@ -13,10 +13,11 @@ import type { TransferMember } from './transfers.js';
  * Why the guard stopped (or flagged) a recipient, in the order it asks:
  *
  * 1. `suppressed` — on the suppression list (P3-1).
- * 2. `excluded_customer` / `excluded_account_managed` — on the outreach exclusions (FR-CRMS-10).
- * 3. `owned_by_other` — the person, or the company at the address's domain, is another member's.
- * 4. `in_negotiation` — the address's company has an open deal another member owns (reported instead of 3).
- * 5. `cold_to_known` — a sequence enrolment of someone already in a two-way thread with the workspace.
+ * 2. `pooled_customer` — a customer or prospect of another workspace in this one's lead pool.
+ * 3. `excluded_customer` / `excluded_account_managed` — on the outreach exclusions (FR-CRMS-10).
+ * 4. `owned_by_other` — the person, or the company at the address's domain, is another member's.
+ * 5. `in_negotiation` — the address's company has an open deal another member owns (reported instead of 4).
+ * 6. `cold_to_known` — a sequence enrolment of someone already in a two-way thread with the workspace.
  *
  * `repeat_blocks` is not a recipient's: three blocks on owned addresses by one member in a day.
  * `record_export` is the export audit (GUARD-1b): who exported which records, how many, and whether only their own.
@@ -60,6 +61,8 @@ export const GUARDRAIL_KINDS = [
     'spam_rate',
     // GUARD-2 (FR-CRMS-22): mail seen through sync or sent from the CRM to another member's lead or a customer.
     'poach_suspected',
+    // Lead pools: mail to a customer or prospect of another workspace in this one's pool.
+    'pooled_customer',
 ] as const;
 export type GuardrailKind = (typeof GUARDRAIL_KINDS)[number];
 
@@ -123,6 +126,7 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     reply_rate: 'Reply rate under the floor',
     spam_rate: 'Domain spam rate',
     poach_suspected: 'Mailed another member’s lead',
+    pooled_customer: 'Another workspace’s customer or prospect',
 };
 
 /** The kinds that are about a mailbox's sending rather than one recipient (REP-1). */

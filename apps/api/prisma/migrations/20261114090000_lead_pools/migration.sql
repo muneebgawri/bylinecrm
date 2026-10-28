@@ -114,23 +114,26 @@ CREATE TRIGGER people_lead_pool_claim
     AFTER INSERT OR UPDATE OF email_primary, deleted_at ON "people"
     FOR EACH ROW EXECUTE FUNCTION people_lead_pool_claim();
 
--- The name of another workspace in the current workspace's pool that has this address as a customer or
--- prospect; null for none (or no pool). Nothing else of that workspace is returned.
-CREATE FUNCTION lead_pool_holder(p_email text)
-    RETURNS text
+-- Of these addresses, those another workspace in the current workspace's pool has as a customer or
+-- prospect, each with that workspace's name (the first by name); none without a pool. Nothing else of
+-- that workspace is returned. Asked by a save's address check and by the recipient guard before mail.
+CREATE FUNCTION lead_pool_holders(p_emails text[])
+    RETURNS TABLE (email text, workspace_name text)
     LANGUAGE sql
     STABLE
     SECURITY DEFINER
     SET search_path = public, pg_temp
 AS $$
-    SELECT w.name
+    SELECT DISTINCT ON (a.email) a.email, w.name
     FROM workspaces me
     JOIN lead_pool_addresses a ON a.pool_id = me.lead_pool_id
     JOIN workspaces w ON w.id = a.workspace_id
-    WHERE me.id = app_workspace_id() AND a.email = p_email AND a.workspace_id <> me.id
+    WHERE me.id = app_workspace_id() AND a.email = ANY (p_emails) AND a.workspace_id <> me.id
       AND lead_pool_protected(a.person_id)
-    ORDER BY w.name
-    LIMIT 1
+    ORDER BY a.email, w.name
 $$;
-REVOKE ALL ON FUNCTION lead_pool_holder(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION lead_pool_holder(text) TO bylinecrm_app;
+REVOKE ALL ON FUNCTION lead_pool_holders(text[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION lead_pool_holders(text[]) TO bylinecrm_app;
+
+-- The recipient guard's refusal of mail to another pooled workspace's customer or prospect.
+ALTER TYPE "guardrail_kind" ADD VALUE IF NOT EXISTS 'pooled_customer';

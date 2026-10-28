@@ -253,9 +253,18 @@ export class CompanyOwnership {
                 };
             }
             // A workspace sharing this one's lead pool, with the person as a customer or prospect: only its name is told.
-            const [pooled] = await tx.$queryRaw<{ name: string | null }[]>`SELECT lead_pool_holder(${email}) AS name`;
-            return pooled?.name ? { ownerName: null, trashed: false, workspaceName: pooled.name } : null;
+            const pooled = (await poolHoldersIn(tx, [email])).get(email);
+            return pooled ? { ownerName: null, trashed: false, workspaceName: pooled } : null;
         });
+    }
+
+    /**
+     * Of these (normalised) addresses, those another workspace of this one's lead pool has as a customer or
+     * prospect, each to that workspace's name — all that is told of it. Empty for a workspace in no pool.
+     */
+    poolHolders(context: WorkspaceRunContext, addresses: readonly string[]): Promise<Map<string, string>> {
+        if (addresses.length === 0) return Promise.resolve(new Map());
+        return this.widened(context, (tx) => poolHoldersIn(tx, addresses));
     }
 
     private widened<T>(context: WorkspaceRunContext, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
@@ -345,4 +354,10 @@ async function duplicateCompanies(tx: WorkspaceClient): Promise<OwnershipConflic
         }
     }
     return out;
+}
+
+async function poolHoldersIn(tx: WorkspaceClient, addresses: readonly string[]): Promise<Map<string, string>> {
+    const rows = await tx.$queryRaw<{ email: string; name: string }[]>`
+        SELECT email, workspace_name AS name FROM lead_pool_holders(${[...addresses]}::text[])`;
+    return new Map(rows.map((r) => [r.email, r.name] as const));
 }

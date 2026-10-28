@@ -5,6 +5,8 @@ import { PrismaClient } from '@prisma/client';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app';
+import { RecipientGuard, type GuardRequest } from '../../src/guardrails/recipient-guard';
+import { WorkspaceContext } from '../../src/infra/workspace-context';
 import { parseEnv } from '../../src/config/env';
 import { verifyAddress } from '../support/mail';
 
@@ -181,5 +183,39 @@ describe('lead pools', () => {
         await prospect(lexis, address);
         const refused = await as(pinion).post(`/people/${personId}/restore`).expect(409);
         expect(JSON.stringify(refused.body)).toContain(`already a lead in ${lexisName}`);
+    });
+
+    describe('mail', () => {
+        /** What the recipient guard says to Lexis mailing this address, as an admin who may move records. */
+        const guard = (address: string, request: Partial<GuardRequest> = {}) =>
+            app
+                .get(WorkspaceContext)
+                .run({ workspaceId: lexis.workspace, capabilities: new Set(['record:transfer'] as const) }, () =>
+                    app.get(RecipientGuard).check({
+                        path: 'send',
+                        outreach: false,
+                        record: false,
+                        recipients: [{ address, personId: null, field: 'to' }],
+                        ...request,
+                    }),
+                );
+
+        it("refuses mail to another pooled workspace's customer or prospect, saved here or not, by its name only", async () => {
+            const [verdict] = await guard(`HELD-${stamp}@x.test`);
+            expect(verdict).toMatchObject({
+                outcome: 'blocked',
+                kind: 'pooled_customer',
+                message: `Already a lead in ${pinionName}`,
+            });
+            const [enrol] = await guard(`held-${stamp}@x.test`, { path: 'sequence_enrol', outreach: true });
+            expect(enrol).toMatchObject({ outcome: 'blocked', kind: 'pooled_customer' });
+        });
+
+        it('lets a cold lead and a lost deal’s contact through', async () => {
+            const verdicts = await guard(`cold-${stamp}@x.test`);
+            expect(verdicts[0]?.kind).not.toBe('pooled_customer');
+            const lost = await guard(`lost-${stamp}@x.test`);
+            expect(lost[0]?.kind).not.toBe('pooled_customer');
+        });
     });
 });

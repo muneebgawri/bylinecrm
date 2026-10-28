@@ -77,6 +77,7 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     reply_rate: 'high',
     spam_rate: 'high',
     poach_suspected: 'medium',
+    pooled_customer: 'medium',
 };
 
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;
@@ -111,22 +112,25 @@ export class RecipientGuarded extends ApiException {
  * stands now. Reasons, in order — the first that holds is the verdict:
  *
  * 1. **`suppressed`** — the suppression list (P3-1). Everyone.
- * 2. **`excluded_customer` / `excluded_account_managed`** — the outreach exclusions (FR-CRMS-10), now for
+ * 2. **`pooled_customer`** — a customer or prospect (the point of contact of an open or won deal) of another
+ *    workspace in this one's lead pool. Everyone, admins included, whoever owns the record here; only told the
+ *    other workspace's name. Anyone may answer a thread the person wrote in; a sequence never reaches one.
+ * 3. **`excluded_customer` / `excluded_account_managed`** — the outreach exclusions (FR-CRMS-10), now for
  *    one-to-one mail too. Everyone, admins included; for one-to-one mail the record's owner (the person's, or
  *    the company's at the address's domain) may still write to their own customer, and anyone may answer a
  *    thread the customer wrote in. A sequence never reaches one.
- * 3. **`in_negotiation`** — the address's company has an open deal another member owns: the stronger form of 4,
+ * 4. **`in_negotiation`** — the address's company has an open deal another member owns: the stronger form of 5,
  *    told instead of it.
- * 4. **`owned_by_other`** — the person, or the company at the address's domain (OWN-2), is another member's.
+ * 5. **`owned_by_other`** — the person, or the company at the address's domain (OWN-2), is another member's.
  *    A reply in a thread that member is on is not poaching (a colleague cc'd them in).
- * 5. **`cold_to_known`** — enrolling in a sequence someone already in a two-way thread with the workspace:
+ * 6. **`cold_to_known`** — enrolling in a sequence someone already in a two-way thread with the workspace:
  *    a warning for the person's owner (or a manager), a block for anyone else.
  *
  * A lead a shared mailbox (Settings → Guardrails: outreach@, which many people send from) or a member who has left
- * owns is nobody's here: 3–5 read its owner as none, so any member may mail it. Its ownership is not changed.
+ * owns is nobody's here: 4–6 read its owner as none, so any member may mail it. Its ownership is not changed.
  *
- * A holder of `record:transfer` (managers, admins) is not refused 3–5 — the attempt is kept as `allowed`.
- * A job or API key with no member is not judged on 3–5 (there is nobody whose lead it would take).
+ * A holder of `record:transfer` (managers, admins) is not refused 4–6 — the attempt is kept as `allowed`.
+ * A job or API key with no member is not judged on 4–6 (there is nobody whose lead it would take).
  *
  * Ownership is read across the workspace, outside an own-scoped caller's record scope: an account manager who
  * cannot see a colleague's lead must still be told it is theirs. Every verdict other than `pass` is written to
@@ -155,6 +159,7 @@ export class RecipientGuard {
         if (addresses.length === 0) return [];
 
         const suppressed = await this.suppressions.check(context.workspaceId, addresses);
+        const pooled = await this.ownership.poolHolders(context, addresses);
         // Who owns each domain, read the one way OWN-2 reads it.
         const domains = new Map<string, DomainCompany | null>();
         for (const address of addresses) {
@@ -182,6 +187,18 @@ export class RecipientGuard {
             const ownsRecord =
                 sender !== null && (person?.ownerId === sender || (company !== null && company.ownerId === sender));
             const wroteHere = facts.threadAddresses.has(r.address);
+
+            const pooledBy = pooled.get(r.address);
+            if (pooledBy && (request.outreach || !wroteHere)) {
+                return {
+                    ...base,
+                    personId,
+                    companyId: company?.companyId ?? null,
+                    outcome: 'blocked',
+                    kind: 'pooled_customer',
+                    message: `Already a lead in ${pooledBy}`,
+                };
+            }
 
             const excluded = facts.excluded.get(r.address);
             if (excluded && (request.outreach || !(ownsRecord || wroteHere))) {
