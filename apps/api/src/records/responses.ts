@@ -99,7 +99,7 @@ export const addressCheckView = named(
                     .meta({ description: 'The person is in the trash, where it still holds the address.' }),
                 workspaceName: z.string().nullable().meta({
                     description:
-                        "Set when a workspace sharing this one's lead pool has the person (then nothing else is told); null for this workspace.",
+                        "Set when a workspace sharing this one's lead pool has the person as a customer or prospect (then nothing else is told); null for this workspace.",
                 }),
             })
             .nullable(),

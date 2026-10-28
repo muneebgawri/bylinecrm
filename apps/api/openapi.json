@@ -34226,7 +34226,7 @@
                             },
                             "workspaceName": {
                                 "nullable": true,
-                                "description": "Set when a workspace sharing this one's lead pool has the person (then nothing else is told); null for this workspace.",
+                                "description": "Set when a workspace sharing this one's lead pool has the person as a customer or prospect (then nothing else is told); null for this workspace.",
                                 "type": "string"
                             }
                         },

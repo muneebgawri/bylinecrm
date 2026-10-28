@@ -252,7 +252,7 @@ export class CompanyOwnership {
                     workspaceName: null,
                 };
             }
-            // A workspace sharing this one's lead pool: only its name is told.
+            // A workspace sharing this one's lead pool, with the person as a customer or prospect: only its name is told.
             const [pooled] = await tx.$queryRaw<{ name: string | null }[]>`SELECT lead_pool_holder(${email}) AS name`;
             return pooled?.name ? { ownerName: null, trashed: false, workspaceName: pooled.name } : null;
         });

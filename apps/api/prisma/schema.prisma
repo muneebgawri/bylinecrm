@@ -3577,8 +3577,9 @@ model CadenceLapse {
   @@map("cadence_lapses")
 }
 
-/// Workspaces that share one set of leads: a live person's primary email in one cannot be saved in
-/// another (a person in the trash holds nothing). Kept by the `people_lead_pool_claim` trigger.
+/// Workspaces that share one set of leads: a primary email one has as a customer or prospect (the point
+/// of contact of an open or won deal) cannot be saved in another; a cold lead may be saved in both, and
+/// a person in the trash holds nothing. Kept by the `people_lead_pool_claim` trigger.
 model LeadPool {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String   @unique
@@ -3590,7 +3591,7 @@ model LeadPool {
   @@map("lead_pools")
 }
 
-/// A live person's primary email in a pooled workspace. Written only by the trigger and `link-lead-pool`.
+/// A live person's primary email in a pooled workspace, cold or not. Written only by the trigger and `link-lead-pool`.
 model LeadPoolAddress {
   personId    String @id @map("person_id") @db.Uuid
   poolId      String @map("pool_id") @db.Uuid

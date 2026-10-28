@@ -9,8 +9,9 @@ const BATCH = 1000;
 
 /**
  * `node dist/cli/link-lead-pool.js <pool-name> <workspace-slug>...` — run on the server, inside the api
- * container, by the operator. Puts the workspaces in one lead pool (made if new): from then on a live
- * person's primary email in one of them cannot be saved in another (`people_lead_pool_claim`). Then
+ * container, by the operator. Puts the workspaces in one lead pool (made if new): from then on a primary
+ * email one of them has as a customer or prospect (the point of contact of an open or won deal) cannot
+ * be saved in another; a cold lead may be saved in both (`people_lead_pool_claim`). Then
  * records the live people already there, a batch at a time; addresses saved in two of them before
  * they were pooled are counted, and both people kept. Re-running changes nothing once done.
  *
