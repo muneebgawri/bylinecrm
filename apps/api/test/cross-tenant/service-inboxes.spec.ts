@@ -15,8 +15,10 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
+import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
+import { MailboxTokens } from '../../src/mail-accounts/mailbox-tokens.service';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MailSyncService } from '../../src/mail-sync/mail-sync.service';
 import { FakeGmail } from '../support/fake-gmail';
@@ -218,6 +220,30 @@ describe('service inboxes', () => {
             expect(start.status).toBe(201);
             const scopes = new URL((start.body as { authorizeUrl: string }).authorizeUrl).searchParams.get('scope');
             expect(scopes?.split(' ')).toEqual([GMAIL_READONLY_SCOPE]);
+        });
+
+        it('SVC-1: a service inbox stays connected through a token refresh and a check — reading is all it was granted, and all it needs (PNW-960)', async () => {
+            // Production, 2026-10-25: both service inboxes went to reconnect_needed on their first refresh, because the
+            // refresh held every mailbox to a personal mailbox's send scope, and partner mail stopped reaching NewswireOS.
+            await app.get(PrismaService)
+                .$executeRaw`UPDATE mailboxes SET access_expires_at = now() - interval '1 minute' WHERE id = ${serviceMailbox}::uuid`;
+            await expect(app.get(MailboxTokens).getAccessToken(workspace, serviceMailbox)).resolves.toEqual(
+                expect.any(String),
+            );
+            const check = await as(admin).post(w(`/mailboxes/${serviceMailbox}/check`));
+            expect(check.body).toMatchObject({ ok: true, problem: null, mailbox: { status: 'connected' } });
+        });
+
+        it('SVC-1: a service inbox whose read scope is withdrawn does need reconnecting (PNW-960)', async () => {
+            const email = `pr-${stamp}@example.com`;
+            const id = await connect(admin, workspace, 'service', email, [GMAIL_READONLY_SCOPE]);
+            google.narrowGrantFor(email, []);
+            const check = await as(admin).post(w(`/mailboxes/${id}/check`));
+            expect(check.body).toMatchObject({
+                ok: false,
+                problem: 'scope_missing',
+                mailbox: { status: 'reconnect_needed' },
+            });
         });
 
         it('SVC-1: a service inbox never sends', async () => {

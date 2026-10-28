@@ -10,7 +10,7 @@ import { DelegationService } from './delegation.service';
 import { GOOGLE_OAUTH_PORT, GoogleOAuthError, type GoogleOAuthPort } from './google-oauth.port';
 import { TOKEN_LOCK_KEY_PREFIX, TOKEN_REFRESH_SKEW_S } from './mail-accounts.constants';
 import { OAuthClientsService } from './oauth-clients.service';
-import { assessGrant } from './oauth-flow';
+import { assessGrant, requiredScopes } from './oauth-flow';
 import { tokenUnderLock } from './token-lock';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
@@ -133,7 +133,7 @@ export class MailboxTokens {
         // A refresh reports the token's scopes; a narrow scope withdrawn in the Google account
         // means the mailbox can no longer do its job.
         if (grant.scopes.length > 0) {
-            const assessment = assessGrant(grant.scopes);
+            const assessment = assessGrant(grant.scopes, requiredScopes(row.purpose));
             if (!assessment.ok) {
                 await this.markReconnectNeeded(
                     workspaceId,

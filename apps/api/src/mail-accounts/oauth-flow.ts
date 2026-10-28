@@ -1,5 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { GMAIL_BROAD_SCOPE, GMAIL_SCOPES, type MailboxConnectResult } from '@bylinecrm/shared';
+import {
+    GMAIL_BROAD_SCOPE,
+    GMAIL_SCOPES,
+    SERVICE_MAILBOX_SCOPES,
+    type MailboxConnectResult,
+    type MailboxPurpose,
+} from '@bylinecrm/shared';
 import { CONNECT_RANDOM_BYTES, GOOGLE_ENDPOINTS } from './mail-accounts.constants';
 
 /** An unguessable token: a connect `state`, a PKCE verifier. base64url, no padding. */
@@ -41,14 +47,24 @@ export function authorizeUrl(input: {
 }
 
 /**
- * Whether a grant is one the service will hold: every scope it asked for (`required`: a mailbox's
- * two narrow scopes unless told otherwise), and never full mailbox access.
+ * The scopes a mailbox of this purpose cannot work without — the one answer for a connect, a refresh and a check. A
+ * service inbox is read, never sent from (SVC-1), so reading is all it needs; holding it to the send scope as well
+ * moved both production service inboxes to `reconnect_needed` on their first refresh (PNW-960). A personal mailbox's
+ * calendar scope is optional, so it is not required here.
+ */
+export function requiredScopes(purpose: MailboxPurpose): readonly string[] {
+    return purpose === 'service' ? SERVICE_MAILBOX_SCOPES : GMAIL_SCOPES;
+}
+
+/**
+ * Whether a grant is one the service will hold: every scope it asked for (`required`:
+ * `requiredScopes` for a mailbox), and never full mailbox access.
  */
 export type GrantAssessment =
     | { ok: true }
     | { ok: false; result: Extract<MailboxConnectResult, 'scope_too_broad' | 'scope_missing'>; detail: string };
 
-export function assessGrant(scopes: readonly string[], required: readonly string[] = GMAIL_SCOPES): GrantAssessment {
+export function assessGrant(scopes: readonly string[], required: readonly string[]): GrantAssessment {
     if (scopes.includes(GMAIL_BROAD_SCOPE)) {
         return { ok: false, result: 'scope_too_broad', detail: `the grant includes ${GMAIL_BROAD_SCOPE}` };
     }
