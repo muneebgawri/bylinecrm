@@ -1,12 +1,15 @@
 name: ci
 
+# No push trigger: main's protection is strict (a PR must be up to date to merge), so a run on the
+# merge would re-test the tree its PR run already passed. Nothing reads main's ci result; deploys
+# pull what images.yml builds.
 on:
-    push:
-        branches: [main]
     pull_request:
-    # `baseline: true` adds the visual-baseline job (see packages/ui/README.md, "Visual baselines").
-    # It lives in this file because GitHub only dispatches a workflow that exists on the default
-    # branch — a separate workflow could never produce its own first baseline from a PR.
+    # `baseline: true` runs ONLY the two baseline jobs (see packages/ui/README.md, "Visual
+    # baselines"); scripts/visual-baseline.mjs reads just the job it asked for, so the gates are
+    # skipped rather than paid for again. It lives in this file because GitHub only dispatches a
+    # workflow that exists on the default branch — a separate workflow could never produce its own
+    # first baseline from a PR.
     workflow_dispatch:
         inputs:
             baseline:
@@ -26,15 +29,22 @@ concurrency:
 # The API's environment is set on the jobs that run the API, never globally: tools such as
 # sirv-cli read PORT/HOST from the environment ahead of their own flags, and a global PORT moved
 # the design system's static server off the port the gates were probing.
+#
+# `if: ${{ !inputs.baseline }}` on every gate: false only on a baseline dispatch (inputs is empty
+# on pull_request, so the gates run there).
 jobs:
     typecheck:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - uses: ./.github/actions/setup
             - run: pnpm typecheck
 
+    # The quick static checks share one job: each is seconds of work, and as separate jobs every one
+    # paid its own setup and was billed a full minute.
     lint:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -43,8 +53,16 @@ jobs:
             - run: pnpm format:check
             # Every image comes from our GHCR mirror by a listed digest (#123).
             - run: pnpm images:check
+            - run: pnpm scan:licences
+            - run: pnpm scan:identifiers
+            # The web bundle's size budget (apps/web/.size-limit.json, FR-CRMS-UI-10): a production
+            # build, then size-limit over the initial chunks. A chunk over budget fails the job.
+            - run: pnpm --filter @bylinecrm/shared build
+            - run: pnpm --filter web build
+            - run: pnpm --filter web size
 
     test:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         env:
             DATABASE_URL: postgresql://bylinecrm:bylinecrm@127.0.0.1:5432/bylinecrm
@@ -69,6 +87,7 @@ jobs:
             - run: pnpm --filter api contract:check
 
     cross-tenant:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         env:
             DATABASE_URL: postgresql://bylinecrm:bylinecrm@127.0.0.1:5432/bylinecrm
@@ -107,32 +126,8 @@ jobs:
             - run: pnpm --filter api db:setup
             - run: pnpm --filter api test:cross-tenant
 
-    # The web bundle's size budget (apps/web/.size-limit.json, FR-CRMS-UI-10): a production build,
-    # then size-limit over the initial chunks. A chunk over budget fails the job.
-    bundle:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: ./.github/actions/setup
-            - run: pnpm --filter @bylinecrm/shared build
-            - run: pnpm --filter web build
-            - run: pnpm --filter web size
-
-    licence-scan:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: ./.github/actions/setup
-            - run: pnpm scan:licences
-
-    identifier-scan:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: ./.github/actions/setup
-            - run: pnpm scan:identifiers
-
     a11y:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         timeout-minutes: 20
         steps:
@@ -144,6 +139,7 @@ jobs:
             - run: pnpm --filter @bylinecrm/ui test:layout
 
     visual:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         timeout-minutes: 20
         steps:
@@ -166,6 +162,7 @@ jobs:
     # text sizes on phones, the primary action on screen, and phone screenshots against baselines.
     # Two shards keep the wall-clock short; `routes` is the one check branch protection names.
     routes-shard:
+        if: ${{ !inputs.baseline }}
         runs-on: ubuntu-latest
         timeout-minutes: 15
         strategy:
@@ -188,7 +185,7 @@ jobs:
 
     routes:
         needs: routes-shard
-        if: always()
+        if: ${{ always() && !inputs.baseline }}
         runs-on: ubuntu-latest
         steps:
             - name: Both shards passed
