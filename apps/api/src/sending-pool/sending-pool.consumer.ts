@@ -3,12 +3,14 @@ import type { DomainEvent } from '@bylinecrm/shared';
 import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { SuppressionService } from '../suppression/suppression.service';
+import { SMTP2GO_REJECTED } from '../smtp2go/smtp2go.constants';
 import { SendingPoolService } from './sending-pool.service';
 
 /**
  * What a counted bounce or complaint sets off (P3-2): a permanent bounce suppresses its address
  * (`hard_bounce`, from the provider — P3-1's one write) and the mailbox's rates are judged again; a
- * complaint entry attributed to a pool mailbox's send has its rates judged again. Both steps are
+ * complaint entry attributed to a pool mailbox's send has its rates judged again; a send SMTP2Go rejected for a
+ * reason on our side (`smtp2go.rejected`, TRANS-1) has its mailbox's run of rejects judged. Every step is
  * idempotent, so a redelivered event changes nothing.
  */
 @Injectable()
@@ -23,7 +25,8 @@ export class SendingPoolConsumer implements OutboxConsumer {
     accepts(event: DomainEvent): boolean {
         return (
             (event.type === 'email.bounced' && event.bounce?.permanent === true) ||
-            (event.type === 'suppression.added' && event.suppression?.reason === 'complaint')
+            (event.type === 'suppression.added' && event.suppression?.reason === 'complaint') ||
+            (event.type === 'email.failed' && event.failure?.code === SMTP2GO_REJECTED)
         );
     }
 
@@ -36,6 +39,16 @@ export class SendingPoolConsumer implements OutboxConsumer {
                 outboundId: event.bounce.outboundId,
             });
             await this.pool.evaluate(event.workspaceId, event.bounce.mailboxId);
+            return;
+        }
+        if (event.type === 'email.failed') {
+            const send = await this.rls.withWorkspace(event.workspaceId, (tx) =>
+                tx.mailOutbound.findUnique({
+                    where: { id: event.recordId },
+                    select: { mailboxId: true, isTest: true },
+                }),
+            );
+            if (send && !send.isTest) await this.pool.evaluateRejects(event.workspaceId, send.mailboxId);
             return;
         }
         if (event.type === 'suppression.added') {

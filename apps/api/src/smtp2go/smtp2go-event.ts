@@ -98,3 +98,21 @@ function timeOf(raw: string | null): Date | null {
     const at = /^\d+(\.\d+)?$/.test(raw) ? new Date(Number(raw) * 1000) : new Date(raw);
     return Number.isNaN(at.getTime()) ? null : at;
 }
+
+/**
+ * Whether a `reject` was the recipient's doing: SMTP2Go rejects mail to an address on its own suppressions, which it
+ * fills from hard bounces, spam complaints and its unsubscribe footer (or by hand). Its docs give no fixed wording
+ * for the reason, so it is read from the words: a reason naming a suppression, an unsubscribe, a spam complaint or a
+ * hard bounce is the recipient's, mapped to the matching suppression reason here (`null`: suppressed, kind not
+ * said). Anything else — an unverified sender, a sandboxed or broken key — is ours.
+ */
+export function rejectedRecipient(
+    reason: string | null,
+): { recipient: false } | { recipient: true; suppression: 'hard_bounce' | 'complaint' | 'unsubscribe' | null } {
+    const text = (reason ?? '').toLowerCase();
+    if (!/suppress|unsubscri|spam|complain|hard[\s_-]?bounce|bounced/.test(text)) return { recipient: false };
+    if (/unsubscri/.test(text)) return { recipient: true, suppression: 'unsubscribe' };
+    if (/spam|complain/.test(text)) return { recipient: true, suppression: 'complaint' };
+    if (/bounce/.test(text)) return { recipient: true, suppression: 'hard_bounce' };
+    return { recipient: true, suppression: null };
+}

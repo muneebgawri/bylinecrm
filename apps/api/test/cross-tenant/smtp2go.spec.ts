@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
@@ -496,14 +497,14 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             ]);
         });
 
-        it('fails a send SMTP2Go rejected after taking it, once', async () => {
+        it('fails a send SMTP2Go rejected for a reason on our side, once, and suppresses nothing', async () => {
             const to = `reject-${stamp}@acme.example`;
             const s = await sent(to);
             const body = {
                 event: 'reject',
                 email_id: s.emailId,
                 rcpt: to,
-                message: 'Recipient address is on the suppression list',
+                message: 'Sender address is not verified',
                 time: new Date().toISOString(),
             };
             expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
@@ -515,13 +516,42 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             expect(row.status).toBe('failed');
             expect(row.lastError).toMatchObject({
                 code: 'smtp2go.rejected',
-                message: expect.stringContaining('suppression list'),
+                message: expect.stringContaining('not verified'),
             });
             expect((await log.read()).filter((e) => e.type === 'email.failed' && e.recordId === s.id)).toEqual([
                 expect.objectContaining({ failure: expect.objectContaining({ code: 'smtp2go.rejected' }) }),
             ]);
-            // Not the recipient's doing as far as the CRM knows: nothing is suppressed for it.
             expect((await suppressions.check(workspace, [to])).has(to)).toBe(false);
+        });
+
+        it('suppresses the address here too when SMTP2Go rejected it for its own suppression list', async () => {
+            const cases = [
+                ['unsub', 'Recipient is on the suppression list (unsubscribed)', 'unsubscribe'],
+                ['spam', 'Recipient suppressed: spam complaint', 'complaint'],
+                ['hard', 'Recipient suppressed after a hard bounce', 'hard_bounce'],
+            ] as const;
+            for (const [tag, message, reason] of cases) {
+                const to = `reject-${tag}-${stamp}@acme.example`;
+                const s = await sent(to);
+                const body = {
+                    event: 'reject',
+                    email_id: s.emailId,
+                    rcpt: to,
+                    message,
+                    time: new Date().toISOString(),
+                };
+                expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
+                expect((await owner.mailOutbound.findUniqueOrThrow({ where: { id: s.id } })).lastError).toMatchObject({
+                    code: 'smtp2go.rejected_suppressed',
+                });
+                expect(
+                    await owner.suppression.findFirstOrThrow({
+                        where: { workspaceId: workspace, address: to, removedAt: null },
+                    }),
+                ).toMatchObject({ reason, source: 'provider', outboundId: s.id });
+            }
+            await settle(app);
+            expect((await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } })).pausedAt).toBeNull();
         });
 
         it('suppresses an address unsubscribed through SMTP2Go, from the provider; a resubscribe lifts nothing', async () => {
@@ -560,6 +590,49 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             expect(row.status).toBe('sent');
             expect((await hook(mine, { event: 'processed', email_id: s.emailId }).expect(200)).body).toEqual({
                 result: 'ignored',
+            });
+        });
+
+        it('pauses the mailbox and tells its admins after a few rejects on our side in a row; tests never count', async () => {
+            const reject = async (s: { emailId: string }, to: string) =>
+                hook(mine, {
+                    event: 'reject',
+                    email_id: s.emailId,
+                    rcpt: to,
+                    message: 'API key is sandboxed',
+                    time: new Date().toISOString(),
+                }).expect(200);
+            for (let i = 0; i < 2; i += 1) {
+                const to = `misconf-${i}-${stamp}@acme.example`;
+                await reject(await sent(to), to);
+            }
+            // A rejected test send between them is no part of the run.
+            const test = (
+                await as(admin)
+                    .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                    .expect(200)
+            ).body as {
+                outboundId: string;
+                to: string;
+            };
+            const testRow = await owner.mailOutbound.findUniqueOrThrow({ where: { id: test.outboundId } });
+            await reject({ emailId: testRow.providerMessageId!.replace(/^smtp2go:/, '') }, test.to);
+            await settle(app);
+            expect((await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } })).pausedAt).toBeNull();
+
+            const to = `misconf-2-${stamp}@acme.example`;
+            await reject(await sent(to), to);
+            await settle(app);
+            const paused = await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } });
+            expect(paused.pausedAt).not.toBeNull();
+            expect(paused.pauseReason).toMatchObject({ code: 'rejected_sends', sends: 3 });
+            expect(
+                await owner.guardrailEvent.findMany({ where: { workspaceId: workspace, kind: 'rejected_sends' } }),
+            ).toEqual([expect.objectContaining({ outcome: 'blocked', severity: 'high' })]);
+            // Back to work for the tests after this one.
+            await owner.mailbox.update({
+                where: { id: mine.mailbox.id },
+                data: { pausedAt: null, pauseReason: Prisma.DbNull, resumedAt: new Date() },
             });
         });
 

@@ -12,12 +12,14 @@ import { SecretBox } from '../infra/secret-box';
 import { recordProviderBounce } from '../sending-pool/bounces';
 import { SuppressionService } from '../suppression/suppression.service';
 import { TrackingService } from '../tracking/tracking.service';
-import { parseSmtp2GoEvent, type Smtp2GoEvent } from './smtp2go-event';
+import { parseSmtp2GoEvent, rejectedRecipient, type Smtp2GoEvent } from './smtp2go-event';
 import type { MailOutboundStatus, SuppressionReason } from '@prisma/client';
 import {
     SMTP2GO_HOOK_FAILURE_LIMIT,
     SMTP2GO_HOOK_FAILURE_WINDOW_S,
     SMTP2GO_PROVIDER_PREFIX,
+    SMTP2GO_REJECTED,
+    SMTP2GO_REJECTED_SUPPRESSED,
     smtp2goHookRateKey,
 } from './smtp2go.constants';
 
@@ -34,8 +36,9 @@ type Read = Exclude<Smtp2GoEvent, { kind: 'other' }>;
  *   `email.complained`;
  * - `open` / `click` → `tracking_hits` + `email.opened` / `email.clicked`, unless our own short links track the
  *   send already;
- * - `reject` (SMTP2Go took the API call, then refused the message) → the send `failed` as `smtp2go.rejected`, by
- *   the send job's one failure write (`MailSendService.failAfterSent`);
+ * - `reject` (SMTP2Go took the API call, then refused the message) → the send `failed`, by the send job's one
+ *   failure write (`MailSendService.failAfterSent`); the address suppressed when SMTP2Go's own suppressions were
+ *   why, otherwise counted towards the mailbox's pause;
  * - `unsubscribe` (SMTP2Go's own footer) → the address suppressed as `unsubscribe` from the provider, as the
  *   CRM's own link does it;
  * - `delivered` → the send's `delivered_at`, the first report kept.
@@ -125,12 +128,16 @@ export class Smtp2GoHookService {
     }
 
     /**
-     * SMTP2Go refused the message after taking the API call (`reject`: an address on SMTP2Go's suppressions, an
-     * unverified sender, a sandboxed key). The send fails through the send job's one failure write — as one SMTP2Go
-     * refused at the API does, `smtp2go.<reason>` — so it is `failed`, `email.failed` is announced once, its queued
-     * follow-ups are called off, and it no longer counts as sent for the mailbox's allowance and rates. The address
-     * is not suppressed here: SMTP2Go's reason may be ours (the sender, the key), not the recipient's. A send already
-     * failed is a `duplicate`.
+     * SMTP2Go refused the message after taking the API call (`reject`). The send fails through the send job's one
+     * failure write — as one SMTP2Go refused at the API does — so it is `failed`, `email.failed` is announced once,
+     * its queued follow-ups are called off, and it no longer counts as sent for the mailbox's allowance and rates.
+     * Whose doing it was decides the rest (`rejectedRecipient`):
+     * - the recipient is on SMTP2Go's suppressions (`smtp2go.rejected_suppressed`) → the address is suppressed here
+     *   too, from the provider, as the matching reason (hard bounce, complaint, unsubscribe), naming the send — so no
+     *   path mails it again; a reason that does not say which kind suppresses nothing (it is still not ours);
+     * - anything else (`smtp2go.rejected`: an unverified sender, a sandboxed or broken key) → it counts towards the
+     *   mailbox's pause (`SendingPoolConsumer` → `evaluateRejects`), unless it is a test send.
+     * A send already failed is a `duplicate`.
      */
     private async rejected(mailbox: { id: string; workspaceId: string }, event: Read): Promise<Smtp2GoHookResult> {
         const send = await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
@@ -138,12 +145,24 @@ export class Smtp2GoHookService {
         );
         if (!send) return 'unmatched';
         if (send.status === 'failed') return 'duplicate';
+        const whose = rejectedRecipient(event.reason);
         const failed = await this.sends.failAfterSent(mailbox.workspaceId, send.id, {
-            code: 'smtp2go.rejected',
+            code: whose.recipient ? SMTP2GO_REJECTED_SUPPRESSED : SMTP2GO_REJECTED,
             message: `SMTP2Go rejected the message after taking it${event.reason ? ` (${event.reason})` : ''}`,
             at: event.at.toISOString(),
         });
-        return failed ? 'recorded' : 'duplicate';
+        if (!failed) return 'duplicate';
+        const address = event.address ?? send.toAddresses[0] ?? null;
+        if (whose.recipient && whose.suppression && address) {
+            await this.suppressions.suppress(mailbox.workspaceId, {
+                address,
+                reason: whose.suppression,
+                source: 'provider',
+                personId: send.personId,
+                outboundId: send.id,
+            });
+        }
+        return 'recorded';
     }
 
     /**

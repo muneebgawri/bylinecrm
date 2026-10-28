@@ -76,6 +76,7 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     recipient_quality: 'medium',
     reply_rate: 'high',
     spam_rate: 'high',
+    rejected_sends: 'high',
     poach_suspected: 'medium',
     pooled_customer: 'medium',
 };

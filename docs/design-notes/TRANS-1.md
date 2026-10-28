@@ -60,23 +60,29 @@ Each delivery is one event (JSON or form). It is matched to a **sent** send of *
 `smtp2go:<email_id>`, our `message-id`, or `X-BylineCRM-Id` (add that header in the webhook's "Email headers").
 The event key is a hash of (email_id, message-id, event, rcpt, time, url), so a redelivery changes nothing.
 
-| SMTP2Go event    | Writes                                                        | Events                                        | Then                                                                                |
-| ---------------- | ------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `bounce`         | `mail_bounces` (`message_id` null, `provider_event_id`)       | `email.bounced`                               | hard: suppression `hard_bounce`/`provider`, bounce rate judged (existing consumer)  |
-| `spam`           | suppression `complaint`/`provider` with the send              | `suppression.added`, `email.complained` (new) | complaint rate judged (existing consumer)                                           |
-| `open` / `click` | `tracking_hits` (`token_id` null, `provider_event_id`, `url`) | `email.opened` / `email.clicked`              | same bot rule; stage rules as for our clicks                                        |
-| `reject`         | send `sent` → `failed`, `last_error` `smtp2go.rejected`       | `email.failed`                                | the send job's one failure write (follow-ups called off; no longer counted as sent) |
-| `unsubscribe`    | suppression `unsubscribe`/`provider` with the send            | `suppression.added`                           | enrolments stop, as for our own link; never lifted                                  |
-| `delivered`      | send's `delivered_at` (first report kept)                     | —                                             | shown on the send (`deliveredAt`)                                                   |
-| `processed`      | —                                                             | —                                             | `ignored`: the send is `sent` already                                               |
-| `resubscribe`    | —                                                             | —                                             | `ignored`: an unsubscribe is never lifted, so the CRM does not mail it again        |
-| anything else    | —                                                             | —                                             | `ignored`                                                                           |
+| SMTP2Go event    | Writes                                                                                                                   | Events                                          | Then                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `bounce`         | `mail_bounces` (`message_id` null, `provider_event_id`)                                                                  | `email.bounced`                                 | hard: suppression `hard_bounce`/`provider`, bounce rate judged (existing consumer)                                               |
+| `spam`           | suppression `complaint`/`provider` with the send                                                                         | `suppression.added`, `email.complained` (new)   | complaint rate judged (existing consumer)                                                                                        |
+| `open` / `click` | `tracking_hits` (`token_id` null, `provider_event_id`, `url`)                                                            | `email.opened` / `email.clicked`                | same bot rule; stage rules as for our clicks                                                                                     |
+| `reject`         | send `sent` → `failed`: `smtp2go.rejected_suppressed` (recipient on SMTP2Go's suppressions) or `smtp2go.rejected` (ours) | `email.failed`; suppressed: `suppression.added` | suppressed: suppression `hard_bounce`/`complaint`/`unsubscribe`, `provider`, with the send; ours: counts towards the pause below |
+| `unsubscribe`    | suppression `unsubscribe`/`provider` with the send                                                                       | `suppression.added`                             | enrolments stop, as for our own link; never lifted                                                                               |
+| `delivered`      | send's `delivered_at` (first report kept)                                                                                | —                                               | shown on the send (`deliveredAt`)                                                                                                |
+| `processed`      | —                                                                                                                        | —                                               | `ignored`: the send is `sent` already                                                                                            |
+| `resubscribe`    | —                                                                                                                        | —                                               | `ignored`: an unsubscribe is never lifted, so the CRM does not mail it again                                                     |
+| anything else    | —                                                                                                                        | —                                               | `ignored`                                                                                                                        |
 
 Event names are the webhook's (`processed`, `delivered`, `open`, `click`, `bounce`, `spam`, `unsubscribe`,
 `resubscribe`, `reject`); the activity API's past-tense names (`rejected`, `unsubscribed`, `opened`, `clicked`) are
-read as the same events, and keyed as them, so either spelling redelivered changes nothing. A `reject` is SMTP2Go
-refusing the message after taking the API call (an address on SMTP2Go's own suppressions, an unverified sender, a
-sandboxed key): the CRM does not suppress the address for it, since the reason may be ours. A redelivered `reject`
+read as the same events, and keyed as them, so either spelling redelivered changes nothing. A `reject` is SMTP2Go refusing the message after taking the API call. Its docs name two causes and give no fixed
+wording: the address is on SMTP2Go's own suppressions (filled from hard bounces, spam complaints and its unsubscribe
+footer), or the sender is unverified / the key sandboxed. The reason text decides (`rejectedRecipient`): one naming a
+suppression, an unsubscribe, a spam complaint or a hard bounce is the recipient's, and the address is suppressed here
+too as the matching reason (a suppression whose kind is not said suppresses nothing). Anything else is ours: when a
+pool mailbox's last 3 sends in a row (`SENDING_POOL_REJECT_PAUSE_AFTER`, since its last resume; test sends left out)
+were all rejected on our side, the pool's pause write pauses it (`rejected_sends`, shown on Pool health) and a
+`rejected_sends` guardrail event tells its owner and every reviewer in the bell, as the reply-rate floor does. A run
+is used, not a rate: a misconfigured mailbox rejects everything, and a rate would wait for `rateMinSample` sends. A redelivered `reject`
 finds the send already failed and is a `duplicate`; a redelivered `unsubscribe` finds the entry for the send; a
 second `delivered` finds `delivered_at` set.
 

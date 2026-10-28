@@ -3,7 +3,7 @@ import { buildMime } from '../mail-send/mime';
 import { gmailShapeOf } from '../mail-send/mime-read';
 import { parseGmailMessage } from '../mail-sync/parse-message';
 import { evaluateDomain } from '../sending-pool/domain-checks';
-import { parseSmtp2GoEvent } from './smtp2go-event';
+import { parseSmtp2GoEvent, rejectedRecipient } from './smtp2go-event';
 import { Smtp2GoHttp, type FetchLike } from './smtp2go.http';
 import { Smtp2GoError } from './smtp2go.port';
 
@@ -85,6 +85,25 @@ describe('TRANS-1 SMTP2Go webhook events', () => {
         const delivered = parseSmtp2GoEvent({ ...bounce, event: 'delivered' });
         expect(a.kind === 'reject' && b.kind === 'reject' && a.key === b.key).toBe(true);
         expect(a.kind === 'reject' && delivered.kind === 'delivered' && a.key !== delivered.key).toBe(true);
+    });
+
+    it('tells a reject for the recipient (SMTP2Go’s suppressions) from one on our side', () => {
+        expect(rejectedRecipient('Recipient is on the suppression list (unsubscribed)')).toEqual({
+            recipient: true,
+            suppression: 'unsubscribe',
+        });
+        expect(rejectedRecipient('Suppressed: spam complaint')).toEqual({ recipient: true, suppression: 'complaint' });
+        expect(rejectedRecipient('Address suppressed after hard bounce')).toEqual({
+            recipient: true,
+            suppression: 'hard_bounce',
+        });
+        expect(rejectedRecipient('Recipient address is on the suppression list')).toEqual({
+            recipient: true,
+            suppression: null,
+        });
+        expect(rejectedRecipient('Sender address is not verified')).toEqual({ recipient: false });
+        expect(rejectedRecipient('API key is sandboxed')).toEqual({ recipient: false });
+        expect(rejectedRecipient(null)).toEqual({ recipient: false });
     });
 
     it('ignores a send id that is not one of ours, and reads epoch-second times', () => {

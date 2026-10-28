@@ -29,6 +29,7 @@
                                 "recipient_quality",
                                 "reply_rate",
                                 "spam_rate",
+                                "rejected_sends",
                                 "poach_suspected",
                                 "pooled_customer"
                             ]
@@ -36291,6 +36292,7 @@
                             "recipient_quality",
                             "reply_rate",
                             "spam_rate",
+                            "rejected_sends",
                             "poach_suspected",
                             "pooled_customer"
                         ],
@@ -36867,7 +36869,7 @@
                 "properties": {
                     "code": {
                         "type": "string",
-                        "enum": ["bounce_rate", "complaint_rate", "domain_spam_rate", "reply_rate"]
+                        "enum": ["bounce_rate", "complaint_rate", "domain_spam_rate", "reply_rate", "rejected_sends"]
                     },
                     "message": {
                         "type": "string"
@@ -37281,7 +37283,13 @@
                             "properties": {
                                 "code": {
                                     "type": "string",
-                                    "enum": ["bounce_rate", "complaint_rate", "domain_spam_rate", "reply_rate"]
+                                    "enum": [
+                                        "bounce_rate",
+                                        "complaint_rate",
+                                        "domain_spam_rate",
+                                        "reply_rate",
+                                        "rejected_sends"
+                                    ]
                                 },
                                 "message": {
                                     "type": "string"
@@ -39806,6 +39814,7 @@
                                                 "recipient_quality",
                                                 "reply_rate",
                                                 "spam_rate",
+                                                "rejected_sends",
                                                 "poach_suspected",
                                                 "pooled_customer"
                                             ]
