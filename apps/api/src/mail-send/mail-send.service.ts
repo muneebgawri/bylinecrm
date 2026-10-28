@@ -1127,7 +1127,7 @@ export class MailSendService {
                 workspaceId,
                 id,
                 error.outcome === 'refused'
-                    ? { code: `smtp2go.${error.reason}`, message: `SMTP2Go refused the message (${error.status})`, at }
+                    ? { code: `smtp2go.${error.reason}`, message: error.refusal, at }
                     : {
                           code: 'smtp2go.unconfirmed',
                           message: `SMTP2Go's answer was lost (${error.status || 'timeout'}); it may have gone and was not sent again`,
@@ -1250,7 +1250,7 @@ export class MailSendService {
             if (!(error instanceof Smtp2GoError)) throw error;
             const failure =
                 error.outcome === 'refused'
-                    ? { code: `smtp2go.${error.reason}`, message: `SMTP2Go refused the message (${error.status})` }
+                    ? { code: `smtp2go.${error.reason}`, message: error.refusal }
                     : error.outcome === 'retry'
                       ? {
                             code: SMTP2GO_NOT_SENT,

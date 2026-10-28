@@ -32,7 +32,14 @@ export class Smtp2GoError extends Error {
         readonly status: number,
         readonly outcome: 'retry' | 'refused' | 'unconfirmed',
         readonly reason: string,
+        /** SMTP2Go's own words for a refusal (`data.error`), when it gave any. */
+        readonly detail: string | null = null,
     ) {
         super(`SMTP2Go answered ${status || 'nothing'} (${reason})`);
+    }
+
+    /** How a refusal reads on the send: the status, and SMTP2Go's reason when it gave one. */
+    get refusal(): string {
+        return `SMTP2Go refused the message (${this.status})${this.detail ? `: ${this.detail}` : ''}`;
     }
 }

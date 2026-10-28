@@ -156,6 +156,18 @@ describe('TRANS-1 SMTP2Go HTTP adapter', () => {
             }),
         ).toBe('retry');
     });
+
+    it('keeps SMTP2Go’s own reason for a refusal, so the send says why', async () => {
+        const refusal = async (body: unknown) =>
+            new Smtp2GoHttp(answer(403, body)).sendMime('k', 'm').catch((e: unknown) => (e as Smtp2GoError).refusal);
+        expect(
+            await refusal({ data: { error_code: 'E_ApiResponseCodes.API_EXCEPTION', error: 'Sender not allowed' } }),
+        ).toBe('SMTP2Go refused the message (403): Sender not allowed');
+        expect(await refusal({ data: { error_code: 'x', failures: ['Recipient blocked'] } })).toBe(
+            'SMTP2Go refused the message (403): Recipient blocked',
+        );
+        expect(await refusal({ data: { error_code: 'x' } })).toBe('SMTP2Go refused the message (403)');
+    });
 });
 
 describe('TRANS-1 a send through SMTP2Go is stored like a Gmail send', () => {
