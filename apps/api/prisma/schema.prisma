@@ -1580,6 +1580,9 @@ model MailOutbound {
   /// TRANS-1: when the recipient's server accepted it, as the provider reported (SMTP2Go's `delivered`; the first
   /// recipient's, for a send to several); null when not reported — Gmail reports nothing of the kind.
   deliveredAt             DateTime?          @map("delivered_at") @db.Timestamptz
+  /// TRANS-1: an admin's "Send test" through an SMTP2Go pool mailbox, to themselves. Left out of the mailbox's
+  /// allowance, spacing and rates, so a test never holds back a real send.
+  isTest                  Boolean            @default(false) @map("is_test")
   /// The sequence step this send is (P3-3); null for 1:1 mail.
   sequenceEnrolmentId     String?            @map("sequence_enrolment_id") @db.Uuid
   sequenceStepId          String?            @map("sequence_step_id") @db.Uuid

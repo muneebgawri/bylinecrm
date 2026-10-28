@@ -137,6 +137,7 @@ export class SendingPoolService {
             FROM mail_outbound
             WHERE mailbox_id = ${mailboxId}::uuid
               AND status IN ('sending', 'sent')
+              AND NOT is_test
               AND coalesce(sent_at, last_attempt_at) >= ${since}
               AND id <> ${exceptId ?? '00000000-0000-0000-0000-000000000000'}::uuid`;
         return row?.used ?? 0;
@@ -188,7 +189,8 @@ export class SendingPoolService {
             const [row] = await tx.$queryRaw<{ last: Date | null }[]>`
                 SELECT max(greatest(sent_at, last_attempt_at, send_at)) AS last
                 FROM mail_outbound
-                WHERE mailbox_id = ${mailboxId}::uuid AND status IN ('scheduled', 'queued', 'sending', 'sent')`;
+                WHERE mailbox_id = ${mailboxId}::uuid AND status IN ('scheduled', 'queued', 'sending', 'sent')
+                  AND NOT is_test`;
             const span = settings.jitterMaxSeconds - settings.jitterMinSeconds;
             const gapMs = (settings.jitterMinSeconds + Math.random() * span) * 1000;
             const spaced = row?.last ? row.last.getTime() + gapMs : 0;
@@ -212,7 +214,7 @@ export class SendingPoolService {
             const settings = await this.settingsIn(tx);
             const since = new Date(now.getTime() - settings.rateWindowDays * SENDING_POOL_WINDOW_MS);
             const sends = await tx.mailOutbound.count({
-                where: { mailboxId, status: 'sent', sentAt: { gte: since } },
+                where: { mailboxId, status: 'sent', isTest: false, sentAt: { gte: since } },
             });
             if (sends < settings.rateMinSample) return;
             const [bounces, complaints] = await Promise.all([
@@ -474,6 +476,7 @@ export class SendingPoolService {
             FROM mail_outbound
             WHERE mailbox_id = ${mailbox.id}::uuid
               AND status IN ('sending', 'sent')
+              AND NOT is_test
               AND coalesce(sent_at, last_attempt_at) >= ${since}
               AND id <> ${exceptId ?? '00000000-0000-0000-0000-000000000000'}::uuid`;
         return {

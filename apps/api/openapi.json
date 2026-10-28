@@ -21795,6 +21795,79 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/smtp2go/mailboxes/{mailboxId}/test": {
+            "post": {
+                "operationId": "poolSmtpMailboxes_test",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Smtp2GoTestResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/hooks/smtp2go/{mailboxId}": {
             "post": {
                 "operationId": "poolSmtpHook_receive",
@@ -40613,6 +40686,41 @@
                     }
                 },
                 "required": ["result"]
+            },
+            "Smtp2GoTestResult": {
+                "type": "object",
+                "properties": {
+                    "outcome": {
+                        "type": "string",
+                        "enum": ["sent", "refused"],
+                        "description": "`sent`: SMTP2Go took it — its webhook events for it follow; `refused`: the suppression list or SMTP2Go refused it (`error`)."
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "The admin’s own account address it went to."
+                    },
+                    "outboundId": {
+                        "nullable": true,
+                        "description": "The test send; null when the suppression list refused it before anything was made.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "error": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string"
+                            },
+                            "message": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["code", "message"]
+                    }
+                },
+                "required": ["outcome", "to", "outboundId", "error"]
             },
             "EnrichmentAnswer": {
                 "type": "object",

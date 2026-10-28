@@ -5,9 +5,10 @@ import {
     useAddSmtp2GoMailbox,
     usePutSmtp2GoKey,
     useRotateSmtp2GoSecret,
+    useSendSmtp2GoTest,
     useSmtp2GoMailboxes,
 } from '../../../api/smtp2go';
-import type { Smtp2GoMailboxView } from '../../../api/types';
+import type { Smtp2GoMailboxView, Smtp2GoTestResult } from '../../../api/types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
@@ -19,7 +20,7 @@ import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 const API_KEY = /^api-[A-Za-z0-9]{16,64}$/;
 
 const RESULT_TEXT: Record<string, string> = {
-    recorded: 'A bounce, complaint, open or click was recorded.',
+    recorded: 'A delivery, bounce, rejection, complaint, unsubscribe, open or click was recorded.',
     duplicate: 'A delivery already recorded arrived again.',
     unmatched: 'An event arrived for no send of this mailbox.',
     ignored: 'An event the CRM does not read was acknowledged.',
@@ -151,6 +152,8 @@ function AddForm({ workspaceId }: { workspaceId: string }) {
 function MailboxCard({ workspaceId, view }: { workspaceId: string; view: Smtp2GoMailboxView }) {
     const putKey = usePutSmtp2GoKey(workspaceId);
     const rotate = useRotateSmtp2GoSecret(workspaceId);
+    const test = useSendSmtp2GoTest(workspaceId);
+    const [tested, setTested] = useState<Smtp2GoTestResult | null>(null);
     const [apiKey, setApiKey] = useState('');
     const [keyError, setKeyError] = useState<string | undefined>();
     const [confirm, setConfirm] = useState(false);
@@ -199,7 +202,7 @@ function MailboxCard({ workspaceId, view }: { workspaceId: string; view: Smtp2Go
                     <div className="flex flex-col gap-2 text-[13px]">
                         <p className="m-0">
                             In SMTP2Go (Settings › Webhooks), add this URL with the Authorization header below; include
-                            the bounce, spam, open and click events, and the{' '}
+                            the processed, delivered, bounce, reject, spam, unsubscribe, open and click events, and the{' '}
                             <code className="text-xs">X-BylineCRM-Id</code> header.
                         </p>
                         <CopyValue value={view.hookUrl} label="Copy webhook URL" />
@@ -229,6 +232,36 @@ function MailboxCard({ workspaceId, view }: { workspaceId: string; view: Smtp2Go
                             New webhook secret
                         </Button>
                     </form>
+                    <div className="flex flex-col gap-1">
+                        <div>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                shape="square"
+                                loading={test.isPending}
+                                onClick={() =>
+                                    test.mutate(mailbox.id, {
+                                        onSuccess: setTested,
+                                        onError: (e) =>
+                                            toast({
+                                                title: 'That did not work',
+                                                description: failureText(e),
+                                                tone: 'danger',
+                                            }),
+                                    })
+                                }
+                            >
+                                Send test
+                            </Button>
+                        </div>
+                        {tested && (
+                            <p role="status" className="m-0 text-[13px] text-text-muted">
+                                {tested.outcome === 'sent'
+                                    ? `Sent to ${tested.to} through SMTP2Go. Its webhook’s last event shows above; reload to see the latest.`
+                                    : `Not sent to ${tested.to}: ${tested.error?.message ?? 'refused'}.`}
+                            </p>
+                        )}
+                    </div>
                 </>
             )}
             <ConfirmDialog

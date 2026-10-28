@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
-import type { AddSmtp2GoMailboxInput, Smtp2GoMailboxView } from './types';
+import type { AddSmtp2GoMailboxInput, Smtp2GoMailboxView, Smtp2GoTestResult } from './types';
 
 /**
  * SMTP2Go pool mailboxes (TRANS-1): the outreach pool's second transport, an admin's to add. The API key is sent
@@ -24,6 +24,8 @@ const smtp2go = {
         request<Smtp2GoMailboxView>('PUT', path(workspaceId, `/${mailboxId}/api-key`), { body: { apiKey } }),
     rotate: (workspaceId: string, mailboxId: string) =>
         request<Smtp2GoMailboxView>('POST', path(workspaceId, `/${mailboxId}/rotate-secret`)),
+    test: (workspaceId: string, mailboxId: string) =>
+        request<Smtp2GoTestResult>('POST', path(workspaceId, `/${mailboxId}/test`)),
 };
 
 export const useSmtp2GoMailboxes = (workspaceId: string) =>
@@ -48,3 +50,12 @@ export const usePutSmtp2GoKey = (workspaceId: string) =>
     );
 export const useRotateSmtp2GoSecret = (workspaceId: string) =>
     useSmtp2GoWrite(workspaceId, (mailboxId: string) => smtp2go.rotate(workspaceId, mailboxId));
+
+/** "Send test": one message through the mailbox's SMTP2Go key to the admin's own address. */
+export function useSendSmtp2GoTest(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (mailboxId: string) => smtp2go.test(workspaceId, mailboxId),
+        onSuccess: () => void client.invalidateQueries({ queryKey: keys.list(workspaceId) }),
+    });
+}

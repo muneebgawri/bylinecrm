@@ -332,6 +332,81 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
         });
     });
 
+    describe('"Send test" (admin only)', () => {
+        const used = async () =>
+            (
+                (await as(admin).get(w('/sending-pool'))).body as {
+                    mailboxes: { mailboxId: string; used: number }[];
+                }
+            ).mailboxes.find((m) => m.mailboxId === mine.mailbox.id)?.used;
+
+        it('sends one message to the admin through the mailbox, matched by its webhook, outside the allowance', async () => {
+            const before = await used();
+            const res = await as(admin)
+                .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                .expect(200);
+            const result = res.body as { outcome: string; to: string; outboundId: string };
+            expect(result).toMatchObject({ outcome: 'sent', to: `s2g-admin-${stamp}@example.com`, error: null });
+            expect(smtp2go.sent).toHaveLength(1);
+            expect(smtp2go.sent[0]!.apiKey).toBe(apiKey);
+            expect(smtp2go.sent[0]!.mime).toContain(`X-BylineCRM-Id: ${result.outboundId}`);
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: result.outboundId } });
+            expect(row).toMatchObject({ status: 'sent', isTest: true, mailboxId: mine.mailbox.id, personId: null });
+            expect(await used()).toBe(before);
+
+            const emailId = row.providerMessageId!.replace(/^smtp2go:/, '');
+            const delivered = {
+                event: 'delivered',
+                email_id: emailId,
+                rcpt: result.to,
+                time: new Date().toISOString(),
+            };
+            expect((await hook(mine, delivered).expect(200)).body).toEqual({ result: 'recorded' });
+            const listed = (await as(admin).get(w('/smtp2go/mailboxes')).expect(200)).body as Smtp2GoView[];
+            expect(listed.find((m) => m.mailbox.id === mine.mailbox.id)?.lastHookResult).toBe('recorded');
+        });
+
+        it('never passes the suppression list, and says when SMTP2Go refuses it', async () => {
+            const me = `s2g-admin-${stamp}@example.com`;
+            const entry = await suppressions.suppress(workspace, { address: me, reason: 'manual', source: 'member' });
+            const refused = (
+                await as(admin)
+                    .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                    .expect(200)
+            ).body;
+            expect(refused).toMatchObject({
+                outcome: 'refused',
+                outboundId: null,
+                error: { code: 'recipient.suppressed' },
+            });
+            expect(smtp2go.sent).toHaveLength(0);
+            await owner.suppression.update({
+                where: { id: entry.id },
+                data: { removedAt: new Date(), removalNote: 'test over' },
+            });
+
+            smtp2go.failNext('refused');
+            const failed = (
+                await as(admin)
+                    .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                    .expect(200)
+            ).body as {
+                outboundId: string;
+            };
+            expect(failed).toMatchObject({ outcome: 'refused', error: { code: 'smtp2go.api_key_invalid' } });
+            expect((await owner.mailOutbound.findUniqueOrThrow({ where: { id: failed.outboundId } })).status).toBe(
+                'failed',
+            );
+        });
+
+        it('is an admin’s, for this workspace’s mailboxes only', async () => {
+            await as(otherAdmin)
+                .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`, otherWorkspace))
+                .expect(404);
+            expect(smtp2go.sent).toHaveLength(0);
+        });
+    });
+
     describe('SMTP2Go’s webhook', () => {
         it('refuses a delivery without this mailbox’s secret, and another workspace’s secret', async () => {
             const body = { event: 'processed', email_id: 'x' };

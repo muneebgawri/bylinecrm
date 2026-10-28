@@ -187,6 +187,7 @@ export type NewswireosDealWonDeliveryView = Schemas['NewswireosDealWonDelivery']
 export type BylineSettingsView = Schemas['BylineSettings'];
 export type PutBylineSettingsInput = Loose<Schemas['PutBylineSettingsDto']>;
 export type Smtp2GoMailboxView = Schemas['Smtp2GoMailbox'];
+export type Smtp2GoTestResult = Schemas['Smtp2GoTestResult'];
 export type AddSmtp2GoMailboxInput = Loose<Schemas['AddSmtp2GoMailboxDto']>;
 export type BlocklistEntryView = Schemas['BlocklistEntry'];
 /** A new entry and the stored mail it removed (P2-2: the blocklist is retroactive). */

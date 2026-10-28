@@ -57,6 +57,7 @@ import { deleteOwnDraft } from './mail-drafts.service';
 import type { MailSendJob } from './mail-send.workers';
 import { buildMime, newMessageId, replySubject, type MimeAddress } from './mime';
 import type { MailOutboundView, MailRecordSendsPage, MailScheduledPage, MailSendAccepted } from './responses';
+import type { Smtp2GoTestResult } from '../smtp2go/responses';
 import { PoolRefusal, SendingPoolService } from '../sending-pool/sending-pool.service';
 import { RecipientSuppressed } from '../suppression/suppression.service';
 import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
@@ -1136,23 +1137,7 @@ export class MailSendService {
             return 'failed';
         }
 
-        const providerMessageId = `${SMTP2GO_PROVIDER_PREFIX}${emailId}`;
-        const sentAt = new Date();
-        await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailOutbound.update({
-                where: { id },
-                data: {
-                    status: 'sent',
-                    providerMessageId,
-                    providerThreadId: providerMessageId,
-                    // SMTP2Go sends the MIME as built: our Message-ID is the one a reply names.
-                    providerRfc822MessageId: row.rfc822MessageId,
-                    sentAt,
-                    lastError: Prisma.DbNull,
-                    request: Prisma.DbNull,
-                },
-            }),
-        );
+        const { providerMessageId, sentAt } = await this.recordSmtp2GoSent(workspaceId, row, emailId);
         try {
             await this.sync.storeSent(
                 workspaceId,
@@ -1165,6 +1150,119 @@ export class MailSendService {
             );
         }
         return 'sent';
+    }
+
+    /** What SMTP2Go took: the send is `sent`, under SMTP2Go's id, with our own Message-ID (it sends the MIME as built). */
+    private async recordSmtp2GoSent(
+        workspaceId: string,
+        row: OutboundRow,
+        emailId: string,
+    ): Promise<{ providerMessageId: string; sentAt: Date }> {
+        const providerMessageId = `${SMTP2GO_PROVIDER_PREFIX}${emailId}`;
+        const sentAt = new Date();
+        await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.mailOutbound.update({
+                where: { id: row.id },
+                data: {
+                    status: 'sent',
+                    providerMessageId,
+                    providerThreadId: providerMessageId,
+                    // SMTP2Go sends the MIME as built: our Message-ID is the one a reply names.
+                    providerRfc822MessageId: row.rfc822MessageId,
+                    sentAt,
+                    lastError: Prisma.DbNull,
+                    request: Prisma.DbNull,
+                },
+            }),
+        );
+        return { providerMessageId, sentAt };
+    }
+
+    /**
+     * TRANS-1 "Send test": one message through an SMTP2Go pool mailbox to the admin asking, at their account address,
+     * so the mailbox's key and webhook can be seen working. It is a send of that mailbox (`isTest`) with our
+     * Message-ID and `X-BylineCRM-Id`, so SMTP2Go's events for it match as any send's do. It skips what only a pool
+     * send passes — sequences, rotation, spacing and the allowance (it is left out of all three and of the rates, so
+     * it never holds back a real send) — but never the suppression list (`SendPolicy`, as every send). A refusal
+     * fails it as a real send's would; the answer says which. Not stored as a message: it is about no record.
+     */
+    async sendSmtp2GoTest(
+        mailboxId: string,
+        content: { subject: string; text: string; html: string },
+    ): Promise<Smtp2GoTestResult> {
+        const { workspaceId, memberId } = this.current();
+        if (!memberId) throw new ApiException(403, 'forbidden', 'a test is sent by a member signed in, not an API key');
+        const found = await this.rls.withWorkspace(async (tx) => {
+            const mailbox = await tx.mailbox.findFirst({ where: { id: mailboxId, transport: 'smtp2go' } });
+            const member = await tx.workspaceMember.findUniqueOrThrow({
+                where: { id: memberId },
+                select: { user: { select: { email: true, displayName: true } } },
+            });
+            return { mailbox, member };
+        });
+        const mailbox = found.mailbox;
+        if (!mailbox) throw new ApiException(404, 'not_found', 'SMTP2Go mailbox not found');
+        if (mailbox.status !== 'connected' || !mailbox.transportKeyCiphertext) {
+            throw new ApiException(409, 'conflict', 'the mailbox is not connected; give it a working API key first');
+        }
+        const to = found.member.user.email.toLowerCase();
+        try {
+            await this.policy.assertSendable(workspaceId, [{ address: to, personId: null, field: 'to' }]);
+        } catch (error) {
+            if (!(error instanceof RecipientSuppressed)) throw error;
+            return { outcome: 'refused', to, outboundId: null, error: { code: error.code, message: error.message } };
+        }
+        const id = randomUUID();
+        const rfc822MessageId = newMessageId();
+        const mime = buildMime({
+            from: { address: mailbox.email, name: found.member.user.displayName },
+            to: [{ address: to }],
+            subject: content.subject,
+            text: content.text,
+            html: content.html,
+            messageId: rfc822MessageId,
+            crmId: id,
+            date: new Date(),
+        });
+        const row = await this.rls.withWorkspace((tx) =>
+            tx.mailOutbound.create({
+                data: {
+                    id,
+                    workspaceId,
+                    mailboxId: mailbox.id,
+                    senderMemberId: memberId,
+                    rfc822MessageId,
+                    toAddresses: [to],
+                    subject: content.subject,
+                    status: 'sending',
+                    mime,
+                    attempts: 1,
+                    lastAttemptAt: new Date(),
+                    isTest: true,
+                },
+            }),
+        );
+        try {
+            const { emailId } = await this.smtp2go.sendMime(this.secrets.open(mailbox.transportKeyCiphertext), mime);
+            await this.recordSmtp2GoSent(workspaceId, row, emailId);
+            return { outcome: 'sent', to, outboundId: id, error: null };
+        } catch (error) {
+            if (!(error instanceof Smtp2GoError)) throw error;
+            const failure =
+                error.outcome === 'refused'
+                    ? { code: `smtp2go.${error.reason}`, message: `SMTP2Go refused the message (${error.status})` }
+                    : error.outcome === 'retry'
+                      ? {
+                            code: SMTP2GO_NOT_SENT,
+                            message: `SMTP2Go did not take the message (${error.status || 'no answer'}); try again later`,
+                        }
+                      : {
+                            code: 'smtp2go.unconfirmed',
+                            message: `SMTP2Go's answer was lost (${error.status || 'timeout'}); check SMTP2Go's activity`,
+                        };
+            await this.markFailed(workspaceId, id, { ...failure, at: new Date().toISOString() });
+            return { outcome: 'refused', to, outboundId: id, error: failure };
+        }
     }
 
     /** The queue's attempts are spent: the send failed, unless it went after all. */

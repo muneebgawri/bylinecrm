@@ -2,7 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ENV, type Env } from '../config/env';
 import { DomainEvents } from '../events/domain-events.service';
-import { ApiException } from '../infra/errors/api-errors';
+import { RateLimiter } from '../auth/rate-limiter.service';
+import { ApiException, RateLimited } from '../infra/errors/api-errors';
+import { MailSendService } from '../mail-send/mail-send.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -10,8 +12,8 @@ import { randomToken } from '../mail-accounts/oauth-flow';
 import { view as mailboxView } from '../mail-accounts/mailboxes.service';
 import { actorOf } from '../records/actor';
 import { enrolMailbox, sendingDomainOf } from '../sending-pool/pool-mailbox';
-import { SMTP2GO_HOOK_PATH } from './smtp2go.constants';
-import type { Smtp2GoMailboxView } from './responses';
+import { SMTP2GO_HOOK_PATH, SMTP2GO_TEST_LIMIT, SMTP2GO_TEST_WINDOW_S, smtp2goTestRateKey } from './smtp2go.constants';
+import type { Smtp2GoMailboxView, Smtp2GoTestResult } from './responses';
 
 type MailboxRow = Prisma.MailboxGetPayload<object>;
 
@@ -31,6 +33,8 @@ export class Smtp2GoMailboxesService {
         private readonly context: WorkspaceContext,
         private readonly secrets: SecretBox,
         private readonly events: DomainEvents,
+        private readonly sends: MailSendService,
+        private readonly limiter: RateLimiter,
     ) {}
 
     list(): Promise<Smtp2GoMailboxView[]> {
@@ -131,6 +135,24 @@ export class Smtp2GoMailboxesService {
                 }),
             );
         });
+    }
+
+    /**
+     * "Send test": one message through this mailbox's SMTP2Go key to the admin asking (`MailSendService`), with a
+     * link SMTP2Go's click tracking can follow, so the settings page shows its webhook's result. Rate-limited per
+     * mailbox; the answer says whether it went or why not.
+     */
+    async sendTest(id: string): Promise<Smtp2GoTestResult> {
+        const { workspaceId } = this.member();
+        await this.rls.withWorkspace((tx) => this.live(tx, id));
+        if (await this.limiter.hit(smtp2goTestRateKey(id), SMTP2GO_TEST_LIMIT, SMTP2GO_TEST_WINDOW_S)) {
+            throw new RateLimited('too many tests from this mailbox; try again in an hour');
+        }
+        const link = new URL(`/w/${workspaceId}/settings/smtp2go`, this.env.APP_URL).toString();
+        const subject = 'BylineCRM test through SMTP2Go';
+        const text = `This is a test from BylineCRM, sent through SMTP2Go to check this pool mailbox and its webhook.\n\nSettings: ${link}\n`;
+        const html = `<p>This is a test from BylineCRM, sent through SMTP2Go to check this pool mailbox and its webhook.</p><p><a href="${link}">Open Settings › SMTP2Go</a></p>`;
+        return this.sends.sendSmtp2GoTest(id, { subject, text, html });
     }
 
     private async live(tx: WorkspaceClient, id: string): Promise<MailboxRow> {

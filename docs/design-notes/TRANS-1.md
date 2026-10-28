@@ -85,6 +85,17 @@ twice; turn SMTP2Go's open/click tracking off for those domains. Distinct-click 
 hits, the URL. The mailbox records the last delivery's time and result (`recorded`, `duplicate`, `unmatched`,
 `ignored`, `bad_secret`) for the settings page.
 
+## Send test
+
+`POST /w/:id/smtp2go/mailboxes/:mailboxId/test` (`workspace:admin`, `200`, at most 5 per mailbox per hour) sends one
+message through the mailbox's key to the asking admin's own account address — our Message-ID, `X-BylineCRM-Id`, and a
+link to this settings page for SMTP2Go's click tracking. It is a send of that mailbox (`mail_outbound.is_test`), so
+SMTP2Go's events for it match as any send's and the card's last-event line shows them. It skips sequences and the
+pool's gate (rotation, spacing, allowance) and is left out of the allowance, spacing and rate denominators — a test
+never holds back a real send — but never skips the suppression list (`SendPolicy`). The answer is `sent`, or `refused`
+with the suppression list's or SMTP2Go's reason (a refused test send is `failed`, as a real one would be). It is not
+stored as a message: it is about no record.
+
 ## Domains
 
 An SMTP2Go mailbox's domain is enrolled and gated like any pool domain. The SPF step passes `include:spf.smtp2go.com`
