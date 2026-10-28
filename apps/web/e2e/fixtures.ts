@@ -1032,6 +1032,10 @@ export const slotlineSettings: SlotlineSettingsView = {
     lastDeliveryResult: 'stored',
     unmatchedOrganizers: 0,
     lastUnmatchedOrganizer: null,
+    catchUp: false,
+    catchUpThrough: null,
+    lastCatchUpAt: null,
+    lastCatchUpResult: null,
 };
 
 /** Kate's calendar (CAL-1): read a few minutes ago. */
