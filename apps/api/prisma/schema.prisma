@@ -20,6 +20,11 @@ model Workspace {
   defaultCurrency String   @default("USD") @map("default_currency") @db.Char(3)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  /// The lead pool this workspace shares leads with (`link-lead-pool`); null for none.
+  leadPoolId      String?  @map("lead_pool_id") @db.Uuid
+
+  leadPool          LeadPool?         @relation(fields: [leadPoolId], references: [id], onDelete: SetNull)
+  leadPoolAddresses LeadPoolAddress[]
 
   members WorkspaceMember[]
   roles   Role[]
@@ -596,6 +601,8 @@ model Person {
 
   mailOutbound MailOutbound[]
   mailDrafts   MailDraft[]
+
+  leadPoolAddress LeadPoolAddress?
 
   suppressions       Suppression[]
   unsubscribeTokens  UnsubscribeToken[]
@@ -3168,6 +3175,7 @@ enum GuardrailKind {
   spam_rate
   /// GUARD-2: mail that left (Gmail sync or a CRM send) to another member's lead, or to a customer on the exclusions.
   poach_suspected
+  pooled_customer
 
   @@map("guardrail_kind")
 }
@@ -3568,4 +3576,34 @@ model CadenceLapse {
   @@index([workspaceId, rotateAt])
   @@index([opportunityId])
   @@map("cadence_lapses")
+}
+
+/// Workspaces that share one set of leads: a primary email one has as a customer or prospect (the point
+/// of contact of an open or won deal) cannot be saved in another; a cold lead may be saved in both, and
+/// a person in the trash holds nothing. Kept by the `people_lead_pool_claim` trigger.
+model LeadPool {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspaces Workspace[]
+  addresses  LeadPoolAddress[]
+
+  @@map("lead_pools")
+}
+
+/// A live person's primary email in a pooled workspace, cold or not. Written only by the trigger and `link-lead-pool`.
+model LeadPoolAddress {
+  personId    String @id @map("person_id") @db.Uuid
+  poolId      String @map("pool_id") @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  email       String
+
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  pool      LeadPool  @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([poolId, email])
+  @@index([workspaceId])
+  @@map("lead_pool_addresses")
 }

@@ -450,6 +450,7 @@ export function CreateRecordDialog<O extends ListObject>({
 
 /** A taken address, said by whose person has it — what the saver needs to know whom to ask. */
 function takenText(holder: NonNullable<AddressCheckView['holder']>): string {
+    if (holder.workspaceName) return `This person is already a lead in ${holder.workspaceName}.`;
     const whose = holder.ownerName
         ? `${holder.ownerName} already has this person`
         : 'This person is already saved, with no owner';

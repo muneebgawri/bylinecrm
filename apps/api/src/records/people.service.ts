@@ -269,9 +269,19 @@ export class PeopleService implements BulkRecords {
     }
 
     /** The address is taken: says by whose person, so the saver knows whom to ask (no more of it is shown). */
-    private async conflict(context: WorkspaceRunContext, address: string | null | undefined): Promise<UniqueConflict> {
-        const holder = await this.ownership.addressHolder(context, address).catch(() => null);
+    private async conflict(
+        context: WorkspaceRunContext,
+        address: string | null | undefined,
+        exceptPersonId?: string,
+    ): Promise<UniqueConflict> {
+        const holder = await this.ownership.addressHolder(context, address, exceptPersonId).catch(() => null);
         if (!holder) return new UniqueConflict('a person with that primary email exists', 'emails.primary');
+        if (holder.workspaceName) {
+            return new UniqueConflict(
+                `a person with that primary email is already a lead in ${holder.workspaceName}`,
+                'emails.primary',
+            );
+        }
         const whose = holder.ownerName ? `owned by ${holder.ownerName}` : 'with no owner';
         const where = holder.trashed ? ', in the trash' : '';
         return new UniqueConflict(`a person with that primary email exists, ${whose}${where}`, 'emails.primary');
@@ -291,11 +301,13 @@ export class PeopleService implements BulkRecords {
         context: WorkspaceRunContext,
         id: string,
     ): Promise<{ row: PersonRow; event: DomainEvent }> {
-        const result = await tx.person.updateMany({
-            where: { id, ...recordWhere(context, true) },
-            data: { deletedAt: null },
+        const where = { id, ...recordWhere(context, true) };
+        const trashed = await tx.person.findFirst({ where, select: { emailPrimary: true } });
+        if (!trashed) throw notFound();
+        // A lead pool may have given the address to another workspace while this person was in the trash.
+        await tx.person.updateMany({ where, data: { deletedAt: null } }).catch(async (error: unknown) => {
+            throw uniqueViolation(error) ? await this.conflict(context, trashed.emailPrimary, id) : error;
         });
-        if (result.count === 0) throw notFound();
         return { row: await find(tx, context, id), event: event(context, 'person.restored', id) };
     }
 
