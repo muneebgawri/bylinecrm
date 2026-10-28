@@ -2,25 +2,59 @@ import type { DomainCheck, DomainCheckStep } from '@bylinecrm/shared';
 import { SMTP2GO_SPF_INCLUDE } from '../smtp2go/smtp2go.constants';
 import { GOOGLE_SPF_INCLUDE } from './sending-pool.constants';
 
-/** The three names a sending domain's check reads. */
-export function domainCheckNames(domain: string, selector: string): { spf: string; dkim: string; dmarc: string } {
-    return { spf: domain, dkim: `${selector}._domainkey.${domain}`, dmarc: `_dmarc.${domain}` };
+/**
+ * The DKIM selectors a domain's check reads (TRANS-1): the primary (Gmail's, `google`) while a Gmail-transport
+ * mailbox sends from the domain — or when no other selector is known — and every other selector its senders
+ * sign with (each SMTP2Go mailbox's).
+ */
+export function dkimSelectorsToCheck(
+    row: { dkimSelector: string; extraDkimSelectors: readonly string[] },
+    gmailSends: boolean,
+): string[] {
+    const primary = gmailSends || row.extraDkimSelectors.length === 0 ? [row.dkimSelector] : [];
+    return [...new Set([...primary, ...row.extraDkimSelectors])];
 }
+
+/** The names a sending domain's check reads: one DKIM name per selector. */
+export function domainCheckNames(
+    domain: string,
+    selectors: readonly string[],
+): { spf: string; dkim: string[]; dmarc: string } {
+    return { spf: domain, dkim: selectors.map((s) => `${s}._domainkey.${domain}`), dmarc: `_dmarc.${domain}` };
+}
+
+/** A TXT lookup's answer: the records, or why it could not be made ("could not check" is never "passed"). */
+export type TxtAnswer = string[] | { failure: string };
 
 const pass = (message: string): DomainCheckStep => ({ outcome: 'pass', message });
 const fail = (message: string): DomainCheckStep => ({ outcome: 'fail', message });
 
 /**
  * Whether a sending domain passes SPF, DKIM and DMARC (FR-CRMS-13), from its TXT records — a pure
- * judgement, so the lookups happen elsewhere, outside any transaction. What each step requires and
- * why: docs/design-notes/P3-2.md.
+ * judgement, so the lookups happen elsewhere, outside any transaction. DKIM passes only when every
+ * selector checked has a key. What each step requires and why: docs/design-notes/P3-2.md.
  */
-export function evaluateDomain(domain: string, selector: string, txt: (name: string) => string[]): DomainCheck {
-    const names = domainCheckNames(domain, selector);
+export function evaluateDomain(
+    domain: string,
+    selectors: readonly string[],
+    txt: (name: string) => TxtAnswer,
+): DomainCheck {
+    const names = domainCheckNames(domain, selectors);
+    const step = (name: string, judge: (records: string[]) => DomainCheckStep): DomainCheckStep => {
+        const answer = txt(name);
+        return Array.isArray(answer) ? judge(answer) : fail(answer.failure);
+    };
+    const dkim = names.dkim.map((name) => step(name, (records) => dkimStep(name, records)));
+    const dkimFails = dkim.filter((s) => s.outcome === 'fail');
     return {
-        spf: spfStep(txt(names.spf)),
-        dkim: dkimStep(names.dkim, txt(names.dkim)),
-        dmarc: dmarcStep(names.dmarc, txt(names.dmarc)),
+        spf: step(names.spf, spfStep),
+        dkim:
+            dkimFails.length > 0
+                ? fail(dkimFails.map((s) => s.message).join('; '))
+                : dkim.length === 1
+                  ? dkim[0]!
+                  : pass(`DKIM keys found at ${names.dkim.join(', ')}`),
+        dmarc: step(names.dmarc, (records) => dmarcStep(names.dmarc, records)),
     };
 }
 

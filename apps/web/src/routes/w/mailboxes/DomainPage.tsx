@@ -96,7 +96,10 @@ export function DomainPage() {
                     <p className="m-0 text-[13px] text-text-muted">Not checked yet.</p>
                 )}
                 <p className="m-0 mt-2 text-xs text-text-muted">
-                    DKIM selector <span className="font-medium text-text">{d.dkimSelector}</span>
+                    {d.extraDkimSelectors.length > 0 ? 'DKIM selectors ' : 'DKIM selector '}
+                    <span className="font-medium text-text">
+                        {[d.dkimSelector, ...d.extraDkimSelectors.filter((s) => s !== d.dkimSelector)].join(', ')}
+                    </span>
                     {d.checkedAt ? ` · checked ${formatRelative(d.checkedAt)}` : ''}
                 </p>
             </section>

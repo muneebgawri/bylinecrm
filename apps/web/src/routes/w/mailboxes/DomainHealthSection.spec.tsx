@@ -11,6 +11,7 @@ const domain = (over: Partial<SendingDomainView> = {}): SendingDomainView => ({
     id: 'd-1',
     domain: 'out.example',
     dkimSelector: 'google',
+    extraDkimSelectors: [],
     status: 'pass',
     lastCheck: {
         spf: { outcome: 'pass', message: 'SPF includes _spf.google.com' },

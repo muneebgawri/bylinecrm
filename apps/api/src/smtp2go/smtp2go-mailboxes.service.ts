@@ -86,9 +86,14 @@ export class Smtp2GoMailboxesService {
                 : await tx.mailbox.create({ data: { ...data, workspaceId: context.workspaceId, email } });
             await enrolMailbox(tx, row);
             if (input.dkimSelector) {
+                // Added to the selectors the domain check reads, never replacing Gmail's: a domain may use both.
                 await tx.sendingDomain.updateMany({
-                    where: { domain: sendingDomainOf(email) },
-                    data: { dkimSelector: input.dkimSelector, nextCheckAt: new Date() },
+                    where: {
+                        domain: sendingDomainOf(email),
+                        dkimSelector: { not: input.dkimSelector },
+                        NOT: { extraDkimSelectors: { has: input.dkimSelector } },
+                    },
+                    data: { extraDkimSelectors: { push: input.dkimSelector }, nextCheckAt: new Date() },
                 });
             }
             await this.events.record(tx, {

@@ -2014,8 +2014,11 @@ model SendingDomain {
   workspaceId            String                 @map("workspace_id") @db.Uuid
   /// Lower case.
   domain                 String
-  /// The DKIM selector checked: `<selector>._domainkey.<domain>`.
+  /// The primary (Gmail) DKIM selector, `<selector>._domainkey.<domain>`: checked while a Gmail-transport mailbox
+  /// sends from the domain, or when no other selector is known.
   dkimSelector           String                 @default("google") @map("dkim_selector")
+  /// The other selectors the domain's senders sign with (each SMTP2Go mailbox's, TRANS-1); every one is checked.
+  extraDkimSelectors     String[]               @default([]) @map("extra_dkim_selectors")
   status                 SendingDomainStatus    @default(unchecked)
   /// The last check's per-step results: `{ spf, dkim, dmarc }`, each `{ outcome, message }`.
   lastCheck              Json?                  @map("last_check")
