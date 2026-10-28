@@ -1630,6 +1630,7 @@ export const scheduledSends: MailOutboundView[] = [
         cancelledAt: null,
         createdAt: at(1),
         sentAt: null,
+        deliveredAt: null,
         tracking: { clicks: 0, uniqueClicks: 0, opens: 0 },
     },
 ];

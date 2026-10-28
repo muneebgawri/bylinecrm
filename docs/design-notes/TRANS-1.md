@@ -60,12 +60,25 @@ Each delivery is one event (JSON or form). It is matched to a **sent** send of *
 `smtp2go:<email_id>`, our `message-id`, or `X-BylineCRM-Id` (add that header in the webhook's "Email headers").
 The event key is a hash of (email_id, message-id, event, rcpt, time, url), so a redelivery changes nothing.
 
-| SMTP2Go event    | Writes                                                        | Events                                        | Then                                                                               |
-| ---------------- | ------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `bounce`         | `mail_bounces` (`message_id` null, `provider_event_id`)       | `email.bounced`                               | hard: suppression `hard_bounce`/`provider`, bounce rate judged (existing consumer) |
-| `spam`           | suppression `complaint`/`provider` with the send              | `suppression.added`, `email.complained` (new) | complaint rate judged (existing consumer)                                          |
-| `open` / `click` | `tracking_hits` (`token_id` null, `provider_event_id`, `url`) | `email.opened` / `email.clicked`              | same bot rule; stage rules as for our clicks                                       |
-| anything else    | —                                                             | —                                             | `ignored`                                                                          |
+| SMTP2Go event    | Writes                                                        | Events                                        | Then                                                                                |
+| ---------------- | ------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `bounce`         | `mail_bounces` (`message_id` null, `provider_event_id`)       | `email.bounced`                               | hard: suppression `hard_bounce`/`provider`, bounce rate judged (existing consumer)  |
+| `spam`           | suppression `complaint`/`provider` with the send              | `suppression.added`, `email.complained` (new) | complaint rate judged (existing consumer)                                           |
+| `open` / `click` | `tracking_hits` (`token_id` null, `provider_event_id`, `url`) | `email.opened` / `email.clicked`              | same bot rule; stage rules as for our clicks                                        |
+| `reject`         | send `sent` → `failed`, `last_error` `smtp2go.rejected`       | `email.failed`                                | the send job's one failure write (follow-ups called off; no longer counted as sent) |
+| `unsubscribe`    | suppression `unsubscribe`/`provider` with the send            | `suppression.added`                           | enrolments stop, as for our own link; never lifted                                  |
+| `delivered`      | send's `delivered_at` (first report kept)                     | —                                             | shown on the send (`deliveredAt`)                                                   |
+| `processed`      | —                                                             | —                                             | `ignored`: the send is `sent` already                                               |
+| `resubscribe`    | —                                                             | —                                             | `ignored`: an unsubscribe is never lifted, so the CRM does not mail it again        |
+| anything else    | —                                                             | —                                             | `ignored`                                                                           |
+
+Event names are the webhook's (`processed`, `delivered`, `open`, `click`, `bounce`, `spam`, `unsubscribe`,
+`resubscribe`, `reject`); the activity API's past-tense names (`rejected`, `unsubscribed`, `opened`, `clicked`) are
+read as the same events, and keyed as them, so either spelling redelivered changes nothing. A `reject` is SMTP2Go
+refusing the message after taking the API call (an address on SMTP2Go's own suppressions, an unverified sender, a
+sandboxed key): the CRM does not suppress the address for it, since the reason may be ours. A redelivered `reject`
+finds the send already failed and is a `duplicate`; a redelivered `unsubscribe` finds the entry for the send; a
+second `delivered` finds `delivered_at` set.
 
 If the workspace's own short-link domain (P3-4) tracked the send, SMTP2Go's open/click is `ignored` so nothing counts
 twice; turn SMTP2Go's open/click tracking off for those domains. Distinct-click counts use the token or, for SMTP2Go

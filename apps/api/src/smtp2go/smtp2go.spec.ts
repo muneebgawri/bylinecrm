@@ -54,8 +54,37 @@ describe('TRANS-1 SMTP2Go webhook events', () => {
             kind: 'click',
             url: 'https://acme.example/x',
         });
-        expect(parseSmtp2GoEvent({ event: 'delivered' })).toEqual({ kind: 'other', event: 'delivered' });
+        expect(parseSmtp2GoEvent({ event: 'processed' })).toEqual({ kind: 'other', event: 'processed' });
+        expect(parseSmtp2GoEvent({ event: 'resubscribe' })).toEqual({ kind: 'other', event: 'resubscribe' });
+        expect(parseSmtp2GoEvent({ event: 'toString' })).toEqual({ kind: 'other', event: 'tostring' });
         expect(parseSmtp2GoEvent('nonsense')).toEqual({ kind: 'other', event: '' });
+    });
+
+    it('reads reject, unsubscribe and delivered, by the webhook’s names and the activity API’s past tense', () => {
+        const reject = parseSmtp2GoEvent({
+            ...bounce,
+            event: 'reject',
+            message: 'Recipient is on the suppression list',
+        });
+        expect(reject).toMatchObject({ kind: 'reject', reason: 'Recipient is on the suppression list', crmId: CRM_ID });
+        expect(parseSmtp2GoEvent({ ...bounce, event: 'Rejected' })).toMatchObject({ kind: 'reject' });
+        expect(parseSmtp2GoEvent({ ...bounce, event: 'unsubscribe' })).toMatchObject({
+            kind: 'unsubscribe',
+            address: 'gone@acme.example',
+        });
+        expect(parseSmtp2GoEvent({ ...bounce, event: 'unsubscribed' })).toMatchObject({ kind: 'unsubscribe' });
+        expect(parseSmtp2GoEvent({ ...bounce, event: 'delivered' })).toMatchObject({
+            kind: 'delivered',
+            at: new Date('2026-10-20T10:00:00Z'),
+        });
+    });
+
+    it('keys a variant name as the event it is, so `rejected` redelivered as `reject` is the same event', () => {
+        const a = parseSmtp2GoEvent({ ...bounce, event: 'reject' });
+        const b = parseSmtp2GoEvent({ ...bounce, event: 'rejected' });
+        const delivered = parseSmtp2GoEvent({ ...bounce, event: 'delivered' });
+        expect(a.kind === 'reject' && b.kind === 'reject' && a.key === b.key).toBe(true);
+        expect(a.kind === 'reject' && delivered.kind === 'delivered' && a.key !== delivered.key).toBe(true);
     });
 
     it('ignores a send id that is not one of ours, and reads epoch-second times', () => {

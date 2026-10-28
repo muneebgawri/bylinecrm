@@ -5,6 +5,7 @@ import { RateLimiter } from '../auth/rate-limiter.service';
 import { hashToken } from '../auth/tokens';
 import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, RateLimited } from '../infra/errors/api-errors';
+import { MailSendService } from '../mail-send/mail-send.service';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
@@ -12,6 +13,7 @@ import { recordProviderBounce } from '../sending-pool/bounces';
 import { SuppressionService } from '../suppression/suppression.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { parseSmtp2GoEvent, type Smtp2GoEvent } from './smtp2go-event';
+import type { MailOutboundStatus, SuppressionReason } from '@prisma/client';
 import {
     SMTP2GO_HOOK_FAILURE_LIMIT,
     SMTP2GO_HOOK_FAILURE_WINDOW_S,
@@ -19,7 +21,7 @@ import {
     smtp2goHookRateKey,
 } from './smtp2go.constants';
 
-type Read = Extract<Smtp2GoEvent, { kind: 'bounce' | 'spam' | 'open' | 'click' }>;
+type Read = Exclude<Smtp2GoEvent, { kind: 'other' }>;
 
 /**
  * SMTP2Go's webhook for one pool mailbox (TRANS-1). The URL names the mailbox (read through the owner client, as
@@ -31,10 +33,16 @@ type Read = Extract<Smtp2GoEvent, { kind: 'bounce' | 'spam' | 'open' | 'click' }
  * - `spam` → the address suppressed as `complaint` from the provider (counts towards the complaint rate) and
  *   `email.complained`;
  * - `open` / `click` → `tracking_hits` + `email.opened` / `email.clicked`, unless our own short links track the
- *   send already.
- * Everything else SMTP2Go can send (`processed`, `delivered`, its own `unsubscribe`, …) is acknowledged and
- * ignored; replies are never SMTP2Go's — they arrive in the mailbox the message's Reply-To names, as before.
- * A redelivery changes nothing.
+ *   send already;
+ * - `reject` (SMTP2Go took the API call, then refused the message) → the send `failed` as `smtp2go.rejected`, by
+ *   the send job's one failure write (`MailSendService.failAfterSent`);
+ * - `unsubscribe` (SMTP2Go's own footer) → the address suppressed as `unsubscribe` from the provider, as the
+ *   CRM's own link does it;
+ * - `delivered` → the send's `delivered_at`, the first report kept.
+ * `processed` (the send is `sent` already) and `resubscribe` are acknowledged and ignored — an unsubscribe is
+ * never lifted (`SuppressionService`), so a resubscribe at SMTP2Go does not make the CRM mail the address again.
+ * Replies are never SMTP2Go's — they arrive in the mailbox the message's Reply-To names, as before. A redelivery
+ * changes nothing.
  */
 @Injectable()
 export class Smtp2GoHookService {
@@ -47,6 +55,7 @@ export class Smtp2GoHookService {
         private readonly suppressions: SuppressionService,
         private readonly tracking: TrackingService,
         private readonly limiter: RateLimiter,
+        private readonly sends: MailSendService,
     ) {}
 
     async receive(
@@ -76,10 +85,19 @@ export class Smtp2GoHookService {
     }
 
     private async apply(mailbox: { id: string; workspaceId: string }, event: Read): Promise<Smtp2GoHookResult> {
-        if (event.kind === 'spam') return this.complaint(mailbox, event);
+        if (event.kind === 'spam') return this.providerSuppression(mailbox, event, 'complaint');
+        if (event.kind === 'unsubscribe') return this.providerSuppression(mailbox, event, 'unsubscribe');
+        if (event.kind === 'reject') return this.rejected(mailbox, event);
         return this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
             const send = await sendOf(tx, mailbox.id, event);
             if (!send) return 'unmatched';
+            if (event.kind === 'delivered') {
+                const first = await tx.mailOutbound.updateMany({
+                    where: { id: send.id, deliveredAt: null },
+                    data: { deliveredAt: event.at },
+                });
+                return first.count === 1 ? 'recorded' : 'duplicate';
+            }
             const address = event.address ?? send.toAddresses[0] ?? null;
             if (event.kind === 'bounce') {
                 if (!address) return 'unmatched';
@@ -107,18 +125,46 @@ export class Smtp2GoHookService {
     }
 
     /**
-     * A spam complaint: the address goes on the suppression list as `complaint` from the provider, naming the
-     * send — which is what the pool's complaint rate counts (`SendingPoolConsumer`) — and `email.complained` is
-     * announced once. A complaint already recorded for this send is a `duplicate`.
+     * SMTP2Go refused the message after taking the API call (`reject`: an address on SMTP2Go's suppressions, an
+     * unverified sender, a sandboxed key). The send fails through the send job's one failure write — as one SMTP2Go
+     * refused at the API does, `smtp2go.<reason>` — so it is `failed`, `email.failed` is announced once, its queued
+     * follow-ups are called off, and it no longer counts as sent for the mailbox's allowance and rates. The address
+     * is not suppressed here: SMTP2Go's reason may be ours (the sender, the key), not the recipient's. A send already
+     * failed is a `duplicate`.
      */
-    private async complaint(mailbox: { id: string; workspaceId: string }, event: Read): Promise<Smtp2GoHookResult> {
+    private async rejected(mailbox: { id: string; workspaceId: string }, event: Read): Promise<Smtp2GoHookResult> {
+        const send = await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
+            sendOf(tx, mailbox.id, event, ['sent', 'failed']),
+        );
+        if (!send) return 'unmatched';
+        if (send.status === 'failed') return 'duplicate';
+        const failed = await this.sends.failAfterSent(mailbox.workspaceId, send.id, {
+            code: 'smtp2go.rejected',
+            message: `SMTP2Go rejected the message after taking it${event.reason ? ` (${event.reason})` : ''}`,
+            at: event.at.toISOString(),
+        });
+        return failed ? 'recorded' : 'duplicate';
+    }
+
+    /**
+     * A spam complaint or an unsubscribe through SMTP2Go's footer: the address goes on the suppression list
+     * (`complaint` / `unsubscribe`) from the provider, naming the send, through the one write every path uses — so
+     * no path mails it again, and its enrolments stop. A complaint is what the pool's complaint rate counts
+     * (`SendingPoolConsumer`) and is announced once as `email.complained`. One already recorded for this send is a
+     * `duplicate`.
+     */
+    private async providerSuppression(
+        mailbox: { id: string; workspaceId: string },
+        event: Read,
+        reason: Extract<SuppressionReason, 'complaint' | 'unsubscribe'>,
+    ): Promise<Smtp2GoHookResult> {
         const found = await this.rls.withWorkspace(mailbox.workspaceId, async (tx) => {
             const send = await sendOf(tx, mailbox.id, event);
             if (!send) return null;
             const address = event.address ?? send.toAddresses[0] ?? null;
             if (!address) return null;
             const already = await tx.suppression.count({
-                where: { address, reason: 'complaint', outboundId: send.id },
+                where: { address, reason, outboundId: send.id },
             });
             return { send, address, already: already > 0 };
         });
@@ -126,11 +172,12 @@ export class Smtp2GoHookService {
         if (found.already) return 'duplicate';
         await this.suppressions.suppress(mailbox.workspaceId, {
             address: found.address,
-            reason: 'complaint',
+            reason,
             source: 'provider',
             personId: found.send.personId,
             outboundId: found.send.id,
         });
+        if (reason !== 'complaint') return 'recorded';
         await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
             this.events.record(tx, {
                 type: 'email.complained',
@@ -161,8 +208,11 @@ export class Smtp2GoHookService {
     }
 }
 
-/** The send of this mailbox an event is about: by SMTP2Go's id for it, our Message-ID, or our send id. */
-function sendOf(tx: WorkspaceClient, mailboxId: string, event: Read) {
+/**
+ * The send of this mailbox an event is about: by SMTP2Go's id for it, our Message-ID, or our send id — one that went
+ * (`statuses`: a reject also finds the one it already failed, so a redelivery is a `duplicate`).
+ */
+function sendOf(tx: WorkspaceClient, mailboxId: string, event: Read, statuses: MailOutboundStatus[] = ['sent']) {
     const or = [
         ...(event.emailId ? [{ providerMessageId: `${SMTP2GO_PROVIDER_PREFIX}${event.emailId}` }] : []),
         ...(event.messageId ? [{ rfc822MessageId: event.messageId }] : []),
@@ -170,8 +220,8 @@ function sendOf(tx: WorkspaceClient, mailboxId: string, event: Read) {
     ];
     if (or.length === 0) return Promise.resolve(null);
     return tx.mailOutbound.findFirst({
-        where: { mailboxId, status: 'sent', OR: or },
-        select: { id: true, personId: true, toAddresses: true },
+        where: { mailboxId, status: { in: statuses }, OR: or },
+        select: { id: true, status: true, personId: true, toAddresses: true },
     });
 }
 

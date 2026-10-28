@@ -149,7 +149,7 @@ export interface ScheduleOutreachInput {
 }
 
 /** Why the last attempt failed, as kept on the row. Never a token or a raw Google body. */
-interface SendErrorRecord {
+export interface SendErrorRecord {
     code: string;
     message: string;
     at: string;
@@ -1440,20 +1440,40 @@ export class MailSendService {
         return null;
     }
 
-    /** Fails a send for good; announced once (`email.failed`), when it becomes failed — not on a re-mark. */
-    private async markFailed(workspaceId: string, id: string, error: SendErrorRecord): Promise<void> {
-        await this.rls.withWorkspace(workspaceId, async (tx) => {
+    /**
+     * TRANS-1: a send that went is failed after all — the provider refused it after taking it (SMTP2Go's `reject`
+     * webhook event: a recipient on SMTP2Go's own suppressions, an unverified sender, a sandboxed key). The same
+     * write as any failure: `failed` with the reason, `email.failed` once, its queued follow-ups called off; and, as
+     * for a send SMTP2Go refused at the API, it no longer counts towards the mailbox's allowance or its rates'
+     * denominator (both count `sending`/`sent`). False when the send was not `sent` (a redelivered event).
+     */
+    failAfterSent(workspaceId: string, id: string, error: SendErrorRecord): Promise<boolean> {
+        return this.markFailed(workspaceId, id, error, ['sent']);
+    }
+
+    /**
+     * Fails a send for good; announced once (`email.failed`), when it becomes failed — not on a re-mark. `from`: the
+     * states it may fail from — one not yet gone, unless the provider failed it afterwards (`failAfterSent`).
+     */
+    private async markFailed(
+        workspaceId: string,
+        id: string,
+        error: SendErrorRecord,
+        from: MailOutboundStatus[] = ['queued', 'sending'],
+    ): Promise<boolean> {
+        return this.rls.withWorkspace(workspaceId, async (tx) => {
             const record = error as unknown as Prisma.InputJsonValue;
             const changed = await tx.mailOutbound.updateMany({
-                where: { id, status: { in: ['queued', 'sending'] } },
+                where: { id, status: { in: from } },
                 data: { status: 'failed', lastError: record },
             });
             if (changed.count === 1) {
                 await this.announceFailure(tx, workspaceId, id, error);
                 await this.cancelFollowUps(tx, workspaceId, id, 'previous_failed', SYSTEM);
-            } else {
-                await tx.mailOutbound.updateMany({ where: { id, status: 'failed' }, data: { lastError: record } });
+                return true;
             }
+            await tx.mailOutbound.updateMany({ where: { id, status: 'failed' }, data: { lastError: record } });
+            return false;
         });
     }
 
@@ -1882,6 +1902,7 @@ function view(
         cancelledAt: row.cancelledAt,
         createdAt: row.createdAt,
         sentAt: row.sentAt,
+        deliveredAt: row.deliveredAt,
         tracking: tracking ?? { ...NO_TRACKING_COUNTS },
     };
 }

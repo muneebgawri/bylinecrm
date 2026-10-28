@@ -1577,6 +1577,9 @@ model MailOutbound {
   /// `{ code, message, at }` while the last attempt failed; null after a clean one.
   lastError               Json?              @map("last_error")
   sentAt                  DateTime?          @map("sent_at") @db.Timestamptz
+  /// TRANS-1: when the recipient's server accepted it, as the provider reported (SMTP2Go's `delivered`; the first
+  /// recipient's, for a send to several); null when not reported — Gmail reports nothing of the kind.
+  deliveredAt             DateTime?          @map("delivered_at") @db.Timestamptz
   /// The sequence step this send is (P3-3); null for 1:1 mail.
   sequenceEnrolmentId     String?            @map("sequence_enrolment_id") @db.Uuid
   sequenceStepId          String?            @map("sequence_step_id") @db.Uuid
