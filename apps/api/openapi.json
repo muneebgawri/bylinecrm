@@ -34223,9 +34223,14 @@
                             "trashed": {
                                 "type": "boolean",
                                 "description": "The person is in the trash, where it still holds the address."
+                            },
+                            "workspaceName": {
+                                "nullable": true,
+                                "description": "Set when a workspace sharing this one's lead pool has the person (then nothing else is told); null for this workspace.",
+                                "type": "string"
                             }
                         },
-                        "required": ["ownerName", "trashed"]
+                        "required": ["ownerName", "trashed", "workspaceName"]
                     }
                 },
                 "required": ["available", "holder"]

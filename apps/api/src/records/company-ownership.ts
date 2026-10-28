@@ -235,16 +235,26 @@ export class CompanyOwnership {
     async addressHolder(
         context: WorkspaceRunContext,
         address: string | null | undefined,
-    ): Promise<{ ownerName: string | null; trashed: boolean } | null> {
+        /** A person not to count: the one being restored, which holds its own address. */
+        exceptPersonId?: string,
+    ): Promise<{ ownerName: string | null; trashed: boolean; workspaceName: string | null } | null> {
         if (!address) return null;
+        const email = address.trim().toLowerCase();
         return this.widened(context, async (tx) => {
             const person = await tx.person.findFirst({
-                where: { emailPrimary: address.trim().toLowerCase() },
+                where: { emailPrimary: email, ...(exceptPersonId ? { id: { not: exceptPersonId } } : {}) },
                 select: { deletedAt: true, owner: { select: { user: { select: { displayName: true } } } } },
             });
-            return person
-                ? { ownerName: person.owner?.user.displayName ?? null, trashed: person.deletedAt !== null }
-                : null;
+            if (person) {
+                return {
+                    ownerName: person.owner?.user.displayName ?? null,
+                    trashed: person.deletedAt !== null,
+                    workspaceName: null,
+                };
+            }
+            // A workspace sharing this one's lead pool: only its name is told.
+            const [pooled] = await tx.$queryRaw<{ name: string | null }[]>`SELECT lead_pool_holder(${email}) AS name`;
+            return pooled?.name ? { ownerName: null, trashed: false, workspaceName: pooled.name } : null;
         });
     }
 
