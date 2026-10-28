@@ -524,7 +524,7 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             expect((await suppressions.check(workspace, [to])).has(to)).toBe(false);
         });
 
-        it('suppresses the address here too when SMTP2Go rejected it for its own suppression list', async () => {
+        it('reads the reject’s wording when SMTP2Go’s suppressions cannot be read', async () => {
             const cases = [
                 ['unsub', 'Recipient is on the suppression list (unsubscribed)', 'unsubscribe'],
                 ['spam', 'Recipient suppressed: spam complaint', 'complaint'],
@@ -552,6 +552,44 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             }
             await settle(app);
             expect((await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } })).pausedAt).toBeNull();
+        });
+
+        it('asks SMTP2Go’s suppressions whose a reject was, whatever its wording says', async () => {
+            const held = `reject-held-${stamp}@acme.example`;
+            const blocked = `reject-blocked-${stamp}@acme.example`;
+            const free = `reject-free-${stamp}@acme.example`;
+            smtp2go.holdSuppressions({ [held]: 'spam', [blocked]: 'compliance' });
+            const reject = async (to: string, message: string) => {
+                const s = await sent(to);
+                const body = {
+                    event: 'reject',
+                    email_id: s.emailId,
+                    rcpt: to,
+                    message,
+                    time: new Date().toISOString(),
+                };
+                expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
+                return s;
+            };
+            // The wording names no suppression; SMTP2Go's list says it is a complaint.
+            const a = await reject(held, 'Message rejected');
+            expect((await owner.mailOutbound.findUniqueOrThrow({ where: { id: a.id } })).lastError).toMatchObject({
+                code: 'smtp2go.rejected_suppressed',
+            });
+            expect(
+                await owner.suppression.findFirstOrThrow({ where: { workspaceId: workspace, address: held } }),
+            ).toMatchObject({ reason: 'complaint', source: 'provider', outboundId: a.id });
+            // A block SMTP2Go names otherwise is still the recipient's: manual here.
+            await reject(blocked, 'Message rejected');
+            expect(
+                await owner.suppression.findFirstOrThrow({ where: { workspaceId: workspace, address: blocked } }),
+            ).toMatchObject({ reason: 'manual', source: 'provider' });
+            // Wording that sounds like a suppression, but SMTP2Go holds none: ours, and nothing suppressed.
+            const c = await reject(free, 'Recipient is on the suppression list (unsubscribed)');
+            expect((await owner.mailOutbound.findUniqueOrThrow({ where: { id: c.id } })).lastError).toMatchObject({
+                code: 'smtp2go.rejected',
+            });
+            expect(await owner.suppression.count({ where: { workspaceId: workspace, address: free } })).toBe(0);
         });
 
         it('suppresses an address unsubscribed through SMTP2Go, from the provider; a resubscribe lifts nothing', async () => {

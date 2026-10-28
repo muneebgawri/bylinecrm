@@ -6,6 +6,13 @@ export class FakeSmtp2Go implements Smtp2GoPort {
     readonly sent: { apiKey: string; mime: string; emailId: string }[] = [];
     private failures: Smtp2GoError[] = [];
     private next = 1;
+    /** SMTP2Go's suppressions as a test sets them; null — the default — is a key that may not read them. */
+    private suppressions: Map<string, string> | null = null;
+
+    /** SMTP2Go's suppressions hold these addresses, for these reasons (`unsubscribe`, `spam`, `bounce`, …). */
+    holdSuppressions(entries: Record<string, string>): void {
+        this.suppressions = new Map(Object.entries(entries).map(([a, r]) => [a.toLowerCase(), r]));
+    }
 
     /** The next send fails this way (`retry`: 503; `refused`: 401; `unconfirmed`: 500). */
     failNext(outcome: Smtp2GoError['outcome']): void {
@@ -22,8 +29,17 @@ export class FakeSmtp2Go implements Smtp2GoPort {
         return Promise.resolve({ emailId });
     }
 
+    suppressionOf(_apiKey: string, address: string): Promise<string | null> {
+        assertNoOpenTransaction('FakeSmtp2Go.suppressionOf');
+        if (!this.suppressions) {
+            return Promise.reject(new Smtp2GoError(403, 'refused', 'E_ApiResponseCodes.ENDPOINT_PERMISSION_DENIED'));
+        }
+        return Promise.resolve(this.suppressions.get(address.toLowerCase()) ?? null);
+    }
+
     clear(): void {
         this.sent.length = 0;
         this.failures = [];
+        this.suppressions = null;
     }
 }

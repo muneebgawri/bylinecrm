@@ -46,4 +46,39 @@ export class Smtp2GoHttp implements Smtp2GoPort {
         if (res.status >= 500) throw new Smtp2GoError(res.status, 'unconfirmed', reason, detail);
         throw new Smtp2GoError(res.status, 'refused', reason, detail);
     }
+
+    async suppressionOf(apiKey: string, address: string): Promise<string | null> {
+        let res: Response;
+        try {
+            res = await this.fetchFn(`${SMTP2GO_API_URL}/suppression/view`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-Smtp2go-Api-Key': apiKey,
+                },
+                body: JSON.stringify({ email_address: address }),
+                signal: AbortSignal.timeout(SMTP2GO_HTTP_TIMEOUT_MS),
+            });
+        } catch {
+            throw new Smtp2GoError(0, 'retry', 'unreachable');
+        }
+        const body = (await res.json().catch(() => null)) as {
+            data?: { results?: { reason?: unknown }[]; error_code?: string; error?: string };
+        } | null;
+        if (!res.ok || !Array.isArray(body?.data?.results)) {
+            const reason = typeof body?.data?.error_code === 'string' ? body.data.error_code.slice(0, 80) : 'error';
+            const detail = typeof body?.data?.error === 'string' ? body.data.error.trim().slice(0, 200) || null : null;
+            throw new Smtp2GoError(
+                res.status,
+                res.status === 429 || res.status === 503 ? 'retry' : 'refused',
+                reason,
+                detail,
+            );
+        }
+        const hit = body.data.results[0];
+        if (!hit) return null;
+        // A suppression with no reason SMTP2Go names is still one: an admin's block reads as `manual`.
+        return typeof hit.reason === 'string' && hit.reason.trim() ? hit.reason.trim().toLowerCase() : 'manual';
+    }
 }

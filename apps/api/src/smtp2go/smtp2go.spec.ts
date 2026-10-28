@@ -3,7 +3,7 @@ import { buildMime } from '../mail-send/mime';
 import { gmailShapeOf } from '../mail-send/mime-read';
 import { parseGmailMessage } from '../mail-sync/parse-message';
 import { evaluateDomain } from '../sending-pool/domain-checks';
-import { parseSmtp2GoEvent, rejectedRecipient } from './smtp2go-event';
+import { parseSmtp2GoEvent, rejectedRecipient, suppressionFromSmtp2Go } from './smtp2go-event';
 import { Smtp2GoHttp, type FetchLike } from './smtp2go.http';
 import { Smtp2GoError } from './smtp2go.port';
 
@@ -155,6 +155,33 @@ describe('TRANS-1 SMTP2Go HTTP adapter', () => {
                 throw new TypeError('fetch failed');
             }),
         ).toBe('retry');
+    });
+
+    it('reads SMTP2Go’s suppression of an address, and says when it cannot', async () => {
+        const http = (status: number, body: unknown) => new Smtp2GoHttp(answer(status, body));
+        expect(
+            await http(200, { data: { results: [{ email_address: 'a@x.example', reason: 'Spam' }] } }).suppressionOf(
+                'k',
+                'a@x.example',
+            ),
+        ).toBe('spam');
+        expect(JSON.parse(calls.at(-1)!.init.body as string)).toEqual({ email_address: 'a@x.example' });
+        expect(calls.at(-1)!.url).toBe('https://api.smtp2go.com/v3/suppression/view');
+        expect(await http(200, { data: { results: [] } }).suppressionOf('k', 'a@x.example')).toBeNull();
+        expect(await http(200, { data: { results: [{ reason: '' }] } }).suppressionOf('k', 'a@x.example')).toBe(
+            'manual',
+        );
+        await expect(
+            http(403, { data: { error_code: 'E_ApiResponseCodes.ENDPOINT_PERMISSION_DENIED' } }).suppressionOf(
+                'k',
+                'a',
+            ),
+        ).rejects.toBeInstanceOf(Smtp2GoError);
+        expect(suppressionFromSmtp2Go('unsubscribe')).toBe('unsubscribe');
+        expect(suppressionFromSmtp2Go('spam')).toBe('complaint');
+        expect(suppressionFromSmtp2Go('bounce')).toBe('hard_bounce');
+        expect(suppressionFromSmtp2Go('compliance')).toBe('manual');
+        expect(suppressionFromSmtp2Go('manual')).toBe('manual');
     });
 
     it('keeps SMTP2Go’s own reason for a refusal, so the send says why', async () => {

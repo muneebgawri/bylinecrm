@@ -108,11 +108,25 @@ function timeOf(raw: string | null): Date | null {
  */
 export function rejectedRecipient(
     reason: string | null,
-): { recipient: false } | { recipient: true; suppression: 'hard_bounce' | 'complaint' | 'unsubscribe' | null } {
+):
+    | { recipient: false }
+    | { recipient: true; suppression: 'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual' | null } {
     const text = (reason ?? '').toLowerCase();
     if (!/suppress|unsubscri|spam|complain|hard[\s_-]?bounce|bounced/.test(text)) return { recipient: false };
     if (/unsubscri/.test(text)) return { recipient: true, suppression: 'unsubscribe' };
     if (/spam|complain/.test(text)) return { recipient: true, suppression: 'complaint' };
     if (/bounce/.test(text)) return { recipient: true, suppression: 'hard_bounce' };
     return { recipient: true, suppression: null };
+}
+
+/**
+ * SMTP2Go's reason for a suppression (`Smtp2GoPort.suppressionOf`) as ours: `unsubscribe` as an unsubscribe, `spam` as
+ * a complaint, `bounce` as a hard bounce; anything else (`manual`, `compliance`, a name SMTP2Go adds later) as `manual`
+ * — still the recipient's, never our sending's fault.
+ */
+export function suppressionFromSmtp2Go(reason: string): 'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual' {
+    if (reason === 'unsubscribe' || reason === 'unsubscribed') return 'unsubscribe';
+    if (reason === 'spam' || reason === 'complaint') return 'complaint';
+    if (reason === 'bounce' || reason === 'hard-bounce' || reason === 'hard_bounce') return 'hard_bounce';
+    return 'manual';
 }

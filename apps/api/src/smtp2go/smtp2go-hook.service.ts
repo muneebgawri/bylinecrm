@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Smtp2GoHookResult } from '@bylinecrm/shared';
 import { RateLimiter } from '../auth/rate-limiter.service';
 import { hashToken } from '../auth/tokens';
@@ -12,7 +12,8 @@ import { SecretBox } from '../infra/secret-box';
 import { recordProviderBounce } from '../sending-pool/bounces';
 import { SuppressionService } from '../suppression/suppression.service';
 import { TrackingService } from '../tracking/tracking.service';
-import { parseSmtp2GoEvent, rejectedRecipient, type Smtp2GoEvent } from './smtp2go-event';
+import { parseSmtp2GoEvent, rejectedRecipient, suppressionFromSmtp2Go, type Smtp2GoEvent } from './smtp2go-event';
+import { SMTP2GO_PORT, type Smtp2GoPort } from './smtp2go.port';
 import type { MailOutboundStatus, SuppressionReason } from '@prisma/client';
 import {
     SMTP2GO_HOOK_FAILURE_LIMIT,
@@ -59,6 +60,7 @@ export class Smtp2GoHookService {
         private readonly tracking: TrackingService,
         private readonly limiter: RateLimiter,
         private readonly sends: MailSendService,
+        @Inject(SMTP2GO_PORT) private readonly smtp2go: Smtp2GoPort,
     ) {}
 
     async receive(
@@ -131,7 +133,7 @@ export class Smtp2GoHookService {
      * SMTP2Go refused the message after taking the API call (`reject`). The send fails through the send job's one
      * failure write — as one SMTP2Go refused at the API does — so it is `failed`, `email.failed` is announced once,
      * its queued follow-ups are called off, and it no longer counts as sent for the mailbox's allowance and rates.
-     * Whose doing it was decides the rest (`rejectedRecipient`):
+     * Whose doing it was decides the rest (`whoseReject`: SMTP2Go's own suppressions, read back, or else its reason):
      * - the recipient is on SMTP2Go's suppressions (`smtp2go.rejected_suppressed`) → the address is suppressed here
      *   too, from the provider, as the matching reason (hard bounce, complaint, unsubscribe), naming the send — so no
      *   path mails it again; a reason that does not say which kind suppresses nothing (it is still not ours);
@@ -145,14 +147,14 @@ export class Smtp2GoHookService {
         );
         if (!send) return 'unmatched';
         if (send.status === 'failed') return 'duplicate';
-        const whose = rejectedRecipient(event.reason);
+        const address = event.address ?? send.toAddresses[0] ?? null;
+        const whose = await this.whoseReject(mailbox, address, event.reason);
         const failed = await this.sends.failAfterSent(mailbox.workspaceId, send.id, {
             code: whose.recipient ? SMTP2GO_REJECTED_SUPPRESSED : SMTP2GO_REJECTED,
             message: `SMTP2Go rejected the message after taking it${event.reason ? ` (${event.reason})` : ''}`,
             at: event.at.toISOString(),
         });
         if (!failed) return 'duplicate';
-        const address = event.address ?? send.toAddresses[0] ?? null;
         if (whose.recipient && whose.suppression && address) {
             await this.suppressions.suppress(mailbox.workspaceId, {
                 address,
@@ -163,6 +165,33 @@ export class Smtp2GoHookService {
             });
         }
         return 'recorded';
+    }
+
+    /**
+     * Whether a reject was the recipient's: SMTP2Go rejects only for its suppressions, an unverified sender, or a
+     * sandboxed key, so its suppressions answer it — held for the address (and why) is the recipient's, not held is
+     * ours. SMTP2Go does not document a reject's wording, so its reason is read only when the suppressions cannot be
+     * (the key lacks `/suppression/view`, SMTP2Go unreachable). Called outside any transaction.
+     */
+    private async whoseReject(
+        mailbox: { id: string; workspaceId: string },
+        address: string | null,
+        reason: string | null,
+    ): Promise<ReturnType<typeof rejectedRecipient>> {
+        const key = await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
+            tx.mailbox.findUnique({ where: { id: mailbox.id }, select: { transportKeyCiphertext: true } }),
+        );
+        if (address && key?.transportKeyCiphertext) {
+            try {
+                const held = await this.smtp2go.suppressionOf(this.secrets.open(key.transportKeyCiphertext), address);
+                return held === null
+                    ? { recipient: false }
+                    : { recipient: true, suppression: suppressionFromSmtp2Go(held) };
+            } catch {
+                // SMTP2Go could not say: its reason is all there is.
+            }
+        }
+        return rejectedRecipient(reason);
     }
 
     /**
