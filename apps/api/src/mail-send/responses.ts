@@ -87,6 +87,10 @@ export const mailOutboundView = named(
         cancelledAt: dateTime.nullable(),
         createdAt: dateTime,
         sentAt: dateTime.nullable(),
+        deliveredAt: dateTime.nullable().meta({
+            description:
+                'When the recipient’s server accepted it, as the provider reported (TRANS-1: SMTP2Go’s `delivered`); null when not reported.',
+        }),
         tracking: trackingCounts.meta({
             description: 'Clicks and indicative opens on this send (P3-4); zeros until it is sent and tracked.',
         }),

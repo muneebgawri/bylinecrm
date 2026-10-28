@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
@@ -160,7 +161,16 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
         send = app.get(MailSendService);
         sync = app.get(MailSyncService);
         suppressions = app.get(SuppressionService);
-        log = await eventLog(app, 'email.bounced', 'email.complained', 'email.opened', 'email.clicked', 'email.sent');
+        log = await eventLog(
+            app,
+            'email.bounced',
+            'email.complained',
+            'email.opened',
+            'email.clicked',
+            'email.sent',
+            'email.failed',
+            'suppression.added',
+        );
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -323,9 +333,84 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
         });
     });
 
+    describe('"Send test" (admin only)', () => {
+        const used = async () =>
+            (
+                (await as(admin).get(w('/sending-pool'))).body as {
+                    mailboxes: { mailboxId: string; used: number }[];
+                }
+            ).mailboxes.find((m) => m.mailboxId === mine.mailbox.id)?.used;
+
+        it('sends one message to the admin through the mailbox, matched by its webhook, outside the allowance', async () => {
+            const before = await used();
+            const res = await as(admin)
+                .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                .expect(200);
+            const result = res.body as { outcome: string; to: string; outboundId: string };
+            expect(result).toMatchObject({ outcome: 'sent', to: `s2g-admin-${stamp}@example.com`, error: null });
+            expect(smtp2go.sent).toHaveLength(1);
+            expect(smtp2go.sent[0]!.apiKey).toBe(apiKey);
+            expect(smtp2go.sent[0]!.mime).toContain(`X-BylineCRM-Id: ${result.outboundId}`);
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: result.outboundId } });
+            expect(row).toMatchObject({ status: 'sent', isTest: true, mailboxId: mine.mailbox.id, personId: null });
+            expect(await used()).toBe(before);
+
+            const emailId = row.providerMessageId!.replace(/^smtp2go:/, '');
+            const delivered = {
+                event: 'delivered',
+                email_id: emailId,
+                rcpt: result.to,
+                time: new Date().toISOString(),
+            };
+            expect((await hook(mine, delivered).expect(200)).body).toEqual({ result: 'recorded' });
+            const listed = (await as(admin).get(w('/smtp2go/mailboxes')).expect(200)).body as Smtp2GoView[];
+            expect(listed.find((m) => m.mailbox.id === mine.mailbox.id)?.lastHookResult).toBe('recorded');
+        });
+
+        it('never passes the suppression list, and says when SMTP2Go refuses it', async () => {
+            const me = `s2g-admin-${stamp}@example.com`;
+            const entry = await suppressions.suppress(workspace, { address: me, reason: 'manual', source: 'member' });
+            const refused = (
+                await as(admin)
+                    .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                    .expect(200)
+            ).body;
+            expect(refused).toMatchObject({
+                outcome: 'refused',
+                outboundId: null,
+                error: { code: 'recipient.suppressed' },
+            });
+            expect(smtp2go.sent).toHaveLength(0);
+            await owner.suppression.update({
+                where: { id: entry.id },
+                data: { removedAt: new Date(), removalNote: 'test over' },
+            });
+
+            smtp2go.failNext('refused');
+            const failed = (
+                await as(admin)
+                    .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                    .expect(200)
+            ).body as {
+                outboundId: string;
+            };
+            expect(failed).toMatchObject({ outcome: 'refused', error: { code: 'smtp2go.api_key_invalid' } });
+            expect((await owner.mailOutbound.findUniqueOrThrow({ where: { id: failed.outboundId } })).status).toBe(
+                'failed',
+            );
+        });
+
+        it('is an admin’s, for this workspace’s mailboxes only', async () => {
+            await as(otherAdmin)
+                .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`, otherWorkspace))
+                .expect(404);
+            expect(smtp2go.sent).toHaveLength(0);
+        });
+    });
+
     describe('SMTP2Go’s webhook', () => {
         it('refuses a delivery without this mailbox’s secret, and another workspace’s secret', async () => {
-            const body = { event: 'delivered', email_id: 'x' };
+            const body = { event: 'processed', email_id: 'x' };
             await hook(mine, body, null).expect(401);
             await hook(mine, body, 'Bearer wrong').expect(401);
             await hook(mine, body, theirs.hookAuthorization).expect(401);
@@ -410,6 +495,145 @@ describe('TRANS-1 SMTP2Go pool transport (FR-CRMS-6, FR-CRMS-7, FR-CRMS-8, FR-CR
             expect(events.filter((e) => e.type === 'email.clicked' && e.recordId === s.id)).toEqual([
                 expect.objectContaining({ tracking: expect.objectContaining({ url: 'https://acme.example/pricing' }) }),
             ]);
+        });
+
+        it('fails a send SMTP2Go rejected for a reason on our side, once, and suppresses nothing', async () => {
+            const to = `reject-${stamp}@acme.example`;
+            const s = await sent(to);
+            const body = {
+                event: 'reject',
+                email_id: s.emailId,
+                rcpt: to,
+                message: 'Sender address is not verified',
+                time: new Date().toISOString(),
+            };
+            expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
+            expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'duplicate' });
+            expect((await hook(mine, { ...body, event: 'rejected' }).expect(200)).body).toEqual({
+                result: 'duplicate',
+            });
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: s.id } });
+            expect(row.status).toBe('failed');
+            expect(row.lastError).toMatchObject({
+                code: 'smtp2go.rejected',
+                message: expect.stringContaining('not verified'),
+            });
+            expect((await log.read()).filter((e) => e.type === 'email.failed' && e.recordId === s.id)).toEqual([
+                expect.objectContaining({ failure: expect.objectContaining({ code: 'smtp2go.rejected' }) }),
+            ]);
+            expect((await suppressions.check(workspace, [to])).has(to)).toBe(false);
+        });
+
+        it('suppresses the address here too when SMTP2Go rejected it for its own suppression list', async () => {
+            const cases = [
+                ['unsub', 'Recipient is on the suppression list (unsubscribed)', 'unsubscribe'],
+                ['spam', 'Recipient suppressed: spam complaint', 'complaint'],
+                ['hard', 'Recipient suppressed after a hard bounce', 'hard_bounce'],
+            ] as const;
+            for (const [tag, message, reason] of cases) {
+                const to = `reject-${tag}-${stamp}@acme.example`;
+                const s = await sent(to);
+                const body = {
+                    event: 'reject',
+                    email_id: s.emailId,
+                    rcpt: to,
+                    message,
+                    time: new Date().toISOString(),
+                };
+                expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
+                expect((await owner.mailOutbound.findUniqueOrThrow({ where: { id: s.id } })).lastError).toMatchObject({
+                    code: 'smtp2go.rejected_suppressed',
+                });
+                expect(
+                    await owner.suppression.findFirstOrThrow({
+                        where: { workspaceId: workspace, address: to, removedAt: null },
+                    }),
+                ).toMatchObject({ reason, source: 'provider', outboundId: s.id });
+            }
+            await settle(app);
+            expect((await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } })).pausedAt).toBeNull();
+        });
+
+        it('suppresses an address unsubscribed through SMTP2Go, from the provider; a resubscribe lifts nothing', async () => {
+            const to = `unsub-${stamp}@acme.example`;
+            const s = await sent(to);
+            const body = { event: 'unsubscribe', email_id: s.emailId, rcpt: to, time: new Date().toISOString() };
+            expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
+            expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'duplicate' });
+            const resubscribe = { ...body, event: 'resubscribe', time: new Date(Date.now() + 60_000).toISOString() };
+            expect((await hook(mine, resubscribe).expect(200)).body).toEqual({ result: 'ignored' });
+            const entries = await owner.suppression.findMany({ where: { workspaceId: workspace, address: to } });
+            expect(entries).toEqual([
+                expect.objectContaining({
+                    reason: 'unsubscribe',
+                    source: 'provider',
+                    outboundId: s.id,
+                    removedAt: null,
+                }),
+            ]);
+            expect((await log.read()).filter((e) => e.type === 'suppression.added')).toHaveLength(1);
+            expect((await log.read()).filter((e) => e.type === 'email.complained')).toHaveLength(0);
+        });
+
+        it('records when the send was delivered, the first report kept', async () => {
+            const to = `delivered-${stamp}@acme.example`;
+            const s = await sent(to);
+            const at = '2026-10-20T10:00:00.000Z';
+            const body = { event: 'delivered', 'message-id': `<${s.rfc822MessageId}>`, rcpt: to, time: at };
+            expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'recorded' });
+            expect((await hook(mine, body).expect(200)).body).toEqual({ result: 'duplicate' });
+            expect((await hook(mine, { ...body, time: '2026-10-20T11:00:00.000Z' }).expect(200)).body).toEqual({
+                result: 'duplicate',
+            });
+            const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: s.id } });
+            expect(row.deliveredAt?.toISOString()).toBe(at);
+            expect(row.status).toBe('sent');
+            expect((await hook(mine, { event: 'processed', email_id: s.emailId }).expect(200)).body).toEqual({
+                result: 'ignored',
+            });
+        });
+
+        it('pauses the mailbox and tells its admins after a few rejects on our side in a row; tests never count', async () => {
+            const reject = async (s: { emailId: string }, to: string) =>
+                hook(mine, {
+                    event: 'reject',
+                    email_id: s.emailId,
+                    rcpt: to,
+                    message: 'API key is sandboxed',
+                    time: new Date().toISOString(),
+                }).expect(200);
+            for (let i = 0; i < 2; i += 1) {
+                const to = `misconf-${i}-${stamp}@acme.example`;
+                await reject(await sent(to), to);
+            }
+            // A rejected test send between them is no part of the run.
+            const test = (
+                await as(admin)
+                    .post(w(`/smtp2go/mailboxes/${mine.mailbox.id}/test`))
+                    .expect(200)
+            ).body as {
+                outboundId: string;
+                to: string;
+            };
+            const testRow = await owner.mailOutbound.findUniqueOrThrow({ where: { id: test.outboundId } });
+            await reject({ emailId: testRow.providerMessageId!.replace(/^smtp2go:/, '') }, test.to);
+            await settle(app);
+            expect((await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } })).pausedAt).toBeNull();
+
+            const to = `misconf-2-${stamp}@acme.example`;
+            await reject(await sent(to), to);
+            await settle(app);
+            const paused = await owner.mailbox.findUniqueOrThrow({ where: { id: mine.mailbox.id } });
+            expect(paused.pausedAt).not.toBeNull();
+            expect(paused.pauseReason).toMatchObject({ code: 'rejected_sends', sends: 3 });
+            expect(
+                await owner.guardrailEvent.findMany({ where: { workspaceId: workspace, kind: 'rejected_sends' } }),
+            ).toEqual([expect.objectContaining({ outcome: 'blocked', severity: 'high' })]);
+            // Back to work for the tests after this one.
+            await owner.mailbox.update({
+                where: { id: mine.mailbox.id },
+                data: { pausedAt: null, pauseReason: Prisma.DbNull, resumedAt: new Date() },
+            });
         });
 
         it('matches only this mailbox’s sends: another workspace’s hook cannot report on ours', async () => {

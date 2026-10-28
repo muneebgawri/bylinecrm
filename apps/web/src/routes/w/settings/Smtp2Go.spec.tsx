@@ -68,4 +68,26 @@ describe('TRANS-1 Settings → SMTP2Go', { timeout: 20_000 }, () => {
         expect(screen.queryByText(/api-0123456789abcdef0123/)).toBeNull();
         expect(within(card).getByText('No events yet')).toBeInTheDocument();
     });
+    it('sends a test through the mailbox and says inline whether it went', async () => {
+        let answer: unknown = { outcome: 'sent', to: 'kate@pinion.example', outboundId: 'o-1', error: null };
+        const seen = stubApi([
+            (r) => (r.method === 'GET' && r.url.endsWith('/smtp2go/mailboxes') ? json([added]) : undefined),
+            (r) => (r.method === 'POST' && r.url.endsWith('/smtp2go/mailboxes/mb-s2g/test') ? json(answer) : undefined),
+        ]);
+        open();
+        await userEvent.click(await screen.findByRole('button', { name: 'Send test' }));
+        expect(await screen.findByText(/^Sent to kate@pinion\.example through SMTP2Go\./)).toBeInTheDocument();
+        expect(seen.filter((r) => r.method === 'POST')).toHaveLength(1);
+
+        answer = {
+            outcome: 'refused',
+            to: 'kate@pinion.example',
+            outboundId: 'o-2',
+            error: { code: 'smtp2go.E_ApiResponseCodes.API_KEY_INVALID', message: 'SMTP2Go refused the message (401)' },
+        };
+        await userEvent.click(screen.getByRole('button', { name: 'Send test' }));
+        expect(
+            await screen.findByText('Not sent to kate@pinion.example: SMTP2Go refused the message (401).'),
+        ).toBeInTheDocument();
+    });
 });
