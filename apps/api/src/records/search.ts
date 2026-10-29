@@ -30,11 +30,21 @@ export async function searchCandidates(
     const prefix = `${q.toLowerCase().replace(/[\\%_]/g, '\\$&')}%`;
     // A table with no prefix column matches on the vector alone; `FALSE` keeps one query shape.
     const prefixClause = prefixColumn ? Prisma.sql`${prefixColumn} LIKE ${prefix}` : Prisma.sql`FALSE`;
+    const words = prefixQuery(q);
     const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM ${name}
         WHERE ${deletedClause}
-          AND ("search" @@ plainto_tsquery('simple', ${q}) OR ${prefixClause})
-        ORDER BY ts_rank("search", plainto_tsquery('simple', ${q})) DESC, "id"
+          AND ("search" @@ to_tsquery('simple', ${words}) OR ${prefixClause})
+        ORDER BY ts_rank("search", to_tsquery('simple', ${words})) DESC, "id"
         LIMIT ${SEARCH_CANDIDATE_LIMIT}`;
     return rows.map((r) => r.id);
+}
+
+/**
+ * Every word typed as a prefix, all required: "mat smi" finds Matt Smith while it is being typed.
+ * Only letters and digits survive, so nothing typed can be read as tsquery syntax; an email is
+ * found by the prefix column instead.
+ */
+export function prefixQuery(q: string): string {
+    return (q.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map((word) => `${word}:*`).join(' & ');
 }

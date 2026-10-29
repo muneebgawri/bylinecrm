@@ -144,7 +144,9 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
                 <RecordDrawerHost />
             </Suspense>
             <Suspense fallback={null}>
-                {paletteLoaded && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}
+                {paletteLoaded && (
+                    <CommandPalette workspaceId={workspaceId} open={paletteOpen} onOpenChange={setPaletteOpen} />
+                )}
                 {shortcutsLoaded && <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />}
                 {profileLoaded && profile.data && (
                     <ProfileDialog

@@ -5,6 +5,7 @@ import { companyDomain } from './company-domain';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { acrossOwnerScope } from './record-scope';
 
 /** A company found by a domain, with who owns it. */
 export interface DomainCompany {
@@ -268,8 +269,7 @@ export class CompanyOwnership {
     }
 
     private widened<T>(context: WorkspaceRunContext, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
-        const { ownerScopeMemberId: _scope, ...wide } = context;
-        return this.context.run(wide, () => this.rls.withWorkspace(context.workspaceId, fn));
+        return acrossOwnerScope(this.rls, this.context, context, fn);
     }
 }
 

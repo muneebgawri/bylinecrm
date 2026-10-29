@@ -35582,9 +35582,22 @@
                     "subtitle": {
                         "nullable": true,
                         "type": "string"
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The record's current owner, by name; null when it has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "canOpen": {
+                        "type": "boolean",
+                        "description": "False for a record outside the caller's owner scope: listed by name and owner only (subtitle null) so they can see it is taken."
                     }
                 },
-                "required": ["object", "id", "title", "subtitle"]
+                "required": ["object", "id", "title", "subtitle", "owner", "canOpen"]
             },
             "SearchResults": {
                 "type": "object",

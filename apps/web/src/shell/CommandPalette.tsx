@@ -9,8 +9,14 @@ import {
     isStringArray,
     usePersistedState,
 } from '@bylinecrm/ui';
-import { useMemo, useRef } from 'react';
+import type { RecordObject } from '@bylinecrm/shared';
+import { useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useSearch } from '../api/lists';
+import type { SearchResults } from '../api/types';
 import { useCommands, type Command } from '../commands/registry';
+import { useDebounced } from '../lib/useDebounced';
+import { paths } from '../routes/paths';
 import { formatShortcut } from '../commands/shortcuts';
 import { PALETTE_RECENTS_KEY, PALETTE_RECENTS_LIMIT } from './storage';
 
@@ -22,17 +28,33 @@ import { PALETTE_RECENTS_KEY, PALETTE_RECENTS_LIMIT } from './storage';
 export const PALETTE_GROUPS = ['Suggested', 'This panel', 'This record', 'Go to', 'Create', 'Account'] as const;
 export type PaletteGroup = (typeof PALETTE_GROUPS)[number];
 
+/** How many matches the palette lists per object; more typing narrows, it never pages. */
+const PALETTE_RESULTS = 5;
+const RECORD_GROUPS: readonly { object: RecordObject; heading: string }[] = [
+    { object: 'person', heading: 'People' },
+    { object: 'company', heading: 'Companies' },
+    { object: 'opportunity', heading: 'Deals' },
+];
+const RECORD_OBJECTS = RECORD_GROUPS.map((g) => g.object);
+type SearchHit = SearchResults[RecordObject][number];
+
 export interface CommandPaletteProps {
+    workspaceId: string;
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
 
 /**
- * ⌘K. Lists every available registered command grouped as `PALETTE_GROUPS` orders them;
- * "Suggested" is the commands run most recently (persisted per viewer). Enter runs, Esc closes.
+ * ⌘K. Lists the records matching what is typed (`GET /search`, as `RecordPicker` does), then every
+ * available registered command grouped as `PALETTE_GROUPS` orders them; "Suggested" is the
+ * commands run most recently (persisted per viewer). Enter runs, Esc closes.
  */
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPaletteProps) {
     const all = useCommands();
+    const navigate = useNavigate();
+    const [q, setQ] = useState('');
+    const term = useDebounced(q);
+    const results = useSearch(workspaceId, open ? term : '', RECORD_OBJECTS, PALETTE_RESULTS);
     const [recents, setRecents] = usePersistedState<string[]>(PALETTE_RECENTS_KEY, isStringArray, []);
 
     const available = useMemo(() => all.filter((c) => c.when?.() ?? true), [all]);
@@ -46,18 +68,31 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     // A command runs once the palette has closed and let go of focus, so one that moves focus (into
     // the composer, onto the owner field) keeps it instead of having it handed back to the trigger.
     const chosen = useRef<Command | null>(null);
+    const close = (next: boolean) => {
+        if (!next) setQ('');
+        onOpenChange(next);
+    };
     const run = (command: Command) => {
         chosen.current = command;
         setRecents((current) =>
             [command.id, ...current.filter((id) => id !== command.id)].slice(0, PALETTE_RECENTS_LIMIT),
         );
-        onOpenChange(false);
+        close(false);
+    };
+    const openHit = (hit: SearchHit) => {
+        chosen.current = {
+            id: `record.${hit.id}`,
+            title: hit.title,
+            group: 'Records',
+            run: () => navigate(hitPath(workspaceId, hit)),
+        };
+        close(false);
     };
 
     return (
         <CommandDialog
             open={open}
-            onOpenChange={onOpenChange}
+            onOpenChange={close}
             onCloseAutoFocus={(event) => {
                 const command = chosen.current;
                 if (!command) return;
@@ -66,9 +101,50 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 command.run();
             }}
         >
-            <CommandInput placeholder="Search for a page, a record or an action…" />
+            <CommandInput placeholder="Search for a page, a record or an action…" value={q} onValueChange={setQ} />
             <CommandList>
-                <CommandEmpty>Nothing matches.</CommandEmpty>
+                <CommandEmpty>{results.isFetching ? 'Searching…' : 'Nothing matches.'}</CommandEmpty>
+                {q.trim() !== '' &&
+                    RECORD_GROUPS.map(({ object, heading }) => {
+                        const hits = results.data?.[object] ?? [];
+                        return (
+                            hits.length > 0 && (
+                                <CommandGroup key={object} heading={heading}>
+                                    {hits.map((hit) => (
+                                        <CommandItem
+                                            key={hit.id}
+                                            value={`${object} ${hit.id}`}
+                                            // The server already matched these (names, emails, domains); the
+                                            // typed text as a keyword keeps cmdk's own filter from hiding them.
+                                            keywords={[q, hit.title, hit.subtitle ?? '']}
+                                            // Someone else's, outside the caller's scope: shown so they see it is taken,
+                                            // by name and owner only, and not opened.
+                                            disabled={!hit.canOpen}
+                                            onSelect={() => openHit(hit)}
+                                        >
+                                            <span className="flex min-w-0 flex-col">
+                                                <span className="truncate">{hit.title}</span>
+                                                {hit.canOpen ? (
+                                                    hit.subtitle && (
+                                                        <span className="truncate text-xs text-text-faint">
+                                                            {hit.subtitle}
+                                                        </span>
+                                                    )
+                                                ) : (
+                                                    <span className="truncate text-xs text-text-faint">
+                                                        Already taken: not yours to open
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="ml-auto shrink-0 pl-3 text-xs text-text-muted">
+                                                {ownerLabel(hit.owner)}
+                                            </span>
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            )
+                        );
+                    })}
                 {suggested.length > 0 && (
                     <CommandGroup heading="Suggested">
                         {suggested.map((command) => (
@@ -103,4 +179,22 @@ function Item({ command, onRun }: { command: Command; onRun: (c: Command) => voi
             {command.shortcut && <CommandShortcut>{formatShortcut(command.shortcut)}</CommandShortcut>}
         </CommandItem>
     );
+}
+
+function hitPath(workspaceId: string, hit: SearchHit): string {
+    switch (hit.object) {
+        case 'person':
+            return paths.person(workspaceId, hit.id);
+        case 'company':
+            return paths.company(workspaceId, hit.id);
+        case 'opportunity':
+            return paths.deal(workspaceId, hit.id);
+    }
+}
+
+/** Whose record it is, as the palette says it beside each hit. */
+function ownerLabel(owner: SearchHit['owner']): string {
+    if (!owner) return 'No owner';
+    const name = owner.name ?? 'Unnamed member';
+    return owner.leftAt ? `Owner: ${name} (left)` : `Owner: ${name}`;
 }

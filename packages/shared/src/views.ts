@@ -338,6 +338,13 @@ export type SearchHit = {
     id: string;
     title: string;
     subtitle: string | null;
+    /** Who owns the record now, so a search answers "whose lead is this?"; null when no one does. */
+    owner: { memberId: string; name: string | null; leftAt: Date | null } | null;
+    /**
+     * False for a record outside the caller's owner scope: found so they can see it is taken, told by
+     * name and owner only (`subtitle` null), and not opened.
+     */
+    canOpen: boolean;
 };
 export type SearchResults = Record<RecordObject, SearchHit[]>;
 
