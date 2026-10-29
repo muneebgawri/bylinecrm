@@ -6,6 +6,7 @@ import {
     CommandItem,
     CommandList,
     CommandShortcut,
+    commandFilter,
     isStringArray,
     usePersistedState,
 } from '@bylinecrm/ui';
@@ -36,6 +37,16 @@ const RECORD_GROUPS: readonly { object: RecordObject; heading: string }[] = [
     { object: 'opportunity', heading: 'Deals' },
 ];
 const RECORD_OBJECTS = RECORD_GROUPS.map((g) => g.object);
+/** A record hit's cmdk value starts with this: the server matched it, so the palette's own filter never hides it. */
+const RECORD_VALUE = 'record:';
+
+/**
+ * Records rank first — the server already matched them, on names, emails and domains the palette cannot
+ * see — so Enter opens the best one; commands keep cmdk's fuzzy match.
+ */
+function paletteFilter(value: string, search: string, keywords?: string[]): number {
+    return value.startsWith(RECORD_VALUE) ? 1 : commandFilter(value, search, keywords);
+}
 type SearchHit = SearchResults[RecordObject][number];
 
 export interface CommandPaletteProps {
@@ -55,6 +66,15 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
     const [q, setQ] = useState('');
     const term = useDebounced(q);
     const results = useSearch(workspaceId, open ? term : '', RECORD_OBJECTS, PALETTE_RESULTS);
+    // The hits arrive after typing has settled, when cmdk has already highlighted a command: the best
+    // record the caller may open is highlighted instead, so Enter opens it.
+    const [highlighted, setHighlighted] = useState('');
+    const [answered, setAnswered] = useState(results.data);
+    if (results.data !== answered) {
+        setAnswered(results.data);
+        const best = RECORD_OBJECTS.flatMap((object) => results.data?.[object] ?? []).find((hit) => hit.canOpen);
+        if (best) setHighlighted(hitValue(best));
+    }
     const [recents, setRecents] = usePersistedState<string[]>(PALETTE_RECENTS_KEY, isStringArray, []);
 
     const available = useMemo(() => all.filter((c) => c.when?.() ?? true), [all]);
@@ -93,6 +113,9 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
         <CommandDialog
             open={open}
             onOpenChange={close}
+            filter={paletteFilter}
+            value={highlighted}
+            onValueChange={setHighlighted}
             onCloseAutoFocus={(event) => {
                 const command = chosen.current;
                 if (!command) return;
@@ -113,10 +136,7 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
                                     {hits.map((hit) => (
                                         <CommandItem
                                             key={hit.id}
-                                            value={`${object} ${hit.id}`}
-                                            // The server already matched these (names, emails, domains); the
-                                            // typed text as a keyword keeps cmdk's own filter from hiding them.
-                                            keywords={[q, hit.title, hit.subtitle ?? '']}
+                                            value={hitValue(hit)}
                                             // Someone else's, outside the caller's scope: shown so they see it is taken,
                                             // by name and owner only, and not opened.
                                             disabled={!hit.canOpen}
@@ -179,6 +199,10 @@ function Item({ command, onRun }: { command: Command; onRun: (c: Command) => voi
             {command.shortcut && <CommandShortcut>{formatShortcut(command.shortcut)}</CommandShortcut>}
         </CommandItem>
     );
+}
+
+function hitValue(hit: SearchHit): string {
+    return `${RECORD_VALUE}${hit.object}:${hit.id}`;
 }
 
 function hitPath(workspaceId: string, hit: SearchHit): string {
