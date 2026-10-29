@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GmailApiError } from './gmail.port';
 import {
     GMAIL_RETRY_ATTEMPTS,
@@ -147,5 +147,49 @@ describe('a rate-limited mailbox', () => {
         expect(rateLimitCooldownUntil(record(30))).toBe(at + MAIL_SYNC_RATE_LIMIT_COOLDOWN_CAP_MS);
         expect(rateLimitCooldownUntil({ code: 'internal', message: 'm', at: new Date(at).toISOString() })).toBe(0);
         expect(rateLimitCooldownUntil(null)).toBe(0);
+    });
+});
+
+/**
+ * PNW-1125: pr@ and media@ were refused by Gmail on every run for four days, the cool-down probing every two hours. Gmail
+ * says when a per-user limit lifts ("Retry after <time>"); a request before then is refused anyway and spends quota.
+ */
+describe('Gmail’s own retry time', () => {
+    it('is not retried within the run when Gmail says to wait longer than the run ever waits', async () => {
+        const later = new Date(Date.now() + 60 * 60_000);
+        const request = vi
+            .fn()
+            .mockRejectedValue(new GmailApiError(403, 'rateLimitExceeded', 'x', 'Retry after …', later));
+        const sleep = vi.fn(async () => undefined);
+        await expect(withGmailRetry(request, { sleep })).rejects.toBeInstanceOf(GmailApiError);
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(sleep).not.toHaveBeenCalled();
+    });
+
+    it('still retries a short wait Gmail names, like any transient failure', async () => {
+        const soon = new Date(Date.now() + 2_000);
+        const request = vi
+            .fn()
+            .mockRejectedValueOnce(new GmailApiError(429, 'rateLimitExceeded', 'x', null, soon))
+            .mockResolvedValue('ok');
+        await expect(withGmailRetry(request, { sleep: async () => undefined })).resolves.toBe('ok');
+        expect(request).toHaveBeenCalledTimes(2);
+    });
+
+    it('holds the mailbox’s cool-down until Gmail’s time when that is later than the backoff', () => {
+        const at = '2026-10-29T12:00:00.000Z';
+        const retryAfter = '2026-10-29T20:00:00.000Z';
+        expect(rateLimitCooldownUntil({ code: 'gmail.rateLimitExceeded', at, rateLimitedRuns: 1, retryAfter })).toBe(
+            Date.parse(retryAfter),
+        );
+        // Earlier than the backoff: the backoff still decides.
+        expect(
+            rateLimitCooldownUntil({
+                code: 'gmail.rateLimitExceeded',
+                at,
+                rateLimitedRuns: 3,
+                retryAfter: '2026-10-29T12:01:00.000Z',
+            }),
+        ).toBe(Date.parse(at) + 20 * 60_000);
     });
 });

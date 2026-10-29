@@ -60,7 +60,12 @@ type SyncErrorRecord = {
     at: string;
     /** Consecutive runs that ended rate-limited, this one included (`rateLimitedRuns`); absent for any other failure. */
     rateLimitedRuns?: number;
+    /** When Gmail said it would take requests again (ISO 8601) — the cool-down holds until then (PNW-1125). */
+    retryAfter?: string;
 };
+
+/** How much of Google's message a stored error keeps: enough to name the limit and the time, never a page of it. */
+const GOOGLE_MESSAGE_MAX = 300;
 
 /** Thrown inside a run when Gmail no longer has history after the stored cursor. */
 class HistoryExpired extends Error {}
@@ -153,7 +158,13 @@ export class MailSyncService {
                 await this.recordStopped(mailbox, unavailableError(error.mailboxStatus));
                 return skipped;
             }
-            await this.recordStopped(mailbox, runError(error));
+            const record = runError(error);
+            // A refusal is logged with Google's own words, so the reason survives a restart and can be searched.
+            if (error instanceof GmailApiError) {
+                const until = record.retryAfter ? `; Gmail says retry after ${record.retryAfter}` : '';
+                this.logger.warn(`mailbox ${mailbox.id}: ${record.code} — ${record.message}${until}`);
+            }
+            await this.recordStopped(mailbox, record);
             throw error;
         }
     }
@@ -615,13 +626,19 @@ function unavailableError(status: string): SyncErrorRecord {
     };
 }
 
-function runError(error: unknown): SyncErrorRecord {
+/**
+ * What a failed run leaves on the mailbox. For a Gmail refusal: the reason, Google's own message (which limit, and until
+ * when — dropped until PNW-1125, so four days of refusals on two inboxes said nothing) and the time Gmail named.
+ */
+export function runError(error: unknown): SyncErrorRecord {
     const at = new Date().toISOString();
     if (error instanceof GmailApiError) {
+        const said = error.googleMessage ? `: ${error.googleMessage.slice(0, GOOGLE_MESSAGE_MAX)}` : '';
         return {
             code: `gmail.${error.reason}`,
-            message: `Gmail refused the sync (${error.status ?? 'no answer'})`,
+            message: `Gmail refused the sync (${error.status ?? 'no answer'})${said}`,
             at,
+            ...(error.retryAfter ? { retryAfter: error.retryAfter.toISOString() } : {}),
         };
     }
     return { code: 'internal', message: 'the sync failed; it will be retried', at };

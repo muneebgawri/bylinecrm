@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { retryAfterOfGoogleMessage, retryAfterSecondsOf } from '../infra/retry-after';
 import {
     GmailApiError,
     type GmailHistoryPage,
@@ -144,7 +145,19 @@ export class GmailHttp implements GmailPort {
         }
         if (!response.ok) {
             const reason = errorReason(body) ?? `http_${response.status}`;
-            throw new GmailApiError(response.status, reason, `Gmail answered ${response.status} (${reason})`);
+            const googleMessage = errorMessage(body);
+            const headerSeconds = retryAfterSecondsOf(response.headers.get('retry-after'), new Date());
+            const retryAfter =
+                headerSeconds !== null
+                    ? new Date(Date.now() + headerSeconds * 1000)
+                    : retryAfterOfGoogleMessage(googleMessage);
+            throw new GmailApiError(
+                response.status,
+                reason,
+                `Gmail answered ${response.status} (${reason})`,
+                googleMessage,
+                retryAfter,
+            );
         }
         if (typeof body !== 'object' || body === null) {
             throw new GmailApiError(response.status, 'unexpected_response', 'Gmail answered with no JSON object');
@@ -155,6 +168,13 @@ export class GmailHttp implements GmailPort {
 
 function str(value: unknown): string {
     return typeof value === 'string' ? value : String(value ?? '');
+}
+
+/** Gmail's error message (`{ error: { message } }`, else the first `errors[].message`), when it gave one. */
+function errorMessage(body: unknown): string | null {
+    const error = (body as { error?: { message?: unknown; errors?: { message?: unknown }[] } } | null)?.error;
+    const message = error?.message ?? error?.errors?.[0]?.message;
+    return typeof message === 'string' && message.trim() ? message.trim() : null;
 }
 
 /** Gmail's error reason (`{ error: { errors: [{ reason }] , status } }`), when it gave one. */
