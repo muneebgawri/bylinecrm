@@ -1,3 +1,4 @@
+import { keepNewswireosClient } from './newswireos-client-ids';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
@@ -133,14 +134,12 @@ export class DealWonPushService {
                 });
                 if (!answer.customerId) return;
                 // The person's client is NewswireOS's latest answer; a company keeps the first client it was given.
-                await tx.person.updateMany({
-                    where: { id: row.personId },
-                    data: { newswireosCustomerId: answer.customerId },
-                });
-                await tx.company.updateMany({
-                    where: { id: row.companyId, newswireosCustomerId: null },
-                    data: { newswireosCustomerId: answer.parentCustomerId ?? answer.customerId },
-                });
+                await keepNewswireosClient(tx, { type: 'person', id: row.personId }, answer.customerId, 'replace');
+                await keepNewswireosClient(
+                    tx,
+                    { type: 'company', id: row.companyId },
+                    answer.parentCustomerId ?? answer.customerId,
+                );
             });
             return 'done';
         } catch (error) {

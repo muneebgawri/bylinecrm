@@ -93,3 +93,13 @@ Known limit: a payment recorded in shadow is not acted on when the mode is later
   client, a shared domain, someone who moved) still goes on the company's only open deal; with none, it is
   `needs_deal` and the company's owner is asked. "Create a deal for this payment" (`POST /newswireos-payments/:id/
 create-deal`; the client's owner or a reviewer) makes it in one click, as the automatic path would.
+
+## Knowing each client's NewswireOS id (INV-2b)
+
+"Raise invoice in NewswireOS" needs the deal's contact or company to carry its NewswireOS client id
+(`newswireos_customer_id`); at launch only the won-deal push set it, so almost no deal had the link. One writer,
+`keepNewswireosClient`, now takes it from every source: the won-deal push replaces a person's (NewswireOS's own
+answer); every NewswireOS timeline event fills the record it matched; the client CSV (`sync-newswireos-clients`,
+optional third field `email,account manager,client id`) fills people by primary address, 500 per statement. Fill
+never moves an id a record already has, and a company keeps the first it was given. Existing events are applied once
+by `backfill-newswireos-client-ids` (job code: paged, resumable, dry run by default).
