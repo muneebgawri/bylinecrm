@@ -1763,7 +1763,8 @@ model MailboxSyncState {
   historyId           String?        @map("history_id")
   status              MailSyncStatus @default(idle)
   lastSyncedAt        DateTime?      @map("last_synced_at") @db.Timestamptz
-  /// `{ code, message, at }` while the last run failed or was skipped; null after a clean run.
+  /// `{ code, message, at, rateLimitedRuns? }` while the last run failed or was skipped; null after a clean run.
+  /// `rateLimitedRuns` counts consecutive runs that ended rate-limited — the tick's cool-down reads it.
   lastError           Json?          @map("last_error")
   fullSyncCompletedAt DateTime?      @map("full_sync_completed_at") @db.Timestamptz
   updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz

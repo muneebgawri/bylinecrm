@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { GmailApiError } from './gmail.port';
-import { GMAIL_RETRY_ATTEMPTS, GMAIL_RETRY_BASE_MS, GMAIL_RETRY_CAP_MS } from './mail-sync.constants';
-import { gmailRetryDelayMs, withGmailRetry } from './retry';
+import {
+    GMAIL_RETRY_ATTEMPTS,
+    GMAIL_RETRY_BASE_MS,
+    GMAIL_RETRY_CAP_MS,
+    MAIL_SYNC_RATE_LIMIT_COOLDOWN_BASE_MS,
+    MAIL_SYNC_RATE_LIMIT_COOLDOWN_CAP_MS,
+} from './mail-sync.constants';
+import { gmailRetryDelayMs, rateLimitCooldownUntil, rateLimitedRuns, withGmailRetry } from './retry';
 
 const middle = () => 0.5;
 
@@ -80,5 +86,66 @@ describe('withGmailRetry', () => {
             { sleep: () => Promise.resolve() },
         );
         expect(calls).toBe(2);
+    });
+});
+
+/**
+ * Gmail's own guidance for `403 rateLimitExceeded` / `userRateLimitExceeded`: back off exponentially and retry. Treated
+ * as permanent, a rate-limited run failed at once — and the tick enqueued the mailbox again two minutes later, every
+ * time, so the per-user limit never cleared: the two service inboxes (pr@, media@) failed every sync from 2026-10-25
+ * and partner mail stopped reaching NewswireOS.
+ */
+describe('a rate-limited mailbox', () => {
+    it('retries Gmail’s 403 rate limits like a 429, and still not a 403 that is not one', async () => {
+        for (const reason of ['rateLimitExceeded', 'userRateLimitExceeded']) {
+            let calls = 0;
+            const result = await withGmailRetry(
+                () => {
+                    calls += 1;
+                    return calls === 1
+                        ? Promise.reject(new GmailApiError(403, reason, 'slow down'))
+                        : Promise.resolve('ok');
+                },
+                { sleep: async () => undefined },
+            );
+            expect(result).toBe('ok');
+            expect(calls).toBe(2);
+        }
+        let calls = 0;
+        await expect(
+            withGmailRetry(
+                () => {
+                    calls += 1;
+                    return Promise.reject(new GmailApiError(403, 'insufficientPermissions', 'no'));
+                },
+                { sleep: async () => undefined },
+            ),
+        ).rejects.toThrow('no');
+        expect(calls).toBe(1);
+    });
+
+    it('counts consecutive rate-limited runs, and starts over after any other outcome', () => {
+        const limited = { code: 'gmail.rateLimitExceeded', message: 'm', at: '2026-10-28T20:00:00.000Z' };
+        expect(rateLimitedRuns(limited, null)).toBe(1);
+        expect(rateLimitedRuns(limited, { ...limited, rateLimitedRuns: 3 })).toBe(4);
+        expect(rateLimitedRuns(limited, { code: 'internal', message: 'm', at: limited.at })).toBe(1);
+        expect(
+            rateLimitedRuns({ code: 'internal', message: 'm', at: limited.at }, { ...limited, rateLimitedRuns: 3 }),
+        ).toBeUndefined();
+    });
+
+    it('cools down exponentially from its last rate-limited run, capped — and not at all otherwise', () => {
+        const at = Date.parse('2026-10-28T20:00:00.000Z');
+        const record = (n: number) => ({
+            code: 'gmail.rateLimitExceeded',
+            message: 'm',
+            at: new Date(at).toISOString(),
+            rateLimitedRuns: n,
+        });
+        expect(rateLimitCooldownUntil(record(1))).toBe(at + MAIL_SYNC_RATE_LIMIT_COOLDOWN_BASE_MS);
+        expect(rateLimitCooldownUntil(record(3))).toBe(at + MAIL_SYNC_RATE_LIMIT_COOLDOWN_BASE_MS * 4);
+        expect(rateLimitCooldownUntil(record(30))).toBe(at + MAIL_SYNC_RATE_LIMIT_COOLDOWN_CAP_MS);
+        expect(rateLimitCooldownUntil({ code: 'internal', message: 'm', at: new Date(at).toISOString() })).toBe(0);
+        expect(rateLimitCooldownUntil(null)).toBe(0);
     });
 });
