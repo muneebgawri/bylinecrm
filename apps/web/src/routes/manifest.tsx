@@ -95,6 +95,8 @@ const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.H
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
 const profilePage = () => import('./w/profile/ProfilePage').then((m) => ({ Component: m.ProfilePage }));
 const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
+/** Reports is its own chunk: its charts are only wanted there. */
+const reportsPage = () => import('./w/reports/ReportsPage').then((m) => ({ Component: m.ReportsPage }));
 
 /** Mailboxes is its own chunk: the connect flow, sync state and the blocklist (FR-CRMS-UI-10). */
 const mailboxesPage = () => import('./w/mailboxes/MailboxesPage').then((m) => ({ Component: m.MailboxesPage }));
@@ -147,7 +149,7 @@ const workspaceRoutes: RouteObject = {
     children: [
         { index: true, element: <Navigate to="home" replace /> },
         lazyPage('home', homePage, 'Dashboard'),
-        page('reports', 'reports', 'Reports'),
+        lazyPage('reports', reportsPage, 'Reports'),
         lazyPage('people', lists.people, 'People'),
         lazyPage('people/:personId', records.person, 'Person'),
         lazyPage('companies', lists.companies, 'Companies'),

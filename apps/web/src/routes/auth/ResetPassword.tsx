@@ -1,5 +1,6 @@
 import { LINK_TOKEN_PARAM } from '@bylinecrm/shared';
-import { Button, Field, Input } from '@bylinecrm/ui';
+import { Button, Field, PasswordInput } from '@bylinecrm/ui';
+import { KeyRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError, fieldErrorAt } from '../../api/client';
@@ -38,7 +39,7 @@ export function ResetPassword() {
 
     if (invalidLink) {
         return (
-            <AuthLayout title="This link no longer works">
+            <AuthLayout title="This link no longer works" icon={<KeyRound />}>
                 <div className="flex flex-col gap-4">
                     <p role="alert" className="m-0 text-text-muted">
                         Reset links work once and expire after 30 minutes. Ask for a new one.
@@ -56,19 +57,21 @@ export function ResetPassword() {
         (failure && failure.status !== 400 ? 'Could not save. Check your connection and try again.' : null);
 
     return (
-        <AuthLayout title="Choose a new password" subtitle="Saving it signs you out on every other device.">
+        <AuthLayout
+            title="Choose a new password"
+            subtitle="Saving it signs you out on every other device."
+            icon={<KeyRound />}
+        >
             <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
                 <Field label="New password" required hint={PASSWORD_HINT} error={passwordError}>
-                    <Input
-                        type="password"
+                    <PasswordInput
                         autoComplete="new-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                     />
                 </Field>
                 <Field label="Confirm new password" required error={mismatch ? 'The passwords do not match.' : null}>
-                    <Input
-                        type="password"
+                    <PasswordInput
                         autoComplete="new-password"
                         value={confirm}
                         onChange={(e) => setConfirm(e.target.value)}

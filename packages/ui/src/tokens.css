@@ -1,162 +1,176 @@
 /*
  * BylineCRM design tokens — the ONE place a colour, radius, spacing base, type size or shadow is
- * defined. Values are the approved shell mockup's (docs/design/shell-mockup-v3.html, 2026-10-09).
- * Components never carry a raw value; they use Tailwind utilities that `theme.css` maps onto these
- * variables. Light values live on `:root`; dark values apply when the app sets
- * `data-theme="dark"`, or when it sets nothing and the OS prefers dark (`color-scheme` follows, so
- * native controls and scrollbars match). Density is a second attribute, `data-density`, that
- * scales the spacing base and the root font size.
+ * defined. Values are the Nexora CRM template's (neutral shadcn palette, Geist, 16px base with a
+ * 14px body), adopted 2026-10-29. Components never carry a raw value; they use Tailwind utilities
+ * that `theme.css` maps onto these variables. Light values live on `:root`; dark values apply when
+ * the app sets `data-theme="dark"`, or when it sets nothing and the OS prefers dark (`color-scheme`
+ * follows, so native controls and scrollbars match). Density is a second attribute, `data-density`,
+ * that scales the spacing base and the root font size.
  *
  * Contrast: every text-on-background pair here meets WCAG 2.1 AA (4.5:1); the a11y gate (axe on
  * every story) is what proves it, so change a value and watch that gate, not this comment.
- * Four of the mockup's values were under AA at small sizes and are the nearest passing ones
- * instead (recorded in docs/design-notes/P1-UI-1.md): light accent #6d4aff→#6a48f7, light success
- * #17803d→#167c3b, light muted/faint #667085/#98a2b3→#5f6877/#656f7d, dark faint #6b7687→#7f8c9f.
  */
 
 :root {
     color-scheme: light;
 
-    /* Surfaces */
-    --bc-background: #f5f6f8;
+    /* Surfaces: the sidebar sits on `background`; the page panel, cards and inputs are `surface` */
+    --bc-background: #fafafa;
     --bc-surface: #ffffff;
-    --bc-surface-raised: #f7f8fa;
-    --bc-border: #e6e8ec;
-    --bc-border-strong: #d2d6dc;
-    --bc-selection: #f3f0ff;
+    --bc-surface-raised: #f5f5f5;
+    --bc-border: #e5e5e5;
+    --bc-border-strong: #d4d4d4;
+    --bc-selection: #f5f5f5;
 
     /* Text */
-    --bc-text: #101828;
-    --bc-text-muted: #5f6877;
-    --bc-text-faint: #656f7d;
+    --bc-text: #0a0a0a;
+    --bc-text-muted: #737373;
+    --bc-text-faint: #737373;
 
-    /* Primary (the black pill button, the logo mark, the active page number) */
-    --bc-primary: #101828;
-    --bc-primary-foreground: #ffffff;
+    /* Primary (the black button, the logo mark, the active page number) */
+    --bc-primary: #171717;
+    --bc-primary-foreground: #fafafa;
 
-    /* Accent (interactive, the purple) */
-    --bc-accent: #6a48f7;
-    --bc-accent-foreground: #ffffff;
-    --bc-accent-soft: #efeaff;
+    /* Accent (interactive) — the template is monochrome, so the accent is the primary */
+    --bc-accent: #171717;
+    --bc-accent-foreground: #fafafa;
+    --bc-accent-soft: #f5f5f5;
 
     /* Status — `-soft` is the tinted background a status badge sits on; the base is its text */
-    --bc-success: #167c3b;
-    --bc-success-soft: #e5f6ec;
-    --bc-warning: #b54708;
-    --bc-warning-soft: #fff3e4;
-    --bc-danger: #b42318;
-    --bc-danger-soft: #fee4e2;
-    --bc-info: #175cd3;
-    --bc-info-soft: #e7f0ff;
+    --bc-success: #047857;
+    --bc-success-soft: #ecfdf5;
+    --bc-warning: #b45309;
+    --bc-warning-soft: #fffbeb;
+    --bc-danger: #dc2626;
+    --bc-danger-soft: #fef2f2;
+    --bc-info: #1d4ed8;
+    --bc-info-soft: #eff6ff;
 
     /* Focus */
-    --bc-ring: #6a48f7;
+    --bc-ring: #a3a3a3;
 
-    /* Shape: 12px cards, 8px controls, 6px chips, pills */
+    /* Charts: five categorical hues in fixed order (validated for CVD and contrast on both surfaces) */
+    --bc-chart-1: #2563eb;
+    --bc-chart-2: #d97706;
+    --bc-chart-3: #059669;
+    --bc-chart-4: #7c3aed;
+    --bc-chart-5: #be185d;
+
+    /* Shape: 14px cards, 8px controls, 6px chips, pills */
     --bc-radius-sm: 6px;
     --bc-radius-md: 8px;
-    --bc-radius-lg: 12px;
+    --bc-radius-lg: 10px;
     --bc-radius-xl: 14px;
     --bc-radius-full: 9999px;
 
-    /* Type — Inter is self-hosted (fonts.css, OFL); the stack falls back to the platform UI font */
+    /* Type — Geist is self-hosted (fonts.css, OFL); the stack falls back to the platform UI font.
+       The root is 16px so spacing utilities match the template; the body reads at 14px. */
     --bc-font-sans:
-        'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --bc-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-    --bc-font-size-root: 14px;
+    --bc-font-size-root: 16px;
+    --bc-font-size-body: 0.875rem;
     --bc-line-height: 1.5;
 
     /* Density — the spacing base every `p-*`/`gap-*` utility multiplies */
     --bc-spacing: 0.25rem;
 
-    /* Touch (FR-CRMS-UI-12): physical constants, so px and outside density — the root font is
-       14px, so rem steps would land a 44px target at 38.5px and a 16px input at 14px. */
+    /* Touch (FR-CRMS-UI-12): physical constants, so px and outside density. */
     --bc-touch-target: 44px;
     --bc-touch-text: 16px;
 
     /* Shadows: card, hover, overlay */
-    --bc-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
-    --bc-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
-    --bc-shadow-lg: 0 20px 48px rgba(16, 24, 40, 0.18);
+    --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --bc-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --bc-shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
 
-    /* The layer behind a dialog, drawer, sheet or the palette: it DIMS the page in both themes, so
-       it is a near-black in both — never the text colour, which is near-white in dark mode. */
-    --bc-scrim: rgba(16, 24, 40, 0.4);
+    /* The layer behind a dialog, drawer, sheet or the palette: it DIMS the page in both themes. */
+    --bc-scrim: rgba(0, 0, 0, 0.5);
 
     /* Layout: the shell's fixed dimensions, so the app and the stories agree */
-    --bc-sidebar-width: 240px;
+    --bc-sidebar-width: 256px;
     --bc-sidebar-collapsed-width: 64px;
     --bc-topbar-height: 56px;
 }
 
 [data-density='compact'] {
-    --bc-font-size-root: 13px;
-    --bc-spacing: 0.1875rem;
+    --bc-font-size-root: 14px;
+    --bc-spacing: 0.21875rem;
 }
 
 /* Dark values, as one block so light and dark cannot drift apart */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) {
         color-scheme: dark;
-        --bc-background: #0e1117;
-        --bc-surface: #151a22;
-        --bc-surface-raised: #1b212b;
-        --bc-border: #262d38;
-        --bc-border-strong: #364050;
-        --bc-selection: #241f45;
-        --bc-text: #eef1f5;
-        --bc-text-muted: #9aa5b5;
-        --bc-text-faint: #7f8c9f;
-        --bc-primary: #eef1f5;
-        --bc-primary-foreground: #0e1117;
-        --bc-accent: #9b84ff;
-        --bc-accent-foreground: #0e1117;
-        --bc-accent-soft: #2a2350;
-        --bc-success: #4ade80;
-        --bc-success-soft: #15301f;
-        --bc-warning: #fdba74;
-        --bc-warning-soft: #3a2510;
-        --bc-danger: #fda29b;
-        --bc-danger-soft: #3b1a17;
-        --bc-info: #8ab4ff;
-        --bc-info-soft: #1b2a44;
-        --bc-ring: #9b84ff;
+        --bc-background: #0a0a0a;
+        --bc-surface: #171717;
+        --bc-surface-raised: #262626;
+        --bc-border: rgba(255, 255, 255, 0.1);
+        --bc-border-strong: rgba(255, 255, 255, 0.18);
+        --bc-selection: #262626;
+        --bc-text: #fafafa;
+        --bc-text-muted: #a3a3a3;
+        --bc-text-faint: #a3a3a3;
+        --bc-primary: #e5e5e5;
+        --bc-primary-foreground: #171717;
+        --bc-accent: #e5e5e5;
+        --bc-accent-foreground: #171717;
+        --bc-accent-soft: #262626;
+        --bc-success: #34d399;
+        --bc-success-soft: rgba(16, 185, 129, 0.12);
+        --bc-warning: #fbbf24;
+        --bc-warning-soft: rgba(245, 158, 11, 0.12);
+        --bc-danger: #f87171;
+        --bc-danger-soft: rgba(239, 68, 68, 0.12);
+        --bc-info: #60a5fa;
+        --bc-info-soft: rgba(59, 130, 246, 0.12);
+        --bc-ring: #737373;
+        --bc-chart-1: #3b82f6;
+        --bc-chart-2: #d97706;
+        --bc-chart-3: #059669;
+        --bc-chart-4: #8b5cf6;
+        --bc-chart-5: #ec4899;
         --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
         --bc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
         --bc-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
-        --bc-scrim: rgba(0, 0, 0, 0.6);
+        --bc-scrim: rgba(0, 0, 0, 0.7);
     }
 }
 
 :root[data-theme='dark'] {
     color-scheme: dark;
-    --bc-background: #0e1117;
-    --bc-surface: #151a22;
-    --bc-surface-raised: #1b212b;
-    --bc-border: #262d38;
-    --bc-border-strong: #364050;
-    --bc-selection: #241f45;
-    --bc-text: #eef1f5;
-    --bc-text-muted: #9aa5b5;
-    --bc-text-faint: #7f8c9f;
-    --bc-primary: #eef1f5;
-    --bc-primary-foreground: #0e1117;
-    --bc-accent: #9b84ff;
-    --bc-accent-foreground: #0e1117;
-    --bc-accent-soft: #2a2350;
-    --bc-success: #4ade80;
-    --bc-success-soft: #15301f;
-    --bc-warning: #fdba74;
-    --bc-warning-soft: #3a2510;
-    --bc-danger: #fda29b;
-    --bc-danger-soft: #3b1a17;
-    --bc-info: #8ab4ff;
-    --bc-info-soft: #1b2a44;
-    --bc-ring: #9b84ff;
+    --bc-background: #0a0a0a;
+    --bc-surface: #171717;
+    --bc-surface-raised: #262626;
+    --bc-border: rgba(255, 255, 255, 0.1);
+    --bc-border-strong: rgba(255, 255, 255, 0.18);
+    --bc-selection: #262626;
+    --bc-text: #fafafa;
+    --bc-text-muted: #a3a3a3;
+    --bc-text-faint: #a3a3a3;
+    --bc-primary: #e5e5e5;
+    --bc-primary-foreground: #171717;
+    --bc-accent: #e5e5e5;
+    --bc-accent-foreground: #171717;
+    --bc-accent-soft: #262626;
+    --bc-success: #34d399;
+    --bc-success-soft: rgba(16, 185, 129, 0.12);
+    --bc-warning: #fbbf24;
+    --bc-warning-soft: rgba(245, 158, 11, 0.12);
+    --bc-danger: #f87171;
+    --bc-danger-soft: rgba(239, 68, 68, 0.12);
+    --bc-info: #60a5fa;
+    --bc-info-soft: rgba(59, 130, 246, 0.12);
+    --bc-ring: #737373;
+    --bc-chart-1: #3b82f6;
+    --bc-chart-2: #d97706;
+    --bc-chart-3: #059669;
+    --bc-chart-4: #8b5cf6;
+    --bc-chart-5: #ec4899;
     --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
     --bc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
     --bc-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6);
-    --bc-scrim: rgba(0, 0, 0, 0.6);
+    --bc-scrim: rgba(0, 0, 0, 0.7);
 }
 
 html {
@@ -166,4 +180,8 @@ html {
     background-color: var(--bc-background);
     color: var(--bc-text);
     -webkit-font-smoothing: antialiased;
+}
+
+body {
+    font-size: var(--bc-font-size-body);
 }

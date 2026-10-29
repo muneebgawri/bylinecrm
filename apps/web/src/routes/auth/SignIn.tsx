@@ -1,11 +1,11 @@
 import { SIGN_IN_ERROR_PARAM } from '@bylinecrm/shared';
-import { Button, Field, Input } from '@bylinecrm/ui';
+import { Button, Field, Input, PasswordInput } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useLogin, useProviders } from '../../api/queries';
 import { paths, returnToFrom } from '../paths';
-import { AuthLayout } from './AuthLayout';
+import { AuthLayout, authLinkClass } from './AuthLayout';
 import { ProviderButtons } from './ProviderButtons';
 
 export function SignIn() {
@@ -37,8 +37,19 @@ export function SignIn() {
                 ? 'Could not sign in. Check your connection and try again.'
                 : null;
 
+    const aside = signupOpen ? (
+        <>
+            New here?{' '}
+            <Link to={paths.signUp} className={authLinkClass}>
+                Create a workspace
+            </Link>
+        </>
+    ) : (
+        'New here? Ask your administrator for an invitation.'
+    );
+
     return (
-        <AuthLayout title="Sign in to BylineCRM" subtitle="Your pipeline, outreach and mail in one place.">
+        <AuthLayout title="Welcome back" subtitle="Sign in to your BylineCRM account." aside={aside}>
             {refused === 'signup.closed' && (
                 <p role="alert" className="m-0 mb-4 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
                     This server does not take new accounts. Ask your administrator for an invitation.
@@ -50,17 +61,16 @@ export function SignIn() {
                     <Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </Field>
                 <Field label="Password" required error={message}>
-                    <Input
-                        type="password"
+                    <PasswordInput
                         autoComplete="current-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                     />
                 </Field>
-                <p className="m-0 -mt-2 text-right text-[13px]">
+                <p className="m-0 -mt-2 text-right text-xs">
                     <Link
                         to={paths.forgotPassword}
-                        className="inline-flex min-h-touch items-center font-medium text-text-muted underline-offset-4 hover:text-text hover:underline md:min-h-0"
+                        className="inline-flex min-h-touch items-center font-medium text-accent underline-offset-4 hover:underline md:min-h-0"
                     >
                         Forgot your password?
                     </Link>
@@ -76,18 +86,6 @@ export function SignIn() {
                     Sign in
                 </Button>
             </form>
-            {signupOpen ? (
-                <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
-                    New here?{' '}
-                    <Link to={paths.signUp} className="font-medium text-text underline-offset-4 hover:underline">
-                        Create a workspace
-                    </Link>
-                </p>
-            ) : (
-                <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
-                    New here? Ask your administrator for an invitation.
-                </p>
-            )}
         </AuthLayout>
     );
 }

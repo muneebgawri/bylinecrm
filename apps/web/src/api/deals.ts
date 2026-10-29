@@ -183,6 +183,14 @@ export const useBoard = (workspaceId: string, pipelineId: string | undefined, pa
         refetchOnWindowFocus: true,
     });
 
+/** The default pipeline's whole board, unfiltered: the dashboard and the reports read every number from it. */
+export function useDefaultBoard(workspaceId: string) {
+    const pipelines = usePipelines(workspaceId);
+    const pipeline = pipelines.data?.find((p) => p.isDefault) ?? pipelines.data?.[0];
+    const board = useBoard(workspaceId, pipeline?.id, {});
+    return { pipelines, board };
+}
+
 export function useCreateDeal(workspaceId: string) {
     const client = useQueryClient();
     return useMutation({

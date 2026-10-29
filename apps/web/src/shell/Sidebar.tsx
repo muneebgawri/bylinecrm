@@ -45,7 +45,7 @@ function visibleItems(group: NavGroup, membership: MembershipSummary | null): re
 }
 
 /**
- * The 240px sidebar: workspace switcher at the top, four nav groups, the user card at the
+ * The 256px sidebar: workspace switcher at the top, four nav groups, the user card at the
  * bottom. Collapsed, it shows icons with tooltips and keeps the same structure. Under `/settings`
  * the groups are settings' sections behind a way back to the app, so there is only ever one sidebar.
  *
@@ -63,7 +63,7 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
     return (
         <aside
             aria-label="Sidebar"
-            className="flex h-full min-w-0 flex-col gap-1.5 overflow-y-auto border-r border-border bg-surface px-3 py-3.5"
+            className="flex h-full min-w-0 flex-col gap-1.5 overflow-y-auto bg-background px-3 py-3.5"
         >
             <WorkspaceSwitcher workspaceId={workspaceId} collapsed={collapsed} />
             {inSettings && <BackToApp workspaceId={workspaceId} collapsed={collapsed} onNavigate={onNavigate} />}
@@ -75,7 +75,7 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
                         <div key={group.label} className="flex flex-col gap-0.5">
                             <div
                                 className={cn(
-                                    'px-2.5 pt-2.5 pb-1 text-[11.5px] font-medium text-text-faint',
+                                    'px-2.5 pt-3 pb-1.5 text-xs font-medium text-text-faint',
                                     collapsed && 'sr-only',
                                 )}
                             >
@@ -155,8 +155,8 @@ function NavEntry({
             className={({ isActive }) =>
                 cn(
                     'flex h-9 w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 text-left font-[450] text-text-muted transition-colors',
-                    'hover:bg-surface-raised hover:text-text',
-                    isActive && 'border-border bg-surface-raised font-medium text-text shadow-sm',
+                    'hover:border-border hover:bg-surface hover:text-text hover:shadow-sm',
+                    isActive && 'border-border bg-surface font-medium text-text shadow-sm',
                     collapsed && 'justify-center px-0',
                     focusRing,
                 )
@@ -268,7 +268,7 @@ function UserCard({
                     type="button"
                     aria-label={collapsed ? `Account: ${email}` : undefined}
                     className={cn(
-                        'mt-auto flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface p-2 text-left hover:bg-surface-raised',
+                        'mt-auto flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface p-2 text-left shadow-sm hover:bg-surface-raised',
                         collapsed && 'justify-center border-transparent p-1',
                         focusRing,
                     )}

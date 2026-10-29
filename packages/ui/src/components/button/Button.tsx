@@ -40,7 +40,7 @@ export const buttonVariants = cva(
                 square: 'rounded-md',
             },
         },
-        defaultVariants: { variant: 'secondary', size: 'md', shape: 'pill' },
+        defaultVariants: { variant: 'secondary', size: 'md', shape: 'square' },
     },
 );
 
