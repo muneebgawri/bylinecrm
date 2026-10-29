@@ -124,10 +124,11 @@ export class BiginReuseReconciler {
             review: [],
         };
         const connections = await this.rls.withWorkspace(async (tx) => ({
-            twenty: (await readConnection(tx, this.secrets))?.connection ?? null,
+            twenty: options.twenty === false ? null : ((await readConnection(tx, this.secrets))?.connection ?? null),
             bigin: (await readBiginConnection(tx, this.secrets))?.connection ?? null,
         }));
 
+        if (!connections.twenty) progress('Twenty not read: the logs and Bigin only');
         // (a) Twenty: who carries which Bigin id, and every person update that touched a name or the emails.
         const changes = new Map<string, TwentyChange[]>();
         const twentyPeople = new Map<string, string[]>();
@@ -496,6 +497,12 @@ type Progress = (line: string) => void;
 export interface ReconcileOptions {
     apply: boolean;
     logs: readonly ReuseLogRow[];
+    /**
+     * Whether Twenty's history is read (default). False when Twenty is gone — its data deleted after the cutover —
+     * though its connection is still stored: the reconcile then stands on the old job's logs and Bigin's current
+     * record, and what they cannot tell apart goes to review, as it would without either.
+     */
+    twenty?: boolean;
     /** A line per stage and every so many pages or contacts, so a long run shows it is moving. */
     progress?: Progress;
 }

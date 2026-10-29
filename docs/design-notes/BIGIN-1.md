@@ -155,7 +155,7 @@ Nest application context with no workers or relays of its own) runs `BiginReuseR
    Contact with a `reconcile` row is not reconciled again. The output is, per Contact, before → after and what
    moved; the review list; and totals per kind, zero included.
 
-Owner steps: deploy, extract the log rows from the old job's logs, run without `--apply`, read the review list,
+Owner steps: deploy, copy the old job's `output/` directory (`bigin_delta_sync.*.jsonl`, read as the job wrote them), run with `--no-twenty` (Twenty is deleted) and without `--apply`, read the review list,
 then run with `--apply`.
 
 ## Running, and the cursor
@@ -216,3 +216,6 @@ interval/failures/last error/cutover, saved accounts role, module cursors), `big
    the change get their phones and new custom fields only from a full run; Tasks, Events and Calls are read whole the
    first time either way. Nothing is backfilled in a migration (a full-table backfill once blocked the production
    API); the run writes in its usual 20-record transactions.
+
+The cutover itself — gates, freeze, final sync, count check, comms, rollback, retiring Bigin — is the runbook
+[`docs/deploy/bigin-cutover.md`](../deploy/bigin-cutover.md).
