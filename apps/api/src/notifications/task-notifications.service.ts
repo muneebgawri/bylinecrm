@@ -57,8 +57,13 @@ export class TaskNotificationsService {
 
     // ── Told ─────────────────────────────────────────────────────────────────────────────────
 
-    /** A task was made or handed on: its assignee is told, unless they did it themselves. */
+    /**
+     * A task was made or handed on: its assignee is told, unless they did it themselves. A task an
+     * import or a sync brought over (the Bigin and Twenty importers: hundreds at once, most of them
+     * long overdue) is no one handing work to anyone: nobody is told.
+     */
     async assigned(workspaceId: string, taskId: string, actor: EventActor): Promise<void> {
+        if (actor.kind === 'import' || actor.kind === 'sync') return;
         await this.rls.withWorkspace(workspaceId, async (tx) => {
             const task = await tx.task.findUnique({
                 where: { id: taskId },

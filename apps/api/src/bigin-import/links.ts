@@ -5,7 +5,7 @@ import type { BiginLinkIndex } from './mappers';
 import type { DealSnapshot } from './stage-map';
 
 /** What a Bigin record maps to here. */
-export type BiginLocalType = 'company' | 'person' | 'opportunity' | 'note';
+export type BiginLocalType = 'company' | 'person' | 'opportunity' | 'note' | 'task';
 
 export interface BiginLinkRow {
     object: string;

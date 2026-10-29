@@ -18,7 +18,8 @@ const PAGE_MAX = 200;
  * as Zoho does) and the Bigin read grammar the importer uses — `GET /bigin/v1/<Module>` with a
  * `Zoho-oauthtoken`, `If-Modified-Since` (second resolution; `304` when nothing matched), `sort_by=
  * Modified_Time&sort_order=asc`, `page`/`per_page` and `{ data, info: { more_records } }`;
- * `/<Module>/deleted` and `/<Module>/actions/count`. Nothing here is Zoho's code: it is the shape of its
+ * `/<Module>/deleted` and `/<Module>/actions/count`, for the modules the importer reads (`Tasks`, `Events`
+ * and `Calls` too; an empty one answers no records). Nothing here is Zoho's code: it is the shape of its
  * answers, as the Python sync (`twenty-bigin-sync`) relied on them.
  */
 export class FakeBigin {
@@ -192,7 +193,7 @@ export class FakeBigin {
         const v2 = parsed?.[1] === 'v2';
         // `match[1]` the module, `match[2]` what under it — the same shape for both versions.
         const match = parsed ? [parsed[0], parsed[2], parsed[3]] : null;
-        if (!match || !['Accounts', 'Contacts', 'Deals', 'Notes'].includes(match[1]!)) {
+        if (!match || !['Accounts', 'Contacts', 'Deals', 'Notes', 'Tasks', 'Events', 'Calls'].includes(match[1]!)) {
             return {
                 status: 400,
                 body: { code: 'INVALID_MODULE', message: 'the module name given seems to be invalid' },

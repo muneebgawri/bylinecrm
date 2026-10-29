@@ -25189,7 +25189,7 @@
                         "in": "query",
                         "schema": {
                             "type": "string",
-                            "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                            "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                         }
                     },
                     {
@@ -42795,7 +42795,7 @@
                 "properties": {
                     "object": {
                         "type": "string",
-                        "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                        "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                     },
                     "remote": {
                         "nullable": true,
@@ -42965,7 +42965,7 @@
                     "phase": {
                         "nullable": true,
                         "type": "string",
-                        "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                        "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                     },
                     "report": {
                         "type": "array",
@@ -43071,7 +43071,7 @@
                             "properties": {
                                 "object": {
                                     "type": "string",
-                                    "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                                    "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                                 },
                                 "count": {
                                     "type": "integer",
@@ -43089,7 +43089,7 @@
                             "properties": {
                                 "object": {
                                     "type": "string",
-                                    "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                                    "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                                 },
                                 "since": {
                                     "nullable": true,
@@ -43122,7 +43122,7 @@
                             "properties": {
                                 "object": {
                                     "type": "string",
-                                    "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                                    "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                                 },
                                 "remote": {
                                     "nullable": true,
@@ -43151,7 +43151,7 @@
                 "properties": {
                     "object": {
                         "type": "string",
-                        "enum": ["Accounts", "Contacts", "Deals", "Notes"]
+                        "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
                     },
                     "externalId": {
                         "type": "string"
