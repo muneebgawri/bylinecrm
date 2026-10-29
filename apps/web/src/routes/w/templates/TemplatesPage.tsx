@@ -67,7 +67,7 @@ export function TemplatesPage() {
     const canChange = (t: EmailTemplateView) => write.allowed && (t.kind !== 'outreach' || outreachWrite);
 
     return (
-        <div className="p-7 max-md:p-4">
+        <div className="p-4 md:p-6">
             <PageHeader
                 title="Templates"
                 subtitle="Reusable emails with variables. A variable with no value blocks the send; it is never sent blank."

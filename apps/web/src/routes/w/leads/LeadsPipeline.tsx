@@ -23,19 +23,10 @@ import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths, withCreate } from '../../paths';
-import { LEADS_FILTER } from './leadsFilter';
+import { CONTACT_STATUS_TONE, LEADS_FILTER } from './leadsFilter';
 
 /** The statuses a lead moves through before it is a customer or out; `do_not_contact` is set by suppression, not here. */
 const LANES: readonly ContactStatus[] = CONTACT_STATUSES.filter((s) => s !== 'do_not_contact');
-const TONE: Record<ContactStatus, 'neutral' | 'accent' | 'info' | 'success' | 'warning' | 'danger'> = {
-    new: 'neutral',
-    attempted_contact: 'info',
-    contacted: 'accent',
-    engaged: 'success',
-    unresponsive: 'warning',
-    do_not_contact: 'danger',
-    customer: 'success',
-};
 
 /**
  * Leads as a pipeline: every person, in a lane per contact status. A card's "Move to" sets the
@@ -95,7 +86,7 @@ export function LeadsPipeline() {
                             <KanbanLane
                                 key={status}
                                 name={CONTACT_STATUS_LABELS[status]}
-                                tone={TONE[status]}
+                                tone={CONTACT_STATUS_TONE[status]}
                                 count={list.length}
                             >
                                 {list.length === 0 ? (

@@ -5,7 +5,7 @@ import {
     ENRICHMENT_SOURCE_NOTES,
     type EnrichmentSource,
 } from '@bylinecrm/shared';
-import { Button, Field, Input, LoadingRegion, Skeleton, Switch, toast } from '@bylinecrm/ui';
+import { Field, Input, LoadingRegion, Skeleton, Switch, toast } from '@bylinecrm/ui';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import { useEnrichmentSettings, usePutEnrichmentSettings } from '../../../api/enrichment';
@@ -14,6 +14,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SettingsSaveBar, SettingsSection } from './SettingsSection';
 import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /**
@@ -93,8 +94,11 @@ function SettingsForm({ workspaceId, settings }: { workspaceId: string; settings
                     {edit.reason} An admin changes these settings.
                 </p>
             )}
-            <fieldset className="m-0 flex flex-col gap-3 border-0 p-0" disabled={readOnly}>
-                <legend className="mb-2 p-0 text-sm font-semibold">Sources</legend>
+            <SettingsSection
+                title="Sources"
+                description="Where a person's or company's details are looked up."
+                disabled={readOnly}
+            >
                 {ENRICHMENT_SOURCES.map((source) => (
                     <SourceRow
                         key={source}
@@ -104,9 +108,12 @@ function SettingsForm({ workspaceId, settings }: { workspaceId: string; settings
                         onChange={(on) => setSources((current) => ({ ...current, [source]: on }))}
                     />
                 ))}
-            </fieldset>
-            <fieldset className="m-0 flex flex-col gap-3 border-0 p-0" disabled={readOnly}>
-                <legend className="mb-2 p-0 text-sm font-semibold">Asking again</legend>
+            </SettingsSection>
+            <SettingsSection
+                title="Asking again"
+                description="How long an answer stands before it is refreshed."
+                disabled={readOnly}
+            >
                 <Field
                     label="Ask again after"
                     hint={`Days an answer stands before the sources are asked again. ${
@@ -130,14 +137,8 @@ function SettingsForm({ workspaceId, settings }: { workspaceId: string; settings
                         className="max-w-[10rem]"
                     />
                 </Field>
-            </fieldset>
-            {!readOnly && (
-                <div>
-                    <Button type="submit" variant="primary" shape="square" loading={put.isPending} disabled={!dirty}>
-                        Save
-                    </Button>
-                </div>
-            )}
+            </SettingsSection>
+            {!readOnly && <SettingsSaveBar dirty={dirty} saving={put.isPending} saveLabel="Save" />}
         </form>
     );
 }

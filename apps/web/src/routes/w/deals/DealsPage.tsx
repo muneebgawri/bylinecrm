@@ -346,7 +346,7 @@ export function DealsPage() {
     ) : null;
 
     return (
-        <div className="p-7 max-md:p-4">
+        <div className="p-4 md:p-6">
             {mobile ? (
                 <>
                     {/* A phone: one compact row so the first card is on screen without scrolling (FR-CRMS-UI-12). */}

@@ -1,6 +1,7 @@
 import { TRANSFER_REASON_CADENCE_ROTATION } from '@bylinecrm/shared';
-import { Button, Switch } from '@bylinecrm/ui';
-import { useId, type ReactElement } from 'react';
+import { Button, Switch, Tabs, TabsList, TabsTrigger, cn, toneSoft, type Tone } from '@bylinecrm/ui';
+import { ArrowRightLeft, Bell, CalendarClock, Check, CircleDollarSign, ListTodo, ShieldAlert } from 'lucide-react';
+import { useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useMarkNotificationsRead, useNotificationSettings, useUpdateNotificationSettings } from '../api/notifications';
 import type { NotificationsView } from '../api/types';
@@ -29,6 +30,27 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     payment_needs_deal: 'Payment received: which deal?',
     payment_created_deal: 'Payment received: deal created',
     payment_unmatched: 'Payment from an unknown client',
+};
+
+/** The tile each kind wears: an icon and a tone, so a glance tells a task from a payment. */
+const KIND_LOOK: Record<Item['kind'], { icon: ReactNode; tone: Tone }> = {
+    task_assigned: { icon: <ListTodo />, tone: 'info' },
+    task_due: { icon: <CalendarClock />, tone: 'warning' },
+    transfer_proposed: { icon: <ArrowRightLeft />, tone: 'accent' },
+    transfer_accepted: { icon: <ArrowRightLeft />, tone: 'success' },
+    transfer_declined: { icon: <ArrowRightLeft />, tone: 'danger' },
+    transfer_received: { icon: <ArrowRightLeft />, tone: 'success' },
+    transfer_taken: { icon: <ArrowRightLeft />, tone: 'neutral' },
+    guardrail_repeat_blocks: { icon: <ShieldAlert />, tone: 'warning' },
+    guardrail_alert: { icon: <ShieldAlert />, tone: 'danger' },
+    invoice_needs_review: { icon: <CircleDollarSign />, tone: 'warning' },
+    invoice_coverage_lost: { icon: <CircleDollarSign />, tone: 'danger' },
+    guardrail_poach_suspected: { icon: <ShieldAlert />, tone: 'danger' },
+    cadence_warning: { icon: <CalendarClock />, tone: 'warning' },
+    cadence_rotated: { icon: <ArrowRightLeft />, tone: 'neutral' },
+    payment_needs_deal: { icon: <CircleDollarSign />, tone: 'warning' },
+    payment_created_deal: { icon: <CircleDollarSign />, tone: 'success' },
+    payment_unmatched: { icon: <CircleDollarSign />, tone: 'danger' },
 };
 
 /** What a transfer notification says under its label. */
@@ -72,30 +94,57 @@ export function NotificationsPanel({
     onOpenChange: (open: boolean) => void;
 }) {
     const read = useMarkNotificationsRead(workspaceId);
+    const [tab, setTab] = useState<'all' | 'unread'>('all');
     const unread = inbox?.unread ?? 0;
-    const items = inbox?.items ?? [];
+    const all = inbox?.items ?? [];
+    const items = tab === 'unread' ? all.filter((n) => !n.readAt) : all;
     return (
         <ResponsivePanel
             trigger={trigger}
             title="Notifications"
             open={open}
             onOpenChange={onOpenChange}
-            widthClass="w-[min(22rem,calc(100vw-2rem))]"
+            widthClass="w-[min(24rem,calc(100vw-2rem))]"
             footer={<DigestSetting workspaceId={workspaceId} />}
         >
-            {unread > 0 && (
-                <div className="flex justify-end">
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <Tabs value={tab} onValueChange={(v) => setTab(v as 'all' | 'unread')}>
+                    <TabsList variant="pill" aria-label="Which notifications" className="h-8">
+                        <TabsTrigger value="all" className="text-xs">
+                            All
+                        </TabsTrigger>
+                        <TabsTrigger value="unread" className="text-xs">
+                            Unread
+                            {unread > 0 && (
+                                <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground tabular-nums">
+                                    {unread}
+                                </span>
+                            )}
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+                {unread > 0 && (
                     <Button size="sm" variant="ghost" shape="square" onClick={() => read.mutate(undefined)}>
-                        Mark all read
+                        <Check aria-hidden /> Mark all read
                     </Button>
-                </div>
-            )}
+                )}
+            </div>
             {items.length === 0 ? (
-                <p className="m-0 py-6 text-center text-sm text-text-muted">Nothing new</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <span className="grid size-10 place-items-center rounded-full bg-surface-raised text-text-muted [&_svg]:size-5">
+                        <Bell aria-hidden />
+                    </span>
+                    <p className="m-0 text-sm font-medium">{tab === 'unread' ? 'All caught up' : 'Nothing yet'}</p>
+                    <p className="m-0 text-xs text-text-muted">
+                        {tab === 'unread'
+                            ? 'Every notification has been read.'
+                            : 'Tasks, transfers, payments and alerts for you show here.'}
+                    </p>
+                </div>
             ) : (
-                <ul className="m-0 max-h-[60vh] list-none overflow-y-auto p-0">
+                <ul className="m-0 max-h-[60vh] list-none divide-y divide-border overflow-y-auto p-0">
                     {items.map((n) => (
-                        <li key={n.id} className="border-b border-border last:border-b-0">
+                        <li key={n.id} className="group relative">
                             <NotificationLink
                                 workspaceId={workspaceId}
                                 item={n}
@@ -104,6 +153,19 @@ export function NotificationsPanel({
                                     onOpenChange(false);
                                 }}
                             />
+                            {!n.readAt && (
+                                <button
+                                    type="button"
+                                    aria-label="Mark as read"
+                                    title="Mark as read"
+                                    onClick={() => read.mutate([n.id])}
+                                    className={cn(
+                                        'absolute top-2.5 right-2 grid size-7 place-items-center rounded-md text-text-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-raised hover:text-text focus-visible:opacity-100 max-md:opacity-100',
+                                    )}
+                                >
+                                    <Check aria-hidden className="size-4" />
+                                </button>
+                            )}
                         </li>
                     ))}
                 </ul>
@@ -153,25 +215,38 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
             ? paths.settingsGuardrails(workspaceId)
             : null;
     const targets = item.task?.targets ?? [];
+    const look = KIND_LOOK[item.kind];
     const body = (
         <>
-            <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                {!item.readAt && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
-                <span>{KIND_LABEL[item.kind]}</span>
-                <span aria-hidden>·</span>
-                {formatRelative(item.createdAt)}
+            <span
+                aria-hidden
+                className={cn('grid size-8 shrink-0 place-items-center rounded-lg [&_svg]:size-4', toneSoft[look.tone])}
+            >
+                {look.icon}
             </span>
-            <span className={item.readAt ? 'block text-sm' : 'block text-sm font-semibold'}>{title}</span>
-            {item.transfer?.reason && (
-                <span className="block truncate text-xs text-text-muted">{item.transfer.reason}</span>
-            )}
-            {targets.length > 0 && (
-                <span className="block truncate text-xs text-text-muted">{targets.map((t) => t.label).join(', ')}</span>
-            )}
+            <span className="min-w-0 flex-1 pr-7">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                    {!item.readAt && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
+                    <span>{KIND_LABEL[item.kind]}</span>
+                    <span aria-hidden>·</span>
+                    {formatRelative(item.createdAt)}
+                </span>
+                <span className={item.readAt ? 'block truncate text-sm' : 'block truncate text-sm font-semibold'}>
+                    {title}
+                </span>
+                {item.transfer?.reason && (
+                    <span className="block truncate text-xs text-text-muted">{item.transfer.reason}</span>
+                )}
+                {targets.length > 0 && (
+                    <span className="block truncate text-xs text-text-muted">
+                        {targets.map((t) => t.label).join(', ')}
+                    </span>
+                )}
+            </span>
         </>
     );
     const className =
-        'block px-3 py-2.5 hover:bg-surface-raised focus-visible:bg-surface-raised outline-none max-md:min-h-touch';
+        'flex items-start gap-3 px-3 py-3 hover:bg-surface-raised focus-visible:bg-surface-raised outline-none max-md:min-h-touch';
     return to ? (
         <Link to={to} onClick={onOpen} className={className}>
             {body}

@@ -111,7 +111,7 @@ export function SequencePage() {
     const { sequenceId = '' } = useParams();
     const sequence = useSequence(workspaceId, sequenceId);
     if (sequence.isError) throw sequence.error;
-    if (!sequence.data) return <LoadingRegion label="Loading sequence" className="p-7 max-md:p-4" />;
+    if (!sequence.data) return <LoadingRegion label="Loading sequence" className="p-4 md:p-6" />;
     return <SequenceBuilder key={sequence.data.id} workspaceId={workspaceId} sequence={sequence.data} />;
 }
 

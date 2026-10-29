@@ -3,7 +3,7 @@ import {
     EMAIL_VERIFICATION_RESULT_LABELS,
     type EmailVerificationResult,
 } from '@bylinecrm/shared';
-import { Badge, Button, Field, Input, LoadingRegion, toast } from '@bylinecrm/ui';
+import { Badge, Field, Input, LoadingRegion, toast } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import { usePutVerificationSettings, useVerificationSettings } from '../../../api/outreach';
@@ -12,6 +12,7 @@ import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { formatDate } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SettingsSaveBar, SettingsSection } from './SettingsSection';
 import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** What verification can find, and what the enrolment check does with each (doc 48 FR-CRMS-14). */
@@ -132,7 +133,11 @@ function AgeForm({ workspaceId, settings }: { workspaceId: string; settings: Ema
                     {edit.reason} An admin changes this setting.
                 </p>
             )}
-            <fieldset className="m-0 flex flex-col gap-4 border-0 p-0" disabled={readOnly}>
+            <SettingsSection
+                title="Re-verifying"
+                description="How long a verification result stands."
+                disabled={readOnly}
+            >
                 <Field
                     label="Re-verify after"
                     hint={`Days a result stands before it is found again before the next send. ${
@@ -156,14 +161,8 @@ function AgeForm({ workspaceId, settings }: { workspaceId: string; settings: Ema
                         className="max-w-[10rem]"
                     />
                 </Field>
-            </fieldset>
-            {!readOnly && (
-                <div>
-                    <Button type="submit" variant="primary" shape="square" loading={put.isPending} disabled={!dirty}>
-                        Save
-                    </Button>
-                </div>
-            )}
+            </SettingsSection>
+            {!readOnly && <SettingsSaveBar dirty={dirty} saving={put.isPending} saveLabel="Save" />}
         </form>
     );
 }

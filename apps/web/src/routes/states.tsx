@@ -1,4 +1,5 @@
 import { Button, EmptyState, LoadingRegion, Skeleton } from '@bylinecrm/ui';
+import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { isRouteErrorResponse, Link, useNavigate, useRouteError } from 'react-router';
 import { ApiError } from '../api/client';
@@ -9,16 +10,25 @@ import { paths } from './paths';
 /** What a route shows while its data loads: the page's shape, no layout shift (FR-CRMS-UI-7). */
 export function RouteSkeleton() {
     return (
-        <LoadingRegion label="Loading" className="p-7">
-            <Skeleton className="mb-2 h-7 w-56" />
-            <Skeleton className="mb-6 h-4 w-96" />
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
+        <LoadingRegion label="Loading" className="flex flex-col gap-4 p-4 md:p-6">
+            <div>
+                <Skeleton className="mb-2 h-7 w-56" />
+                <Skeleton className="h-4 w-96" />
             </div>
-            <Skeleton className="mt-4 h-80" />
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+                {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                        <Skeleton className="mb-3 h-4 w-24" />
+                        <Skeleton className="h-7 w-20" />
+                    </div>
+                ))}
+            </div>
+            <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                <Skeleton className="mb-4 h-5 w-40" />
+                <Skeleton className="mb-2 h-9" />
+                <Skeleton className="mb-2 h-9" />
+                <Skeleton className="h-9" />
+            </div>
         </LoadingRegion>
     );
 }
@@ -73,9 +83,10 @@ export function RouteError() {
               : message;
 
     return (
-        <div className="p-7">
+        <div className="p-4 md:p-6">
             <EmptyState
                 tone="error"
+                icon={<AlertTriangle />}
                 title={title}
                 body={body}
                 action={
@@ -96,6 +107,7 @@ export function Forbidden() {
         <main className="grid min-h-dvh place-items-center bg-background p-6 text-text">
             <EmptyState
                 tone="error"
+                icon={<ShieldAlert />}
                 title="You cannot open this"
                 body="Your role does not include it. An admin can change that."
                 action={

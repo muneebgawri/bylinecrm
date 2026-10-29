@@ -88,7 +88,7 @@ export function MailboxesPage() {
 
     const configured = status.data?.configured ?? false;
     return (
-        <div className="p-7 max-md:p-4">
+        <div className="p-4 md:p-6">
             <PageHeader
                 title="Mailboxes"
                 subtitle="The Google Workspace mailboxes this workspace reads and sends from."

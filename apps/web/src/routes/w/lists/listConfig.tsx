@@ -6,6 +6,7 @@ import {
     type RecordObject,
     type ViewColumn,
 } from '@bylinecrm/shared';
+import { CONTACT_STATUS_TONE } from '../leads/leadsFilter';
 import { Badge } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
 import type {
@@ -118,17 +119,16 @@ const PERSON_COLUMNS: ListColumn<PersonView>[] = [
     {
         field: 'contactStatus',
         label: labelOf('person', 'contactStatus'),
-        width: 120,
+        width: 170,
         exportFields: ['contactStatus'],
-        cell: (r) =>
-            r.cadenceOverdue ? (
-                <span className="inline-flex flex-wrap items-center gap-1">
+        cell: (r) => (
+            <span className="inline-flex flex-wrap items-center gap-1">
+                <Badge dot shape="pill" status={CONTACT_STATUS_TONE[r.contactStatus]}>
                     {CONTACT_STATUS_LABELS[r.contactStatus]}
-                    <Badge status="danger">Overdue</Badge>
-                </span>
-            ) : (
-                CONTACT_STATUS_LABELS[r.contactStatus]
-            ),
+                </Badge>
+                {r.cadenceOverdue && <Badge status="danger">Overdue</Badge>}
+            </span>
+        ),
     },
     {
         field: 'lastContactedAt',
