@@ -111,7 +111,7 @@ export function InvoicesPanel({ workspaceId, deal }: { workspaceId: string; deal
                     href={raise.data.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mx-4 mt-1 mb-1 inline-flex items-center gap-1 text-xs text-text underline"
+                    className="mx-4 mt-1 mb-1 inline-flex items-center gap-1 text-xs text-text underline max-md:min-h-touch"
                 >
                     Raise invoice in NewswireOS
                     <ExternalLink aria-hidden className="size-3" />

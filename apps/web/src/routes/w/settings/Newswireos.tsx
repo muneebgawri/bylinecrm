@@ -642,11 +642,17 @@ function PaidInvoices({ workspaceId, settings }: { workspaceId: string; settings
                             <span className="text-xs text-text-muted">
                                 {DECISION_TEXT[p.decision]}{' '}
                                 {p.opportunityId ? (
-                                    <Link className="underline" to={paths.deal(workspaceId, p.opportunityId)}>
+                                    <Link
+                                        className="underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
+                                        to={paths.deal(workspaceId, p.opportunityId)}
+                                    >
                                         {p.opportunityName ?? 'a deal'}
                                     </Link>
                                 ) : p.mode === 'on' ? (
-                                    <Link className="underline" to={paths.payment(workspaceId, p.id)}>
+                                    <Link
+                                        className="underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
+                                        to={paths.payment(workspaceId, p.id)}
+                                    >
                                         choose a deal
                                     </Link>
                                 ) : null}{' '}

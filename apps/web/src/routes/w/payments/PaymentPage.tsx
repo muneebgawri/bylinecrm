@@ -54,7 +54,10 @@ export function PaymentPage() {
                 <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-[13px]">
                     <span className="flex items-center gap-2">
                         <Badge status="success">On a deal</Badge>
-                        <Link className="font-medium text-text underline" to={paths.deal(workspaceId, p.opportunityId)}>
+                        <Link
+                            className="font-medium text-text underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
+                            to={paths.deal(workspaceId, p.opportunityId)}
+                        >
                             {p.opportunityName ?? 'Open the deal'}
                         </Link>
                     </span>
@@ -101,7 +104,7 @@ export function PaymentPage() {
                             {p.candidates.map((deal) => (
                                 <li key={deal.id} className="flex items-center gap-3 py-2">
                                     <Link
-                                        className="min-w-0 flex-1 truncate text-text underline"
+                                        className="min-w-0 flex-1 truncate text-text underline max-md:flex max-md:min-h-touch max-md:items-center"
                                         to={paths.deal(workspaceId, deal.id)}
                                     >
                                         {deal.name}
