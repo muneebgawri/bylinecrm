@@ -9,8 +9,9 @@ import { AuthLayout } from './AuthLayout';
 /**
  * `/verify-email` (#93). With `?token=` it is the page a mailed link opens: one button that spends
  * the link — never on load, because mail scanners and link previews open links too. Without a token
- * it is where a signed-in, unverified person is held: which address the link went to, a way to get
- * a new one, and a way out.
+ * it is where a signed-in, unverified person is held: which address the link went to, a way out,
+ * and — deliberately not as the page's primary action, because people took it for the next step and
+ * got two mails — a fallback to get a new link.
  */
 export function VerifyEmail() {
     const token = new URLSearchParams(useLocation().search).get(LINK_TOKEN_PARAM);
@@ -114,16 +115,18 @@ function CheckInbox() {
                         </p>
                     )}
                 </div>
-                <Button
-                    data-primary-action
-                    variant="primary"
-                    shape="square"
-                    className="w-full"
-                    loading={resend.isPending}
-                    onClick={() => resend.mutate()}
-                >
-                    Send a new link
-                </Button>
+                <p className="m-0 text-sm text-text-muted">
+                    Didn’t get it? Check your spam folder, or{' '}
+                    <Button
+                        variant="link"
+                        className="h-auto p-0 font-medium text-text"
+                        loading={resend.isPending}
+                        onClick={() => resend.mutate()}
+                    >
+                        send a new link
+                    </Button>
+                    .
+                </p>
                 <Button
                     variant="ghost"
                     shape="square"

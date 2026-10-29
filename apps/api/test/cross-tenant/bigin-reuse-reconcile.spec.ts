@@ -270,6 +270,22 @@ describe('FR-CRMS-26 reconcile reused Bigin contacts', () => {
         expect(await owner.biginContactReuse.count({ where: { workspaceId: workspace } })).toBe(0);
     });
 
+    it('without Twenty (its data gone, its connection still stored): Twenty is not asked; the logs and Bigin decide', async () => {
+        const asked = twenty.requests.length;
+        const lines: string[] = [];
+        const report = await reconciler.reconcile(workspace, {
+            apply: false,
+            logs,
+            twenty: false,
+            progress: (line) => lines.push(line),
+        });
+        expect(twenty.requests.length).toBe(asked);
+        expect(lines).toContain('Twenty not read: the logs and Bigin only');
+        // A dry run: whatever the logs and Bigin alone show is reported, and nothing is written.
+        expect(report.applied).toBe(false);
+        expect(await owner.biginContactReuse.count({ where: { workspaceId: workspace } })).toBe(0);
+    });
+
     it('applied: the earlier person gets back their address, the notes and deals from before the change, and a note; the holder becomes the latest person; mail follows the address', async () => {
         const report = await reconciler.reconcile(workspace, { apply: true, logs });
         expect(report.totals).toMatchObject({ contactsSplit: 1, peopleCreated: 1, notesMoved: 1, dealsMoved: 1 });

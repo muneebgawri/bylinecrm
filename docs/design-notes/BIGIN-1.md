@@ -108,7 +108,7 @@ Nest application context with no workers or relays of its own) runs `BiginReuseR
    Contact with a `reconcile` row is not reconciled again. The output is, per Contact, before → after and what
    moved; the review list; and totals per kind, zero included.
 
-Owner steps: deploy, extract the log rows from the old job's logs, run without `--apply`, read the review list,
+Owner steps: deploy, copy the old job's `output/` directory (`bigin_delta_sync.*.jsonl`, read as the job wrote them), run with `--no-twenty` (Twenty is deleted) and without `--apply`, read the review list,
 then run with `--apply`.
 
 ## Running, and the cursor
