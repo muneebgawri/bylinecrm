@@ -18,6 +18,7 @@ const RECORD_IDS: Record<string, string> = {
     sequence: IDS.sequence,
     settingsPipeline: IDS.pipeline,
     sendingDomain: IDS.sendingDomain,
+    payment: IDS.payment,
 };
 
 export interface RouteState {

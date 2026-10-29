@@ -62,6 +62,9 @@ import type {
     DealInvoiceView,
     NewswireosSettingsView,
     NewswireosDealWonDeliveryView,
+    NewswireosInvoiceLinkView,
+    NewswireosPaymentReviewView,
+    NewswireosPaymentView,
     NewswireosOwnershipDeliveryView,
     BylineSettingsView,
     Smtp2GoMailboxView,
@@ -130,6 +133,8 @@ export const IDS = {
     mailbox: '0b1e0000-0000-4000-8000-0000000008a1',
     poolMailbox: '0b1e0000-0000-4000-8000-0000000008a2',
     sendingDomain: '0b1e0000-0000-4000-8000-0000000008a3',
+    payment: '0b1e0000-0000-4000-8000-0000000008f1',
+    secondPayment: '0b1e0000-0000-4000-8000-0000000008f2',
     blockedDomain: '0b1e0000-0000-4000-8000-0000000008b1',
     suppressedUnsubscribe: '0b1e0000-0000-4000-8000-0000000009a1',
     suppressedBounce: '0b1e0000-0000-4000-8000-0000000009a2',
@@ -2127,3 +2132,51 @@ export function dealInvoices(dealId: string): DealInvoiceView[] {
         ),
     ];
 }
+
+/** INV-2: a paid invoice waiting for its owner to choose between the client's two open deals. */
+export const newswireosPayment: NewswireosPaymentView = {
+    id: IDS.payment,
+    invoiceNumber: 'INV-202610-000067',
+    paymentMethod: 'stripe',
+    amount: { amountMinor: 90_000, currency: 'USD' },
+    clientName: 'Sergio Client',
+    clientEmail: 'sergio@sergio-media.test',
+    mode: 'on',
+    decision: 'needs_deal',
+    matchedBy: null,
+    opportunityId: null,
+    opportunityName: null,
+    candidates: [
+        { id: IDS.deal, name: 'Sergio Media — Q4 distribution' },
+        { id: IDS.secondDeal, name: 'Sergio Media — Product launch' },
+    ],
+    resolvedAt: null,
+    canCreateDeal: true,
+    occurredAt: '2026-10-29T09:00:00.000Z',
+    createdAt: '2026-10-29T09:00:01.000Z',
+};
+
+/** INV-2: Settings → NewswireOS's review: one waiting, one the CRM placed on the deal an AM also chose. */
+export const newswireosPayments: NewswireosPaymentReviewView[] = [
+    { ...newswireosPayment, enteredOnOpportunityId: null, agrees: null },
+    {
+        ...newswireosPayment,
+        id: IDS.secondPayment,
+        invoiceNumber: 'INV-202610-000061',
+        clientName: 'Olivia Client',
+        decision: 'attached',
+        matchedBy: 'only_open_deal',
+        opportunityId: IDS.deal,
+        opportunityName: 'Olivia Media — Press release bundle',
+        candidates: [],
+        canCreateDeal: false,
+        enteredOnOpportunityId: IDS.deal,
+        agrees: true,
+    },
+];
+
+/** INV-2: where a deal's invoice is raised in NewswireOS. */
+export const newswireosInvoiceLink: NewswireosInvoiceLinkView = {
+    url: `https://pressboard.example.test/pinion/clients/cus_1/?generate_invoice=1&byline_opportunity_id=${IDS.deal}`,
+    reason: null,
+};
