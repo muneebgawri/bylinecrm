@@ -39,6 +39,37 @@ describe('GmailHttp', () => {
         expect(new GmailApiError(403, 'forbidden', 'x').transient).toBe(false);
     });
 
+    it('PNW-1125 keeps Google’s own message and when it says to retry, from the body or the Retry-After header', async () => {
+        respond(403, {
+            error: {
+                errors: [
+                    {
+                        reason: 'rateLimitExceeded',
+                        message: 'User-rate limit exceeded.  Retry after 2026-10-29T18:12:00.000Z',
+                    },
+                ],
+                message: 'User-rate limit exceeded.  Retry after 2026-10-29T18:12:00.000Z',
+                status: 'PERMISSION_DENIED',
+            },
+        });
+        const fromBody = (await new GmailHttp().getProfile('t').catch((e: unknown) => e)) as GmailApiError;
+        expect(fromBody).toMatchObject({ status: 403, reason: 'rateLimitExceeded' });
+        expect(fromBody.googleMessage).toBe('User-rate limit exceeded.  Retry after 2026-10-29T18:12:00.000Z');
+        expect(fromBody.retryAfter).toEqual(new Date('2026-10-29T18:12:00.000Z'));
+
+        vi.restoreAllMocks();
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+            new Response(JSON.stringify({ error: { errors: [{ reason: 'rateLimitExceeded' }] } }), {
+                status: 429,
+                headers: { 'retry-after': '120' },
+            }),
+        );
+        const before = Date.now();
+        const fromHeader = (await new GmailHttp().getProfile('t').catch((e: unknown) => e)) as GmailApiError;
+        expect(fromHeader.retryAfter!.getTime()).toBeGreaterThanOrEqual(before + 119_000);
+        expect(fromHeader.googleMessage).toBeNull();
+    });
+
     it('reports a network failure without a status', async () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
         await expect(new GmailHttp().getProfile('t')).rejects.toMatchObject({ status: null, reason: 'network' });

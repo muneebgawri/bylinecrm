@@ -18,7 +18,8 @@ const PAGE_MAX = 200;
  * as Zoho does) and the Bigin read grammar the importer uses — `GET /bigin/v1/<Module>` with a
  * `Zoho-oauthtoken`, `If-Modified-Since` (second resolution; `304` when nothing matched), `sort_by=
  * Modified_Time&sort_order=asc`, `page`/`per_page` and `{ data, info: { more_records } }`;
- * `/<Module>/deleted` and `/<Module>/actions/count`. Nothing here is Zoho's code: it is the shape of its
+ * `/<Module>/deleted` and `/<Module>/actions/count`, for the modules the importer reads (`Tasks`, `Events`
+ * and `Calls` too; an empty one answers no records). Nothing here is Zoho's code: it is the shape of its
  * answers, as the Python sync (`twenty-bigin-sync`) relied on them.
  */
 export class FakeBigin {
@@ -192,7 +193,7 @@ export class FakeBigin {
         const v2 = parsed?.[1] === 'v2';
         // `match[1]` the module, `match[2]` what under it — the same shape for both versions.
         const match = parsed ? [parsed[0], parsed[2], parsed[3]] : null;
-        if (!match || !['Accounts', 'Contacts', 'Deals', 'Notes'].includes(match[1]!)) {
+        if (!match || !['Accounts', 'Contacts', 'Deals', 'Notes', 'Tasks', 'Events', 'Calls'].includes(match[1]!)) {
             return {
                 status: 400,
                 body: { code: 'INVALID_MODULE', message: 'the module name given seems to be invalid' },
@@ -227,7 +228,9 @@ export class FakeBigin {
                       .filter((r) => after === null || new Date(r.Modified_Time).getTime() > after)
                       .sort((a, b) => a.Modified_Time.localeCompare(b.Modified_Time) || a.id.localeCompare(b.id));
         if (rows.length === 0 && after !== null) return { status: 304 };
-        const slice = rows.slice((page - 1) * perPage, page * perPage);
+        const slice = rows
+            .slice((page - 1) * perPage, page * perPage)
+            .map((row) => (module === 'Tasks' && !match[2] ? taskAsAsked(row, url.searchParams.get('fields')) : row));
         return {
             status: 200,
             body: {
@@ -244,4 +247,21 @@ export class FakeBigin {
             },
         };
     }
+}
+
+/**
+ * A task as Bigin lists it (production, 2026-10-29): its record (`Related_To`, `$related_module`) only when the
+ * request names `What_Id`, its contact (`Who_Id`) only when it names `Who_Id` — a list without `fields` has no
+ * link at all. Tasks are seeded in the shape Bigin answers when asked.
+ */
+function taskAsAsked(row: Record<string, unknown>, fields: string | null): Record<string, unknown> {
+    const named = new Set((fields ?? '').split(','));
+    const out = { ...row };
+    if (!named.has('What_Id')) {
+        delete out.Related_To;
+        delete out.$related_module;
+        delete out.What_Id;
+    }
+    if (!named.has('Who_Id')) delete out.Who_Id;
+    return out;
 }

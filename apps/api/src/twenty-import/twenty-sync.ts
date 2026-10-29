@@ -17,15 +17,36 @@ export function syncWaitMs(interval: TwentySyncEvery, failures: number): number 
  * edited in BylineCRM after Twenty last touched the record — that keeps BylineCRM's value. `edited`
  * names those fields (what the timeline shows changed by someone other than the import, later than
  * Twenty's `updatedAt`); the input loses them, and `kept` names what it lost, for the run report.
+ * Custom values are held back key by key when `edited` names them (`custom.<key>`, BIGIN-1): the
+ * other custom fields are still written. Without that detail `custom` is held back whole.
  */
 export function withoutLocalEdits<T extends object>(
     input: T,
     edited: ReadonlySet<string>,
 ): { input: T; kept: string[] } {
+    const custom = (input as { custom?: unknown }).custom;
+    const perKey =
+        edited.has('custom') && custom !== null && typeof custom === 'object' && [...edited].some(isCustomKey);
     const kept = Object.keys(input)
-        .filter((field) => edited.has(field))
+        .filter((field) => edited.has(field) && !(perKey && field === 'custom'))
+        .concat(
+            perKey
+                ? Object.keys(custom)
+                      .filter((key) => edited.has(`custom.${key}`))
+                      .map((k) => `custom.${k}`)
+                : [],
+        )
         .sort();
     if (kept.length === 0) return { input, kept };
-    const rest = Object.fromEntries(Object.entries(input).filter(([field]) => !edited.has(field))) as T;
-    return { input: rest, kept };
+    const rest = Object.fromEntries(
+        Object.entries(input).filter(([field]) => !edited.has(field) || (perKey && field === 'custom')),
+    ) as Record<string, unknown>;
+    if (perKey) {
+        rest.custom = Object.fromEntries(
+            Object.entries(custom as Record<string, unknown>).filter(([key]) => !edited.has(`custom.${key}`)),
+        );
+    }
+    return { input: rest as T, kept };
 }
+
+const isCustomKey = (field: string) => field.startsWith('custom.');

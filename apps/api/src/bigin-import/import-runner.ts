@@ -33,6 +33,7 @@ import type { FieldDefinition } from '../records/custom-fields/custom-values';
 import { NotesService, type NoteInput } from '../records/notes.service';
 import { OpportunitiesService } from '../records/opportunities.service';
 import { PeopleService, type PersonInput } from '../records/people.service';
+import { TasksService } from '../records/tasks.service';
 import { defaultCurrency, stored } from '../records/references';
 import { fieldsEditedAfter } from '../timeline/timeline.service';
 import { customValuesFor, definitionsNeeded, type InferredCustom } from '../twenty-import/custom-fields-sync';
@@ -59,12 +60,16 @@ import {
 import { countBiginLinks, flagBiginDeleted, loadBiginLinks, writeBiginLink, type BiginLocalType } from './links';
 import {
     mapAccount,
+    mapCall,
     mapContact,
     mapDeal,
+    mapEvent,
     mapNote,
+    mapTask,
     ownerEmailOf,
     ownerNameOf,
     referencesOf,
+    type BiginTaskInput,
     type MappedDeal,
 } from './mappers';
 
@@ -77,7 +82,17 @@ const LOCAL: Readonly<Record<BiginImportObject, BiginLocalType>> = {
     Contacts: 'person',
     Deals: 'opportunity',
     Notes: 'note',
+    // Bigin's activities: each a task on the records it is about (BIGIN-1).
+    Tasks: 'task',
+    Events: 'task',
+    Calls: 'task',
 };
+
+/** The record object a module's custom values live on; null for a module that carries none (notes, tasks). */
+function customTarget(module: BiginImportObject): 'company' | 'person' | 'opportunity' | null {
+    const type = LOCAL[module];
+    return type === 'company' || type === 'person' || type === 'opportunity' ? type : null;
+}
 
 type Outcome = 'created' | 'updated' | 'unchanged' | 'merged' | 'skipped';
 type Cursors = Partial<Record<BiginImportObject, BiginPassCursor>>;
@@ -131,6 +146,7 @@ export class BiginImportRunner {
         private readonly companies: CompaniesService,
         private readonly opportunities: OpportunitiesService,
         private readonly notes: NotesService,
+        private readonly tasks: TasksService,
         private readonly moves: StageMoveService,
         private readonly sync: BiginSyncService,
         private readonly auth: AuthService,
@@ -355,8 +371,9 @@ export class BiginImportRunner {
             const unlinked = records
                 .map((r) => plainBiginId(r.id))
                 .filter((id): id is string => id !== null && !links.link(module, id));
+            // Only companies, people and deals were imported from Twenty with their Bigin id.
             const cross =
-                type === 'note'
+                type === 'note' || type === 'task'
                     ? new Map<string, string>()
                     : await localsByBiginRecordId(tx, workspaceId, type, unlinked);
             return {
@@ -373,13 +390,15 @@ export class BiginImportRunner {
                 return { record, result: { failed: failureText(error), custom: {} } as MapResult };
             }
         });
-        const definitions =
-            module === 'Contacts'
-                ? await this.ensureDefinitions(
-                      'person',
-                      mapped.map((m) => m.result.custom),
-                  )
-                : [];
+        // The custom fields the page's values need, on the module's own object (Contacts' `pr_link` and
+        // `description`, Accounts' `phone`, Deals' `press_release_title`, …), made before the page is written.
+        const target = customTarget(module);
+        const definitions = target
+            ? await this.ensureDefinitions(
+                  target,
+                  mapped.map((m) => m.result.custom),
+              )
+            : [];
         // A page is written in chunks, each its own transaction: one transaction for a whole page of 200
         // records (a savepoint each, with the services' reads and the timeline) outlived the 15-second
         // transaction limit on production data. Re-reading a page after a failure is idempotent (the links).
@@ -481,6 +500,12 @@ export class BiginImportRunner {
                 return asResult(mapDeal(record, links, currency));
             case 'Notes':
                 return asResult(mapNote(record, links));
+            case 'Tasks':
+                return asResult(mapTask(record, links));
+            case 'Events':
+                return asResult(mapEvent(record, links));
+            case 'Calls':
+                return asResult(mapCall(record, links));
         }
     }
 
@@ -564,7 +589,11 @@ export class BiginImportRunner {
             });
             page.entry.ownersFilled = (page.entry.ownersFilled ?? 0) + 1;
         };
-        const localEdits = async <I extends object>(object: RecordObject, localId: string, input: I): Promise<I> => {
+        const localEdits = async <I extends object>(
+            object: RecordObject | 'task',
+            localId: string,
+            input: I,
+        ): Promise<I> => {
             const edited = await fieldsEditedAfter(tx, { type: object, id: localId }, modified ?? new Date(0));
             // An edit that left the field empty holds nothing back: Bigin fills a blank, never overwrites a value.
             for (const field of await blankFields(tx, object, localId, edited)) edited.delete(field);
@@ -597,13 +626,13 @@ export class BiginImportRunner {
         const known = async (): Promise<{ id: string; how: 'linked' | 'merged' } | 'trashed' | null> => {
             const id = linked ?? page.cross.get(externalId) ?? null;
             if (!id) return null;
-            if (await trashed(tx, type as CrossSourceType | 'note', id)) return linked ? 'trashed' : null;
+            if (await trashed(tx, type as CrossSourceType | 'note' | 'task', id)) return linked ? 'trashed' : null;
             return { id, how: linked ? 'linked' : 'merged' };
         };
 
         switch (module) {
             case 'Accounts': {
-                const input = { ...(mapped.input as CompanyInput & { name: string }) };
+                const input = withCustom(mapped.input as CompanyInput & { name: string }, mapped.custom, page);
                 const found = await known();
                 if (found === 'trashed') return skip(mapped, 'trashed in BylineCRM');
                 if (found) {
@@ -702,13 +731,14 @@ export class BiginImportRunner {
                     await link(match.id);
                     return 'merged';
                 }
-                const created = await this.people.createIn(tx, context, { ...input, ownerId });
+                const created = await this.people.createIn(tx, context, forCreate({ ...input, ownerId }));
                 events.push(created.event);
                 await link(created.row.id);
                 return 'created';
             }
             case 'Deals': {
                 const deal = mapped as unknown as MappedDeal;
+                deal.input = withCustom(deal.input, mapped.custom, page);
                 const stage = await this.resolveStage(tx, state, deal.stage);
                 if (stage.unknown && deal.stage && page.entry.unknownStages.length < TWENTY_IMPORT_ERRORS_KEPT) {
                     page.entry.unknownStages.push({ externalId, stage: deal.stage });
@@ -774,6 +804,31 @@ export class BiginImportRunner {
                 await link(created.row.id);
                 return 'created';
             }
+            case 'Tasks':
+            case 'Events':
+            case 'Calls': {
+                /**
+                 * Bigin's owner is the assignee: set on a task created, and on one that has none — never
+                 * changing one. Being given an imported task is not someone handing it over: the import's
+                 * event tells nobody (`TaskNotificationsService.assigned`).
+                 */
+                const input = mapped.input as BiginTaskInput;
+                const found = await known();
+                if (found === 'trashed') return skip(mapped, 'trashed in BylineCRM');
+                if (found) {
+                    const patch = await localEdits('task', found.id, input);
+                    const current = await tx.task.findUnique({ where: { id: found.id }, select: { assigneeId: true } });
+                    const fill = ownerId && current?.assigneeId === null ? { assigneeId: ownerId } : {};
+                    const result = await this.tasks.updateIn(tx, context, found.id, { ...patch, ...fill });
+                    if (result.event) events.push(result.event);
+                    await link(found.id);
+                    return result.event ? 'updated' : 'unchanged';
+                }
+                const created = await this.tasks.createIn(tx, context, { ...input, assigneeId: ownerId });
+                events.push(created.event);
+                await link(created.row.id);
+                return 'created';
+            }
         }
     }
 
@@ -819,7 +874,11 @@ export class BiginImportRunner {
             personId = match.id;
             outcome = 'merged';
         } else {
-            const created = await this.people.createIn(tx, context, { ...reuse.input, ownerId: reuse.ownerId });
+            const created = await this.people.createIn(
+                tx,
+                context,
+                forCreate({ ...reuse.input, ownerId: reuse.ownerId }),
+            );
             reuse.events.push(created.event);
             personId = created.row.id;
             outcome = 'created';
@@ -1040,7 +1099,7 @@ async function currentIdentity(tx: WorkspaceClient, personId: string): Promise<C
 
 const deletedKey = (module: BiginImportObject) => `${module}:deleted`;
 
-async function trashed(tx: WorkspaceClient, type: CrossSourceType | 'note', id: string): Promise<boolean> {
+async function trashed(tx: WorkspaceClient, type: CrossSourceType | 'note' | 'task', id: string): Promise<boolean> {
     const where = { id };
     const select = { deletedAt: true } as const;
     const row =
@@ -1050,8 +1109,29 @@ async function trashed(tx: WorkspaceClient, type: CrossSourceType | 'note', id: 
               ? await tx.person.findUnique({ where, select })
               : type === 'opportunity'
                 ? await tx.opportunity.findUnique({ where, select })
-                : await tx.note.findUnique({ where, select });
+                : type === 'note'
+                  ? await tx.note.findUnique({ where, select })
+                  : await tx.task.findUnique({ where, select });
     return !row || row.deletedAt !== null;
+}
+
+/** The input with the custom values the page's definitions take; as it was when there are none to write. */
+function withCustom<I extends { custom?: Record<string, unknown> | undefined }>(
+    input: I,
+    custom: InferredCustom,
+    page: { definitions: FieldDefinition[] },
+): I {
+    const values = customValuesFor(custom, page.definitions);
+    return Object.keys(values).length === 0 ? { ...input } : { ...input, custom: values };
+}
+
+/**
+ * A record's input as it is created: a custom value Bigin has cleared (`null`) clears one written before
+ * on an update, and on a record made now is simply not there.
+ */
+function forCreate<I extends { custom?: Record<string, unknown> | undefined }>(input: I): I {
+    if (!input.custom) return input;
+    return { ...input, custom: Object.fromEntries(Object.entries(input.custom).filter(([, v]) => v !== null)) };
 }
 
 /** A mapper's answer as the page carries it: a skip has no custom values. */
@@ -1069,10 +1149,11 @@ function skip(mapped: { note?: string }, reason: string): 'skipped' {
 /**
  * Which of `fields` the record has empty (null, or text that is only spaces). A field that is not a plain
  * column (emails, phones, an address, an amount) is never called empty here: a local edit of it holds.
+ * A custom field (`custom.<key>`) is empty when the record has no value for it.
  */
 export async function blankFields(
     tx: WorkspaceClient,
-    object: RecordObject,
+    object: RecordObject | 'task',
     id: string,
     fields: ReadonlySet<string>,
 ): Promise<string[]> {
@@ -1086,10 +1167,12 @@ export async function blankFields(
                 ? await tx.opportunity.findUnique({ where: { id } })
                 : null;
     if (!row) return [];
+    const custom = (row.custom ?? {}) as Record<string, unknown>;
+    const blank = (value: unknown) =>
+        value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
     return [...fields].filter((field) => {
-        if (!(field in row)) return false;
-        const value = row[field];
-        return value === null || (typeof value === 'string' && value.trim() === '');
+        if (field.startsWith('custom.')) return blank(custom[field.slice('custom.'.length)]);
+        return field in row && blank(row[field]);
     });
 }
 

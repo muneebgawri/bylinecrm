@@ -1,14 +1,7 @@
 import { SENDING_DOMAIN_RECHECK_MS } from '@bylinecrm/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextPostmasterReadAt } from './postmaster-schedule';
-import {
-    googleErrorOf,
-    PostmasterHttp,
-    postmasterDay,
-    postmasterRange,
-    retryAfterSecondsOf,
-    spamRateBpsOf,
-} from './postmaster.http';
+import { googleErrorOf, PostmasterHttp, postmasterDay, postmasterRange, spamRateBpsOf } from './postmaster.http';
 import { PostmasterRequestFailed } from './postmaster.port';
 
 /**
@@ -37,14 +30,7 @@ describe('#129 FR-CRMS-13 Postmaster Tools', () => {
         const now = new Date('2026-10-14T10:00:00Z');
         const DAY = 24 * 60 * 60 * 1000;
 
-        it('reads Retry-After as seconds or as a date, and anything else as nothing', () => {
-            expect(retryAfterSecondsOf('120', now)).toBe(120);
-            expect(retryAfterSecondsOf('Wed, 14 Oct 2026 10:02:00 GMT', now)).toBe(120);
-            expect(retryAfterSecondsOf('Wed, 14 Oct 2026 09:00:00 GMT', now)).toBe(0);
-            expect(retryAfterSecondsOf(null, now)).toBeNull();
-            expect(retryAfterSecondsOf('soon', now)).toBeNull();
-            expect(retryAfterSecondsOf('-5', now)).toBeNull();
-        });
+        // Reading Retry-After itself is infra/retry-after.spec's (one reader for every Google client, PNW-1125).
 
         it('a reading for the day is enough until the next day, UTC', () => {
             expect(nextPostmasterReadAt({ status: 'ok' }, now, 0)).toEqual(new Date('2026-10-15T00:00:00Z'));

@@ -357,4 +357,33 @@ describe('FR-CRMS-26 reconcile reused Bigin contacts', () => {
         expect(report.contacts).toEqual([]);
         expect(await owner.person.count({ where: { workspaceId: otherWorkspace } })).toBe(0);
     });
+
+    it('reads every Bigin Contact past a bulk edit: more than 2,000 in one second, by page token', async () => {
+        const second = new Date().toISOString();
+        bigin.seed(
+            'Contacts',
+            Array.from({ length: 2_100 }, (_, i) => ({
+                First_Name: 'Bulk',
+                Last_Name: `${i}`,
+                Email: `bulk-${i}@reconcile.example`,
+                Modified_Time: second,
+                Created_Time: second,
+            })),
+        );
+        const lines: string[] = [];
+        const report = await reconciler.reconcile(workspace, {
+            apply: false,
+            logs,
+            twenty: false,
+            progress: (line) => lines.push(line),
+        });
+        expect(report.applied).toBe(false);
+        const read = Math.max(
+            ...lines
+                .filter((l) => l.startsWith('Bigin Contacts: '))
+                .map((l) => Number(l.slice('Bigin Contacts: '.length))),
+        );
+        expect(read).toBeGreaterThanOrEqual(2_100);
+        expect(bigin.requests.some((r) => r.path.includes('page_token='))).toBe(true);
+    }, 300_000);
 });

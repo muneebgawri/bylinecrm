@@ -477,5 +477,7 @@ async function localNames(
         names.set(`opportunity:${d.id}`, d.name);
     for (const n of await tx.note.findMany({ where: { id: { in: ids('note') } }, select: { id: true, title: true } }))
         if (n.title) names.set(`note:${n.id}`, n.title);
+    for (const t of await tx.task.findMany({ where: { id: { in: ids('task') } }, select: { id: true, title: true } }))
+        names.set(`task:${t.id}`, t.title);
     return names;
 }

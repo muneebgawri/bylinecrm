@@ -81,6 +81,10 @@ export class GmailApiError extends Error {
         readonly status: number | null,
         readonly reason: string,
         message: string,
+        /** Google's own words (`error.message`) — which limit, and often until when. Never holds a token. (PNW-1125) */
+        readonly googleMessage: string | null = null,
+        /** When Gmail says the request may be made again — its Retry-After header, or "Retry after <time>". */
+        readonly retryAfter: Date | null = null,
     ) {
         super(message);
         this.name = 'GmailApiError';
