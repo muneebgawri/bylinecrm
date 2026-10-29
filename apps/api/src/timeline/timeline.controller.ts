@@ -23,7 +23,7 @@ export class TimelineController {
     @Returns(timelinePage)
     list(@Query() query: ListTimelineQueryDto): Promise<Page<TimelineActivityView>> {
         return this.timeline.list({
-            target: parseTarget(query.target),
+            target: query.target ? parseTarget(query.target) : undefined,
             kinds: splitKinds(query.kinds),
             cursor: query.cursor,
             limit: query.limit,

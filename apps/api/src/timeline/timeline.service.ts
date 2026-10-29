@@ -26,12 +26,13 @@ import { canonical } from '../records/diff';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { type Page, paginate } from '../records/list-query';
 import { stored } from '../records/references';
-import { readableTargets } from '../records/targets';
+import { dedupeTargets, readableTargets } from '../records/targets';
 import type { TimelineActivityView, ExternalActivityResult } from './responses';
 export type { TimelineActivityView, ExternalActivityResult } from './responses';
 
 export interface TimelineQuery {
-    target: RecordTarget;
+    /** Absent: the workspace feed — every live record the caller can read. */
+    target?: RecordTarget | undefined;
     /** Prefixes of `kind` to keep; empty means every kind. */
     kinds: readonly string[];
     cursor?: string | undefined;
@@ -80,17 +81,33 @@ export class TimelineService {
     private entries(query: TimelineQuery): Promise<Page<TimelineActivityView>> {
         this.current();
         return this.rls.withWorkspace(async (tx) => {
+            const kinds =
+                query.kinds.length > 0 ? { AND: [{ OR: query.kinds.map((k) => ({ kind: { startsWith: k } })) }] } : {};
+            if (!query.target) {
+                // The feed: the tenant's entries, newest first; a page keeps only the entries whose
+                // record is live and in the caller's scope (the same rule as opening the record).
+                const page = await paginate(query.limit, query.cursor, (args) =>
+                    tx.timelineActivity.findMany({
+                        where: kinds,
+                        orderBy: [{ happenedAt: 'desc' }, { id: 'asc' }],
+                        ...args,
+                    }),
+                );
+                const targets = page.items.map((r) => ({ type: r.targetType as RecordObject, id: r.targetId }));
+                const readable = new Set(
+                    (await readableTargets(tx, dedupeTargets(targets))).map((t) => `${t.type}:${t.id}`),
+                );
+                return {
+                    items: page.items.filter((r) => readable.has(`${r.targetType}:${r.targetId}`)).map(view),
+                    nextCursor: page.nextCursor,
+                };
+            }
             const visible = await readableTargets(tx, [query.target]);
             if (visible.length === 0) throw new NotFoundException('target not found');
             const targets = await this.mergedTargets(tx, query.target);
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.timelineActivity.findMany({
-                    where: {
-                        OR: targets.map((t) => ({ targetType: t.type, targetId: t.id })),
-                        ...(query.kinds.length > 0
-                            ? { AND: [{ OR: query.kinds.map((k) => ({ kind: { startsWith: k } })) }] }
-                            : {}),
-                    },
+                    where: { OR: targets.map((t) => ({ targetType: t.type, targetId: t.id })), ...kinds },
                     orderBy: [{ happenedAt: 'desc' }, { id: 'asc' }],
                     ...args,
                 }),
@@ -222,24 +239,39 @@ export class TimelineService {
 /**
  * The fields of a record that someone other than the import changed after `after` (#185): the
  * `diff` keys of the record's own entries (not a note's or a task's on it) with any actor but the
- * import's, later than that moment. What the Twenty sync's precedence rule asks the timeline.
+ * import's, later than that moment. What the Twenty sync's precedence rule asks the timeline. A
+ * changed `custom` also names each custom field that changed, as `custom.<key>`, so the rule holds
+ * field by field there too (BIGIN-1). A task (BIGIN-1: Bigin's tasks, events and calls) has no entry
+ * of its own: its entries are those on its records that link it.
  */
 export async function fieldsEditedAfter(
     tx: WorkspaceClient,
-    target: { type: RecordObject; id: string },
+    target: { type: RecordObject | 'task'; id: string },
     after: Date,
 ): Promise<Set<string>> {
     const rows = await tx.timelineActivity.findMany({
-        where: { targetType: target.type, targetId: target.id, linkedType: null, happenedAt: { gt: after } },
+        where:
+            target.type === 'task'
+                ? { linkedType: 'task', linkedId: target.id, happenedAt: { gt: after } }
+                : { targetType: target.type, targetId: target.id, linkedType: null, happenedAt: { gt: after } },
         select: { actor: true, properties: true },
     });
     const fields = new Set<string>();
     for (const row of rows) {
         if (stored<TimelineActor>(row.actor).kind === 'import') continue;
-        const diff = stored<{ diff?: Record<string, unknown> }>(row.properties).diff;
+        const diff = stored<{ diff?: Record<string, { from?: unknown; to?: unknown }> }>(row.properties).diff;
         for (const field of Object.keys(diff ?? {})) fields.add(field);
+        const custom = diff?.custom;
+        if (custom) for (const key of changedKeys(custom.from, custom.to)) fields.add(`custom.${key}`);
     }
     return fields;
+}
+
+/** The keys whose values differ between two custom-value objects. */
+function changedKeys(from: unknown, to: unknown): string[] {
+    const a = (from && typeof from === 'object' ? from : {}) as Record<string, unknown>;
+    const b = (to && typeof to === 'object' ? to : {}) as Record<string, unknown>;
+    return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => canonical(a[k]) !== canonical(b[k]));
 }
 
 /** The rows one event leaves, by the shape of its object: a record's own entry, or one per target. */

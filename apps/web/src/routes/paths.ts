@@ -39,6 +39,9 @@ export const paths = {
     /** One sending domain's health (#190): an admin's page. */
     sendingDomain: (workspaceId: string, domainId: string) => `/w/${workspaceId}/mailboxes/domains/${domainId}`,
     team: (workspaceId: string) => `/w/${workspaceId}/team`,
+    calendar: (workspaceId: string) => `/w/${workspaceId}/calendar`,
+    activities: (workspaceId: string) => `/w/${workspaceId}/activities`,
+    leads: (workspaceId: string) => `/w/${workspaceId}/leads`,
     /** The person's own name, signature details and signatures: every member's, from the account menu. */
     profile: (workspaceId: string) => `/w/${workspaceId}/profile`,
     settings: (workspaceId: string) => `/w/${workspaceId}/settings`,

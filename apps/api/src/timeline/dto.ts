@@ -13,7 +13,8 @@ const target = z.string().min(1);
 
 export class ListTimelineQueryDto extends createZodDto(
     z.object({
-        target,
+        /** Absent: the workspace's feed — every record the caller may read, newest first. */
+        target: target.optional(),
         /** Comma-separated prefixes of `kind` to keep (`linked-note,opportunity.`); absent keeps every kind. */
         kinds: z.string().max(500).optional(),
         cursor: z.string().min(1).optional(),

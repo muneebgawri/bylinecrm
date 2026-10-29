@@ -6,7 +6,6 @@ import { Home as ServiceStatus } from './home';
 import { paths } from './paths';
 import { DOMAIN_PARAM, PIPELINE_PARAM, UNSUBSCRIBE_TOKEN_PARAM, WORKSPACE_PARAM } from './params';
 import { AuthSkeleton, Forbidden, NotFound, RouteError, RouteSkeleton } from './states';
-import { ContentPage, type PageId } from './w/pages';
 import { Workspaces } from './Workspaces';
 
 /** The signed-out pages are one chunk, out of the first load: a signed-in person never needs them (#102). */
@@ -95,6 +94,10 @@ const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.H
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
 const profilePage = () => import('./w/profile/ProfilePage').then((m) => ({ Component: m.ProfilePage }));
 const teamPage = () => import('./w/team/TeamPage').then((m) => ({ Component: m.TeamPage }));
+const calendarPage = () => import('./w/calendar/CalendarPage').then((m) => ({ Component: m.CalendarPage }));
+const activitiesPage = () => import('./w/activities/ActivitiesPage').then((m) => ({ Component: m.ActivitiesPage }));
+const leadsPage = () => import('./w/leads/LeadsPipeline').then((m) => ({ Component: m.LeadsPipeline }));
+const landingPage = () => import('./public/Landing').then((m) => ({ Component: m.Landing }));
 /** Reports is its own chunk: its charts are only wanted there. */
 const reportsPage = () => import('./w/reports/ReportsPage').then((m) => ({ Component: m.ReportsPage }));
 
@@ -114,13 +117,6 @@ const dealsPage = () => import('./w/deals/DealsPage').then((m) => ({ Component: 
  * The route manifest: the one list of pages. A route's `handle.crumb` is its breadcrumb; its
  * `errorElement` is the boundary that says what happened (FR-CRMS-UI-7).
  */
-const page = (id: PageId, path: string, crumb: string): RouteObject => ({
-    path,
-    element: <ContentPage id={id} />,
-    handle: { crumb },
-    errorElement: <RouteError />,
-});
-
 /**
  * A page whose code loads on first visit. Its own `hydrateFallbackElement` is what React Router
  * draws while the code loads on a direct visit — inside the shell's content area — so the shell is
@@ -150,6 +146,9 @@ const workspaceRoutes: RouteObject = {
         { index: true, element: <Navigate to="home" replace /> },
         lazyPage('home', homePage, 'Dashboard'),
         lazyPage('reports', reportsPage, 'Reports'),
+        lazyPage('leads', leadsPage, 'Leads'),
+        lazyPage('calendar', calendarPage, 'Calendar'),
+        lazyPage('activities', activitiesPage, 'Activities'),
         lazyPage('people', lists.people, 'People'),
         lazyPage('people/:personId', records.person, 'Person'),
         lazyPage('companies', lists.companies, 'Companies'),
@@ -197,7 +196,7 @@ const workspaceRoutes: RouteObject = {
 };
 
 export const routes: RouteObject[] = [
-    { path: paths.root, element: <Navigate to={paths.workspaces} replace /> },
+    { path: paths.root, lazy: landingPage, errorElement: <RouteError />, hydrateFallbackElement: null },
     authPage(paths.signIn, auth.signIn),
     authPage(paths.signUp, auth.signUp),
     authPage(paths.authCallback, auth.callback),

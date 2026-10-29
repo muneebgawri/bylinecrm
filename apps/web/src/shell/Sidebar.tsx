@@ -4,8 +4,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuTrigger,
     Skeleton,
     THEMES,
@@ -388,20 +386,44 @@ function UserCard({
                     )}
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="min-w-56">
-                <div className="px-2 py-1.5 text-xs text-text-muted">{email}</div>
-                <div className="px-2 pt-1.5 pb-1 text-[11.5px] font-medium text-text-faint">Theme</div>
-                <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
+            <DropdownMenuContent align="start" side="top" className="min-w-60 p-2">
+                <div className="flex items-center gap-2 px-1 py-1.5">
+                    <Avatar name={name} size="md" />
+                    <div className="grid min-w-0 flex-1 text-sm leading-tight">
+                        <span className="truncate font-medium">{name}</span>
+                        <span className="truncate text-xs text-text-muted">{email}</span>
+                    </div>
+                </div>
+                <div className="my-1 h-px bg-border" />
+                <div
+                    role="radiogroup"
+                    aria-label="Theme"
+                    className="mx-1 my-1 grid grid-cols-3 gap-0.5 rounded-lg bg-surface-raised p-[3px]"
+                >
                     {THEMES.map((t) => {
                         const Icon = THEME_ICONS[t];
+                        const on = theme === t;
                         return (
-                            <DropdownMenuRadioItem key={t} value={t}>
-                                <Icon aria-hidden />
-                                {THEME_LABELS[t]}
-                            </DropdownMenuRadioItem>
+                            <button
+                                key={t}
+                                type="button"
+                                role="radio"
+                                aria-checked={on}
+                                aria-label={THEME_LABELS[t]}
+                                title={THEME_LABELS[t]}
+                                onClick={() => setTheme(t)}
+                                className={cn(
+                                    'grid h-7 place-items-center rounded-md text-text-muted transition-colors hover:text-text',
+                                    on && 'bg-surface text-text shadow-sm',
+                                    focusRing,
+                                )}
+                            >
+                                <Icon aria-hidden className="size-4" />
+                            </button>
                         );
                     })}
-                </DropdownMenuRadioGroup>
+                </div>
+                <div className="my-1 h-px bg-border" />
                 <DropdownMenuItem onSelect={onOpenProfile}>
                     <UserRound aria-hidden /> Profile
                 </DropdownMenuItem>

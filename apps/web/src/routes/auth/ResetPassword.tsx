@@ -1,6 +1,6 @@
 import { LINK_TOKEN_PARAM } from '@bylinecrm/shared';
 import { Button, Field, PasswordInput } from '@bylinecrm/ui';
-import { KeyRound } from 'lucide-react';
+import { CheckCircle2, KeyRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError, fieldErrorAt } from '../../api/client';
@@ -20,6 +20,7 @@ export function ResetPassword() {
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
     const [mismatch, setMismatch] = useState(false);
+    const [saved, setSaved] = useState(false);
 
     const failure = reset.error instanceof ApiError ? reset.error : null;
     const invalidLink = !token || failure?.code === 'token.invalid';
@@ -31,11 +32,37 @@ export function ResetPassword() {
             return;
         }
         setMismatch(false);
-        reset.mutate(
-            { token: token ?? '', password },
-            { onSuccess: () => navigate(paths.workspaces, { replace: true }) },
-        );
+        reset.mutate({ token: token ?? '', password }, { onSuccess: () => setSaved(true) });
     };
+
+    if (saved) {
+        return (
+            <AuthLayout
+                title="Password updated"
+                subtitle="You are signed in here, and signed out everywhere else."
+                icon={<CheckCircle2 className="text-success" />}
+                hero={{
+                    eyebrow: 'All set',
+                    heading: (
+                        <>
+                            Your account is <span className="text-accent">secure again.</span>
+                        </>
+                    ),
+                    body: 'Every other session was signed out when you saved the new password. Sign in again on those devices with it.',
+                }}
+            >
+                <Button
+                    data-primary-action
+                    variant="primary"
+                    shape="square"
+                    className="w-full"
+                    onClick={() => navigate(paths.workspaces, { replace: true })}
+                >
+                    Continue to BylineCRM
+                </Button>
+            </AuthLayout>
+        );
+    }
 
     if (invalidLink) {
         return (
