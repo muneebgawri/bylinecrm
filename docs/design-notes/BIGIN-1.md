@@ -163,4 +163,7 @@ interval/failures/last error/cutover, saved accounts role, module cursors), `big
 3. Run _Everything_ once (it merges into what the Twenty import brought), review the report, then set the
    automatic sync (hourly).
 4. Retire the `twenty-bigin-sync` job (Bigin → Twenty), so Twenty stops receiving Bigin edits that would come back
-   through the Twenty importer as conflicts; keep the Twenty importer for Twenty-native data until its cutover.
+
+The cutover itself — gates, freeze, final sync, count check, comms, rollback, retiring Bigin — is the runbook
+[`docs/deploy/bigin-cutover.md`](../deploy/bigin-cutover.md).
+through the Twenty importer as conflicts; keep the Twenty importer for Twenty-native data until its cutover.
