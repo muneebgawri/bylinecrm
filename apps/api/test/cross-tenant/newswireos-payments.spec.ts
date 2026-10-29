@@ -19,6 +19,7 @@ import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { INVOICE_VERIFY_QUEUE } from '../../src/invoices/invoices.constants';
 import { InvoicesService } from '../../src/invoices/invoices.service';
+import { fillNewswireosClientsByAddress } from '../../src/invoices/newswireos-client-ids';
 import { InvoicesWorkers } from '../../src/invoices/invoices.workers';
 import { NEWSWIREOS_VERIFICATION_PORT } from '../../src/invoices/newswireos-verification.port';
 import type { NewswireosPaymentReviewView, NewswireosPaymentView } from '../../src/invoices/responses';
@@ -601,6 +602,46 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
         } finally {
             await owner.workspace.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { leadPoolId: null } });
         }
+    });
+
+    it('INV-2b: NewswireOS’s events give a person their client id — filled once, never moved — and the link follows', async () => {
+        const client = await newClient('Idless');
+        const deal = await newDeal(client, 'Idless deal');
+        await paid(invoiceNumber(), { email: client.email, customer_id: 'cus_first' });
+        await paid(invoiceNumber(), { email: client.email, customer_id: 'cus_second' });
+        expect((await owner.person.findUniqueOrThrow({ where: { id: client.person } })).newswireosCustomerId).toBe(
+            'cus_first',
+        );
+        const link = (
+            await as(a.who)
+                .get(w(`/opportunities/${deal}/invoices/newswireos-link`))
+                .expect(200)
+        ).body as {
+            url: string | null;
+        };
+        expect(link.url).toContain('/clients/cus_first/');
+    });
+
+    it('INV-2b: the client CSV fills ids in batches, only for people who have none', async () => {
+        const one = await newClient('Batch');
+        const two = await newClient('Kept');
+        await owner.person.update({ where: { id: two.person }, data: { newswireosCustomerId: 'cus_kept' } });
+        const filled = await fillNewswireosClientsByAddress(owner, a.id, [
+            { address: one.email.toUpperCase(), customerId: 'cus_batch' },
+            { address: two.email, customerId: 'cus_other' },
+            { address: `nobody-${stamp}@nowhere.test`, customerId: 'cus_none' },
+        ]);
+        expect(filled).toBe(1);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: one.person } })).newswireosCustomerId).toBe(
+            'cus_batch',
+        );
+        expect((await owner.person.findUniqueOrThrow({ where: { id: two.person } })).newswireosCustomerId).toBe(
+            'cus_kept',
+        );
+        // Another workspace's people at those addresses are never touched.
+        expect(await fillNewswireosClientsByAddress(owner, b.id, [{ address: one.email, customerId: 'cus_b' }])).toBe(
+            0,
+        );
     });
 
     it('cross-tenant: another workspace sees none of this workspace’s payments', async () => {

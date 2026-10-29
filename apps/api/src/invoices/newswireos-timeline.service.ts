@@ -1,3 +1,4 @@
+import { keepNewswireosClient } from './newswireos-client-ids';
 import { Injectable } from '@nestjs/common';
 import { TWENTY_IMPORT_SOURCE, type Money, type RecordTarget, type TimelineActor } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
@@ -91,6 +92,11 @@ export class NewswireosTimelineService {
                     },
                 });
                 if (match) await writeEntry(tx, workspaceId, delivery, match.target);
+                // INV-2: the client this record is, for its deals' "Raise invoice in NewswireOS" — filled, never moved.
+                const customerId = delivery.client?.customerId;
+                if (match && customerId && (match.target.type === 'person' || match.target.type === 'company')) {
+                    await keepNewswireosClient(tx, { type: match.target.type, id: match.target.id }, customerId);
+                }
                 const email = delivery.client?.email;
                 if (email && (delivery.type === 'client.created' || delivery.type === 'am.assigned')) {
                     await keepExclusion(

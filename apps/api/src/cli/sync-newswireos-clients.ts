@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { TWENTY_IMPORT_SOURCE } from '@bylinecrm/shared';
 import { parseEnv } from '../config/env';
 import { NEWSWIREOS_CLIENT_NOTE as CLIENT_NOTE, NEWSWIREOS_CLIENT_SOURCE } from '../invoices/invoices.constants';
+import { fillNewswireosClientsByAddress } from '../invoices/newswireos-client-ids';
 
 /**
  * The source of an exclusion this sync owns: a NewswireOS client account. The hook keeps it current between syncs
@@ -16,7 +17,9 @@ const GONE_NOTE = 'No longer a NewswireOS client';
 /**
  * `node dist/cli/sync-newswireos-clients.js --workspace <id> --csv <file> [--apply]` — makes the workspace's
  * `account_managed` exclusions NewswireOS's clients and only them. The CSV is `email,account manager name` per line,
- * exported from NewswireOS (customer and sub-account users).
+ * exported from NewswireOS (customer and sub-account users), optionally with the client's NewswireOS id as a third
+ * field (`email,account manager,client id`): each person at that address who has no client id yet is given it (INV-2),
+ * so their deals link to raising an invoice for them in NewswireOS.
  *
  * - A client's address is excluded as `account_managed`, source `newswireos`, with their account manager's name. An
  *   exclusion the Twenty import made for it (a lead lookup) becomes this one; one made otherwise (by hand, a won deal,
@@ -33,7 +36,9 @@ async function main(): Promise<void> {
     const workspaceId = arg('--workspace');
     const csv = arg('--csv');
     if (!workspaceId || !csv) throw new Error('usage: --workspace <id> --csv <file> [--apply]');
-    const clients = parseClients(readFileSync(csv, 'utf8'));
+    const text = readFileSync(csv, 'utf8');
+    const clients = parseClients(text);
+    const clientIds = parseClientIds(text);
     const env = parseEnv(process.env);
     const db = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
     const counts = {
@@ -45,6 +50,8 @@ async function main(): Promise<void> {
         already: 0,
         endLookup: 0,
         endGone: 0,
+        withId: clientIds.size,
+        idsFilled: 0,
     };
     try {
         const live = await db.outreachExclusion.findMany({
@@ -88,6 +95,12 @@ async function main(): Promise<void> {
             }
         }
         if (apply) {
+            // INV-2: each client's NewswireOS id on the person at that address who has none yet (batched).
+            counts.idsFilled = await fillNewswireosClientsByAddress(
+                db,
+                workspaceId,
+                [...clientIds].map(([address, customerId]) => ({ address, customerId })),
+            );
             const now = new Date();
             for (const c of creates) {
                 await db.outreachExclusion.create({
@@ -130,7 +143,8 @@ async function main(): Promise<void> {
     console.log(
         `clients ${counts.clients}: ${verb}add ${counts.add}, ${verb}convert from a lead lookup ${counts.convert}, ` +
             `${verb}rename the account manager ${counts.renamed}, unchanged ${counts.kept}, excluded otherwise ` +
-            `${counts.already}; ${verb}end lead lookups ${counts.endLookup}, ${verb}end former clients ${counts.endGone}`,
+            `${counts.already}; ${verb}end lead lookups ${counts.endLookup}, ${verb}end former clients ${counts.endGone}; ` +
+            `client ids in the file ${counts.withId}${apply ? `, given to people ${counts.idsFilled}` : ''}`,
     );
 }
 
@@ -139,23 +153,44 @@ function arg(name: string): string | undefined {
     return at > 0 ? process.argv[at + 1] : undefined;
 }
 
-/** `email,account manager` lines: lower-cased, one per address (the first account manager named wins). */
+/**
+ * One CSV line: `email,account manager[,client id]`. The client id (INV-2) is the optional last field — NewswireOS's
+ * customer id, a UUID or a number — so an account manager whose name has a comma in it stays whole.
+ */
+function clientLine(line: string): { address: string; am: string | null; customerId: string | null } | null {
+    const fields = line.split(',');
+    const address = (fields.shift() ?? '').trim().toLowerCase();
+    if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(address)) return null;
+    const last = fields.length > 1 ? (fields[fields.length - 1] ?? '').trim() : '';
+    const customerId = CLIENT_ID.test(last) ? last : null;
+    if (customerId) fields.pop();
+    const am = fields.join(',').trim().replace(/\s+/g, ' ');
+    return { address, am: am || null, customerId };
+}
+
+const CLIENT_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{1,20})$/i;
+
+/** `email,account manager[,client id]` lines: lower-cased, one per address (the first account manager named wins). */
 export function parseClients(text: string): Map<string, string | null> {
     const clients = new Map<string, string | null>();
     for (const line of text.split(/\r?\n/)) {
-        const comma = line.indexOf(',');
-        const address = (comma < 0 ? line : line.slice(0, comma)).trim().toLowerCase();
-        if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(address) || clients.has(address)) continue;
-        const am =
-            comma < 0
-                ? ''
-                : line
-                      .slice(comma + 1)
-                      .trim()
-                      .replace(/\s+/g, ' ');
-        clients.set(address, am || null);
+        const c = clientLine(line);
+        if (c && !clients.has(c.address)) clients.set(c.address, c.am);
     }
     return clients;
+}
+
+/** INV-2: the client id each address's line carries, when it carries one (the first line for an address wins). */
+export function parseClientIds(text: string): Map<string, string> {
+    const ids = new Map<string, string>();
+    const seen = new Set<string>();
+    for (const line of text.split(/\r?\n/)) {
+        const c = clientLine(line);
+        if (!c || seen.has(c.address)) continue;
+        seen.add(c.address);
+        if (c.customerId) ids.set(c.address, c.customerId);
+    }
+    return ids;
 }
 
 if (require.main === module) {

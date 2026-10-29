@@ -18,6 +18,7 @@ import { recordWhere } from '../records/record-scope';
 import { fillWonDealAmount } from './deal-amount';
 import { covers, settle, type Settlement } from './invoice-decision';
 import { InvoiceQueue } from './invoice-queue';
+import { customerIdOf } from './newswireos-client-ids';
 import { isFreeMailDomain } from '../enrichment/email-domain';
 import { INVOICE_REASONS, NEWSWIREOS_CLIENT_EMAILS_MAX } from './invoices.constants';
 import {
@@ -642,9 +643,7 @@ async function timelineCustomerId(tx: WorkspaceClient, targetIds: readonly (stri
         orderBy: { createdAt: 'desc' },
         select: { payload: true },
     });
-    const data = (event?.payload as { data?: { client?: { customer_id?: unknown } } } | undefined)?.data;
-    const id = data?.client?.customer_id;
-    return typeof id === 'string' && id !== '' ? id : typeof id === 'number' ? String(id) : null;
+    return event ? customerIdOf(event.payload) : null;
 }
 
 /** Whoever may verify invoices by hand: members whose role has `invoice:verify`, and admins. */
