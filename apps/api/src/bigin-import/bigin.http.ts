@@ -19,7 +19,9 @@ import type {
     BiginApi,
     BiginConnection,
     BiginDeletedPage,
+    BiginField,
     BiginListOptions,
+    BiginModule,
     BiginPage,
     BiginRecord,
 } from './bigin.port';
@@ -190,7 +192,7 @@ export class BiginHttp implements BiginApi {
         };
     }
 
-    async count(connection: BiginConnection, module: BiginImportObject): Promise<number | null> {
+    async count(connection: BiginConnection, module: BiginImportObject | string): Promise<number | null> {
         try {
             const body = await this.get(connection, `${module}/actions/count`, module, new URLSearchParams(), null);
             const count = Number(body.count);
@@ -200,6 +202,40 @@ export class BiginHttp implements BiginApi {
             if (error instanceof BiginApiError && error.permanent) return null;
             throw error;
         }
+    }
+
+    async modules(connection: BiginConnection): Promise<BiginModule[]> {
+        const body = await this.get(connection, 'settings/modules', 'modules', new URLSearchParams(), null);
+        const rows = Array.isArray((body as { modules?: unknown }).modules)
+            ? ((body as { modules: Record<string, unknown>[] }).modules ?? [])
+            : [];
+        return rows
+            .filter((m) => typeof m.api_name === 'string')
+            .map((m) => ({
+                apiName: m.api_name as string,
+                label: String(m.plural_label ?? m.module_name ?? m.api_name),
+                apiSupported: m.api_supported !== false,
+            }));
+    }
+
+    async fieldDefinitions(connection: BiginConnection, module: string): Promise<BiginField[]> {
+        const body = await this.get(connection, 'settings/fields', module, new URLSearchParams({ module }), null);
+        const rows = Array.isArray((body as { fields?: unknown }).fields)
+            ? ((body as { fields: Record<string, unknown>[] }).fields ?? [])
+            : [];
+        return rows
+            .filter((f) => typeof f.api_name === 'string')
+            .map((f) => ({
+                apiName: f.api_name as string,
+                label: String(f.field_label ?? f.display_label ?? f.api_name),
+                type: String(f.data_type ?? ''),
+                custom: f.custom_field === true,
+                values: Array.isArray(f.pick_list_values)
+                    ? (f.pick_list_values as { display_value?: unknown; actual_value?: unknown }[])
+                          .map((v) => String(v.actual_value ?? v.display_value ?? ''))
+                          .filter((v) => v !== '')
+                    : [],
+            }));
     }
 
     async dealStages(connection: BiginConnection): Promise<string[] | null> {

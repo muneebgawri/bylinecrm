@@ -171,21 +171,42 @@ const TARGET_TYPE: Readonly<Record<BiginImportObject, RecordTarget['type'] | nul
     Notes: null,
 };
 
+/**
+ * The modules a note's parent may be in. `$se_module` says so on v1; v2 (a pass paged by token) never
+ * returns `$` fields, so its `Parent_Id.module` is read, and without either every module a note sits on is
+ * tried — Bigin's record ids are unique across modules, so at most one resolves.
+ */
+function parentModulesOf(record: BiginRecord): BiginImportObject[] {
+    const named = text(record.$se_module);
+    if (named) return PARENT_MODULE[named] ? [PARENT_MODULE[named]] : [];
+    const parent = record.Parent_Id;
+    const module = isObject(parent) ? parent.module : undefined;
+    const apiName = isObject(module) ? text(module.api_name) : text(module);
+    if (apiName) return PARENT_MODULE[apiName] ? [PARENT_MODULE[apiName]] : [];
+    return ['Contacts', 'Accounts', 'Deals'];
+}
+
 export function mapNote(
     record: BiginRecord,
     links: BiginLinkIndex,
 ): Mapped<NoteInput & { targets: RecordTarget[] }> | Skip {
     const body = text(record.Note_Content);
     if (!body) return { skip: 'no content' };
-    const module = PARENT_MODULE[text(record.$se_module) ?? ''];
-    const type = module ? TARGET_TYPE[module] : null;
-    const id = module ? links.resolve(module, lookupId(record.Parent_Id), createdAt(record)) : null;
-    if (!module || !type || !id) return { skip: 'its record is not in BylineCRM' };
+    let target: RecordTarget | null = null;
+    for (const module of parentModulesOf(record)) {
+        const type = TARGET_TYPE[module];
+        const id = links.resolve(module, lookupId(record.Parent_Id), createdAt(record));
+        if (type && id) {
+            target = { type, id } as RecordTarget;
+            break;
+        }
+    }
+    if (!target) return { skip: 'its record is not in BylineCRM' };
     return {
         input: {
             title: text(record.Note_Title) ?? '',
             body: markdownToRichText(body),
-            targets: [{ type, id }],
+            targets: [target],
         },
         custom: {},
         ownerEmail: ownerEmailOf(record),
@@ -213,8 +234,7 @@ export function referencesOf(
             add('Contacts', record.Contact_Name);
             break;
         case 'Notes': {
-            const module = PARENT_MODULE[text(record.$se_module) ?? ''];
-            if (module) add(module, record.Parent_Id);
+            for (const module of parentModulesOf(record)) add(module, record.Parent_Id);
             break;
         }
         default:
