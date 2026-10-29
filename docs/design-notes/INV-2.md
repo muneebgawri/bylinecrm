@@ -53,3 +53,21 @@ A deal's Invoices card links to **Raise invoice in NewswireOS** (`GET /opportuni
 once in Settings → NewswireOS (the dashboard's workspace address) and `customerId` is the NewswireOS client id the CRM
 knows for the deal's contact or company (kept by the won-deal push, else the latest timeline event about them).
 Pressboard opens Generate invoice for that client and sends the deal id, so the paid invoice comes back naming it.
+
+## Safety rules (review, 2026-10-29)
+
+- **A named deal must be the client's.** `byline_opportunity_id` is only trusted when the deal's contact or company is
+  the paying client; otherwise (another client's deal, an unknown payer) the deal's owner confirms it
+  (`needs_deal`). An id typed into the link cannot credit a payment to an unrelated deal.
+- **Choosing is bounded.** An owner chooses among the deals offered; only whoever verifies invoices may put a payment on
+  any deal or place a stranger's. A payment is visible only to reviewers, those notified of it, and the owners of its
+  deal or candidates (404 to anyone else).
+- **One decision per invoice at a time.** A transaction advisory lock on (workspace, invoice number) serialises a
+  redelivery racing the first, and two people choosing at once.
+- **Refusals never loop.** If placing the payment fails (the invoice entered elsewhere at that instant, no amount), the
+  transaction rolls back and the payment is decided again as `needs_deal`, so the hook answers 2xx.
+- **Nothing for nothing.** A payment of 0 moves no deal; with no amount reported no deal is created.
+- **Departed owners** are not notified; the reviewers are, as they are when there is no deal to offer.
+
+Known limits: a payment recorded in shadow is not acted on when the mode is later switched on; verification is queued
+after commit as for an entered invoice (a lost queue job leaves it `verifying` until "Check again").

@@ -62,7 +62,27 @@ export class NewswireosPaymentsService {
 
     /** Takes a paid invoice from the hook (a job, acting for the workspace). Returns what was decided, if anything. */
     async received(workspaceId: string, delivery: TimelineDelivery): Promise<NewswireosPaymentDecision | null> {
+        try {
+            return await this.decide(workspaceId, delivery, false);
+        } catch (error) {
+            if (!(error instanceof ApiException) && !(error instanceof Prisma.PrismaClientKnownRequestError))
+                throw error;
+            // The deal refused the payment (no amount to expect; the invoice entered elsewhere at that moment).
+            // Everything it did is rolled back; decided again without acting, a person places it — rather than the
+            // hook failing and NewswireOS retrying it for ever.
+            this.logger.warn(`payment ${delivery.invoiceNumber} not placed automatically: ${(error as Error).message}`);
+            return this.decide(workspaceId, delivery, true);
+        }
+    }
+
+    private async decide(
+        workspaceId: string,
+        delivery: TimelineDelivery,
+        byHand: boolean,
+    ): Promise<NewswireosPaymentDecision | null> {
         if (delivery.type !== 'invoice.paid' || !delivery.invoiceNumber) return null;
+        // A payment of nothing (a fully discounted invoice) is no revenue: the timeline has it; no deal moves.
+        if (delivery.amount !== null && delivery.amount.amountMinor <= 0) return null;
         const invoiceNumber = delivery.invoiceNumber;
         const context: WorkspaceRunContext = {
             workspaceId,
@@ -77,12 +97,25 @@ export class NewswireosPaymentsService {
                 });
                 const mode = (settings?.paymentMode ?? 'off') as NewswireosPaymentMode;
                 if (mode === 'off') return null;
+                // One decision per invoice at a time: a redelivery racing the first (NewswireOS retries a slow
+                // answer) waits here, then finds the first's row, rather than both making a deal.
+                await lockInvoice(tx, workspaceId, invoiceNumber);
                 const known = await tx.newswireosPayment.findUnique({
                     where: { workspaceId_invoiceNumber: { workspaceId, invoiceNumber } },
                     select: { id: true },
                 });
                 if (known) return null;
-                const plan = await planFor(tx, workspaceId, delivery, invoiceNumber);
+                const planned = await planFor(tx, workspaceId, delivery, invoiceNumber);
+                const plan: Plan =
+                    byHand && (planned.decision === 'attached' || planned.decision === 'created_deal')
+                        ? {
+                              ...planned,
+                              decision: 'needs_deal',
+                              matchedBy: null,
+                              opportunityId: null,
+                              candidateIds: planned.opportunityId ? [planned.opportunityId] : [],
+                          }
+                        : planned;
                 const acted = mode === 'on' ? await this.act(tx, context, delivery, invoiceNumber, plan) : plan;
                 const row = await tx.newswireosPayment.create({
                     data: {
@@ -147,12 +180,16 @@ export class NewswireosPaymentsService {
 
     /** One payment, for the page a `payment_*` notification opens. */
     async get(paymentId: string) {
+        const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
+            const me = await requireCallerMember(tx, context);
             const row = await tx.newswireosPayment.findUnique({
                 where: { id: paymentId },
                 include: { opportunity: { select: { name: true } } },
             });
-            if (!row) throw new NotFoundException('no such payment');
+            // A client's payment is told to those it concerns: whoever verifies invoices, whoever was notified of
+            // it, and the owner of the deal it is on. To anyone else it does not exist.
+            if (!row || !(await concerns(tx, me, row))) throw new NotFoundException('no such payment');
             return paymentView(row, await dealNames(tx, row.candidateIds));
         });
     }
@@ -165,27 +202,49 @@ export class NewswireosPaymentsService {
         const context = this.current();
         const result = await this.rls.withWorkspace(async (tx) => {
             const me = await requireCallerMember(tx, context);
-            const row = await tx.newswireosPayment.findUnique({ where: { id: paymentId } });
-            if (!row) throw new NotFoundException('no such payment');
+            const found = await tx.newswireosPayment.findUnique({ where: { id: paymentId } });
+            if (!found || !(await concerns(tx, me, found))) throw new NotFoundException('no such payment');
+            // Two choices at once (a double click, two members) are one after the other: the second sees the first.
+            await lockInvoice(tx, found.workspaceId, found.invoiceNumber);
+            const row = (await tx.newswireosPayment.findUnique({ where: { id: paymentId } }))!;
             if (row.mode !== 'on' || (row.decision !== 'needs_deal' && row.decision !== 'unmatched')) {
                 throw new ApiException(409, 'conflict', 'this payment is not waiting for a deal');
             }
             if (row.resolvedAt) throw new ApiException(409, 'conflict', 'this payment is already on a deal');
+            const reviewer = (await invoiceReviewers(tx)).includes(me);
+            // An owner chooses among the client's open deals; only whoever verifies invoices puts a payment on any
+            // deal (a stranger's, or one the CRM did not offer) — or it would credit a payment to whichever deal.
+            if (!reviewer && (row.decision === 'unmatched' || !row.candidateIds.includes(opportunityId))) {
+                throw new ForbiddenException(
+                    'choose one of the client’s open deals; whoever verifies invoices may choose any',
+                );
+            }
             const deal = await tx.opportunity.findFirst({
                 where: { id: opportunityId, deletedAt: null },
                 select: { id: true, ownerId: true },
             });
             if (!deal) throw new NotFoundException('no such deal');
-            const reviewer = (await invoiceReviewers(tx)).includes(me);
             if (!reviewer && deal.ownerId !== me) {
                 throw new ForbiddenException(
                     'only the deal’s owner, or whoever verifies invoices, puts a payment on it',
                 );
             }
-            const invoice = await this.invoices.attachIn(tx, context, deal.id, paymentInvoice(row));
+            // Entered by hand meanwhile: that is where it is; nothing is entered twice.
+            const entered = await tx.dealInvoice.findUnique({
+                where: {
+                    workspaceId_gateway_reference: {
+                        workspaceId: row.workspaceId,
+                        gateway: 'newswireos_invoice',
+                        reference: row.invoiceNumber,
+                    },
+                },
+                select: { opportunityId: true, status: true },
+            });
+            const already = entered && entered.status !== 'invalid' ? entered.opportunityId : null;
+            const invoice = already ? null : await this.invoices.attachIn(tx, context, deal.id, paymentInvoice(row));
             const updated = await tx.newswireosPayment.update({
                 where: { id: row.id },
-                data: { opportunityId: deal.id, resolvedAt: new Date(), resolvedById: me },
+                data: { opportunityId: already ?? deal.id, resolvedAt: new Date(), resolvedById: me },
                 include: { opportunity: { select: { name: true } } },
             });
             await tx.notification.updateMany({
@@ -194,7 +253,7 @@ export class NewswireosPaymentsService {
             });
             return { invoice, view: paymentView(updated, await dealNames(tx, updated.candidateIds)) };
         });
-        await this.invoices.verifyLater(result.invoice);
+        if (result.invoice) await this.invoices.verifyLater(result.invoice);
         return result.view;
     }
 
@@ -214,22 +273,8 @@ export class NewswireosPaymentsService {
                 : {}),
         };
         if (plan.decision === 'attached' && plan.opportunityId) {
-            try {
-                const invoice = await this.invoices.attachIn(tx, context, plan.opportunityId, input);
-                return { ...plan, invoice };
-            } catch (error) {
-                // The deal refused it (no amount to expect, a payment already elsewhere): a person decides, as for
-                // several open deals, rather than the hook failing and NewswireOS retrying for ever.
-                if (!(error instanceof ApiException)) throw error;
-                this.logger.warn(`payment ${invoiceNumber} not attached to ${plan.opportunityId}: ${error.message}`);
-                return {
-                    ...plan,
-                    decision: 'needs_deal',
-                    matchedBy: null,
-                    opportunityId: null,
-                    candidateIds: [plan.opportunityId],
-                };
-            }
+            const invoice = await this.invoices.attachIn(tx, context, plan.opportunityId, input);
+            return { ...plan, invoice };
         }
         if (plan.decision === 'created_deal' && plan.target) {
             const opportunityId = await this.dealFor(tx, context, delivery, invoiceNumber, plan);
@@ -283,7 +328,16 @@ export class NewswireosPaymentsService {
     private async tell(tx: WorkspaceClient, workspaceId: string, row: Row, plan: Plan): Promise<void> {
         const target = [{ type: 'payment' as const, id: row.id }];
         if (plan.decision === 'needs_deal' || plan.decision === 'created_deal') {
-            const recipients = plan.ownerId ? [plan.ownerId] : await invoiceReviewers(tx);
+            // The owner, while they are a member; a departed one's client is the reviewers' to place.
+            const owner = plan.ownerId
+                ? await tx.workspaceMember.findFirst({
+                      where: { id: plan.ownerId, leftAt: null },
+                      select: { id: true },
+                  })
+                : null;
+            // With no deal to offer, only a reviewer can place it (any deal), so it is theirs to hear about.
+            const choosable = plan.decision === 'created_deal' || plan.candidateIds.length > 0;
+            const recipients = owner && choosable ? [owner.id] : await invoiceReviewers(tx);
             const kind = plan.decision === 'needs_deal' ? 'payment_needs_deal' : 'payment_created_deal';
             await notify(tx, workspaceId, recipients, kind, target);
         } else if (plan.decision === 'unmatched') {
@@ -325,14 +379,26 @@ export async function planFor(
     if (named && UUID.test(named)) {
         const deal = await tx.opportunity.findFirst({
             where: { id: named, deletedAt: null },
-            select: { id: true, ownerId: true },
+            select: { id: true, ownerId: true, pointOfContactId: true, companyId: true },
         });
-        if (deal) {
+        if (deal && target && (await dealIsClients(tx, deal, target))) {
             return {
                 ...none,
                 decision: 'attached',
                 matchedBy: 'deal_id',
                 opportunityId: deal.id,
+                ownerId: deal.ownerId,
+                target,
+            };
+        }
+        // A deal named for a client the CRM cannot tie it to — an unknown payer, or another client's deal (an id
+        // typed into the link) — is never credited on NewswireOS's word alone: its owner confirms it.
+        if (deal) {
+            return {
+                ...none,
+                decision: 'needs_deal',
+                opportunityId: null,
+                candidateIds: [deal.id],
                 ownerId: deal.ownerId,
                 target,
             };
@@ -369,7 +435,12 @@ export async function planFor(
             target,
         };
     }
-    if (open.length === 0) return { ...none, decision: 'created_deal', opportunityId: null, ownerId, target };
+    if (open.length === 0) {
+        // A deal is made for what was paid; with no amount reported there is nothing to make it for.
+        return delivery.amount
+            ? { ...none, decision: 'created_deal', opportunityId: null, ownerId, target }
+            : { ...none, decision: 'needs_deal', opportunityId: null, ownerId, target };
+    }
     return {
         ...none,
         decision: 'needs_deal',
@@ -378,6 +449,40 @@ export async function planFor(
         ownerId: ownerId ?? open[0]!.ownerId,
         target,
     };
+}
+
+/** Serialises the decisions about one invoice number (a transaction lock, released at commit). */
+async function lockInvoice(tx: WorkspaceClient, workspaceId: string, invoiceNumber: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`newswireos-payment:${workspaceId}:${invoiceNumber}`}, 0))`;
+}
+
+/** Whether a deal is with the client: their person, or their company (or the person's company). */
+async function dealIsClients(
+    tx: WorkspaceClient,
+    deal: { pointOfContactId: string | null; companyId: string | null },
+    target: Target,
+): Promise<boolean> {
+    if (target.type === 'company') return deal.companyId === target.id;
+    if (deal.pointOfContactId === target.id) return true;
+    const person = await tx.person.findUnique({ where: { id: target.id }, select: { companyId: true } });
+    return person?.companyId != null && deal.companyId === person.companyId;
+}
+
+/** Whether a payment is the member's to see: reviewers, those notified of it, the owner of its deal or choices. */
+async function concerns(
+    tx: WorkspaceClient,
+    memberId: string,
+    row: { id: string; opportunityId: string | null; candidateIds: string[] },
+): Promise<boolean> {
+    if ((await invoiceReviewers(tx)).includes(memberId)) return true;
+    const told = await tx.notification.findFirst({
+        where: { memberId, newswireosPaymentId: row.id },
+        select: { id: true },
+    });
+    if (told) return true;
+    const ids = [...(row.opportunityId ? [row.opportunityId] : []), ...row.candidateIds];
+    if (ids.length === 0) return false;
+    return (await tx.opportunity.count({ where: { id: { in: ids }, ownerId: memberId } })) > 0;
 }
 
 /** What a chosen deal takes from the payment: the invoice as NewswireOS numbered it, for what was paid. */

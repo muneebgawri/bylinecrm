@@ -3,7 +3,14 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, type DealInvoiceView, type DomainEvent } from '@bylinecrm/shared';
+import {
+    CSRF_COOKIE,
+    CSRF_HEADER,
+    SESSION_COOKIE,
+    SYSTEM_ROLES,
+    type DealInvoiceView,
+    type DomainEvent,
+} from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
@@ -48,6 +55,8 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
     const secret = `whsec_${stamp}`;
     let a: { who: Who; id: string; member: string };
     let b: { who: Who; id: string; member: string };
+    let rep: Who;
+    let repId: string;
     let stages: Stage[];
     let pipelineId: string;
     let hookUrl: string;
@@ -192,6 +201,21 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
                     .expect(200)
             ).body as { hookUrl: string; paymentMode: string }
         ).hookUrl;
+        const roles = (await as(a.who).get(w('/roles')).expect(200)).body as { id: string; name: string }[];
+        const repEmail = `inv2-rep-${stamp}@example.test`;
+        const invite = await as(a.who)
+            .post(w('/invites'))
+            .send({ email: repEmail, roleId: roles.find((r) => r.name === SYSTEM_ROLES.member)!.id })
+            .expect(201);
+        const joined = await http()
+            .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+            .send({ password: 'correct horse battery staple' })
+            .expect(201);
+        await verifyAddress(app, http, repEmail);
+        rep = browserFrom(joined);
+        repId = (
+            await owner.workspaceMember.findFirstOrThrow({ where: { workspaceId: a.id, user: { email: repEmail } } })
+        ).id;
     });
 
     afterAll(async () => {
@@ -379,6 +403,86 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
             url: `https://dash.example.test/pinion/clients/cus_42/?generate_invoice=1&byline_opportunity_id=${deal}`,
             reason: null,
         });
+    });
+
+    it('on: a deal named for another client is never credited on NewswireOS’s word; its owner confirms', async () => {
+        const payer = await newClient('Payer');
+        const other = await newClient('Other');
+        const elsewhere = await newDeal(other, 'Another client’s deal');
+        const number = invoiceNumber();
+        await paid(number, { email: payer.email }, { byline_opportunity_id: elsewhere });
+        const row = await payment(number);
+        expect(row).toMatchObject({ decision: 'needs_deal', opportunityId: null, candidateIds: [elsewhere] });
+        expect(await invoicesOn(elsewhere)).toEqual([]);
+    });
+
+    it('a payment of nothing moves no deal', async () => {
+        const client = await newClient('Zero');
+        await newDeal(client, 'Zero deal');
+        const number = invoiceNumber();
+        await paid(number, { email: client.email }, { amount_cents: 0 });
+        expect(await owner.newswireosPayment.findFirst({ where: { invoiceNumber: number } })).toBeNull();
+    });
+
+    it('a member sees and places only the payments that concern them, among the deals offered', async () => {
+        const mine = async (path: string, body: object) =>
+            ((await as(rep).post(w(path)).send(body).expect(201)).body as { id: string }).id;
+        const slug = `rep-${stamp}`;
+        const company = await mine('/companies', { name: 'Rep Co', domain: `${slug}.test` });
+        const person = await mine('/people', {
+            nameFirst: 'Rae',
+            nameLast: 'Client',
+            companyId: company,
+            emails: { primary: `rae@${slug}.test`, additional: [] },
+        });
+        const deal = (name: string, c = company, p = person) =>
+            mine('/opportunities', {
+                name: `${name} ${stamp}`,
+                companyId: c,
+                pointOfContactId: p,
+                amount: { amountMinor: 50_000, currency: 'USD' },
+            });
+        const first = await deal('Rae one');
+        const second = await deal('Rae two');
+        const otherCompany = await mine('/companies', { name: 'Rep Other', domain: `${slug}-other.test` });
+        const otherPerson = await mine('/people', {
+            nameFirst: 'Other',
+            nameLast: 'Contact',
+            companyId: otherCompany,
+            emails: { primary: `other@${slug}-other.test`, additional: [] },
+        });
+        const unrelated = await deal('Unrelated', otherCompany, otherPerson);
+        const number = invoiceNumber();
+        await paid(number, { email: `rae@${slug}.test` });
+        const row = await payment(number);
+        expect(row.decision).toBe('needs_deal');
+        expect(await notificationsOf(repId, 'payment_needs_deal')).toHaveLength(1);
+
+        // Someone else's payment does not exist for them.
+        const stranger = await owner.newswireosPayment.findFirstOrThrow({
+            where: { workspaceId: a.id, decision: 'unmatched' },
+        });
+        await as(rep)
+            .get(w(`/newswireos-payments/${stranger.id}`))
+            .expect(404);
+        await as(rep)
+            .post(w(`/newswireos-payments/${stranger.id}/choose`))
+            .send({ opportunityId: first })
+            .expect(404);
+
+        await as(rep)
+            .get(w(`/newswireos-payments/${row.id}`))
+            .expect(200);
+        // Their own deal, but not one offered: refused, or a payment could be credited to any deal they own.
+        await as(rep)
+            .post(w(`/newswireos-payments/${row.id}/choose`))
+            .send({ opportunityId: unrelated })
+            .expect(403);
+        await as(rep)
+            .post(w(`/newswireos-payments/${row.id}/choose`))
+            .send({ opportunityId: second })
+            .expect(200);
+        expect(await invoicesOn(second)).toHaveLength(1);
     });
 
     it('cross-tenant: another workspace sees none of this workspace’s payments', async () => {
