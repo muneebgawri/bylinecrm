@@ -222,24 +222,39 @@ export class TimelineService {
 /**
  * The fields of a record that someone other than the import changed after `after` (#185): the
  * `diff` keys of the record's own entries (not a note's or a task's on it) with any actor but the
- * import's, later than that moment. What the Twenty sync's precedence rule asks the timeline.
+ * import's, later than that moment. What the Twenty sync's precedence rule asks the timeline. A
+ * changed `custom` also names each custom field that changed, as `custom.<key>`, so the rule holds
+ * field by field there too (BIGIN-1). A task (BIGIN-1: Bigin's tasks, events and calls) has no entry
+ * of its own: its entries are those on its records that link it.
  */
 export async function fieldsEditedAfter(
     tx: WorkspaceClient,
-    target: { type: RecordObject; id: string },
+    target: { type: RecordObject | 'task'; id: string },
     after: Date,
 ): Promise<Set<string>> {
     const rows = await tx.timelineActivity.findMany({
-        where: { targetType: target.type, targetId: target.id, linkedType: null, happenedAt: { gt: after } },
+        where:
+            target.type === 'task'
+                ? { linkedType: 'task', linkedId: target.id, happenedAt: { gt: after } }
+                : { targetType: target.type, targetId: target.id, linkedType: null, happenedAt: { gt: after } },
         select: { actor: true, properties: true },
     });
     const fields = new Set<string>();
     for (const row of rows) {
         if (stored<TimelineActor>(row.actor).kind === 'import') continue;
-        const diff = stored<{ diff?: Record<string, unknown> }>(row.properties).diff;
+        const diff = stored<{ diff?: Record<string, { from?: unknown; to?: unknown }> }>(row.properties).diff;
         for (const field of Object.keys(diff ?? {})) fields.add(field);
+        const custom = diff?.custom;
+        if (custom) for (const key of changedKeys(custom.from, custom.to)) fields.add(`custom.${key}`);
     }
     return fields;
+}
+
+/** The keys whose values differ between two custom-value objects. */
+function changedKeys(from: unknown, to: unknown): string[] {
+    const a = (from && typeof from === 'object' ? from : {}) as Record<string, unknown>;
+    const b = (to && typeof to === 'object' ? to : {}) as Record<string, unknown>;
+    return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => canonical(a[k]) !== canonical(b[k]));
 }
 
 /** The rows one event leaves, by the shape of its object: a record's own entry, or one per target. */

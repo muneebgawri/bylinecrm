@@ -32,5 +32,13 @@ describe('#185 P4-4f scheduled Twenty sync', () => {
             input: { jobTitle: 'CMO' },
             kept: ['city', 'custom'],
         });
+        // BIGIN-1: with the custom fields that changed named, only those keep BylineCRM's value.
+        const bigin = { city: 'Lyon', custom: { description: 'From Bigin', pr_link: 'https://x.example/' } };
+        expect(withoutLocalEdits(bigin, new Set(['custom', 'custom.description']))).toEqual({
+            input: { city: 'Lyon', custom: { pr_link: 'https://x.example/' } },
+            kept: ['custom.description'],
+        });
+        // A custom field edited here that the source does not carry holds none of the source's back.
+        expect(withoutLocalEdits(bigin, new Set(['custom', 'custom.other']))).toEqual({ input: bigin, kept: [] });
     });
 });

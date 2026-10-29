@@ -20,7 +20,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin inventory', () => {
             },
             biginImportLink: {
                 count: vi.fn(({ where }: { where: { object: string } }) =>
-                    Promise.resolve({ Accounts: 10, Contacts: 20, Deals: 30, Notes: 5 }[where.object] ?? 0),
+                    Promise.resolve({ Accounts: 10, Contacts: 20, Deals: 30, Notes: 5, Tasks: 7 }[where.object] ?? 0),
                 ),
             },
         };
@@ -33,12 +33,13 @@ describe('FR-CRMS-25 BIGIN-1 Bigin inventory', () => {
                 { apiName: 'Contacts', label: 'Contacts', apiSupported: true },
                 { apiName: 'Tasks', label: 'Tasks', apiSupported: true },
                 { apiName: 'Calls', label: 'Calls', apiSupported: true },
+                { apiName: 'Products', label: 'Products', apiSupported: true },
                 { apiName: 'Home', label: 'Home', apiSupported: false },
             ]),
             count: vi.fn((_c: unknown, module: string) => {
                 if (module === 'Calls')
                     return Promise.reject(new BiginApiError(400, 'Bigin could not read "Calls"', true));
-                return Promise.resolve({ Contacts: 21, Tasks: 400 }[module] ?? null);
+                return Promise.resolve({ Contacts: 21, Tasks: 400, Products: 10 }[module] ?? null);
             }),
             fieldDefinitions: vi.fn((_c: unknown, module: string) =>
                 Promise.resolve(
@@ -73,15 +74,17 @@ describe('FR-CRMS-25 BIGIN-1 Bigin inventory', () => {
 
         expect(inventory.modules).toEqual([
             { apiName: 'Contacts', label: 'Contacts', remote: 21, imported: true, linked: 20, error: null },
-            { apiName: 'Tasks', label: 'Tasks', remote: 400, imported: false, linked: null, error: null },
+            { apiName: 'Tasks', label: 'Tasks', remote: 400, imported: true, linked: 7, error: null },
             {
                 apiName: 'Calls',
                 label: 'Calls',
                 remote: null,
-                imported: false,
-                linked: null,
+                imported: true,
+                linked: 0,
                 error: 'Bigin could not read "Calls"',
             },
+            // BylineCRM has no products: counted, never imported.
+            { apiName: 'Products', label: 'Products', remote: 10, imported: false, linked: null, error: null },
         ]);
         // The client secret and refresh token are opened for the read only.
         expect((bigin.count as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatchObject({

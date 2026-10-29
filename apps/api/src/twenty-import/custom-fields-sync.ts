@@ -1,5 +1,5 @@
 import type { CustomFieldType } from '@bylinecrm/shared';
-import type { FieldDefinition } from '../records/custom-fields/custom-values';
+import { CUSTOM_PHONE, type FieldDefinition } from '../records/custom-fields/custom-values';
 import {
     emailOf,
     isEnumLike,
@@ -17,6 +17,8 @@ import {
 export interface InferredValue {
     type: CustomFieldType;
     value: string | number | boolean;
+    /** The label a definition made for it starts with; `labelOf(key)` when the importer has no better one. */
+    label?: string | undefined;
 }
 export type InferredCustom = Record<string, InferredValue | null>;
 
@@ -147,7 +149,13 @@ export function definitionsNeeded(
                 const current = known.get(key);
                 entry = current
                     ? { key, label: labelOf(key), type: current.type, options: [...current.options], existing: true }
-                    : { key, label: labelOf(key), type: inferred.type, options: [], existing: false };
+                    : {
+                          key,
+                          label: inferred.label ?? labelOf(key),
+                          type: inferred.type,
+                          options: [],
+                          existing: false,
+                      };
                 needed.set(key, entry);
             }
             if (
@@ -210,6 +218,7 @@ function coerce(inferred: InferredValue, definition: Pick<FieldDefinition, 'type
         case 'email':
             return typeof value === 'string' ? (emailOf(value) ?? undefined) : undefined;
         case 'phone':
-            return typeof value === 'string' ? value : undefined;
+            // A value the field would refuse is left out, never the reason the whole record fails.
+            return typeof value === 'string' && CUSTOM_PHONE.test(value) ? value : undefined;
     }
 }

@@ -23,6 +23,11 @@ export interface TaskInput {
     targets?: RecordTarget[] | undefined;
     /** The sequence step making the task (#158): the runner's alone, never a request's. */
     sequence?: { enrolmentId: string; stepId: string } | undefined;
+    /**
+     * When a task that arrives done was done at its source (BIGIN-1): an importer's alone, never a request's.
+     * `completedAtFor` decides what is stored; a task done already keeps its instant.
+     */
+    completedAt?: string | null | undefined;
 }
 
 export interface ListTasksQuery {
@@ -128,7 +133,7 @@ export class TasksService {
                 status,
                 dueAt: input.dueAt ? new Date(input.dueAt) : null,
                 assigneeId: input.assigneeId ?? null,
-                completedAt: completedAtFor(status, undefined, new Date()),
+                completedAt: completedAtFor(status, undefined, new Date(), instantOrNull(input.completedAt)),
                 sequenceEnrolmentId: input.sequence?.enrolmentId ?? null,
                 sequenceStepId: input.sequence?.stepId ?? null,
                 createdBy: actor,
@@ -173,7 +178,7 @@ export class TasksService {
                 : {}),
             ...(patch.dueAt === undefined ? {} : { dueAt: patch.dueAt === null ? null : new Date(patch.dueAt) }),
             status,
-            completedAt: completedAtFor(status, current, new Date()),
+            completedAt: completedAtFor(status, current, new Date(), instantOrNull(patch.completedAt)),
         };
         const projected = projectedChanges(
             current,
@@ -276,6 +281,10 @@ async function find(tx: WorkspaceClient, context: WorkspaceRunContext, id: strin
         throw new NotFoundException('task not found');
     }
     return row;
+}
+
+function instantOrNull(value: string | null | undefined): Date | null {
+    return value ? new Date(value) : null;
 }
 
 function targetsOf(row: TaskRow): RecordTarget[] {
