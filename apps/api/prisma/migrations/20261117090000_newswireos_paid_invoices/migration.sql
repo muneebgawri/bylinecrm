@@ -29,7 +29,7 @@ CREATE TABLE "newswireos_payments" (
     CONSTRAINT "newswireos_payments_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "newswireos_payments_mode_check" CHECK ("mode" IN ('off', 'shadow', 'on')),
     CONSTRAINT "newswireos_payments_decision_check"
-        CHECK ("decision" IN ('already_on_deal', 'attached', 'created_deal', 'needs_deal', 'unmatched')),
+        CHECK ("decision" IN ('already_on_deal', 'attached', 'created_deal', 'needs_deal', 'unmatched', 'pooled_elsewhere')),
     CONSTRAINT "newswireos_payments_matched_by_check" CHECK ("matched_by" IN ('deal_id', 'only_open_deal'))
 );
 

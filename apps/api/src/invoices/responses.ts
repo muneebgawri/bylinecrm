@@ -237,6 +237,10 @@ export const newswireosPaymentView = named(
             .array(z.object({ id, name: z.string() }))
             .meta({ description: 'For `needs_deal`: the client’s open deals to choose from.' }),
         resolvedAt: dateTime.nullable().meta({ description: 'When a person chose the deal.' }),
+        canCreateDeal: z.boolean().meta({
+            description:
+                'Whether a deal can be made for it (`POST …/create-deal`): a known client, an amount, still waiting — e.g. one known by company domain alone.',
+        }),
         occurredAt: dateTime.nullable(),
         createdAt: dateTime,
     }),

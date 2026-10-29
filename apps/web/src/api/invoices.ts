@@ -234,3 +234,16 @@ export function useChoosePaymentDeal(workspaceId: string, paymentId: string) {
         },
     });
 }
+
+/** INV-2: makes a deal for a waiting payment (its client known, by domain alone) and puts the payment on it. */
+export function useCreatePaymentDeal(workspaceId: string, paymentId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () =>
+            request<NewswireosPaymentView>(
+                'POST',
+                workspacePath(workspaceId, `/newswireos-payments/${paymentId}/create-deal`),
+            ),
+        onSuccess: (view) => client.setQueryData(keys.payment(workspaceId, paymentId), view),
+    });
+}

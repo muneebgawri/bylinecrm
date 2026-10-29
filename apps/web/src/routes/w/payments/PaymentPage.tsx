@@ -1,6 +1,6 @@
 import { Badge, Button, LoadingRegion, PageHeader, toast } from '@bylinecrm/ui';
 import { Link } from 'react-router';
-import { useChoosePaymentDeal, usePayment } from '../../../api/invoices';
+import { useChoosePaymentDeal, useCreatePaymentDeal, usePayment } from '../../../api/invoices';
 import type { NewswireosPaymentView } from '../../../api/types';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { failureText } from '../../../lib/errors';
@@ -19,6 +19,7 @@ export function PaymentPage() {
     const paymentId = usePaymentId();
     const payment = usePayment(workspaceId, paymentId);
     const choose = useChoosePaymentDeal(workspaceId, paymentId);
+    const create = useCreatePaymentDeal(workspaceId, paymentId);
     const put = (opportunityId: string) =>
         choose.mutate(opportunityId, {
             onSuccess: (view) => toast({ title: `Payment put on ${view.opportunityName ?? 'the deal'}` }),
@@ -68,11 +69,33 @@ export function PaymentPage() {
                         Which deal is this payment for?
                     </h2>
                     <p className="m-0 text-text-muted">
-                        {p.decision === 'needs_deal'
-                            ? `${p.clientName ?? 'This client'} has more than one open deal, so the CRM did not guess. Choose the one this invoice paid for.`
-                            : `NewswireOS reported this payment from ${p.clientEmail ?? 'a client'}, who is not in the CRM. Choose the deal it paid for.`}{' '}
-                        It is then verified with NewswireOS and moves the deal as an invoice entered there would.
+                        {waitingLine(p)} It is then verified with NewswireOS and moves the deal as an invoice entered
+                        there would.
                     </p>
+                    {p.canCreateDeal && (
+                        <div>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                shape="square"
+                                loading={create.isPending}
+                                onClick={() =>
+                                    create.mutate(undefined, {
+                                        onSuccess: (view) =>
+                                            toast({ title: `Deal made: ${view.opportunityName ?? 'the deal'}` }),
+                                        onError: (e) =>
+                                            toast({
+                                                title: 'That did not work',
+                                                description: failureText(e),
+                                                tone: 'danger',
+                                            }),
+                                    })
+                                }
+                            >
+                                Create a deal for this payment
+                            </Button>
+                        </div>
+                    )}
                     {p.candidates.length > 0 ? (
                         <ul aria-label="Open deals" className="m-0 flex list-none flex-col divide-y divide-border p-0">
                             {p.candidates.map((deal) => (
@@ -122,6 +145,20 @@ export function PaymentPage() {
 
 /** How NewswireOS names a payment method, as people say it. */
 const METHOD_LABEL: Record<string, string> = { stripe: 'Stripe', paypal: 'PayPal', wallet: 'Wallet', crypto: 'Crypto' };
+
+/** Why the CRM is asking, in the words of what it found. */
+function waitingLine(p: NewswireosPaymentView): string {
+    const who = p.clientName ?? 'This client';
+    if (p.decision === 'unmatched') {
+        return `NewswireOS reported this payment from ${p.clientEmail ?? 'a client'}, who is not in the CRM. Choose the deal it paid for.`;
+    }
+    if (p.candidates.length > 1)
+        return `${who} has more than one open deal, so the CRM did not guess. Choose the one this invoice paid for.`;
+    if (p.candidates.length === 1) {
+        return 'The invoice was raised for this deal, but the CRM cannot tie the deal to who paid. Confirm it if it is right.';
+    }
+    return `${who} is known to the CRM only by their company’s domain and has no open deal, so no deal was made automatically. Make one for this payment, or choose the deal it paid for.`;
+}
 
 function onDealLine(p: NewswireosPaymentView): string {
     if (p.resolvedAt) return `Put on this deal by hand ${formatWhen(p.resolvedAt)}.`;

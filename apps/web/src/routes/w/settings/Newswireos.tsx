@@ -566,6 +566,7 @@ const DECISION_TEXT: Record<NewswireosPaymentReviewView['decision'], string> = {
     created_deal: 'New deal',
     needs_deal: 'Owner to choose',
     unmatched: 'Client not in the CRM',
+    pooled_elsewhere: 'Another workspace’s client (lead pool): not booked here',
 };
 
 /** INV-2: what a paid invoice NewswireOS reports does, and shadow's check against what Account Managers entered. */

@@ -15006,6 +15006,79 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/newswireos-payments/{paymentId}/create-deal": {
+            "post": {
+                "operationId": "newswireosPayments_createDeal",
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosPayment"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/api/w/{workspaceId}/integrations/byline": {
             "get": {
                 "operationId": "bylineSettings_get",
@@ -38394,7 +38467,14 @@
                     },
                     "decision": {
                         "type": "string",
-                        "enum": ["already_on_deal", "attached", "created_deal", "needs_deal", "unmatched"]
+                        "enum": [
+                            "already_on_deal",
+                            "attached",
+                            "created_deal",
+                            "needs_deal",
+                            "unmatched",
+                            "pooled_elsewhere"
+                        ]
                     },
                     "matchedBy": {
                         "nullable": true,
@@ -38439,6 +38519,10 @@
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     },
+                    "canCreateDeal": {
+                        "type": "boolean",
+                        "description": "Whether a deal can be made for it (`POST …/create-deal`): a known client, an amount, still waiting — e.g. one known by company domain alone."
+                    },
                     "occurredAt": {
                         "nullable": true,
                         "type": "string",
@@ -38465,6 +38549,7 @@
                     "opportunityName",
                     "candidates",
                     "resolvedAt",
+                    "canCreateDeal",
                     "occurredAt",
                     "createdAt"
                 ]
@@ -38516,7 +38601,14 @@
                     },
                     "decision": {
                         "type": "string",
-                        "enum": ["already_on_deal", "attached", "created_deal", "needs_deal", "unmatched"]
+                        "enum": [
+                            "already_on_deal",
+                            "attached",
+                            "created_deal",
+                            "needs_deal",
+                            "unmatched",
+                            "pooled_elsewhere"
+                        ]
                     },
                     "matchedBy": {
                         "nullable": true,
@@ -38561,6 +38653,10 @@
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     },
+                    "canCreateDeal": {
+                        "type": "boolean",
+                        "description": "Whether a deal can be made for it (`POST …/create-deal`): a known client, an amount, still waiting — e.g. one known by company domain alone."
+                    },
                     "occurredAt": {
                         "nullable": true,
                         "type": "string",
@@ -38600,6 +38696,7 @@
                     "opportunityName",
                     "candidates",
                     "resolvedAt",
+                    "canCreateDeal",
                     "occurredAt",
                     "createdAt",
                     "enteredOnOpportunityId",

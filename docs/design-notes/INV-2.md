@@ -81,3 +81,15 @@ Known limit: a payment recorded in shadow is not acted on when the mode is later
 - **Lost verifications.** A sweep in the invoice worker re-queues every invoice still `verifying` 10 minutes after it
   was last touched (500 a run, every 10 minutes, by a partial index on `verifying` rows). Jobs are keyed on the
   invoice, so a live one is never doubled.
+
+## Lead pool and domain-only matches (2026-10-29)
+
+- **Lead pool.** A client another workspace of this one's lead pool holds (a customer or prospect there,
+  `lead_pool_holders`) is that workspace's payment: unless the client was matched here by this CRM's own ids (which
+  name nothing elsewhere), the payment is recorded `pooled_elsewhere` and nothing is done or told. Were two pooled
+  workspaces both linked to NewswireOS, the payment would otherwise count twice. (Production 2026-10-29: only
+  Pinion Newswire is linked; Lexiswire is not.)
+- **Domain-only matches never create a deal.** A client matched by company domain alone (an agency paying for a
+  client, a shared domain, someone who moved) still goes on the company's only open deal; with none, it is
+  `needs_deal` and the company's owner is asked. "Create a deal for this payment" (`POST /newswireos-payments/:id/
+create-deal`; the client's owner or a reviewer) makes it in one click, as the automatic path would.

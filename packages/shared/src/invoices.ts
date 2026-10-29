@@ -78,9 +78,12 @@ export type NewswireosPaymentMode = (typeof NEWSWIREOS_PAYMENT_MODES)[number];
  * INV-2: which deal a paid invoice goes on, and how that was decided.
  * - `already_on_deal`: an Account Manager had already entered it; nothing is done.
  * - `attached`: the deal NewswireOS named (`deal_id`), or the client's only open deal (`only_open_deal`).
- * - `created_deal`: the client had no open deal; one is made for the payment, and its owner is told.
+ * - `created_deal`: the client had no open deal; one is made for the payment, and its owner is told. Only for a
+ *   client matched by CRM id or email: one matched by company domain alone is `needs_deal`, for its owner to decide.
  * - `needs_deal`: the client has several open deals; the owner is asked which, never guessed.
  * - `unmatched`: no person or company in the CRM is this client; whoever verifies invoices is told.
+ * - `pooled_elsewhere`: another workspace of this one's lead pool holds the client; it is that workspace's payment,
+ *   so nothing is done here and no one is told (were both linked to NewswireOS, it would otherwise count twice).
  */
 export const NEWSWIREOS_PAYMENT_DECISIONS = [
     'already_on_deal',
@@ -88,6 +91,7 @@ export const NEWSWIREOS_PAYMENT_DECISIONS = [
     'created_deal',
     'needs_deal',
     'unmatched',
+    'pooled_elsewhere',
 ] as const;
 export type NewswireosPaymentDecision = (typeof NEWSWIREOS_PAYMENT_DECISIONS)[number];
 export const NEWSWIREOS_PAYMENT_MATCHES = ['deal_id', 'only_open_deal'] as const;

@@ -278,4 +278,13 @@ export class NewswireosPaymentsController {
     ): Promise<NewswireosPaymentView> {
         return this.payments.choose(paymentId, body.opportunityId);
     }
+
+    /** Makes a deal for the payment and puts it on it: the client's owner, or whoever verifies invoices. */
+    @Requires('deal:edit')
+    @HttpCode(200)
+    @Post(':paymentId/create-deal')
+    @Returns(newswireosPaymentView)
+    createDeal(@Param('paymentId', ParseUUIDPipe) paymentId: string): Promise<NewswireosPaymentView> {
+        return this.payments.createDeal(paymentId);
+    }
 }

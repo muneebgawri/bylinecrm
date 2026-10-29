@@ -523,6 +523,86 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
         expect(await app.get(getQueueToken(INVOICE_VERIFY_QUEUE)).getJob(invoice!.id)).toBeTruthy();
     });
 
+    it('on: a client known by company domain alone gets no deal made for it; the owner makes one in a click', async () => {
+        const slug = `domain-${stamp}`;
+        const company = (
+            (
+                await as(a.who)
+                    .post(w('/companies'))
+                    .send({ name: 'Domain Co', domain: `${slug}.test` })
+                    .expect(201)
+            ).body as { id: string }
+        ).id;
+        const number = invoiceNumber();
+        await paid(number, { email: `someone-new@${slug}.test`, company_domain: `${slug}.test` });
+        const row = await payment(number);
+        expect(row).toMatchObject({
+            decision: 'needs_deal',
+            targetType: 'company',
+            targetId: company,
+            opportunityId: null,
+        });
+        expect(await notificationsOf(a.member, 'payment_needs_deal')).toEqual(
+            expect.arrayContaining([expect.objectContaining({ newswireosPaymentId: row.id })]),
+        );
+        const shown = (
+            await as(a.who)
+                .get(w(`/newswireos-payments/${row.id}`))
+                .expect(200)
+        ).body as NewswireosPaymentView;
+        expect(shown.canCreateDeal).toBe(true);
+        const made = (
+            await as(a.who)
+                .post(w(`/newswireos-payments/${row.id}/create-deal`))
+                .expect(200)
+        ).body as NewswireosPaymentView;
+        expect(made.opportunityName).toBe('Domain Co — NewswireOS payment');
+        expect(await invoicesOn(made.opportunityId!)).toHaveLength(1);
+        await as(a.who)
+            .post(w(`/newswireos-payments/${row.id}/create-deal`))
+            .expect(409);
+    });
+
+    it('lead pool: a payment from another pooled workspace’s client is not booked here too', async () => {
+        const pool = await owner.leadPool.create({ data: { name: `inv2-pool-${stamp}` } });
+        await owner.workspace.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { leadPoolId: pool.id } });
+        try {
+            const slug = `pooled-${stamp}`;
+            const email = `held@${slug}.test`;
+            // A cold lead here; B's prospect (a deal with them), so the pool protects them for B.
+            await as(a.who)
+                .post(w('/people'))
+                .send({ nameFirst: 'Held', nameLast: 'Lead', emails: { primary: email, additional: [] } })
+                .expect(201);
+            const theirs = (
+                (
+                    await as(b.who)
+                        .post(w('/people', b.id))
+                        .send({ nameFirst: 'Held', nameLast: 'Lead', emails: { primary: email, additional: [] } })
+                        .expect(201)
+                ).body as { id: string }
+            ).id;
+            const co = (
+                (
+                    await as(b.who)
+                        .post(w('/companies', b.id))
+                        .send({ name: 'Held Co', domain: `${slug}.test` })
+                        .expect(201)
+                ).body as { id: string }
+            ).id;
+            await as(b.who)
+                .post(w('/opportunities', b.id))
+                .send({ name: 'Their deal', companyId: co, pointOfContactId: theirs })
+                .expect(201);
+            const number = invoiceNumber();
+            await paid(number, { email });
+            expect(await payment(number)).toMatchObject({ decision: 'pooled_elsewhere', opportunityId: null });
+            expect(await owner.notification.count({ where: { newswireosPayment: { invoiceNumber: number } } })).toBe(0);
+        } finally {
+            await owner.workspace.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { leadPoolId: null } });
+        }
+    });
+
     it('cross-tenant: another workspace sees none of this workspace’s payments', async () => {
         const row = await owner.newswireosPayment.findFirstOrThrow({ where: { workspaceId: a.id } });
         await as(b.who)
