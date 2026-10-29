@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { ApiException } from '../infra/errors/api-errors';
-import type { WorkspaceRunContext } from '../infra/workspace-context';
+import type { RlsPrismaService, WorkspaceClient } from '../infra/rls-prisma.service';
+import type { WorkspaceContext, WorkspaceRunContext } from '../infra/workspace-context';
 
 /**
  * The filter an own-scoped caller's reads carry, mirrored by the restrictive `owner_scope`
@@ -8,6 +9,21 @@ import type { WorkspaceRunContext } from '../infra/workspace-context';
  */
 export function ownerWhere(context: WorkspaceRunContext): { ownerId?: string } {
     return context.ownerScopeMemberId ? { ownerId: context.ownerScopeMemberId } : {};
+}
+
+/**
+ * Runs `fn` as the caller but past their owner scope (OWN-2): for the one question an own-scoped
+ * member must still have answered — whose is this lead? — and nothing more. A caller of this tells
+ * only a record's name and owner, never the rest of it.
+ */
+export function acrossOwnerScope<T>(
+    rls: RlsPrismaService,
+    scope: WorkspaceContext,
+    context: WorkspaceRunContext,
+    fn: (tx: WorkspaceClient) => Promise<T>,
+): Promise<T> {
+    const { ownerScopeMemberId: _scope, ...wide } = context;
+    return scope.run(wide, () => rls.withWorkspace(context.workspaceId, fn));
 }
 
 /**

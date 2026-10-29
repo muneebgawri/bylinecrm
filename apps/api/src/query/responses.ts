@@ -1,6 +1,7 @@
 import { RECORD_OBJECTS, type SearchResults } from '@bylinecrm/shared';
 import { z } from 'zod';
 import { id, named } from '../openapi/responses';
+import { memberSummaryView } from '../workspace/responses';
 
 /** Group-by and global search (P1-4), as the API returns them. */
 
@@ -23,6 +24,13 @@ const searchHit = named(
         id,
         title: z.string(),
         subtitle: z.string().nullable(),
+        owner: memberSummaryView
+            .nullable()
+            .meta({ description: "The record's current owner, by name; null when it has none." }),
+        canOpen: z.boolean().meta({
+            description:
+                "False for a record outside the caller's owner scope: listed by name and owner only (subtitle null) so they can see it is taken.",
+        }),
     }),
 );
 

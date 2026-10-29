@@ -429,7 +429,7 @@ describe('views, filters, export and search', () => {
     });
 
     describe('global search', () => {
-        it('finds across objects under the caller’s scope and never across workspaces', async () => {
+        it('finds across objects, tells an own-scoped caller whose a lead is, and never crosses workspaces', async () => {
             const all = (
                 await as(admin)
                     .get(w(`/search?q=${token}`))
@@ -444,7 +444,14 @@ describe('views, filters, export and search', () => {
                     .get(w(`/search?q=${token}`))
                     .expect(200)
             ).body as SearchResults;
-            expect(mine.person.map((h) => h.id)).toEqual([repsPerson]);
+            // OWN-2: an own-scoped rep is told the admin's lead is taken — by name and owner only, not opened.
+            expect(mine.person.map((h) => h.id).sort()).toEqual([adminsPerson, repsPerson].sort());
+            const theirs = mine.person.find((h) => h.id === adminsPerson)!;
+            expect(theirs.canOpen).toBe(false);
+            expect(theirs.subtitle).toBeNull();
+            expect(theirs.owner?.memberId).toBeTruthy();
+            expect(mine.person.find((h) => h.id === repsPerson)!.canOpen).toBe(true);
+            expect(mine.opportunity.filter((h) => !h.canOpen).every((h) => h.subtitle === null)).toBe(true);
 
             const elsewhere = (await as(other).get(`/api/w/${otherWorkspace}/search?q=${token}`).expect(200))
                 .body as SearchResults;

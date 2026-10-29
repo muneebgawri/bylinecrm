@@ -1,4 +1,7 @@
 import { Command as CommandPrimitive } from 'cmdk';
+
+/** cmdk's own fuzzy ranking, for a `filter` that changes it for some items only. */
+export { defaultFilter as commandFilter } from 'cmdk';
 import { Search } from 'lucide-react';
 import { forwardRef, type ComponentPropsWithoutRef, type ComponentRef } from 'react';
 import { cn } from '../../lib/cn';
@@ -30,6 +33,11 @@ export interface CommandDialogProps extends ComponentPropsWithoutRef<typeof Dial
      * moves focus itself (into a composer, onto a field) runs here and prevents the default.
      */
     onCloseAutoFocus?: ComponentPropsWithoutRef<typeof DialogContent>['onCloseAutoFocus'];
+    /** Ranks an item against what is typed (cmdk's `filter`); cmdk's own fuzzy match by default. */
+    filter?: ComponentPropsWithoutRef<typeof CommandPrimitive>['filter'];
+    /** The highlighted item's value, when the caller moves it (results that arrive after typing). */
+    value?: string;
+    onValueChange?: (value: string) => void;
 }
 
 export function CommandDialog({
@@ -37,6 +45,9 @@ export function CommandDialog({
     title = 'Command palette',
     description = 'Search for a record, a page or an action.',
     onCloseAutoFocus,
+    filter,
+    value,
+    onValueChange,
     ...props
 }: CommandDialogProps) {
     return (
@@ -47,7 +58,12 @@ export function CommandDialog({
             >
                 <DialogTitle className="sr-only">{title}</DialogTitle>
                 <DialogDescription className="sr-only">{description}</DialogDescription>
-                <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-text-muted">
+                <Command
+                    {...(filter ? { filter } : {})}
+                    {...(value !== undefined ? { value } : {})}
+                    {...(onValueChange ? { onValueChange } : {})}
+                    className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-text-muted"
+                >
                     {children}
                 </Command>
             </DialogContent>
