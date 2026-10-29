@@ -1,15 +1,31 @@
-import { Badge, Button, Field, Input, LoadingRegion, Switch, toast } from '@bylinecrm/ui';
+import {
+    Badge,
+    Button,
+    Field,
+    Input,
+    LoadingRegion,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    Switch,
+    toast,
+} from '@bylinecrm/ui';
+import { Link } from 'react-router';
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import {
     useDealWonDeliveries,
     useNewswireosSettings,
     useOwnershipDeliveries,
+    usePaymentReview,
     usePutNewswireos,
     useRemoveNewswireos,
     useRotateNewswireos,
     useSetDealWonPush,
     useSetOwnershipPush,
+    useSetPaymentMode,
     useTestDealWonPush,
     useTestOwnershipPush,
 } from '../../../api/invoices';
@@ -18,8 +34,11 @@ import type {
     NewswireosDealWonPreview,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
+    NewswireosPaymentReviewView,
     NewswireosSettingsView,
 } from '../../../api/types';
+import { formatMoney } from '../../../lib/money';
+import { paths } from '../../paths';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
@@ -72,18 +91,30 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
     const [baseUrl, setBaseUrl] = useState(settings.baseUrl ?? 'https://');
     const [apiToken, setApiToken] = useState('');
     const [secret, setSecret] = useState('');
-    const [local, setLocal] = useState<{ baseUrl?: string; apiToken?: string; secret?: string }>({});
+    const [dashboardUrl, setDashboardUrl] = useState(settings.dashboardUrl ?? '');
+    const [local, setLocal] = useState<{ baseUrl?: string; apiToken?: string; secret?: string; dashboardUrl?: string }>(
+        {},
+    );
     const [confirm, setConfirm] = useState<'rotate' | 'remove' | null>(null);
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        const errors: { baseUrl?: string; apiToken?: string; secret?: string } = {};
+        const errors: { baseUrl?: string; apiToken?: string; secret?: string; dashboardUrl?: string } = {};
         if (!/^https?:\/\/[^/\s]+/i.test(baseUrl.trim())) errors.baseUrl = 'Enter NewswireOS’s address.';
         if (!settings.configured && !apiToken) errors.apiToken = 'Enter a NewswireOS API token.';
         setLocal(errors);
-        if (errors.baseUrl || errors.apiToken || errors.secret) return;
+        const dashboard = dashboardUrl.trim();
+        if (dashboard && !/^https?:\/\/[^/\s]+\/[^\s]+/i.test(dashboard)) {
+            errors.dashboardUrl = 'Enter the dashboard address with the workspace, https://…/your-workspace.';
+        }
+        if (errors.baseUrl || errors.apiToken || errors.secret || errors.dashboardUrl) return;
         put.mutate(
-            { baseUrl: baseUrl.trim(), ...(apiToken ? { apiToken } : {}), ...(secret ? { secret } : {}) },
+            {
+                baseUrl: baseUrl.trim(),
+                ...(apiToken ? { apiToken } : {}),
+                ...(secret ? { secret } : {}),
+                dashboardUrl: dashboard || null,
+            },
             {
                 onSuccess: () => toast({ title: settings.configured ? 'NewswireOS saved' : 'NewswireOS linked' }),
                 onError: (e) => {
@@ -149,6 +180,19 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                         className="max-w-[28rem]"
                     />
                 </Field>
+                <Field
+                    label="Dashboard address"
+                    hint="Where Account Managers raise invoices, with your workspace: https://dashboard.example/your-workspace. A deal’s “Raise invoice in NewswireOS” opens the client there, so the paid invoice comes back to that deal."
+                    error={local.dashboardUrl ?? fieldErrorAt(put.error, 'dashboardUrl')}
+                >
+                    <Input
+                        type="url"
+                        inputMode="url"
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        className="max-w-[28rem]"
+                    />
+                </Field>
                 <div className="flex flex-wrap gap-2">
                     <Button type="submit" variant="primary" shape="square" loading={put.isPending}>
                         {settings.configured ? 'Save' : 'Link NewswireOS'}
@@ -200,6 +244,7 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
 
             {settings.configured && <OwnershipPush workspaceId={workspaceId} settings={settings} />}
             {settings.configured && <DealWonPush workspaceId={workspaceId} settings={settings} />}
+            {settings.configured && <PaidInvoices workspaceId={workspaceId} settings={settings} />}
 
             <ConfirmDialog
                 open={confirm !== null}
@@ -497,5 +542,126 @@ function DealWonItem({ delivery: d }: { delivery: NewswireosDealWonDeliveryView 
                 </span>
             )}
         </li>
+    );
+}
+
+const PAYMENT_MODES: Record<NewswireosSettingsView['paymentMode'], { label: string; help: string }> = {
+    off: {
+        label: 'Off',
+        help: 'Paid invoices go on the client’s timeline only. Account Managers enter them on deals.',
+    },
+    shadow: {
+        label: 'Shadow',
+        help: 'Each paid invoice records the deal it would go on, and nothing else happens. Compare below with what Account Managers enter, then switch on.',
+    },
+    on: {
+        label: 'On',
+        help: 'Each paid invoice goes on the client’s deal as if an Account Manager had entered it, so it is verified and moves the deal by the invoice rule. With no open deal, one is made and its owner told; with several, the owner chooses.',
+    },
+};
+
+const DECISION_TEXT: Record<NewswireosPaymentReviewView['decision'], string> = {
+    already_on_deal: 'Already entered on',
+    attached: 'On',
+    created_deal: 'New deal',
+    needs_deal: 'Owner to choose',
+    unmatched: 'Client not in the CRM',
+    pooled_elsewhere: 'Another workspace’s client (lead pool): not booked here',
+};
+
+/** INV-2: what a paid invoice NewswireOS reports does, and shadow's check against what Account Managers entered. */
+function PaidInvoices({ workspaceId, settings }: { workspaceId: string; settings: NewswireosSettingsView }) {
+    const set = useSetPaymentMode(workspaceId);
+    const review = usePaymentReview(workspaceId);
+    const compared = (review.data ?? []).filter((p) => p.agrees !== null);
+    const agreed = compared.filter((p) => p.agrees).length;
+    return (
+        <section
+            aria-labelledby="newswireos-payments-title"
+            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+        >
+            <h3 id="newswireos-payments-title" className="m-0 text-[14px] font-semibold text-text">
+                Paid invoices move deals
+            </h3>
+            <Field label="When NewswireOS reports a paid invoice" className="max-w-xs">
+                <Select
+                    value={settings.paymentMode}
+                    disabled={set.isPending}
+                    onValueChange={(mode) =>
+                        set.mutate(mode as NewswireosSettingsView['paymentMode'], {
+                            onSuccess: () => toast({ title: `Paid invoices: ${PAYMENT_MODES[mode as 'on'].label}` }),
+                            onError: (e) =>
+                                toast({ title: 'That did not work', description: failureText(e), tone: 'danger' }),
+                        })
+                    }
+                >
+                    <SelectTrigger aria-label="When NewswireOS reports a paid invoice">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {(Object.keys(PAYMENT_MODES) as NewswireosSettingsView['paymentMode'][]).map((m) => (
+                            <SelectItem key={m} value={m}>
+                                {PAYMENT_MODES[m].label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </Field>
+            <p className="m-0 text-[13px] text-text-muted">{PAYMENT_MODES[settings.paymentMode].help}</p>
+            <h4 className="m-0 mt-2 text-[13px] font-semibold text-text">Recent paid invoices</h4>
+            {compared.length > 0 && (
+                <p className="m-0 text-[13px] text-text-muted">
+                    Of {compared.length} also entered by an Account Manager, the CRM chose the same deal for {agreed}.
+                </p>
+            )}
+            {review.isError ? (
+                <p className="m-0 text-[13px] text-text-muted">{failureText(review.error)}</p>
+            ) : !review.data ? (
+                <LoadingRegion label="Loading paid invoices" className="h-12" />
+            ) : review.data.length === 0 ? (
+                <p className="m-0 text-[13px] text-text-muted">NewswireOS has not reported a paid invoice yet.</p>
+            ) : (
+                <ul
+                    aria-label="Recent paid invoices"
+                    className="m-0 flex list-none flex-col divide-y divide-border p-0"
+                >
+                    {review.data.map((p) => (
+                        <li key={p.id} className="flex flex-col gap-0.5 py-2 text-[13px]">
+                            <span className="flex flex-wrap items-center gap-2">
+                                <span className="min-w-0 flex-1 font-medium break-words">
+                                    {p.invoiceNumber} · {p.clientName ?? p.clientEmail ?? 'A client'} ·{' '}
+                                    {formatMoney(p.amount)}
+                                </span>
+                                {p.agrees !== null && (
+                                    <Badge status={p.agrees ? 'success' : 'warning'}>
+                                        {p.agrees ? 'Same deal' : 'Different deal'}
+                                    </Badge>
+                                )}
+                                {p.mode === 'shadow' && <Badge status="neutral">Shadow</Badge>}
+                            </span>
+                            <span className="text-xs text-text-muted">
+                                {DECISION_TEXT[p.decision]}{' '}
+                                {p.opportunityId ? (
+                                    <Link
+                                        className="underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
+                                        to={paths.deal(workspaceId, p.opportunityId)}
+                                    >
+                                        {p.opportunityName ?? 'a deal'}
+                                    </Link>
+                                ) : p.mode === 'on' ? (
+                                    <Link
+                                        className="underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
+                                        to={paths.payment(workspaceId, p.id)}
+                                    >
+                                        choose a deal
+                                    </Link>
+                                ) : null}{' '}
+                                · {formatWhen(p.occurredAt ?? p.createdAt)}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
     );
 }

@@ -26,6 +26,9 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     guardrail_poach_suspected: 'Another member’s lead mailed',
     cadence_warning: 'Follow-up overdue',
     cadence_rotated: 'Lead rotated',
+    payment_needs_deal: 'Payment received: which deal?',
+    payment_created_deal: 'Payment received: deal created',
+    payment_unmatched: 'Payment from an unknown client',
 };
 
 /** What a transfer notification says under its label. */
@@ -127,6 +130,7 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
             : item.cadence
               ? { type: 'opportunity' as const, id: item.cadence.opportunityId }
               : undefined;
+    const pay = item.payment;
     const title = item.task
         ? item.task.title
         : item.transfer
@@ -135,8 +139,19 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
             ? `${item.invoice.opportunityName}: ${item.invoice.reference}`
             : item.cadence
               ? `${item.cadence.opportunityName} (${item.cadence.stageName}): touch it by ${formatDate(item.cadence.rotateAt)} or it rotates to the next rep`
-              : guardrailLine(item);
-    const to = target ? recordPath(workspaceId, target) : item.guardrail ? paths.settingsGuardrails(workspaceId) : null;
+              : pay
+                ? `${pay.clientName ?? 'A client'} paid ${pay.invoiceNumber}${pay.opportunityName ? ` · ${pay.opportunityName}` : ''}`
+                : guardrailLine(item);
+    // INV-2: a payment on its deal opens the deal; one waiting for a deal opens the page to choose it.
+    const to = target
+        ? recordPath(workspaceId, target)
+        : pay
+          ? pay.opportunityId
+              ? paths.deal(workspaceId, pay.opportunityId)
+              : paths.payment(workspaceId, pay.id)
+          : item.guardrail
+            ? paths.settingsGuardrails(workspaceId)
+            : null;
     const targets = item.task?.targets ?? [];
     const body = (
         <>

@@ -9,6 +9,15 @@ export const INVOICE_VERIFY_JOB = 'verify';
 /** NewswireOS not answering is retried: three tries with exponential backoff from 5 s, then `needs_review`. */
 export const INVOICE_VERIFY_ATTEMPTS = 3;
 export const INVOICE_VERIFY_BACKOFF_MS = 5_000;
+/**
+ * INV-2: the sweep that re-queues an invoice still `verifying` whose job was lost (Redis down when it was entered,
+ * a worker that died holding it): how often it runs, how long an invoice waits before it counts as lost (longer
+ * than every attempt's backoff together), and how many one run takes.
+ */
+export const INVOICE_SWEEP_JOB = 'sweep';
+export const INVOICE_SWEEP_EVERY_MS = 10 * 60_000;
+export const INVOICE_STUCK_AFTER_MS = 10 * 60_000;
+export const INVOICE_SWEEP_BATCH = 500;
 
 /** NewswireOS's lookup (token scope `payment_verification:lookup`): where, and how long a call may take. */
 export const NEWSWIREOS_LOOKUP_PATH = '/api/v1/crm/payment-verification/lookup';
@@ -23,6 +32,15 @@ export const NEWSWIREOS_HOOK_PATH = '/api/hooks/newswireos';
  * NewswireOS minted (`whsec_…`, pasted into Byline). It also sends `x-webhook-id` and `x-webhook-event`.
  */
 export const NEWSWIREOS_SIGNATURE_HEADER = 'x-webhook-signature';
+/**
+ * INV-2: replay protection. NewswireOS sends when it signed (`x-webhook-timestamp`, Unix seconds) and signs
+ * `${timestamp}.${body}` (`x-webhook-signature-v2: sha256=…`); a delivery signed further than the tolerance from now
+ * is refused, so one captured on the wire cannot be posted again later. The plain body signature stays for
+ * NewswireOS's other subscribers; the CRM no longer accepts it alone.
+ */
+export const NEWSWIREOS_TIMESTAMP_HEADER = 'x-webhook-timestamp';
+export const NEWSWIREOS_TIMED_SIGNATURE_HEADER = 'x-webhook-signature-v2';
+export const NEWSWIREOS_SIGNATURE_TOLERANCE_S = 300;
 /** The delivery's id, the same on every retry: what a timeline event (PNW-766) is de-duplicated on. */
 export const NEWSWIREOS_WEBHOOK_ID_HEADER = 'x-webhook-id';
 export const NEWSWIREOS_SECRET_MIN = 1;

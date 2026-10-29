@@ -39,3 +39,12 @@ export function useDomainId(): string {
     if (!value) throw new Error(`route has no :${DOMAIN_PARAM} segment`);
     return value;
 }
+
+/** A reported payment's page segment (INV-2). */
+export const PAYMENT_PARAM = 'paymentId';
+
+export function usePaymentId(): string {
+    const value = useParams()[PAYMENT_PARAM];
+    if (!value) throw new Error(`route has no :${PAYMENT_PARAM} segment`);
+    return value;
+}

@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import type { NewswireosPaymentMode } from '@bylinecrm/shared';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { hashToken } from '../auth/tokens';
 import { ENV, type Env } from '../config/env';
@@ -31,7 +32,12 @@ export class NewswireosSettingsService {
         return this.rls.withWorkspace(async (tx) => this.view(await tx.newswireosSettings.findFirst()));
     }
 
-    async put(input: { baseUrl: string; apiToken?: string | undefined; secret?: string | undefined }) {
+    async put(input: {
+        baseUrl: string;
+        apiToken?: string | undefined;
+        secret?: string | undefined;
+        dashboardUrl?: string | null | undefined;
+    }) {
         const context = this.context.get()!;
         if (!context.memberId) {
             throw new ApiException(403, 'forbidden', 'NewswireOS is linked by a member signed in, not by an API key');
@@ -49,6 +55,9 @@ export class NewswireosSettingsService {
                 configuredById: context.memberId!,
                 ...(input.apiToken ? { apiTokenCiphertext: this.secrets.seal(input.apiToken) } : {}),
                 ...(input.secret ? { secretCiphertext: this.secrets.seal(input.secret) } : {}),
+                ...(input.dashboardUrl !== undefined
+                    ? { dashboardUrl: input.dashboardUrl === null ? null : input.dashboardUrl.replace(/\/+$/, '') }
+                    : {}),
             };
             if (existing) {
                 return this.view(await tx.newswireosSettings.update({ where: { id: existing.id }, data }));
@@ -84,6 +93,16 @@ export class NewswireosSettingsService {
         });
     }
 
+    /** INV-2: what a paid invoice NewswireOS reports does. `404` without a link. */
+    async setPaymentMode(mode: NewswireosPaymentMode): Promise<NewswireosSettingsView> {
+        const row = await this.rls.withWorkspace(async (tx) => {
+            const { count } = await tx.newswireosSettings.updateMany({ data: { paymentMode: mode } });
+            if (count === 0) throw new NotFoundException('NewswireOS is not linked');
+            return tx.newswireosSettings.findFirst();
+        });
+        return this.view(row);
+    }
+
     /** Unlinks NewswireOS: new invoices wait for a person; those already decided stay. */
     async remove(): Promise<void> {
         await this.rls.withWorkspace((tx) => tx.newswireosSettings.deleteMany({}));
@@ -104,6 +123,8 @@ export class NewswireosSettingsService {
             lastDeliveryResult: row?.lastDeliveryResult ?? null,
             pushOwnership: row?.pushOwnership ?? false,
             pushDealWon: row?.pushDealWon ?? false,
+            paymentMode: (row?.paymentMode ?? 'shadow') as NewswireosPaymentMode,
+            dashboardUrl: row?.dashboardUrl ?? null,
         };
     }
 }

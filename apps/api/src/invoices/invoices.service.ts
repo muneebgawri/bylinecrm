@@ -99,8 +99,24 @@ export class InvoicesService {
      */
     async create(opportunityId: string, input: NewInvoice): Promise<DealInvoiceView> {
         const context = this.current();
+        const row = await this.rls.withWorkspace((tx) => this.attachIn(tx, context, opportunityId, input));
+        await this.verifyLater(row);
+        return view(row);
+    }
+
+    /**
+     * Puts a payment on a deal, in the caller's transaction: what `create` does for a person, and what a paid
+     * invoice NewswireOS reports does (INV-2) — one path, so the same checks, verification and stage rule apply.
+     * The caller queues the verification (`verifyLater`) once the transaction has committed.
+     */
+    async attachIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        opportunityId: string,
+        input: NewInvoice,
+    ): Promise<Row> {
         const reference = input.reference.trim();
-        const row = await this.rls.withWorkspace(async (tx) => {
+        {
             const deal = await dealFor(tx, context, opportunityId);
             const amountMinor = input.expectedAmountMinor ? BigInt(input.expectedAmountMinor) : deal.amountMinor;
             if (amountMinor === null || amountMinor <= 0n) {
@@ -177,9 +193,44 @@ export class InvoicesService {
                 }
                 throw error;
             }
+        }
+    }
+
+    /** Queues an entered invoice's verification with NewswireOS. */
+    verifyLater(row: Pick<Row, 'id' | 'workspaceId'>): Promise<void> {
+        return this.queue.enqueue({ workspaceId: row.workspaceId, invoiceId: row.id });
+    }
+
+    /**
+     * INV-2: where an Account Manager raises this deal's invoice in NewswireOS — the client's page on the dashboard,
+     * opening "Generate invoice" for this deal, so the paid invoice comes back naming it. Null (with why) when the
+     * dashboard address is not set or the deal's contact and company are not a NewswireOS client the CRM knows.
+     */
+    async newswireosLink(opportunityId: string): Promise<{ url: string | null; reason: string | null }> {
+        const context = this.current();
+        return this.rls.withWorkspace(async (tx) => {
+            await dealFor(tx, context, opportunityId);
+            const settings = await tx.newswireosSettings.findFirst({ select: { dashboardUrl: true } });
+            if (!settings?.dashboardUrl) return { url: null, reason: 'NO_DASHBOARD_URL' };
+            const deal = await tx.opportunity.findUniqueOrThrow({
+                where: { id: opportunityId },
+                select: {
+                    pointOfContactId: true,
+                    companyId: true,
+                    pointOfContact: { select: { newswireosCustomerId: true } },
+                    company: { select: { newswireosCustomerId: true } },
+                },
+            });
+            const customerId =
+                deal.pointOfContact?.newswireosCustomerId ??
+                deal.company?.newswireosCustomerId ??
+                (await timelineCustomerId(tx, [deal.pointOfContactId, deal.companyId]));
+            if (!customerId) return { url: null, reason: 'NOT_A_CLIENT' };
+            const url = new URL(`${settings.dashboardUrl}/clients/${encodeURIComponent(customerId)}/`);
+            url.searchParams.set('generate_invoice', '1');
+            url.searchParams.set('byline_opportunity_id', opportunityId);
+            return { url: url.toString(), reason: null };
         });
-        await this.queue.enqueue({ workspaceId: context.workspaceId, invoiceId: row.id });
-        return view(row);
     }
 
     /** Verifies an undecided invoice by hand (`invoice:verify`): NewswireOS could not, or there is no link. */
@@ -565,20 +616,12 @@ async function notifyReviewers(
     invoiceId: string,
     kind: 'invoice_needs_review' | 'invoice_coverage_lost' = 'invoice_needs_review',
 ): Promise<void> {
-    const reviewers = await tx.workspaceMember.findMany({
-        where: {
-            leftAt: null,
-            role: {
-                OR: [{ isSystem: true, name: 'admin' }, { permissions: { some: { capability: 'invoice:verify' } } }],
-            },
-        },
-        select: { id: true },
-    });
+    const reviewers = await invoiceReviewers(tx);
     if (reviewers.length === 0) return;
     await tx.notification.createMany({
-        data: reviewers.map((m) => ({
+        data: reviewers.map((memberId) => ({
             workspaceId,
-            memberId: m.id,
+            memberId,
             kind,
             invoiceId,
         })),
@@ -588,6 +631,34 @@ async function notifyReviewers(
         where: { invoiceId, kind, readAt: { not: null } },
         data: { readAt: null },
     });
+}
+
+/** The NewswireOS client id the latest timeline event about these records named (PNW-766); null when none did. */
+async function timelineCustomerId(tx: WorkspaceClient, targetIds: readonly (string | null)[]): Promise<string | null> {
+    const ids = targetIds.filter((id): id is string => id !== null);
+    if (ids.length === 0) return null;
+    const event = await tx.newswireosTimelineEvent.findFirst({
+        where: { targetId: { in: ids } },
+        orderBy: { createdAt: 'desc' },
+        select: { payload: true },
+    });
+    const data = (event?.payload as { data?: { client?: { customer_id?: unknown } } } | undefined)?.data;
+    const id = data?.client?.customer_id;
+    return typeof id === 'string' && id !== '' ? id : typeof id === 'number' ? String(id) : null;
+}
+
+/** Whoever may verify invoices by hand: members whose role has `invoice:verify`, and admins. */
+export async function invoiceReviewers(tx: WorkspaceClient): Promise<string[]> {
+    const reviewers = await tx.workspaceMember.findMany({
+        where: {
+            leftAt: null,
+            role: {
+                OR: [{ isSystem: true, name: 'admin' }, { permissions: { some: { capability: 'invoice:verify' } } }],
+            },
+        },
+        select: { id: true },
+    });
+    return reviewers.map((m) => m.id);
 }
 
 export function view(row: Row): DealInvoiceView {

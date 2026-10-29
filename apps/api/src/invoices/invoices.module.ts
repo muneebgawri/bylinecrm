@@ -16,11 +16,18 @@ import {
     OWNERSHIP_PUSH_BACKOFF_MS,
     OWNERSHIP_PUSH_QUEUE,
 } from './invoices.constants';
-import { InvoicesController, NewswireosHookController, NewswireosSettingsController } from './invoices.controllers';
+import {
+    InvoicesController,
+    NewswireosHookController,
+    NewswireosPaymentsController,
+    NewswireosSettingsController,
+} from './invoices.controllers';
 import { InvoicesService } from './invoices.service';
 import { InvoicesWorkers } from './invoices.workers';
 import { NewswireosHookService } from './newswireos-hook.service';
 import { NewswireosSettingsService } from './newswireos-settings.service';
+import { NewswireosPaymentsService } from './newswireos-payments.service';
+import { RecordsModule } from '../records/records.module';
 import { NewswireosTimelineService } from './newswireos-timeline.service';
 import { NewswireosVerificationHttp } from './newswireos-verification.http';
 import { NEWSWIREOS_VERIFICATION_PORT } from './newswireos-verification.port';
@@ -40,6 +47,7 @@ import { OwnershipPushWorker } from './ownership-push.worker';
 @Module({
     imports: [
         AuthModule,
+        RecordsModule,
         BullModule.registerQueue({
             name: INVOICE_VERIFY_QUEUE,
             defaultJobOptions: {
@@ -68,7 +76,12 @@ import { OwnershipPushWorker } from './ownership-push.worker';
             },
         }),
     ],
-    controllers: [InvoicesController, NewswireosSettingsController, NewswireosHookController],
+    controllers: [
+        InvoicesController,
+        NewswireosSettingsController,
+        NewswireosHookController,
+        NewswireosPaymentsController,
+    ],
     providers: [
         { provide: NEWSWIREOS_VERIFICATION_PORT, useClass: NewswireosVerificationHttp },
         InvoiceQueue,
@@ -85,6 +98,7 @@ import { OwnershipPushWorker } from './ownership-push.worker';
         DealWonPushSubscriber,
         DealWonPushWorker,
         NewswireosTimelineService,
+        NewswireosPaymentsService,
     ],
 })
 export class InvoicesModule {}

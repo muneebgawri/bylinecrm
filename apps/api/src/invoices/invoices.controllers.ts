@@ -8,15 +8,23 @@ import { Returns } from '../openapi/responses';
 import { DealWonPushService } from './deal-won-push.service';
 import {
     CreateInvoiceDto,
+    ChoosePaymentDealDto,
     PutDealWonPushDto,
+    PutPaymentModeDto,
     PutNewswireosSettingsDto,
     PutOwnershipPushDto,
     RejectInvoiceDto,
     VerifyInvoiceDto,
 } from './dto';
-import { NEWSWIREOS_HOOK_PATH, NEWSWIREOS_SIGNATURE_HEADER, NEWSWIREOS_WEBHOOK_ID_HEADER } from './invoices.constants';
+import {
+    NEWSWIREOS_HOOK_PATH,
+    NEWSWIREOS_TIMED_SIGNATURE_HEADER,
+    NEWSWIREOS_TIMESTAMP_HEADER,
+    NEWSWIREOS_WEBHOOK_ID_HEADER,
+} from './invoices.constants';
 import { InvoicesService } from './invoices.service';
 import { NewswireosHookService } from './newswireos-hook.service';
+import { NewswireosPaymentsService } from './newswireos-payments.service';
 import { NewswireosSettingsService } from './newswireos-settings.service';
 import { OwnershipPushService } from './ownership-push.service';
 import {
@@ -24,12 +32,18 @@ import {
     dealWonDeliveryView,
     dealWonPushPreview,
     newswireosHookResult,
+    newswireosInvoiceLinkView,
+    newswireosPaymentReviewView,
+    newswireosPaymentView,
     newswireosSettingsView,
     ownershipDeliveryView,
     ownershipPushPreview,
     type DealWonDeliveryView,
     type DealWonPushPreview,
     type NewswireosHookResult,
+    type NewswireosInvoiceLinkView,
+    type NewswireosPaymentReviewView,
+    type NewswireosPaymentView,
     type NewswireosSettingsView,
     type OwnershipDeliveryView,
     type OwnershipPushPreview,
@@ -60,6 +74,14 @@ export class InvoicesController {
     }
 
     /** Verifies an invoice waiting for finance by hand. */
+    /** INV-2: where this deal's invoice is raised in NewswireOS, so the paid invoice comes back naming the deal. */
+    @Requires('deal:read')
+    @Get('newswireos-link')
+    @Returns(newswireosInvoiceLinkView)
+    newswireosLink(@Param('opportunityId', ParseUUIDPipe) opportunityId: string): Promise<NewswireosInvoiceLinkView> {
+        return this.invoices.newswireosLink(opportunityId) as Promise<NewswireosInvoiceLinkView>;
+    }
+
     @Requires('invoice:verify')
     @HttpCode(200)
     @Post(':invoiceId/verify')
@@ -106,6 +128,7 @@ export class NewswireosSettingsController {
         private readonly settings: NewswireosSettingsService,
         private readonly ownership: OwnershipPushService,
         private readonly dealWon: DealWonPushService,
+        private readonly paymentsService: NewswireosPaymentsService,
     ) {}
 
     @Requires('workspace:admin')
@@ -163,6 +186,22 @@ export class NewswireosSettingsController {
         return this.ownership.preview();
     }
 
+    /** INV-2: what a paid invoice NewswireOS reports does — `off`, `shadow` or `on`. `404` without a link. */
+    @Requires('workspace:admin')
+    @Put('payment-mode')
+    @Returns(newswireosSettingsView)
+    putPaymentMode(@Body() body: PutPaymentModeDto): Promise<NewswireosSettingsView> {
+        return this.settings.setPaymentMode(body.mode);
+    }
+
+    /** INV-2: the latest paid invoices NewswireOS reported, beside what Account Managers entered (shadow's check). */
+    @Requires('workspace:admin')
+    @Get('payments')
+    @Returns([newswireosPaymentReviewView])
+    payments(): Promise<NewswireosPaymentReviewView[]> {
+        return this.paymentsService.list();
+    }
+
     /** PNW-766: pushes won deals to NewswireOS, which makes their contacts clients, or stops. `404` without a link. */
     @Requires('workspace:admin')
     @Put('deal-won-push')
@@ -205,11 +244,47 @@ export class NewswireosHookController {
     @Returns(newswireosHookResult)
     receive(
         @Param('token') token: string,
-        @Headers(NEWSWIREOS_SIGNATURE_HEADER) signature: string | undefined,
+        @Headers(NEWSWIREOS_TIMESTAMP_HEADER) timestamp: string | undefined,
+        @Headers(NEWSWIREOS_TIMED_SIGNATURE_HEADER) signature: string | undefined,
         @Headers(NEWSWIREOS_WEBHOOK_ID_HEADER) webhookId: string | undefined,
         @Req() req: Request & RequestWithRawBody,
         @Body() body: unknown,
     ): Promise<NewswireosHookResult> {
-        return this.hook.receive(token, req.rawBody, signature, body, req.ip ?? '', webhookId);
+        return this.hook.receive(token, req.rawBody, { timestamp, value: signature }, body, req.ip ?? '', webhookId);
+    }
+}
+
+/** INV-2: a paid invoice NewswireOS reported, for the page its notification opens, and choosing its deal. */
+@ApiTags('invoices')
+@TenantController('newswireos-payments')
+export class NewswireosPaymentsController {
+    constructor(private readonly payments: NewswireosPaymentsService) {}
+
+    @Requires('deal:read')
+    @Get(':paymentId')
+    @Returns(newswireosPaymentView)
+    get(@Param('paymentId', ParseUUIDPipe) paymentId: string): Promise<NewswireosPaymentView> {
+        return this.payments.get(paymentId);
+    }
+
+    /** Puts the payment on the deal chosen: the deal's owner, or whoever verifies invoices. */
+    @Requires('deal:edit')
+    @HttpCode(200)
+    @Post(':paymentId/choose')
+    @Returns(newswireosPaymentView)
+    choose(
+        @Param('paymentId', ParseUUIDPipe) paymentId: string,
+        @Body() body: ChoosePaymentDealDto,
+    ): Promise<NewswireosPaymentView> {
+        return this.payments.choose(paymentId, body.opportunityId);
+    }
+
+    /** Makes a deal for the payment and puts it on it: the client's owner, or whoever verifies invoices. */
+    @Requires('deal:edit')
+    @HttpCode(200)
+    @Post(':paymentId/create-deal')
+    @Returns(newswireosPaymentView)
+    createDeal(@Param('paymentId', ParseUUIDPipe) paymentId: string): Promise<NewswireosPaymentView> {
+        return this.payments.createDeal(paymentId);
     }
 }

@@ -356,7 +356,11 @@ async function duplicateCompanies(tx: WorkspaceClient): Promise<OwnershipConflic
     return out;
 }
 
-async function poolHoldersIn(tx: WorkspaceClient, addresses: readonly string[]): Promise<Map<string, string>> {
+/**
+ * Of these (normalised) addresses, those another workspace of the caller's lead pool holds as a customer or prospect,
+ * each to that workspace's name, in the caller's transaction. Empty for a workspace in no pool.
+ */
+export async function poolHoldersIn(tx: WorkspaceClient, addresses: readonly string[]): Promise<Map<string, string>> {
     const rows = await tx.$queryRaw<{ email: string; name: string }[]>`
         SELECT email, workspace_name AS name FROM lead_pool_holders(${[...addresses]}::text[])`;
     return new Map(rows.map((r) => [r.email, r.name] as const));

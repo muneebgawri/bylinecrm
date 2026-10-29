@@ -6,8 +6,11 @@ import type {
     DealInvoiceView,
     NewswireosDealWonDeliveryView,
     NewswireosDealWonPreview,
+    NewswireosInvoiceLinkView,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
+    NewswireosPaymentReviewView,
+    NewswireosPaymentView,
     NewswireosSettingsView,
     PutNewswireosSettingsInput,
 } from './types';
@@ -24,6 +27,8 @@ const keys = {
         ['w', workspaceId, 'integrations', 'newswireos', 'ownership-deliveries'] as const,
     dealWonDeliveries: (workspaceId: string) =>
         ['w', workspaceId, 'integrations', 'newswireos', 'deal-won-deliveries'] as const,
+    payments: (workspaceId: string) => ['w', workspaceId, 'integrations', 'newswireos', 'payments'] as const,
+    payment: (workspaceId: string, paymentId: string) => ['w', workspaceId, 'newswireos-payments', paymentId] as const,
 };
 
 const base = (workspaceId: string, dealId: string) => workspacePath(workspaceId, `/opportunities/${dealId}/invoices`);
@@ -42,6 +47,15 @@ export const invoices = {
 };
 
 /** A deal's invoices; looked at again every few seconds while one is being verified. */
+/** INV-2: where this deal's invoice is raised in NewswireOS, so the paid invoice comes back naming the deal. */
+export const useNewswireosInvoiceLink = (workspaceId: string, dealId: string) =>
+    useQuery({
+        queryKey: [...keys.deal(workspaceId, dealId), 'newswireos-link'] as const,
+        queryFn: ({ signal }) =>
+            request<NewswireosInvoiceLinkView>('GET', `${base(workspaceId, dealId)}/newswireos-link`, { signal }),
+        staleTime: 60_000,
+    });
+
 export function useDealInvoices(workspaceId: string, dealId: string) {
     return useQuery({
         queryKey: keys.deal(workspaceId, dealId),
@@ -172,3 +186,64 @@ export const useDealWonDeliveries = (workspaceId: string) =>
 /** PNW-766: the dry run. Nothing is sent; the body a push would send for the latest won deal that qualifies. */
 export const useTestDealWonPush = (workspaceId: string) =>
     useMutation({ mutationFn: () => newswireos.testDealWonPush(workspaceId) });
+
+/** INV-2: what a paid invoice NewswireOS reports does — `off`, `shadow` (record only) or `on`. */
+export const useSetPaymentMode = (workspaceId: string) =>
+    useNewswireosWrite(workspaceId, (mode: NewswireosSettingsView['paymentMode']) =>
+        request<NewswireosSettingsView>('PUT', workspacePath(workspaceId, '/integrations/newswireos/payment-mode'), {
+            body: { mode },
+        }),
+    );
+
+/** INV-2: the latest paid invoices NewswireOS reported, beside what Account Managers entered (shadow's check). */
+export const usePaymentReview = (workspaceId: string) =>
+    useQuery({
+        queryKey: keys.payments(workspaceId),
+        queryFn: ({ signal }) =>
+            request<NewswireosPaymentReviewView[]>(
+                'GET',
+                workspacePath(workspaceId, '/integrations/newswireos/payments'),
+                { signal },
+            ),
+    });
+
+/** INV-2: one reported payment, for the page its notification opens. */
+export const usePayment = (workspaceId: string, paymentId: string) =>
+    useQuery({
+        queryKey: keys.payment(workspaceId, paymentId),
+        queryFn: ({ signal }) =>
+            request<NewswireosPaymentView>('GET', workspacePath(workspaceId, `/newswireos-payments/${paymentId}`), {
+                signal,
+            }),
+    });
+
+/** INV-2: puts a payment the CRM would not guess on the deal chosen; that deal's invoices refetch. */
+export function useChoosePaymentDeal(workspaceId: string, paymentId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (opportunityId: string) =>
+            request<NewswireosPaymentView>(
+                'POST',
+                workspacePath(workspaceId, `/newswireos-payments/${paymentId}/choose`),
+                { body: { opportunityId } },
+            ),
+        onSuccess: (view) => {
+            client.setQueryData(keys.payment(workspaceId, paymentId), view);
+            if (view.opportunityId)
+                void client.invalidateQueries({ queryKey: keys.deal(workspaceId, view.opportunityId) });
+        },
+    });
+}
+
+/** INV-2: makes a deal for a waiting payment (its client known, by domain alone) and puts the payment on it. */
+export function useCreatePaymentDeal(workspaceId: string, paymentId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () =>
+            request<NewswireosPaymentView>(
+                'POST',
+                workspacePath(workspaceId, `/newswireos-payments/${paymentId}/create-deal`),
+            ),
+        onSuccess: (view) => client.setQueryData(keys.payment(workspaceId, paymentId), view),
+    });
+}

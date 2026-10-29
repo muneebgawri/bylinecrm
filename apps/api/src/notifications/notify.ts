@@ -9,13 +9,17 @@ import type { WorkspaceClient } from '../infra/rls-prisma.service';
  * (member, kind, target) is told once — a unique row — so an event delivered again tells nobody twice.
  */
 const COLUMN: Readonly<
-    Record<NotificationTargetType, 'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId' | 'cadenceLapseId'>
+    Record<
+        NotificationTargetType,
+        'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId' | 'cadenceLapseId' | 'newswireosPaymentId'
+    >
 > = {
     task: 'taskId',
     transfer: 'transferId',
     guardrail: 'guardrailEventId',
     invoice: 'invoiceId',
     cadence: 'cadenceLapseId',
+    payment: 'newswireosPaymentId',
 };
 
 /** Tells each member about each target, once per (member, kind, target). Returns how many rows were new. */
@@ -39,7 +43,10 @@ export async function notify(
 
 /** A stored notification's target, read back from whichever typed column is set. */
 export function targetOf(
-    row: Pick<Notification, 'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId' | 'cadenceLapseId'>,
+    row: Pick<
+        Notification,
+        'taskId' | 'transferId' | 'guardrailEventId' | 'invoiceId' | 'cadenceLapseId' | 'newswireosPaymentId'
+    >,
 ): NotificationTarget {
     for (const type of Object.keys(COLUMN) as NotificationTargetType[]) {
         const id = row[COLUMN[type]];

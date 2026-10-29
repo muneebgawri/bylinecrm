@@ -1,4 +1,10 @@
-import { INVOICE_GATEWAYS, INVOICE_STATUSES } from '@bylinecrm/shared';
+import {
+    INVOICE_GATEWAYS,
+    INVOICE_STATUSES,
+    NEWSWIREOS_PAYMENT_DECISIONS,
+    NEWSWIREOS_PAYMENT_MATCHES,
+    NEWSWIREOS_PAYMENT_MODES,
+} from '@bylinecrm/shared';
 import { z } from 'zod';
 import { id, named } from '../openapi/responses';
 
@@ -59,6 +65,13 @@ export const newswireosSettingsView = named(
         pushOwnership: z.boolean().meta({
             description:
                 'PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default.',
+        }),
+        dashboardUrl: z.string().nullable().meta({
+            description: 'INV-2: the NewswireOS dashboard’s workspace address, where “Raise invoice” opens a client.',
+        }),
+        paymentMode: z.enum(NEWSWIREOS_PAYMENT_MODES).meta({
+            description:
+                'INV-2: what a paid invoice NewswireOS reports does. `off`: the timeline only. `shadow` (the default): records which deal it would go on, does nothing. `on`: puts it on that deal (or a new one), so verification and the stage rule move the deal.',
         }),
         pushDealWon: z.boolean().meta({
             description:
@@ -202,3 +215,64 @@ export const newswireosHookResult = named(
 
 export type NewswireosSettingsView = z.output<typeof newswireosSettingsView>;
 export type NewswireosHookResult = z.output<typeof newswireosHookResult>;
+
+/** INV-2: a paid invoice NewswireOS reported, and which deal it went on (or, in shadow, would have). */
+export const newswireosPaymentView = named(
+    'NewswireosPayment',
+    z.object({
+        id,
+        invoiceNumber: z.string(),
+        paymentMethod: z.string().nullable().meta({ description: 'How the client paid, as NewswireOS names it.' }),
+        amount: z.object({ amountMinor: z.number().int(), currency: z.string() }).nullable(),
+        clientName: z.string().nullable(),
+        clientEmail: z.string().nullable(),
+        mode: z
+            .enum(NEWSWIREOS_PAYMENT_MODES)
+            .meta({ description: 'The mode it was decided in; `shadow` acted on nothing.' }),
+        decision: z.enum(NEWSWIREOS_PAYMENT_DECISIONS),
+        matchedBy: z.enum(NEWSWIREOS_PAYMENT_MATCHES).nullable(),
+        opportunityId: id.nullable().meta({ description: 'The deal it went on, or would have; null until chosen.' }),
+        opportunityName: z.string().nullable(),
+        candidates: z
+            .array(z.object({ id, name: z.string() }))
+            .meta({ description: 'For `needs_deal`: the client’s open deals to choose from.' }),
+        resolvedAt: dateTime.nullable().meta({ description: 'When a person chose the deal.' }),
+        canCreateDeal: z.boolean().meta({
+            description:
+                'Whether a deal can be made for it (`POST …/create-deal`): a known client, an amount, still waiting — e.g. one known by company domain alone.',
+        }),
+        occurredAt: dateTime.nullable(),
+        createdAt: dateTime,
+    }),
+);
+
+/** INV-2: a reported payment beside what an Account Manager entered for the same invoice — shadow mode's check. */
+export const newswireosPaymentReviewView = named(
+    'NewswireosPaymentReview',
+    newswireosPaymentView.extend({
+        enteredOnOpportunityId: id.nullable().meta({
+            description: 'The deal an Account Manager entered this invoice on by hand; null when none has.',
+        }),
+        agrees: z.boolean().nullable().meta({
+            description: 'Whether that is the deal the CRM chose; null until someone has entered it.',
+        }),
+    }),
+);
+
+export type NewswireosPaymentView = z.output<typeof newswireosPaymentView>;
+export type NewswireosPaymentReviewView = z.output<typeof newswireosPaymentReviewView>;
+
+/** INV-2: where a deal's invoice is raised in NewswireOS. */
+export const newswireosInvoiceLinkView = named(
+    'NewswireosInvoiceLink',
+    z.object({
+        url: z.string().nullable().meta({
+            description: 'The client’s page on the NewswireOS dashboard, opening “Generate invoice” for this deal.',
+        }),
+        reason: z.enum(['NO_DASHBOARD_URL', 'NOT_A_CLIENT']).nullable().meta({
+            description:
+                'Why there is no link: the dashboard address is not set in Settings → NewswireOS, or the deal’s contact and company are not a NewswireOS client the CRM knows.',
+        }),
+    }),
+);
+export type NewswireosInvoiceLinkView = z.output<typeof newswireosInvoiceLinkView>;

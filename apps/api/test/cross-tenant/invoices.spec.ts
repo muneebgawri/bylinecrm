@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -18,12 +18,12 @@ import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
-import { NEWSWIREOS_SIGNATURE_HEADER } from '../../src/invoices/invoices.constants';
 import { InvoicesService } from '../../src/invoices/invoices.service';
 import { NEWSWIREOS_VERIFICATION_PORT, NewswireosApiError } from '../../src/invoices/newswireos-verification.port';
 import { StageRulesService } from '../../src/pipelines/stage-rules.service';
 import { FakeNewswireos } from '../support/fake-newswireos';
 import { verifyAddress } from '../support/mail';
+import { newswireosSignature } from '../support/newswireos-hook';
 
 interface Browser {
     cookie: string;
@@ -147,7 +147,7 @@ describe('INV-1 invoices on a deal (FR-CRMS-19)', () => {
             .set('content-type', 'application/json')
             .set('x-webhook-id', id)
             .set('x-webhook-event', body.type)
-            .set(NEWSWIREOS_SIGNATURE_HEADER, `sha256=${createHmac('sha256', key).update(raw).digest('hex')}`)
+            .set(newswireosSignature(raw, key))
             .send(raw);
     };
 

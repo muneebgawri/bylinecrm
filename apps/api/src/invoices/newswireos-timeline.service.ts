@@ -34,6 +34,12 @@ export interface TimelineDelivery {
     client: TimelineClient | null;
     /** `am.assigned`'s `data.account_manager.name`; null when it carries none. */
     accountManager: string | null;
+    /** INV-2, on `invoice.paid`: NewswireOS's invoice number (the `newswireos_invoice` reference); null without one. */
+    invoiceNumber: string | null;
+    /** INV-2, on `invoice.paid`: how it was paid (`stripe`, `paypal`, `wallet`, `crypto`); shown, never trusted. */
+    paymentMethod: string | null;
+    /** INV-2, on `invoice.paid`: the CRM deal the invoice was raised for, when it was raised from one. */
+    bylineOpportunityId: string | null;
     payload: unknown;
 }
 
@@ -52,7 +58,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  *   then the company domain (a company's own or other domain), and put on that one record's timeline as an
  *   `external.newswireos_<event>` entry, source `newswireos`, keyed on the delivery. A company's timeline shows its
  *   people's, so a person's entry is not also written on the company.
- * - **The timeline only.** `invoice.paid` verifies nothing and moves no stage: that stays the lookup's (§8q).
+ * - **The timeline only, here.** `invoice.paid` verifies nothing and moves no stage itself: with its invoice number,
+ *   INV-2 (`NewswireosPaymentsService`) puts it on the client's deal as an entered invoice, and the lookup (§8q)
+ *   verifies it as any other.
  * - **Exclusions.** `client.created` and `am.assigned` keep the client's `account_managed` exclusion as the client
  *   sync does (`sync-newswireos-clients`): one this source made is renamed to the new account manager; a Twenty lead
  *   lookup's becomes this source's; any other (by hand, a won deal, a domain) already keeps them out and is left.
@@ -276,6 +284,9 @@ export function parseTimeline(body: unknown, webhookId: string | undefined): Tim
               }
             : null,
         accountManager: text(am?.['name'], 200),
+        invoiceNumber: text(data['invoice_number'], 100),
+        paymentMethod: text(data['payment_method'], 40),
+        bylineOpportunityId: text(data['byline_opportunity_id'], 200),
         payload: body,
     };
 }

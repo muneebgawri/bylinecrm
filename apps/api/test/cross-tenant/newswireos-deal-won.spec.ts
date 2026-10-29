@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -20,11 +20,11 @@ import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { NEWSWIREOS_DEAL_WON_PORT } from '../../src/invoices/deal-won-push.port';
 import { DealWonPushService } from '../../src/invoices/deal-won-push.service';
-import { NEWSWIREOS_SIGNATURE_HEADER } from '../../src/invoices/invoices.constants';
 import { NewswireosApiError } from '../../src/invoices/newswireos-verification.port';
 import type { DealWonDeliveryView, DealWonPushPreview } from '../../src/invoices/responses';
 import { FakeNewswireosDealWon } from '../support/fake-newswireos-deal-won';
 import { verifyAddress } from '../support/mail';
+import { newswireosSignature } from '../support/newswireos-hook';
 import { settle } from '../support/outbox';
 
 type Who = { cookie: string; csrf: string };
@@ -148,12 +148,7 @@ describe('PNW-766 deal won and the NewswireOS timeline', () => {
             .set('content-type', 'application/json')
             .set('x-webhook-id', id)
             .set('x-webhook-event', type)
-            .set(
-                NEWSWIREOS_SIGNATURE_HEADER,
-                `sha256=${createHmac('sha256', opts.key ?? secret)
-                    .update(raw)
-                    .digest('hex')}`,
-            )
+            .set(newswireosSignature(raw, opts.key ?? secret))
             .send(raw);
     };
     const client = (c: Record<string, unknown>) => ({
