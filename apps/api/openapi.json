@@ -13633,6 +13633,79 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices/newswireos-link": {
+            "get": {
+                "operationId": "invoices_newswireosLink",
+                "parameters": [
+                    {
+                        "name": "opportunityId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosInvoiceLink"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/api/w/{workspaceId}/opportunities/{opportunityId}/invoices/{invoiceId}/verify": {
             "post": {
                 "operationId": "invoices_verify",
@@ -29941,6 +30014,13 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 500
+                    },
+                    "dashboardUrl": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "format": "uri",
+                        "description": "INV-2: the NewswireOS dashboard’s workspace address, `https://dashboard.example/{workspace-slug}`, where a deal’s “Raise invoice” opens the client. Leave out to keep it; null clears it.",
+                        "nullable": true
                     }
                 },
                 "required": ["baseUrl"]
@@ -37811,6 +37891,11 @@
                         "type": "boolean",
                         "description": "PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default."
                     },
+                    "dashboardUrl": {
+                        "nullable": true,
+                        "description": "INV-2: the NewswireOS dashboard’s workspace address, where “Raise invoice” opens a client.",
+                        "type": "string"
+                    },
                     "paymentMode": {
                         "type": "string",
                         "enum": ["off", "shadow", "on"],
@@ -37829,6 +37914,7 @@
                     "lastDeliveryAt",
                     "lastDeliveryResult",
                     "pushOwnership",
+                    "dashboardUrl",
                     "paymentMode",
                     "pushDealWon"
                 ]
@@ -38519,6 +38605,23 @@
                     "enteredOnOpportunityId",
                     "agrees"
                 ]
+            },
+            "NewswireosInvoiceLink": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "nullable": true,
+                        "description": "The client’s page on the NewswireOS dashboard, opening “Generate invoice” for this deal.",
+                        "type": "string"
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "description": "Why there is no link: the dashboard address is not set in Settings → NewswireOS, or the deal’s contact and company are not a NewswireOS client the CRM knows.",
+                        "type": "string",
+                        "enum": ["NO_DASHBOARD_URL", "NOT_A_CLIENT"]
+                    }
+                },
+                "required": ["url", "reason"]
             },
             "HealthStatus": {
                 "type": "object",

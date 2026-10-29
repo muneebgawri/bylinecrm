@@ -1983,6 +1983,7 @@ export const newswireosSettings: NewswireosSettingsView = {
     pushOwnership: true,
     pushDealWon: true,
     paymentMode: 'shadow',
+    dashboardUrl: null,
 };
 
 /** PNW-765: ownership changes pushed to NewswireOS: one matched, one waiting for NewswireOS's route. */

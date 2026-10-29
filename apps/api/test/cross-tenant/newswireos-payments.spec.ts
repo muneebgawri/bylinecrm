@@ -356,6 +356,31 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
         );
     });
 
+    it('a deal links to raising its invoice in NewswireOS, for the client the CRM knows', async () => {
+        const client = await newClient('Linked');
+        const deal = await newDeal(client, 'Linked deal');
+        const link = async () =>
+            (
+                await as(a.who)
+                    .get(w(`/opportunities/${deal}/invoices/newswireos-link`))
+                    .expect(200)
+            ).body as {
+                url: string | null;
+                reason: string | null;
+            };
+        expect(await link()).toEqual({ url: null, reason: 'NO_DASHBOARD_URL' });
+        await as(a.who)
+            .put(w('/integrations/newswireos'))
+            .send({ baseUrl: 'https://newswireos.example.test', dashboardUrl: 'https://dash.example.test/pinion/' })
+            .expect(200);
+        expect(await link()).toEqual({ url: null, reason: 'NOT_A_CLIENT' });
+        await owner.person.update({ where: { id: client.person }, data: { newswireosCustomerId: 'cus_42' } });
+        expect(await link()).toEqual({
+            url: `https://dash.example.test/pinion/clients/cus_42/?generate_invoice=1&byline_opportunity_id=${deal}`,
+            reason: null,
+        });
+    });
+
     it('cross-tenant: another workspace sees none of this workspace’s payments', async () => {
         const row = await owner.newswireosPayment.findFirstOrThrow({ where: { workspaceId: a.id } });
         await as(b.who)

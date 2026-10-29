@@ -45,3 +45,11 @@ ownership (OWN-2) and the Won announcement (`deal.won`) all work as they already
 NewswireOS stores `byline_opportunity_id` on the invoice (nullable) and accepts it on
 `POST /api/workspaces/:slug/clients/:clientId/invoices/generate`. Pressboard (a UI over NewswireOS, with no invoices
 of its own) passes it from the CRM's deep link into its generate-invoice modal.
+
+## Raising an invoice from a deal
+
+A deal's Invoices card links to **Raise invoice in NewswireOS** (`GET /opportunities/:id/invoices/newswireos-link`):
+`{dashboardUrl}/clients/{customerId}/?generate_invoice=1&byline_opportunity_id={dealId}`, where `dashboardUrl` is set
+once in Settings → NewswireOS (the dashboard's workspace address) and `customerId` is the NewswireOS client id the CRM
+knows for the deal's contact or company (kept by the won-deal push, else the latest timeline event about them).
+Pressboard opens Generate invoice for that client and sends the deal id, so the paid invoice comes back naming it.

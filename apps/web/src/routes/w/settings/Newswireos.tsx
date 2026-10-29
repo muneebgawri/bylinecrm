@@ -91,18 +91,30 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
     const [baseUrl, setBaseUrl] = useState(settings.baseUrl ?? 'https://');
     const [apiToken, setApiToken] = useState('');
     const [secret, setSecret] = useState('');
-    const [local, setLocal] = useState<{ baseUrl?: string; apiToken?: string; secret?: string }>({});
+    const [dashboardUrl, setDashboardUrl] = useState(settings.dashboardUrl ?? '');
+    const [local, setLocal] = useState<{ baseUrl?: string; apiToken?: string; secret?: string; dashboardUrl?: string }>(
+        {},
+    );
     const [confirm, setConfirm] = useState<'rotate' | 'remove' | null>(null);
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        const errors: { baseUrl?: string; apiToken?: string; secret?: string } = {};
+        const errors: { baseUrl?: string; apiToken?: string; secret?: string; dashboardUrl?: string } = {};
         if (!/^https?:\/\/[^/\s]+/i.test(baseUrl.trim())) errors.baseUrl = 'Enter NewswireOS’s address.';
         if (!settings.configured && !apiToken) errors.apiToken = 'Enter a NewswireOS API token.';
         setLocal(errors);
-        if (errors.baseUrl || errors.apiToken || errors.secret) return;
+        const dashboard = dashboardUrl.trim();
+        if (dashboard && !/^https?:\/\/[^/\s]+\/[^\s]+/i.test(dashboard)) {
+            errors.dashboardUrl = 'Enter the dashboard address with the workspace, https://…/your-workspace.';
+        }
+        if (errors.baseUrl || errors.apiToken || errors.secret || errors.dashboardUrl) return;
         put.mutate(
-            { baseUrl: baseUrl.trim(), ...(apiToken ? { apiToken } : {}), ...(secret ? { secret } : {}) },
+            {
+                baseUrl: baseUrl.trim(),
+                ...(apiToken ? { apiToken } : {}),
+                ...(secret ? { secret } : {}),
+                dashboardUrl: dashboard || null,
+            },
             {
                 onSuccess: () => toast({ title: settings.configured ? 'NewswireOS saved' : 'NewswireOS linked' }),
                 onError: (e) => {
@@ -165,6 +177,19 @@ function NewswireosForm({ workspaceId, settings }: { workspaceId: string; settin
                         autoComplete="new-password"
                         value={secret}
                         onChange={(e) => setSecret(e.target.value)}
+                        className="max-w-[28rem]"
+                    />
+                </Field>
+                <Field
+                    label="Dashboard address"
+                    hint="Where Account Managers raise invoices, with your workspace: https://dashboard.example/your-workspace. A deal’s “Raise invoice in NewswireOS” opens the client there, so the paid invoice comes back to that deal."
+                    error={local.dashboardUrl ?? fieldErrorAt(put.error, 'dashboardUrl')}
+                >
+                    <Input
+                        type="url"
+                        inputMode="url"
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
                         className="max-w-[28rem]"
                     />
                 </Field>

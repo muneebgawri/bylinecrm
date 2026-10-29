@@ -58,6 +58,15 @@ export class PutNewswireosSettingsDto extends createZodDto(
         secret: z.string().min(NEWSWIREOS_SECRET_MIN).max(NEWSWIREOS_SECRET_MAX).optional().meta({
             description: 'The webhook secret NewswireOS minted (`whsec_…`). Leave out to keep the current one.',
         }),
+        dashboardUrl: z
+            .url({ protocol: /^https?$/ })
+            .max(NEWSWIREOS_BASE_URL_MAX)
+            .nullable()
+            .optional()
+            .meta({
+                description:
+                    'INV-2: the NewswireOS dashboard’s workspace address, `https://dashboard.example/{workspace-slug}`, where a deal’s “Raise invoice” opens the client. Leave out to keep it; null clears it.',
+            }),
     }),
 ) {}
 

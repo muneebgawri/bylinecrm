@@ -27,6 +27,7 @@ import {
     dealWonDeliveryView,
     dealWonPushPreview,
     newswireosHookResult,
+    newswireosInvoiceLinkView,
     newswireosPaymentReviewView,
     newswireosPaymentView,
     newswireosSettingsView,
@@ -35,6 +36,7 @@ import {
     type DealWonDeliveryView,
     type DealWonPushPreview,
     type NewswireosHookResult,
+    type NewswireosInvoiceLinkView,
     type NewswireosPaymentReviewView,
     type NewswireosPaymentView,
     type NewswireosSettingsView,
@@ -67,6 +69,14 @@ export class InvoicesController {
     }
 
     /** Verifies an invoice waiting for finance by hand. */
+    /** INV-2: where this deal's invoice is raised in NewswireOS, so the paid invoice comes back naming the deal. */
+    @Requires('deal:read')
+    @Get('newswireos-link')
+    @Returns(newswireosInvoiceLinkView)
+    newswireosLink(@Param('opportunityId', ParseUUIDPipe) opportunityId: string): Promise<NewswireosInvoiceLinkView> {
+        return this.invoices.newswireosLink(opportunityId) as Promise<NewswireosInvoiceLinkView>;
+    }
+
     @Requires('invoice:verify')
     @HttpCode(200)
     @Post(':invoiceId/verify')

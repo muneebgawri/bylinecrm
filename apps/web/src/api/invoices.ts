@@ -6,6 +6,7 @@ import type {
     DealInvoiceView,
     NewswireosDealWonDeliveryView,
     NewswireosDealWonPreview,
+    NewswireosInvoiceLinkView,
     NewswireosOwnershipDeliveryView,
     NewswireosOwnershipPreview,
     NewswireosPaymentReviewView,
@@ -46,6 +47,15 @@ export const invoices = {
 };
 
 /** A deal's invoices; looked at again every few seconds while one is being verified. */
+/** INV-2: where this deal's invoice is raised in NewswireOS, so the paid invoice comes back naming the deal. */
+export const useNewswireosInvoiceLink = (workspaceId: string, dealId: string) =>
+    useQuery({
+        queryKey: [...keys.deal(workspaceId, dealId), 'newswireos-link'] as const,
+        queryFn: ({ signal }) =>
+            request<NewswireosInvoiceLinkView>('GET', `${base(workspaceId, dealId)}/newswireos-link`, { signal }),
+        staleTime: 60_000,
+    });
+
 export function useDealInvoices(workspaceId: string, dealId: string) {
     return useQuery({
         queryKey: keys.deal(workspaceId, dealId),

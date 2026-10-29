@@ -56,6 +56,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "newswireos_payments" TO bylinecrm_app;
 ALTER TABLE "newswireos_settings" ADD COLUMN "payment_mode" TEXT NOT NULL DEFAULT 'shadow';
 ALTER TABLE "newswireos_settings" ADD CONSTRAINT "newswireos_settings_payment_mode_check"
     CHECK ("payment_mode" IN ('off', 'shadow', 'on'));
+-- Where Account Managers raise an invoice for a deal: the NewswireOS dashboard's workspace address.
+ALTER TABLE "newswireos_settings" ADD COLUMN "dashboard_url" TEXT;
 
 -- ── Notifications ────────────────────────────────────────────────────────────────────────────────────────────────
 ALTER TYPE "notification_kind" ADD VALUE IF NOT EXISTS 'payment_needs_deal';

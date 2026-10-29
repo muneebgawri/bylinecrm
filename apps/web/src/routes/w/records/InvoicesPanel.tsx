@@ -11,10 +11,10 @@ import {
     SelectValue,
     toast,
 } from '@bylinecrm/ui';
-import { Plus } from 'lucide-react';
+import { ExternalLink, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
-import { useDealInvoices, useInvoiceAction } from '../../../api/invoices';
+import { useDealInvoices, useInvoiceAction, useNewswireosInvoiceLink } from '../../../api/invoices';
 import type { DealInvoiceView, OpportunityView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
@@ -91,6 +91,8 @@ export function InvoicesPanel({ workspaceId, deal }: { workspaceId: string; deal
     const list = useDealInvoices(workspaceId, deal.id);
     const edit = usePermission('deal:edit');
     const [adding, setAdding] = useState(false);
+    // INV-2: raised from here, the paid invoice comes back naming this deal and is put on it.
+    const raise = useNewswireosInvoiceLink(workspaceId, deal.id);
     return (
         <RailCard
             title="Invoices"
@@ -104,6 +106,17 @@ export function InvoicesPanel({ workspaceId, deal }: { workspaceId: string; deal
                 ) : undefined
             }
         >
+            {raise.data?.url && edit.allowed && (
+                <a
+                    href={raise.data.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mb-2 inline-flex items-center gap-1 text-xs text-text underline"
+                >
+                    Raise invoice in NewswireOS
+                    <ExternalLink aria-hidden className="size-3" />
+                </a>
+            )}
             {adding && <AddInvoice workspaceId={workspaceId} deal={deal} onDone={() => setAdding(false)} />}
             {list.isPending ? (
                 <RailLoading />

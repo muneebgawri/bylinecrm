@@ -180,6 +180,7 @@ export type DealInvoiceView = Schemas['DealInvoice'];
 export type CreateInvoiceInput = Loose<Schemas['CreateInvoiceDto']>;
 export type NewswireosSettingsView = Schemas['NewswireosSettings'];
 export type NewswireosPaymentView = Schemas['NewswireosPayment'];
+export type NewswireosInvoiceLinkView = Schemas['NewswireosInvoiceLink'];
 export type NewswireosPaymentReviewView = Schemas['NewswireosPaymentReview'];
 export type PutNewswireosSettingsInput = Loose<Schemas['PutNewswireosSettingsDto']>;
 export type NewswireosOwnershipDeliveryView = Schemas['NewswireosOwnershipDelivery'];

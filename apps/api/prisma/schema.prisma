@@ -3383,6 +3383,8 @@ model NewswireosSettings {
   pushDealWon         Boolean   @default(false) @map("push_deal_won")
   /// INV-2: what a reported paid invoice does — `off`, `shadow` (record which deal only), `on` (put it on the deal).
   paymentMode         String    @default("shadow") @map("payment_mode")
+  /// INV-2: the NewswireOS dashboard's workspace address (`https://…/{slug}`): "Raise invoice" links to a client there.
+  dashboardUrl        String?   @map("dashboard_url")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

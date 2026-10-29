@@ -66,6 +66,9 @@ export const newswireosSettingsView = named(
             description:
                 'PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default.',
         }),
+        dashboardUrl: z.string().nullable().meta({
+            description: 'INV-2: the NewswireOS dashboard’s workspace address, where “Raise invoice” opens a client.',
+        }),
         paymentMode: z.enum(NEWSWIREOS_PAYMENT_MODES).meta({
             description:
                 'INV-2: what a paid invoice NewswireOS reports does. `off`: the timeline only. `shadow` (the default): records which deal it would go on, does nothing. `on`: puts it on that deal (or a new one), so verification and the stage rule move the deal.',
@@ -254,3 +257,18 @@ export const newswireosPaymentReviewView = named(
 
 export type NewswireosPaymentView = z.output<typeof newswireosPaymentView>;
 export type NewswireosPaymentReviewView = z.output<typeof newswireosPaymentReviewView>;
+
+/** INV-2: where a deal's invoice is raised in NewswireOS. */
+export const newswireosInvoiceLinkView = named(
+    'NewswireosInvoiceLink',
+    z.object({
+        url: z.string().nullable().meta({
+            description: 'The client’s page on the NewswireOS dashboard, opening “Generate invoice” for this deal.',
+        }),
+        reason: z.enum(['NO_DASHBOARD_URL', 'NOT_A_CLIENT']).nullable().meta({
+            description:
+                'Why there is no link: the dashboard address is not set in Settings → NewswireOS, or the deal’s contact and company are not a NewswireOS client the CRM knows.',
+        }),
+    }),
+);
+export type NewswireosInvoiceLinkView = z.output<typeof newswireosInvoiceLinkView>;
