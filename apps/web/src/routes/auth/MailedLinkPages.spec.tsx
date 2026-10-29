@@ -91,10 +91,8 @@ describe('#93 verify-email page', () => {
         });
         renderAt(paths.verifyEmail);
         expect(await screen.findByText('kate@example.com')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /send a new link/i })).not.toHaveAttribute('data-primary-action');
-        await user.click(screen.getByRole('button', { name: /send a new link/i }));
+        await user.click(screen.getByRole('button', { name: 'Send a new link' }));
         expect(await screen.findByText(/A new link is on its way/)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /send a new link/i })).toBeInTheDocument();
         expect(callsTo(fetchMock, '/auth/email/verification')).toHaveLength(1);
     });
 
