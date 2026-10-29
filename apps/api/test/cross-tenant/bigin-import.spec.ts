@@ -1192,7 +1192,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             ids.caller = caller!.id;
             ids.phoneDeal = deal!.id;
 
-            const run = await runToEnd('full');
+            const run = await runToEnd('changes');
             expect(run.status, run.error ?? '').toBe('succeeded');
             expect(run.failedRecords, JSON.stringify(run.report.flatMap((r) => r.errors))).toBe(0);
 
@@ -1257,7 +1257,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 .patch(w(`/people/${personId}`))
                 .send({ custom: { description: 'Edited here' } });
             expect(edited.status, JSON.stringify(edited.body)).toBe(200);
-            const run = await runToEnd('full');
+            const run = await runToEnd('changes');
             expect(run.status).toBe('succeeded');
             const person = await owner.person.findUniqueOrThrow({ where: { id: personId } });
             expect(person.jobTitle).toBe('Editor');
@@ -1380,13 +1380,17 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
 
             // A status set here after Bigin last changed the task stays; Bigin's other changes apply.
             bigin.update('Tasks', task!.id, { Subject: 'Send the final draft' });
+            // Read again unchanged in Bigin: nothing to write.
+            bigin.update('Tasks', done!.id, {});
+            bigin.update('Events', event!.id, {});
+            bigin.update('Calls', call!.id, {});
             await new Promise((resolve) => setTimeout(resolve, 1100));
             const marked = await as(member)
                 .patch(w(`/tasks/${open.id}`))
                 .send({ status: 'done' });
             expect(marked.status, JSON.stringify(marked.body)).toBe(200);
 
-            const again = await runToEnd('full');
+            const again = await runToEnd('changes');
             expect(again.status).toBe('succeeded');
             expect(counts(reportOf(again, 'Tasks'))).toMatchObject({
                 created: 0,
