@@ -289,7 +289,7 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
         expect(row).toMatchObject({ decision: 'created_deal', targetType: 'person', targetId: client.person });
         const deal = await owner.opportunity.findUniqueOrThrow({ where: { id: row.opportunityId! } });
         expect(deal).toMatchObject({ companyId: client.company, pointOfContactId: client.person, ownerId: a.member });
-        expect(deal.name).toContain(number);
+        expect(deal.name).toBe('Fresh — NewswireOS payment');
         expect(await invoicesOn(deal.id)).toHaveLength(1);
         expect(await notificationsOf(a.member, 'payment_created_deal')).toEqual(
             expect.arrayContaining([expect.objectContaining({ newswireosPaymentId: row.id })]),

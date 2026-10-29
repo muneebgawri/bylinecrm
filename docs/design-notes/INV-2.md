@@ -16,7 +16,7 @@ ownership (OWN-2) and the Won announcement (`deal.won`) all work as they already
     2. `byline_opportunity_id` names a live deal (the invoice was raised from it) → `attached`, `matchedBy: deal_id`.
     3. The client (matched as the timeline matches: contact id, company id, email, domain) has exactly one open deal →
        `attached`, `matchedBy: only_open_deal`.
-    4. No open deal → `created_deal`: a deal is made for the payment (the record's company and contact, the record's
+    4. No open deal → `created_deal`: a deal ("<client> — NewswireOS payment") is made for the payment (the record's company and contact, the record's
        owner, the amount paid, lead source NewswireOS) and the invoice put on it; the stage rule then closes it Won, as
        any deal. The owner is told (`payment_created_deal`).
     5. Several open deals → `needs_deal`: nothing is attached; the owner is asked (`payment_needs_deal`) and chooses on

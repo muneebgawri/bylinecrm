@@ -41,7 +41,11 @@ export function PaymentPage() {
         <div className="flex flex-col gap-5 p-7">
             <PageHeader
                 title={`${p.clientName ?? 'A client'} paid ${p.invoiceNumber}`}
-                subtitle={[formatMoney(p.amount), p.paymentMethod, p.occurredAt ? formatWhen(p.occurredAt) : null]
+                subtitle={[
+                    formatMoney(p.amount),
+                    p.paymentMethod ? (METHOD_LABEL[p.paymentMethod] ?? p.paymentMethod) : null,
+                    p.occurredAt ? formatWhen(p.occurredAt) : null,
+                ]
                     .filter(Boolean)
                     .join(' · ')}
             />
@@ -115,6 +119,9 @@ export function PaymentPage() {
         </div>
     );
 }
+
+/** How NewswireOS names a payment method, as people say it. */
+const METHOD_LABEL: Record<string, string> = { stripe: 'Stripe', paypal: 'PayPal', wallet: 'Wallet', crypto: 'Crypto' };
 
 function onDealLine(p: NewswireosPaymentView): string {
     if (p.resolvedAt) return `Put on this deal by hand ${formatWhen(p.resolvedAt)}.`;

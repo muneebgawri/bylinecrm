@@ -258,9 +258,14 @@ export class NewswireosPaymentsService {
                 ? await tx.person.findUnique({ where: { id: target.id }, select: { id: true, companyId: true } })
                 : null;
         const companyId = target.type === 'company' ? target.id : (person?.companyId ?? null);
-        const client = delivery.client?.name ?? (await recordName(tx, target)) ?? 'NewswireOS client';
+        // Named as the CRM knows the client — their company, as deals are — else as NewswireOS names them.
+        const client =
+            (companyId ? await recordName(tx, { type: 'company', id: companyId }) : null) ??
+            delivery.client?.name ??
+            (await recordName(tx, target)) ??
+            'NewswireOS client';
         const created = await this.opportunities.createIn(tx, context, {
-            name: `${client} — ${invoiceNumber}`,
+            name: `${client} — NewswireOS payment`,
             ...(delivery.amount
                 ? { amount: { amountMinor: delivery.amount.amountMinor, currency: delivery.amount.currency } }
                 : {}),
