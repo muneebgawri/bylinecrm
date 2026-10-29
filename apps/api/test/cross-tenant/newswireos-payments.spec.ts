@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { createHmac, randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { getQueueToken } from '@nestjs/bullmq';
 import { Test } from '@nestjs/testing';
 import {
     CSRF_COOKIE,
@@ -16,13 +17,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
-import { NEWSWIREOS_SIGNATURE_HEADER } from '../../src/invoices/invoices.constants';
+import { INVOICE_VERIFY_QUEUE } from '../../src/invoices/invoices.constants';
 import { InvoicesService } from '../../src/invoices/invoices.service';
+import { InvoicesWorkers } from '../../src/invoices/invoices.workers';
 import { NEWSWIREOS_VERIFICATION_PORT } from '../../src/invoices/newswireos-verification.port';
 import type { NewswireosPaymentReviewView, NewswireosPaymentView } from '../../src/invoices/responses';
 import { StageRulesService } from '../../src/pipelines/stage-rules.service';
 import { FakeNewswireos } from '../support/fake-newswireos';
 import { verifyAddress } from '../support/mail';
+import { newswireosSignature } from '../support/newswireos-hook';
 
 type Who = { cookie: string; csrf: string };
 type Stage = { id: string; kind: 'open' | 'won' | 'lost' };
@@ -151,7 +154,7 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
             .set('content-type', 'application/json')
             .set('x-webhook-id', id)
             .set('x-webhook-event', 'invoice.paid')
-            .set(NEWSWIREOS_SIGNATURE_HEADER, `sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`)
+            .set(newswireosSignature(raw, secret))
             .send(raw)
             .expect(200);
     };
@@ -483,6 +486,41 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
             .send({ opportunityId: second })
             .expect(200);
         expect(await invoicesOn(second)).toHaveLength(1);
+    });
+
+    it('a delivery signed long ago (a replay), or with the body-only signature, is refused', async () => {
+        const raw = JSON.stringify({
+            id: `evt_${randomUUID()}`,
+            event_type: 'invoice.paid',
+            occurred_at: null,
+            data: {},
+        });
+        const post = (headers: Record<string, string>) =>
+            http().post(new URL(hookUrl).pathname).set('content-type', 'application/json').set(headers).send(raw);
+        const stale = (await post(newswireosSignature(raw, secret, new Date(Date.now() - 10 * 60_000))).expect(401))
+            .body as { message: string };
+        expect(stale.message).toMatch(/too long ago/);
+        await post(newswireosSignature(raw, secret, new Date(Date.now() + 10 * 60_000))).expect(401);
+        const bodyOnly = `sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`;
+        await post({ 'x-webhook-signature': bodyOnly }).expect(401);
+        await post(newswireosSignature(raw, secret)).expect(200);
+    });
+
+    it('a lost verification is re-queued by the sweep', async () => {
+        const client = await newClient('Lost');
+        const deal = await newDeal(client, 'Lost deal');
+        const number = invoiceNumber();
+        await paid(number, { email: client.email });
+        const [invoice] = await invoicesOn(deal);
+        expect(invoice!.status).toBe('verifying');
+        // As if its job never made it to Redis, and long enough ago to count as lost.
+        await app.get(getQueueToken(INVOICE_VERIFY_QUEUE)).remove(invoice!.id);
+        await owner.dealInvoice.update({
+            where: { id: invoice!.id },
+            data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+        });
+        expect(await app.get(InvoicesWorkers).sweep()).toBeGreaterThanOrEqual(1);
+        expect(await app.get(getQueueToken(INVOICE_VERIFY_QUEUE)).getJob(invoice!.id)).toBeTruthy();
     });
 
     it('cross-tenant: another workspace sees none of this workspace’s payments', async () => {

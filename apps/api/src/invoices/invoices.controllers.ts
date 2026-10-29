@@ -16,7 +16,12 @@ import {
     RejectInvoiceDto,
     VerifyInvoiceDto,
 } from './dto';
-import { NEWSWIREOS_HOOK_PATH, NEWSWIREOS_SIGNATURE_HEADER, NEWSWIREOS_WEBHOOK_ID_HEADER } from './invoices.constants';
+import {
+    NEWSWIREOS_HOOK_PATH,
+    NEWSWIREOS_TIMED_SIGNATURE_HEADER,
+    NEWSWIREOS_TIMESTAMP_HEADER,
+    NEWSWIREOS_WEBHOOK_ID_HEADER,
+} from './invoices.constants';
 import { InvoicesService } from './invoices.service';
 import { NewswireosHookService } from './newswireos-hook.service';
 import { NewswireosPaymentsService } from './newswireos-payments.service';
@@ -239,12 +244,13 @@ export class NewswireosHookController {
     @Returns(newswireosHookResult)
     receive(
         @Param('token') token: string,
-        @Headers(NEWSWIREOS_SIGNATURE_HEADER) signature: string | undefined,
+        @Headers(NEWSWIREOS_TIMESTAMP_HEADER) timestamp: string | undefined,
+        @Headers(NEWSWIREOS_TIMED_SIGNATURE_HEADER) signature: string | undefined,
         @Headers(NEWSWIREOS_WEBHOOK_ID_HEADER) webhookId: string | undefined,
         @Req() req: Request & RequestWithRawBody,
         @Body() body: unknown,
     ): Promise<NewswireosHookResult> {
-        return this.hook.receive(token, req.rawBody, signature, body, req.ip ?? '', webhookId);
+        return this.hook.receive(token, req.rawBody, { timestamp, value: signature }, body, req.ip ?? '', webhookId);
     }
 }
 

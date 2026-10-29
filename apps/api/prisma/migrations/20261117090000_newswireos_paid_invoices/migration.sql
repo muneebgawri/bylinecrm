@@ -73,3 +73,8 @@ ALTER TABLE "notifications" DROP CONSTRAINT "notifications_about_one_thing";
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_about_one_thing"
     CHECK (num_nonnulls("task_id", "transfer_id", "guardrail_event_id", "invoice_id", "cadence_lapse_id",
                         "newswireos_payment_id") = 1);
+
+-- ── Lost verifications ───────────────────────────────────────────────────────────────────────────────────────────
+-- The sweep that re-queues an invoice left `verifying` reads only those rows, oldest first: a small partial index,
+-- not a scan of every invoice. (Built on a table that is small today; CONCURRENTLY cannot run inside a migration.)
+CREATE INDEX "deal_invoices_verifying_updated_at_idx" ON "deal_invoices"("updated_at") WHERE "status" = 'verifying';

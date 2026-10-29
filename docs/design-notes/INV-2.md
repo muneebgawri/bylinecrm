@@ -69,5 +69,15 @@ Pressboard opens Generate invoice for that client and sends the deal id, so the 
 - **Nothing for nothing.** A payment of 0 moves no deal; with no amount reported no deal is created.
 - **Departed owners** are not notified; the reviewers are, as they are when there is no deal to offer.
 
-Known limits: a payment recorded in shadow is not acted on when the mode is later switched on; verification is queued
-after commit as for an entered invoice (a lost queue job leaves it `verifying` until "Check again").
+Known limit: a payment recorded in shadow is not acted on when the mode is later switched on.
+
+## Replays and lost verifications (2026-10-29)
+
+- **Replay protection.** NewswireOS signs every delivery with `x-webhook-timestamp` (Unix seconds) and
+  `x-webhook-signature-v2: sha256=HMAC(secret, "${timestamp}.${body}")`, fresh per attempt. The CRM's hook requires
+  both and refuses a delivery signed more than 5 minutes from now (`stale`), so one captured on the wire cannot be
+  posted again later; the body-only `x-webhook-signature` is no longer accepted alone. **NewswireOS #916 must be
+  deployed before this CRM release**, or the CRM refuses its deliveries (NewswireOS retries them, so none is lost).
+- **Lost verifications.** A sweep in the invoice worker re-queues every invoice still `verifying` 10 minutes after it
+  was last touched (500 a run, every 10 minutes, by a partial index on `verifying` rows). Jobs are keyed on the
+  invoice, so a live one is never doubled.

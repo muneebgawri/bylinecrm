@@ -13,6 +13,7 @@ import {
     NEWSWIREOS_HOOK_FAILURE_WINDOW_S,
     newswireosDeliveryKey,
     newswireosHookRateKey,
+    NEWSWIREOS_SIGNATURE_TOLERANCE_S,
 } from './invoices.constants';
 import { InvoicesService, type PaymentStateChange } from './invoices.service';
 import { NewswireosPaymentsService } from './newswireos-payments.service';
@@ -46,7 +47,7 @@ export class NewswireosHookService {
     async receive(
         token: string,
         rawBody: Buffer | undefined,
-        signature: string | undefined,
+        signature: { timestamp: string | undefined; value: string | undefined },
         body: unknown,
         clientIp: string,
         webhookId?: string,
@@ -64,10 +65,19 @@ export class NewswireosHookService {
             await this.record(workspaceId, 'no_secret');
             throw new ApiException(401, 'unauthorized', 'this hook’s secret has not been set in the CRM yet');
         }
-        if (!rawBody || !signed(rawBody, signature, this.secrets.open(settings.secretCiphertext))) {
-            await this.record(workspaceId, 'bad_signature');
+        const verdict = rawBody
+            ? signedAt(rawBody, signature.timestamp, signature.value, this.secrets.open(settings.secretCiphertext))
+            : 'bad_signature';
+        if (verdict !== 'signed') {
+            await this.record(workspaceId, verdict);
             await this.refused(clientIp);
-            throw new ApiException(401, 'unauthorized', 'the delivery is not signed with this hook’s secret');
+            throw new ApiException(
+                401,
+                'unauthorized',
+                verdict === 'stale'
+                    ? 'the delivery was signed too long ago: a replay, or a clock far off'
+                    : 'the delivery is not signed with this hook’s secret',
+            );
         }
         // PNW-766: client activity for the timeline, on the same hook and secret; de-duplicated on its stored row.
         const timeline = parseTimeline(body, webhookId);
@@ -115,6 +125,23 @@ export class NewswireosHookService {
             tx.newswireosSettings.updateMany({ data: { lastDeliveryAt: new Date(), lastDeliveryResult: result } }),
         );
     }
+}
+
+/**
+ * INV-2: whether a delivery is signed with `secret` and recently: `signature` is the hex HMAC-SHA256 of
+ * `${timestamp}.${raw}`, and `timestamp` (Unix seconds) is within the tolerance of `now`. Exported for the suite.
+ */
+export function signedAt(
+    raw: Buffer,
+    timestamp: string | undefined,
+    signature: string | undefined,
+    secret: string,
+    now: Date = new Date(),
+): 'signed' | 'stale' | 'bad_signature' {
+    if (!timestamp || !/^\d{1,12}$/.test(timestamp.trim())) return 'bad_signature';
+    if (!signed(Buffer.concat([Buffer.from(`${timestamp.trim()}.`), raw]), signature, secret)) return 'bad_signature';
+    const age = Math.abs(now.getTime() / 1000 - Number(timestamp.trim()));
+    return age <= NEWSWIREOS_SIGNATURE_TOLERANCE_S ? 'signed' : 'stale';
 }
 
 /** Whether `signature` is the hex HMAC-SHA256 of `raw` with `secret`. Exported for the suite. */
