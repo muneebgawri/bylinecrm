@@ -40,11 +40,14 @@ export function SettingsSaveBar({
     saving,
     onReset,
     saveLabel = 'Save changes',
+    extra,
 }: {
     dirty: boolean;
     saving: boolean;
     onReset?: () => void;
     saveLabel?: string;
+    /** A further action beside Save, such as "Unlink". */
+    extra?: ReactNode;
 }) {
     return (
         <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-border bg-surface/95 px-5 py-3.5 shadow-lg backdrop-blur-sm">
@@ -52,6 +55,7 @@ export function SettingsSaveBar({
                 {dirty ? 'You have unsaved changes.' : 'Everything is saved.'}
             </p>
             <div className="flex items-center gap-2">
+                {extra}
                 {onReset && (
                     <Button type="button" variant="secondary" size="sm" disabled={!dirty || saving} onClick={onReset}>
                         Reset

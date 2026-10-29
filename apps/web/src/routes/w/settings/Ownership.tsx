@@ -12,6 +12,7 @@ import type { OwnershipConflictView, OwnershipSettingsView } from '../../../api/
 import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { useWorkspaceId } from '../../params';
+import { SettingsSaveBar, SettingsSection } from './SettingsSection';
 import { paths } from '../../paths';
 import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
@@ -50,7 +51,7 @@ export function Ownership() {
     return (
         <section aria-labelledby={SETTINGS_SECTION_TITLE_ID}>
             <CoolingSettings />
-            <h3 className="m-0 mb-1 mt-6 text-sm font-semibold">Conflicts</h3>
+            <h3 className="m-0 mt-6 mb-2 text-base font-semibold">Conflicts</h3>
             <p className="m-0 mb-3 max-w-[65ch] text-[13px] text-text-muted">
                 A company’s owner owns its people and deals. These records are held by someone else — usually from
                 before the rule, an import, or a manager’s choice. Moving one hands it to the company’s owner, and both
@@ -178,8 +179,12 @@ function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
     };
 
     return (
-        <form onSubmit={submit} noValidate className="mb-2 flex items-end gap-3">
-            <fieldset className="m-0 border-0 p-0" disabled={!edit.allowed}>
+        <form onSubmit={submit} noValidate className="mb-2 flex flex-col gap-4">
+            <SettingsSection
+                title="Transfer cooling period"
+                description="How long a transferred record stays away from the member it left."
+                disabled={!edit.allowed}
+            >
                 <Field
                     label="Transfer cooling period (days)"
                     hint="After a transfer, the record cannot go back to the member it left for this many days. Managers and admins are exempt. 0 turns it off; the default is 14."
@@ -199,12 +204,8 @@ function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
                         className="max-w-[10rem]"
                     />
                 </Field>
-            </fieldset>
-            {edit.allowed && (
-                <Button type="submit" variant="primary" shape="square" loading={put.isPending} disabled={!dirty}>
-                    Save
-                </Button>
-            )}
+            </SettingsSection>
+            {edit.allowed && <SettingsSaveBar dirty={dirty} saving={put.isPending} saveLabel="Save" />}
         </form>
     );
 }
