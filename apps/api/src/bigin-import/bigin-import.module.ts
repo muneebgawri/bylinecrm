@@ -14,6 +14,7 @@ import { BiginImportService, biginHttp } from './bigin-import.service';
 import { BiginImportWorkers } from './bigin-import.workers';
 import { BiginSyncService } from './bigin-sync.service';
 import { BIGIN_PORT } from './bigin.port';
+import { BiginInventoryService } from './bigin-inventory';
 import { BiginImportRunner } from './import-runner';
 import { BiginReuseReconciler } from './reuse-reconciler';
 import { BiginStageApplier } from './stage-apply';
@@ -47,6 +48,7 @@ import { BiginStageMapService } from './stage-map.service';
     controllers: [BiginImportController],
     providers: [
         { provide: BIGIN_PORT, useFactory: biginHttp, inject: [ENV] },
+        BiginInventoryService,
         BiginImportRunner,
         BiginSyncService,
         BiginImportWorkers,

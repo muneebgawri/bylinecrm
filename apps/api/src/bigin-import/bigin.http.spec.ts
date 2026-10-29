@@ -145,4 +145,51 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
         expect(seen.length).toBeGreaterThan(0);
         expect(seen.every((i) => i.redirect === 'error')).toBe(true);
     });
+
+    it('BIGIN-1 inventory: lists the API-served modules and describes a module’s fields with its picklists', async () => {
+        const fetch = vi.fn((url: string) => {
+            if (url.endsWith('/oauth/v2/token'))
+                return Promise.resolve(json(200, { access_token: 't', expires_in: 3600 }));
+            if (url.includes('/settings/modules')) {
+                return Promise.resolve(
+                    json(200, {
+                        modules: [
+                            { api_name: 'Contacts', plural_label: 'Contacts', api_supported: true },
+                            { api_name: 'Tasks', module_name: 'Tasks' },
+                            { api_name: 'Home', plural_label: 'Home', api_supported: false },
+                            { plural_label: 'nameless' },
+                        ],
+                    }),
+                );
+            }
+            return Promise.resolve(
+                json(200, {
+                    fields: [
+                        {
+                            api_name: 'Pipeline',
+                            field_label: 'Pipeline',
+                            data_type: 'picklist',
+                            custom_field: false,
+                            pick_list_values: [
+                                { display_value: 'Sales', actual_value: 'Sales' },
+                                { display_value: 'Renewals' },
+                            ],
+                        },
+                        { api_name: 'PR_LINK', field_label: 'PR link', data_type: 'website', custom_field: true },
+                    ],
+                }),
+            );
+        });
+        const http = new BiginHttp({ sleep: () => Promise.resolve() }, { fetch });
+        expect(await http.modules(connection)).toEqual([
+            { apiName: 'Contacts', label: 'Contacts', apiSupported: true },
+            { apiName: 'Tasks', label: 'Tasks', apiSupported: true },
+            { apiName: 'Home', label: 'Home', apiSupported: false },
+        ]);
+        expect(await http.fieldDefinitions(connection, 'Deals')).toEqual([
+            { apiName: 'Pipeline', label: 'Pipeline', type: 'picklist', custom: false, values: ['Sales', 'Renewals'] },
+            { apiName: 'PR_LINK', label: 'PR link', type: 'website', custom: true, values: [] },
+        ]);
+        expect(fetch.mock.calls.some(([u]) => String(u).includes('/settings/fields?module=Deals'))).toBe(true);
+    });
 });

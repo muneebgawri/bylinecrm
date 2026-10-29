@@ -45,6 +45,24 @@ export interface BiginPage {
     nextPageToken?: string | null | undefined;
 }
 
+/** A module of the account, as `settings/modules` names it. */
+export interface BiginModule {
+    apiName: string;
+    label: string;
+    /** Whether the API reads it at all (Zoho lists some modules it does not serve). */
+    apiSupported: boolean;
+}
+
+/** A field of a module, as `settings/fields` describes it. */
+export interface BiginField {
+    apiName: string;
+    label: string;
+    type: string;
+    custom: boolean;
+    /** A picklist's values (Deals' `Stage`, `Pipeline`); empty for other fields. */
+    values: string[];
+}
+
 /** A record Bigin deleted: `/<Module>/deleted`. */
 export interface BiginDeleted {
     id: string;
@@ -65,8 +83,15 @@ export interface BiginApi {
         module: BiginImportObject,
         options: BiginListOptions,
     ): Promise<BiginDeletedPage>;
-    /** How many records the module holds; null when Bigin will not say. */
-    count(connection: BiginConnection, module: BiginImportObject): Promise<number | null>;
+    /**
+     * How many records the module holds; null when Bigin will not say. Any module by its API name — the importer's
+     * four, or (the inventory) one the importer does not read.
+     */
+    count(connection: BiginConnection, module: BiginImportObject | string): Promise<number | null>;
+    /** The account's modules (Zoho's `settings/modules`): what there is to import, by API name. */
+    modules(connection: BiginConnection): Promise<BiginModule[]>;
+    /** A module's fields (Zoho's `settings/fields`), with the values of each picklist. */
+    fieldDefinitions(connection: BiginConnection, module: string): Promise<BiginField[]>;
     /** The values of the Deals `Stage` picklist (Zoho's fields API), in Bigin's order; null when it has none. */
     dealStages(connection: BiginConnection): Promise<string[] | null>;
     /**
