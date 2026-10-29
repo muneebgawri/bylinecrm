@@ -93,6 +93,17 @@ export const BIGIN_MAPPED_FIELDS: Readonly<Record<string, readonly string[]>> = 
         'Owner',
     ],
 };
+/**
+ * Fields a module's list returns only when asked by name (production, 2026-10-29): Bigin's Tasks carry their
+ * record — answered as `Related_To` with `$related_module` — only when the request names `What_Id` (and the
+ * contact, `Who_Id`); a list without `fields` has no link at all, so a sampled page never shows them. These are
+ * always asked for, on v1 and v2 alike, ahead of what the sample has. A name here must be one of the module's
+ * fields: v2 refuses a field the module does not have. Events (`Related_To`) and Calls (`What_Id`, `Who_Id`)
+ * return their links unasked.
+ */
+export const BIGIN_REQUESTED_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    Tasks: ['What_Id', 'Who_Id'],
+};
 /** Zoho's token endpoint under the data centre's accounts host. */
 export const ZOHO_TOKEN_PATH = '/oauth/v2/token';
 export const BIGIN_HTTP_TIMEOUT_MS = 60_000;

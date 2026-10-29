@@ -90,6 +90,35 @@ describe('FR-CRMS-25 BIGIN-1 Bigin HTTP adapter', () => {
         expect(fields).not.toContain('Custom_59');
     });
 
+    it('BIGIN-1: a task’s record is answered only when named — v1 and v2 both ask for What_Id and Who_Id, which no sample shows', async () => {
+        const calls: string[] = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                calls.push(url);
+                if (url.endsWith('/oauth/v2/token'))
+                    return Promise.resolve(json(200, { access_token: 't1', expires_in: 3600 }));
+                return Promise.resolve(
+                    json(200, { data: [{ id: '1', Subject: 'Call back', Status: 'In Progress' }], info: {} }),
+                );
+            }),
+        );
+        const http = new BiginHttp({ sleep: () => Promise.resolve() }, { fetch: (u, i) => globalThis.fetch(u, i) });
+        await http.list(connection, 'Tasks', { since: null, page: 1 });
+        await http.list(connection, 'Tasks', { since: null, page: 11, byToken: true });
+        const named = (fragment: string) =>
+            new URL(calls.find((c) => c.includes(fragment) && c.includes('fields='))!).searchParams
+                .get('fields')!
+                .split(',');
+        for (const fields of [named('/bigin/v1/Tasks?'), named('/bigin/v2/Tasks?')]) {
+            expect(fields.slice(0, 5)).toEqual(['id', 'Modified_Time', 'Created_Time', 'What_Id', 'Who_Id']);
+            expect(fields).toEqual(expect.arrayContaining(['Subject', 'Status']));
+        }
+        // Every other module's v1 list names no fields: v1 answers them all.
+        await http.list(connection, 'Contacts', { since: null, page: 1 });
+        expect(calls.filter((c) => c.includes('/bigin/v1/Contacts?')).every((c) => !c.includes('fields='))).toBe(true);
+    });
+
     it('a 304 is an empty page; a 429 is retried; refused credentials are final and never carry a secret', async () => {
         const answers = [
             json(200, { access_token: 't1', expires_in: 3600 }),

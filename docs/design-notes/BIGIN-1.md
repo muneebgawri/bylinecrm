@@ -20,15 +20,22 @@ schedule, backoff and admin mail — so this note says only what differs. Read `
 | `Events`                            | Tasks titled `Meeting: <Event_Title>`, due at `Start_DateTime`, done (at `End_DateTime`) once it has ended; `Description` and `Venue` the body.                                                                                                                                                                                                                 |
 | `Calls`                             | Done tasks titled `Call: <Subject>`, due and done at `Call_Start_Time`; `Description`, `Call_Type`, `Call_Purpose`, `Call_Result`, `Call_Duration` the body.                                                                                                                                                                                                    |
 
-**Tasks, events and calls.** Each is a task on the records it is about: its related record (`What_Id`, an event's
-`Related_To`, in the module `$se_module` names — or, read through v2 without `$` fields, the lookup's own `module`,
-else every module, as notes are found) and its contact (`Who_Id`), resolved through the links. A task here is always
-on a record (the tasks API refuses one without), so one about no record here is _skipped_ with "its record is not in
-BylineCRM", in the report, as a note is — Bigin's sampled task had no related record, so expect many of the 749 to
-be skipped; they stay in Bigin. The owner is the assignee (matched by email as every owner is), set on create and on
-a task that has none, never changed. The #185 rule holds for tasks too: a field changed here (a status, a due date)
-after Bigin last modified the task keeps BylineCRM's value — a task's changes are on its records' timelines, linked
-to it, and `fieldsEditedAfter` reads those.
+**Tasks, events and calls.** Each is a task on the records it is about, resolved through the links (Contacts →
+person, Deals → opportunity, Accounts → company). A Bigin Task names its record only when the request asks for it
+(production, 2026-10-29): a list without `fields` has no link at all, and a list naming `What_Id` and `Who_Id`
+answers `Related_To: { id, name }` with `$related_module` ("Contacts" for 723 of 749, "Deals" for 4, none for 22).
+So the importer always names `What_Id` and `Who_Id` for Tasks — on v1 too, which otherwise lists every field
+unasked — ahead of what the sampled page shows (`BIGIN_REQUESTED_FIELDS`; a sample never shows them). Events
+answer `Related_To` and Calls `What_Id`/`Who_Id`/`$se_module` unasked. The mappers read `Related_To` in the module
+`$related_module` names, `What_Id` in the module `$se_module` names, or — read through v2 without `$` fields — the
+lookup's own `module`, else every module, as notes are found; and the contact, `Who_Id`. A task here is always on
+a record (the tasks API refuses one without), so a Bigin task whose record is not in BylineCRM, or that has none, is
+_skipped_ and listed in the run report ("its record is not in BylineCRM"), as a note is; it stays in Bigin. On
+production's data 459 of the 716 tasks that name a record resolve (456 to people, 3 to deals). The owner is the
+assignee (matched by email as every owner is), set on create and on a task that has none, never changed. The #185
+rule holds for tasks too: a field changed here (a status, a due date) after Bigin last modified the task keeps
+BylineCRM's value — a task's changes are on its records' timelines, linked to it, and `fieldsEditedAfter` reads
+those.
 
 **No notifications for imported tasks.** `TaskNotificationsService.assigned` tells nobody of a task whose event's
 actor is an import or a sync (the Bigin and Twenty importers run as `import`): being given hundreds of imported

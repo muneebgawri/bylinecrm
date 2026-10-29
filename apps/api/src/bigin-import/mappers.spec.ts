@@ -253,6 +253,28 @@ describe('FR-CRMS-25 BIGIN-1 Bigin mappers', () => {
             links,
         );
         expect(done).toMatchObject({ input: { status: 'done', completedAt: '2026-02-01T10:00:00-05:00' } });
+        // As Bigin answers a task asked for `What_Id` (production): `Related_To`, its module in `$related_module`.
+        expect(
+            mapTask(
+                {
+                    id: '24',
+                    Subject: 'Follow up',
+                    Related_To: { id: '3', name: 'Matt' },
+                    $related_module: 'Contacts',
+                    $se_module: null,
+                },
+                links,
+            ),
+        ).toMatchObject({ input: { targets: [{ type: 'person', id: 'Contacts:3' }] } });
+        expect(
+            mapTask({ id: '25', Subject: 'Deal', Related_To: { id: '5', name: 'D' }, $related_module: 'Deals' }, links),
+        ).toMatchObject({ input: { targets: [{ type: 'opportunity', id: 'Deals:5' }] } });
+        expect(
+            referencesOf('Tasks', { id: '24', Related_To: { id: '3', name: 'Matt' }, $related_module: 'Contacts' }),
+        ).toEqual([
+            { object: 'Tasks', id: '24' },
+            { object: 'Contacts', id: '3' },
+        ]);
         expect(taskStatusOf('Not Started')).toBe('todo');
         expect(taskStatusOf('In Progress')).toBe('in_progress');
         expect(taskStatusOf('Deferred')).toBe('todo');

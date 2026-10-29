@@ -14,6 +14,7 @@ import {
     BIGIN_REST_PATH_V2,
     BIGIN_FIELDS_MAX,
     BIGIN_MAPPED_FIELDS,
+    BIGIN_REQUESTED_FIELDS,
 } from './bigin-import.constants';
 import type {
     BiginApi,
@@ -108,6 +109,10 @@ export class BiginHttp implements BiginApi {
                 sort_by: 'Modified_Time',
                 sort_order: 'asc',
             });
+            // v1 lists every field unasked, except those that come only by name (a task's record): then
+            // the fields are named, as v2 names them.
+            if (BIGIN_REQUESTED_FIELDS[module])
+                params.set('fields', (await this.fieldsOf(connection, module)).join(','));
             const body = await this.get(connection, module, module, params, options.since);
             return {
                 records: (Array.isArray(body.data) ? body.data : []).filter(
@@ -139,7 +144,8 @@ export class BiginHttp implements BiginApi {
 
     /**
      * The fields v2 is asked for: every field a v1 page of the module carries (v1 returns them all, custom
-     * fields included), `id` and the timestamps first, at most `BIGIN_FIELDS_MAX`. Read once per module and
+     * fields included), `id` and the timestamps first, then the fields only answered when named
+     * (`BIGIN_REQUESTED_FIELDS`, which no sample shows), at most `BIGIN_FIELDS_MAX`. Read once per module and
      * connection.
      */
     private async fieldsOf(connection: BiginConnection, module: BiginImportObject): Promise<string[]> {
@@ -160,7 +166,12 @@ export class BiginHttp implements BiginApi {
         }
         // What the mappers read comes first: past the cap a field is not read, and a blank would be written.
         // Only what the sample has is asked (v2 refuses a field the module does not have).
-        const seen = new Set<string>(['id', 'Modified_Time', 'Created_Time']);
+        const seen = new Set<string>([
+            'id',
+            'Modified_Time',
+            'Created_Time',
+            ...(BIGIN_REQUESTED_FIELDS[module] ?? []),
+        ]);
         for (const name of BIGIN_MAPPED_FIELDS[module] ?? []) if (sampled.has(name)) seen.add(name);
         for (const name of sampled) seen.add(name);
         const fields = [...seen].slice(0, BIGIN_FIELDS_MAX);

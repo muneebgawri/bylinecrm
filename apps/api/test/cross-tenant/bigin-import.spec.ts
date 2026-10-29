@@ -1268,6 +1268,8 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
         });
 
         it('tasks, events and calls are tasks on their records, assigned by owner; none is told to its assignee; a second run changes nothing', async () => {
+            // As Bigin answers a task asked for `What_Id`/`Who_Id` (the fake leaves the links out unless asked):
+            // the record as `Related_To`, its module as `$related_module`, `$se_module` null.
             const [task, done, alone] = bigin.seed('Tasks', [
                 {
                     Subject: 'Send the draft',
@@ -1275,8 +1277,9 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                     Priority: 'High',
                     Due_Date: '2026-01-15',
                     Description: 'Before the embargo',
-                    $se_module: 'Deals',
-                    What_Id: { id: ids.phoneDeal, name: 'Phone Co release' },
+                    $se_module: null,
+                    Related_To: { id: ids.phoneDeal, name: 'Phone Co release' },
+                    $related_module: 'Deals',
                     Who_Id: { id: ids.caller },
                     Owner: ownerOf(memberEmail),
                 },
@@ -1284,8 +1287,9 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                     Subject: 'Confirm invoice',
                     Status: 'Completed',
                     Closed_Time: '2026-02-01T10:00:00+00:00',
-                    $se_module: 'Accounts',
-                    What_Id: { id: ids.phoneAccount },
+                    $se_module: null,
+                    Related_To: { id: ids.phoneAccount, name: 'Phone Co' },
+                    $related_module: 'Accounts',
                     Owner: ownerOf(memberEmail),
                 },
                 { Subject: 'On nothing', Status: 'Not Started', Owner: ownerOf(memberEmail) },

@@ -228,7 +228,9 @@ export class FakeBigin {
                       .filter((r) => after === null || new Date(r.Modified_Time).getTime() > after)
                       .sort((a, b) => a.Modified_Time.localeCompare(b.Modified_Time) || a.id.localeCompare(b.id));
         if (rows.length === 0 && after !== null) return { status: 304 };
-        const slice = rows.slice((page - 1) * perPage, page * perPage);
+        const slice = rows
+            .slice((page - 1) * perPage, page * perPage)
+            .map((row) => (module === 'Tasks' && !match[2] ? taskAsAsked(row, url.searchParams.get('fields')) : row));
         return {
             status: 200,
             body: {
@@ -245,4 +247,21 @@ export class FakeBigin {
             },
         };
     }
+}
+
+/**
+ * A task as Bigin lists it (production, 2026-10-29): its record (`Related_To`, `$related_module`) only when the
+ * request names `What_Id`, its contact (`Who_Id`) only when it names `Who_Id` — a list without `fields` has no
+ * link at all. Tasks are seeded in the shape Bigin answers when asked.
+ */
+function taskAsAsked(row: Record<string, unknown>, fields: string | null): Record<string, unknown> {
+    const named = new Set((fields ?? '').split(','));
+    const out = { ...row };
+    if (!named.has('What_Id')) {
+        delete out.Related_To;
+        delete out.$related_module;
+        delete out.What_Id;
+    }
+    if (!named.has('Who_Id')) delete out.Who_Id;
+    return out;
 }

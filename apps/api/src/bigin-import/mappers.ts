@@ -268,13 +268,13 @@ const TARGET_TYPE: Readonly<Record<BiginImportObject, RecordTarget['type'] | nul
 };
 
 /**
- * The modules a note's parent (or an activity's related record) may be in. `$se_module` says so on v1;
- * v2 (a pass paged by token) never returns `$` fields, so the lookup's own `module` is read, and without
- * either every module a record sits on is tried — Bigin's record ids are unique across modules, so at
- * most one resolves.
+ * The modules a note's parent (or an activity's related record) may be in. `$se_module` says so on v1 — a
+ * task's `Related_To` says it as `$related_module` — v2 (a pass paged by token) never returns `$` fields, so
+ * the lookup's own `module` is read, and without either every module a record sits on is tried — Bigin's
+ * record ids are unique across modules, so at most one resolves.
  */
 function parentModulesOf(record: BiginRecord, field = 'Parent_Id'): BiginImportObject[] {
-    const named = text(record.$se_module);
+    const named = (field === 'Related_To' ? text(record.$related_module) : null) ?? text(record.$se_module);
     if (named) return PARENT_MODULE[named] ? [PARENT_MODULE[named]] : [];
     const parent = record[field];
     const module = isObject(parent) ? parent.module : undefined;
@@ -312,12 +312,16 @@ export function mapNote(
 
 const SKIP_NO_RECORD = 'its record is not in BylineCRM';
 
-/** Bigin's lookups from an activity (a task, event or call) to its record: `What_Id`, or an event's `Related_To`. */
+/**
+ * Bigin's lookups from an activity (a task, event or call) to its record: `What_Id`, or `Related_To` — how a
+ * task answers the `What_Id` it was asked for (with `$related_module`), and how an event names its record.
+ */
 const RELATED_FIELDS = ['What_Id', 'Related_To'] as const;
 
 /**
- * The records a Bigin activity is about, as the links resolve them: its related record (`What_Id`, an
- * event's `Related_To`, in the module `$se_module` names) and its contact (`Who_Id`). None when none is here.
+ * The records a Bigin activity is about, as the links resolve them: its related record (`Related_To` in the
+ * module `$related_module` names, or `What_Id` in the module `$se_module` names) and its contact (`Who_Id`).
+ * None when none is here.
  */
 function activityTargets(record: BiginRecord, links: BiginLinkIndex): RecordTarget[] {
     const targets: RecordTarget[] = [];
