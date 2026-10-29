@@ -147,3 +147,93 @@ export function wonByOwner(
     }
     return [...map.values()].sort((a, b) => b.won - a.won || b.amountMinor - a.amountMinor);
 }
+
+// ---- The period the reports read ---------------------------------------------------------------
+
+export interface DateRange {
+    /** Inclusive start, at the start of its day. */
+    from: Date;
+    /** Exclusive end, at the start of the day after the last one. */
+    to: Date;
+}
+
+export const RANGE_PRESETS = [
+    { id: 'this_month', label: 'This month' },
+    { id: 'last_month', label: 'Last month' },
+    { id: 'this_quarter', label: 'This quarter' },
+    { id: 'last_90', label: 'Last 90 days' },
+    { id: 'this_year', label: 'This year' },
+    { id: 'last_12', label: 'Last 12 months' },
+] as const;
+export type RangePreset = (typeof RANGE_PRESETS)[number]['id'];
+
+/** A preset's bounds on the reader's calendar. */
+export function presetRange(preset: RangePreset, now = new Date()): DateRange {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    switch (preset) {
+        case 'this_month':
+            return { from: new Date(y, m, 1), to: new Date(y, m + 1, 1) };
+        case 'last_month':
+            return { from: new Date(y, m - 1, 1), to: new Date(y, m, 1) };
+        case 'this_quarter': {
+            const q = Math.floor(m / 3) * 3;
+            return { from: new Date(y, q, 1), to: new Date(y, q + 3, 1) };
+        }
+        case 'last_90':
+            return { from: new Date(y, m, now.getDate() - 89), to: new Date(y, m, now.getDate() + 1) };
+        case 'this_year':
+            return { from: new Date(y, 0, 1), to: new Date(y + 1, 0, 1) };
+        case 'last_12':
+            return { from: new Date(y, m - 11, 1), to: new Date(y, m + 1, 1) };
+    }
+}
+
+/**
+ * What a change is measured against: the same months before a range of whole months (so October is
+ * set against September, not against the 31 days before it), else the same length of time ending
+ * where this one starts.
+ */
+export function previousRange(range: DateRange): DateRange {
+    const wholeMonths = range.from.getDate() === 1 && range.to.getDate() === 1;
+    if (wholeMonths) {
+        const months =
+            (range.to.getFullYear() - range.from.getFullYear()) * 12 + (range.to.getMonth() - range.from.getMonth());
+        return { from: new Date(range.from.getFullYear(), range.from.getMonth() - months, 1), to: range.from };
+    }
+    const length = range.to.getTime() - range.from.getTime();
+    return { from: new Date(range.from.getTime() - length), to: range.from };
+}
+
+/** The calendar months a range touches, oldest first, capped so a long range stays readable. */
+export function monthsIn(range: DateRange, cap = 24): { key: string; label: string }[] {
+    const out: { key: string; label: string }[] = [];
+    const last = new Date(range.to.getTime() - 1);
+    const acrossYears = last.getFullYear() !== range.from.getFullYear();
+    for (let d = new Date(range.from.getFullYear(), range.from.getMonth(), 1); d <= last && out.length < cap;) {
+        out.push({
+            key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+            label: d.toLocaleString(undefined, { month: 'short', ...(acrossYears ? { year: '2-digit' } : {}) }),
+        });
+        d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    return out;
+}
+
+/** "Jun 1 – Jun 30, 2026" */
+export function rangeLabel(range: DateRange): string {
+    const last = new Date(range.to.getTime() - 1);
+    const sameYear = range.from.getFullYear() === last.getFullYear();
+    const a = range.from.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        ...(sameYear ? {} : { year: 'numeric' }),
+    });
+    const b = last.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${a} – ${b}`;
+}
+
+/** `YYYY-MM-DD` for a date input, on the reader's calendar. */
+export function toDateInput(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

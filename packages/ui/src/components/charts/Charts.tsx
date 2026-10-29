@@ -178,7 +178,7 @@ export function StackedBarChart({ data, series, format, label, className }: Stac
             >
                 <div className="flex flex-col justify-between pb-6 text-right tabular-nums">
                     {[4, 3, 2, 1, 0].map((i) => (
-                        <span key={i}>{format(Math.round((max * i) / 4))}</span>
+                        <span key={i}>{Number.isInteger((max * i) / 4) ? format((max * i) / 4) : ''}</span>
                     ))}
                 </div>
                 <div className="relative">
@@ -209,7 +209,7 @@ export function StackedBarChart({ data, series, format, label, className }: Stac
                                             style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? 3 : 0 }}
                                         />
                                     ))}
-                                    <span className="absolute top-full mt-1.5 w-full truncate text-center text-[11px] text-text-muted">
+                                    <span className="absolute top-full left-1/2 mt-1.5 -translate-x-1/2 text-[11px] whitespace-nowrap text-text-muted">
                                         {d.label}
                                     </span>
                                     {active === i && (

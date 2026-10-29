@@ -119,11 +119,11 @@ const PERSON_COLUMNS: ListColumn<PersonView>[] = [
     {
         field: 'contactStatus',
         label: labelOf('person', 'contactStatus'),
-        width: 170,
+        width: 120,
         exportFields: ['contactStatus'],
         cell: (r) => (
             <span className="inline-flex flex-wrap items-center gap-1">
-                <Badge dot shape="pill" status={CONTACT_STATUS_TONE[r.contactStatus]}>
+                <Badge shape="pill" status={CONTACT_STATUS_TONE[r.contactStatus]}>
                     {CONTACT_STATUS_LABELS[r.contactStatus]}
                 </Badge>
                 {r.cadenceOverdue && <Badge status="danger">Overdue</Badge>}

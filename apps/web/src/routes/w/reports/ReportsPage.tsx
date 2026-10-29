@@ -51,10 +51,8 @@ import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { STAGE_TONES } from '../deals/dealsView';
-import { periodBounds } from '../team/TeamPage';
 import {
     atRisk,
-    averageCycleDays,
     averageDaysInStage,
     boardCurrency,
     byMonth,
@@ -62,8 +60,6 @@ import {
     count,
     deals,
     forecast,
-    lastMonths,
-    lost,
     open,
     percentChange,
     probabilityOf,
@@ -71,7 +67,12 @@ import {
     winRate,
     won,
     wonByOwner,
+    monthsIn,
+    rangeLabel,
+    type DateRange,
 } from './reportsData';
+import { RangePicker, rangeOf, type RangeChoice } from './RangePicker';
+import { amountMinor, cycleDays, usePeriodComparison } from './reportsPeriod';
 
 const compact = (currency: string) => (amountMinor: number) => formatMoneyCompact({ amountMinor, currency });
 
@@ -86,19 +87,26 @@ export function ReportsPage() {
     const data = board.data;
     const currency = boardCurrency(data);
     const money = compact(currency);
-    const months = useMemo(() => lastMonths(9), []);
-    const wonDeals = deals(won(data));
-    const lostDeals = deals(lost(data));
+    // The period: a preset or two dates; every time-based figure reads it, against the period before.
+    const [choice, setChoice] = useState<RangeChoice>({ preset: 'this_month' });
+    const range = useMemo(() => rangeOf(choice), [choice]);
+    const months = useMemo(() => monthsIn(range), [range]);
+    const period = usePeriodComparison(workspaceId, range, data);
+    const wonDeals = period.now.won;
+    const lostDeals = period.now.lost;
     const wonMonthly = byMonth(wonDeals, (d) => d.closedAt, months, currency);
     const lostMonthly = byMonth(lostDeals, (d) => d.closedAt, months, currency);
-    const newMonthly = byMonth(deals(data?.columns ?? []), (d) => d.createdAt, months, currency);
-    const last = months.length - 1;
-    const revenueChange = percentChange(wonMonthly.amounts[last - 1] ?? 0, wonMonthly.amounts[last] ?? 0);
-    const wonChange = percentChange(wonMonthly.counts[last - 1] ?? 0, wonMonthly.counts[last] ?? 0);
-    const newChange = percentChange(newMonthly.counts[last - 1] ?? 0, newMonthly.counts[last] ?? 0);
+    const newMonthly = byMonth(period.now.created, (d) => d.createdAt, months, currency);
+    const revenue = amountMinor(wonDeals, currency);
+    const revenueChange = percentChange(amountMinor(period.before.won, currency), revenue);
+    const wonChange = percentChange(period.before.won.length, wonDeals.length);
+    const newChange = percentChange(period.before.created.length, period.now.created.length);
+    const closedCount = wonDeals.length + lostDeals.length;
+    const rate = closedCount === 0 ? null : Math.round((wonDeals.length / closedCount) * 100);
+    const cycle = cycleDays([...wonDeals, ...lostDeals]);
+    const ready = !period.now.pending;
     const risky = atRisk(data);
-    const rate = winRate(data);
-    const cycle = averageCycleDays(data);
+    const inPeriod = `in ${rangeLabel(range)}${period.now.truncated ? ' (first 200 deals)' : ''}`;
 
     return (
         <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -113,14 +121,17 @@ export function ReportsPage() {
                 }
                 subtitle="Monitor sales performance, pipeline health and team results."
                 actions={
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={board.isFetching}
-                        onClick={() => void board.refetch()}
-                    >
-                        <RefreshCw aria-hidden /> Refresh
-                    </Button>
+                    <>
+                        <RangePicker value={choice} onChange={setChoice} />
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={board.isFetching}
+                            onClick={() => void board.refetch()}
+                        >
+                            <RefreshCw aria-hidden /> Refresh
+                        </Button>
+                    </>
                 }
             >
                 {board.dataUpdatedAt > 0 && (
@@ -138,36 +149,33 @@ export function ReportsPage() {
                     className="col-span-12 md:col-span-6 xl:col-span-3"
                     icon={<CircleDollarSign />}
                     tone="success"
-                    label="Total revenue"
-                    value={data ? money(sumOf(won(data), currency).amountMinor) : null}
+                    label="Won revenue"
+                    value={ready ? money(revenue) : null}
                     change={revenueChange}
                     spark={
                         <Sparkline values={wonMonthly.amounts} label="Won revenue by month" className={CHART_TEXT[2]} />
                     }
                     rows={[
-                        ['Deals won', count(won(data)).toLocaleString()],
-                        [
-                            'Average deal',
-                            wonDeals.length
-                                ? money(sumOf(won(data), currency).amountMinor / Math.max(count(won(data)), 1))
-                                : '—',
-                        ],
+                        ['Deals won', wonDeals.length.toLocaleString()],
+                        ['Average deal', wonDeals.length ? money(revenue / wonDeals.length) : '—'],
                     ]}
+                    footnote={inPeriod}
                 />
                 <ReportKpi
                     className="col-span-12 md:col-span-6 xl:col-span-3"
                     icon={<Handshake />}
                     tone="info"
                     label="Deals won"
-                    value={data ? count(won(data)).toLocaleString() : null}
+                    value={ready ? wonDeals.length.toLocaleString() : null}
                     change={wonChange}
                     spark={
                         <Sparkline values={wonMonthly.counts} label="Deals won by month" className={CHART_TEXT[0]} />
                     }
                     rows={[
-                        ['This month', (wonMonthly.counts[last] ?? 0).toLocaleString()],
+                        ['Deals lost', lostDeals.length.toLocaleString()],
                         ['Win rate', rate === null ? '—' : `${rate}%`],
                     ]}
+                    footnote={inPeriod}
                 />
                 <PipelineHealthCard className="col-span-12 xl:col-span-6" money={money} currency={currency} />
             </div>
@@ -178,12 +186,12 @@ export function ReportsPage() {
                     icon={<UserPlus />}
                     tone="info"
                     label="New deals"
-                    value={data ? (newMonthly.counts[last] ?? 0).toLocaleString() : null}
+                    value={ready ? period.now.created.length.toLocaleString() : null}
                     change={newChange}
                     spark={
                         <Sparkline values={newMonthly.counts} label="New deals by month" className={CHART_TEXT[0]} />
                     }
-                    footnote="created this month, from the deals on the board"
+                    footnote={`created ${inPeriod}`}
                 />
                 <ReportKpi
                     className="col-span-12 md:col-span-6 xl:col-span-3"
@@ -198,10 +206,14 @@ export function ReportsPage() {
                     icon={<Timer />}
                     tone="accent"
                     label="Average sales cycle"
-                    value={data ? (cycle === null ? '—' : `${cycle} ${cycle === 1 ? 'day' : 'days'}`) : null}
-                    footnote="from creation to close, over the deals closed"
+                    value={ready ? (cycle === null ? '—' : `${cycle} ${cycle === 1 ? 'day' : 'days'}`) : null}
+                    footnote={`from creation to close, over the deals closed ${inPeriod}`}
                 />
-                <MeetingsKpi workspaceId={workspaceId} className="col-span-12 md:col-span-6 xl:col-span-3" />
+                <MeetingsKpi
+                    workspaceId={workspaceId}
+                    range={range}
+                    className="col-span-12 md:col-span-6 xl:col-span-3"
+                />
             </div>
 
             <div className="grid grid-cols-12 gap-4">
@@ -273,7 +285,9 @@ export function ReportsPage() {
                     <CardHeader className="flex flex-row items-start justify-between">
                         <div>
                             <CardTitle className="text-base">Won vs lost</CardTitle>
-                            <p className="m-0 mt-1 text-sm text-text-muted">Deal outcomes by month they closed</p>
+                            <p className="m-0 mt-1 text-sm text-text-muted">
+                                Deal outcomes by the month they closed, {rangeLabel(range)}
+                            </p>
                         </div>
                         <div className="text-right">
                             <div className="text-2xl font-semibold tracking-tight tabular-nums">
@@ -284,11 +298,11 @@ export function ReportsPage() {
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">
                         <div className="grid grid-cols-3 divide-x divide-border rounded-lg border border-border">
-                            <Stat dot={CHART_BGS[2]} label="Won" value={count(won(data)).toLocaleString()} />
-                            <Stat dot={CHART_BGS[4]} label="Lost" value={count(lost(data)).toLocaleString()} />
+                            <Stat dot={CHART_BGS[2]} label="Won" value={wonDeals.length.toLocaleString()} />
+                            <Stat dot={CHART_BGS[4]} label="Lost" value={lostDeals.length.toLocaleString()} />
                             <Stat label="Best month" value={bestMonth(months, wonMonthly.counts)} />
                         </div>
-                        {!data ? (
+                        {!ready ? (
                             <Skeleton className="h-52" />
                         ) : (
                             <StackedBarChart
@@ -515,8 +529,8 @@ function ReportKpi({
 }
 
 /** Meetings held this month, from the team's meeting KPIs. */
-function MeetingsKpi({ workspaceId, className }: { workspaceId: string; className?: string }) {
-    const bounds = useMemo(() => periodBounds('month'), []);
+function MeetingsKpi({ workspaceId, range, className }: { workspaceId: string; range: DateRange; className?: string }) {
+    const bounds = useMemo(() => ({ from: range.from.toISOString(), to: range.to.toISOString() }), [range]);
     const kpis = useMeetingKpis(workspaceId, bounds);
     const rows = kpis.data?.rows ?? [];
     const held = rows.reduce((n, r) => n + r.held, 0);
@@ -528,7 +542,7 @@ function MeetingsKpi({ workspaceId, className }: { workspaceId: string; classNam
             tone="danger"
             label="Meetings held"
             value={kpis.data ? held.toLocaleString() : kpis.isError ? '—' : null}
-            footnote={kpis.data ? `${booked.toLocaleString()} booked this month` : 'this month'}
+            footnote={kpis.data ? `${booked.toLocaleString()} booked in ${rangeLabel(range)}` : rangeLabel(range)}
         />
     );
 }
