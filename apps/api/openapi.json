@@ -14363,6 +14363,149 @@
                 "tags": ["invoices"]
             }
         },
+        "/api/w/{workspaceId}/integrations/newswireos/payment-mode": {
+            "put": {
+                "operationId": "newswireosSettings_putPaymentMode",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PutPaymentModeDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosSettings"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/integrations/newswireos/payments": {
+            "get": {
+                "operationId": "newswireosSettings_payments",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/NewswireosPaymentReview"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
         "/api/w/{workspaceId}/integrations/newswireos/deal-won-push": {
             "put": {
                 "operationId": "newswireosSettings_putDealWonPush",
@@ -14591,6 +14734,162 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/NewswireosHookResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/newswireos-payments/{paymentId}": {
+            "get": {
+                "operationId": "newswireosPayments_get",
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosPayment"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["invoices"]
+            }
+        },
+        "/api/w/{workspaceId}/newswireos-payments/{paymentId}/choose": {
+            "post": {
+                "operationId": "newswireosPayments_choose",
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChoosePaymentDealDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NewswireosPayment"
                                 }
                             }
                         },
@@ -29656,6 +29955,17 @@
                 },
                 "required": ["enabled"]
             },
+            "PutPaymentModeDto": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["off", "shadow", "on"],
+                        "description": "`off`, `shadow` (record which deal only) or `on` (put each paid invoice on its deal)."
+                    }
+                },
+                "required": ["mode"]
+            },
             "PutDealWonPushDto": {
                 "type": "object",
                 "properties": {
@@ -29665,6 +29975,17 @@
                     }
                 },
                 "required": ["enabled"]
+            },
+            "ChoosePaymentDealDto": {
+                "type": "object",
+                "properties": {
+                    "opportunityId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                },
+                "required": ["opportunityId"]
             },
             "PutBylineSettingsDto": {
                 "type": "object",
@@ -37490,6 +37811,11 @@
                         "type": "boolean",
                         "description": "PNW-765: whether completed ownership transfers are pushed to NewswireOS (the token needs `crm:ownership_write`). Off by default."
                     },
+                    "paymentMode": {
+                        "type": "string",
+                        "enum": ["off", "shadow", "on"],
+                        "description": "INV-2: what a paid invoice NewswireOS reports does. `off`: the timeline only. `shadow` (the default): records which deal it would go on, does nothing. `on`: puts it on that deal (or a new one), so verification and the stage rule move the deal."
+                    },
                     "pushDealWon": {
                         "type": "boolean",
                         "description": "PNW-766: whether won deals are pushed to NewswireOS, which makes their contacts clients (the token needs `crm:client_write`). Off by default."
@@ -37503,6 +37829,7 @@
                     "lastDeliveryAt",
                     "lastDeliveryResult",
                     "pushOwnership",
+                    "paymentMode",
                     "pushDealWon"
                 ]
             },
@@ -37933,6 +38260,265 @@
                     }
                 },
                 "required": ["result"]
+            },
+            "NewswireosPayment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "invoiceNumber": {
+                        "type": "string"
+                    },
+                    "paymentMethod": {
+                        "nullable": true,
+                        "description": "How the client paid, as NewswireOS names it.",
+                        "type": "string"
+                    },
+                    "amount": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                            "amountMinor": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "currency": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["amountMinor", "currency"]
+                    },
+                    "clientName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "clientEmail": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["off", "shadow", "on"],
+                        "description": "The mode it was decided in; `shadow` acted on nothing."
+                    },
+                    "decision": {
+                        "type": "string",
+                        "enum": ["already_on_deal", "attached", "created_deal", "needs_deal", "unmatched"]
+                    },
+                    "matchedBy": {
+                        "nullable": true,
+                        "type": "string",
+                        "enum": ["deal_id", "only_open_deal"]
+                    },
+                    "opportunityId": {
+                        "nullable": true,
+                        "description": "The deal it went on, or would have; null until chosen.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "opportunityName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "candidates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "name": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["id", "name"]
+                        },
+                        "description": "For `needs_deal`: the client’s open deals to choose from."
+                    },
+                    "resolvedAt": {
+                        "nullable": true,
+                        "description": "When a person chose the deal.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "occurredAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                },
+                "required": [
+                    "id",
+                    "invoiceNumber",
+                    "paymentMethod",
+                    "amount",
+                    "clientName",
+                    "clientEmail",
+                    "mode",
+                    "decision",
+                    "matchedBy",
+                    "opportunityId",
+                    "opportunityName",
+                    "candidates",
+                    "resolvedAt",
+                    "occurredAt",
+                    "createdAt"
+                ]
+            },
+            "NewswireosPaymentReview": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "invoiceNumber": {
+                        "type": "string"
+                    },
+                    "paymentMethod": {
+                        "nullable": true,
+                        "description": "How the client paid, as NewswireOS names it.",
+                        "type": "string"
+                    },
+                    "amount": {
+                        "nullable": true,
+                        "type": "object",
+                        "properties": {
+                            "amountMinor": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "currency": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["amountMinor", "currency"]
+                    },
+                    "clientName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "clientEmail": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["off", "shadow", "on"],
+                        "description": "The mode it was decided in; `shadow` acted on nothing."
+                    },
+                    "decision": {
+                        "type": "string",
+                        "enum": ["already_on_deal", "attached", "created_deal", "needs_deal", "unmatched"]
+                    },
+                    "matchedBy": {
+                        "nullable": true,
+                        "type": "string",
+                        "enum": ["deal_id", "only_open_deal"]
+                    },
+                    "opportunityId": {
+                        "nullable": true,
+                        "description": "The deal it went on, or would have; null until chosen.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "opportunityName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "candidates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "name": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["id", "name"]
+                        },
+                        "description": "For `needs_deal`: the client’s open deals to choose from."
+                    },
+                    "resolvedAt": {
+                        "nullable": true,
+                        "description": "When a person chose the deal.",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "occurredAt": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "enteredOnOpportunityId": {
+                        "nullable": true,
+                        "description": "The deal an Account Manager entered this invoice on by hand; null when none has.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "agrees": {
+                        "nullable": true,
+                        "description": "Whether that is the deal the CRM chose; null until someone has entered it.",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id",
+                    "invoiceNumber",
+                    "paymentMethod",
+                    "amount",
+                    "clientName",
+                    "clientEmail",
+                    "mode",
+                    "decision",
+                    "matchedBy",
+                    "opportunityId",
+                    "opportunityName",
+                    "candidates",
+                    "resolvedAt",
+                    "occurredAt",
+                    "createdAt",
+                    "enteredOnOpportunityId",
+                    "agrees"
+                ]
             },
             "HealthStatus": {
                 "type": "object",
@@ -39669,16 +40255,19 @@
                                         "invoice_coverage_lost",
                                         "guardrail_poach_suspected",
                                         "cadence_warning",
-                                        "cadence_rotated"
+                                        "cadence_rotated",
+                                        "payment_needs_deal",
+                                        "payment_created_deal",
+                                        "payment_unmatched"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`)."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM."
                                 },
                                 "target": {
                                     "type": "object",
                                     "properties": {
                                         "type": {
                                             "type": "string",
-                                            "enum": ["task", "transfer", "guardrail", "invoice", "cadence"]
+                                            "enum": ["task", "transfer", "guardrail", "invoice", "cadence", "payment"]
                                         },
                                         "id": {
                                             "type": "string",
@@ -39958,6 +40547,60 @@
                                         "reasonCode"
                                     ]
                                 },
+                                "payment": {
+                                    "nullable": true,
+                                    "description": "For a `payment_*` kind (INV-2): the paid invoice NewswireOS reported, and the deal it is on (null until chosen).",
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "invoiceNumber": {
+                                            "type": "string"
+                                        },
+                                        "clientName": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        },
+                                        "amount": {
+                                            "nullable": true,
+                                            "type": "object",
+                                            "properties": {
+                                                "amountMinor": {
+                                                    "type": "integer",
+                                                    "minimum": -9007199254740991,
+                                                    "maximum": 9007199254740991
+                                                },
+                                                "currency": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": ["amountMinor", "currency"]
+                                        },
+                                        "opportunityId": {
+                                            "nullable": true,
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "opportunityName": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "id",
+                                        "invoiceNumber",
+                                        "clientName",
+                                        "amount",
+                                        "opportunityId",
+                                        "opportunityName"
+                                    ]
+                                },
                                 "cadence": {
                                     "nullable": true,
                                     "description": "For `cadence_warning` (CADENCE-1): the lapsed deal, and when it rotates.",
@@ -40021,6 +40664,7 @@
                                 "transfer",
                                 "guardrail",
                                 "invoice",
+                                "payment",
                                 "cadence",
                                 "createdAt",
                                 "readAt"

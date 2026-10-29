@@ -1,4 +1,9 @@
-import { INVOICE_GATEWAYS, INVOICE_REASON_MAX, INVOICE_REFERENCE_MAX } from '@bylinecrm/shared';
+import {
+    INVOICE_GATEWAYS,
+    INVOICE_REASON_MAX,
+    INVOICE_REFERENCE_MAX,
+    NEWSWIREOS_PAYMENT_MODES,
+} from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import {
@@ -73,3 +78,15 @@ export class PutDealWonPushDto extends createZodDto(
         }),
     }),
 ) {}
+
+/** `PUT /integrations/newswireos/payment-mode` (INV-2). */
+export class PutPaymentModeDto extends createZodDto(
+    z.object({
+        mode: z.enum(NEWSWIREOS_PAYMENT_MODES).meta({
+            description: '`off`, `shadow` (record which deal only) or `on` (put each paid invoice on its deal).',
+        }),
+    }),
+) {}
+
+/** `POST /newswireos-payments/:id/choose` (INV-2): the deal a payment the CRM would not guess goes on. */
+export class ChoosePaymentDealDto extends createZodDto(z.object({ opportunityId: z.uuid() })) {}

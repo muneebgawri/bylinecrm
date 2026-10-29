@@ -631,6 +631,7 @@ export const notificationsInbox: NotificationsView = {
             guardrail: null,
             invoice: null,
             cadence: null,
+            payment: null,
             createdAt: at(1),
             readAt: null,
             task: {
@@ -648,6 +649,7 @@ export const notificationsInbox: NotificationsView = {
             guardrail: null,
             invoice: null,
             cadence: null,
+            payment: null,
             createdAt: at(26),
             readAt: at(25),
             task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },
@@ -1980,6 +1982,7 @@ export const newswireosSettings: NewswireosSettingsView = {
     lastDeliveryResult: 'applied',
     pushOwnership: true,
     pushDealWon: true,
+    paymentMode: 'shadow',
 };
 
 /** PNW-765: ownership changes pushed to NewswireOS: one matched, one waiting for NewswireOS's route. */

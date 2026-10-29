@@ -15,6 +15,7 @@ import {
     newswireosHookRateKey,
 } from './invoices.constants';
 import { InvoicesService, type PaymentStateChange } from './invoices.service';
+import { NewswireosPaymentsService } from './newswireos-payments.service';
 import { NewswireosTimelineService, parseTimeline } from './newswireos-timeline.service';
 import type { NewswireosHookResult } from './responses';
 
@@ -39,6 +40,7 @@ export class NewswireosHookService {
         private readonly limiter: RateLimiter,
         private readonly redis: RedisService,
         private readonly timeline: NewswireosTimelineService,
+        private readonly payments: NewswireosPaymentsService,
     ) {}
 
     async receive(
@@ -71,6 +73,9 @@ export class NewswireosHookService {
         const timeline = parseTimeline(body, webhookId);
         if (timeline !== null) {
             const result = timeline === 'ignored' ? timeline : await this.timeline.apply(workspaceId, timeline);
+            // INV-2: a paid invoice also goes on its deal. Asked on a redelivery too: it is idempotent on the
+            // invoice number, so a payment a failed delivery left undone is done when NewswireOS retries.
+            if (timeline !== 'ignored') await this.payments.received(workspaceId, timeline);
             await this.record(workspaceId, result);
             return { result };
         }

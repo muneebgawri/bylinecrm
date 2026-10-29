@@ -212,6 +212,7 @@ export class TaskNotificationsService {
                     { guardrailEventId: { not: null } },
                     { invoiceId: { not: null } },
                     { cadenceLapseId: { not: null } },
+                    { newswireosPaymentId: { not: null } },
                 ],
             } satisfies Prisma.NotificationWhereInput;
             const rows = await tx.notification.findMany({
@@ -224,6 +225,7 @@ export class TaskNotificationsService {
                     guardrailEvent: { include: { actor: MEMBER, owner: MEMBER } },
                     invoice: { include: { opportunity: { select: { name: true } } } },
                     cadenceLapse: { include: { opportunity: { select: { name: true } } } },
+                    newswireosPayment: { include: { opportunity: { select: { name: true } } } },
                 },
             });
             const labels = await labelTargets(tx, [
@@ -283,6 +285,22 @@ export class TaskNotificationsService {
                               gateway: r.invoice.gateway,
                               reference: r.invoice.reference,
                               reasonCode: r.invoice.reasonCode,
+                          }
+                        : null,
+                    payment: r.newswireosPayment
+                        ? {
+                              id: r.newswireosPayment.id,
+                              invoiceNumber: r.newswireosPayment.invoiceNumber,
+                              clientName: r.newswireosPayment.clientName,
+                              amount:
+                                  r.newswireosPayment.amountMinor !== null && r.newswireosPayment.currency
+                                      ? {
+                                            amountMinor: Number(r.newswireosPayment.amountMinor),
+                                            currency: r.newswireosPayment.currency,
+                                        }
+                                      : null,
+                              opportunityId: r.newswireosPayment.opportunityId,
+                              opportunityName: r.newswireosPayment.opportunity?.name ?? null,
                           }
                         : null,
                     cadence: r.cadenceLapse

@@ -34,6 +34,12 @@ export const NOTIFICATION_KINDS = [
     'cadence_warning',
     // CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).
     'cadence_rotated',
+    // INV-2: a client paid with several open deals: which one is it on? (to the client's owner).
+    'payment_needs_deal',
+    // INV-2: a client paid with no open deal, so one was made for the payment (to its owner).
+    'payment_created_deal',
+    // INV-2: NewswireOS reported a payment from no one in the CRM (to holders of `invoice:verify`).
+    'payment_unmatched',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -57,7 +63,7 @@ export interface TaskSummary {
  * What a notification is about (GUARD-2): one polymorphic target, whatever the kind. The typed summaries below
  * carry what the bell shows of each; new kinds add a target type here rather than a model of their own.
  */
-export const NOTIFICATION_TARGET_TYPES = ['task', 'transfer', 'guardrail', 'invoice', 'cadence'] as const;
+export const NOTIFICATION_TARGET_TYPES = ['task', 'transfer', 'guardrail', 'invoice', 'cadence', 'payment'] as const;
 export type NotificationTargetType = (typeof NOTIFICATION_TARGET_TYPES)[number];
 export interface NotificationTarget {
     type: NotificationTargetType;
@@ -78,6 +84,8 @@ export interface NotificationView {
     invoice: InvoiceSummary | null;
     /** The lapse, for `cadence_warning` (CADENCE-1); null otherwise. */
     cadence: CadenceLapseSummary | null;
+    /** For a `payment_*` kind (INV-2): the paid invoice NewswireOS reported, and the deal it is on. */
+    payment: NewswireosPaymentSummary | null;
     /** ISO 8601. */
     createdAt: string;
     /** ISO 8601; null while unread. */
@@ -102,4 +110,15 @@ export interface MyTaskView extends TaskSummary {
 export interface NotificationSettings {
     /** The daily email of tasks due or overdue, and (GUARD-2) guardrail alerts of the last day (on unless turned off). */
     taskDigest: boolean;
+}
+
+/** INV-2: a paid invoice NewswireOS reported, as the bell shows it. */
+export interface NewswireosPaymentSummary {
+    id: string;
+    invoiceNumber: string;
+    clientName: string | null;
+    amount: { amountMinor: number; currency: string } | null;
+    /** The deal it is on; null while it waits for someone to choose. */
+    opportunityId: string | null;
+    opportunityName: string | null;
 }

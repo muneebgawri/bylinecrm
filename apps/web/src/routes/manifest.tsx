@@ -31,6 +31,7 @@ const authPage = (path: string, lazy: LazyRouteFunction<RouteObject>): RouteObje
 });
 
 /** Record pages are one chunk: the three records share their panels (FR-CRMS-UI-10). */
+const paymentPage = () => import('./w/payments/PaymentPage').then((m) => ({ Component: m.PaymentPage }));
 const records = {
     person: () => import('./w/records/RecordPages').then((m) => ({ Component: m.PersonPage })),
     company: () => import('./w/records/RecordPages').then((m) => ({ Component: m.CompanyPage })),
@@ -153,6 +154,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('companies/:companyId', records.company, 'Company'),
         lazyPage('deals', dealsPage, 'Deals'),
         lazyPage('deals/:dealId', records.deal, 'Deal'),
+        lazyPage('payments/:paymentId', paymentPage, 'Payment'),
         lazyPage('sequences', sequences.list, 'Sequences'),
         lazyPage('sequences/:sequenceId', sequences.builder, 'Sequence'),
         lazyPage('templates', templates.list, 'Templates'),

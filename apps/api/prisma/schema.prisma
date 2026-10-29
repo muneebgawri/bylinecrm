@@ -114,6 +114,7 @@ model Workspace {
   newswireosOwnershipDeliveries NewswireosOwnershipDelivery[]
   newswireosDealWonDeliveries   NewswireosDealWonDelivery[]
   newswireosTimelineEvents      NewswireosTimelineEvent[]
+  newswireosPayments            NewswireosPayment[]
   bylineSettings                BylineSettings?
   bylineLeads                   BylineLead[]
   dealInvoices                  DealInvoice[]
@@ -312,13 +313,14 @@ model WorkspaceMember {
   updatedEmailVerificationSettings EmailVerificationSettings[]
   updatedEnrichmentSettings        EnrichmentSettings[]
 
-  configuredTwentyImports TwentyImportSettings[]
-  startedTwentyImports    TwentyImportRun[]
-  configuredBiginImports  BiginImportSettings[]
-  startedBiginImports     BiginImportRun[]
-  sequenceEnrolments      SequenceEnrolment[]    @relation("EnrolmentEnroller")
-  ownedSequences          Sequence[]             @relation("SequenceOwner")
-  notifications           Notification[]
+  configuredTwentyImports    TwentyImportSettings[]
+  startedTwentyImports       TwentyImportRun[]
+  configuredBiginImports     BiginImportSettings[]
+  startedBiginImports        BiginImportRun[]
+  sequenceEnrolments         SequenceEnrolment[]    @relation("EnrolmentEnroller")
+  ownedSequences             Sequence[]             @relation("SequenceOwner")
+  notifications              Notification[]
+  newswireosPaymentsResolved NewswireosPayment[]    @relation("NewswireosPaymentResolver")
 
   hostedMeetings        CalendarEvent[]
   configuredSlotline    SlotlineSettings[]
@@ -745,6 +747,7 @@ model Opportunity {
   sequenceEnrolments SequenceEnrolment[]
   invoices           DealInvoice[]
   cadenceLapses      CadenceLapse[]
+  newswireosPayments NewswireosPayment[]
 
   @@index([workspaceId, cadenceOverdue])
   @@index([workspaceId, deletedAt])
@@ -3065,6 +3068,12 @@ enum NotificationKind {
   cadence_warning
   /// CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).
   cadence_rotated
+  /// INV-2: a client paid with several open deals: which one is it on? (to the client's owner).
+  payment_needs_deal
+  /// INV-2: a client paid with no open deal, so one was made for the payment (to its owner).
+  payment_created_deal
+  /// INV-2: NewswireOS reported a payment from no one in the CRM (to holders of `invoice:verify`).
+  payment_unmatched
 
   @@map("notification_kind")
 }
@@ -3073,34 +3082,38 @@ enum NotificationKind {
 /// (member, kind, transfer) are unique, so an event delivered again or a sweep run twice tells nobody twice.
 /// Exactly one of `taskId` / `transferId` is set (the database checks). Each member reads only their own.
 model Notification {
-  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId      String           @map("workspace_id") @db.Uuid
-  memberId         String           @map("member_id") @db.Uuid
-  kind             NotificationKind
-  taskId           String?          @map("task_id") @db.Uuid
-  transferId       String?          @map("transfer_id") @db.Uuid
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId         String           @map("workspace_id") @db.Uuid
+  memberId            String           @map("member_id") @db.Uuid
+  kind                NotificationKind
+  taskId              String?          @map("task_id") @db.Uuid
+  transferId          String?          @map("transfer_id") @db.Uuid
   /// GUARD-1: the guardrail event, for a `guardrail_*` kind. Exactly one of task, transfer, guardrail event.
-  guardrailEventId String?          @map("guardrail_event_id") @db.Uuid
+  guardrailEventId    String?          @map("guardrail_event_id") @db.Uuid
   /// INV-1: the invoice, for an `invoice_*` kind.
-  invoiceId        String?          @map("invoice_id") @db.Uuid
+  invoiceId           String?          @map("invoice_id") @db.Uuid
   /// CADENCE-1: the lapse, for `cadence_warning`.
-  cadenceLapseId   String?          @map("cadence_lapse_id") @db.Uuid
-  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  readAt           DateTime?        @map("read_at") @db.Timestamptz
+  cadenceLapseId      String?          @map("cadence_lapse_id") @db.Uuid
+  /// INV-2: the paid invoice NewswireOS reported, for `payment_*`.
+  newswireosPaymentId String?          @map("newswireos_payment_id") @db.Uuid
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  readAt              DateTime?        @map("read_at") @db.Timestamptz
 
-  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  member         WorkspaceMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  task           Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  transfer       OwnershipTransfer? @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  guardrailEvent GuardrailEvent?    @relation(fields: [guardrailEventId], references: [id], onDelete: Cascade)
-  invoice        DealInvoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  cadenceLapse   CadenceLapse?      @relation(fields: [cadenceLapseId], references: [id], onDelete: Cascade)
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member            WorkspaceMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  task              Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  transfer          OwnershipTransfer? @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  guardrailEvent    GuardrailEvent?    @relation(fields: [guardrailEventId], references: [id], onDelete: Cascade)
+  invoice           DealInvoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  cadenceLapse      CadenceLapse?      @relation(fields: [cadenceLapseId], references: [id], onDelete: Cascade)
+  newswireosPayment NewswireosPayment? @relation(fields: [newswireosPaymentId], references: [id], onDelete: Cascade)
 
   @@unique([memberId, kind, taskId])
   @@unique([memberId, kind, transferId])
   @@unique([memberId, kind, guardrailEventId])
   @@unique([memberId, kind, invoiceId])
   @@unique([memberId, kind, cadenceLapseId])
+  @@unique([memberId, kind, newswireosPaymentId])
   @@index([memberId, createdAt])
   @@map("notifications")
 }
@@ -3368,6 +3381,8 @@ model NewswireosSettings {
   pushOwnership       Boolean   @default(false) @map("push_ownership")
   /// PNW-766: push won deals to NewswireOS (`crm:client_write`), which makes their contacts clients. Off until an admin turns it on.
   pushDealWon         Boolean   @default(false) @map("push_deal_won")
+  /// INV-2: what a reported paid invoice does — `off`, `shadow` (record which deal only), `on` (put it on the deal).
+  paymentMode         String    @default("shadow") @map("payment_mode")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -3466,6 +3481,52 @@ model NewswireosTimelineEvent {
   @@unique([workspaceId, eventId])
   @@index([workspaceId, createdAt])
   @@map("newswireos_timeline_events")
+}
+
+/// INV-2: a paid invoice NewswireOS reported (`invoice.paid` with an invoice number), and which deal it went on —
+/// or, in shadow mode, would have. One per invoice number: a redelivery, or the same invoice reported again, finds it.
+model NewswireosPayment {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String    @map("workspace_id") @db.Uuid
+  /// The timeline delivery that reported it (`newswireos_timeline_events.event_id`).
+  eventId            String    @map("event_id")
+  /// NewswireOS's invoice number: the `newswireos_invoice` reference the verification lookup takes.
+  invoiceNumber      String    @map("invoice_number")
+  /// How the client paid, as NewswireOS names it (`stripe`, `paypal`, `crypto`, `wallet`…); shown, never trusted.
+  paymentMethod      String?   @map("payment_method")
+  amountMinor        BigInt?   @map("amount_minor")
+  currency           String?
+  clientName         String?   @map("client_name")
+  clientEmail        String?   @map("client_email")
+  /// The deal NewswireOS named (`byline_opportunity_id`), as sent.
+  namedOpportunityId String?   @map("named_opportunity_id")
+  /// The person or company the client is, as the timeline matched it. Null: unmatched.
+  targetType         String?   @map("target_type")
+  targetId           String?   @map("target_id") @db.Uuid
+  /// `off` | `shadow` | `on` when it was decided: in `shadow` nothing below was acted on.
+  mode               String
+  /// `already_on_deal` | `attached` | `created_deal` | `needs_deal` | `unmatched` (shared `NEWSWIREOS_PAYMENT_DECISIONS`).
+  decision           String
+  /// For `attached`: `deal_id` or `only_open_deal`.
+  matchedBy          String?   @map("matched_by")
+  /// The deal it went on (or would have). Null for `needs_deal` until someone chooses, and for `unmatched`.
+  opportunityId      String?   @map("opportunity_id") @db.Uuid
+  /// For `needs_deal`: the open deals to choose from.
+  candidateIds       String[]  @default([]) @map("candidate_ids") @db.Uuid
+  /// When a person chose the deal for a `needs_deal` (or `unmatched`) payment, and who.
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedById       String?   @map("resolved_by_id") @db.Uuid
+  occurredAt         DateTime? @map("occurred_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  resolvedBy    WorkspaceMember? @relation("NewswireosPaymentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@unique([workspaceId, invoiceNumber])
+  @@index([workspaceId, createdAt])
+  @@map("newswireos_payments")
 }
 
 /// The workspace's BylineAI link (BYL-1): the secret BylineAI's WEBHOOK connector signs lead deliveries with

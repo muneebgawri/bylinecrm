@@ -72,6 +72,15 @@ const cadenceSummary = z.object({
     rotateAt: isoTime,
 });
 
+const paymentSummary = z.object({
+    id,
+    invoiceNumber: z.string(),
+    clientName: z.string().nullable(),
+    amount: z.object({ amountMinor: z.number().int(), currency: z.string() }).nullable(),
+    opportunityId: id.nullable(),
+    opportunityName: z.string().nullable(),
+});
+
 const taskSummary = {
     id,
     title: z.string(),
@@ -87,7 +96,7 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`).',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM.',
                 }),
                 target: z
                     .object({ type: z.enum(NOTIFICATION_TARGET_TYPES), id })
@@ -99,6 +108,10 @@ export const notificationsView = named(
                 }),
                 invoice: invoiceSummary.nullable().meta({
                     description: 'For an `invoice_*` kind (INV-1): the invoice waiting for finance, and its deal.',
+                }),
+                payment: paymentSummary.nullable().meta({
+                    description:
+                        'For a `payment_*` kind (INV-2): the paid invoice NewswireOS reported, and the deal it is on (null until chosen).',
                 }),
                 cadence: cadenceSummary.nullable().meta({
                     description: 'For `cadence_warning` (CADENCE-1): the lapsed deal, and when it rotates.',

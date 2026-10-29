@@ -65,3 +65,30 @@ export interface InvoiceSummary {
     reference: string;
     reasonCode: string | null;
 }
+
+/**
+ * INV-2: what the CRM does with a paid invoice NewswireOS reports (`invoice.paid`). `off` puts it on the timeline
+ * only; `shadow` also records which deal it would go on, and does nothing else; `on` puts it on that deal (or a new
+ * one) as an Account Manager would, so the same verification and stage rule move the deal.
+ */
+export const NEWSWIREOS_PAYMENT_MODES = ['off', 'shadow', 'on'] as const;
+export type NewswireosPaymentMode = (typeof NEWSWIREOS_PAYMENT_MODES)[number];
+
+/**
+ * INV-2: which deal a paid invoice goes on, and how that was decided.
+ * - `already_on_deal`: an Account Manager had already entered it; nothing is done.
+ * - `attached`: the deal NewswireOS named (`deal_id`), or the client's only open deal (`only_open_deal`).
+ * - `created_deal`: the client had no open deal; one is made for the payment, and its owner is told.
+ * - `needs_deal`: the client has several open deals; the owner is asked which, never guessed.
+ * - `unmatched`: no person or company in the CRM is this client; whoever verifies invoices is told.
+ */
+export const NEWSWIREOS_PAYMENT_DECISIONS = [
+    'already_on_deal',
+    'attached',
+    'created_deal',
+    'needs_deal',
+    'unmatched',
+] as const;
+export type NewswireosPaymentDecision = (typeof NEWSWIREOS_PAYMENT_DECISIONS)[number];
+export const NEWSWIREOS_PAYMENT_MATCHES = ['deal_id', 'only_open_deal'] as const;
+export type NewswireosPaymentMatch = (typeof NEWSWIREOS_PAYMENT_MATCHES)[number];
