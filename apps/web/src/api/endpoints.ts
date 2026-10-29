@@ -7,12 +7,16 @@ import type {
     CreatedPlatformWorkspaceView,
     InvitePreviewView,
     LoginInput,
+    LoginResultView,
     MembershipSummary,
     PlatformAccessView,
     PlatformInviteView,
     PlatformWorkspaceView,
     ProfileView,
+    RecoveryCodesView,
     SignupInput,
+    TwoFactorSetupView,
+    TwoFactorStatusView,
     UserView,
     WorkspaceView,
 } from './types';
@@ -64,7 +68,10 @@ export const workspacePath = (workspaceId: string, rest: string) => `/w/${worksp
 export const auth = {
     signup: (input: SignupInput) =>
         request<{ user: UserView; workspace: WorkspaceView }>('POST', '/auth/signup', { body: input }),
-    login: (input: LoginInput) => request<{ user: UserView }>('POST', '/auth/login', { body: input }),
+    login: (input: LoginInput) => request<LoginResultView>('POST', '/auth/login', { body: input }),
+    /** The second half of a two-factor login (2FA-1): the challenge the first half answered, and a code. */
+    loginTwoFactor: (input: { challenge: string; code: string }) =>
+        request<{ user: UserView }>('POST', '/auth/login/two-factor', { body: input }),
     logout: () => request<void>('POST', '/auth/logout'),
     /** The providers, and who may sign up (P0-14): the sign-in and sign-up pages read both. */
     providers: () => request<AuthProvidersView>('GET', '/auth/providers'),
@@ -93,6 +100,15 @@ export const me = {
     /** The person's own profile: the name every workspace shows them under (P1-UI-10). */
     profile: (signal?: AbortSignal) => request<ProfileView>('GET', '/me/profile', { signal }),
     updateProfile: (displayName: string) => request<ProfileView>('PATCH', '/me/profile', { body: { displayName } }),
+    /** The person's own second factor (2FA-1). */
+    twoFactor: {
+        status: (signal?: AbortSignal) => request<TwoFactorStatusView>('GET', '/me/two-factor', { signal }),
+        setup: () => request<TwoFactorSetupView>('POST', '/me/two-factor/setup', {}),
+        enable: (code: string) => request<RecoveryCodesView>('POST', '/me/two-factor/enable', { body: { code } }),
+        disable: (password: string) => request<void>('POST', '/me/two-factor/disable', { body: { password } }),
+        recoveryCodes: (password: string) =>
+            request<RecoveryCodesView>('POST', '/me/two-factor/recovery-codes', { body: { password } }),
+    },
     workspaces: (signal?: AbortSignal) => request<WorkspaceView[]>('GET', '/me/workspaces', { signal }),
     createWorkspace: (name: string) => request<WorkspaceView>('POST', '/workspaces', { body: { name } }),
 };

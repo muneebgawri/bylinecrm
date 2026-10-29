@@ -638,8 +638,18 @@ function slugFor(name: string): string {
     return `${words || 'workspace'}-${randomBytes(SLUG_SUFFIX_BYTES).toString('hex')}`;
 }
 
-function userView(user: { id: string; email: string; emailVerifiedAt: Date | null }): UserView {
-    return { id: user.id, email: user.email, emailVerified: user.emailVerifiedAt !== null };
+export function userView(user: {
+    id: string;
+    email: string;
+    emailVerifiedAt: Date | null;
+    totpEnabledAt: Date | null;
+}): UserView {
+    return {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerifiedAt !== null,
+        twoFactorEnabled: user.totpEnabledAt !== null,
+    };
 }
 
 export function workspaceView(workspace: { id: string; slug: string; name: string }): WorkspaceView {

@@ -7,6 +7,7 @@ import { useLogin, useProviders } from '../../api/queries';
 import { paths, returnToFrom } from '../paths';
 import { AuthLayout, authLinkClass } from './AuthLayout';
 import { ProviderButtons } from './ProviderButtons';
+import { TwoFactorStep } from './TwoFactorStep';
 
 export function SignIn() {
     const navigate = useNavigate();
@@ -16,12 +17,15 @@ export function SignIn() {
     const signupOpen = useProviders().data?.signup === 'open';
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    // A two-factor account answers the password with a challenge; the code finishes it (2FA-1).
+    const [challenge, setChallenge] = useState<string | null>(null);
+    const onward = () => navigate(returnToFrom(location.search), { replace: true });
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
         login.mutate(
             { email, password },
-            { onSuccess: () => navigate(returnToFrom(location.search), { replace: true }) },
+            { onSuccess: (result) => (result.twoFactor ? setChallenge(result.twoFactor.challenge) : onward()) },
         );
     };
 
@@ -36,6 +40,20 @@ export function SignIn() {
               : login.isError
                 ? 'Could not sign in. Check your connection and try again.'
                 : null;
+
+    if (challenge) {
+        return (
+            <TwoFactorStep
+                challenge={challenge}
+                onSignedIn={onward}
+                onBack={() => {
+                    setChallenge(null);
+                    setPassword('');
+                    login.reset();
+                }}
+            />
+        );
+    }
 
     const aside = signupOpen ? (
         <>

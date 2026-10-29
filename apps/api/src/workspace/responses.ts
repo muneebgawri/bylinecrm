@@ -4,7 +4,15 @@ import { dateTime, id, named } from '../openapi/responses';
 
 /** The caller, the workspaces and the people in them (P0-3), as the API returns them. */
 
-export const userView = named('User', z.object({ id, email: z.email(), emailVerified: z.boolean() }));
+export const userView = named(
+    'User',
+    z.object({
+        id,
+        email: z.email(),
+        emailVerified: z.boolean(),
+        twoFactorEnabled: z.boolean().meta({ description: 'Sign-in asks for an authenticator code (2FA-1).' }),
+    }),
+);
 
 /** The person's own profile (`/api/me/profile`): the name every workspace shows them under. */
 export const profileView = named(
@@ -22,6 +30,38 @@ export const workspaceView = named('Workspace', z.object({ id, slug: z.string(),
 
 export const signedUp = named('SignedUp', z.object({ user: userView, workspace: workspaceView }));
 export const signedIn = named('SignedIn', z.object({ user: userView }));
+/**
+ * What a password login answers (2FA-1): the person, signed in — or, when their account asks for a
+ * second factor, a challenge to finish with `POST /auth/login/two-factor`; no session yet.
+ */
+export const loginResult = named(
+    'LoginResult',
+    z.object({
+        user: userView.nullable(),
+        twoFactor: z
+            .object({ challenge: z.string().meta({ description: 'Send back with the code; good for five minutes.' }) })
+            .nullable(),
+    }),
+);
+export const twoFactorStatus = named(
+    'TwoFactorStatus',
+    z.object({
+        enabled: z.boolean(),
+        enabledAt: z.iso.datetime().nullable(),
+        recoveryCodesLeft: z.number().int().meta({ description: 'Unused recovery codes; 0 means make new ones.' }),
+    }),
+);
+export const twoFactorSetup = named(
+    'TwoFactorSetup',
+    z.object({
+        secret: z.string().meta({ description: 'Base32, for typing into an app by hand.' }),
+        otpauthUrl: z.string().meta({ description: 'What the app scans, as a QR code.' }),
+    }),
+);
+export const recoveryCodes = named(
+    'RecoveryCodes',
+    z.object({ codes: z.array(z.string()).meta({ description: 'Shown once; each works once.' }) }),
+);
 export const authProviders = named(
     'AuthProviders',
     z.object({
@@ -121,6 +161,10 @@ export const createdInvite = named(
 );
 
 export type UserView = z.output<typeof userView>;
+export type LoginResultView = z.output<typeof loginResult>;
+export type TwoFactorStatusView = z.output<typeof twoFactorStatus>;
+export type TwoFactorSetupView = z.output<typeof twoFactorSetup>;
+export type RecoveryCodesView = z.output<typeof recoveryCodes>;
 export type ProfileView = z.output<typeof profileView>;
 export type WorkspaceView = z.output<typeof workspaceView>;
 export type AuthProvidersView = z.output<typeof authProviders>;

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { OneTimeTokenPurpose, Prisma } from '@prisma/client';
 import { ApiException } from '../infra/errors/api-errors';
-import { EMAIL_VERIFICATION_TTL_S, PASSWORD_RESET_TTL_S } from './auth.constants';
+import { EMAIL_VERIFICATION_TTL_S, PASSWORD_RESET_TTL_S, TWO_FACTOR_CHALLENGE_TTL_S } from './auth.constants';
 import { hashToken, randomToken } from './tokens';
 
 type OwnerTx = Prisma.TransactionClient;
@@ -10,6 +10,7 @@ type OwnerTx = Prisma.TransactionClient;
 const TTL_S: Record<OneTimeTokenPurpose, number> = {
     email_verification: EMAIL_VERIFICATION_TTL_S,
     password_reset: PASSWORD_RESET_TTL_S,
+    two_factor: TWO_FACTOR_CHALLENGE_TTL_S,
 };
 
 /** A link just issued: the secret (mailed once, never stored) and the row that holds its hash. */
