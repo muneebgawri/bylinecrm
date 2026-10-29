@@ -21,6 +21,7 @@ import {
     StackedBarChart,
     cn,
     toneSolid,
+    toneTile,
 } from '@bylinecrm/ui';
 import {
     Activity,
@@ -477,8 +478,8 @@ function ReportKpi({
                         <span
                             aria-hidden
                             className={cn(
-                                'grid size-full place-items-center rounded-md text-primary-foreground [&_svg]:size-5',
-                                toneSolid[tone],
+                                'grid size-full place-items-center rounded-md [&_svg]:size-5',
+                                toneTile[tone],
                             )}
                         >
                             {icon}

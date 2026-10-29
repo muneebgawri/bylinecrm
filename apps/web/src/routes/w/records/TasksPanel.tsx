@@ -1,3 +1,4 @@
+import { ListTodo } from 'lucide-react';
 import { TASK_STATUSES, type RecordTarget, type TaskStatus } from '@bylinecrm/shared';
 import {
     Badge,
@@ -56,6 +57,7 @@ export function TasksPanel({
     return (
         <RailCard
             title="Tasks"
+            icon={<ListTodo />}
             count={tasks.data ? items.filter((t) => t.status !== 'done').length : undefined}
             action={
                 write.allowed ? (

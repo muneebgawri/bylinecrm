@@ -12,7 +12,7 @@ import {
     UsersRound,
     type LucideIcon,
 } from 'lucide-react';
-import { paths } from '../routes/paths';
+import { paths, withCreate } from '../routes/paths';
 
 /**
  * The sidebar's contents, once: four groups with 12px labels (mockup v3). Every item names the
@@ -30,6 +30,15 @@ export interface NavItem {
     shortcut?: string;
     /** Right-aligned: a count (`{ count }`) or an attention badge (`{ badge }`). Filled by pages later. */
     badge?: 'count' | 'attention';
+    /** Sub-pages under the item: the sidebar shows them beneath it when the section is open. */
+    children?: readonly NavChild[];
+}
+
+export interface NavChild {
+    id: string;
+    label: string;
+    to: (workspaceId: string) => string;
+    requires?: Capability;
 }
 
 export interface NavGroup {
@@ -48,7 +57,23 @@ export const NAV: readonly NavGroup[] = [
     {
         label: 'CRM',
         items: [
-            { id: 'people', label: 'People', icon: Users, to: paths.people, requires: 'record:read', shortcut: 'g p' },
+            {
+                id: 'people',
+                label: 'People',
+                icon: Users,
+                to: paths.people,
+                requires: 'record:read',
+                shortcut: 'g p',
+                children: [
+                    { id: 'people.all', label: 'All people', to: paths.people },
+                    {
+                        id: 'people.new',
+                        label: 'Add person',
+                        to: (ws) => withCreate(paths.people(ws)),
+                        requires: 'record:write',
+                    },
+                ],
+            },
             {
                 id: 'companies',
                 label: 'Companies',
@@ -56,8 +81,34 @@ export const NAV: readonly NavGroup[] = [
                 to: paths.companies,
                 requires: 'record:read',
                 shortcut: 'g c',
+                children: [
+                    { id: 'companies.all', label: 'All companies', to: paths.companies },
+                    {
+                        id: 'companies.new',
+                        label: 'Add company',
+                        to: (ws) => withCreate(paths.companies(ws)),
+                        requires: 'record:write',
+                    },
+                ],
             },
-            { id: 'deals', label: 'Deals', icon: Handshake, to: paths.deals, requires: 'deal:read', shortcut: 'g d' },
+            {
+                id: 'deals',
+                label: 'Deals',
+                icon: Handshake,
+                to: paths.deals,
+                requires: 'deal:read',
+                shortcut: 'g d',
+                children: [
+                    { id: 'deals.board', label: 'Pipeline', to: (ws) => `${paths.deals(ws)}?show=board` },
+                    { id: 'deals.list', label: 'All deals', to: (ws) => `${paths.deals(ws)}?show=list` },
+                    {
+                        id: 'deals.new',
+                        label: 'Add deal',
+                        to: (ws) => withCreate(paths.deals(ws)),
+                        requires: 'deal:edit',
+                    },
+                ],
+            },
         ],
     },
     {

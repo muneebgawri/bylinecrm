@@ -32,6 +32,16 @@ export const toneSolid: Record<Tone, string> = {
     info: 'bg-info',
 };
 
+/** The tone's gradient tile, for the icon box on a KPI card; the glyph on it is white. */
+export const toneTile: Record<Tone, string> = {
+    neutral: 'bg-tile-neutral text-white',
+    accent: 'bg-tile-accent text-white',
+    success: 'bg-tile-success text-white',
+    warning: 'bg-tile-warning text-white',
+    danger: 'bg-tile-danger text-white',
+    info: 'bg-tile-info text-white',
+};
+
 /** The tone's colour as text. */
 export const toneText: Record<Tone, string> = {
     neutral: 'text-text-muted',

@@ -27,6 +27,8 @@
     /* `text-touch` — the 16px under which iOS zooms into a focused field. */
     --text-touch: var(--bc-touch-text);
 
+    /* The one absolute: white glyphs on a gradient tile, in both themes. */
+    --color-white: #ffffff;
     --color-background: var(--bc-background);
     --color-surface: var(--bc-surface);
     --color-surface-raised: var(--bc-surface-raised);
@@ -60,6 +62,12 @@
     --color-chart-3: var(--bc-chart-3);
     --color-chart-4: var(--bc-chart-4);
     --color-chart-5: var(--bc-chart-5);
+    --background-image-tile-info: var(--bc-tile-info);
+    --background-image-tile-accent: var(--bc-tile-accent);
+    --background-image-tile-success: var(--bc-tile-success);
+    --background-image-tile-warning: var(--bc-tile-warning);
+    --background-image-tile-danger: var(--bc-tile-danger);
+    --background-image-tile-neutral: var(--bc-tile-neutral);
     /* `bg-scrim` — the layer behind every overlay (dialog, drawer, sheet, palette). */
     --color-scrim: var(--bc-scrim);
 

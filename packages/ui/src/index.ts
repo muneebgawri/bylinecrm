@@ -1,6 +1,6 @@
 export { cn } from './lib/cn';
 export { focusRing, focusWithinRing, groupFocusRing } from './lib/focus';
-export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
+export { TONES, toneSoft, toneSolid, toneText, toneTile, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
 export {
     BREAKPOINT_PX,
@@ -80,6 +80,8 @@ export {
     type AvatarProps,
 } from './components/avatar/Avatar';
 export { ScoreBar, type ScoreBarProps } from './components/score-bar/ScoreBar';
+export { Progress, type ProgressProps } from './components/progress/Progress';
+export { Accordion, AccordionItem, type AccordionItemProps } from './components/accordion/Accordion';
 export {
     SegmentedControl,
     type SegmentedControlProps,

@@ -1,6 +1,6 @@
 import { DEFAULT_CURRENCY } from '@bylinecrm/shared';
 import { Badge, FactGrid } from '@bylinecrm/ui';
-import { ListTodo, StickyNote } from 'lucide-react';
+import { ListTodo, StickyNote, Handshake, Users } from 'lucide-react';
 import { useId, useState } from 'react';
 import { usePatchRecord } from '../../../api/records';
 import type { CompanyView } from '../../../api/types';
@@ -260,7 +260,11 @@ export function CompanyRecord({
                 <>
                     <EnrichmentPanel workspaceId={workspaceId} object="company" recordId={company.id} />
                     <CompanyDomainsCard workspaceId={workspaceId} companyId={company.id} ownerId={company.ownerId} />
-                    <RailCard title="People" count={people.data && !people.more ? companyPeople.length : undefined}>
+                    <RailCard
+                        title="People"
+                        icon={<Users />}
+                        count={people.data && !people.more ? companyPeople.length : undefined}
+                    >
                         {people.isPending ? (
                             <RailLoading />
                         ) : companyPeople.length === 0 ? (
@@ -276,7 +280,11 @@ export function CompanyRecord({
                             ))
                         )}
                     </RailCard>
-                    <RailCard title="Deals" count={deals.data && !deals.more ? companyDeals.length : undefined}>
+                    <RailCard
+                        title="Deals"
+                        icon={<Handshake />}
+                        count={deals.data && !deals.more ? companyDeals.length : undefined}
+                    >
                         {deals.isPending ? (
                             <RailLoading />
                         ) : companyDeals.length === 0 ? (

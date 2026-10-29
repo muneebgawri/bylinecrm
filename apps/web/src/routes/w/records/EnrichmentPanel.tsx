@@ -1,3 +1,4 @@
+import { Sparkles } from 'lucide-react';
 import {
     ENRICHMENT_FACTS,
     ENRICHMENT_SOURCE_LABELS,
@@ -49,6 +50,7 @@ export function EnrichmentPanel({
     return (
         <RailCard
             title="Enrichment"
+            icon={<Sparkles />}
             count={history.data ? latest.length : undefined}
             action={
                 write.allowed && history.data ? (

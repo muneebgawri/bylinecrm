@@ -38,7 +38,13 @@ export function RecordHeader({
     className,
 }: RecordHeaderProps) {
     return (
-        <header className={cn('flex flex-col gap-3', className)}>
+        <header
+            className={cn(
+                'flex flex-col gap-3',
+                layout === 'page' && 'rounded-xl border border-border bg-surface p-5 shadow-sm',
+                className,
+            )}
+        >
             {layout === 'page' && (back || siblings) && (
                 <div className="flex items-center gap-1">
                     {back && (
@@ -90,14 +96,14 @@ export function RecordHeader({
                     )}
                 </div>
             )}
-            <div className="flex flex-wrap items-center gap-3.5">
-                <Avatar name={name} src={avatarSrc ?? undefined} size={layout === 'page' ? 'lg' : 'lg'} />
+            <div className="flex flex-wrap items-center gap-4">
+                <Avatar name={name} src={avatarSrc ?? undefined} size="lg" className="rounded-xl" />
                 <div className="min-w-0 flex-1">
-                    <h1 className="m-0 flex flex-wrap items-center gap-2.5 text-xl leading-tight font-semibold tracking-tight">
+                    <h1 className="m-0 flex flex-wrap items-center gap-2 text-lg leading-none font-semibold tracking-tight">
                         <span className="truncate">{name}</span>
                         {status}
                     </h1>
-                    {subtitle && <p className="m-0 mt-0.5 truncate text-[13px] text-text-muted">{subtitle}</p>}
+                    {subtitle && <p className="m-0 mt-1.5 truncate text-sm text-text-muted">{subtitle}</p>}
                 </div>
                 {actions && <div className="flex flex-wrap items-center gap-2 max-md:hidden">{actions}</div>}
             </div>

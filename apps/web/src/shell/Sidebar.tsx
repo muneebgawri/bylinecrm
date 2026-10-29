@@ -17,7 +17,20 @@ import {
     useTheme,
     type Theme,
 } from '@bylinecrm/ui';
-import { ArrowLeft, Check, ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    ChevronRight,
+    ChevronsUpDown,
+    Keyboard,
+    LogOut,
+    Monitor,
+    Moon,
+    Plus,
+    Sun,
+    UserRound,
+} from 'lucide-react';
+import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
 import { useLogout, useProfile, useWorkspaces } from '../api/queries';
 import type { MembershipSummary, WorkspaceView } from '../api/types';
@@ -83,13 +96,23 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
                             </div>
                             {items.map((item) =>
                                 known || !item.requires ? (
-                                    <NavEntry
-                                        key={item.id}
-                                        item={item}
-                                        workspaceId={workspaceId}
-                                        collapsed={collapsed}
-                                        onNavigate={onNavigate}
-                                    />
+                                    item.children && !inSettings ? (
+                                        <NavSection
+                                            key={item.id}
+                                            item={item}
+                                            workspaceId={workspaceId}
+                                            collapsed={collapsed}
+                                            onNavigate={onNavigate}
+                                        />
+                                    ) : (
+                                        <NavEntry
+                                            key={item.id}
+                                            item={item}
+                                            workspaceId={workspaceId}
+                                            collapsed={collapsed}
+                                            onNavigate={onNavigate}
+                                        />
+                                    )
                                 ) : (
                                     <NavSkeleton key={item.id} collapsed={collapsed} />
                                 ),
@@ -133,6 +156,85 @@ function BackToApp({
             <TooltipTrigger asChild>{link}</TooltipTrigger>
             <TooltipContent side="right">Back to app</TooltipContent>
         </Tooltip>
+    );
+}
+
+const ROW =
+    'flex h-9 w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 text-left font-[450] text-text-muted transition-colors hover:border-border hover:bg-surface hover:text-text hover:shadow-sm';
+const ACTIVE = 'border-border bg-surface font-medium text-text shadow-sm';
+
+/**
+ * An item with sub-pages: the row opens and closes the list beneath it, and is itself active while
+ * any of its pages is open. Collapsed, only the icon shows and it goes straight to the first page.
+ */
+function NavSection({
+    item,
+    workspaceId,
+    collapsed,
+    onNavigate,
+}: {
+    item: NavItem;
+    workspaceId: string;
+    collapsed: boolean;
+    onNavigate?: (() => void) | undefined;
+}) {
+    const Icon = item.icon;
+    const membership = useMembership();
+    const location = useLocation();
+    const href = item.to(workspaceId);
+    const inSection = location.pathname === href || location.pathname.startsWith(`${href}/`);
+    const [open, setOpen] = useState(inSection);
+    const children = (item.children ?? []).filter((c) => !c.requires || can(membership, c.requires));
+    if (collapsed) return <NavEntry item={item} workspaceId={workspaceId} collapsed onNavigate={onNavigate} />;
+    const here = location.pathname + location.search;
+    const expanded = open || inSection;
+    return (
+        <div className="flex flex-col gap-0.5">
+            <div className={cn(ROW, 'gap-0 px-0', inSection && ACTIVE)}>
+                <Link
+                    to={href}
+                    onClick={onNavigate}
+                    aria-current={inSection ? 'page' : undefined}
+                    className={cn('flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-md pl-2.5', focusRing)}
+                >
+                    <Icon aria-hidden className="size-4.25 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                </Link>
+                <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? 'Hide' : 'Show'} ${item.label} pages`}
+                    onClick={() => setOpen((o) => !o)}
+                    className={cn('grid h-full w-8 shrink-0 place-items-center rounded-md', focusRing)}
+                >
+                    <ChevronRight aria-hidden className={cn('size-4 transition-transform', expanded && 'rotate-90')} />
+                </button>
+            </div>
+            {expanded && (
+                <ul className="m-0 mb-1 ml-5 flex list-none flex-col gap-0.5 border-l border-border py-0.5 pl-2.5">
+                    {children.map((child) => {
+                        const to = child.to(workspaceId);
+                        const active = here === to || (child === children[0] && here === href);
+                        return (
+                            <li key={child.id}>
+                                <Link
+                                    to={to}
+                                    onClick={onNavigate}
+                                    aria-current={active ? 'page' : undefined}
+                                    className={cn(
+                                        'flex h-8 items-center rounded-md border border-transparent px-2.5 text-[13px] text-text-muted transition-colors hover:border-border hover:bg-surface hover:text-text hover:shadow-sm',
+                                        active && ACTIVE,
+                                        focusRing,
+                                    )}
+                                >
+                                    {child.label}
+                                </Link>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
     );
 }
 

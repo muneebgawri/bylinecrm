@@ -56,6 +56,14 @@
     --bc-chart-4: #7c3aed;
     --bc-chart-5: #be185d;
 
+    /* Icon tiles on KPI cards: a soft two-stop gradient per tone, white glyph on top */
+    --bc-tile-info: linear-gradient(135deg, #06b6d4, #2563eb);
+    --bc-tile-accent: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    --bc-tile-success: linear-gradient(135deg, #10b981, #0d9488);
+    --bc-tile-warning: linear-gradient(135deg, #f59e0b, #ea580c);
+    --bc-tile-danger: linear-gradient(135deg, #f43f5e, #db2777);
+    --bc-tile-neutral: linear-gradient(135deg, #525252, #262626);
+
     /* Shape: 14px cards, 8px controls, 6px chips, pills */
     --bc-radius-sm: 6px;
     --bc-radius-md: 8px;

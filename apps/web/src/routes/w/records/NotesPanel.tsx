@@ -1,3 +1,4 @@
+import { StickyNote } from 'lucide-react';
 import type { RecordTarget, RichText } from '@bylinecrm/shared';
 import { Button, Input, Skeleton } from '@bylinecrm/ui';
 import { lazy, Suspense, useState } from 'react';
@@ -36,6 +37,7 @@ export function NotesPanel({
     return (
         <RailCard
             title="Notes"
+            icon={<StickyNote />}
             count={notes.data ? items.length : undefined}
             action={
                 write.allowed ? (

@@ -22,7 +22,11 @@ export const FactGrid = forwardRef<HTMLDListElement, FactGridProps>(function Fac
     return (
         <dl
             ref={ref}
-            className={cn('grid overflow-hidden rounded-md border border-border', COLUMNS[columns], className)}
+            className={cn(
+                'grid overflow-hidden rounded-xl border border-border bg-surface shadow-sm',
+                COLUMNS[columns],
+                className,
+            )}
             {...props}
         >
             {facts.map((fact) => (

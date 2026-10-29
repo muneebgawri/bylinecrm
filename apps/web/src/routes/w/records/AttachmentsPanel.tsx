@@ -35,6 +35,7 @@ export function AttachmentsPanel({ workspaceId, target }: { workspaceId: string;
     return (
         <RailCard
             title="Files"
+            icon={<Paperclip />}
             count={list.data?.length}
             action={
                 write.allowed ? (

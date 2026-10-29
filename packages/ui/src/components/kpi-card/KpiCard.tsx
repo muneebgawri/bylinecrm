@@ -1,6 +1,6 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
-import { toneSolid, type Tone } from '../../lib/tones';
+import { toneTile, type Tone } from '../../lib/tones';
 
 export interface KpiCardProps extends HTMLAttributes<HTMLDivElement> {
     /** The icon in the tile (a lucide icon); the label carries the meaning. */
@@ -40,10 +40,7 @@ export const KpiCard = forwardRef<HTMLDivElement, KpiCardProps>(function KpiCard
                 <span className="grid size-10 place-items-center rounded-lg border border-border bg-surface p-0.5 shadow-sm">
                     <span
                         aria-hidden
-                        className={cn(
-                            'grid size-full place-items-center rounded-md text-primary-foreground [&_svg]:size-5',
-                            toneSolid[tone],
-                        )}
+                        className={cn('grid size-full place-items-center rounded-md [&_svg]:size-5', toneTile[tone])}
                     >
                         {icon}
                     </span>
