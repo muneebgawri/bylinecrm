@@ -1,3 +1,4 @@
+import { SuppressionModule } from '../suppression/suppression.module';
 import { ENV } from '../config/env';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
@@ -35,6 +36,7 @@ import { BiginStageMapService } from './stage-map.service';
         TimelineModule,
         TransactionalMailModule,
         TransfersModule,
+        SuppressionModule,
         BullModule.registerQueue({
             name: BIGIN_IMPORT_QUEUE,
             defaultJobOptions: {

@@ -284,6 +284,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 Account_Name: { id: ids.acme, name: 'Acme' },
                 Owner: ownerOf(adminEmail),
                 PR_LINK: 'https://www.newswire.ca/news-releases/acme',
+                Email_Opt_Out: true,
             },
             {
                 First_Name: 'Dana',
@@ -506,6 +507,22 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect(all.filter((p) => p.emails.primary === `dana-${stamp}@acme.example`)).toHaveLength(1);
             // An owner nobody here has leaves the person unowned.
             expect(all.find((p) => p.nameFirst === 'Owner')!.ownerId).toBeNull();
+            // Opted out of email in Bigin: never mailed here — suppressed as their own unsubscribe.
+            const suppressed = await owner.suppression.findMany({
+                where: { workspaceId: workspace, address: `matthew.croteau@acme-${stamp}.example`, removedAt: null },
+            });
+            expect(suppressed).toEqual([
+                expect.objectContaining({
+                    reason: 'unsubscribe',
+                    source: 'recipient',
+                    note: 'Opted out of email in Bigin',
+                }),
+            ]);
+            expect(
+                await owner.suppression.count({
+                    where: { workspaceId: workspace, address: `dana-${stamp}@acme.example`, removedAt: null },
+                }),
+            ).toBe(0);
         });
 
         it('deals: the stage by name (case aside), Closed Won/Lost to won and lost, an unknown stage to the first open one with the raw stage reported', async () => {

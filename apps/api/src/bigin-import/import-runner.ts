@@ -1,3 +1,5 @@
+import { SuppressionService } from '../suppression/suppression.service';
+import { suppressBiginOptOuts } from './opt-outs';
 import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import {
     BIGIN_IMPORT_OBJECTS,
@@ -132,6 +134,7 @@ export class BiginImportRunner {
         private readonly moves: StageMoveService,
         private readonly sync: BiginSyncService,
         private readonly auth: AuthService,
+        private readonly suppression: SuppressionService,
         private readonly transfers: TransfersService,
     ) {}
 
@@ -438,6 +441,8 @@ export class BiginImportRunner {
                 await this.events.recordAll(tx, events);
             });
         }
+        // A Contact who opted out of email in Bigin is never mailed here: suppressed once the page is written.
+        if (module === 'Contacts') await suppressBiginOptOuts(this.suppression, workspaceId, records);
         await this.rls.withWorkspace(async (tx) => {
             for (const record of inWindow) {
                 const modified = biginInstant(record.Modified_Time);

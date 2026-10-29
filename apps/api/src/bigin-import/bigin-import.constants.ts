@@ -49,6 +49,8 @@ export const BIGIN_MAPPED_FIELDS: Readonly<Record<string, readonly string[]>> = 
         'Account_Name',
         'Owner',
         'PR_LINK',
+        // Read so a Contact's opt-out reaches the suppression list (`opt-outs.ts`).
+        'Email_Opt_Out',
     ],
     Deals: ['Deal_Name', 'Amount', 'Closing_Date', 'Stage', 'Account_Name', 'Contact_Name', 'Owner'],
     Notes: ['Note_Title', 'Note_Content', 'Parent_Id', 'Owner'],

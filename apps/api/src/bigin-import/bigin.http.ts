@@ -204,6 +204,20 @@ export class BiginHttp implements BiginApi {
         }
     }
 
+    async search(connection: BiginConnection, module: string, criteria: string, page: number): Promise<BiginPage> {
+        const body = await this.get(
+            connection,
+            `${module}/search`,
+            module,
+            new URLSearchParams({ criteria, per_page: String(BIGIN_PAGE_SIZE), page: String(page) }),
+            null,
+        );
+        const records = (Array.isArray(body.data) ? body.data : []).filter(
+            (r): r is BiginRecord => typeof r === 'object' && r !== null && typeof (r as BiginRecord).id === 'string',
+        );
+        return { records, moreRecords: Boolean(body.info?.more_records), nextPageToken: null };
+    }
+
     async modules(connection: BiginConnection): Promise<BiginModule[]> {
         const body = await this.get(connection, 'settings/modules', 'modules', new URLSearchParams(), null);
         const rows = Array.isArray((body as { modules?: unknown }).modules)

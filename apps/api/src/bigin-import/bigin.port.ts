@@ -88,6 +88,8 @@ export interface BiginApi {
      * four, or (the inventory) one the importer does not read.
      */
     count(connection: BiginConnection, module: BiginImportObject | string): Promise<number | null>;
+    /** A page of the module's records matching a Zoho search `criteria`, e.g. `(Email_Opt_Out:equals:true)`. */
+    search(connection: BiginConnection, module: string, criteria: string, page: number): Promise<BiginPage>;
     /** The account's modules (Zoho's `settings/modules`): what there is to import, by API name. */
     modules(connection: BiginConnection): Promise<BiginModule[]>;
     /** A module's fields (Zoho's `settings/fields`), with the values of each picklist. */
