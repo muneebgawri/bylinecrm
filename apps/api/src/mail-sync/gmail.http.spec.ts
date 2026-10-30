@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GmailApiError } from './gmail.port';
 import { GmailHttp } from './gmail.http';
+import { GMAIL_UNITS } from './mail-sync.constants';
 
 function respond(status: number, body: unknown) {
     return vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(body), { status }));
@@ -107,5 +108,26 @@ describe('GmailHttp', () => {
         await new GmailHttp().send('tok', { raw: 'x' });
         const body = JSON.parse(String(spy.mock.calls[0]![1]?.body)) as Record<string, unknown>;
         expect(body).not.toHaveProperty('threadId');
+    });
+
+    /**
+     * PNW-1125: Google re-priced the Gmail API on 2026-05-01 for projects created since — a `messages.get` costs 20
+     * units, 60 with `format=full|raw|html` (https://developers.google.com/workspace/gmail/api/reference/quota). The
+     * table still charged 5, so the pacer let a mailbox download twelve times what it counted, and every backlog run
+     * crossed the 6,000-unit per-user minute. A request is charged what Google bills for the format it asks.
+     */
+    it('R-PNW-1125: a message read is charged what Google bills for the format the client asks', async () => {
+        const billed: Record<string, number> = { full: 60, raw: 60, html: 60, metadata: 20, minimal: 20 };
+        const formatOf = (spy: ReturnType<typeof respond>) =>
+            new URL(String(spy.mock.calls[0]![0])).searchParams.get('format') ?? 'full';
+
+        const full = respond(200, { id: 'm', threadId: 't', payload: {} });
+        await new GmailHttp().getMessage('t', 'm');
+        expect(GMAIL_UNITS.getMessage).toBe(billed[formatOf(full)]);
+        vi.restoreAllMocks();
+
+        const headers = respond(200, { id: 'm', threadId: 't', payload: { headers: [] } });
+        await new GmailHttp().getMessageHeaders('t', 'm', ['X-Crm-Id']);
+        expect(GMAIL_UNITS.getMessageMetadata).toBe(billed[formatOf(headers)]);
     });
 });

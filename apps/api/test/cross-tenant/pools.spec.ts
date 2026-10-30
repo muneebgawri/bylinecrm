@@ -14,6 +14,7 @@ import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sync.service';
+import { GmailQuota } from '../../src/mail-sync/quota';
 import { WEBHOOK_QUEUE } from '../../src/webhooks/webhooks.constants';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
@@ -95,6 +96,10 @@ describe('background work and request handling (#86, FR-CRMS-2)', () => {
             .useValue(google)
             .overrideProvider(GMAIL_PORT)
             .useValue(gmail)
+            // The fake Gmail has no Google quota, and this spec measures the database pools under a fast import:
+            // Google's per-user pacing (PNW-1125: ~1.5 full reads a second) is quota.spec's, not this load's.
+            .overrideProvider(GmailQuota)
+            .useValue({ take: () => Promise.resolve() })
             .compile();
         app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
         await app.init();

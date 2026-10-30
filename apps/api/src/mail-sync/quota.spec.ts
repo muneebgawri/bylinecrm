@@ -46,7 +46,8 @@ describe('GmailQuota', () => {
         const fetchers = Array.from({ length: 5 }, fetcher);
         await vi.advanceTimersByTimeAsync(3 * 60 * 1000);
         stop = true;
-        await vi.advanceTimersByTimeAsync(2000);
+        // Each fetcher still finishes the request it is waiting on: run the clock until every one has.
+        await vi.runAllTimersAsync();
         await Promise.all(fetchers);
 
         expect(granted.length).toBeGreaterThan(0);
