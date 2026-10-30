@@ -23,15 +23,22 @@ export const GMAIL_FETCH_CONCURRENCY = 5;
 export const GMAIL_USER_UNITS_PER_MINUTE = 6000;
 /**
  * The units a mailbox may spend in one second: a tenth of the minute held back for the same mailbox's sending (P2-3)
- * and Google's sliding window. Any 60 s then holds at most 61 of these seconds, under the minute. Costs are Gmail's
- * published per-method units.
+ * and Google's sliding window. Any 60 s then holds at most 61 of these seconds, under the minute.
  */
 export const GMAIL_QUOTA_UNITS_PER_S = Math.floor((GMAIL_USER_UNITS_PER_MINUTE * 0.9) / 60);
+/**
+ * What Google bills each request, in quota units, for the format the client asks (gmail.http.ts). Google re-priced the
+ * API on 2026-05-01 for projects created since (https://developers.google.com/workspace/gmail/api/reference/quota): a
+ * message read costs 60 with `format=full`, 20 with `format=metadata` — no longer 5 (PNW-1125).
+ */
 export const GMAIL_UNITS = {
     getProfile: 1,
     listMessages: 5,
     listHistory: 2,
-    getMessage: 5,
+    /** `messages.get` with `format=full`. */
+    getMessage: 60,
+    /** `messages.get` with `format=metadata` (sending's lookup of a lost send, P2-3a). */
+    getMessageMetadata: 20,
     send: 100,
     /** `users.settings.sendAs.list` (#193). */
     listSendAs: 1,

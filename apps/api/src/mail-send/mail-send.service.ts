@@ -1526,7 +1526,7 @@ export class MailSendService {
             for (const ref of page.messages) {
                 if (checked >= MAIL_SEND_DEDUPE_MAX_CANDIDATES) return null;
                 checked += 1;
-                await this.sync.chargeQuota(mailboxId, GMAIL_UNITS.getMessage);
+                await this.sync.chargeQuota(mailboxId, GMAIL_UNITS.getMessageMetadata);
                 const candidate = await this.gmail.getMessageHeaders(token, ref.id, [MAIL_CRM_ID_HEADER]);
                 const ours = candidate.headers.some(
                     (h) => h.name.toLowerCase() === wanted && h.value.trim() === row.id,
