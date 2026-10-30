@@ -25,7 +25,7 @@ import {
     toneSolid,
 } from '@bylinecrm/ui';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowRightLeft, Clock, MoreHorizontal } from 'lucide-react';
+import { ArrowRightLeft, MoreHorizontal } from 'lucide-react';
 import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { BoardColumn, BoardView, OpportunityView, StageView } from '../../../api/types';
 import { formatDay } from '../../../lib/format';
@@ -531,19 +531,18 @@ function CardBody({
             reference={shortReference(deal.id)}
             {...(priority ? { priority } : {})}
             title={deal.name}
-            chips={
-                <>
-                    {deal.closeDate && (
-                        <CardChip>
-                            <Clock aria-hidden /> {fieldTitle('closeDate')} {formatDay(deal.closeDate)}
-                        </CardChip>
-                    )}
-                    {quiet && (
-                        <CardChip className="text-warning">{daysLabel(deal.daysInStage)} · past threshold</CardChip>
-                    )}
-                </>
-            }
+            {...(deal.company ? { company: deal.company.name } : {})}
+            {...(quiet
+                ? {
+                      chips: (
+                          <CardChip className="text-warning">{daysLabel(deal.daysInStage)} · past threshold</CardChip>
+                      ),
+                  }
+                : {})}
             amount={formatMoneyCompact(deal.amount)}
+            {...(deal.closedAt ? {} : { probability: deal.probability ?? stage?.probability ?? 0 })}
+            {...(deal.pointOfContact ? { contact: deal.pointOfContact.name } : {})}
+            {...(deal.closeDate ? { date: { label: fieldTitle('closeDate'), value: formatDay(deal.closeDate) } } : {})}
             {...(ownerName ? { owner: { name: ownerName } } : {})}
             age={
                 deal.closedAt

@@ -206,7 +206,7 @@ function ArchivedFields({
     const rows = archived.data ?? [];
     if (archived.isPending || rows.length === 0) return null;
     return (
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
             <button
                 type="button"
                 aria-expanded={open}
@@ -362,7 +362,7 @@ function CustomFieldEditor({
                         )}
                         {needsOptions && (
                             <fieldset className="m-0 grid gap-2 border-0 p-0">
-                                <legend className="mb-1 p-0 text-[13px] font-medium">Options</legend>
+                                <legend className="mb-1 p-0 text-xs font-medium text-text-muted">Options</legend>
                                 {options.length > 0 && (
                                     <ol aria-label="Options" className="m-0 grid list-none gap-1 p-0">
                                         {options.map((option, i) => (

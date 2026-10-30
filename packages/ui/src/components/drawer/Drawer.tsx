@@ -44,7 +44,7 @@ export const DrawerContent = forwardRef<ComponentRef<typeof DialogPrimitive.Cont
                     )}
                     {...props}
                 >
-                    <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border bg-surface px-5.5 py-4">
+                    <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border bg-surface px-6 py-4">
                         <DialogPrimitive.Close
                             className={cn(
                                 'grid size-8.5 shrink-0 place-items-center rounded-md text-text-muted hover:bg-surface-raised hover:text-text max-md:size-touch',
@@ -54,7 +54,9 @@ export const DrawerContent = forwardRef<ComponentRef<typeof DialogPrimitive.Cont
                             <X aria-hidden className="size-4.5" />
                             <span className="sr-only">Close</span>
                         </DialogPrimitive.Close>
-                        <DialogPrimitive.Title className="text-lg font-semibold">{title}</DialogPrimitive.Title>
+                        <DialogPrimitive.Title className="text-base leading-none font-semibold">
+                            {title}
+                        </DialogPrimitive.Title>
                         <DialogPrimitive.Description className="sr-only">
                             {description ?? `${title} panel`}
                         </DialogPrimitive.Description>

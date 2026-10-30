@@ -23020,7 +23020,7 @@
                 "parameters": [
                     {
                         "name": "target",
-                        "required": true,
+                        "required": false,
                         "in": "query",
                         "schema": {
                             "minLength": 1,

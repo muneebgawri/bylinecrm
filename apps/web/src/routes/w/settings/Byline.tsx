@@ -9,6 +9,7 @@ import { CopyValue } from '../../../components/CopyValue';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
+import { SettingsSaveBar, SettingsSection } from './SettingsSection';
 import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
 /** The shortest webhook secret the API accepts. */
@@ -71,6 +72,13 @@ function BylineForm({
     const [verify, setVerify] = useState(settings.verifyWithByline);
     const [local, setLocal] = useState<{ secret?: string; baseUrl?: string; apiKey?: string }>({});
     const [confirm, setConfirm] = useState(false);
+    const dirty =
+        secret !== '' ||
+        apiKey !== '' ||
+        baseUrl.trim() !== (settings.baseUrl ?? '') ||
+        verify !== settings.verifyWithByline ||
+        dealt.join(',') !== settings.roundRobinMemberIds.join(',') ||
+        !(settings.configured || settings.apiConfigured);
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -104,26 +112,30 @@ function BylineForm({
 
     return (
         <div className="flex flex-col gap-5">
-            <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-                <Field
-                    label="Webhook secret"
-                    hint={
-                        settings.configured
-                            ? 'Set. Enter a new one only when you change BYLINE_WEBHOOK_SECRET in BylineAI too.'
-                            : 'BylineAI signs every lead with it (BYLINE_WEBHOOK_SECRET); anything else is refused.'
-                    }
-                    error={local.secret ?? fieldErrorAt(put.error, 'secret')}
+            <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+                <SettingsSection title="Webhook" description="BylineAI signs every lead it delivers with this secret.">
+                    <Field
+                        label="Webhook secret"
+                        hint={
+                            settings.configured
+                                ? 'Set. Enter a new one only when you change BYLINE_WEBHOOK_SECRET in BylineAI too.'
+                                : 'BylineAI signs every lead with it (BYLINE_WEBHOOK_SECRET); anything else is refused.'
+                        }
+                        error={local.secret ?? fieldErrorAt(put.error, 'secret')}
+                    >
+                        <Input
+                            type="password"
+                            autoComplete="new-password"
+                            value={secret}
+                            onChange={(e) => setSecret(e.target.value)}
+                            className="max-w-[28rem]"
+                        />
+                    </Field>
+                </SettingsSection>
+                <SettingsSection
+                    title="Deal new companies’ leads to"
+                    description="In turn, to the members picked here; nobody picked means a lead waits unowned."
                 >
-                    <Input
-                        type="password"
-                        autoComplete="new-password"
-                        value={secret}
-                        onChange={(e) => setSecret(e.target.value)}
-                        className="max-w-[28rem]"
-                    />
-                </Field>
-                <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-                    <legend className="mb-1 text-[13px] font-medium text-text">Deal new companies’ leads to</legend>
                     {members.map((m) => (
                         <label key={m.id} className="flex items-center gap-2 text-[13px]">
                             <Checkbox
@@ -140,11 +152,11 @@ function BylineForm({
                     {fieldErrorAt(put.error, 'roundRobinMemberIds') && (
                         <p className="m-0 text-[13px] text-danger">{fieldErrorAt(put.error, 'roundRobinMemberIds')}</p>
                     )}
-                </fieldset>
-                <fieldset className="m-0 flex flex-col gap-4 border-0 p-0">
-                    <legend className="mb-1 text-[13px] font-medium text-text">
-                        Enrichment and verification from BylineAI
-                    </legend>
+                </SettingsSection>
+                <SettingsSection
+                    title="Enrichment and verification from BylineAI"
+                    description="Ask BylineAI about addresses and companies, under its own budgets."
+                >
                     <Field
                         label="BylineAI address"
                         hint="BylineAI’s site origin, https://byline.example — leave empty to stop asking BylineAI."
@@ -181,26 +193,28 @@ function BylineForm({
                         <Checkbox checked={verify} onCheckedChange={(checked) => setVerify(checked === true)} />
                         Verify addresses with BylineAI (its Reacher pool); the free checks answer when it cannot
                     </label>
-                </fieldset>
-                <div className="flex flex-wrap gap-2">
-                    <Button type="submit" variant="primary" shape="square" loading={put.isPending}>
-                        {settings.configured || settings.apiConfigured ? 'Save' : 'Link BylineAI'}
-                    </Button>
-                    {(settings.configured || settings.apiConfigured) && (
-                        <Button type="button" variant="ghost" shape="square" onClick={() => setConfirm(true)}>
-                            Unlink
-                        </Button>
-                    )}
-                </div>
+                </SettingsSection>
+                <SettingsSaveBar
+                    dirty={dirty}
+                    saving={put.isPending}
+                    saveLabel={settings.configured || settings.apiConfigured ? 'Save' : 'Link BylineAI'}
+                    extra={
+                        (settings.configured || settings.apiConfigured) && (
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirm(true)}>
+                                Unlink
+                            </Button>
+                        )
+                    }
+                />
             </form>
 
             {settings.configured && (
                 <section
                     aria-label="Webhook for BylineAI"
-                    className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+                    className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-6 shadow-sm"
                 >
                     <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="m-0 text-[14px] font-semibold text-text">Leads</h3>
+                        <h3 className="m-0 text-base font-semibold text-text">Leads</h3>
                         {settings.lastDeliveryResult === 'bad_signature' ? (
                             <Badge status="danger">Secret does not match</Badge>
                         ) : settings.lastDeliveryAt ? (

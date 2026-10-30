@@ -16,7 +16,7 @@ import {
     focusRing,
 } from '@bylinecrm/ui';
 import { LOST_REASON_LABELS, LOST_REASONS, type LostReason } from '@bylinecrm/shared';
-import { ListTodo, Mail, StickyNote } from 'lucide-react';
+import { ListTodo, Mail, StickyNote, History, UserRound } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useDealHistory, useMoveDeal, usePipeline } from '../../../api/deals';
@@ -443,7 +443,7 @@ export function DealRecord({
             }
             rail={
                 <>
-                    <RailCard title="Stage history" count={history.data?.length}>
+                    <RailCard title="Stage history" icon={<History />} count={history.data?.length}>
                         {history.isPending ? (
                             <RailLoading />
                         ) : history.isError || !history.data?.length ? (
@@ -458,7 +458,7 @@ export function DealRecord({
                             ))
                         )}
                     </RailCard>
-                    <RailCard title="Contact">
+                    <RailCard title="Contact" icon={<UserRound />}>
                         {deal.pointOfContactId && contact.data ? (
                             <RailRow
                                 to={paths.person(workspaceId, deal.pointOfContactId)}

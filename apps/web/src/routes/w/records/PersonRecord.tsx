@@ -1,6 +1,6 @@
 import { Badge, FactGrid, toast } from '@bylinecrm/ui';
 import { CONTACT_STATUS_LABELS, CONTACT_STATUSES, type ContactStatus } from '@bylinecrm/shared';
-import { ListTodo, Mail, Send, StickyNote } from 'lucide-react';
+import { Building2, Handshake, ListTodo, Mail, Send, StickyNote } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useSetContactStatus } from '../../../api/customers';
@@ -426,7 +426,7 @@ export function PersonRecord({
             rail={
                 <>
                     <EnrichmentPanel workspaceId={workspaceId} object="person" recordId={person.id} />
-                    <RailCard title="Company">
+                    <RailCard title="Company" icon={<Building2 />}>
                         {person.companyId && companyName ? (
                             <RailRow
                                 to={paths.company(workspaceId, person.companyId)}
@@ -437,7 +437,11 @@ export function PersonRecord({
                             <RailEmpty>Not linked to a company.</RailEmpty>
                         )}
                     </RailCard>
-                    <RailCard title="Deals" count={deals.data && !deals.more ? personDeals.length : undefined}>
+                    <RailCard
+                        title="Deals"
+                        icon={<Handshake />}
+                        count={deals.data && !deals.more ? personDeals.length : undefined}
+                    >
                         {deals.isPending ? (
                             <RailLoading />
                         ) : personDeals.length === 0 ? (

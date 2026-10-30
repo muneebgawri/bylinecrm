@@ -1,5 +1,6 @@
 import { LINK_TOKEN_PARAM } from '@bylinecrm/shared';
 import { Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
+import { MailCheck } from 'lucide-react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useLogout, useMe, useResendVerification, useVerifyEmail } from '../../api/queries';
@@ -24,7 +25,7 @@ function SpendLink({ token }: { token: string }) {
 
     if (verify.isSuccess) {
         return (
-            <AuthLayout title="Your email is verified">
+            <AuthLayout title="Your email is verified" icon={<MailCheck />}>
                 <div className="flex flex-col gap-4">
                     <p className="m-0 text-text-muted" role="status">
                         Thanks. You can use BylineCRM now.
@@ -44,7 +45,11 @@ function SpendLink({ token }: { token: string }) {
     }
 
     return (
-        <AuthLayout title="Verify your email address" subtitle="Confirm this is your address to finish setting up.">
+        <AuthLayout
+            title="Verify your email address"
+            subtitle="Confirm this is your address to finish setting up."
+            icon={<MailCheck />}
+        >
             <div className="flex flex-col gap-4">
                 {verify.isError && (
                     <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
@@ -88,7 +93,20 @@ function CheckInbox() {
 
     const limited = resend.error instanceof ApiError && resend.error.status === 429;
     return (
-        <AuthLayout title="Check your inbox" subtitle="Verify your email address to start using BylineCRM.">
+        <AuthLayout
+            title="Check your inbox"
+            subtitle="Verify your email address to start using BylineCRM."
+            icon={<MailCheck />}
+            hero={{
+                eyebrow: 'One last step',
+                heading: (
+                    <>
+                        Verify your <span className="text-accent">email address.</span>
+                    </>
+                ),
+                body: 'We sent a confirmation link to your inbox. Open it to activate your BylineCRM account and start working your pipeline.',
+            }}
+        >
             <div className="flex flex-col gap-4">
                 {me.isPending ? (
                     <LoadingRegion label="Loading" className="grid gap-2">

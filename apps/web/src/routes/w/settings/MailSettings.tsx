@@ -1,6 +1,5 @@
 import { DEFAULT_UNSUBSCRIBE_FOOTER_TEXT, MAIL_SETTINGS_TEXT_MAX } from '@bylinecrm/shared';
 import {
-    Button,
     Field,
     Input,
     LoadingRegion,
@@ -20,6 +19,7 @@ import type { MailSettingsView, PutMailSettingsInput } from '../../../api/types'
 import { usePermission } from '../../../auth/capabilities';
 import { countries } from '../../../lib/countries';
 import { failureText } from '../../../lib/errors';
+import { SettingsSaveBar, SettingsSection } from './SettingsSection';
 import { useWorkspaceId } from '../../params';
 import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
 
@@ -158,8 +158,11 @@ function MailSettingsForm({ workspaceId, settings }: { workspaceId: string; sett
                     {edit.reason} An admin changes these settings.
                 </p>
             )}
-            <fieldset className="m-0 flex flex-col gap-4 border-0 p-0" disabled={readOnly}>
-                <legend className="mb-3 p-0 text-sm font-semibold">Postal address</legend>
+            <SettingsSection
+                title="Postal address"
+                description="Printed at the foot of every outreach email, as the law requires."
+                disabled={readOnly}
+            >
                 <Field label="Street address" error={error('line1')}>
                     <Input
                         value={form.line1}
@@ -216,9 +219,8 @@ function MailSettingsForm({ workspaceId, settings }: { workspaceId: string; sett
                         </Select>
                     </Field>
                 </div>
-            </fieldset>
-            <fieldset className="m-0 flex flex-col gap-4 border-0 p-0" disabled={readOnly}>
-                <legend className="mb-3 p-0 text-sm font-semibold">Sending</legend>
+            </SettingsSection>
+            <SettingsSection title="Sending" description="How outreach mail introduces itself." disabled={readOnly}>
                 <Field
                     label="Default sender name"
                     hint="Shown as who an email is from when a mailbox has no name of its own. Optional."
@@ -242,22 +244,8 @@ function MailSettingsForm({ workspaceId, settings }: { workspaceId: string; sett
                         maxLength={MAIL_SETTINGS_TEXT_MAX}
                     />
                 </Field>
-            </fieldset>
-            {!readOnly && (
-                <div className="flex items-center gap-3">
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        shape="square"
-                        data-primary-action
-                        loading={put.isPending}
-                        disabled={!dirty}
-                    >
-                        Save
-                    </Button>
-                    {dirty && <span className="text-[13px] text-text-muted">Unsaved changes</span>}
-                </div>
-            )}
+            </SettingsSection>
+            {!readOnly && <SettingsSaveBar dirty={dirty} saving={put.isPending} saveLabel="Save" />}
         </form>
     );
 }

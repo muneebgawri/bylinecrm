@@ -212,16 +212,21 @@ export const attachments = {
 };
 
 export const timeline = {
+    /** One record's entries with `target`; the workspace's feed without it. */
     list: (
         workspaceId: string,
-        params: { target: RecordTarget; kinds?: string | undefined; cursor?: string | undefined },
+        params: { target?: RecordTarget | undefined; kinds?: string | undefined; cursor?: string | undefined },
         signal?: AbortSignal,
     ) =>
         request<TimelinePage>(
             'GET',
             workspacePath(
                 workspaceId,
-                `/timeline${query({ target: targetParam(params.target), kinds: params.kinds, cursor: params.cursor })}`,
+                `/timeline${query({
+                    target: params.target ? targetParam(params.target) : undefined,
+                    kinds: params.kinds,
+                    cursor: params.cursor,
+                })}`,
             ),
             { signal },
         ),
@@ -477,6 +482,15 @@ export function useDeleteAttachment(workspaceId: string, target: RecordTarget) {
 }
 
 /** The record's activity, newest first, a page at a time; `kinds` narrows by prefix. */
+/** The workspace's activity feed: every record the caller may read, newest first, a page at a time. */
+export const useActivityFeed = (workspaceId: string, kinds: string | undefined) =>
+    useInfiniteQuery({
+        queryKey: ['w', workspaceId, 'timeline', 'feed', kinds ?? ''] as const,
+        queryFn: ({ pageParam, signal }) => timeline.list(workspaceId, { kinds, cursor: pageParam }, signal),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (page) => page.nextCursor ?? undefined,
+    });
+
 export const useTimeline = (workspaceId: string, target: RecordTarget, kinds: string | undefined) =>
     useInfiniteQuery({
         queryKey: keys.timeline(workspaceId, target, kinds),

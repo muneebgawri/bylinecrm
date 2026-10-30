@@ -1,5 +1,5 @@
 import { CSRF_COOKIE, MEMBER_INVITE_PARAM, SIGNUP_INVITE_PARAM } from '@bylinecrm/shared';
-import { Button, Field, Input, LoadingRegion, Skeleton } from '@bylinecrm/ui';
+import { Button, Field, Input, LoadingRegion, PasswordInput, Skeleton } from '@bylinecrm/ui';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ApiError, fieldErrorAt, readCookie } from '../../api/client';
@@ -13,11 +13,9 @@ import {
     useSignup,
 } from '../../api/queries';
 import { paths, signInPath } from '../paths';
-import { AuthLayout } from './AuthLayout';
+import { AuthLayout, authLinkClass } from './AuthLayout';
 import { PASSWORD_HINT } from './password';
 import { ProviderButtons } from './ProviderButtons';
-
-const linkClass = 'font-medium text-text underline-offset-4 hover:underline';
 
 /**
  * `/sign-up` is three pages by its query string (P0-14): `?invite=` accepts a workspace invitation
@@ -43,7 +41,11 @@ function CreateAccount({ signupToken }: { signupToken: string | null }) {
     if (providers.isPending) return <Pending title="Create your workspace" />;
     if (mode === 'closed' || (mode === 'invite' && !signupToken) || providers.isError) {
         return (
-            <AuthLayout title="Sign-ups are closed" subtitle="This server takes new accounts by invitation only.">
+            <AuthLayout
+                title="Sign-ups are closed"
+                subtitle="This server takes new accounts by invitation only."
+                aside={<AlreadyHaveAccount />}
+            >
                 <p className="m-0 mb-5 text-text-muted">
                     Ask your administrator for an invitation. The link they send you opens the page to join.
                 </p>
@@ -78,7 +80,11 @@ function CreateAccount({ signupToken }: { signupToken: string | null }) {
                   : null;
 
     return (
-        <AuthLayout title="Create your workspace" subtitle="A workspace is your team's CRM; you can add more later.">
+        <AuthLayout
+            title="Create your workspace"
+            subtitle="A workspace is your team's CRM; you can add more later."
+            aside={<AlreadyHaveAccount />}
+        >
             {!signupToken && <ProviderButtons />}
             <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
                 <Field
@@ -90,8 +96,7 @@ function CreateAccount({ signupToken }: { signupToken: string | null }) {
                     <Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </Field>
                 <Field label="Password" required hint={PASSWORD_HINT} error={fieldError('password')}>
-                    <Input
-                        type="password"
+                    <PasswordInput
                         autoComplete="new-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -116,7 +121,6 @@ function CreateAccount({ signupToken }: { signupToken: string | null }) {
                     Create workspace
                 </Button>
             </form>
-            <AlreadyHaveAccount />
         </AuthLayout>
     );
 }
@@ -144,7 +148,7 @@ function AcceptInvitation({ token }: { token: string }) {
     if (preview.isError) {
         const status = preview.error instanceof ApiError ? preview.error.status : undefined;
         return (
-            <AuthLayout title="This invitation cannot be used">
+            <AuthLayout title="This invitation cannot be used" aside={<AlreadyHaveAccount />}>
                 <p className="m-0 text-text-muted">
                     {status === 410
                         ? 'It was already used, or it has expired. Ask whoever invited you for a new link.'
@@ -152,7 +156,6 @@ function AcceptInvitation({ token }: { token: string }) {
                           ? 'The link is not a valid invitation. Check that it was copied whole.'
                           : 'Could not check the invitation. Check your connection and try again.'}
                 </p>
-                <AlreadyHaveAccount />
             </AuthLayout>
         );
     }
@@ -219,7 +222,18 @@ function AcceptInvitation({ token }: { token: string }) {
         signup.mutate({ token, password }, { onSuccess: goHome });
     };
     return (
-        <AuthLayout title={title} subtitle={subtitle}>
+        <AuthLayout
+            title={title}
+            subtitle={subtitle}
+            aside={
+                <>
+                    Already have an account?{' '}
+                    <Link to={signInPath(here)} className={authLinkClass}>
+                        Sign in to accept
+                    </Link>
+                </>
+            }
+        >
             <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
                 <Field label="Email">
                     <Input type="email" autoComplete="username" value={email} readOnly />
@@ -232,7 +246,7 @@ function AcceptInvitation({ token }: { token: string }) {
                         failure?.status === 409 ? (
                             <>
                                 You already have an account.{' '}
-                                <Link to={signInPath(here)} className={linkClass}>
+                                <Link to={signInPath(here)} className={authLinkClass}>
                                     Sign in to accept
                                 </Link>
                                 .
@@ -243,8 +257,7 @@ function AcceptInvitation({ token }: { token: string }) {
                         )
                     }
                 >
-                    <Input
-                        type="password"
+                    <PasswordInput
                         autoComplete="new-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -261,30 +274,24 @@ function AcceptInvitation({ token }: { token: string }) {
                     Create account and join
                 </Button>
             </form>
-            <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
-                Already have an account?{' '}
-                <Link to={signInPath(here)} className={linkClass}>
-                    Sign in to accept
-                </Link>
-            </p>
         </AuthLayout>
     );
 }
 
 function AlreadyHaveAccount() {
     return (
-        <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
+        <>
             Already have an account?{' '}
-            <Link to={paths.signIn} className={linkClass}>
+            <Link to={paths.signIn} className={authLinkClass}>
                 Sign in
             </Link>
-        </p>
+        </>
     );
 }
 
 function Pending({ title }: { title: string }): ReactNode {
     return (
-        <AuthLayout title={title}>
+        <AuthLayout title={title} aside={<AlreadyHaveAccount />}>
             <LoadingRegion label="Loading" className="grid gap-3">
                 <Skeleton className="h-10" />
                 <Skeleton className="h-10" />

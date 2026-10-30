@@ -5,12 +5,15 @@ import { Link } from 'react-router';
 /** The right rail's card: a muted heading with a count, an action, and rows beneath (mockup v3 `.rel`); a named region. */
 export function RailCard({
     title,
+    icon,
     count,
     action,
     children,
     className,
 }: {
     title: string;
+    /** A lucide icon before the title, muted. */
+    icon?: ReactNode;
     count?: number | undefined;
     action?: ReactNode;
     children: ReactNode;
@@ -20,11 +23,20 @@ export function RailCard({
     return (
         <section
             aria-labelledby={headingId}
-            className={cn('rounded-lg border border-border bg-surface shadow-sm', className)}
+            className={cn('overflow-hidden rounded-xl border border-border bg-surface shadow-sm', className)}
         >
-            <h3 className="m-0 flex items-center gap-2 border-b border-border px-4 py-3 text-[13px] font-medium text-text-muted">
+            <h3 className="m-0 flex items-center gap-2 border-b border-border px-4 py-3.5 text-sm font-semibold">
+                {icon && (
+                    <span aria-hidden className="text-text-muted [&>svg]:size-4">
+                        {icon}
+                    </span>
+                )}
                 <span id={headingId}>{title}</span>
-                {count !== undefined && <span className="tabular-nums text-text-faint">{count}</span>}
+                {count !== undefined && (
+                    <span className="rounded-full bg-surface-raised px-1.5 py-0.5 text-[11px] font-medium text-text-muted tabular-nums">
+                        {count}
+                    </span>
+                )}
                 {action && <span className="ml-auto">{action}</span>}
             </h3>
             {children}
@@ -51,7 +63,7 @@ export function RailRow({
         </>
     );
     const classes = cn(
-        'block w-full border-b border-border px-4 py-2.5 text-left last:border-b-0',
+        'block w-full border-b border-border px-4 py-3 text-left last:border-b-0',
         (to || onClick) && 'hover:bg-surface-raised',
         focusRing,
     );
@@ -74,7 +86,7 @@ export function RailRow({
 
 /** The rail card's "nothing here" line; a sentence, never a blank card. */
 export function RailEmpty({ children }: { children: ReactNode }) {
-    return <p className="m-0 px-4 py-3 text-[13px] text-text-faint">{children}</p>;
+    return <p className="m-0 px-4 py-4 text-sm text-text-muted">{children}</p>;
 }
 
 /** A rail card while its rows load: the shape, not "nothing here" (loading is not empty, FR-CRMS-UI-7). */

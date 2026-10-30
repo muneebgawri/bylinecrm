@@ -25,7 +25,7 @@ export const buttonVariants = cva(
                 accent: 'border border-accent bg-accent text-accent-foreground hover:opacity-90',
                 secondary: 'border border-border bg-surface text-text shadow-sm hover:bg-surface-raised',
                 ghost: 'border border-transparent text-text-muted hover:bg-surface-raised hover:text-text',
-                danger: 'border border-danger bg-danger text-danger-soft hover:opacity-90',
+                danger: 'border border-danger-fill bg-danger-fill text-white hover:opacity-90',
                 link: 'text-accent underline-offset-4 hover:underline',
             },
             size: {
@@ -40,7 +40,7 @@ export const buttonVariants = cva(
                 square: 'rounded-md',
             },
         },
-        defaultVariants: { variant: 'secondary', size: 'md', shape: 'pill' },
+        defaultVariants: { variant: 'secondary', size: 'md', shape: 'square' },
     },
 );
 

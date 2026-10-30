@@ -31,7 +31,7 @@ export function DomainPage() {
     );
     if (!admin) {
         return (
-            <div className="p-7 max-md:p-4">
+            <div className="p-4 md:p-6">
                 <EmptyState
                     title="Only an admin can open a sending domain"
                     body="Its health is on the Mailboxes page for everyone who runs outreach."
@@ -43,7 +43,7 @@ export function DomainPage() {
     if (domain.isError) throw domain.error;
     if (!domain.data) {
         return (
-            <div className="p-7 max-md:p-4">
+            <div className="p-4 md:p-6">
                 <LoadingRegion label="Loading the sending domain">
                     <Skeleton className="h-9 w-64" />
                     <Skeleton className="mt-4 h-40" />
@@ -64,7 +64,7 @@ export function DomainPage() {
         });
     const reads = readsText(d.postmaster);
     return (
-        <div className="p-7 max-md:p-4">
+        <div className="p-4 md:p-6">
             <p className="m-0 mb-2 text-[13px]">{back}</p>
             <PageHeader
                 title={d.domain}

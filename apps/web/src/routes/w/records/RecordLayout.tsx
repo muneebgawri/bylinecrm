@@ -43,13 +43,13 @@ export function RecordLayout({
     }
     return (
         <div className="flex flex-col">
-            <div className="flex flex-col gap-5 p-7 max-md:p-4">
+            <div className="flex flex-col gap-4 p-4 md:p-6">
                 {header}
                 {facts}
                 <div
                     className={cn(
-                        'grid gap-4',
-                        'grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_280px]',
+                        'grid items-start gap-4',
+                        'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.85fr)] xl:grid-cols-[minmax(220px,0.85fr)_minmax(320px,1.45fr)_minmax(220px,0.85fr)]',
                     )}
                 >
                     <div className="order-2 min-w-0 lg:order-1 lg:col-span-2 xl:col-span-1">{properties}</div>

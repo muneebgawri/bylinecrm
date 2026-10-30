@@ -606,7 +606,7 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         const closed = await card('Annual plan');
         expect(within(closed).getByText('Closed Oct 9, 2026')).toBeInTheDocument();
         const open = await card('Series B PR');
-        expect(within(open).getByText(/Expected close Oct 31, 2026/)).toBeInTheDocument();
+        expect(within(open).getByTitle('Expected close Oct 31, 2026')).toBeInTheDocument();
         expect(within(open).queryByText(/^Close /)).not.toBeInTheDocument();
     });
 

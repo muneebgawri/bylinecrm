@@ -29,15 +29,15 @@ export const Switch = forwardRef<ComponentRef<typeof SwitchPrimitive.Root>, Swit
             <span
                 aria-hidden
                 className={cn(
-                    'inline-flex h-5 w-9 items-center rounded-full border-2 border-transparent transition-colors',
-                    'group-data-[state=checked]:bg-accent group-data-[state=unchecked]:bg-border-strong',
+                    'inline-flex h-[1.15rem] w-8 items-center rounded-full border border-transparent transition-colors',
+                    'group-data-[state=checked]:bg-primary group-data-[state=unchecked]:bg-border-strong',
                     groupFocusRing,
                 )}
             >
                 <SwitchPrimitive.Thumb
                     className={cn(
-                        'pointer-events-none block size-4 rounded-full bg-surface-raised shadow-sm transition-transform',
-                        'data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0',
+                        'pointer-events-none block size-4 rounded-full bg-surface shadow-sm transition-transform',
+                        'data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0',
                     )}
                 />
             </span>

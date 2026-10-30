@@ -1,10 +1,11 @@
 import { Button, Field, Input } from '@bylinecrm/ui';
+import { MailCheck } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useForgotPassword } from '../../api/queries';
 import { paths } from '../paths';
-import { AuthLayout } from './AuthLayout';
+import { AuthLayout, authLinkClass } from './AuthLayout';
 
 /**
  * `/forgot-password` (#93): asks for a reset link. The answer is the same whether or not the address
@@ -32,9 +33,18 @@ export function ForgotPassword() {
                 ? 'Could not send the link. Check your connection and try again.'
                 : null;
 
+    const aside = (
+        <>
+            Remembered it?{' '}
+            <Link to={paths.signIn} className={authLinkClass}>
+                Sign in
+            </Link>
+        </>
+    );
+
     if (sentTo) {
         return (
-            <AuthLayout title="Check your inbox">
+            <AuthLayout title="Check your inbox" aside={aside} icon={<MailCheck />}>
                 <div className="flex flex-col gap-4">
                     <p className="m-0 text-text-muted" role="status">
                         If an account uses <strong className="font-medium text-text">{sentTo}</strong>, we sent it a
@@ -49,7 +59,7 @@ export function ForgotPassword() {
     }
 
     return (
-        <AuthLayout title="Reset your password" subtitle="We will email you a link to choose a new one.">
+        <AuthLayout title="Reset your password" subtitle="We will email you a link to choose a new one." aside={aside}>
             <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
                 <Field label="Email" required error={message}>
                     <Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -65,12 +75,6 @@ export function ForgotPassword() {
                     Send reset link
                 </Button>
             </form>
-            <p className="m-0 mt-5 text-center text-[13px] text-text-muted">
-                Remembered it?{' '}
-                <Link to={paths.signIn} className="font-medium text-text underline-offset-4 hover:underline">
-                    Sign in
-                </Link>
-            </p>
         </AuthLayout>
     );
 }
