@@ -1,3 +1,4 @@
+import { UnrecoverableError } from 'bullmq';
 import { GmailApiError } from './gmail.port';
 import {
     GMAIL_RATE_LIMIT_REASONS,
@@ -74,4 +75,14 @@ export function rateLimitCooldownUntil(lastError: RateLimitRecord | null): numbe
     // Never sooner than Gmail said it would take requests again (PNW-1125); the backoff when it said nothing, or sooner.
     const told = lastError.retryAfter ? Date.parse(lastError.retryAfter) : Number.NaN;
     return Math.max(Date.parse(lastError.at) + wait, Number.isNaN(told) ? 0 : told);
+}
+
+/**
+ * What a failed sync job hands the queue (PNW-1125). A run Gmail refused for its rate limit is not retried by the
+ * queue: a retry seconds later pages the mailbox again into the limit Gmail just named. The mailbox's cool-down, read
+ * by the tick, decides when it is asked again. Any other failure keeps the queue's retries.
+ */
+export function queueFailure(error: unknown): unknown {
+    if (error instanceof GmailApiError && error.rateLimited) return new UnrecoverableError(error.message);
+    return error;
 }

@@ -6,7 +6,7 @@ import { PrismaService } from '../infra/prisma.service';
 import { DelegationService } from '../mail-accounts/delegation.service';
 import { MAIL_SYNC_EVERY_MS, MAIL_SYNC_QUEUE, MAIL_SYNC_WORKER_CONCURRENCY } from './mail-sync.constants';
 import { MailSyncService } from './mail-sync.service';
-import { rateLimitCooldownUntil, type RateLimitRecord } from './retry';
+import { queueFailure, rateLimitCooldownUntil, type RateLimitRecord } from './retry';
 
 /** A mailbox's sync job. Its id is the mailbox's, so one mailbox has at most one queued or running job. */
 export interface MailSyncJob {
@@ -22,7 +22,8 @@ const TICK_JOB = 'tick';
  * every `MAIL_SYNC_EVERY_MS` enqueues every connected mailbox; a mailbox connecting is enqueued at
  * once (the subscriber). Enqueueing is idempotent per mailbox: the job id is the mailbox id, so a
  * mailbox already queued or running is not queued twice. A run that throws is retried by the
- * queue's backoff (`MAIL_SYNC_JOB_ATTEMPTS`); the next tick picks up anything else.
+ * queue's backoff (`MAIL_SYNC_JOB_ATTEMPTS`), except one Gmail rate-limited: its cool-down decides
+ * (`queueFailure`). The next tick picks up anything else.
  */
 @Injectable()
 export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy {
@@ -63,7 +64,11 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
         if (job.name === TICK_JOB) return this.tick();
         if (job.name === SYNC_JOB) {
             const { workspaceId, mailboxId } = job.data as MailSyncJob;
-            return this.sync.syncMailbox(workspaceId, mailboxId);
+            try {
+                return await this.sync.syncMailbox(workspaceId, mailboxId);
+            } catch (error) {
+                throw queueFailure(error);
+            }
         }
         this.logger.warn(`mail-sync job ${job.name} is not one this worker knows`);
         return null;
