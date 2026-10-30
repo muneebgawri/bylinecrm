@@ -23,19 +23,10 @@ import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { paths, withCreate } from '../../paths';
-import { LEADS_FILTER } from './leadsFilter';
+import { CONTACT_STATUS_TONE, LEADS_FILTER } from './leadsFilter';
 
 /** The statuses a lead moves through before it is a customer or out; `do_not_contact` is set by suppression, not here. */
 const LANES: readonly ContactStatus[] = CONTACT_STATUSES.filter((s) => s !== 'do_not_contact');
-const TONE: Record<ContactStatus, 'neutral' | 'accent' | 'info' | 'success' | 'warning' | 'danger'> = {
-    new: 'neutral',
-    attempted_contact: 'info',
-    contacted: 'accent',
-    engaged: 'success',
-    unresponsive: 'warning',
-    do_not_contact: 'danger',
-    customer: 'success',
-};
 
 /**
  * Leads as a pipeline: every person, in a lane per contact status. A card's "Move to" sets the
@@ -95,7 +86,7 @@ export function LeadsPipeline() {
                             <KanbanLane
                                 key={status}
                                 name={CONTACT_STATUS_LABELS[status]}
-                                tone={TONE[status]}
+                                tone={CONTACT_STATUS_TONE[status]}
                                 count={list.length}
                             >
                                 {list.length === 0 ? (
@@ -162,7 +153,7 @@ function LeadCard({
                 <div className="min-w-0 flex-1">
                     <Link
                         to={paths.person(workspaceId, person.id)}
-                        className="block truncate text-sm font-semibold hover:underline"
+                        className="block truncate text-sm font-semibold hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
                     >
                         {label}
                     </Link>
@@ -193,7 +184,7 @@ function LeadCard({
                         disabled={moving}
                         onClick={() => onMove(next)}
                         className={cn(
-                            'flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-text hover:bg-surface-raised disabled:opacity-50',
+                            'flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-text hover:bg-surface-raised disabled:opacity-50 max-md:min-h-touch',
                             focusRing,
                         )}
                         title={`Move to ${CONTACT_STATUS_LABELS[next]}`}

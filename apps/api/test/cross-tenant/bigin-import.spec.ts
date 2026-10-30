@@ -35,6 +35,7 @@ import { TwentyImportRunner } from '../../src/twenty-import/import-runner';
 import { FakeBigin } from '../support/fake-bigin';
 import { settle } from '../support/outbox';
 import { PeopleDedupe } from '../../src/records/people-dedupe.service';
+import { TaskNotificationsService } from '../../src/notifications/task-notifications.service';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { FakeTwenty } from '../support/fake-twenty';
@@ -181,7 +182,10 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
         | 'unknown'
         | 'earlyDeal'
         | 'note'
-        | 'orphan';
+        | 'orphan'
+        | 'phoneAccount'
+        | 'caller'
+        | 'phoneDeal';
     const ids = {} as Record<IdKey, string>;
     let firstRun: BiginImportRunView;
 
@@ -378,7 +382,7 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect(res.status).toBe(200);
             const overview = res.body as BiginImportOverview;
             expect(overview.settings.configured).toBe(false);
-            expect(overview.linked.map((l) => l.count)).toEqual([0, 0, 0, 0]);
+            expect(overview.linked.map((l) => l.count)).toEqual([0, 0, 0, 0, 0, 0, 0]);
             expect((await as(member).get(w('/import/bigin'))).status).toBe(403);
             expect((await as(member).put(w('/import/bigin/settings')).send(connection())).status).toBe(403);
         });
@@ -414,6 +418,9 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 expect.objectContaining({ object: 'Contacts', remote: 6 }),
                 expect.objectContaining({ object: 'Deals', remote: 5 }),
                 expect.objectContaining({ object: 'Notes', remote: 2 }),
+                expect.objectContaining({ object: 'Tasks', remote: 0 }),
+                expect.objectContaining({ object: 'Events', remote: 0 }),
+                expect.objectContaining({ object: 'Calls', remote: 0 }),
             ]);
         });
 
@@ -1137,6 +1144,282 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             expect(reportOf(third, 'Deals').kept).toEqual([]);
             expect((await owner.opportunity.findUniqueOrThrow({ where: { id: dealId } })).name).toBe('Somebody’s deal');
             expect(await dealOwner(unowned!.id)).toBe(memberMemberId);
+        });
+    });
+
+    describe('BIGIN-1: the data the importer used to leave behind', () => {
+        it('phones without + are +1, an unreadable one is kept as written, descriptions and a company phone are custom fields', async () => {
+            const [account] = bigin.seed('Accounts', [
+                {
+                    Account_Name: 'Phone Co',
+                    Website: `https://phone-${stamp}.example`,
+                    Phone: '(999) 999-9999 ext 9',
+                    Description: 'Long-time wire client',
+                    Owner: ownerOf(adminEmail),
+                },
+            ]);
+            const [caller, odd] = bigin.seed('Contacts', [
+                {
+                    First_Name: 'Nan',
+                    Last_Name: 'Pa',
+                    Email: `nanpa-${stamp}@phone.example`,
+                    Phone: '999.999.9999',
+                    Mobile: '1 (999) 999-9998',
+                    Description: 'Prefers mornings',
+                    Account_Name: { id: account!.id },
+                    Owner: ownerOf(memberEmail),
+                },
+                {
+                    First_Name: 'Odd',
+                    Last_Name: 'Number',
+                    Email: `odd-${stamp}@phone.example`,
+                    Phone: '555-1234',
+                    Owner: ownerOf(adminEmail),
+                },
+            ]);
+            const [deal] = bigin.seed('Deals', [
+                {
+                    Deal_Name: 'Phone Co release',
+                    Stage: 'New',
+                    Account_Name: { id: account!.id },
+                    Contact_Name: { id: caller!.id },
+                    Description: 'Two releases',
+                    Title_of_Press_Release: 'Phone Co rings in the year',
+                    Owner: ownerOf(adminEmail),
+                },
+            ]);
+            ids.phoneAccount = account!.id;
+            ids.caller = caller!.id;
+            ids.phoneDeal = deal!.id;
+
+            const run = await runToEnd('changes');
+            expect(run.status, run.error ?? '').toBe('succeeded');
+            expect(run.failedRecords, JSON.stringify(run.report.flatMap((r) => r.errors))).toBe(0);
+
+            const person = await owner.person.findUniqueOrThrow({
+                where: { id: (await linkOf('Contacts', caller!.id))!.localId },
+            });
+            expect(person.phones).toEqual({
+                primary: { number: '9999999999', countryCode: 'US' },
+                additional: [{ number: '9999999998', countryCode: 'US' }],
+            });
+            expect(person.custom).toMatchObject({ description: 'Prefers mornings' });
+            expect((person.custom as Record<string, unknown>).phone_unparsed).toBeUndefined();
+            const oddPerson = await owner.person.findUniqueOrThrow({
+                where: { id: (await linkOf('Contacts', odd!.id))!.localId },
+            });
+            expect(oddPerson.phones).toEqual({ primary: null, additional: [] });
+            expect(oddPerson.custom).toMatchObject({ phone_unparsed: 'Phone: 555-1234' });
+            const unparsed = await owner.customFieldDefinition.findFirstOrThrow({
+                where: { workspaceId: workspace, object: 'person', key: 'phone_unparsed' },
+            });
+            expect(unparsed).toMatchObject({ label: 'Phone (as in Bigin)', type: 'text' });
+
+            const company = await owner.company.findUniqueOrThrow({
+                where: { id: (await linkOf('Accounts', account!.id))!.localId },
+            });
+            expect(company.custom).toMatchObject({
+                phone: '+1 9999999999 ext 9',
+                description: 'Long-time wire client',
+            });
+            const opportunity = await owner.opportunity.findUniqueOrThrow({
+                where: { id: (await linkOf('Deals', deal!.id))!.localId },
+            });
+            expect(opportunity.custom).toMatchObject({
+                description: 'Two releases',
+                press_release_title: 'Phone Co rings in the year',
+            });
+            const defs = await owner.customFieldDefinition.findMany({
+                where: { workspaceId: workspace, key: { in: ['phone', 'description', 'press_release_title'] } },
+                select: { object: true, key: true, type: true },
+            });
+            expect(defs).toEqual(
+                expect.arrayContaining([
+                    { object: 'company', key: 'phone', type: 'text' },
+                    { object: 'company', key: 'description', type: 'text' },
+                    { object: 'person', key: 'description', type: 'text' },
+                    { object: 'opportunity', key: 'description', type: 'text' },
+                    { object: 'opportunity', key: 'press_release_title', type: 'text' },
+                ]),
+            );
+        });
+
+        it('a custom field edited here keeps its value; Bigin’s other fields, custom ones included, still apply', async () => {
+            const personId = (await linkOf('Contacts', ids.caller))!.localId;
+            // Bigin's record was modified before the local edit: Bigin's description loses, its title applies.
+            bigin.update('Contacts', ids.caller, {
+                Description: 'From Bigin again',
+                Title: 'Editor',
+                PR_LINK: 'https://pr.example/nan',
+            });
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            const edited = await as(admin)
+                .patch(w(`/people/${personId}`))
+                .send({ custom: { description: 'Edited here' } });
+            expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+            const run = await runToEnd('changes');
+            expect(run.status).toBe('succeeded');
+            const person = await owner.person.findUniqueOrThrow({ where: { id: personId } });
+            expect(person.jobTitle).toBe('Editor');
+            expect(person.custom).toMatchObject({ description: 'Edited here', pr_link: 'https://pr.example/nan' });
+            expect(reportOf(run, 'Contacts').kept).toEqual(
+                expect.arrayContaining([{ externalId: ids.caller, fields: ['custom.description'] }]),
+            );
+        });
+
+        it('tasks, events and calls are tasks on their records, assigned by owner; none is told to its assignee; a second run changes nothing', async () => {
+            // As Bigin answers a task asked for `What_Id`/`Who_Id` (the fake leaves the links out unless asked):
+            // the record as `Related_To`, its module as `$related_module`, `$se_module` null.
+            const [task, done, alone] = bigin.seed('Tasks', [
+                {
+                    Subject: 'Send the draft',
+                    Status: 'In Progress',
+                    Priority: 'High',
+                    Due_Date: '2026-01-15',
+                    Description: 'Before the embargo',
+                    $se_module: null,
+                    Related_To: { id: ids.phoneDeal, name: 'Phone Co release' },
+                    $related_module: 'Deals',
+                    Who_Id: { id: ids.caller },
+                    Owner: ownerOf(memberEmail),
+                },
+                {
+                    Subject: 'Confirm invoice',
+                    Status: 'Completed',
+                    Closed_Time: '2026-02-01T10:00:00+00:00',
+                    $se_module: null,
+                    Related_To: { id: ids.phoneAccount, name: 'Phone Co' },
+                    $related_module: 'Accounts',
+                    Owner: ownerOf(memberEmail),
+                },
+                { Subject: 'On nothing', Status: 'Not Started', Owner: ownerOf(memberEmail) },
+            ]);
+            const [event] = bigin.seed('Events', [
+                {
+                    Event_Title: 'Kick-off',
+                    Start_DateTime: '2026-03-01T09:00:00-05:00',
+                    End_DateTime: '2026-03-01T10:00:00-05:00',
+                    Venue: 'Zoom',
+                    Related_To: { id: ids.caller, module: { api_name: 'Contacts' } },
+                    Owner: ownerOf(memberEmail),
+                },
+            ]);
+            const [call] = bigin.seed('Calls', [
+                {
+                    Subject: 'Intro',
+                    Call_Start_Time: '2026-04-01T15:00:00+00:00',
+                    Call_Duration: '05:30',
+                    Call_Type: 'Outbound',
+                    Call_Result: 'Interested',
+                    $se_module: 'Contacts',
+                    What_Id: { id: ids.caller },
+                    Owner: ownerOf(memberEmail),
+                },
+            ]);
+
+            const run = await runToEnd('changes');
+            expect(run.status, run.error ?? '').toBe('succeeded');
+            expect(counts(reportOf(run, 'Tasks'))).toMatchObject({ read: 3, created: 2, skipped: 1, failed: 0 });
+            expect(reportOf(run, 'Tasks').errors).toEqual([
+                { externalId: alone!.id, message: 'its record is not in BylineCRM' },
+            ]);
+            expect(counts(reportOf(run, 'Events'))).toMatchObject({ read: 1, created: 1, failed: 0 });
+            expect(counts(reportOf(run, 'Calls'))).toMatchObject({ read: 1, created: 1, failed: 0 });
+
+            const personId = (await linkOf('Contacts', ids.caller))!.localId;
+            const taskOf = async (object: BiginImportObject, externalId: string) => {
+                const link = (await linkOf(object, externalId))!;
+                expect(link.localType).toBe('task');
+                return owner.task.findUniqueOrThrow({ where: { id: link.localId }, include: { targets: true } });
+            };
+            const open = await taskOf('Tasks', task!.id);
+            expect(open).toMatchObject({
+                title: 'Send the draft',
+                status: 'in_progress',
+                assigneeId: memberMemberId,
+                completedAt: null,
+                dueAt: new Date('2026-01-15T00:00:00.000Z'),
+            });
+            expect(open.bodyText).toContain('Before the embargo');
+            expect(open.bodyText).toContain('Priority: High');
+            expect(open.createdBy).toEqual({ kind: 'import', id: run.id });
+            expect(open.targets.map((t) => `${t.targetType}:${t.targetId}`).sort()).toEqual(
+                [`opportunity:${(await linkOf('Deals', ids.phoneDeal))!.localId}`, `person:${personId}`].sort(),
+            );
+            const closed = await taskOf('Tasks', done!.id);
+            expect(closed).toMatchObject({ status: 'done', completedAt: new Date('2026-02-01T10:00:00.000Z') });
+            expect(closed.targets.map((t) => t.targetType)).toEqual(['company']);
+            const meeting = await taskOf('Events', event!.id);
+            expect(meeting).toMatchObject({
+                title: 'Meeting: Kick-off',
+                status: 'done',
+                dueAt: new Date('2026-03-01T14:00:00.000Z'),
+                completedAt: new Date('2026-03-01T15:00:00.000Z'),
+            });
+            expect(meeting.targets.map((t) => `${t.targetType}:${t.targetId}`)).toEqual([`person:${personId}`]);
+            expect(meeting.bodyText).toContain('Venue: Zoom');
+            const called = await taskOf('Calls', call!.id);
+            expect(called).toMatchObject({ title: 'Call: Intro', status: 'done', assigneeId: memberMemberId });
+            expect(called.bodyText).toContain('Result: Interested');
+
+            // Nobody is told of a task an import brought over — not as assigned, not as due — while a member
+            // handing one over still tells its assignee.
+            const imported = [open.id, closed.id, meeting.id, called.id];
+            const handed = await as(admin)
+                .post(w('/tasks'))
+                .send({
+                    title: 'Handed over',
+                    assigneeId: memberMemberId,
+                    targets: [{ type: 'person', id: personId }],
+                });
+            expect(handed.status, JSON.stringify(handed.body)).toBe(201);
+            await settle(app);
+            await app.get(TaskNotificationsService).remindDue();
+            expect(await owner.notification.count({ where: { taskId: { in: imported } } })).toBe(0);
+            expect(
+                await owner.notification.count({
+                    where: { taskId: (handed.body as { id: string }).id, kind: 'task_assigned' },
+                }),
+            ).toBe(1);
+
+            // A status set here after Bigin last changed the task stays; Bigin's other changes apply.
+            bigin.update('Tasks', task!.id, { Subject: 'Send the final draft' });
+            // Read again unchanged in Bigin: nothing to write.
+            bigin.update('Tasks', done!.id, {});
+            bigin.update('Events', event!.id, {});
+            bigin.update('Calls', call!.id, {});
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            const marked = await as(member)
+                .patch(w(`/tasks/${open.id}`))
+                .send({ status: 'done' });
+            expect(marked.status, JSON.stringify(marked.body)).toBe(200);
+
+            const again = await runToEnd('changes');
+            expect(again.status).toBe('succeeded');
+            expect(counts(reportOf(again, 'Tasks'))).toMatchObject({
+                created: 0,
+                updated: 1,
+                unchanged: 1,
+                skipped: 1,
+            });
+            expect(reportOf(again, 'Tasks').kept).toEqual([
+                { externalId: task!.id, fields: ['completedAt', 'status'] },
+            ]);
+            expect(counts(reportOf(again, 'Events'))).toMatchObject({ created: 0, updated: 0, unchanged: 1 });
+            expect(counts(reportOf(again, 'Calls'))).toMatchObject({ created: 0, updated: 0, unchanged: 1 });
+            expect(await taskOf('Tasks', task!.id)).toMatchObject({ title: 'Send the final draft', status: 'done' });
+            expect(
+                await owner.task.count({
+                    where: { workspaceId: workspace, createdBy: { path: ['kind'], equals: 'import' } },
+                }),
+            ).toBe(4);
+
+            // Bigin deleting a call flags it for review; its task stays.
+            bigin.remove('Calls', call!.id);
+            const third = await runToEnd('changes');
+            expect(reportOf(third, 'Calls').missingInSource).toBe(1);
+            expect((await linkOf('Calls', call!.id))!.missingSince).not.toBeNull();
+            expect((await owner.task.findUniqueOrThrow({ where: { id: called.id } })).deletedAt).toBeNull();
         });
     });
 });

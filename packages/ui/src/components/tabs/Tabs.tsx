@@ -22,7 +22,7 @@ export const TabsList = forwardRef<ComponentRef<typeof TabsPrimitive.List>, Tabs
                 'group/tabs inline-flex items-center',
                 variant === 'line'
                     ? 'gap-1 border-b border-border'
-                    : 'h-9 gap-0.5 rounded-lg bg-surface-raised p-[3px] text-text-muted',
+                    : 'h-9 gap-0.5 rounded-lg bg-surface-raised p-[3px] text-text-muted max-md:h-touch',
                 className,
             )}
             {...props}

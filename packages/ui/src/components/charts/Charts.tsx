@@ -178,7 +178,7 @@ export function StackedBarChart({ data, series, format, label, className }: Stac
             >
                 <div className="flex flex-col justify-between pb-6 text-right tabular-nums">
                     {[4, 3, 2, 1, 0].map((i) => (
-                        <span key={i}>{format(Math.round((max * i) / 4))}</span>
+                        <span key={i}>{Number.isInteger((max * i) / 4) ? format((max * i) / 4) : ''}</span>
                     ))}
                 </div>
                 <div className="relative">
@@ -209,7 +209,7 @@ export function StackedBarChart({ data, series, format, label, className }: Stac
                                             style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? 3 : 0 }}
                                         />
                                     ))}
-                                    <span className="absolute top-full mt-1.5 w-full truncate text-center text-[11px] text-text-muted">
+                                    <span className="absolute top-full left-1/2 mt-1.5 -translate-x-1/2 text-[11px] whitespace-nowrap text-text-muted">
                                         {d.label}
                                     </span>
                                     {active === i && (
@@ -253,14 +253,18 @@ export function DonutChart({ data, total, totalLabel, label, className }: DonutC
     const sum = data.reduce((a, d) => a + d.value, 0) || 1;
     const r = 40;
     const c = 2 * Math.PI * r;
-    let offset = 0;
+    const starts: number[] = [];
+    for (let i = 0, acc = 0; i < data.length; i++) {
+        starts.push(acc);
+        acc += (data[i]!.value / sum) * c;
+    }
     return (
         <div className={cn('flex flex-col gap-4', className)}>
             <div className="relative mx-auto size-40">
                 <svg role="img" aria-label={label} viewBox="0 0 100 100" className="size-full -rotate-90">
                     {data.map((d, i) => {
                         const len = (d.value / sum) * c;
-                        const el = (
+                        return (
                             <circle
                                 key={d.label}
                                 cx="50"
@@ -270,15 +274,13 @@ export function DonutChart({ data, total, totalLabel, label, className }: DonutC
                                 className={CHART_STROKES[i % CHART_STROKES.length]}
                                 strokeWidth="14"
                                 strokeDasharray={`${Math.max(len - 2, 0)} ${c - Math.max(len - 2, 0)}`}
-                                strokeDashoffset={-offset}
+                                strokeDashoffset={-(starts[i] ?? 0)}
                             >
                                 <title>
                                     {d.label}: {d.value} ({Math.round((d.value / sum) * 100)}%)
                                 </title>
                             </circle>
                         );
-                        offset += len;
-                        return el;
                     })}
                 </svg>
                 <div className="absolute inset-0 grid place-items-center text-center">

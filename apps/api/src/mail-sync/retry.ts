@@ -35,7 +35,11 @@ export async function withGmailRetry<T>(request: () => Promise<T>, options: Retr
             return await request();
         } catch (error) {
             if (!(error instanceof GmailApiError) || !error.transient || attempt >= GMAIL_RETRY_ATTEMPTS) throw error;
-            await sleep(gmailRetryDelayMs(attempt, options.random));
+            // Gmail named when it will take requests again (PNW-1125): asking sooner is refused anyway and spends quota.
+            // Longer than this run ever waits, the run ends and the mailbox's cool-down holds until then.
+            const told = error.retryAfter ? error.retryAfter.getTime() - Date.now() : 0;
+            if (told > GMAIL_RETRY_CAP_MS) throw error;
+            await sleep(Math.max(gmailRetryDelayMs(attempt, options.random), told));
         }
     }
 }
@@ -47,6 +51,8 @@ export interface RateLimitRecord {
     at: string;
     /** Consecutive runs that ended rate-limited, this one included. Absent for any other failure. */
     rateLimitedRuns?: number;
+    /** When Gmail said it would take requests again (ISO 8601), when it said (PNW-1125). */
+    retryAfter?: string;
 }
 
 const isRateLimitCode = (code: string) => GMAIL_RATE_LIMIT_REASONS.has(code.replace(/^gmail\./, ''));
@@ -65,5 +71,7 @@ export function rateLimitCooldownUntil(lastError: RateLimitRecord | null): numbe
     if (!lastError || !isRateLimitCode(lastError.code)) return 0;
     const n = lastError.rateLimitedRuns ?? 1;
     const wait = Math.min(MAIL_SYNC_RATE_LIMIT_COOLDOWN_BASE_MS * 2 ** (n - 1), MAIL_SYNC_RATE_LIMIT_COOLDOWN_CAP_MS);
-    return Date.parse(lastError.at) + wait;
+    // Never sooner than Gmail said it would take requests again (PNW-1125); the backoff when it said nothing, or sooner.
+    const told = lastError.retryAfter ? Date.parse(lastError.retryAfter) : Number.NaN;
+    return Math.max(Date.parse(lastError.at) + wait, Number.isNaN(told) ? 0 : told);
 }

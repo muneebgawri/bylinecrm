@@ -35,6 +35,8 @@ export const BIGIN_MAPPED_FIELDS: Readonly<Record<string, readonly string[]>> = 
         'Billing_State',
         'Billing_Country',
         'Billing_Code',
+        'Phone',
+        'Description',
         'Owner',
     ],
     Contacts: [
@@ -49,11 +51,58 @@ export const BIGIN_MAPPED_FIELDS: Readonly<Record<string, readonly string[]>> = 
         'Account_Name',
         'Owner',
         'PR_LINK',
+        'Description',
         // Read so a Contact's opt-out reaches the suppression list (`opt-outs.ts`).
         'Email_Opt_Out',
     ],
-    Deals: ['Deal_Name', 'Amount', 'Closing_Date', 'Stage', 'Account_Name', 'Contact_Name', 'Owner'],
+    Deals: [
+        'Deal_Name',
+        'Amount',
+        'Closing_Date',
+        'Stage',
+        'Account_Name',
+        'Contact_Name',
+        'Owner',
+        'Description',
+        'Title_of_Press_Release',
+    ],
     Notes: ['Note_Title', 'Note_Content', 'Parent_Id', 'Owner'],
+    Tasks: ['Subject', 'Status', 'Priority', 'Due_Date', 'Description', 'Closed_Time', 'What_Id', 'Who_Id', 'Owner'],
+    Events: [
+        'Event_Title',
+        'Start_DateTime',
+        'End_DateTime',
+        'All_day',
+        'Venue',
+        'Description',
+        'Related_To',
+        'What_Id',
+        'Who_Id',
+        'Owner',
+    ],
+    Calls: [
+        'Subject',
+        'Call_Start_Time',
+        'Call_Duration',
+        'Call_Type',
+        'Call_Purpose',
+        'Call_Result',
+        'Description',
+        'What_Id',
+        'Who_Id',
+        'Owner',
+    ],
+};
+/**
+ * Fields a module's list returns only when asked by name (production, 2026-10-29): Bigin's Tasks carry their
+ * record — answered as `Related_To` with `$related_module` — only when the request names `What_Id` (and the
+ * contact, `Who_Id`); a list without `fields` has no link at all, so a sampled page never shows them. These are
+ * always asked for, on v1 and v2 alike, ahead of what the sample has. A name here must be one of the module's
+ * fields: v2 refuses a field the module does not have. Events (`Related_To`) and Calls (`What_Id`, `Who_Id`)
+ * return their links unasked.
+ */
+export const BIGIN_REQUESTED_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    Tasks: ['What_Id', 'Who_Id'],
 };
 /** Zoho's token endpoint under the data centre's accounts host. */
 export const ZOHO_TOKEN_PATH = '/oauth/v2/token';

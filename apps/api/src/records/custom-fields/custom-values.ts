@@ -18,9 +18,9 @@ export interface FieldDefinition {
 export type ValidationMode = 'create' | 'patch';
 
 /** Upper bound on a text value; the column is JSONB, so this is the only limit. */
-const TEXT_MAX = 10_000;
+export const CUSTOM_TEXT_MAX = 10_000;
 /** Loose international format: an optional `+`, then digits with the usual separators. */
-const PHONE = /^\+?[0-9 ()./-]{3,30}$/;
+export const CUSTOM_PHONE = /^\+?[0-9 ()./-]{3,30}$/;
 
 /**
  * Why a definition's options do not fit its type, or `null` when they do. One rule for the
@@ -38,7 +38,7 @@ export function optionsProblem(type: CustomFieldType, options: readonly string[]
 function valueSchema(definition: FieldDefinition): z.ZodType {
     switch (definition.type) {
         case 'text':
-            return z.string().max(TEXT_MAX);
+            return z.string().max(CUSTOM_TEXT_MAX);
         case 'number':
             return z.number().finite();
         case 'boolean':
@@ -56,7 +56,7 @@ function valueSchema(definition: FieldDefinition): z.ZodType {
         case 'email':
             return z.email().max(254);
         case 'phone':
-            return z.string().regex(PHONE);
+            return z.string().regex(CUSTOM_PHONE);
     }
 }
 

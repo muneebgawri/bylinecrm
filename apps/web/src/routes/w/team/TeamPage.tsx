@@ -205,7 +205,7 @@ export function TeamPage() {
                             aria-label={label}
                             onClick={() => setView(id)}
                             className={cn(
-                                'grid size-8 place-items-center rounded-md text-text-muted transition-colors hover:text-text',
+                                'grid size-8 place-items-center rounded-md text-text-muted transition-colors hover:text-text max-md:size-touch',
                                 view === id && 'bg-surface text-text shadow-sm',
                                 focusRing,
                             )}

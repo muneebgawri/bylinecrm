@@ -111,7 +111,7 @@ describe('#192 the bell: a member’s task notifications', () => {
         ]);
         bell();
         await userEvent.click(await screen.findByRole('button', { name: 'Notifications' }));
-        expect(await screen.findByText('Nothing new')).toBeInTheDocument();
+        expect(await screen.findByText('Nothing yet')).toBeInTheDocument();
         const digest = await screen.findByRole('switch', { name: /daily email of tasks due/i });
         expect(digest).toBeChecked();
         await userEvent.click(digest);

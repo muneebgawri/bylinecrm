@@ -1,20 +1,67 @@
 # BIGIN-1 — A direct, one-way sync from Zoho Bigin (FR-CRMS-25)
 
 Until now Bigin reached BylineCRM only indirectly: a Python job (`twenty-bigin-sync`) pulled Bigin into Twenty,
-and the Twenty importer (P4-4) pulled Twenty into BylineCRM. BIGIN-1 reads Bigin directly. The Twenty importer
-keeps running for Twenty-native data; the two meet on the same records (below), never duplicate them.
+and the Twenty importer (P4-4) pulled Twenty into BylineCRM. BIGIN-1 reads Bigin directly. Twenty itself was cut
+over on 2026-10-23 and is no longer reachable, so the Twenty importer no longer runs; what it brought over meets
+the Bigin importer on the same records (below), never duplicated.
 
 It is the Twenty importer's shape, on purpose — same run row, links, page transactions, savepoints, report,
 schedule, backoff and admin mail — so this note says only what differs. Read `P4-4.md` first.
 
 ## What is read, and where it lands
 
-| Bigin module (`/bigin/v1/<Module>`) | Lands as                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Accounts`                          | Companies: `Account_Name`, the registrable domain of `Website` (OWN-2c's `companyDomain`), the billing address.                                                                                                                                                                                                                                                       |
-| `Contacts`                          | People: names, `Email` (+ `Secondary_Email`), `Phone`/`Mobile` when written with an international prefix (Bigin's phones are free text; without a calling code there is no country), `Title`, `Mailing_City`, the company through `Account_Name`, `source = bigin`, `PR_LINK` as the `pr_link` custom field (the key the Twenty importer uses for Twenty's `prLink`). |
-| `Deals`                             | Deals in the default pipeline: `Deal_Name`, `Amount` (major units → minor, the workspace currency), `Closing_Date`, company (`Account_Name`) and point of contact (`Contact_Name`).                                                                                                                                                                                   |
-| `Notes`                             | Notes on their parent (`$se_module` + `Parent_Id`: Contacts, Accounts, Deals/Potentials/Pipelines), `Note_Content` as rich text. A note whose parent is not here is _skipped_.                                                                                                                                                                                        |
+| Bigin module (`/bigin/v1/<Module>`) | Lands as                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Accounts`                          | Companies: `Account_Name`, the registrable domain of `Website` (OWN-2c's `companyDomain`), the billing address. Custom text fields: `Phone` as `phone` (a company has no phone column; normalised as below when it can be read, else as Bigin wrote it) and `Description` as `description`.                                                                     |
+| `Contacts`                          | People: names, `Email` (+ `Secondary_Email`), `Phone`/`Mobile` (below), `Title`, `Mailing_City`, the company through `Account_Name`, `source = bigin`. Custom fields: `PR_LINK` as `pr_link` (the key the Twenty importer used for Twenty's `prLink`), `Description` as `description`, a phone that cannot be read as `phone_unparsed` ("Phone (as in Bigin)"). |
+| `Deals`                             | Deals in the default pipeline: `Deal_Name`, `Amount` (major units → minor, the workspace currency), `Closing_Date`, company (`Account_Name`) and point of contact (`Contact_Name`). Custom text fields: `Description` as `description`, `Title_of_Press_Release` as `press_release_title`.                                                                      |
+| `Notes`                             | Notes on their parent (`$se_module` + `Parent_Id`: Contacts, Accounts, Deals/Potentials/Pipelines), `Note_Content` as rich text. A note whose parent is not here is _skipped_.                                                                                                                                                                                  |
+| `Tasks`                             | Tasks: `Subject` the title, `Description` (and `Priority`, which tasks here lack, as a line) the body, `Status` — `Completed` → done (at `Closed_Time`), `In Progress`/`In-Progress` → in progress, anything else → to do — and `Due_Date` (midnight UTC, as a deal's follow-up date).                                                                          |
+| `Events`                            | Tasks titled `Meeting: <Event_Title>`, due at `Start_DateTime`, done (at `End_DateTime`) once it has ended; `Description` and `Venue` the body.                                                                                                                                                                                                                 |
+| `Calls`                             | Done tasks titled `Call: <Subject>`, due and done at `Call_Start_Time`; `Description`, `Call_Type`, `Call_Purpose`, `Call_Result`, `Call_Duration` the body.                                                                                                                                                                                                    |
+
+**Tasks, events and calls.** Each is a task on the records it is about, resolved through the links (Contacts →
+person, Deals → opportunity, Accounts → company). A Bigin Task names its record only when the request asks for it
+(production, 2026-10-29): a list without `fields` has no link at all, and a list naming `What_Id` and `Who_Id`
+answers `Related_To: { id, name }` with `$related_module` ("Contacts" for 723 of 749, "Deals" for 4, none for 22).
+So the importer always names `What_Id` and `Who_Id` for Tasks — on v1 too, which otherwise lists every field
+unasked — ahead of what the sampled page shows (`BIGIN_REQUESTED_FIELDS`; a sample never shows them). Events
+answer `Related_To` and Calls `What_Id`/`Who_Id`/`$se_module` unasked. The mappers read `Related_To` in the module
+`$related_module` names, `What_Id` in the module `$se_module` names, or — read through v2 without `$` fields — the
+lookup's own `module`, else every module, as notes are found; and the contact, `Who_Id`. A task here is always on
+a record (the tasks API refuses one without), so a Bigin task whose record is not in BylineCRM, or that has none, is
+_skipped_ and listed in the run report ("its record is not in BylineCRM"), as a note is; it stays in Bigin. On
+production's data 459 of the 716 tasks that name a record resolve (456 to people, 3 to deals). The owner is the
+assignee (matched by email as every owner is), set on create and on a task that has none, never changed. The #185
+rule holds for tasks too: a field changed here (a status, a due date) after Bigin last modified the task keeps
+BylineCRM's value — a task's changes are on its records' timelines, linked to it, and `fieldsEditedAfter` reads
+those.
+
+**No notifications for imported tasks.** `TaskNotificationsService.assigned` tells nobody of a task whose event's
+actor is an import or a sync (the Bigin and Twenty importers run as `import`): being given hundreds of imported
+tasks, most long overdue, is no one handing work over. `remindDue` already passes over a task that was due before
+it was made, so an overdue imported task never sends `task_due`; one due in the future is reminded as any task is.
+The morning digest (for members who chose it) does list a member's overdue open tasks, imported ones included.
+
+**Phones.** Bigin's phones are free text and the workspace has no default country. A number written with `+` keeps
+the country its calling code implies. One without `+` that is North American in shape — ten digits, or eleven
+starting with 1, once punctuation (`()`, `-`, `.`, spaces) and an extension (`ext 9`, `ext. 9`, `x9`) are set aside —
+is +1 (US), the extension kept as the phone's. Anything else that is not empty is never dropped: it is kept verbatim
+on the person as `phone_unparsed` (`Phone: …; Mobile: …`), cleared again once Bigin's numbers all read. A company's
+phone is text (`+1 9999999999 ext 9`, or as written): the custom `phone` type refuses extensions and free text.
+
+**Custom fields.** Everything above that is a custom field goes through the importer's one inference path
+(`InferredCustom`, `definitionsNeeded`, `customValuesFor`): the definition is made, as text, on the module's own
+object (person, company or deal) the first time a page carries a value; a workspace that already has the key keeps
+its type (a value its type refuses is left out, never failing the record). Text longer than a custom text value
+holds (10,000 characters) is cut with an ellipsis. An empty Bigin value is left out, so it never clears a value
+written here. The #185 rule holds per custom field: the timeline's `custom` diff names each key that changed
+(`custom.<key>`), and only those keep BylineCRM's value (`withoutLocalEdits`); the others are still written.
+
+**Not imported.** Products (10, unchanged since January): BylineCRM has no product concept. Attachments: Bigin
+counts them only one record at a time (a call per record against the daily API budget), so they were not measured
+and are not imported — a known limit; they stay in Bigin. Tags: none in the account. There is one pipeline ("Sales
+Pipeline Standard"), so every deal lands in the default pipeline.
 
 `Account_Name`/`Contact_Name`/`Parent_Id` are polymorphic (null, an id, or `{ id, name }`); `lookupId` reads all three.
 Bigin ids are kept bare: the CSV export (and so Twenty's `biginrecordid`) prefixes `zcrm_`, the API does not —
@@ -163,7 +210,12 @@ interval/failures/last error/cutover, saved accounts role, module cursors), `big
 3. Run _Everything_ once (it merges into what the Twenty import brought), review the report, then set the
    automatic sync (hourly).
 4. Retire the `twenty-bigin-sync` job (Bigin → Twenty), so Twenty stops receiving Bigin edits that would come back
+   through the Twenty importer as conflicts; the Twenty cutover is done (2026-10-23), so the Twenty importer no longer runs.
+5. **After deploying the missing-data change** (phones, descriptions, company phones, tasks, events and calls): run
+   _Everything_ once. A `changes` run reads only what Bigin modified since its cursor, so records imported before
+   the change get their phones and new custom fields only from a full run; Tasks, Events and Calls are read whole the
+   first time either way. Nothing is backfilled in a migration (a full-table backfill once blocked the production
+   API); the run writes in its usual 20-record transactions.
 
 The cutover itself — gates, freeze, final sync, count check, comms, rollback, retiring Bigin — is the runbook
 [`docs/deploy/bigin-cutover.md`](../deploy/bigin-cutover.md).
-through the Twenty importer as conflicts; keep the Twenty importer for Twenty-native data until its cutover.

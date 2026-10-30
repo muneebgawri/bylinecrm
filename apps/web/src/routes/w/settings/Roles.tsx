@@ -231,7 +231,7 @@ function RoleForm({
                     <div className="grid gap-4 sm:grid-cols-2">
                         {GROUPS.map(([subject, caps]) => (
                             <fieldset key={subject} className="m-0 border-0 p-0">
-                                <legend className="mb-1.5 p-0 text-[11.5px] font-medium text-text-faint">
+                                <legend className="mb-1.5 p-0 text-xs font-medium text-text-muted">
                                     {CAPABILITY_AREA_LABEL[subject] ?? subject}
                                 </legend>
                                 {caps.map((cap) => (

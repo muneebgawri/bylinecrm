@@ -75,7 +75,7 @@ export function TemplateEditorPage() {
     if (template.isError) {
         if (template.error instanceof ApiError && template.error.status === 404) {
             return (
-                <div className="p-7 max-md:p-4">
+                <div className="p-4 md:p-6">
                     <EmptyState
                         title="Template not found"
                         body="It may have been deleted, or the link is wrong."

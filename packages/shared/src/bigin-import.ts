@@ -10,7 +10,7 @@ import type { StageKind } from './pipelines.js';
 import type { TwentyImportRecordError, TwentyImportSyncView } from './twenty-import.js';
 
 /** The Bigin modules the importer reads, in the order it reads them (a later one refers to earlier ones). */
-export const BIGIN_IMPORT_OBJECTS = ['Accounts', 'Contacts', 'Deals', 'Notes'] as const;
+export const BIGIN_IMPORT_OBJECTS = ['Accounts', 'Contacts', 'Deals', 'Notes', 'Tasks', 'Events', 'Calls'] as const;
 export type BiginImportObject = (typeof BIGIN_IMPORT_OBJECTS)[number];
 
 export function isBiginImportObject(value: unknown): value is BiginImportObject {
@@ -23,6 +23,9 @@ export const BIGIN_IMPORT_OBJECT_LABELS: Readonly<Record<BiginImportObject, { la
     Contacts: { label: 'Contacts', lands: 'People' },
     Deals: { label: 'Deals', lands: 'Deals in the default pipeline' },
     Notes: { label: 'Notes', lands: 'Notes on their records' },
+    Tasks: { label: 'Tasks', lands: 'Tasks on their records' },
+    Events: { label: 'Events', lands: 'Tasks on their records ("Meeting: …")' },
+    Calls: { label: 'Calls', lands: 'Done tasks on their records ("Call: …")' },
 };
 
 export const BIGIN_IMPORT_RUN_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const;

@@ -1847,6 +1847,9 @@ const biginCounts: Record<BiginImportObjectReportView['object'], [number, number
     Contacts: [1840, 1795, 31, 2],
     Deals: [266, 260, 4, 0],
     Notes: [933, 921, 0, 12],
+    Tasks: [749, 412, 0, 337],
+    Events: [1, 1, 0, 0],
+    Calls: [2, 2, 0, 0],
 };
 
 export const biginImportRun: BiginImportRunView = {

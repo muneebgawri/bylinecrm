@@ -14,7 +14,7 @@ export interface BiginInventoryModule {
     label: string;
     /** Records in Bigin; null when Bigin would not count them (the error says why). */
     remote: number | null;
-    /** Whether the importer reads this module (BIGIN-1: Accounts, Contacts, Deals, Notes). */
+    /** Whether the importer reads this module (BIGIN-1: `BIGIN_IMPORT_OBJECTS`). */
     imported: boolean;
     /** Bigin records linked to a CRM record (imported modules only). */
     linked: number | null;

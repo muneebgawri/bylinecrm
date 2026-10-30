@@ -21,4 +21,11 @@ describe('completedAtFor', () => {
         expect(completedAtFor('todo', undefined, now)).toBeNull();
         expect(completedAtFor('in_progress', { status: 'todo', completedAt: null }, now)).toBeNull();
     });
+
+    it('BIGIN-1: an imported task done at its source was done then; one already done keeps its instant', () => {
+        expect(completedAtFor('done', undefined, now, earlier)).toEqual(earlier);
+        expect(completedAtFor('done', { status: 'todo', completedAt: null }, now, earlier)).toEqual(earlier);
+        expect(completedAtFor('done', { status: 'done', completedAt: now }, now, earlier)).toEqual(now);
+        expect(completedAtFor('todo', undefined, now, earlier)).toBeNull();
+    });
 });

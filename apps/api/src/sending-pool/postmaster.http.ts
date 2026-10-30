@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SPAM_RATE_HISTORY_DAYS } from '@bylinecrm/shared';
 import { z } from 'zod';
+import { retryAfterSecondsOf } from '../infra/retry-after';
 import { assertNoOpenTransaction } from '../infra/transaction-scope';
 import {
     PostmasterRequestFailed,
@@ -49,20 +50,6 @@ export function spamRateBpsOf(value: Record<string, unknown>): number | null {
     const ratio = value['doubleValue'] ?? value['floatValue'];
     if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return null;
     return Math.round(ratio * 10_000);
-}
-
-/**
- * A `Retry-After` header as the seconds to wait (#183): a number of seconds, or an HTTP date (how
- * far it is from `now`, never less than zero). Anything else, or no header, is no advice.
- */
-export function retryAfterSecondsOf(header: string | null, now: Date): number | null {
-    if (header === null) return null;
-    const value = header.trim();
-    // A delta in seconds, or an HTTP date; a negative delta (or a bare number parsed as a year) is neither.
-    if (/^-?\d+$/.test(value)) return value.startsWith('-') ? null : Number(value);
-    const at = Date.parse(value);
-    if (Number.isNaN(at)) return null;
-    return Math.max(0, Math.round((at - now.getTime()) / 1000));
 }
 
 const googleError = z.object({

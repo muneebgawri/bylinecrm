@@ -467,23 +467,46 @@ export class BiginReuseReconciler {
         }
     }
 
+    /**
+     * Every Bigin Contact, read as the importer reads a module (`advanceWindow`): by modification windows, and where a
+     * bulk edit put more than 2,000 in one second, by v2's page tokens — which start at the oldest record, so only
+     * what is in the window moves it, and a record read in an earlier window is kept once.
+     */
     private async readBiginContacts(connection: BiginConnection, progress: Progress) {
         const out: Awaited<ReturnType<BiginApi['list']>>['records'] = [];
+        const kept = new Set<string>();
         const cursor = startPass(null, null);
         let pages = 0;
         while (!cursor.done) {
-            const page = await this.bigin.list(connection, 'Contacts', { since: cursor.since, page: cursor.page });
-            const seen = new Set(cursor.seen);
-            for (const r of page.records) if (!seen.has(String(r.id))) out.push(r);
-            let latest: Date | null = null;
+            const page = await this.bigin.list(connection, 'Contacts', {
+                since: cursor.since,
+                page: cursor.page,
+                pageToken: cursor.pageToken ?? null,
+                byToken: cursor.byToken ?? false,
+            });
             for (const r of page.records) {
+                const id = String(r.id);
+                if (kept.has(id)) continue;
+                kept.add(id);
+                out.push(r);
+            }
+            const since = cursor.since ? new Date(cursor.since) : null;
+            const inWindow = since
+                ? page.records.filter((r) => {
+                      const at = biginInstant(r.Modified_Time);
+                      return !at || at >= since;
+                  })
+                : page.records;
+            let latest: Date | null = null;
+            for (const r of inWindow) {
                 const at = biginInstant(r.Modified_Time);
                 if (at && (!latest || at > latest)) latest = at;
             }
             advanceWindow(cursor, {
-                ids: page.records.map((r) => String(r.id)),
+                ids: inWindow.map((r) => String(r.id)),
                 latest,
                 moreRecords: page.moreRecords && page.records.length > 0,
+                nextPageToken: page.nextPageToken ?? null,
             });
             pages += 1;
             if (cursor.done || pages % 20 === 0) progress(`Bigin Contacts: ${out.length}`);
