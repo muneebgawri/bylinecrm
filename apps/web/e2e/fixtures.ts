@@ -89,6 +89,7 @@ import type {
     TemplateVariablesView,
     TimelineActivityView,
     ProfileView,
+    TwoFactorStatusView,
     UserView,
     WorkspaceView,
     SequenceEnrolmentView,
@@ -161,6 +162,8 @@ export const user: UserView = {
 };
 /** A confirmed name, so the gate's pages are not covered by the first-sign-up prompt. */
 export const profile: ProfileView = { email: user.email, displayName: 'Kate Morgan', completed: true };
+/** Two-factor off, so the profile shows the way to turn it on. */
+export const twoFactor: TwoFactorStatusView = { enabled: false, enabledAt: null, recoveryCodesLeft: 0 };
 
 /** Two workspaces, so `/workspaces` shows its picker instead of redirecting to the only one. */
 export const workspaces: WorkspaceView[] = [
