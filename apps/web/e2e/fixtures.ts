@@ -89,6 +89,7 @@ import type {
     TemplateVariablesView,
     TimelineActivityView,
     ProfileView,
+    TwoFactorStatusView,
     UserView,
     WorkspaceView,
     SequenceEnrolmentView,
@@ -153,9 +154,16 @@ export const IDS = {
 const stageId = (index: number) => `0b1e0000-0000-4000-8000-0000000003${String(index).padStart(2, '0')}`;
 const member = { kind: 'member' as const, id: IDS.member };
 
-export const user: UserView = { id: IDS.user, email: 'kate.morgan@example.com', emailVerified: true };
+export const user: UserView = {
+    id: IDS.user,
+    email: 'kate.morgan@example.com',
+    emailVerified: true,
+    twoFactorEnabled: false,
+};
 /** A confirmed name, so the gate's pages are not covered by the first-sign-up prompt. */
 export const profile: ProfileView = { email: user.email, displayName: 'Kate Morgan', completed: true };
+/** Two-factor off, so the profile shows the way to turn it on. */
+export const twoFactor: TwoFactorStatusView = { enabled: false, enabledAt: null, recoveryCodesLeft: 0 };
 
 /** Two workspaces, so `/workspaces` shows its picker instead of redirecting to the only one. */
 export const workspaces: WorkspaceView[] = [

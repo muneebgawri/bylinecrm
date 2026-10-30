@@ -19,6 +19,7 @@ import type {
 export const keys = {
     me: ['me'] as const,
     profile: ['me', 'profile'] as const,
+    twoFactor: ['me', 'two-factor'] as const,
     workspaces: ['me', 'workspaces'] as const,
     membership: (workspaceId: string) => ['w', workspaceId, 'me'] as const,
     members: (workspaceId: string) => ['w', workspaceId, 'members'] as const,
@@ -237,7 +238,56 @@ export function useSignup() {
 
 export function useLogin() {
     const client = useQueryClient();
-    return useMutation({ mutationFn: (input: LoginInput) => auth.login(input), onSuccess: () => client.clear() });
+    return useMutation({
+        mutationFn: (input: LoginInput) => auth.login(input),
+        // A challenge is not a sign-in: nothing changes until the code follows.
+        onSuccess: (result) => {
+            if (result.user) client.clear();
+        },
+    });
+}
+
+/** The code after the password (2FA-1): on success the browser is signed in. */
+export function useLoginTwoFactor() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: { challenge: string; code: string }) => auth.loginTwoFactor(input),
+        onSuccess: () => client.clear(),
+    });
+}
+
+export const useTwoFactorStatus = () =>
+    useQuery({ queryKey: keys.twoFactor, queryFn: ({ signal }) => me.twoFactor.status(signal) });
+
+export function useTwoFactorSetup() {
+    return useMutation({ mutationFn: () => me.twoFactor.setup() });
+}
+export function useTwoFactorEnable() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (code: string) => me.twoFactor.enable(code),
+        onSuccess: () => {
+            void client.invalidateQueries({ queryKey: keys.twoFactor });
+            void client.invalidateQueries({ queryKey: keys.me });
+        },
+    });
+}
+export function useTwoFactorDisable() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (password: string) => me.twoFactor.disable(password),
+        onSuccess: () => {
+            void client.invalidateQueries({ queryKey: keys.twoFactor });
+            void client.invalidateQueries({ queryKey: keys.me });
+        },
+    });
+}
+export function useTwoFactorRecoveryCodes() {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (password: string) => me.twoFactor.recoveryCodes(password),
+        onSuccess: () => void client.invalidateQueries({ queryKey: keys.twoFactor }),
+    });
 }
 
 export function useLogout() {

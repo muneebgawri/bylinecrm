@@ -143,6 +143,10 @@ model User {
   displayName        String?   @map("display_name")
   /// When the person confirmed their name (saved, or kept the suggestion); `null` asks once.
   profileCompletedAt DateTime? @map("profile_completed_at") @db.Timestamptz
+  /// Two-factor sign-in (2FA-1): the authenticator secret, sealed with SECRETS_KEY; set at setup, before it is enabled.
+  totpSecret         String?   @map("totp_secret")
+  /// When the person proved their authenticator with a first code; `null` means sign-in needs no second factor.
+  totpEnabledAt      DateTime? @map("totp_enabled_at") @db.Timestamptz
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -150,6 +154,7 @@ model User {
   sessions      Session[]
   identities    ExternalIdentity[]
   oneTimeTokens OneTimeToken[]
+  recoveryCodes TwoFactorRecoveryCode[]
 
   platformWorkspaceInvites WorkspaceInvite[]      @relation("PlatformWorkspaceInvites")
   platformSignupInvites    PlatformSignupInvite[]
@@ -161,6 +166,24 @@ model User {
 enum OneTimeTokenPurpose {
   email_verification
   password_reset
+  /// A sign-in that passed the password and awaits the second factor (2FA-1): five minutes, one code.
+  two_factor
+}
+
+/// A recovery code for two-factor sign-in (2FA-1): one of eight shown once at setup, usable once. Only
+/// the hash is stored. The person reads and replaces their own through the restricted client; the sign-in
+/// path spends one through the owner client, as it reads the user.
+model TwoFactorRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @unique @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("two_factor_recovery_codes")
 }
 
 /// A mailed single-use link (#93): verify an address, reset a password. Only the secret's hash is

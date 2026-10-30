@@ -28,6 +28,7 @@ const ID = String.raw`([^/]+)`;
 const GETS: [RegExp, Handler][] = [
     [/^\/api\/me$/, () => data.user],
     [/^\/api\/me\/profile$/, () => data.profile],
+    [/^\/api\/me\/two-factor$/, () => data.twoFactor],
     [/^\/api\/me\/workspaces$/, () => data.workspaces],
     [/^\/api\/auth\/providers$/, () => data.providers],
     [/^\/api\/auth\/invites\/([^/]+)$/, (m) => invitePreview(m[1])],

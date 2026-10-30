@@ -23,6 +23,7 @@ import { OneTimeTokenService } from './one-time-token.service';
 import { PasswordService } from './password.service';
 import { RateLimiter } from './rate-limiter.service';
 import { SessionService } from './session.service';
+import { TwoFactorService } from './two-factor.service';
 
 /**
  * Authentication and authorization for every route. The four guards run in this order on every
@@ -44,6 +45,7 @@ import { SessionService } from './session.service';
     providers: [
         AuthService,
         SessionService,
+        TwoFactorService,
         PasswordService,
         RateLimiter,
         OidcService,

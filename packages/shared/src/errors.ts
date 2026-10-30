@@ -20,6 +20,10 @@ export const ERROR_CODES = [
     'email.unverified',
     /** `400`: a mailed single-use link is unknown, spent, expired or for something else (#93). */
     'token.invalid',
+    /** `400`: the second-factor code is not the app's current one nor an unused recovery code (2FA-1). */
+    'two_factor.code_invalid',
+    /** `400`: enabling two-factor needs a setup (a scanned secret) first (2FA-1). */
+    'two_factor.not_set_up',
     /** `403`: the route is for platform admins (a verified address in `PLATFORM_ADMIN_EMAILS`). */
     'platform.forbidden',
     /** No such record, or not one this caller can see — the two are never told apart. */

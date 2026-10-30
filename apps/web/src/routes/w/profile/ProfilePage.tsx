@@ -6,6 +6,7 @@ import { useProfile, useUpdateProfile } from '../../../api/queries';
 import { useCan, useMembership } from '../../../auth/capabilities';
 import { useWorkspaceId } from '../../params';
 import { DetailsForm, OwnMailboxSignatures } from '../settings/Signatures';
+import { TwoFactorSection } from './TwoFactorSection';
 
 /**
  * The person's own profile, from the account menu: every member's way to their name, the details their
@@ -25,6 +26,7 @@ export function ProfilePage() {
             />
             <div className="mt-5 flex max-w-3xl flex-col gap-6">
                 <NameSection />
+                <TwoFactorSection />
                 {memberId ? (
                     <>
                         <DetailsForm workspaceId={workspaceId} memberId={memberId} />
