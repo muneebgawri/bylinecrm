@@ -6,6 +6,7 @@ import { DomainEvents } from '../events/domain-events.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { chunked } from '../records/bulk/bulk.service';
 import { companyDomain } from '../records/company-domain';
 import { NotesService } from '../records/notes.service';
 import { OpportunitiesService } from '../records/opportunities.service';
@@ -190,10 +191,12 @@ export class BiginReuseReconciler {
         const done = new Set(
             (
                 await this.rls.withWorkspace((tx) =>
-                    tx.biginContactReuse.findMany({
-                        where: { source: 'reconcile', biginId: { in: candidates } },
-                        select: { biginId: true },
-                    }),
+                    inBatches(candidates, (ids) =>
+                        tx.biginContactReuse.findMany({
+                            where: { source: 'reconcile', biginId: { in: ids } },
+                            select: { biginId: true },
+                        }),
+                    ),
                 )
             ).map((r) => r.biginId),
         );
@@ -574,30 +577,43 @@ async function holdersOf(
 ): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     if (biginIds.length === 0) return out;
-    for (const link of await tx.biginImportLink.findMany({
-        where: { object: 'Contacts', externalId: { in: [...biginIds] } },
-        select: { externalId: true, localId: true },
-    })) {
+    for (const link of await inBatches(biginIds, (ids) =>
+        tx.biginImportLink.findMany({
+            where: { object: 'Contacts', externalId: { in: ids } },
+            select: { externalId: true, localId: true },
+        }),
+    )) {
         out.set(link.externalId, link.localId);
     }
     const twentyIds = biginIds.filter((id) => !out.has(id)).flatMap((id) => twentyPeople.get(id) ?? []);
     if (twentyIds.length > 0) {
         const byTwenty = new Map<string, string>();
         for (const [biginId, ids] of twentyPeople) for (const id of ids) byTwenty.set(id, biginId);
-        for (const link of await tx.twentyImportLink.findMany({
-            where: { object: 'people', externalId: { in: twentyIds } },
-            select: { externalId: true, localId: true },
-        })) {
+        for (const link of await inBatches(twentyIds, (ids) =>
+            tx.twentyImportLink.findMany({
+                where: { object: 'people', externalId: { in: ids } },
+                select: { externalId: true, localId: true },
+            }),
+        )) {
             const biginId = byTwenty.get(link.externalId);
             if (biginId && !out.has(biginId)) out.set(biginId, link.localId);
         }
     }
-    const live = await tx.person.findMany({
-        where: { id: { in: [...out.values()] }, deletedAt: null },
-        select: { id: true },
-    });
+    const live = await inBatches([...out.values()], (ids) =>
+        tx.person.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true } }),
+    );
     const alive = new Set(live.map((p) => p.id));
     for (const [biginId, id] of out) if (!alive.has(id)) out.delete(biginId);
+    return out;
+}
+
+/** Postgres takes at most 32767 bind values a statement; a whole workspace's Contacts can name more. */
+const IN_BATCH = 10_000;
+
+/** `read` over `ids` in runs of {@link IN_BATCH}, results in order. */
+export async function inBatches<T>(ids: readonly string[], read: (ids: string[]) => Promise<T[]>): Promise<T[]> {
+    const out: T[] = [];
+    for (const run of chunked(ids, IN_BATCH)) out.push(...(await read(run)));
     return out;
 }
 
