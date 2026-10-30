@@ -71,7 +71,9 @@ describe('two-factor sign-in', () => {
         const login = await http().post('/api/auth/login').send({ email, password }).expect(200);
         expect((login.body as { twoFactor: unknown }).twoFactor).toBeNull();
         await post('/api/me/two-factor/enable', me).send({ code: '000000' }).expect(400);
-        const enabled = await post('/api/me/two-factor/enable', me).send({ code: totp(secret) }).expect(200);
+        const enabled = await post('/api/me/two-factor/enable', me)
+            .send({ code: totp(secret) })
+            .expect(200);
         codes = (enabled.body as { codes: string[] }).codes;
         expect(codes).toHaveLength(8);
         const status = await http().get('/api/me/two-factor').set('Cookie', me.cookie).expect(200);
@@ -84,12 +86,18 @@ describe('two-factor sign-in', () => {
         expect((login.body as { user: unknown }).user).toBeNull();
         expect(login.headers['set-cookie']).toBeUndefined();
         await http().post('/api/auth/login/two-factor').send({ challenge, code: '000000' }).expect(400);
-        const done = await http().post('/api/auth/login/two-factor').send({ challenge, code: totp(secret) }).expect(200);
+        const done = await http()
+            .post('/api/auth/login/two-factor')
+            .send({ challenge, code: totp(secret) })
+            .expect(200);
         expect(done.body).toMatchObject({ user: { email, twoFactorEnabled: true } });
         const b = browserFrom(done);
         await http().get('/api/me').set('Cookie', b.cookie).expect(200);
         // The challenge is spent: the same code again does not open a second session.
-        await http().post('/api/auth/login/two-factor').send({ challenge, code: totp(secret) }).expect(400);
+        await http()
+            .post('/api/auth/login/two-factor')
+            .send({ challenge, code: totp(secret) })
+            .expect(400);
     });
 
     it('a recovery code works once, and the count goes down', async () => {
@@ -114,7 +122,10 @@ describe('two-factor sign-in', () => {
         for (let i = 0; i < TWO_FACTOR_MAX_ATTEMPTS; i++) {
             await http().post('/api/auth/login/two-factor').send({ challenge, code: '000000' }).expect(400);
         }
-        const res = await http().post('/api/auth/login/two-factor').send({ challenge, code: totp(secret) }).expect(400);
+        const res = await http()
+            .post('/api/auth/login/two-factor')
+            .send({ challenge, code: totp(secret) })
+            .expect(400);
         expect(res.body).toMatchObject({ code: 'token.invalid' });
     });
 

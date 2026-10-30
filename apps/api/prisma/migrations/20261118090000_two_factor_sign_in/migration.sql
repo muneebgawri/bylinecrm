@@ -26,6 +26,7 @@ ALTER TABLE "two_factor_recovery_codes" ADD CONSTRAINT "two_factor_recovery_code
 GRANT UPDATE ("totp_secret", "totp_enabled_at") ON "users" TO bylinecrm_app;
 
 ALTER TABLE "two_factor_recovery_codes" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "two_factor_recovery_codes" FORCE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "two_factor_recovery_codes" TO bylinecrm_app;
 CREATE POLICY own_codes ON "two_factor_recovery_codes"
     FOR ALL TO bylinecrm_app
