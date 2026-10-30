@@ -6,7 +6,7 @@ import { GMAIL_QUOTA_KEY_PREFIX, GMAIL_QUOTA_UNITS_PER_S } from './mail-sync.con
  * Keeps a mailbox's Gmail requests under `GMAIL_QUOTA_UNITS_PER_S`, across every worker process: a
  * fixed one-second window per mailbox in Redis. A request that would overrun the window waits for
  * the next one rather than being sent and throttled by Google. A request costing more than a whole
- * window (none does) is let through alone.
+ * window (a send, 100 units) is let through alone in an otherwise empty second.
  */
 @Injectable()
 export class GmailQuota {

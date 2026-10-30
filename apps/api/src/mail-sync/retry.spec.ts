@@ -1,3 +1,4 @@
+import { UnrecoverableError } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 import { GmailApiError } from './gmail.port';
 import {
@@ -7,7 +8,7 @@ import {
     MAIL_SYNC_RATE_LIMIT_COOLDOWN_BASE_MS,
     MAIL_SYNC_RATE_LIMIT_COOLDOWN_CAP_MS,
 } from './mail-sync.constants';
-import { gmailRetryDelayMs, rateLimitCooldownUntil, rateLimitedRuns, withGmailRetry } from './retry';
+import { gmailRetryDelayMs, queueFailure, rateLimitCooldownUntil, rateLimitedRuns, withGmailRetry } from './retry';
 
 const middle = () => 0.5;
 
@@ -191,5 +192,26 @@ describe('Gmail’s own retry time', () => {
                 retryAfter: '2026-10-29T12:01:00.000Z',
             }),
         ).toBe(Date.parse(at) + 20 * 60_000);
+    });
+});
+
+/**
+ * PNW-1125: a run that ended rate-limited was retried by the queue 30 s and 90 s later (its 3 attempts), each retry
+ * paging the mailbox's history again into the limit Gmail had just named — 39 refused runs became 42 in two minutes.
+ * The mailbox's cool-down, read by the tick, decides when it is asked again; the queue does not retry it.
+ */
+describe('queueFailure', () => {
+    it('R-PNW-1125: a rate-limited run is not retried by the queue', () => {
+        const refused = new GmailApiError(403, 'rateLimitExceeded', 'x');
+        const failure = queueFailure(refused);
+        expect(failure).toBeInstanceOf(UnrecoverableError);
+        expect((failure as Error).message).toContain('x');
+    });
+
+    it('R-PNW-1125: any other failure keeps the queue’s retries', () => {
+        const server = new GmailApiError(503, 'backendError', 'y');
+        const bug = new TypeError('z');
+        expect(queueFailure(server)).toBe(server);
+        expect(queueFailure(bug)).toBe(bug);
     });
 });

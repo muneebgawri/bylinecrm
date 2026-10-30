@@ -17,10 +17,16 @@ export const GMAIL_LIST_PAGE_SIZE = 100;
 export const GMAIL_FETCH_CONCURRENCY = 5;
 
 /**
- * Gmail's quota is 250 units per user per second; the sync keeps under it with room for the same
- * mailbox's sending (P2-3). Costs are Gmail's published per-method units.
+ * Gmail's per-user quota, as the Google project enforces it: "Units per minute per user". Google lowered it from
+ * 15,000 to 6,000 in October 2026 and its console allows no higher value (PNW-1125), so it is a ceiling, not a setting.
  */
-export const GMAIL_QUOTA_UNITS_PER_S = 200;
+export const GMAIL_USER_UNITS_PER_MINUTE = 6000;
+/**
+ * The units a mailbox may spend in one second: a tenth of the minute held back for the same mailbox's sending (P2-3)
+ * and Google's sliding window. Any 60 s then holds at most 61 of these seconds, under the minute. Costs are Gmail's
+ * published per-method units.
+ */
+export const GMAIL_QUOTA_UNITS_PER_S = Math.floor((GMAIL_USER_UNITS_PER_MINUTE * 0.9) / 60);
 export const GMAIL_UNITS = {
     getProfile: 1,
     listMessages: 5,
