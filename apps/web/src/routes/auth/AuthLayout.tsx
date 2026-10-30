@@ -89,7 +89,7 @@ export function AuthFrame({
             <header className="relative z-20 flex h-20 items-center justify-between px-6 lg:px-12">
                 <Link
                     to={paths.signIn}
-                    className="hero-in flex items-center gap-2 text-sm font-semibold"
+                    className="hero-in flex items-center gap-2 text-sm font-semibold max-md:min-h-touch"
                     style={step(0)}
                 >
                     <LogoMark />

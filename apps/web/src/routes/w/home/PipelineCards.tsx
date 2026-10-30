@@ -201,7 +201,7 @@ export function PipelinePulseCard({ workspaceId, className }: { workspaceId: str
                                                 <div className="min-w-0 flex-1">
                                                     <Link
                                                         to={paths.deal(workspaceId, deal.id)}
-                                                        className="block truncate text-sm font-medium hover:underline"
+                                                        className="block truncate text-sm font-medium hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
                                                     >
                                                         {deal.name}
                                                     </Link>
@@ -313,7 +313,7 @@ export function TopCompaniesCard({ workspaceId, className }: { workspaceId: stri
                                 </span>
                                 <Link
                                     to={paths.company(workspaceId, row.id)}
-                                    className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
+                                    className="min-w-0 flex-1 truncate text-sm font-medium hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
                                 >
                                     {row.label}
                                 </Link>

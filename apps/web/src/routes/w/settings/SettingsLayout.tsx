@@ -55,7 +55,7 @@ export function SettingsLayout() {
                                                     to={item.to(workspaceId)}
                                                     className={({ isActive }) =>
                                                         cn(
-                                                            'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-text-muted transition-colors hover:bg-surface-raised hover:text-text',
+                                                            'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-text-muted transition-colors hover:bg-surface-raised hover:text-text max-md:min-h-touch',
                                                             isActive && 'bg-surface-raised font-medium text-text',
                                                             focusRing,
                                                         )

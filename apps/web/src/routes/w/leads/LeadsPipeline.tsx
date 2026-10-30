@@ -153,7 +153,7 @@ function LeadCard({
                 <div className="min-w-0 flex-1">
                     <Link
                         to={paths.person(workspaceId, person.id)}
-                        className="block truncate text-sm font-semibold hover:underline"
+                        className="block truncate text-sm font-semibold hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
                     >
                         {label}
                     </Link>
@@ -184,7 +184,7 @@ function LeadCard({
                         disabled={moving}
                         onClick={() => onMove(next)}
                         className={cn(
-                            'flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-text hover:bg-surface-raised disabled:opacity-50',
+                            'flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-text hover:bg-surface-raised disabled:opacity-50 max-md:min-h-touch',
                             focusRing,
                         )}
                         title={`Move to ${CONTACT_STATUS_LABELS[next]}`}

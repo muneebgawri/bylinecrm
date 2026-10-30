@@ -9,6 +9,7 @@ import {
     PageHeader,
     Skeleton,
     Tabs,
+    TabsContent,
     TabsList,
     TabsTrigger,
     cn,
@@ -98,14 +99,14 @@ export function ActivitiesPage() {
     const groups = groupByDay(shown);
 
     return (
-        <div className="flex flex-col gap-4 p-4 md:p-6">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="flex flex-col gap-4 p-4 md:p-6">
             <PageHeader
                 className="mb-0"
                 title="Activities"
                 subtitle="Everything that happened across your records, newest first."
             />
             <div className="flex flex-wrap items-center gap-3">
-                <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="min-w-0 overflow-x-auto">
+                <div className="min-w-0 overflow-x-auto">
                     <TabsList variant="pill" aria-label="Kind">
                         {TABS.map((t) => (
                             <TabsTrigger key={t.id} value={t.id} className="text-xs">
@@ -113,7 +114,7 @@ export function ActivitiesPage() {
                             </TabsTrigger>
                         ))}
                     </TabsList>
-                </Tabs>
+                </div>
                 <label className="relative ml-auto block w-full max-w-72">
                     <Search
                         aria-hidden
@@ -128,73 +129,75 @@ export function ActivitiesPage() {
                     />
                 </label>
             </div>
-            {feed.isPending ? (
-                <LoadingRegion label="Loading activity" className="flex flex-col gap-3">
-                    <Skeleton className="h-20" />
-                    <Skeleton className="h-20" />
-                    <Skeleton className="h-20" />
-                </LoadingRegion>
-            ) : feed.isError ? (
-                <EmptyState
-                    tone="error"
-                    icon={<Activity />}
-                    title="Activity could not be loaded"
-                    body="Check your connection and try again."
-                    action={
-                        <Button variant="secondary" size="sm" onClick={() => void feed.refetch()}>
-                            Retry
-                        </Button>
-                    }
-                />
-            ) : shown.length === 0 ? (
-                <EmptyState
-                    icon={<Activity />}
-                    title={term ? 'Nothing matches' : 'Nothing yet'}
-                    body={
-                        term
-                            ? 'Try different words, or another kind.'
-                            : 'Notes, tasks, emails, meetings and stage changes show here as they happen.'
-                    }
-                />
-            ) : (
-                <div className="flex flex-col gap-6">
-                    {groups.map(({ day, list }) => (
-                        <section key={day} aria-label={day}>
-                            <h2 className="m-0 mb-2 text-xs font-semibold tracking-wide text-text-muted uppercase">
-                                {day === today
-                                    ? 'Today'
-                                    : new Date(day).toLocaleDateString(undefined, {
-                                          weekday: 'long',
-                                          month: 'long',
-                                          day: 'numeric',
-                                      })}
-                            </h2>
-                            <div className="flex flex-col gap-2">
-                                {list.map(({ entry, words }) => (
-                                    <ActivityCard
-                                        key={entry.id}
-                                        entry={entry}
-                                        words={words}
-                                        name={names.get(entry.target.id)}
-                                        workspaceId={workspaceId}
-                                    />
-                                ))}
-                            </div>
-                        </section>
-                    ))}
-                    {feed.hasNextPage && (
-                        <Button
-                            variant="secondary"
-                            className="self-center"
-                            loading={feed.isFetchingNextPage}
-                            onClick={() => void feed.fetchNextPage()}
-                        >
-                            Load older
-                        </Button>
-                    )}
-                </div>
-            )}
-        </div>
+            <TabsContent value={tab} className="pt-0">
+                {feed.isPending ? (
+                    <LoadingRegion label="Loading activity" className="flex flex-col gap-3">
+                        <Skeleton className="h-20" />
+                        <Skeleton className="h-20" />
+                        <Skeleton className="h-20" />
+                    </LoadingRegion>
+                ) : feed.isError ? (
+                    <EmptyState
+                        tone="error"
+                        icon={<Activity />}
+                        title="Activity could not be loaded"
+                        body="Check your connection and try again."
+                        action={
+                            <Button variant="secondary" size="sm" onClick={() => void feed.refetch()}>
+                                Retry
+                            </Button>
+                        }
+                    />
+                ) : shown.length === 0 ? (
+                    <EmptyState
+                        icon={<Activity />}
+                        title={term ? 'Nothing matches' : 'Nothing yet'}
+                        body={
+                            term
+                                ? 'Try different words, or another kind.'
+                                : 'Notes, tasks, emails, meetings and stage changes show here as they happen.'
+                        }
+                    />
+                ) : (
+                    <div className="flex flex-col gap-6">
+                        {groups.map(({ day, list }) => (
+                            <section key={day} aria-label={day}>
+                                <h2 className="m-0 mb-2 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                                    {day === today
+                                        ? 'Today'
+                                        : new Date(day).toLocaleDateString(undefined, {
+                                              weekday: 'long',
+                                              month: 'long',
+                                              day: 'numeric',
+                                          })}
+                                </h2>
+                                <div className="flex flex-col gap-2">
+                                    {list.map(({ entry, words }) => (
+                                        <ActivityCard
+                                            key={entry.id}
+                                            entry={entry}
+                                            words={words}
+                                            name={names.get(entry.target.id)}
+                                            workspaceId={workspaceId}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        ))}
+                        {feed.hasNextPage && (
+                            <Button
+                                variant="secondary"
+                                className="self-center"
+                                loading={feed.isFetchingNextPage}
+                                onClick={() => void feed.fetchNextPage()}
+                            >
+                                Load older
+                            </Button>
+                        )}
+                    </div>
+                )}
+            </TabsContent>
+        </Tabs>
     );
 }
 
@@ -252,7 +255,10 @@ function ActivityCard({
                     )}
                     <p className="m-0 flex items-center gap-1.5 text-xs text-text-muted">
                         <span className="font-medium text-text">{OBJECT_LABEL[entry.target.type]}:</span>
-                        <Link to={recordPath(workspaceId, entry.target)} className="truncate hover:underline">
+                        <Link
+                            to={recordPath(workspaceId, entry.target)}
+                            className="truncate hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
+                        >
                             {name ?? '…'}
                         </Link>
                     </p>

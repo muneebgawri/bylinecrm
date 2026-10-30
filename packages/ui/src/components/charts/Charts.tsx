@@ -253,14 +253,18 @@ export function DonutChart({ data, total, totalLabel, label, className }: DonutC
     const sum = data.reduce((a, d) => a + d.value, 0) || 1;
     const r = 40;
     const c = 2 * Math.PI * r;
-    let offset = 0;
+    const starts: number[] = [];
+    for (let i = 0, acc = 0; i < data.length; i++) {
+        starts.push(acc);
+        acc += (data[i]!.value / sum) * c;
+    }
     return (
         <div className={cn('flex flex-col gap-4', className)}>
             <div className="relative mx-auto size-40">
                 <svg role="img" aria-label={label} viewBox="0 0 100 100" className="size-full -rotate-90">
                     {data.map((d, i) => {
                         const len = (d.value / sum) * c;
-                        const el = (
+                        return (
                             <circle
                                 key={d.label}
                                 cx="50"
@@ -270,15 +274,13 @@ export function DonutChart({ data, total, totalLabel, label, className }: DonutC
                                 className={CHART_STROKES[i % CHART_STROKES.length]}
                                 strokeWidth="14"
                                 strokeDasharray={`${Math.max(len - 2, 0)} ${c - Math.max(len - 2, 0)}`}
-                                strokeDashoffset={-offset}
+                                strokeDashoffset={-(starts[i] ?? 0)}
                             >
                                 <title>
                                     {d.label}: {d.value} ({Math.round((d.value / sum) * 100)}%)
                                 </title>
                             </circle>
                         );
-                        offset += len;
-                        return el;
                     })}
                 </svg>
                 <div className="absolute inset-0 grid place-items-center text-center">

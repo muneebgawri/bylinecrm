@@ -43,7 +43,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputProps, 'type
                 aria-label={shown ? 'Hide password' : 'Show password'}
                 aria-pressed={shown}
                 className={cn(
-                    'absolute top-1/2 right-1 grid size-8 -translate-y-1/2 place-items-center rounded-sm text-text-faint hover:text-text',
+                    'absolute top-1/2 right-1 grid size-8 -translate-y-1/2 place-items-center rounded-sm text-text-faint hover:text-text max-md:size-touch',
                     focusRing,
                 )}
             >

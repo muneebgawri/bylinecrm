@@ -23025,8 +23025,7 @@
                         "schema": {
                             "minLength": 1,
                             "type": "string"
-                        },
-                        "description": "`person:<uuid>` etc.; absent: the workspace feed — every record the caller may read, newest first."
+                        }
                     },
                     {
                         "name": "kinds",

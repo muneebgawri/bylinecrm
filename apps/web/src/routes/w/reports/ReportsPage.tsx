@@ -666,7 +666,7 @@ function TopDealsCard({
                     />
                 </label>
             </CardHeader>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-md:hidden">
                 <table className="w-full border-collapse text-sm">
                     <thead>
                         <tr className="text-left text-xs text-text-muted">
@@ -740,6 +740,47 @@ function TopDealsCard({
                     </tbody>
                 </table>
             </div>
+            {/* On a phone the same rows are cards (FR-CRMS-UI-12): a table does not fit. */}
+            <ul className="m-0 flex list-none flex-col divide-y divide-border border-t border-border p-0 md:hidden">
+                {!data ? (
+                    <li className="px-4 py-6">
+                        <Skeleton className="h-6" />
+                    </li>
+                ) : rows.length === 0 ? (
+                    <li className="px-4 py-8 text-center text-text-muted">No open deals{q ? ' match' : ' yet'}.</li>
+                ) : (
+                    rows.map((d) => {
+                        const stage = stageOf(d);
+                        const p = probabilityOf(d, data);
+                        return (
+                            <li key={d.id} className="flex flex-col gap-1 px-4 py-2">
+                                <div className="flex items-center justify-between gap-3">
+                                    <Link
+                                        to={paths.deal(workspaceId, d.id)}
+                                        className="flex min-h-touch min-w-0 flex-1 items-center truncate font-semibold hover:underline"
+                                    >
+                                        {d.name}
+                                    </Link>
+                                    <span className="font-semibold tabular-nums">
+                                        {d.amount ? money(d.amount.amountMinor) : '—'}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                                    {stage && (
+                                        <Badge dot status={STAGE_TONES[stage.colour]} shape="pill">
+                                            {stage.name}
+                                        </Badge>
+                                    )}
+                                    <span>
+                                        Forecast {d.amount ? money(Math.round((d.amount.amountMinor * p) / 100)) : '—'}
+                                    </span>
+                                    <span className="ml-auto tabular-nums">{p}% win</span>
+                                </div>
+                            </li>
+                        );
+                    })
+                )}
+            </ul>
             <CardFooter className="border-t border-border py-3 text-xs text-text-muted">
                 Forecast = deal value × win probability, from the deals on the board.
             </CardFooter>
@@ -852,7 +893,7 @@ function TopOpenDealsCard({
                                     <div className="min-w-0 flex-1">
                                         <Link
                                             to={paths.deal(workspaceId, d.id)}
-                                            className="block truncate text-sm font-semibold hover:underline"
+                                            className="block truncate text-sm font-semibold hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
                                         >
                                             {d.name}
                                         </Link>

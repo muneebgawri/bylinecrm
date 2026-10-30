@@ -95,7 +95,11 @@ export function Landing() {
         <div className="relative min-h-dvh overflow-hidden bg-background text-text">
             <header className="absolute inset-x-0 top-0 z-20">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-                    <Link to={paths.root} className="hero-in flex items-center gap-2" style={step(0)}>
+                    <Link
+                        to={paths.root}
+                        className="hero-in flex items-center gap-2 max-md:min-h-touch"
+                        style={step(0)}
+                    >
                         <LogoMark />
                         <span className="text-lg font-semibold tracking-tight">BylineCRM</span>
                     </Link>

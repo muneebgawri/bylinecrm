@@ -22,10 +22,10 @@
     --bc-border-strong: #d4d4d4;
     --bc-selection: #f5f5f5;
 
-    /* Text */
+    /* Text — muted and faint are set so they read on `surface-raised` and `selection` too */
     --bc-text: #0a0a0a;
-    --bc-text-muted: #737373;
-    --bc-text-faint: #737373;
+    --bc-text-muted: #666666;
+    --bc-text-faint: #6b6b6b;
 
     /* Primary (the black button, the logo mark, the active page number) */
     --bc-primary: #171717;
@@ -41,8 +41,10 @@
     --bc-success-soft: #ecfdf5;
     --bc-warning: #b45309;
     --bc-warning-soft: #fffbeb;
-    --bc-danger: #dc2626;
+    --bc-danger: #b91c1c;
     --bc-danger-soft: #fef2f2;
+    /* The one solid status fill (the danger button): white text reads on it in both themes */
+    --bc-danger-fill: #b91c1c;
     --bc-info: #1d4ed8;
     --bc-info-soft: #eff6ff;
 
@@ -130,6 +132,7 @@
         --bc-warning-soft: rgba(245, 158, 11, 0.12);
         --bc-danger: #f87171;
         --bc-danger-soft: rgba(239, 68, 68, 0.12);
+        --bc-danger-fill: #dc2626;
         --bc-info: #60a5fa;
         --bc-info-soft: rgba(59, 130, 246, 0.12);
         --bc-ring: #737373;
@@ -167,6 +170,7 @@
     --bc-warning-soft: rgba(245, 158, 11, 0.12);
     --bc-danger: #f87171;
     --bc-danger-soft: rgba(239, 68, 68, 0.12);
+    --bc-danger-fill: #dc2626;
     --bc-info: #60a5fa;
     --bc-info-soft: rgba(59, 130, 246, 0.12);
     --bc-ring: #737373;

@@ -10,6 +10,7 @@ import {
     Input,
     PageHeader,
     Tabs,
+    TabsContent,
     TabsList,
     TabsTrigger,
     cn,
@@ -167,7 +168,7 @@ export function CalendarPage() {
                                         type="button"
                                         onClick={() => setSelected(e)}
                                         className={cn(
-                                            'flex w-full items-stretch gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-surface-raised',
+                                            'flex w-full items-stretch gap-2.5 rounded-md px-2 py-1.5 text-left max-md:min-h-touch hover:bg-surface-raised',
                                             focusRing,
                                         )}
                                     >
@@ -186,7 +187,11 @@ export function CalendarPage() {
                     </div>
                 </aside>
 
-                <div className="flex min-w-0 flex-1 flex-col gap-3">
+                <Tabs
+                    value={view}
+                    onValueChange={(v) => setView(v as CalendarView)}
+                    className="flex min-w-0 flex-1 flex-col gap-3"
+                >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex flex-wrap items-center gap-2">
                             <Button variant="secondary" onClick={() => setDate(startOfDay(new Date()))}>
@@ -228,19 +233,20 @@ export function CalendarPage() {
                                     className="pl-9"
                                 />
                             </label>
-                            <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)}>
-                                <TabsList variant="pill" aria-label="View">
-                                    {CALENDAR_VIEWS.map((v) => (
-                                        <TabsTrigger key={v.value} value={v.value} className="text-xs">
-                                            {v.label}
-                                        </TabsTrigger>
-                                    ))}
-                                </TabsList>
-                            </Tabs>
+                            <TabsList variant="pill" aria-label="View">
+                                {CALENDAR_VIEWS.map((v) => (
+                                    <TabsTrigger key={v.value} value={v.value} className="text-xs">
+                                        {v.label}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
                         </div>
                     </div>
 
-                    <div className="flex min-h-[680px] flex-col overflow-hidden rounded-xl border border-border bg-surface">
+                    <TabsContent
+                        value={view}
+                        className="flex min-h-[680px] flex-col overflow-hidden rounded-xl border border-border bg-surface pt-0"
+                    >
                         {view === 'month' && (
                             <MonthView
                                 date={date}
@@ -264,13 +270,18 @@ export function CalendarPage() {
                         {view === 'agenda' && (
                             <AgendaView date={date} now={now} events={visible} onOpen={setSelected} />
                         )}
-                    </div>
-                </div>
+                    </TabsContent>
+                </Tabs>
             </div>
 
             <EventDialog event={selected} onClose={() => setSelected(null)} />
         </div>
     );
+}
+
+/** The day as its label: the visible number is part of it, as the accessible name must be. */
+function dayLabel(d: Date): string {
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 function MiniMonth({
@@ -332,7 +343,7 @@ function MiniMonth({
                             key={d.toISOString()}
                             type="button"
                             onClick={() => onPick(d)}
-                            aria-label={d.toDateString()}
+                            aria-label={dayLabel(d)}
                             aria-pressed={picked}
                             className={cn(
                                 'mx-auto my-0.5 grid size-8 place-items-center rounded-md text-sm tabular-nums hover:bg-surface-raised',
@@ -412,23 +423,33 @@ function MonthView({
                                 type="button"
                                 onClick={() => onShowDay(day)}
                                 className={cn(
-                                    'grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium',
+                                    'grid size-6 shrink-0 place-items-center rounded-full text-xs font-medium max-md:size-touch',
                                     today ? 'bg-primary text-primary-foreground' : 'hover:bg-surface-raised',
                                     focusRing,
                                 )}
                             >
                                 {day.getDate()}
                             </button>
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col gap-0.5 max-md:hidden">
                                 {shown.map((e) => (
                                     <Chip key={e.id} event={e} onOpen={onOpen} />
                                 ))}
                             </div>
+                            {list.length > 0 && (
+                                <div aria-hidden className="pointer-events-none flex flex-wrap gap-0.5 md:hidden">
+                                    {list.slice(0, 4).map((e) => (
+                                        <span
+                                            key={e.id}
+                                            className={cn('size-1.5 rounded-full', EVENT_TYPE_CONFIG[e.type].dot)}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                             {hidden > 0 && (
                                 <button
                                     type="button"
                                     onClick={() => onShowDay(day)}
-                                    className="px-1.5 text-left text-[11px] font-medium text-text-muted hover:text-text"
+                                    className="px-1.5 text-left text-[11px] font-medium text-text-muted hover:text-text max-md:hidden"
                                 >
                                     +{hidden} more
                                 </button>
@@ -612,7 +633,7 @@ function AgendaView({
                                     type="button"
                                     onClick={() => onOpen(e)}
                                     className={cn(
-                                        'flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-left hover:bg-surface-raised',
+                                        'flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-left hover:bg-surface-raised max-md:min-h-touch',
                                         focusRing,
                                     )}
                                 >

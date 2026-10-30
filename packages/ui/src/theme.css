@@ -53,6 +53,7 @@
     --color-warning-soft: var(--bc-warning-soft);
     --color-danger: var(--bc-danger);
     --color-danger-soft: var(--bc-danger-soft);
+    --color-danger-fill: var(--bc-danger-fill);
     --color-info: var(--bc-info);
     --color-info-soft: var(--bc-info-soft);
 
