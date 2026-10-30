@@ -224,6 +224,12 @@ export function DealsList({
         overscan: VIRTUAL_OVERSCAN,
     });
 
+    const items = virtualizer.getVirtualItems();
+    const lastItem = items[items.length - 1];
+    const padTop = items[0]?.start ?? 0;
+    const padBottom = lastItem ? virtualizer.getTotalSize() - lastItem.end : 0;
+    const columnCount = table.getVisibleLeafColumns().length;
+
     const head = sorts[0];
 
     const selectedRows = rows.filter((r) => selected.has(r.deal.id));
@@ -376,12 +382,11 @@ export function DealsList({
         );
     }
 
-    const renderRow = (row: (typeof modelRows)[number], style?: React.CSSProperties) => (
+    const renderRow = (row: (typeof modelRows)[number]) => (
         <tr
             key={row.id}
             className={tableClasses.tr}
             data-selected={selected.has(row.id) ? 'true' : undefined}
-            style={style}
             data-index={row.index}
             ref={virtual ? virtualizer.measureElement : undefined}
         >
@@ -445,21 +450,24 @@ export function DealsList({
                         ))}
                     </thead>
                     {virtual ? (
-                        <tbody style={{ height: virtualizer.getTotalSize(), position: 'relative', display: 'block' }}>
-                            {virtualizer.getVirtualItems().map((item) => {
+                        // The rows stay ordinary table rows so they share the header's columns (an
+                        // absolutely positioned row is its own table and loses them); the rows scrolled
+                        // past are two spacer rows, as ListTable does.
+                        <tbody>
+                            {padTop > 0 && (
+                                <tr aria-hidden>
+                                    <td style={{ height: padTop }} colSpan={columnCount} />
+                                </tr>
+                            )}
+                            {items.map((item) => {
                                 const row = modelRows[item.index];
-                                return row
-                                    ? renderRow(row, {
-                                          position: 'absolute',
-                                          top: 0,
-                                          left: 0,
-                                          width: '100%',
-                                          display: 'table',
-                                          tableLayout: 'fixed',
-                                          transform: `translateY(${item.start}px)`,
-                                      })
-                                    : null;
+                                return row ? renderRow(row) : null;
                             })}
+                            {padBottom > 0 && (
+                                <tr aria-hidden>
+                                    <td style={{ height: padBottom }} colSpan={columnCount} />
+                                </tr>
+                            )}
                         </tbody>
                     ) : (
                         <tbody>{modelRows.map((row) => renderRow(row))}</tbody>
