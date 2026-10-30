@@ -28,6 +28,17 @@ export const EMAIL_VERIFICATION_TTL_S = 24 * 60 * 60;
 /** A mailed password-reset link expires after this (#93): short, because it grants the account. */
 export const PASSWORD_RESET_TTL_S = 30 * 60;
 
+/** A sign-in that passed the password waits this long for its second factor (2FA-1). */
+export const TWO_FACTOR_CHALLENGE_TTL_S = 5 * 60;
+/** Wrong codes one challenge takes before it is spent (2FA-1): a six-digit code must not be guessable. */
+export const TWO_FACTOR_MAX_ATTEMPTS = 5;
+/** Recovery codes issued at setup, and again on request (2FA-1); each works once. */
+export const RECOVERY_CODE_COUNT = 8;
+/** Random bytes in a recovery code: 10 base32 characters, shown as `xxxxx-xxxxx`. */
+export const RECOVERY_CODE_BYTES = 6;
+/** The issuer an authenticator app files the account under. */
+export const TOTP_ISSUER = 'BylineCRM';
+
 /** New verification links one account may ask for per window (#93). */
 export const VERIFY_RESEND_MAX = 5;
 export const VERIFY_RESEND_WINDOW_S = 60 * 60;

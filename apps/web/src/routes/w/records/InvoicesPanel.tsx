@@ -11,7 +11,7 @@ import {
     SelectValue,
     toast,
 } from '@bylinecrm/ui';
-import { ExternalLink, Plus } from 'lucide-react';
+import { ExternalLink, Plus, Receipt } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
 import { useDealInvoices, useInvoiceAction, useNewswireosInvoiceLink } from '../../../api/invoices';
@@ -96,6 +96,7 @@ export function InvoicesPanel({ workspaceId, deal }: { workspaceId: string; deal
     return (
         <RailCard
             title="Invoices"
+            icon={<Receipt />}
             count={list.data?.length}
             action={
                 edit.allowed ? (

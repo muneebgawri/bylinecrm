@@ -176,8 +176,11 @@ export function DetailsForm({ workspaceId, memberId }: { workspaceId: string; me
     if (profile.isError) throw profile.error;
     if (!profile.data) return <LoadingRegion label="Loading your details" className="h-24" />;
     return (
-        <section aria-labelledby="signature-details-title" className="rounded-lg border border-border bg-surface p-4">
-            <h3 id="signature-details-title" className="m-0 mb-3 text-sm font-semibold">
+        <section
+            aria-labelledby="signature-details-title"
+            className="rounded-xl border border-border bg-surface p-6 shadow-sm"
+        >
+            <h3 id="signature-details-title" className="m-0 mb-3 text-base font-semibold">
                 Your details
             </h3>
             <DetailsFields
@@ -330,8 +333,8 @@ function MembersDetails({ workspaceId, selfId }: { workspaceId: string; selfId: 
     if (profiles.isError) throw profiles.error;
     const others = (profiles.data ?? []).filter((p) => p.memberId !== selfId);
     return (
-        <section aria-label="Members’ details" className="rounded-lg border border-border bg-surface p-4">
-            <h3 className="m-0 mb-1 text-sm font-semibold">Members’ details</h3>
+        <section aria-label="Members’ details" className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+            <h3 className="m-0 mb-1 text-base font-semibold">Members’ details</h3>
             <p className="m-0 mb-3 text-[13px] text-text-muted">
                 What each member’s signature reads of them. Set a Slotline username for a member who has not.
             </p>
@@ -458,7 +461,7 @@ function DetailsFields({
                 />
             </Field>
             <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
-                <legend className="mb-1 text-[13px] font-medium">Social profiles</legend>
+                <legend className="mb-1 text-xs font-medium text-text-muted">Social profiles</legend>
                 <p className="m-0 -mt-1 text-xs text-text-muted">
                     Each one filled in shows as an icon in {own ? 'your' : 'their'} signature, linking to the profile.
                 </p>
@@ -523,8 +526,8 @@ function LogoSection({ workspaceId, settings }: { workspaceId: string; settings:
         });
     };
     return (
-        <section aria-label="Company logo" className="rounded-lg border border-border bg-surface p-4">
-            <h3 className="m-0 mb-1 text-sm font-semibold">Company logo</h3>
+        <section aria-label="Company logo" className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+            <h3 className="m-0 mb-1 text-base font-semibold">Company logo</h3>
             <p className="m-0 mb-3 text-[13px] text-text-muted">
                 Shown in every signature that has the logo. It is served from a public address, so recipients’ mail apps
                 show it; replacing it keeps the old one working for 30 days for mail already sent.
@@ -601,8 +604,8 @@ function WorkspaceSignature({ workspaceId, settings }: { workspaceId: string; se
             },
         );
     return (
-        <section aria-label="Workspace signature" className="rounded-lg border border-border bg-surface p-4">
-            <h3 className="m-0 mb-1 text-sm font-semibold">Workspace signature</h3>
+        <section aria-label="Workspace signature" className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+            <h3 className="m-0 mb-1 text-base font-semibold">Workspace signature</h3>
             <p className="m-0 mb-3 text-[13px] text-text-muted">
                 Carried by every mailbox without a signature of its own, unless its member switches it off.
             </p>
@@ -610,7 +613,7 @@ function WorkspaceSignature({ workspaceId, settings }: { workspaceId: string; se
                 <div className="flex flex-col gap-3">
                     <SignatureField label="Workspace signature" value={draft} onChange={setDraft} />
                     <fieldset className="m-0 flex flex-wrap gap-x-5 gap-y-2 border-0 p-0">
-                        <legend className="mb-1 text-[13px] font-medium">Keep in every signature</legend>
+                        <legend className="mb-1 text-xs font-medium text-text-muted">Keep in every signature</legend>
                         {(Object.keys(LOCK_LABEL) as SignatureLockable[]).map((lock) => (
                             <LockBox
                                 key={lock}
@@ -714,7 +717,7 @@ function MailboxSignatureCard({
     const view = useMailboxSignature(workspaceId, mailbox.id);
     if (view.isError) throw view.error;
     return (
-        <section aria-label={mailbox.email} className="rounded-lg border border-border bg-surface p-4">
+        <section aria-label={mailbox.email} className="rounded-xl border border-border bg-surface p-6 shadow-sm">
             <h4 className="m-0 mb-2 break-all text-[13px] font-semibold">{mailbox.email}</h4>
             {view.data ? (
                 <MailboxSignatureForm workspaceId={workspaceId} mailbox={mailbox} view={view.data} starter={starter} />

@@ -26,12 +26,13 @@ import { canonical } from '../records/diff';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
 import { type Page, paginate } from '../records/list-query';
 import { stored } from '../records/references';
-import { readableTargets } from '../records/targets';
+import { dedupeTargets, readableTargets } from '../records/targets';
 import type { TimelineActivityView, ExternalActivityResult } from './responses';
 export type { TimelineActivityView, ExternalActivityResult } from './responses';
 
 export interface TimelineQuery {
-    target: RecordTarget;
+    /** Absent: the workspace feed — every live record the caller can read. */
+    target?: RecordTarget | undefined;
     /** Prefixes of `kind` to keep; empty means every kind. */
     kinds: readonly string[];
     cursor?: string | undefined;
@@ -80,17 +81,33 @@ export class TimelineService {
     private entries(query: TimelineQuery): Promise<Page<TimelineActivityView>> {
         this.current();
         return this.rls.withWorkspace(async (tx) => {
+            const kinds =
+                query.kinds.length > 0 ? { AND: [{ OR: query.kinds.map((k) => ({ kind: { startsWith: k } })) }] } : {};
+            if (!query.target) {
+                // The feed: the tenant's entries, newest first; a page keeps only the entries whose
+                // record is live and in the caller's scope (the same rule as opening the record).
+                const page = await paginate(query.limit, query.cursor, (args) =>
+                    tx.timelineActivity.findMany({
+                        where: kinds,
+                        orderBy: [{ happenedAt: 'desc' }, { id: 'asc' }],
+                        ...args,
+                    }),
+                );
+                const targets = page.items.map((r) => ({ type: r.targetType as RecordObject, id: r.targetId }));
+                const readable = new Set(
+                    (await readableTargets(tx, dedupeTargets(targets))).map((t) => `${t.type}:${t.id}`),
+                );
+                return {
+                    items: page.items.filter((r) => readable.has(`${r.targetType}:${r.targetId}`)).map(view),
+                    nextCursor: page.nextCursor,
+                };
+            }
             const visible = await readableTargets(tx, [query.target]);
             if (visible.length === 0) throw new NotFoundException('target not found');
             const targets = await this.mergedTargets(tx, query.target);
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.timelineActivity.findMany({
-                    where: {
-                        OR: targets.map((t) => ({ targetType: t.type, targetId: t.id })),
-                        ...(query.kinds.length > 0
-                            ? { AND: [{ OR: query.kinds.map((k) => ({ kind: { startsWith: k } })) }] }
-                            : {}),
-                    },
+                    where: { OR: targets.map((t) => ({ targetType: t.type, targetId: t.id })), ...kinds },
                     orderBy: [{ happenedAt: 'desc' }, { id: 'asc' }],
                     ...args,
                 }),

@@ -1,125 +1,31 @@
-import { Checkbox, EmptyState, LoadingRegion, PageHeader, Skeleton, toast } from '@bylinecrm/ui';
-import { Link } from 'react-router';
-import { useCompleteMyTask, useMyTasks } from '../../../api/notifications';
-import type { MyTaskView } from '../../../api/types';
-import { useCan } from '../../../auth/capabilities';
-import { failureText } from '../../../lib/errors';
-import { formatWhen } from '../../../lib/format';
+import { PageHeader } from '@bylinecrm/ui';
 import { useWorkspaceId } from '../../params';
-import { recordPath } from '../records/targets';
-
-const GROUPS = ['Overdue', 'Due today', 'Upcoming', 'No due date'] as const;
-type Group = (typeof GROUPS)[number];
-
-/** Where a task falls against today, on the member's own clock: before today, today, later, or never. */
-function groupOf(task: MyTaskView, now: Date): Group {
-    if (!task.dueAt) return 'No due date';
-    const due = new Date(task.dueAt);
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    if (due < start) return 'Overdue';
-    return due < end ? 'Due today' : 'Upcoming';
-}
+import { MyTasksCard } from './MyTasksCard';
+import { DashboardKpis, DealsByStageCard, PipelinePulseCard, TopCompaniesCard } from './PipelineCards';
 
 /**
- * The dashboard (#192): for now, **My tasks** — the member's open tasks, overdue first, then today's,
- * the coming ones and those with no date, each linked to what it is about. A sequence's "Call if no
- * reply" lands here as well as on the person. Completing one (with `task:write`) takes it off.
+ * The dashboard (#192): the four numbers (people, open deals, pipeline value, won revenue), the
+ * default pipeline at a glance, the deals by stage, the companies with the most open value, and
+ * **My tasks**. Every figure is the API's; nothing here is estimated.
  */
 export function HomePage() {
     const workspaceId = useWorkspaceId();
-    const tasks = useMyTasks(workspaceId);
-    const complete = useCompleteMyTask(workspaceId);
-    const canComplete = useCan('task:write');
-    if (tasks.isError) throw tasks.error;
-    const now = new Date();
-    const grouped = new Map<Group, MyTaskView[]>(GROUPS.map((g) => [g, []]));
-    for (const t of tasks.data ?? []) grouped.get(groupOf(t, now))!.push(t);
-
     return (
-        <div className="p-7 max-md:p-4">
-            <PageHeader title="Dashboard" subtitle="What needs your attention today." />
-            <section aria-labelledby="my-tasks-title" className="max-w-3xl">
-                <h2 id="my-tasks-title" className="m-0 mb-3 text-base font-semibold">
-                    My tasks
-                </h2>
-                {!tasks.data ? (
-                    <LoadingRegion label="Loading your tasks">
-                        <Skeleton className="h-9" />
-                        <Skeleton className="mt-2 h-9" />
-                    </LoadingRegion>
-                ) : tasks.data.length === 0 ? (
-                    <EmptyState
-                        title="Nothing assigned to you"
-                        body="Tasks assigned to you — by a teammate or a sequence step — show here."
-                    />
-                ) : (
-                    GROUPS.filter((g) => grouped.get(g)!.length > 0).map((group) => {
-                        const id = `my-tasks-${group.replaceAll(' ', '-').toLowerCase()}`;
-                        return (
-                            <section key={group} aria-labelledby={id} className="mb-5">
-                                <h3
-                                    id={id}
-                                    className={
-                                        group === 'Overdue'
-                                            ? 'm-0 mb-1.5 text-[13px] font-semibold text-danger'
-                                            : 'm-0 mb-1.5 text-[13px] font-semibold text-text-muted'
-                                    }
-                                >
-                                    {group}
-                                </h3>
-                                <ul className="m-0 list-none rounded-lg border border-border bg-surface p-0">
-                                    {grouped.get(group)!.map((t) => (
-                                        <li
-                                            key={t.id}
-                                            className="flex items-start gap-3 border-b border-border px-3 py-2.5 last:border-b-0 max-md:min-h-touch"
-                                        >
-                                            {canComplete && (
-                                                <Checkbox
-                                                    aria-label={`Complete “${t.title}”`}
-                                                    className="mt-0.5"
-                                                    disabled={complete.isPending}
-                                                    onCheckedChange={() =>
-                                                        complete.mutate(t.id, {
-                                                            onSuccess: () =>
-                                                                toast({ title: `Done: ${t.title}`, tone: 'success' }),
-                                                            onError: (error) =>
-                                                                toast({
-                                                                    title: 'Could not complete the task',
-                                                                    description: failureText(error),
-                                                                    tone: 'danger',
-                                                                }),
-                                                        })
-                                                    }
-                                                />
-                                            )}
-                                            <div className="min-w-0 flex-1">
-                                                <span className="block text-sm">{t.title}</span>
-                                                {t.dueAt && (
-                                                    <span className="block text-xs text-text-muted">
-                                                        Due {formatWhen(t.dueAt)}
-                                                    </span>
-                                                )}
-                                                <span className="flex flex-wrap gap-x-3 text-xs">
-                                                    {t.targets.map((target) => (
-                                                        <Link
-                                                            key={`${target.type}:${target.id}`}
-                                                            to={recordPath(workspaceId, target)}
-                                                            className="text-accent underline-offset-2 hover:underline max-md:inline-flex max-md:min-h-touch max-md:items-center"
-                                                        >
-                                                            {target.label}
-                                                        </Link>
-                                                    ))}
-                                                </span>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </section>
-                        );
-                    })
-                )}
-            </section>
+        <div className="flex flex-col gap-4 p-4 md:p-6">
+            <PageHeader
+                className="mb-0"
+                title="Dashboard"
+                subtitle="Track your pipeline, your deals and what needs you today."
+            />
+            <DashboardKpis workspaceId={workspaceId} />
+            <div className="grid grid-cols-12 gap-4">
+                <PipelinePulseCard workspaceId={workspaceId} className="col-span-12 xl:col-span-7" />
+                <DealsByStageCard workspaceId={workspaceId} className="col-span-12 xl:col-span-5" />
+            </div>
+            <div className="grid grid-cols-12 gap-4">
+                <TopCompaniesCard workspaceId={workspaceId} className="col-span-12 lg:col-span-5" />
+                <MyTasksCard workspaceId={workspaceId} className="col-span-12 lg:col-span-7" />
+            </div>
         </div>
     );
 }

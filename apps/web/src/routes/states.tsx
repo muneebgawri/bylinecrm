@@ -1,24 +1,34 @@
 import { Button, EmptyState, LoadingRegion, Skeleton } from '@bylinecrm/ui';
+import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { isRouteErrorResponse, Link, useNavigate, useRouteError } from 'react-router';
 import { ApiError } from '../api/client';
 import { isStaleBuild, mayReloadForNewBuild, reloadForNewBuild } from '../lib/staleBuild';
-import { LogoMark } from '../shell/LogoMark';
+import { AuthFrame } from './auth/AuthLayout';
 import { paths } from './paths';
 
 /** What a route shows while its data loads: the page's shape, no layout shift (FR-CRMS-UI-7). */
 export function RouteSkeleton() {
     return (
-        <LoadingRegion label="Loading" className="p-7">
-            <Skeleton className="mb-2 h-7 w-56" />
-            <Skeleton className="mb-6 h-4 w-96" />
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
+        <LoadingRegion label="Loading" className="flex flex-col gap-4 p-4 md:p-6">
+            <div>
+                <Skeleton className="mb-2 h-7 w-56" />
+                <Skeleton className="h-4 w-96" />
             </div>
-            <Skeleton className="mt-4 h-80" />
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+                {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                        <Skeleton className="mb-3 h-4 w-24" />
+                        <Skeleton className="h-7 w-20" />
+                    </div>
+                ))}
+            </div>
+            <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                <Skeleton className="mb-4 h-5 w-40" />
+                <Skeleton className="mb-2 h-9" />
+                <Skeleton className="mb-2 h-9" />
+                <Skeleton className="h-9" />
+            </div>
         </LoadingRegion>
     );
 }
@@ -29,21 +39,20 @@ export function RouteSkeleton() {
  */
 export function AuthSkeleton() {
     return (
-        <main className="grid min-h-dvh place-items-center bg-background px-4 py-10 text-text">
-            <LoadingRegion label="Loading" className="w-full max-w-100">
-                <div className="mb-6 flex flex-col items-center gap-3">
-                    <LogoMark size="lg" />
-                    <Skeleton className="h-7 w-48" />
-                </div>
-                <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
-                    <Skeleton className="mb-2 h-4 w-16" />
-                    <Skeleton className="mb-4 h-10" />
-                    <Skeleton className="mb-2 h-4 w-20" />
-                    <Skeleton className="mb-6 h-10" />
-                    <Skeleton className="h-10" />
-                </div>
+        <AuthFrame>
+            <LoadingRegion
+                label="Loading"
+                className="w-full rounded-xl border border-border bg-surface/90 p-7 shadow-lg backdrop-blur-md sm:p-8"
+            >
+                <Skeleton className="mb-2 h-6 w-40" />
+                <Skeleton className="mb-7 h-4 w-56" />
+                <Skeleton className="mb-2 h-4 w-16" />
+                <Skeleton className="mb-4 h-9" />
+                <Skeleton className="mb-2 h-4 w-20" />
+                <Skeleton className="mb-6 h-9" />
+                <Skeleton className="h-9" />
             </LoadingRegion>
-        </main>
+        </AuthFrame>
     );
 }
 
@@ -74,9 +83,10 @@ export function RouteError() {
               : message;
 
     return (
-        <div className="p-7">
+        <div className="p-4 md:p-6">
             <EmptyState
                 tone="error"
+                icon={<AlertTriangle />}
                 title={title}
                 body={body}
                 action={
@@ -97,6 +107,7 @@ export function Forbidden() {
         <main className="grid min-h-dvh place-items-center bg-background p-6 text-text">
             <EmptyState
                 tone="error"
+                icon={<ShieldAlert />}
                 title="You cannot open this"
                 body="Your role does not include it. An admin can change that."
                 action={

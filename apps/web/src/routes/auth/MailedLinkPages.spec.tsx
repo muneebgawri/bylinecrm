@@ -144,6 +144,8 @@ describe('#93 reset-password page', () => {
         await user.type(await screen.findByLabelText(/^New password/), 'a long new passphrase');
         await user.type(screen.getByLabelText(/Confirm new password/), 'a long new passphrase');
         await user.click(screen.getByRole('button', { name: 'Save and sign in' }));
+        expect(await screen.findByRole('heading', { name: 'Password updated' })).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Continue to BylineCRM' }));
         expect(await screen.findByText(paths.workspaces)).toBeInTheDocument();
         const [, init] = callsTo(fetchMock, '/auth/password/reset')[0]!;
         expect(JSON.parse(String(init?.body))).toEqual({ token: 't', password: 'a long new passphrase' });

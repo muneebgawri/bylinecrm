@@ -110,36 +110,56 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
     );
 
     return (
-        <div
-            className={cn(
-                'grid h-dvh min-h-160 bg-background text-text',
-                narrow
-                    ? 'grid-cols-1'
-                    : collapsed
-                      ? 'grid-cols-[var(--bc-sidebar-collapsed-width)_1fr]'
-                      : 'grid-cols-[var(--bc-sidebar-width)_1fr]',
-                'grid-rows-[auto_1fr]',
-            )}
-        >
-            {!narrow && <div className="row-span-2 min-h-0">{sidebar}</div>}
-            {narrow && (
-                <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-                    <DrawerContent side="left" width="sm" title="Navigation" className="p-0 [&>div:first-child]:hidden">
-                        {sidebar}
-                    </DrawerContent>
-                </Drawer>
-            )}
-            <TopBar
-                workspaceId={workspaceId}
-                onToggleSidebar={toggleSidebar}
-                sidebarCollapsed={narrow ? !drawerOpen : collapsed}
-                onOpenPalette={() => setPaletteOpen(true)}
-            />
-            {/* min-w-0: a grid item is as wide as its content by default, so a wide table pushed the page sideways. */}
-            <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-                <OfflineBanner />
-                <main className="min-w-0 flex-1 overflow-y-auto">{signedIn ? <Outlet /> : <RouteSkeleton />}</main>
+        <>
+            <div
+                className={cn(
+                    'grid h-dvh min-h-160 bg-background text-text',
+                    narrow
+                        ? 'grid-cols-1'
+                        : collapsed
+                          ? 'grid-cols-[var(--bc-sidebar-collapsed-width)_1fr]'
+                          : 'grid-cols-[var(--bc-sidebar-width)_1fr]',
+                )}
+            >
+                {!narrow && <div className="min-h-0">{sidebar}</div>}
+                {narrow && (
+                    <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+                        <DrawerContent
+                            side="left"
+                            width="sm"
+                            title="Navigation"
+                            className="p-0 [&>div:first-child]:hidden"
+                        >
+                            {sidebar}
+                        </DrawerContent>
+                    </Drawer>
+                )}
+                {/*
+                 * The page is a raised panel inset from the sidebar and the window's edges, so the sidebar
+                 * reads as the frame and the page as the content. min-w-0: a grid item is as wide as its
+                 * content by default, so a wide table pushed the page sideways.
+                 */}
+                <div className={cn('flex min-h-0 min-w-0 flex-col', !narrow && 'p-2 pl-0')}>
+                    <div
+                        className={cn(
+                            'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface',
+                            !narrow && 'rounded-xl border border-border shadow-sm',
+                        )}
+                    >
+                        <TopBar
+                            workspaceId={workspaceId}
+                            onToggleSidebar={toggleSidebar}
+                            sidebarCollapsed={narrow ? !drawerOpen : collapsed}
+                            onOpenPalette={() => setPaletteOpen(true)}
+                        />
+                        <OfflineBanner />
+                        <main className="min-w-0 flex-1 overflow-y-auto">
+                            {signedIn ? <Outlet /> : <RouteSkeleton />}
+                        </main>
+                    </div>
+                </div>
             </div>
+            {/* Overlays live beside the grid, not in it: a grid item, even an empty one, is a row. */}
             <Suspense fallback={null}>
                 <RecordDrawerHost />
             </Suspense>
@@ -160,7 +180,7 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
             <Suspense fallback={null}>
                 <Toaster />
             </Suspense>
-        </div>
+        </>
     );
 }
 

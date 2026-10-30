@@ -20,6 +20,16 @@ export class SignupDto extends createZodDto(
 ) {}
 export class LoginDto extends createZodDto(z.object({ email, password: z.string().min(1).max(PASSWORD_MAX_LENGTH) })) {}
 export class CreateWorkspaceDto extends createZodDto(z.object({ name })) {}
+
+/** A six-digit authenticator code, or a recovery code (`xxxxx-xxxxx`); spaces and case do not matter. */
+const secondFactor = z.string().trim().min(6).max(16);
+export class TwoFactorLoginDto extends createZodDto(
+    z.object({ challenge: z.string().min(1).max(200), code: secondFactor }),
+) {}
+export class TwoFactorEnableDto extends createZodDto(z.object({ code: secondFactor })) {}
+export class TwoFactorPasswordDto extends createZodDto(
+    z.object({ password: z.string().min(1).max(PASSWORD_MAX_LENGTH) }),
+) {}
 export class AcceptInviteSignupDto extends createZodDto(z.object({ password })) {}
 /** A mailed single-use link's secret (#93). */
 const linkToken = z.string().min(1).max(200);

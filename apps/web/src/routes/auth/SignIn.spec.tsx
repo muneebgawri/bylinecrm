@@ -32,10 +32,16 @@ function renderSignIn(initial: string = paths.signIn) {
     );
 }
 
-function stubApi(login: { status: number; body: unknown }, signup: SignupMode = 'closed') {
+function stubApi(
+    login: { status: number; body: unknown },
+    signup: SignupMode = 'closed',
+    twoFactor?: { status: number; body: unknown },
+) {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
         if (url.endsWith('/auth/providers'))
             return Promise.resolve(new Response(JSON.stringify({ providers: ['google'], signup }), { status: 200 }));
+        if (url.endsWith('/auth/login/two-factor') && init?.method === 'POST' && twoFactor)
+            return Promise.resolve(new Response(JSON.stringify(twoFactor.body), { status: twoFactor.status }));
         if (url.endsWith('/auth/login') && init?.method === 'POST')
             return Promise.resolve(new Response(JSON.stringify(login.body), { status: login.status }));
         return Promise.resolve(new Response('{}', { status: 200 }));
@@ -49,7 +55,10 @@ describe('SignIn', () => {
 
     it('offers the providers, posts the form, and returns the person where they were', async () => {
         const user = userEvent.setup();
-        const fetchMock = stubApi({ status: 200, body: { user: { id: 'u', email: 'a@b.c', emailVerified: true } } });
+        const fetchMock = stubApi({
+            status: 200,
+            body: { user: { id: 'u', email: 'a@b.c', emailVerified: true, twoFactorEnabled: false }, twoFactor: null },
+        });
         renderSignIn(`${paths.signIn}?returnTo=${encodeURIComponent('/w/ws-1/people')}`);
 
         // The providers query resolves after the first paint; under a full parallel run that can take a while.
@@ -64,6 +73,24 @@ describe('SignIn', () => {
         expect(await screen.findByRole('status')).toHaveTextContent('/w/ws-1/people');
         const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/auth/login'));
         expect(call?.[1]?.body).toBe(JSON.stringify({ email: 'a@b.c', password: 'correct-horse-battery' }));
+    });
+
+    it('asks for the authenticator code when the password answers with a challenge, then goes on (2FA-1)', async () => {
+        const user = userEvent.setup();
+        const fetchMock = stubApi({ status: 200, body: { user: null, twoFactor: { challenge: 'chal-1' } } }, 'closed', {
+            status: 200,
+            body: { user: { id: 'u', email: 'a@b.c', emailVerified: true, twoFactorEnabled: true } },
+        });
+        renderSignIn();
+        await user.type(await screen.findByLabelText(/Email/), 'a@b.c');
+        await user.type(screen.getByLabelText(/Password/), 'correct-horse-battery');
+        await user.click(screen.getByRole('button', { name: 'Sign in' }));
+        expect(await screen.findByRole('heading', { name: 'Enter your code' })).toBeInTheDocument();
+        await user.type(screen.getByLabelText(/Authentication code/), '123456');
+        await user.click(screen.getByRole('button', { name: 'Verify' }));
+        expect(await screen.findByRole('status')).toHaveTextContent(paths.workspaces);
+        const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/auth/login/two-factor'));
+        expect(call?.[1]?.body).toBe(JSON.stringify({ challenge: 'chal-1', code: '123456' }));
     });
 
     it('says the pair does not match on a 401 without revealing which half', async () => {

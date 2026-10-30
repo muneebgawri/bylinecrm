@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react';
 import type { CustomFieldType, RecordObject } from '@bylinecrm/shared';
 import { Skeleton } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
@@ -56,9 +57,10 @@ export function PropertiesColumn({
 }) {
     const definitions = useCustomFields(workspaceId, object);
     return (
-        <div className="rounded-lg border border-border bg-surface shadow-sm">
-            <h3 className="m-0 flex items-center border-b border-border px-4 py-3 text-[13px] font-medium text-text-muted">
-                Properties
+        <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+            <h3 className="m-0 flex items-center gap-2 border-b border-border px-4 py-3.5 text-sm font-semibold">
+                <Info aria-hidden className="size-4 text-text-muted" />
+                Information
                 {canEdit && <span className="ml-auto text-xs font-normal text-text-faint">click to edit</span>}
             </h3>
             <dl className="m-0 py-1.5">
@@ -115,16 +117,16 @@ export function PropertiesColumn({
 
 export function Row({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <div className="grid grid-cols-[96px_1fr] items-start gap-2 px-3 py-1">
-            <dt className="truncate pt-1.5 pl-1 text-[12.5px] text-text-muted">{label}</dt>
-            <dd className="m-0 min-w-0">{children}</dd>
+        <div className="px-4 py-2">
+            <dt className="text-xs font-medium text-text-muted">{label}</dt>
+            <dd className="m-0 -ml-1 min-w-0">{children}</dd>
         </div>
     );
 }
 
 export function SectionLabel({ children }: { children: ReactNode }) {
     return (
-        <p className="m-0 border-t border-border px-4 pt-2.5 pb-0.5 text-[10.5px] font-semibold tracking-[.06em] text-text-faint uppercase">
+        <p className="m-0 border-t border-border px-4 pt-3 pb-0.5 text-[11px] font-semibold tracking-wide text-text-faint uppercase">
             {children}
         </p>
     );

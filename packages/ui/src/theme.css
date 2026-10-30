@@ -27,6 +27,8 @@
     /* `text-touch` — the 16px under which iOS zooms into a focused field. */
     --text-touch: var(--bc-touch-text);
 
+    /* The one absolute: white glyphs on a gradient tile, in both themes. */
+    --color-white: #ffffff;
     --color-background: var(--bc-background);
     --color-surface: var(--bc-surface);
     --color-surface-raised: var(--bc-surface-raised);
@@ -51,10 +53,22 @@
     --color-warning-soft: var(--bc-warning-soft);
     --color-danger: var(--bc-danger);
     --color-danger-soft: var(--bc-danger-soft);
+    --color-danger-fill: var(--bc-danger-fill);
     --color-info: var(--bc-info);
     --color-info-soft: var(--bc-info-soft);
 
     --color-ring: var(--bc-ring);
+    --color-chart-1: var(--bc-chart-1);
+    --color-chart-2: var(--bc-chart-2);
+    --color-chart-3: var(--bc-chart-3);
+    --color-chart-4: var(--bc-chart-4);
+    --color-chart-5: var(--bc-chart-5);
+    --background-image-tile-info: var(--bc-tile-info);
+    --background-image-tile-accent: var(--bc-tile-accent);
+    --background-image-tile-success: var(--bc-tile-success);
+    --background-image-tile-warning: var(--bc-tile-warning);
+    --background-image-tile-danger: var(--bc-tile-danger);
+    --background-image-tile-neutral: var(--bc-tile-neutral);
     /* `bg-scrim` — the layer behind every overlay (dialog, drawer, sheet, palette). */
     --color-scrim: var(--bc-scrim);
 
@@ -85,5 +99,27 @@
     scrollbar-width: none;
     &::-webkit-scrollbar {
         display: none;
+    }
+}
+
+/*
+ * `hero-in` — a piece of a signed-out page rising into place, 70ms after the piece before it
+ * (`--i`, set inline). Off entirely when the OS asks for reduced motion.
+ */
+@keyframes hero-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@utility hero-in {
+    animation: hero-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 70ms);
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
     }
 }

@@ -1,6 +1,6 @@
 export { cn } from './lib/cn';
 export { focusRing, focusWithinRing, groupFocusRing } from './lib/focus';
-export { TONES, toneSoft, toneSolid, toneText, type Tone } from './lib/tones';
+export { TONES, toneSoft, toneSolid, toneText, toneTile, type Tone } from './lib/tones';
 export { isBoolean, isStringArray, readStored, usePersistedState, writeStored } from './lib/persisted';
 export {
     BREAKPOINT_PX,
@@ -24,7 +24,14 @@ export * from './theme/theme';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/ThemeProvider';
 
 export { Button, buttonVariants, type ButtonProps } from './components/button/Button';
-export { Input, Textarea, fieldClasses, type InputProps, type TextareaProps } from './components/input/Input';
+export {
+    Input,
+    PasswordInput,
+    Textarea,
+    fieldClasses,
+    type InputProps,
+    type TextareaProps,
+} from './components/input/Input';
 export { Field, type FieldProps } from './components/field/Field';
 export * from './components/select/Select';
 export { Checkbox, type CheckboxProps } from './components/checkbox/Checkbox';
@@ -46,6 +53,22 @@ export { ThemeToggle } from './components/theme-toggle/ThemeToggle';
 export { IconTile, iconTileVariants, type IconTileProps } from './components/icon-tile/IconTile';
 export { Delta, type DeltaProps } from './components/delta/Delta';
 export { KpiCard, type KpiCardProps } from './components/kpi-card/KpiCard';
+export {
+    BarChart,
+    CHART_BGS,
+    CHART_FILLS,
+    CHART_STROKES,
+    CHART_TEXT,
+    DistributionBar,
+    DonutChart,
+    Legend,
+    Sparkline,
+    StackedBarChart,
+    type BarDatum,
+    type DonutDatum,
+    type StackedBarDatum,
+} from './components/charts/Charts';
+export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/card/Card';
 export { PageHeader, type PageHeaderProps } from './components/page-header/PageHeader';
 export {
     Avatar,
@@ -57,6 +80,8 @@ export {
     type AvatarProps,
 } from './components/avatar/Avatar';
 export { ScoreBar, type ScoreBarProps } from './components/score-bar/ScoreBar';
+export { Progress, type ProgressProps } from './components/progress/Progress';
+export { Accordion, AccordionItem, type AccordionItemProps } from './components/accordion/Accordion';
 export {
     SegmentedControl,
     type SegmentedControlProps,

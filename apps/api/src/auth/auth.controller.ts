@@ -29,11 +29,15 @@ import {
     SignupDto,
     UpdateProfileDto,
     VerifyEmailDto,
+    TwoFactorEnableDto,
+    TwoFactorLoginDto,
+    TwoFactorPasswordDto,
 } from './dto';
 import { ProfileService } from './profile.service';
 import { OidcService } from './oidc.service';
 import type { Principal } from './principal';
 import { SessionService } from './session.service';
+import { TwoFactorService } from './two-factor.service';
 import { randomToken } from './tokens';
 import { Redirects, Returns } from '../openapi/responses';
 import {
@@ -41,13 +45,23 @@ import {
     invitePreview,
     profileView,
     signedIn,
+    loginResult,
+    recoveryCodes,
+    twoFactorSetup,
+    twoFactorStatus,
     signedUp,
     userView,
     workspaceView,
     type AuthProvidersView,
     type InvitePreviewView,
 } from '../workspace/responses';
-import type { ProfileView } from '../workspace/responses';
+import type {
+    LoginResultView,
+    ProfileView,
+    RecoveryCodesView,
+    TwoFactorSetupView,
+    TwoFactorStatusView,
+} from '../workspace/responses';
 
 /** Sign-up, sign-in and sign-out, for people. Machines use API keys and never come here. */
 @ApiTags('auth')
@@ -60,6 +74,7 @@ export class AuthController {
         private readonly auth: AuthService,
         private readonly sessions: SessionService,
         private readonly oidc: OidcService,
+        private readonly twoFactor: TwoFactorService,
     ) {
         this.cookies = AuthCookies.fromAppUrl(env.APP_URL);
     }
@@ -77,18 +92,40 @@ export class AuthController {
         return result;
     }
 
+    /**
+     * A password login. An account with two-factor on gets no session yet: it gets a challenge to
+     * finish with the code from its authenticator app (2FA-1).
+     */
     @Public()
     @HttpCode(200)
     @Post('login')
-    @Returns(signedIn)
+    @Returns(loginResult)
     async login(
         @Body() body: LoginDto,
         @Req() req: Request,
         @Res({ passthrough: true }) res: Response,
-    ): Promise<{ user: UserView }> {
+    ): Promise<LoginResultView> {
         const user = await this.auth.login({ ...body, ip: req.ip ?? '' });
+        if (user.twoFactorEnabled) {
+            return { user: null, twoFactor: { challenge: await this.twoFactor.challenge(user.id, user.email) } };
+        }
         await this.startSession(req, res, user.id);
-        return { user };
+        return { user, twoFactor: null };
+    }
+
+    /** The second half of a two-factor login: the challenge and a code; the session starts here. */
+    @Public()
+    @HttpCode(200)
+    @Post('login/two-factor')
+    @Returns(signedIn)
+    async loginTwoFactor(
+        @Body() body: TwoFactorLoginDto,
+        @Req() req: Request,
+        @Res({ passthrough: true }) res: Response,
+    ): Promise<{ user: UserView }> {
+        const userId = await this.twoFactor.complete(body.challenge, body.code);
+        await this.startSession(req, res, userId);
+        return { user: await this.auth.me(userId) };
     }
 
     @HttpCode(204)
@@ -262,6 +299,7 @@ export class MeController {
         private readonly memberships: MembershipService,
         private readonly platformAccess: PlatformAccess,
         private readonly profiles: ProfileService,
+        private readonly twoFactor: TwoFactorService,
     ) {}
 
     @Get('me')
@@ -283,6 +321,51 @@ export class MeController {
     updateProfile(@Body() body: UpdateProfileDto, @CurrentPrincipal() principal: Principal): Promise<ProfileView> {
         if (principal.kind !== 'user') throw new ForbiddenException('an API key has no profile');
         return this.profiles.setDisplayName(principal.userId, body.displayName);
+    }
+
+    // ---- Two-factor sign-in (2FA-1): the person's own second factor, from their profile ----
+
+    @Get('me/two-factor')
+    @Returns(twoFactorStatus)
+    twoFactorStatus(@CurrentPrincipal() principal: Principal): Promise<TwoFactorStatusView> {
+        return this.twoFactor.status(userOf(principal));
+    }
+
+    /** A new secret to scan; nothing changes at sign-in until `enable` proves the app. */
+    @Post('me/two-factor/setup')
+    @HttpCode(200)
+    @Returns(twoFactorSetup)
+    async twoFactorSetup(@CurrentPrincipal() principal: Principal): Promise<TwoFactorSetupView> {
+        const userId = userOf(principal);
+        const me = await this.auth.me(userId);
+        return this.twoFactor.beginSetup(userId, me.email);
+    }
+
+    /** The first code from the app: two-factor is on, and here are the recovery codes, once. */
+    @Post('me/two-factor/enable')
+    @HttpCode(200)
+    @Returns(recoveryCodes)
+    twoFactorEnable(
+        @Body() body: TwoFactorEnableDto,
+        @CurrentPrincipal() principal: Principal,
+    ): Promise<RecoveryCodesView> {
+        return this.twoFactor.enable(userOf(principal), body.code);
+    }
+
+    @Post('me/two-factor/disable')
+    @HttpCode(204)
+    twoFactorDisable(@Body() body: TwoFactorPasswordDto, @CurrentPrincipal() principal: Principal): Promise<void> {
+        return this.twoFactor.disable(userOf(principal), body.password);
+    }
+
+    @Post('me/two-factor/recovery-codes')
+    @HttpCode(200)
+    @Returns(recoveryCodes)
+    twoFactorRecoveryCodes(
+        @Body() body: TwoFactorPasswordDto,
+        @CurrentPrincipal() principal: Principal,
+    ): Promise<RecoveryCodesView> {
+        return this.twoFactor.regenerateRecoveryCodes(userOf(principal), body.password);
     }
 
     @Get('me/workspaces')
@@ -309,4 +392,10 @@ export class MeController {
         }
         return this.auth.createWorkspace(principal.userId, body.name);
     }
+}
+
+/** The signed-in person behind a request; an API key has no second factor to manage. */
+function userOf(principal: Principal): string {
+    if (principal.kind !== 'user') throw new ForbiddenException('an API key has no profile');
+    return principal.userId;
 }

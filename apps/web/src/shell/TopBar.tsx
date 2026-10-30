@@ -38,7 +38,7 @@ export function TopBar({ workspaceId, onToggleSidebar, sidebarCollapsed, onOpenP
     const crumbs = useBreadcrumbs();
     const narrow = useIsNarrow();
     return (
-        <header className="flex h-topbar items-center gap-2.5 border-b border-border bg-surface px-5">
+        <header className="flex h-topbar shrink-0 items-center gap-2.5 border-b border-border px-4">
             <Button
                 variant="ghost"
                 size="icon"
@@ -49,6 +49,7 @@ export function TopBar({ workspaceId, onToggleSidebar, sidebarCollapsed, onOpenP
             >
                 <PanelLeft aria-hidden />
             </Button>
+            <span aria-hidden className="h-5 w-px bg-border" />
             {/*
              * The breadcrumb shrinks before the buttons beside it and truncates instead of running under
              * them. On a phone only the current page is named — "Settings / Custom fields" does not fit
@@ -158,7 +159,7 @@ function CreateMenu({ workspaceId }: { workspaceId: string }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="primary">
+                <Button variant="primary" shape="pill">
                     <Plus aria-hidden /> Create
                 </Button>
             </DropdownMenuTrigger>

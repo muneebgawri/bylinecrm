@@ -23,20 +23,26 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
             ref={ref}
             role={tone === 'error' ? 'alert' : undefined}
             className={cn(
-                'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center',
+                'flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-5 py-9 text-center',
                 tone === 'error' ? 'border-danger' : 'border-border',
                 className,
             )}
             {...props}
         >
             {icon && (
-                <div aria-hidden className={cn('[&_svg]:size-8', tone === 'error' ? 'text-danger' : 'text-text-faint')}>
+                <div
+                    aria-hidden
+                    className={cn(
+                        'mb-2 grid size-10 place-items-center rounded-full [&_svg]:size-5',
+                        tone === 'error' ? 'bg-danger-soft text-danger' : 'bg-surface-raised text-text-muted',
+                    )}
+                >
                     {icon}
                 </div>
             )}
-            <p className="text-sm font-medium text-text">{title}</p>
-            {body && <p className="max-w-sm text-sm text-text-muted">{body}</p>}
-            {action && <div className="mt-1">{action}</div>}
+            <p className="m-0 text-sm font-medium text-text">{title}</p>
+            {body && <p className="m-0 max-w-xs text-xs leading-relaxed text-text-muted">{body}</p>}
+            {action && <div className="mt-3">{action}</div>}
         </div>
     );
 });

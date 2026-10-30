@@ -4,8 +4,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuTrigger,
     Skeleton,
     THEMES,
@@ -17,7 +15,19 @@ import {
     useTheme,
     type Theme,
 } from '@bylinecrm/ui';
-import { ArrowLeft, Check, ChevronsUpDown, Keyboard, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
+import {
+    Check,
+    ChevronRight,
+    ChevronsUpDown,
+    Keyboard,
+    LogOut,
+    Monitor,
+    Moon,
+    Plus,
+    Sun,
+    UserRound,
+} from 'lucide-react';
+import { useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
 import { useLogout, useProfile, useWorkspaces } from '../api/queries';
 import type { MembershipSummary, WorkspaceView } from '../api/types';
@@ -25,7 +35,6 @@ import { can, useMembership } from '../auth/capabilities';
 import { paths } from '../routes/paths';
 import { LogoMark } from './LogoMark';
 import { NAV, type NavGroup, type NavItem } from './nav';
-import { SETTINGS_NAV } from './settingsNav';
 
 export const THEME_LABELS: Record<Theme, string> = { light: 'Light', dark: 'Dark', system: 'System' };
 export const THEME_ICONS: Record<Theme, typeof Sun> = { light: Sun, dark: Moon, system: Monitor };
@@ -45,9 +54,9 @@ function visibleItems(group: NavGroup, membership: MembershipSummary | null): re
 }
 
 /**
- * The 240px sidebar: workspace switcher at the top, four nav groups, the user card at the
- * bottom. Collapsed, it shows icons with tooltips and keeps the same structure. Under `/settings`
- * the groups are settings' sections behind a way back to the app, so there is only ever one sidebar.
+ * The 256px sidebar: workspace switcher at the top, four nav groups, the user card at the
+ * bottom. Collapsed, it shows icons with tooltips and keeps the same structure. Settings has its own
+ * inner menu on its page (`SettingsLayout`), so the sidebar never changes shape.
  *
  * A group is never a heading with nothing under it (P1-UI-10): until the membership is known, each
  * gated item is a loading row in its place (so nothing shifts when it resolves); once known, a
@@ -56,18 +65,14 @@ function visibleItems(group: NavGroup, membership: MembershipSummary | null): re
 export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, onOpenProfile }: SidebarProps) {
     const membership = useMembership();
     const known = membership !== null;
-    const { pathname } = useLocation();
-    const settingsRoot = paths.settings(workspaceId);
-    const inSettings = pathname === settingsRoot || pathname.startsWith(`${settingsRoot}/`);
-    const groups: readonly NavGroup[] = inSettings ? SETTINGS_NAV : NAV;
+    const groups: readonly NavGroup[] = NAV;
     return (
         <aside
             aria-label="Sidebar"
-            className="flex h-full min-w-0 flex-col gap-1.5 overflow-y-auto border-r border-border bg-surface px-3 py-3.5"
+            className="flex h-full min-w-0 flex-col gap-1.5 overflow-y-auto bg-background px-3 py-3.5"
         >
             <WorkspaceSwitcher workspaceId={workspaceId} collapsed={collapsed} />
-            {inSettings && <BackToApp workspaceId={workspaceId} collapsed={collapsed} onNavigate={onNavigate} />}
-            <nav aria-label={inSettings ? 'Settings' : 'Primary'} className="flex flex-col gap-1.5">
+            <nav aria-label="Primary" className="flex flex-col gap-1.5">
                 {groups.map((group) => {
                     const items = known ? visibleItems(group, membership) : group.items;
                     if (items.length === 0) return null;
@@ -75,7 +80,7 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
                         <div key={group.label} className="flex flex-col gap-0.5">
                             <div
                                 className={cn(
-                                    'px-2.5 pt-2.5 pb-1 text-[11.5px] font-medium text-text-faint',
+                                    'px-2.5 pt-3 pb-1.5 text-xs font-medium text-text-faint',
                                     collapsed && 'sr-only',
                                 )}
                             >
@@ -83,13 +88,23 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
                             </div>
                             {items.map((item) =>
                                 known || !item.requires ? (
-                                    <NavEntry
-                                        key={item.id}
-                                        item={item}
-                                        workspaceId={workspaceId}
-                                        collapsed={collapsed}
-                                        onNavigate={onNavigate}
-                                    />
+                                    item.children ? (
+                                        <NavSection
+                                            key={item.id}
+                                            item={item}
+                                            workspaceId={workspaceId}
+                                            collapsed={collapsed}
+                                            onNavigate={onNavigate}
+                                        />
+                                    ) : (
+                                        <NavEntry
+                                            key={item.id}
+                                            item={item}
+                                            workspaceId={workspaceId}
+                                            collapsed={collapsed}
+                                            onNavigate={onNavigate}
+                                        />
+                                    )
                                 ) : (
                                     <NavSkeleton key={item.id} collapsed={collapsed} />
                                 ),
@@ -103,36 +118,82 @@ export function Sidebar({ workspaceId, collapsed, onNavigate, onOpenShortcuts, o
     );
 }
 
-/** Settings' way out: back to the workspace's home, where the app's own groups are. */
-function BackToApp({
+const ROW =
+    'flex h-9 w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 text-left font-[450] text-text-muted transition-colors hover:border-border hover:bg-surface hover:text-text hover:shadow-sm';
+const ACTIVE = 'border-border bg-surface font-medium text-text shadow-sm';
+
+/**
+ * An item with sub-pages: the row opens and closes the list beneath it, and is itself active while
+ * any of its pages is open. Collapsed, only the icon shows and it goes straight to the first page.
+ */
+function NavSection({
+    item,
     workspaceId,
     collapsed,
     onNavigate,
 }: {
+    item: NavItem;
     workspaceId: string;
     collapsed: boolean;
     onNavigate?: (() => void) | undefined;
 }) {
-    const link = (
-        <Link
-            to={paths.home(workspaceId)}
-            onClick={onNavigate}
-            className={cn(
-                'flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 font-[450] text-text-muted transition-colors hover:bg-surface-raised hover:text-text',
-                collapsed && 'justify-center px-0',
-                focusRing,
-            )}
-        >
-            <ArrowLeft aria-hidden className="size-4.25 shrink-0" />
-            <span className={cn('truncate', collapsed && 'sr-only')}>Back to app</span>
-        </Link>
-    );
-    if (!collapsed) return link;
+    const Icon = item.icon;
+    const membership = useMembership();
+    const location = useLocation();
+    const href = item.to(workspaceId);
+    const inSection = location.pathname === href || location.pathname.startsWith(`${href}/`);
+    const [open, setOpen] = useState(inSection);
+    const children = (item.children ?? []).filter((c) => !c.requires || can(membership, c.requires));
+    if (collapsed) return <NavEntry item={item} workspaceId={workspaceId} collapsed onNavigate={onNavigate} />;
+    const here = location.pathname + location.search;
+    const expanded = open || inSection;
     return (
-        <Tooltip>
-            <TooltipTrigger asChild>{link}</TooltipTrigger>
-            <TooltipContent side="right">Back to app</TooltipContent>
-        </Tooltip>
+        <div className="flex flex-col gap-0.5">
+            <div className={cn(ROW, 'gap-0 px-0', inSection && ACTIVE)}>
+                <Link
+                    to={href}
+                    onClick={onNavigate}
+                    aria-current={inSection ? 'page' : undefined}
+                    className={cn('flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-md pl-2.5', focusRing)}
+                >
+                    <Icon aria-hidden className="size-4.25 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                </Link>
+                <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? 'Hide' : 'Show'} ${item.label} pages`}
+                    onClick={() => setOpen((o) => !o)}
+                    className={cn('grid h-full w-8 shrink-0 place-items-center rounded-md', focusRing)}
+                >
+                    <ChevronRight aria-hidden className={cn('size-4 transition-transform', expanded && 'rotate-90')} />
+                </button>
+            </div>
+            {expanded && (
+                <ul className="m-0 mb-1 ml-5 flex list-none flex-col gap-0.5 border-l border-border py-0.5 pl-2.5">
+                    {children.map((child) => {
+                        const to = child.to(workspaceId);
+                        const active = here === to || (child === children[0] && here === href);
+                        return (
+                            <li key={child.id}>
+                                <Link
+                                    to={to}
+                                    onClick={onNavigate}
+                                    aria-current={active ? 'page' : undefined}
+                                    className={cn(
+                                        'flex h-8 items-center rounded-md border border-transparent px-2.5 text-[13px] text-text-muted transition-colors hover:border-border hover:bg-surface hover:text-text hover:shadow-sm',
+                                        active && ACTIVE,
+                                        focusRing,
+                                    )}
+                                >
+                                    {child.label}
+                                </Link>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
     );
 }
 
@@ -155,8 +216,8 @@ function NavEntry({
             className={({ isActive }) =>
                 cn(
                     'flex h-9 w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 text-left font-[450] text-text-muted transition-colors',
-                    'hover:bg-surface-raised hover:text-text',
-                    isActive && 'border-border bg-surface-raised font-medium text-text shadow-sm',
+                    'hover:border-border hover:bg-surface hover:text-text hover:shadow-sm',
+                    isActive && 'border-border bg-surface font-medium text-text shadow-sm',
                     collapsed && 'justify-center px-0',
                     focusRing,
                 )
@@ -268,7 +329,7 @@ function UserCard({
                     type="button"
                     aria-label={collapsed ? `Account: ${email}` : undefined}
                     className={cn(
-                        'mt-auto flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface p-2 text-left hover:bg-surface-raised',
+                        'mt-auto flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface p-2 text-left shadow-sm hover:bg-surface-raised',
                         collapsed && 'justify-center border-transparent p-1',
                         focusRing,
                     )}
@@ -286,20 +347,44 @@ function UserCard({
                     )}
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="min-w-56">
-                <div className="px-2 py-1.5 text-xs text-text-muted">{email}</div>
-                <div className="px-2 pt-1.5 pb-1 text-[11.5px] font-medium text-text-faint">Theme</div>
-                <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
+            <DropdownMenuContent align="start" side="top" className="min-w-60 p-2">
+                <div className="flex items-center gap-2 px-1 py-1.5">
+                    <Avatar name={name} size="md" />
+                    <div className="grid min-w-0 flex-1 text-sm leading-tight">
+                        <span className="truncate font-medium">{name}</span>
+                        <span className="truncate text-xs text-text-muted">{email}</span>
+                    </div>
+                </div>
+                <div className="my-1 h-px bg-border" />
+                <div
+                    role="radiogroup"
+                    aria-label="Theme"
+                    className="mx-1 my-1 grid grid-cols-3 gap-0.5 rounded-lg bg-surface-raised p-[3px]"
+                >
                     {THEMES.map((t) => {
                         const Icon = THEME_ICONS[t];
+                        const on = theme === t;
                         return (
-                            <DropdownMenuRadioItem key={t} value={t}>
-                                <Icon aria-hidden />
-                                {THEME_LABELS[t]}
-                            </DropdownMenuRadioItem>
+                            <button
+                                key={t}
+                                type="button"
+                                role="radio"
+                                aria-checked={on}
+                                aria-label={THEME_LABELS[t]}
+                                title={THEME_LABELS[t]}
+                                onClick={() => setTheme(t)}
+                                className={cn(
+                                    'grid h-7 place-items-center rounded-md text-text-muted transition-colors hover:text-text',
+                                    on && 'bg-surface text-text shadow-sm',
+                                    focusRing,
+                                )}
+                            >
+                                <Icon aria-hidden className="size-4" />
+                            </button>
                         );
                     })}
-                </DropdownMenuRadioGroup>
+                </div>
+                <div className="my-1 h-px bg-border" />
                 <DropdownMenuItem onSelect={onOpenProfile}>
                     <UserRound aria-hidden /> Profile
                 </DropdownMenuItem>

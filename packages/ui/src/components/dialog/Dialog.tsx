@@ -23,7 +23,7 @@ export const DialogContent = forwardRef<
                 ref={ref}
                 className={cn(
                     'fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4',
-                    'rounded-lg border border-border bg-surface-raised p-6 text-text shadow-md',
+                    'rounded-xl border border-border bg-surface p-6 text-text shadow-lg',
                     // Never taller than the window: a long dialog scrolls inside itself, and DialogFooter
                     // stays in view at its bottom (bylinecrm#271).
                     'max-h-[calc(100dvh-2rem)] overflow-y-auto',
@@ -57,7 +57,9 @@ export const DialogTitle = forwardRef<
     ComponentRef<typeof DialogPrimitive.Title>,
     ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(function DialogTitle({ className, ...props }, ref) {
-    return <DialogPrimitive.Title ref={ref} className={cn('text-lg font-semibold', className)} {...props} />;
+    return (
+        <DialogPrimitive.Title ref={ref} className={cn('text-lg leading-none font-semibold', className)} {...props} />
+    );
 });
 
 export const DialogDescription = forwardRef<
@@ -79,7 +81,7 @@ export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElem
     return (
         <div
             className={cn(
-                'sticky flex justify-end gap-2 bg-surface-raised',
+                'sticky flex justify-end gap-2 bg-surface',
                 // Reach the panel's bottom edge, covering its padding, so nothing scrolls into view beneath the
                 // actions; each negative margin is cancelled by the same padding, so a dialog that fits is unchanged.
                 '-bottom-6 -mb-6 pb-6',

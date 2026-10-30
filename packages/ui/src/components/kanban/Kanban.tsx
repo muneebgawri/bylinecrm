@@ -1,6 +1,7 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
-import { toneSolid, type Tone } from '../../lib/tones';
+import { toneSoft, toneSolid, type Tone } from '../../lib/tones';
+import { Building2, CalendarDays, User } from 'lucide-react';
 import { Avatar } from '../avatar/Avatar';
 import { Badge, type BadgeProps } from '../badge/Badge';
 
@@ -65,52 +66,142 @@ export function KanbanBoard({ className, ...props }: HTMLAttributes<HTMLDivEleme
 }
 
 export interface DealCardProps extends HTMLAttributes<HTMLElement> {
-    /** "BC-128" */
+    /** "BC-128" — read out and shown on hover, not drawn. */
     reference: string;
     priority?: { label: string; status?: BadgeProps['status'] };
     title: string;
     company?: string;
-    /** Small chips: close date, last activity, step. */
+    /** Small chips under the value: a warning, a step. */
     chips?: ReactNode;
     /** Formatted: "$12,000". */
     amount?: string;
+    /** 0–100: the bar under the value and the chip beside it. */
+    probability?: number;
+    /** The person on the other side, named in the footer. */
+    contact?: string;
+    /** The expected close, in the footer: the day shown, the label read out and on hover. */
+    date?: { label: string; value: string };
     owner?: { name: string; tone?: Tone };
-    /** "3d in stage", "Oct 2". */
+    /** "3d in stage", "Oct 2" — in the footer when there is no contact. */
     age?: string;
     highlighted?: boolean;
 }
 
+/** The bar and chip colour by how likely the deal is: green from 70, amber from 40, red below. */
+function probabilityTone(probability: number): Tone {
+    return probability >= 70 ? 'success' : probability >= 40 ? 'warning' : 'danger';
+}
+
+/**
+ * A pipeline card: a building tile, the deal's name and company, the value with its probability
+ * chip and bar, then a muted footer naming the contact, the close date and the owner's avatar.
+ */
 export const DealCard = forwardRef<HTMLElement, DealCardProps>(function DealCard(
-    { className, reference, priority, title, company, chips, amount, owner, age, highlighted = false, ...props },
+    {
+        className,
+        reference,
+        priority,
+        title,
+        company,
+        chips,
+        amount,
+        probability,
+        contact,
+        date,
+        owner,
+        age,
+        highlighted = false,
+        ...props
+    },
     ref,
 ) {
+    const tone = probability === undefined ? undefined : probabilityTone(probability);
     return (
         <article
             ref={ref}
             aria-label={title}
+            title={reference}
             className={cn(
-                'rounded-lg border border-border bg-surface px-4 py-3.5 shadow-sm transition-shadow hover:border-border-strong hover:shadow-md',
+                'group relative overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md',
                 highlighted && 'border-accent ring-[3px] ring-accent-soft',
                 className,
             )}
             {...props}
         >
-            <div className="mb-1.5 flex items-center gap-2 text-xs text-text-faint">
-                {reference}
-                {priority && (
-                    <Badge shape="pill" status={priority.status ?? 'neutral'} className="ml-auto">
-                        {priority.label}
-                    </Badge>
+            <div className="space-y-3 p-3.5">
+                <div className="flex items-start gap-3">
+                    <span
+                        aria-hidden
+                        className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-raised text-text-muted [&_svg]:size-4"
+                    >
+                        <Building2 />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="m-0 truncate text-sm leading-tight font-semibold">{title}</h3>
+                        {company && <p className="m-0 mt-0.5 truncate text-xs text-text-muted">{company}</p>}
+                        <span className="sr-only">{reference}</span>
+                    </div>
+                    {priority && (
+                        <Badge shape="pill" status={priority.status ?? 'neutral'} className="-mt-0.5 shrink-0">
+                            {priority.label}
+                        </Badge>
+                    )}
+                </div>
+                {(amount || tone) && (
+                    <div className="space-y-2">
+                        <div className="flex items-end justify-between gap-2">
+                            {amount && (
+                                <span className="text-xl leading-none font-bold tracking-tight tabular-nums">
+                                    {amount}
+                                </span>
+                            )}
+                            {tone && (
+                                <span
+                                    className={cn(
+                                        'ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                                        toneSoft[tone],
+                                    )}
+                                >
+                                    {probability}%
+                                </span>
+                            )}
+                        </div>
+                        {tone && (
+                            <span className="block h-1 w-full overflow-hidden rounded-full bg-surface-raised">
+                                <span
+                                    className={cn('block h-full rounded-full', toneSolid[tone])}
+                                    style={{ width: `${probability}%` }}
+                                />
+                            </span>
+                        )}
+                    </div>
                 )}
+                {chips && <div className="flex flex-wrap items-center gap-2">{chips}</div>}
             </div>
-            <h3 className="m-0 text-sm font-semibold">{title}</h3>
-            {company && <p className="m-0 mt-0.5 text-[13px] text-text-muted">{company}</p>}
-            {chips && <div className="mt-2.5 flex flex-wrap items-center gap-2">{chips}</div>}
-            {(amount || owner || age) && (
-                <div className="mt-3 flex items-center gap-2 border-t border-border pt-2.5 text-xs text-text-muted">
-                    {amount && <span className="font-semibold text-text tabular-nums">{amount}</span>}
-                    {owner && <Avatar name={owner.name} tone={owner.tone} size="xs" />}
-                    {age && <span className="ml-auto">{age}</span>}
+            {(contact || date || owner || age) && (
+                <div className="flex items-center justify-between gap-2 border-t border-border bg-surface-raised/40 px-3.5 py-2.5 text-xs text-text-muted">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                        {contact ? (
+                            <>
+                                <User aria-hidden className="size-3.5 shrink-0" />
+                                <span className="truncate">{contact}</span>
+                            </>
+                        ) : (
+                            age && <span className="truncate">{age}</span>
+                        )}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                        {date && (
+                            <span className="flex items-center gap-1 text-[11px]" title={`${date.label} ${date.value}`}>
+                                <CalendarDays aria-hidden className="size-3.5" />
+                                <span className="sr-only">{date.label} </span>
+                                {date.value}
+                            </span>
+                        )}
+                        {owner && (
+                            <Avatar name={owner.name} tone={owner.tone} size="xs" className="border border-border" />
+                        )}
+                    </span>
                 </div>
             )}
         </article>

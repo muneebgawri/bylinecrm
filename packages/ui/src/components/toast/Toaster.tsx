@@ -24,7 +24,7 @@ export function Toaster({ store = toasts, label = 'Notifications' }: ToasterProp
                         if (!open) store.dismiss(record.id);
                     }}
                     className={cn(
-                        'relative flex w-full items-start gap-3 overflow-hidden rounded-lg border border-border bg-surface p-4 pr-10 text-sm text-text shadow-lg',
+                        'relative flex w-full items-start gap-3 overflow-hidden rounded-xl border border-border bg-surface p-4 pr-10 text-sm text-text shadow-lg',
                         'data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)]',
                         'motion-reduce:transition-none',
                     )}

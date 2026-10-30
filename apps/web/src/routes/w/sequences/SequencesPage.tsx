@@ -59,7 +59,7 @@ export function SequencesPage() {
     const rows = all.filter((s) => (tab === 'archived' ? s.status === 'archived' : s.status !== 'archived'));
 
     return (
-        <div className="p-7 max-md:p-4">
+        <div className="p-4 md:p-6">
             <PageHeader
                 title="Sequences"
                 subtitle="Emails and waits that run on their own, and stop on a reply, a bounce, an unsubscribe or a stage change."

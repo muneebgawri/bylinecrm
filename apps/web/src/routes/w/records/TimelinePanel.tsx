@@ -12,7 +12,17 @@ import {
     type Tone,
 } from '@bylinecrm/ui';
 import { useQueries } from '@tanstack/react-query';
-import { ArrowRightLeft, CalendarDays, DollarSign, FileText, Mail, Paperclip, Pencil, SquareCheck } from 'lucide-react';
+import {
+    Activity,
+    ArrowRightLeft,
+    CalendarDays,
+    DollarSign,
+    FileText,
+    Mail,
+    Paperclip,
+    Pencil,
+    SquareCheck,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useRecordDrafts } from '../../../api/mail';
@@ -150,9 +160,10 @@ export function TimelinePanel({
     );
 
     return (
-        <section className="rounded-lg border border-border bg-surface shadow-sm">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-                <h3 className="m-0 text-[13px] font-medium text-text-muted">Activity</h3>
+        <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+                <Activity aria-hidden className="size-4 text-text-muted" />
+                <h3 className="m-0 text-sm font-semibold">Activity</h3>
                 <div role="group" aria-label="Show" className="ml-auto flex flex-wrap gap-1">
                     {FILTERS.map((f) => (
                         <button
