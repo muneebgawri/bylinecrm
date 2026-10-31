@@ -70,6 +70,25 @@ describe('FR-CRMS-26 Bigin contact reuse history', () => {
         expect(history.review).toEqual([]);
     });
 
+    it('without Twenty, the logs alone split a reused contact and put a same-address rename to review', () => {
+        const history = identityHistory({
+            holder: { first: 'C', last: 'Three', email: 'c@three.example' },
+            changes: [],
+            observations: [
+                { at: at('2026-01-01T00:00:00Z'), identity: { first: 'A', last: 'One', email: 'a@one.example' } },
+                { at: at('2026-01-05T00:00:00Z'), identity: { first: 'a', last: 'one', email: 'A@One.example' } },
+                { at: at('2026-01-10T00:00:00Z'), identity: { first: 'B', last: 'Two', email: 'b@two.example' } },
+                { at: at('2026-01-20T00:00:00Z'), identity: { first: 'C', last: 'Three', email: 'b@two.example' } },
+            ],
+        });
+        expect(history.segments).toEqual([
+            { identity: { first: 'A', last: 'One', email: 'a@one.example' }, from: null },
+            { identity: { first: 'C', last: 'Three', email: 'b@two.example' }, from: at('2026-01-10T00:00:00Z') },
+        ]);
+        expect(history.review).toHaveLength(1);
+        expect(history.review[0]).toContain('same address');
+    });
+
     it('no history: one person, nothing to review', () => {
         expect(
             identityHistory({

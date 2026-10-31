@@ -74,6 +74,18 @@ export function identityHistory(input: {
     for (const o of observations) if (firstChange === null || o.at < firstChange) state = { ...o.identity };
 
     const groups: Segment[] = [{ identity: state, from: null }];
+    // Without Twenty's diffs (Twenty is gone), each full identity the logs or Bigin show that differs from the
+    // one before is the change.
+    if (changes.length === 0) {
+        groups.length = 0;
+        for (const o of observations) {
+            const last = groups[groups.length - 1];
+            if (last && sameName(last.identity, o.identity) && sameEmail(last.identity.email, o.identity.email))
+                continue;
+            groups.push({ identity: { ...o.identity }, from: last ? o.at : null });
+        }
+        if (groups.length === 0) groups.push({ identity: state, from: null });
+    }
     changes.forEach((change, index) => {
         const next = changes[index + 1]?.at ?? null;
         let identity: Identity = { ...groups[groups.length - 1]!.identity };
