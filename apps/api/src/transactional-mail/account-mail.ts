@@ -6,6 +6,7 @@ import {
     signupInvitationMail,
     taskDigestMail,
     guardrailAlertMail,
+    gmailUsageHighMail,
     twentySyncFailingMail,
     biginSyncFailingMail,
     verificationMail,
@@ -192,6 +193,19 @@ export class AccountMail {
             },
             input.workspaceId,
         );
+    }
+
+    /** PNW-1194: the project's Gmail spend for the day is past the alert level; one per platform admin per day. */
+    gmailUsageHigh(
+        tx: MailTransaction,
+        input: { to: string; day: string; units: number; billedAbove: number },
+    ): Promise<void> {
+        return this.outbox.record(tx, {
+            kind: 'gmail_usage_high',
+            to: input.to,
+            idempotencyKey: `gmail-usage-${input.day}-${input.to}`,
+            ...gmailUsageHighMail(input),
+        });
     }
 
     /** Wakes the relay after an owner transaction that recorded mail has committed. */

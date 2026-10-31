@@ -45,6 +45,18 @@ export const GMAIL_UNITS = {
 } as const;
 /** Redis key prefix of a mailbox's per-second quota window. */
 export const GMAIL_QUOTA_KEY_PREFIX = 'mail-sync:quota:';
+/**
+ * Google bills a project's Gmail use above this many units a day (projects created since 2026-05-01, PNW-1194). The
+ * Google project is BylineCRM's OAuth client, so its day is what GmailQuota grants.
+ */
+export const GMAIL_PROJECT_BILLED_UNITS_PER_DAY = 80_000_000;
+/** The day's total at which the platform admins are told, once that day: half the billed line, time to act. */
+export const GMAIL_DAILY_ALERT_UNITS = GMAIL_PROJECT_BILLED_UNITS_PER_DAY / 2;
+/** Google's daily quotas run midnight to midnight Pacific time. */
+export const GMAIL_QUOTA_DAY_ZONE = 'America/Los_Angeles';
+/** Redis key prefix of the project's units for one quota day (`<prefix><YYYY-MM-DD>`), kept this long. */
+export const GMAIL_DAY_KEY_PREFIX = 'mail-sync:units-day:';
+export const GMAIL_DAY_KEY_TTL_S = 3 * 24 * 60 * 60;
 
 /** Attempts per Gmail request on `429` or a `5xx` before the run gives up (it is retried later). */
 export const GMAIL_RETRY_ATTEMPTS = 5;

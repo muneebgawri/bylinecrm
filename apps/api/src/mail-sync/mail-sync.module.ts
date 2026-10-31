@@ -3,8 +3,10 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
 import { ReputationModule } from '../reputation/reputation.module';
+import { TransactionalMailModule } from '../transactional-mail/transactional-mail.module';
 import { BlocklistService } from './blocklist.service';
 import { GmailHttp } from './gmail.http';
+import { GmailUsageAlert } from './gmail-usage';
 import { GMAIL_PORT } from './gmail.port';
 import { BlocklistController, MailThreadsController, MailboxSyncController } from './mail-sync.controllers';
 import { IntegrationMailController } from './integration-mail.controller';
@@ -27,6 +29,7 @@ import { GmailQuota } from './quota';
         AuthModule,
         MailAccountsModule,
         ReputationModule,
+        TransactionalMailModule,
         BullModule.registerQueue({
             name: MAIL_SYNC_QUEUE,
             defaultJobOptions: {
@@ -41,6 +44,7 @@ import { GmailQuota } from './quota';
     providers: [
         { provide: GMAIL_PORT, useClass: GmailHttp },
         GmailQuota,
+        GmailUsageAlert,
         MailSyncService,
         MailReadService,
         IntegrationMailService,

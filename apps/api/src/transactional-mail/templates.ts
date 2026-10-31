@@ -175,6 +175,24 @@ export function guardrailAlertMail(input: { workspaceName: string; message: stri
     });
 }
 
+/**
+ * PNW-1194: the Google project's Gmail spend for the day has passed the alert level — to each platform admin, once
+ * that day. Google bills a project's use above `billedAbove` units a day.
+ */
+export function gmailUsageHighMail(input: { day: string; units: number; billedAbove: number }): RenderedMail {
+    const n = (v: number) => v.toLocaleString('en-US');
+    return render(`Gmail use on ${input.day} has passed half of Google’s billing line`, {
+        heading: `${PRODUCT} has spent ${n(input.units)} Gmail units today`,
+        paragraphs: [
+            `On ${input.day} (Google’s quota day, Pacific time) ${PRODUCT} has spent ${n(input.units)} Gmail API units. Google bills a project’s Gmail use above ${n(input.billedAbove)} units a day.`,
+            'A large first import or a run that keeps retrying is the usual cause. Check mail sync’s recent runs and the Gmail API metrics in the Google Cloud console.',
+        ],
+        action: 'Open the Gmail API quotas',
+        url: 'https://console.cloud.google.com/apis/api/gmail.googleapis.com/quotas',
+        footer: `You receive this because you are a platform admin of ${PRODUCT}. It is sent at most once a day.`,
+    });
+}
+
 /** One task as a digest lists it: its title, what it is about, and when it was due. */
 interface DigestTask {
     title: string;

@@ -5,6 +5,7 @@ import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
 import { DelegationService } from '../mail-accounts/delegation.service';
 import { MAIL_SYNC_EVERY_MS, MAIL_SYNC_QUEUE, MAIL_SYNC_WORKER_CONCURRENCY } from './mail-sync.constants';
+import { GmailUsageAlert } from './gmail-usage';
 import { MailSyncService } from './mail-sync.service';
 import { queueFailure, rateLimitCooldownUntil, type RateLimitRecord } from './retry';
 
@@ -35,6 +36,7 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
         private readonly ownerPrisma: PrismaService,
         private readonly sync: MailSyncService,
         private readonly delegation: DelegationService,
+        private readonly usage: GmailUsageAlert,
         @InjectQueue(MAIL_SYNC_QUEUE) private readonly queue: Queue,
     ) {}
 
@@ -87,6 +89,12 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
             where: { status: 'connected', transport: 'gmail' },
             select: { id: true, workspaceId: true, syncState: { select: { lastError: true } } },
         });
+        // PNW-1194: the day's Gmail spend against Google's billing line, told to the platform admins once a day.
+        try {
+            await this.usage.check();
+        } catch (error) {
+            this.logger.error(`gmail usage check failed: ${String(error)}`);
+        }
         let queued = 0;
         const now = Date.now();
         for (const m of mailboxes) {
