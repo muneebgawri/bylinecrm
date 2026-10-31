@@ -56,7 +56,10 @@ git archive --format=tar "$SHA" deploy/env |
     ssh -o BatchMode=yes "$HOST" "mkdir -p $RELEASE_DIR && tar -x -C $RELEASE_DIR"
 
 echo "deploy: releasing $BYLINECRM_ENV" >&2
-ssh -o BatchMode=yes "$HOST" "bash $RELEASE_DIR/deploy/env/release-remote.sh $BYLINECRM_ENV $SHA"
+# A release can sit quietly for up to 45 minutes waiting for a NewswireOS deploy's lock (PNW-1193):
+# keepalives stop an idle connection being dropped, which would hang the release up mid-flight.
+ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$HOST" \
+    "bash $RELEASE_DIR/deploy/env/release-remote.sh $BYLINECRM_ENV $SHA"
 
 if [ "${SKIP_EDGE_PROBE:-0}" = 1 ]; then
     echo "deploy: $SHA deployed to $BYLINECRM_ENV; edge probe skipped" >&2

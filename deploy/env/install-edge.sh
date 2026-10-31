@@ -13,7 +13,8 @@
 #
 # Why it is careful: NewswireOS releases gate their reloads on `nginx -t`. If this file left the
 # edge failing `nginx -t`, the next NewswireOS release would roll back for a reason that is not its
-# own. So the script (1) refuses while a NewswireOS deploy holds its lock, (2) refuses unless the edge
+# own. So the script (1) takes NewswireOS's deploy lock, waiting while a NewswireOS deploy holds it
+# (lib.sh bylinecrm_nw_lock_take), and holds it until it exits, (2) refuses unless the edge
 # passes `nginx -t` BEFORE any change, and (3) on a failed test restores the previous file (or
 # removes the new one) and proves `nginx -t` passes again before exiting non-zero.
 #
@@ -72,10 +73,13 @@ edge_test_verbose() { docker exec "$EDGE" nginx -t; }
     echo "install-edge: $SRC not found" >&2
     exit 1
 }
-if [ -e "$LOCK" ]; then
-    echo "install-edge: a NewswireOS deploy holds $LOCK — refusing; try again when it has finished" >&2
-    exit 1
-fi
+# Held from here to the exit, so no NewswireOS deploy tests or reloads the edge while this changes it.
+# A release waits for a NewswireOS deploy rather than failing on contact (PNW-1193; twice on
+# 2026-10-31). 45 minutes is about twice the 15-25 a NewswireOS deploy takes; a release that still
+# cannot have the lock reverts to the colour that is serving, as before.
+export NEWSWIREOS_LOCK=$LOCK
+bylinecrm_nw_lock_take install-edge "${EDGE_LOCK_WAIT_SECONDS:-2700}" || exit 1
+trap bylinecrm_nw_lock_release EXIT
 if ! edge_test; then
     echo "install-edge: the edge fails nginx -t BEFORE any change — not ours to fix; refusing:" >&2
     edge_test_verbose >&2 || true
