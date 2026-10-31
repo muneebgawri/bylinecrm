@@ -36,8 +36,8 @@ interface FakeMailbox {
     messages: Map<string, GmailRawMessage>;
     /** Message ids, newest last. */
     order: string[];
-    /** Each history step: the id after which the message was added. */
-    history: { historyId: number; messageId: string }[];
+    /** Each history step: the id after which the message was added, or permanently deleted. */
+    history: { historyId: number; messageId: string; deleted?: true }[];
     historyId: number;
     /** History before this id is gone: a start id below it answers 404. */
     oldestHistoryId: number;
@@ -167,6 +167,17 @@ export class FakeGmail implements GmailPort {
         box.order = box.order.filter((id) => id !== messageId);
     }
 
+    /**
+     * The message is permanently deleted and Gmail logs it, as it does for a draft replaced by its next
+     * save or a message emptied from Trash: history names it as added and then as deleted (PNW-1192).
+     */
+    expunge(email: string, messageId: string): void {
+        this.vanish(email, messageId);
+        const box = this.box(email);
+        box.historyId += 1;
+        box.history.push({ historyId: box.historyId, messageId, deleted: true });
+    }
+
     expireHistory(email: string): void {
         const box = this.box(email);
         box.historyId += 1;
@@ -241,7 +252,8 @@ export class FakeGmail implements GmailPort {
         const slice = steps.slice(start, start + this.historyPageSize);
         const next = start + this.historyPageSize < steps.length ? String(start + this.historyPageSize) : null;
         return {
-            addedMessageIds: slice.map((h) => h.messageId),
+            addedMessageIds: slice.filter((h) => !h.deleted).map((h) => h.messageId),
+            deletedMessageIds: slice.filter((h) => h.deleted).map((h) => h.messageId),
             historyId: String(box.historyId),
             nextPageToken: next,
         };
