@@ -96,6 +96,50 @@ bylinecrm_other_colour() {
     esac
 }
 
+# The NewswireOS deploy lock, for a script that changes what NewswireOS owns (its edge): the same
+# lock NewswireOS's own deploys take (newswireos deploy/lib/deploy-lock.sh), never a second one — a
+# directory, because mkdir is atomic, with a `holder` line saying who. Checking that it is free and
+# then acting is a race; taking it is not, so a NewswireOS deploy starting meanwhile is refused.
+#
+#   bylinecrm_nw_lock_take <what> <wait seconds>   # 0 once ours; 1 when still held after the wait
+#   bylinecrm_nw_lock_release                      # removes it only while it is still ours
+#
+# While it is held it waits, saying who holds it, and checks again every NEWSWIREOS_LOCK_POLL_SECONDS
+# — a NewswireOS deploy takes 15-25 minutes and BylineCRM needs the lock for seconds. It never breaks
+# a lock, however old: NewswireOS's own rule. The holder line is deliberately not the `user@host
+# pid=N` shape NewswireOS judges dead by: its dead-holder check looks for a NewswireOS deploy's
+# process, and would take over a lock this script holds (PNW-1193).
+BYLINECRM_NW_LOCK_HOLDER=''
+bylinecrm_nw_lock_take() {
+    local what=$1 wait=$2 poll=${NEWSWIREOS_LOCK_POLL_SECONDS:-15} lock=${NEWSWIREOS_LOCK:-/opt/newswireos-runtime/deploy.lock}
+    local me waited=0 said=''
+    me="bylinecrm-$BYLINECRM_ENV $what on $(hostname -s 2>/dev/null || echo '?') (pid $$) since $(date -u +%FT%TZ)"
+    while ! mkdir "$lock" 2>/dev/null; do
+        local holder
+        holder=$(cat "$lock/holder" 2>/dev/null || echo '<unreadable>')
+        if [ "$waited" -ge "$wait" ]; then
+            echo "bylinecrm: the NewswireOS deploy lock $lock is still held after ${waited}s — refusing; it is left as it is" >&2
+            echo "bylinecrm:   holder: $holder" >&2
+            return 1
+        fi
+        if [ "$holder" != "$said" ]; then
+            echo "bylinecrm: a NewswireOS deploy holds $lock — waiting up to ${wait}s for it (holder: $holder)" >&2
+            said=$holder
+        fi
+        sleep "$poll"
+        waited=$((waited + poll))
+    done
+    printf '%s\n' "$me" >"$lock/holder"
+    BYLINECRM_NW_LOCK_HOLDER=$me
+    echo "bylinecrm: took the NewswireOS deploy lock (${waited}s waited)" >&2
+}
+bylinecrm_nw_lock_release() {
+    local lock=${NEWSWIREOS_LOCK:-/opt/newswireos-runtime/deploy.lock}
+    [ -n "$BYLINECRM_NW_LOCK_HOLDER" ] || return 0
+    if [ "$(cat "$lock/holder" 2>/dev/null)" = "$BYLINECRM_NW_LOCK_HOLDER" ]; then rm -rf "$lock"; fi
+    BYLINECRM_NW_LOCK_HOLDER=''
+}
+
 # The colour serving this environment now, or `none` before the first blue/green release.
 bylinecrm_active_colour() {
     local file="$BYLINECRM_RUNTIME/ACTIVE_COLOUR"

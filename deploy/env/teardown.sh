@@ -74,12 +74,15 @@ if [ "$BYLINECRM_ENV" = production ]; then
     fi
 fi
 
-for lock in "$RUNTIME/deploy.lock" "$NW_LOCK"; do
-    if [ -e "$lock" ]; then
-        log "a deploy holds $lock — refusing; try again when it has finished"
-        exit 1
-    fi
-done
+if [ -e "$RUNTIME/deploy.lock" ]; then
+    log "a deploy holds $RUNTIME/deploy.lock — refusing; try again when it has finished"
+    exit 1
+fi
+# NewswireOS's lock is taken, not only checked, for as long as this changes the edge (PNW-1193). A
+# teardown is a person at a terminal: it does not wait, it refuses and says who holds it.
+export NEWSWIREOS_LOCK=$NW_LOCK
+bylinecrm_nw_lock_take teardown 0 || exit 1
+trap bylinecrm_nw_lock_release EXIT
 
 edge_test() { docker exec "$EDGE" nginx -t >/dev/null 2>&1; }
 
