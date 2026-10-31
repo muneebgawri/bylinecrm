@@ -7,7 +7,8 @@ export type MailKind =
     | 'twenty_sync_failing'
     | 'bigin_sync_failing'
     | 'task_digest'
-    | 'guardrail_alert';
+    | 'guardrail_alert'
+    | 'gmail_usage_high';
 
 /** One message, rendered and addressed, as a transport sends it. */
 export interface OutgoingMail {
