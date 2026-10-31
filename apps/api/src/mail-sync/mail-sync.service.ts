@@ -229,6 +229,7 @@ export class MailSyncService {
     private async incremental(run: Run, startHistoryId: string, lastSyncedAt: Date | null): Promise<SyncRunResult> {
         try {
             const ids: string[] = [];
+            const deleted = new Set<string>();
             let pageToken: string | undefined;
             let historyId = startHistoryId;
             do {
@@ -241,10 +242,16 @@ export class MailSyncService {
                         }),
                 );
                 ids.push(...page.addedMessageIds);
+                for (const id of page.deletedMessageIds) deleted.add(id);
                 historyId = page.historyId || historyId;
                 pageToken = page.nextPageToken ?? undefined;
             } while (pageToken);
-            const result = await this.importIds(run, [...new Set(ids)]);
+            // A message added and then permanently deleted since the cursor (a draft replaced by its next
+            // save) would only answer 404 — at a full read's cost — so it is never read (PNW-1192).
+            const result = await this.importIds(
+                run,
+                [...new Set(ids)].filter((id) => !deleted.has(id)),
+            );
             run.historyId = historyId;
             return { ...result, mode: 'incremental' };
         } catch (error) {

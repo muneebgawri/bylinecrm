@@ -50,16 +50,19 @@ export class GmailHttp implements GmailPort {
         input: { startHistoryId: string; pageToken?: string },
     ): Promise<GmailHistoryPage> {
         const params = new URLSearchParams({ startHistoryId: input.startHistoryId, historyTypes: 'messageAdded' });
+        params.append('historyTypes', 'messageDeleted');
         if (input.pageToken) params.set('pageToken', input.pageToken);
         const body = await this.get(accessToken, `/history?${params.toString()}`);
         const history = Array.isArray(body['history']) ? (body['history'] as Record<string, unknown>[]) : [];
-        const added = history.flatMap((h) =>
-            Array.isArray(h['messagesAdded'])
-                ? (h['messagesAdded'] as { message?: { id?: unknown } }[]).map((a) => str(a.message?.id))
-                : [],
-        );
+        const ids = (key: 'messagesAdded' | 'messagesDeleted') =>
+            history.flatMap((h) =>
+                Array.isArray(h[key])
+                    ? (h[key] as { message?: { id?: unknown } }[]).map((a) => str(a.message?.id))
+                    : [],
+            );
         return {
-            addedMessageIds: added,
+            addedMessageIds: ids('messagesAdded'),
+            deletedMessageIds: ids('messagesDeleted'),
             historyId: str(body['historyId']),
             nextPageToken: typeof body['nextPageToken'] === 'string' ? body['nextPageToken'] : null,
         };

@@ -409,6 +409,17 @@ describe('mail sync', () => {
             expect(run).toMatchObject({ mode: 'incremental', imported: 1, vanished: 1 });
         });
 
+        it('R-PNW-1192: never reads a message history says was deleted since the cursor (a replaced draft)', async () => {
+            const { id } = gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Draft v1', text: 'd' });
+            gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Kept', text: 'k' });
+            gmail.expunge(adminEmail, id);
+            const reads = () => gmail.calls.filter((c) => c.method === 'getMessage' && c.id === id).length;
+            const before = reads();
+            const run = await sync.syncMailbox(workspace, adminMailbox, noWait);
+            expect(run).toMatchObject({ mode: 'incremental', imported: 1, vanished: 0 });
+            expect(reads()).toBe(before);
+        });
+
         it('stores a message Gmail reports twice only once', async () => {
             const { id } = gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: 'Repeat', text: 'r' });
             gmail.repeatInHistory(adminEmail, id);
