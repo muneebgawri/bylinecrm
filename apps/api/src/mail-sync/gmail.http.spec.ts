@@ -17,10 +17,34 @@ describe('GmailHttp', () => {
             history: [{ messagesAdded: [{ message: { id: 'a' } }, { message: { id: 'b' } }] }, { labelsAdded: [] }],
         });
         const page = await new GmailHttp().listHistory('tok', { startHistoryId: '100' });
-        expect(page).toEqual({ addedMessageIds: ['a', 'b'], historyId: '900', nextPageToken: 'p2' });
+        expect(page).toEqual({
+            addedMessageIds: ['a', 'b'],
+            deletedMessageIds: [],
+            historyId: '900',
+            nextPageToken: 'p2',
+        });
         const [url, init] = spy.mock.calls[0]!;
         expect(String(url)).toContain('/history?startHistoryId=100&historyTypes=messageAdded');
         expect((init?.headers as Record<string, string>)['authorization']).toBe('Bearer tok');
+    });
+
+    it('R-PNW-1192: asks history for deletions too, and reads which messages were deleted', async () => {
+        const spy = respond(200, {
+            historyId: '901',
+            history: [
+                { messagesAdded: [{ message: { id: 'draft-v1' } }, { message: { id: 'kept' } }] },
+                { messagesDeleted: [{ message: { id: 'draft-v1' } }] },
+            ],
+        });
+        const page = await new GmailHttp().listHistory('tok', { startHistoryId: '100' });
+        expect(page).toEqual({
+            addedMessageIds: ['draft-v1', 'kept'],
+            deletedMessageIds: ['draft-v1'],
+            historyId: '901',
+            nextPageToken: null,
+        });
+        const params = new URL(String(spy.mock.calls[0]![0])).searchParams;
+        expect(params.getAll('historyTypes')).toEqual(['messageAdded', 'messageDeleted']);
     });
 
     it('turns Gmail errors into GmailApiError with the status and reason, never the token', async () => {

@@ -28,6 +28,11 @@ export interface GmailMessagePage {
 export interface GmailHistoryPage {
     /** Ids of messages added since the start id, in the order Gmail reported them. */
     addedMessageIds: string[];
+    /**
+     * Ids of messages permanently deleted since the start id — a draft replaced by its next save, Trash
+     * emptied. One added and then deleted is gone: reading it answers 404 (PNW-1192).
+     */
+    deletedMessageIds: string[];
     /** The history id this page brings the mailbox to. */
     historyId: string;
     nextPageToken: string | null;
@@ -115,7 +120,7 @@ export interface GmailPort {
     listMessages(accessToken: string, input: { query: string; pageToken?: string }): Promise<GmailMessagePage>;
 
     /**
-     * Messages added since `startHistoryId`. A start id Gmail no longer keeps history for answers
+     * Messages added, and messages permanently deleted, since `startHistoryId`. A start id Gmail no longer keeps history for answers
      * `404` (`GmailApiError` with status 404): the caller re-lists instead.
      */
     listHistory(accessToken: string, input: { startHistoryId: string; pageToken?: string }): Promise<GmailHistoryPage>;
