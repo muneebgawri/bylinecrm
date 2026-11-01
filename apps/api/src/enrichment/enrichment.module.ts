@@ -10,12 +10,7 @@ import { DnsEnricher } from './dns';
 import { EmailDomainEnricher } from './email-domain';
 import { ENRICHERS } from './enricher.port';
 import { EnrichmentConsumer } from './enrichment.consumer';
-import {
-    ENRICHMENT_JOB_ATTEMPTS,
-    ENRICHMENT_JOB_BACKOFF_MS,
-    ENRICHMENT_MAINTENANCE_QUEUE,
-    ENRICHMENT_QUEUE,
-} from './enrichment.constants';
+import { ENRICHMENT_JOB_OPTIONS, ENRICHMENT_MAINTENANCE_QUEUE, ENRICHMENT_QUEUE } from './enrichment.constants';
 import { EnrichmentController } from './enrichment.controllers';
 import { EnrichmentQueue } from './enrichment-queue';
 import { EnrichmentRunner } from './enrichment-runner';
@@ -49,12 +44,7 @@ import { WebsiteEnricher } from './website';
         BylineApiModule,
         BullModule.registerQueue({
             name: ENRICHMENT_QUEUE,
-            defaultJobOptions: {
-                attempts: ENRICHMENT_JOB_ATTEMPTS,
-                backoff: { type: 'exponential', delay: ENRICHMENT_JOB_BACKOFF_MS },
-                removeOnComplete: true,
-                removeOnFail: true,
-            },
+            defaultJobOptions: ENRICHMENT_JOB_OPTIONS,
         }),
         BullModule.registerQueue({
             name: ENRICHMENT_MAINTENANCE_QUEUE,

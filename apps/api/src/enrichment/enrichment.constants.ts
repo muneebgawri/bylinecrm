@@ -4,6 +4,13 @@ import type { EnrichmentObject } from '@bylinecrm/shared';
 export const ENRICHMENT_QUEUE = 'enrichment';
 export const ENRICHMENT_JOB_ATTEMPTS = 3;
 export const ENRICHMENT_JOB_BACKOFF_MS = 30_000;
+/** The queue's job options, for every producer of it (the module, the `enrich-records` command). */
+export const ENRICHMENT_JOB_OPTIONS = {
+    attempts: ENRICHMENT_JOB_ATTEMPTS,
+    backoff: { type: 'exponential', delay: ENRICHMENT_JOB_BACKOFF_MS },
+    removeOnComplete: true,
+    removeOnFail: true,
+} as const;
 /** A job holds its lock this long: the sources' timeouts added up, with room. */
 export const ENRICHMENT_LOCK_MS = 2 * 60_000;
 export const ENRICHMENT_WORKER_CONCURRENCY = 2;
