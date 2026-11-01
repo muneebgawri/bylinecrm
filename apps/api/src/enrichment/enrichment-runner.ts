@@ -73,33 +73,12 @@ export class EnrichmentRunner {
         recordId: string,
         options: { force: boolean; now?: Date },
     ): Promise<EnrichmentRunReport> {
-        const now = options.now ?? new Date();
-        const loaded = await this.rls.withWorkspace(async (tx) => {
-            const subject = await this.subject(tx, context.workspaceId, object, recordId);
-            if (!subject) return null;
-            const settings = await this.settings.settingsIn(tx);
-            const lastAsked = await tx.enrichmentAnswer.groupBy({
-                by: ['source'],
-                where: { object, recordId },
-                _max: { askedAt: true },
-            });
-            return { subject, settings, lastAsked: new Map(lastAsked.map((r) => [r.source, r._max.askedAt])) };
-        });
+        const loaded = await this.dueFor(context.workspaceId, object, recordId, options);
         if (!loaded) {
             this.logger.warn(`${object} ${recordId}: not found or deleted; nothing asked`);
             return { asked: [], answers: 0, applied: 0 };
         }
-        const { subject, settings, lastAsked } = loaded;
-        const dueNow = this.enrichers.filter((e) => {
-            if (!settings.sources[e.source] || !e.applies(subject)) return false;
-            const last = lastAsked.get(e.source);
-            return options.force || !last || now.getTime() - last.getTime() > settings.reaskAfterDays * DAY_MS;
-        });
-        // A source linked per workspace (BylineAI) is not asked where the workspace has not linked it.
-        const linked = await Promise.all(
-            dueNow.map((e) => (e.available ? e.available(context.workspaceId) : Promise.resolve(true))),
-        );
-        const due = dueNow.filter((_, i) => linked[i]);
+        const { subject, due } = loaded;
         if (due.length === 0) return { asked: [], answers: 0, applied: 0 };
 
         // No transaction is open here: the sources reach the network.
@@ -141,6 +120,44 @@ export class EnrichmentRunner {
     }
 
     /** A source's findings, or — when it throws — a failure for each fact it answers for the object. */
+    /**
+     * The sources a run would ask the record now: on, applying to it, linked where they are per
+     * workspace, and due — never asked, older than the re-ask age, or `force`. One rule for the run
+     * itself and for whoever decides whether a run is worth queueing (a record opened). Null when
+     * the record is gone or out of scope. Runs in the caller's workspace context.
+     */
+    async dueFor(
+        workspaceId: string,
+        object: EnrichmentObject,
+        recordId: string,
+        options: { force: boolean; now?: Date },
+    ): Promise<{ subject: EnrichmentSubject; due: Enricher[] } | null> {
+        const now = options.now ?? new Date();
+        const loaded = await this.rls.withWorkspace(async (tx) => {
+            const subject = await this.subject(tx, workspaceId, object, recordId);
+            if (!subject) return null;
+            const settings = await this.settings.settingsIn(tx);
+            const lastAsked = await tx.enrichmentAnswer.groupBy({
+                by: ['source'],
+                where: { object, recordId },
+                _max: { askedAt: true },
+            });
+            return { subject, settings, lastAsked: new Map(lastAsked.map((r) => [r.source, r._max.askedAt])) };
+        });
+        if (!loaded) return null;
+        const { subject, settings, lastAsked } = loaded;
+        const dueNow = this.enrichers.filter((e) => {
+            if (!settings.sources[e.source] || !e.applies(subject)) return false;
+            const last = lastAsked.get(e.source);
+            return options.force || !last || now.getTime() - last.getTime() > settings.reaskAfterDays * DAY_MS;
+        });
+        // A source linked per workspace (BylineAI, members' Google contacts) is not asked where the workspace has not linked it.
+        const linked = await Promise.all(
+            dueNow.map((e) => (e.available ? e.available(workspaceId) : Promise.resolve(true))),
+        );
+        return { subject, due: dueNow.filter((_, i) => linked[i]) };
+    }
+
     private async ask(enricher: Enricher, subject: EnrichmentSubject): Promise<EnrichmentFinding[]> {
         try {
             return await enricher.enrich(subject);

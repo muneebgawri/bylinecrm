@@ -18,6 +18,8 @@ export const ENRICHMENT_MAINTENANCE_QUEUE = 'enrichment-maintenance';
 export const ENRICHMENT_SWEEP_EVERY_MS = 60 * 60_000;
 /** Records one pass queues at most, the longest unasked first; the next pass takes the next. */
 export const ENRICHMENT_SWEEP_BATCH = 100;
+/** Workspaces the sweep asks at once whether a source is linked there. */
+export const ENRICHMENT_SWEEP_CHECKS = 8;
 
 /** Sources asked at once for one record. */
 export const ENRICHMENT_SOURCE_CONCURRENCY = 2;

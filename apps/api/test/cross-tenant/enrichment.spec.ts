@@ -397,6 +397,33 @@ describe('FR-CRMS-15 enrichment', () => {
         expect(await queue.getJob(enrichmentJobId('company', c.id))).toBeTruthy();
     });
 
+    it('a person a source never asked about is queued when opened and by the sweep; once asked, by neither', async () => {
+        const p = await person({ emails: { primary: `una-${stamp}@example.com`, additional: [] } });
+        await settle(app);
+        await drop('person', p.id);
+        // Opened: Gravatar and the address were never asked, so its run is queued.
+        expect((await history('person', p.id)).body.pending).toBe(true);
+        expect(await queue.getJob(enrichmentJobId('person', p.id))).toBeTruthy();
+        await drop('person', p.id);
+        // Nobody opens it: the sweep queues it, newest first.
+        await sweep.run();
+        expect(await queue.getJob(enrichmentJobId('person', p.id))).toBeTruthy();
+        await drop('person', p.id);
+
+        await runner.enrich(workspace, 'person', p.id, { force: false });
+        expect((await history('person', p.id)).body.pending).toBe(false);
+        await sweep.run();
+        expect(await queue.getJob(enrichmentJobId('person', p.id))).toBeFalsy();
+
+        // A person without an address has nothing to ask with: never queued.
+        const bare = await person({});
+        await settle(app);
+        await drop('person', bare.id);
+        expect((await history('person', bare.id)).body.pending).toBe(false);
+        await sweep.run();
+        expect(await queue.getJob(enrichmentJobId('person', bare.id))).toBeFalsy();
+    });
+
     it('keeps answers and settings to their workspace', async () => {
         const domain = `mine-${stamp}.example`;
         web.page(`https://${domain}/`, homePage('Mine', 'https://www.linkedin.com/company/mine/', null));
