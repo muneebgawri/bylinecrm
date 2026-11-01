@@ -7,7 +7,7 @@ import { Enrichment } from './Enrichment';
 
 const settings: EnrichmentSettingsView = {
     reaskAfterDays: 90,
-    sources: { website: true, dns: true, gravatar: true, email_domain: true, byline: true },
+    sources: { website: true, dns: true, gravatar: true, google_contacts: true, email_domain: true, byline: true },
     isDefault: true,
     updatedAt: null,
 };
@@ -73,7 +73,14 @@ describe('P4-2 FR-CRMS-15 Settings → Enrichment', { timeout: 20_000 }, () => {
         await waitFor(() =>
             expect(seen.filter((r) => r.method === 'PUT').at(-1)?.body).toEqual({
                 reaskAfterDays: 30,
-                sources: { website: true, dns: true, gravatar: false, email_domain: true, byline: true },
+                sources: {
+                    website: true,
+                    dns: true,
+                    gravatar: false,
+                    google_contacts: true,
+                    email_domain: true,
+                    byline: true,
+                },
             }),
         );
         await waitFor(() => expect(screen.getByRole('switch', { name: /Gravatar/ })).not.toBeChecked());

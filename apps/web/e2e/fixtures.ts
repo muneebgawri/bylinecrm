@@ -1409,7 +1409,7 @@ export const outreachExclusions: OutreachExclusionView[] = [
 /** Enrichment (P4-2): every free source on but Gravatar; answers asked a day ago. */
 export const enrichmentSettings: EnrichmentSettingsView = {
     reaskAfterDays: 90,
-    sources: { website: true, dns: true, gravatar: false, email_domain: true, byline: true },
+    sources: { website: true, dns: true, gravatar: false, google_contacts: true, email_domain: true, byline: true },
     isDefault: false,
     updatedAt: at(5),
 };

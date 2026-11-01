@@ -188,14 +188,18 @@ export class EnrichmentRunner {
         }
         const row = await tx.person.findFirst({
             where: { id, deletedAt: null },
-            select: { emails: true, country: true },
+            select: { emails: true, country: true, ownerId: true },
         });
         if (!row) return null;
         return {
             workspaceId,
             object,
             id,
-            person: { email: (row.emails as Emails | null)?.primary ?? null, country: row.country },
+            person: {
+                email: (row.emails as Emails | null)?.primary ?? null,
+                country: row.country,
+                ownerId: row.ownerId,
+            },
         };
     }
 

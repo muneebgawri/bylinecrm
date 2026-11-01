@@ -2,6 +2,7 @@ import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, c
 import { ExternalLink, Pencil } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ApiError, fieldErrorAt } from '../../../api/client';
+import { CopyButton } from '../../../components/CopyButton';
 
 /**
  * The inline-edit contract (FR-CRMS-UI-2): a value reads as text; a click (or Enter on it)
@@ -186,6 +187,15 @@ export function InlineText({
                         >
                             <ExternalLink aria-hidden className="size-3.5" />
                         </a>
+                    )}
+                    {/* Every set value can be copied; like `href`, its own control beside the edit button.
+                        It appears with the pencil on hover, and stays where there is no hover. */}
+                    {shown !== null && (
+                        <CopyButton
+                            value={shown}
+                            label={`Copy ${label.toLowerCase()}`}
+                            className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
+                        />
                     )}
                 </div>
             )}

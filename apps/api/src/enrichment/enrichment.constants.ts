@@ -29,3 +29,11 @@ export const ENRICHMENT_USER_AGENT = 'BylineCRM-Enricher/1 (+https://bylinecrm.c
 
 /** The people of a company whose addresses the email-addresses source reads, at most. */
 export const ENRICHMENT_PEOPLE_SAMPLE = 200;
+
+/** Google's People API (AVATAR-1): where the Google Contacts source searches, and how long it waits. */
+export const GOOGLE_PEOPLE_API_BASE = 'https://people.googleapis.com/v1';
+export const GOOGLE_PEOPLE_HTTP_TIMEOUT_MS = 15_000;
+/** The mailboxes asked for one person, at most (the owner's first): each is two searches. */
+export const GOOGLE_CONTACTS_MAILBOXES = 10;
+/** A mailbox's contact search is warmed again after this long (Google's search reads a cache the warm-up fills). */
+export const GOOGLE_CONTACTS_WARM_MS = 60 * 60_000;
