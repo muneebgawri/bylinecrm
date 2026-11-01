@@ -20,6 +20,8 @@ export interface EnrichmentSubject {
     person?: {
         email: string | null;
         country: string | null;
+        /** The member who owns the record: a source that reads members' accounts asks theirs first. */
+        ownerId?: string | null;
     };
 }
 

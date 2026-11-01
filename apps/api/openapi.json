@@ -32416,6 +32416,9 @@
                             "gravatar": {
                                 "type": "boolean"
                             },
+                            "google_contacts": {
+                                "type": "boolean"
+                            },
                             "email_domain": {
                                 "type": "boolean"
                             },
@@ -32423,7 +32426,7 @@
                                 "type": "boolean"
                             }
                         },
-                        "required": ["website", "dns", "gravatar", "email_domain", "byline"]
+                        "required": ["website", "dns", "gravatar", "google_contacts", "email_domain", "byline"]
                     }
                 },
                 "required": ["reaskAfterDays", "sources"]
@@ -42140,7 +42143,7 @@
                     },
                     "source": {
                         "type": "string",
-                        "enum": ["website", "dns", "gravatar", "email_domain", "byline"]
+                        "enum": ["website", "dns", "gravatar", "google_contacts", "email_domain", "byline"]
                     },
                     "status": {
                         "type": "string",
@@ -42237,6 +42240,9 @@
                             "gravatar": {
                                 "type": "boolean"
                             },
+                            "google_contacts": {
+                                "type": "boolean"
+                            },
                             "email_domain": {
                                 "type": "boolean"
                             },
@@ -42244,7 +42250,7 @@
                                 "type": "boolean"
                             }
                         },
-                        "required": ["website", "dns", "gravatar", "email_domain", "byline"]
+                        "required": ["website", "dns", "gravatar", "google_contacts", "email_domain", "byline"]
                     },
                     "isDefault": {
                         "type": "boolean"

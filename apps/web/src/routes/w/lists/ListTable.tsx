@@ -279,6 +279,7 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
                                             {identity ? (
                                                 <AvatarCell
                                                     name={identityName(object, record)}
+                                                    src={identityPicture(object, record)}
                                                     subline={tableSubline(object, record, shown)}
                                                     nameAs={(name) => (
                                                         <button
@@ -315,6 +316,11 @@ export function ListTable<O extends ListObject>(props: ListTableProps<O>) {
 
 export function identityName<O extends ListObject>(object: O, row: ListRow<O>): string {
     return object === 'person' ? personName(row as ListRow<'person'>) : (row as ListRow<'company'>).name;
+}
+
+/** The person's picture (enrichment fills it, P4-2); a company's row keeps its initials. */
+export function identityPicture<O extends ListObject>(object: O, row: ListRow<O>): string | undefined {
+    return object === 'person' ? ((row as ListRow<'person'>).avatarUrl ?? undefined) : undefined;
 }
 
 /** The identity cell's second line and the field it comes from: a person's title (else address), a company's domain. */

@@ -1,7 +1,7 @@
 import { Avatar, Badge, CardList, type CardListItem } from '@bylinecrm/ui';
 import type { ReactNode } from 'react';
 import { formatRelative } from '../../../lib/format';
-import { identityName, identitySubline } from './ListTable';
+import { identityName, identityPicture, identitySubline } from './ListTable';
 import { ownerCell, type ListObject, type ListRow } from './listConfig';
 
 export interface ListCardsProps<O extends ListObject> {
@@ -34,7 +34,7 @@ export function ListCards<O extends ListObject>(props: ListCardsProps<O>) {
             identitySubline(object, row);
         return {
             id: row.id,
-            leading: <Avatar name={name} size="md" />,
+            leading: <Avatar name={name} src={identityPicture(object, row)} size="md" />,
             primary: name,
             secondary: secondary ? [secondary] : [],
             meta: [status(object, row), formatRelative(row.updatedAt)].filter((part) => part !== null),

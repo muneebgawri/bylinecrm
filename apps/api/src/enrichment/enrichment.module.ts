@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { MailAccountsModule } from '../mail-accounts/mail-accounts.module';
 import { RecordsModule } from '../records/records.module';
 import { BylineApiModule } from '../byline/byline-api.module';
 import { BylineEnricher } from '../byline/byline.enricher';
@@ -24,12 +25,16 @@ import { EnrichmentSweep } from './enrichment-sweep';
 import { EnrichmentWorkers } from './enrichment.workers';
 import { ENRICHMENT_FETCH } from './fetch.port';
 import { UndiciFetch } from './fetch.undici';
+import { GoogleContactsEnricher } from './google-contacts';
+import { GoogleContactsHttp } from './google-contacts.http';
+import { GOOGLE_CONTACTS_PORT } from './google-contacts.port';
 import { GravatarEnricher } from './gravatar';
 import { WebsiteEnricher } from './website';
 
 /**
  * Enrichment (P4-2, FR-CRMS-15): the `Enricher` port with the four free sources behind it — the
- * company website, DNS (through the sending pool's port), Gravatar, the addresses themselves — a
+ * company website, DNS (through the sending pool's port), Gravatar, the members' Google contacts
+ * (through their mailboxes' grants), the addresses themselves — a
  * record's answers kept with source and time, the "better than what is there" rule applied through
  * the records' own update path, _Enrich now_, the outbox consumer that enriches a new or changed
  * record, and the hourly sweep that asks again after the workspace's age. Jobs run on the
@@ -38,6 +43,7 @@ import { WebsiteEnricher } from './website';
 @Module({
     imports: [
         AuthModule,
+        MailAccountsModule,
         RecordsModule,
         SendingPoolModule,
         BylineApiModule,
@@ -61,12 +67,21 @@ import { WebsiteEnricher } from './website';
         WebsiteEnricher,
         DnsEnricher,
         GravatarEnricher,
+        { provide: GOOGLE_CONTACTS_PORT, useClass: GoogleContactsHttp },
+        GoogleContactsEnricher,
         EmailDomainEnricher,
         BylineEnricher,
         {
             provide: ENRICHERS,
             useFactory: (...sources: unknown[]) => sources,
-            inject: [WebsiteEnricher, DnsEnricher, GravatarEnricher, EmailDomainEnricher, BylineEnricher],
+            inject: [
+                WebsiteEnricher,
+                DnsEnricher,
+                GravatarEnricher,
+                GoogleContactsEnricher,
+                EmailDomainEnricher,
+                BylineEnricher,
+            ],
         },
         EnrichmentSettingsService,
         EnrichmentQueue,

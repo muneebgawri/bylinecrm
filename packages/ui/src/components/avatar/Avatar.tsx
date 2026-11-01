@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
-import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { TONES, toneSoft, type Tone } from '../../lib/tones';
 
@@ -44,6 +44,9 @@ export const Avatar = forwardRef<HTMLSpanElement, AvatarProps>(function Avatar(
     { className, name, src, tone, size, ...props },
     ref,
 ) {
+    // A picture that will not load (removed since it was found, blocked) falls back to the initials.
+    const [broken, setBroken] = useState<string | null>(null);
+    const picture = src && src !== broken ? src : undefined;
     return (
         <span
             ref={ref}
@@ -52,7 +55,17 @@ export const Avatar = forwardRef<HTMLSpanElement, AvatarProps>(function Avatar(
             className={cn(avatarVariants({ tone: tone ?? toneFor(name), size }), className)}
             {...props}
         >
-            {src ? <img src={src} alt="" className="size-full object-cover" /> : initialsOf(name)}
+            {picture ? (
+                <img
+                    src={picture}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="size-full object-cover"
+                    onError={() => setBroken(picture)}
+                />
+            ) : (
+                initialsOf(name)
+            )}
         </span>
     );
 });

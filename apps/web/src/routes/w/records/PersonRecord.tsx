@@ -7,6 +7,7 @@ import { useSetContactStatus } from '../../../api/customers';
 import { usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
+import { CopyButton } from '../../../components/CopyButton';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { useCompanyCreator } from '../../../components/useCompanyCreator';
 import { formatDay } from '../../../lib/format';
@@ -402,7 +403,21 @@ export function PersonRecord({
                                 ? `${formatDay(person.lastContactedAt.slice(0, 10))} · ${person.contactAttempts} sent`
                                 : 'Not yet',
                         },
-                        { label: 'Email', value: person.emails.primary ?? '—' },
+                        {
+                            label: 'Email',
+                            value: person.emails.primary ? (
+                                <span className="flex items-start gap-1">
+                                    <span className="min-w-0">{person.emails.primary}</span>
+                                    <CopyButton
+                                        value={person.emails.primary}
+                                        label="Copy email"
+                                        className="-my-1 size-6"
+                                    />
+                                </span>
+                            ) : (
+                                '—'
+                            ),
+                        },
                         { label: 'City', value: person.city ?? '—' },
                     ]}
                 />

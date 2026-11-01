@@ -97,13 +97,19 @@ export function RecordHeader({
                 </div>
             )}
             <div className="flex flex-wrap items-center gap-4">
-                <Avatar name={name} src={avatarSrc ?? undefined} size="lg" className="rounded-xl" />
-                <div className="min-w-0 flex-1">
-                    <h1 className="m-0 flex flex-wrap items-center gap-2 text-lg leading-none font-semibold tracking-tight">
-                        <span className="truncate">{name}</span>
+                <Avatar name={name} src={avatarSrc ?? undefined} size="lg" />
+                {/* The identity claims 14rem before the actions do: where both do not fit (the drawer),
+                    the actions wrap under it rather than squeezing the name to an ellipsis. */}
+                <div className="min-w-0 flex-1 basis-56">
+                    <h1 className="m-0 flex flex-wrap items-center gap-2 text-lg leading-tight font-semibold tracking-tight">
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{name}</span>
                         {status}
                     </h1>
-                    {subtitle && <p className="m-0 mt-1.5 truncate text-sm text-text-muted">{subtitle}</p>}
+                    {subtitle && (
+                        <p className="m-0 mt-1.5 line-clamp-2 text-sm text-text-muted [overflow-wrap:anywhere]">
+                            {subtitle}
+                        </p>
+                    )}
                 </div>
                 {actions && <div className="flex flex-wrap items-center gap-2 max-md:hidden">{actions}</div>}
             </div>
