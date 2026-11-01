@@ -741,7 +741,11 @@ describe('calendar sync', () => {
                 lastError: { code: 'calendar_not_granted' },
             });
             const mailbox = await as(member).get(w(`/mailboxes/${memberMailbox}`));
-            expect(mailbox.body).toMatchObject({ status: 'connected', grantedScopes: [...GMAIL_SCOPES] });
+            // Only the calendar scope is dropped; the rest of the grant (Gmail, contacts) is untouched.
+            expect(mailbox.body).toMatchObject({
+                status: 'connected',
+                grantedScopes: PERSONAL_MAILBOX_SCOPES.filter((s) => s !== GOOGLE_CALENDAR_SCOPE),
+            });
         });
 
         it('a throttled read is retried, and a failure past the retries is recorded and thrown for the queue', async () => {

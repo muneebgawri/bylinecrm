@@ -213,7 +213,7 @@ describe('Google Workspace delegation', () => {
         expect(put.status).toBe(200);
         const view = put.body as DelegationView;
         expect(view).toMatchObject({ configured: true, clientId, active: false });
-        expect(view.scopes).toEqual([GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE, GOOGLE_CALENDAR_SCOPE]);
+        expect(view.scopes).toEqual([...DELEGATION_SCOPES]);
         expect(view.lastCheck?.subject).toBe(adminEmail);
         expect(view.lastCheck?.scopes.every((s) => s.granted)).toBe(true);
         // Never the key, in any response, nor in the database in the clear.
