@@ -12,11 +12,14 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { recordWhere } from '../records/record-scope';
 import { EnrichmentQueue } from './enrichment-queue';
+import { EnrichmentRunner } from './enrichment-runner';
 
 /**
  * A record's enrichment as a member sees it (P4-2): its answers, newest first, and whether a run is
  * queued; and _Enrich now_, which queues the record's job with `force` so every source is asked
- * again whatever its age. A record the caller cannot see is `404`, never a hint that it exists.
+ * again whatever its age. Opening a record asks what is due on it: a source it was never asked, or an
+ * answer past the workspace's age, queues its (unforced) run, so a lead someone looks at is enriched
+ * then. A record the caller cannot see is `404`, never a hint that it exists.
  */
 @Injectable()
 export class EnrichmentService {
@@ -24,6 +27,7 @@ export class EnrichmentService {
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
         private readonly queue: EnrichmentQueue,
+        private readonly runner: EnrichmentRunner,
     ) {}
 
     async history(object: EnrichmentObject, recordId: string): Promise<EnrichmentHistoryView> {
@@ -40,9 +44,16 @@ export class EnrichmentService {
             object,
             recordId,
             lastAskedAt: answers[0]?.askedAt.toISOString() ?? null,
-            pending: await this.queue.isPending(object, recordId),
+            pending: (await this.queue.isPending(object, recordId)) || (await this.queueDue(context, object, recordId)),
             answers: answers.map(view),
         };
+    }
+
+    /** Queues the record's unforced run when a source is due on it; whether it did. */
+    private async queueDue(context: WorkspaceRunContext, object: EnrichmentObject, recordId: string) {
+        const due = await this.runner.dueFor(context.workspaceId, object, recordId, { force: false });
+        if (!due || due.due.length === 0) return false;
+        return this.queue.enqueue({ workspaceId: context.workspaceId, object, recordId, force: false });
     }
 
     async request(object: EnrichmentObject, recordId: string): Promise<EnrichmentHistoryView> {
