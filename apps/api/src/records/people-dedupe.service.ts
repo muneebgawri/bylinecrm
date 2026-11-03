@@ -97,7 +97,28 @@ export class PeopleDedupe {
             where: { workspaceId, deletedAt: null },
             select: { id: true, nameFirst: true, nameLast: true, emails: true, companyId: true, createdAt: true },
         });
-        return groupDuplicates(people);
+        // A Bigin Contact's address as Bigin has it now is its person's too, though the import kept an older one:
+        // where another person already has it, the two are one person saved twice.
+        const links = await this.ownerPrisma.biginImportLink.findMany({
+            where: { workspaceId, object: 'Contacts', localType: 'person' },
+            select: { localId: true, snapshot: true },
+        });
+        const biginAddresses = new Map<string, string[]>();
+        for (const link of links) {
+            const email = (link.snapshot as { email?: unknown } | null)?.email;
+            if (typeof email === 'string') {
+                biginAddresses.set(link.localId, [...(biginAddresses.get(link.localId) ?? []), email]);
+            }
+        }
+        return groupDuplicates(
+            people.map((p) => {
+                const more = biginAddresses.get(p.id);
+                if (!more) return p;
+                const emails = (p.emails ?? {}) as { primary?: unknown; additional?: unknown };
+                const additional: unknown[] = Array.isArray(emails.additional) ? emails.additional : [];
+                return { ...p, emails: { ...emails, additional: [...additional, ...more] } };
+            }),
+        );
     }
 
     /**
