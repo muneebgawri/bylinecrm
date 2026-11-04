@@ -1,6 +1,6 @@
 import { Body, Get, HttpCode, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Requires, TenantController } from '../auth/decorators';
+import { AnyMember, Requires, TenantController } from '../auth/decorators';
 import type { Page } from '../records/list-query';
 import { parseTarget } from '../records/targets';
 import { ExternalActivityDto, ListTimelineQueryDto } from './dto';
@@ -68,7 +68,7 @@ function splitKinds(raw: string | undefined): string[] {
 export class DealFeedController {
     constructor(private readonly feed: DealFeedService) {}
 
-    @Requires('deal:read')
+    @AnyMember("the team's deal headlines are for everyone; opening a deal still needs deal:read and its owner scope")
     @Get()
     @Returns(dealFeed)
     async latest(): Promise<{ items: DealFeedItem[] }> {

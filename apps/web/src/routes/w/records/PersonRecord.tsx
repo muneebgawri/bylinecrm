@@ -4,7 +4,7 @@ import { Building2, Handshake, ListTodo, Mail, Send, StickyNote } from 'lucide-r
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useSetContactStatus } from '../../../api/customers';
-import { usePatchRecord, useRecord } from '../../../api/records';
+import { useCustomFields, usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { CopyButton } from '../../../components/CopyButton';
@@ -18,7 +18,13 @@ import { AttachmentsPanel } from './AttachmentsPanel';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
-import { newswireosClientRow, OwnerControl, PropertiesColumn, type PropertyRow } from './PropertiesColumn';
+import {
+    CustomFieldControl,
+    newswireosClientRow,
+    OwnerControl,
+    PropertiesColumn,
+    type PropertyRow,
+} from './PropertiesColumn';
 import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
@@ -33,6 +39,9 @@ import { useRecordCommands } from './useRecordCommands';
 export function personName(p: Pick<PersonView, 'nameFirst' | 'nameLast' | 'emails'>): string {
     return `${p.nameFirst} ${p.nameLast}`.trim() || p.emails.primary || 'Unnamed person';
 }
+
+/** The custom field the imports write a lead's press-release link to. */
+const PR_LINK_KEY = 'pr_link';
 
 /** The person record (doc 50 §A), as a full page or inside the drawer. */
 export function PersonRecord({
@@ -54,6 +63,10 @@ export function PersonRecord({
     const company = useRecord(workspaceId, 'company', person.companyId ?? '');
     const createCompany = useCompanyCreator(workspaceId, person.emails.primary);
     const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
+    // The PR link a rep writes about, next to the compose rather than down the properties (`pr_link`, from Bigin/Twenty).
+    const prLink = useCustomFields(workspaceId, 'person').data?.find(
+        (d) => d.key === PR_LINK_KEY && d.archivedAt === null,
+    );
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
     const enrol = useCan('sequence:enrol');
@@ -80,6 +93,56 @@ export function PersonRecord({
 
     const personDeals = deals.items;
     const companyName = person.companyId ? (company.data?.name ?? '…') : null;
+
+    // The primary phone, edited in place: in the properties and in the facts strip beside the compose (at a glance).
+    const phoneControl = (
+        <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+            <InlineText
+                className="min-w-32 flex-1"
+                label="Phone"
+                path="phones.primary.number"
+                type="tel"
+                value={person.phones.primary ? `${person.phones.primary.number}` : null}
+                placeholder="digits only"
+                canEdit={write.allowed}
+                reason={write.reason}
+                onSave={(v) =>
+                    save({
+                        phones: {
+                            ...person.phones,
+                            primary: v
+                                ? {
+                                      ...person.phones.primary,
+                                      number: v.replace(/\D/g, ''),
+                                      countryCode: person.phones.primary?.countryCode ?? 'US',
+                                  }
+                                : null,
+                        },
+                    })
+                }
+            />
+            <InlineText
+                className="w-28 shrink-0"
+                label="Ext."
+                path="phones.primary.extension"
+                type="tel"
+                display={(v) => `ext. ${v}`}
+                value={person.phones.primary?.extension ?? null}
+                placeholder="Ext."
+                canEdit={write.allowed && person.phones.primary !== null}
+                reason={write.allowed ? 'Add a phone number first.' : write.reason}
+                onSave={(v) => {
+                    const primary = person.phones.primary;
+                    if (!primary) return Promise.resolve();
+                    const { extension: _, ...number } = primary;
+                    const extension = v?.replace(/\D/g, '');
+                    return save({
+                        phones: { ...person.phones, primary: extension ? { ...number, extension } : number },
+                    });
+                }}
+            />
+        </div>
+    );
 
     const standard: PropertyRow[] = [
         {
@@ -167,54 +230,7 @@ export function PersonRecord({
         },
         {
             field: 'phones',
-            control: (
-                <div className="flex items-start gap-2">
-                    <InlineText
-                        className="min-w-0 flex-1"
-                        label="Phone"
-                        path="phones.primary.number"
-                        type="tel"
-                        value={person.phones.primary ? `${person.phones.primary.number}` : null}
-                        placeholder="digits only"
-                        canEdit={write.allowed}
-                        reason={write.reason}
-                        onSave={(v) =>
-                            save({
-                                phones: {
-                                    ...person.phones,
-                                    primary: v
-                                        ? {
-                                              ...person.phones.primary,
-                                              number: v.replace(/\D/g, ''),
-                                              countryCode: person.phones.primary?.countryCode ?? 'US',
-                                          }
-                                        : null,
-                                },
-                            })
-                        }
-                    />
-                    <InlineText
-                        className="w-28 shrink-0"
-                        label="Ext."
-                        path="phones.primary.extension"
-                        type="tel"
-                        display={(v) => `ext. ${v}`}
-                        value={person.phones.primary?.extension ?? null}
-                        placeholder="Ext."
-                        canEdit={write.allowed && person.phones.primary !== null}
-                        reason={write.allowed ? 'Add a phone number first.' : write.reason}
-                        onSave={(v) => {
-                            const primary = person.phones.primary;
-                            if (!primary) return Promise.resolve();
-                            const { extension: _, ...number } = primary;
-                            const extension = v?.replace(/\D/g, '');
-                            return save({
-                                phones: { ...person.phones, primary: extension ? { ...number, extension } : number },
-                            });
-                        }}
-                    />
-                </div>
-            ),
+            control: phoneControl,
         },
         {
             field: 'contactStatus',
@@ -418,6 +434,23 @@ export function PersonRecord({
                                 '—'
                             ),
                         },
+                        { label: 'Phone', value: phoneControl },
+                        ...(prLink
+                            ? [
+                                  {
+                                      label: prLink.label,
+                                      value: (
+                                          <CustomFieldControl
+                                              definition={prLink}
+                                              value={person.custom[prLink.key]}
+                                              canEdit={write.allowed}
+                                              reason={write.reason}
+                                              onSave={(v) => save({ custom: { [prLink.key]: v } })}
+                                          />
+                                      ),
+                                  },
+                              ]
+                            : []),
                         { label: 'City', value: person.city ?? '—' },
                     ]}
                 />
