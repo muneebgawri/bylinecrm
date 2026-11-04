@@ -289,8 +289,8 @@ describe('person dedupe: merging people saved more than once', () => {
         const danaNew = await person('Dana', 'Ruiz', `dana-new-${stamp}@example.test`, '2026-03-01T00:00:00Z');
         await link(`zcrm_dana_${stamp}`, danaOld, `Dana-New-${stamp}@example.test`);
         // Lee's Contact names an address Sam holds: a shared inbox or a reuse, listed only.
-        const lee = await person('Lee', 'Park', `lee-${stamp}@example.test`, '2026-02-01T00:00:00Z');
-        const sam = await person('Sam', 'Ortiz', `office-${stamp}@example.test`, '2026-03-01T00:00:00Z');
+        const lee = await person('Lee', 'Park', `lee-${stamp}@example.test`, '2026-04-01T00:00:00Z');
+        const sam = await person('Sam', 'Ortiz', `office-${stamp}@example.test`, '2026-05-01T00:00:00Z');
         await link(`zcrm_lee_${stamp}`, lee, `office-${stamp}@example.test`);
 
         expect((await dedupe.detect(workspace)).map((g) => [g.tier, g.personIds])).toEqual([
