@@ -2,12 +2,19 @@ import { SuppressionService } from '../suppression/suppression.service';
 import { suppressBiginOptOuts } from './opt-outs';
 import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
 import {
+    BIGIN_HISTORY_PHASES,
     BIGIN_IMPORT_OBJECTS,
+    BIGIN_TIMELINE_SOURCE,
+    EXTERNAL_EMAIL_KIND,
     TWENTY_IMPORT_ERRORS_KEPT,
+    emptyBiginObjectReport,
     plainBiginId,
+    type BiginHistoryPhase,
     type BiginImportMode,
     type BiginImportObject,
     type BiginImportObjectReport,
+    type BiginImportPhase,
+    type BiginImportSource,
     type Capability,
     type DomainEvent,
     type RecordObject,
@@ -35,7 +42,7 @@ import { OpportunitiesService } from '../records/opportunities.service';
 import { PeopleService, type PersonInput } from '../records/people.service';
 import { TasksService } from '../records/tasks.service';
 import { defaultCurrency, stored } from '../records/references';
-import { fieldsEditedAfter } from '../timeline/timeline.service';
+import { fieldsEditedAfter, recordImportedActivities, type ImportedActivity } from '../timeline/timeline.service';
 import { customValuesFor, definitionsNeeded, type InferredCustom } from '../twenty-import/custom-fields-sync';
 import { failureText } from '../twenty-import/import-runner';
 import { withoutLocalEdits } from '../twenty-import/twenty-sync';
@@ -46,7 +53,15 @@ import { isContactReused, reuseNoteText, type ContactIdentity } from './contact-
 import { markdownToRichText } from '../twenty-import/markdown';
 import { BiginApiError } from './bigin.http';
 import { biginStageIndex, chooseStage, type PipelineStageRef, type StageChoice } from './stage-map';
-import { BIGIN_PORT, type BiginApi, type BiginConnection, type BiginRecord } from './bigin.port';
+import {
+    BIGIN_PORT,
+    isBiginHistorySource,
+    type BiginApi,
+    type BiginConnection,
+    type BiginHistorySource,
+    type BiginRecord,
+} from './bigin.port';
+import { HISTORY_KEY_PREFIX, readEmail, readStageHistory } from './history';
 import { TRANSFER_REASON_IMPORT_FILL, TransfersService } from '../transfers/transfers.service';
 import {
     advanceWindow,
@@ -96,7 +111,21 @@ function customTarget(module: BiginImportObject): 'company' | 'person' | 'opport
 }
 
 type Outcome = 'created' | 'updated' | 'unchanged' | 'merged' | 'skipped';
-type Cursors = Partial<Record<BiginImportObject, BiginPassCursor>>;
+/** Where a history phase is: the next page of the export's rows (the entries' keys make a re-read idempotent). */
+interface HistoryCursor {
+    page: number;
+    done: boolean;
+}
+type Cursors = Partial<Record<BiginImportObject, BiginPassCursor>> & Partial<Record<BiginHistoryPhase, HistoryCursor>>;
+
+/** An export run reads no API: the runner's calls take this in place of a stored connection. */
+const EXPORT_CONNECTION: BiginConnection = {
+    accountsUrl: '',
+    apiUrl: '',
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+};
 type MapResult =
     | { input: unknown; custom: InferredCustom; ownerEmail: string | null; note?: string }
     | { skip: string; custom: InferredCustom }
@@ -105,6 +134,9 @@ type MapResult =
 interface RunState {
     runId: string;
     context: WorkspaceRunContext;
+    /** What the run reads: the API (the port), or the export its CLI opened. */
+    bigin: BiginApi;
+    source: BiginImportSource;
     connection: BiginConnection;
     mode: BiginImportMode;
     cursors: Cursors;
@@ -112,7 +144,7 @@ interface RunState {
     /** The workspace's module cursors as the run found them: a `changes` pass reads from them. */
     settingsCursors: Record<string, string>;
     passStartedAt: Date;
-    phase?: BiginImportObject;
+    phase?: BiginImportPhase;
     stages: PipelineStageRef[] | null;
     /** The workspace's Bigin stage mapping, read with the stages. */
     stageMap?: ReadonlyMap<string, string>;
@@ -155,16 +187,24 @@ export class BiginImportRunner {
         private readonly transfers: TransfersService,
     ) {}
 
-    /** Runs `runId` to its end — succeeded, failed, cancelled — or throws so the queue retries it from its cursor. */
-    async run(runId: string): Promise<void> {
+    /**
+     * Runs `runId` to its end — succeeded, failed, cancelled — or throws so the queue retries it from its cursor.
+     * An `export` run reads the export its CLI opened (`exported`); without it the run is left for that CLI.
+     */
+    async run(runId: string, exported?: BiginApi): Promise<void> {
         const head = await this.ownerPrisma.biginImportRun.findUnique({
             where: { id: runId },
-            select: { workspaceId: true, status: true },
+            select: { workspaceId: true, status: true, source: true },
         });
         if (!head || (head.status !== 'queued' && head.status !== 'running')) return;
+        const bigin = head.source === 'export' ? exported : this.bigin;
+        if (!bigin) {
+            this.logger.warn(`bigin import run ${runId} reads an export: only its CLI drives it`);
+            return;
+        }
         await this.context.run(
             { workspaceId: head.workspaceId, capabilities: JOB_CAPABILITIES, actor: { kind: 'import', id: runId } },
-            () => this.execute(runId),
+            () => this.execute(runId, bigin, head.source),
         );
     }
 
@@ -185,14 +225,15 @@ export class BiginImportRunner {
         });
     }
 
-    private async execute(runId: string): Promise<void> {
+    private async execute(runId: string, bigin: BiginApi, source: BiginImportSource): Promise<void> {
         const context = this.context.get()!;
         const opened = await this.rls.withWorkspace(async (tx) => {
             const run = await tx.biginImportRun.findUniqueOrThrow({ where: { id: runId } });
             return { run, stored: await readBiginConnection(tx, this.secrets) };
         });
         if (opened.run.cancelRequested) return this.finish(runId, 'cancelled');
-        if (!opened.stored) return this.finish(runId, 'failed', 'the Bigin connection was removed');
+        const exported = source === 'export';
+        if (!opened.stored && !exported) return this.finish(runId, 'failed', 'the Bigin connection was removed');
         const startedAt = opened.run.startedAt ?? new Date();
         await this.rls.withWorkspace((tx) =>
             tx.biginImportRun.update({
@@ -203,21 +244,35 @@ export class BiginImportRunner {
         const state: RunState = {
             runId,
             context,
-            connection: opened.stored.connection,
+            bigin,
+            source,
+            connection: opened.stored?.connection ?? EXPORT_CONNECTION,
             mode: opened.run.mode,
             cursors: stored<Cursors>(opened.run.cursor),
             report: biginReportFrom(opened.run.report),
-            settingsCursors: stored<Record<string, string>>(opened.stored.row.cursors),
+            settingsCursors: stored<Record<string, string>>(opened.stored?.row.cursors ?? {}),
             passStartedAt: startedAt,
             stages: null,
             membersRoleId: opened.run.createMembersRoleId,
             accountsCreated: opened.run.accountsCreated,
         };
+        // An export carries history the API never served: read after the modules, whose links it resolves through.
+        const history = exported && isBiginHistorySource(bigin) ? bigin : null;
+        if (history) {
+            for (const phase of BIGIN_HISTORY_PHASES) {
+                if (!state.report.some((r) => r.object === phase)) state.report.push(emptyBiginObjectReport(phase));
+            }
+        }
         try {
             for (const module of BIGIN_IMPORT_OBJECTS) {
                 const cursor = state.cursors[module];
                 if (cursor?.done && cursor.deletedDone) continue;
                 const done = await this.readModule(state, module);
+                if (!done) return this.finish(runId, 'cancelled', undefined, state);
+            }
+            for (const phase of history ? BIGIN_HISTORY_PHASES : []) {
+                if (state.cursors[phase]?.done) continue;
+                const done = await this.readHistory(state, phase, history!);
                 if (!done) return this.finish(runId, 'cancelled', undefined, state);
             }
             await this.finish(runId, 'succeeded', undefined, state);
@@ -242,7 +297,7 @@ export class BiginImportRunner {
         let cursor = state.cursors[module];
         if (!cursor) {
             entry.before = await this.rls.withWorkspace((tx) => countBiginLinks(tx, module));
-            entry.remote = await this.bigin.count(state.connection, module);
+            entry.remote = await state.bigin.count(state.connection, module);
             const changes = state.mode === 'changes';
             cursor = startPass(
                 changes ? (state.settingsCursors[module] ?? null) : null,
@@ -251,7 +306,7 @@ export class BiginImportRunner {
             state.cursors[module] = cursor;
         }
         while (!cursor.done) {
-            const page = await this.bigin.list(state.connection, module, {
+            const page = await state.bigin.list(state.connection, module, {
                 since: cursor.since,
                 page: cursor.page,
                 pageToken: cursor.pageToken ?? null,
@@ -276,7 +331,7 @@ export class BiginImportRunner {
         let ascending = true;
         let lastAt: Date | null = null;
         while (!cursor.deletedDone) {
-            const page = await this.bigin.deleted(state.connection, module, {
+            const page = await state.bigin.deleted(state.connection, module, {
                 since: cursor.deletedSince,
                 page: cursor.deletedPage,
             });
@@ -328,6 +383,220 @@ export class BiginImportRunner {
             await this.saveProgress(tx, state);
         });
         return true;
+    }
+
+    /**
+     * One history phase of an export (BIGIN-1), a page at a time, each page in one transaction with the run's progress.
+     * A row becomes an entry on the timeline of what it is about — keyed by its Bigin id, so a re-run (or a resumed
+     * page) writes nothing twice. `before`/`after` count the phase's entries in the workspace.
+     */
+    private async readHistory(state: RunState, phase: BiginHistoryPhase, source: BiginHistorySource): Promise<boolean> {
+        state.phase = phase;
+        const entry = reportEntry(state.report, phase);
+        let cursor = state.cursors[phase];
+        if (!cursor) {
+            entry.before = await this.rls.withWorkspace((tx) => countImported(tx, phase));
+            cursor = { page: 1, done: false };
+            state.cursors[phase] = cursor;
+        }
+        while (!cursor.done) {
+            const page = await source.history(phase, cursor.page);
+            entry.remote = page.total;
+            await this.rls.withWorkspace(async (tx) => {
+                if (phase === 'StageHistory') await this.writeStageHistory(tx, state, page.records, entry);
+                else await this.writeEmails(tx, state, page.records, entry);
+                if (!page.moreRecords || page.records.length === 0) cursor.done = true;
+                else cursor.page += 1;
+                await this.saveProgress(tx, state);
+            });
+            if (cursor.done) break;
+            if (await this.cancelRequested(state.runId)) return false;
+        }
+        await this.rls.withWorkspace(async (tx) => {
+            entry.after = await countImported(tx, phase);
+            await this.saveProgress(tx, state);
+        });
+        return true;
+    }
+
+    /**
+     * Stage history: each move a `deal.stage_changed` entry on its deal, at the moment Bigin moved it, in the shape
+     * the stage writer's event leaves (`diff.stageId`, `StageMoveService.announce`) — Bigin's stages placed as a
+     * deal's are (`resolveStage`: the mapping, the name, won/lost) — with Bigin's own stage names beside it.
+     */
+    private async writeStageHistory(
+        tx: WorkspaceClient,
+        state: RunState,
+        records: BiginRecord[],
+        entry: BiginImportObjectReport,
+    ): Promise<void> {
+        const rows = records.map((record) => ({ record, row: readStageHistory(record) }));
+        const links = await loadBiginLinks(
+            tx,
+            rows.flatMap(({ row }) => ('skip' in row ? [] : [{ object: 'Deals' as const, id: row.dealId }])),
+        );
+        const actor = actorOf(state.context);
+        const pending: { externalId: string; activity: ImportedActivity }[] = [];
+        for (const { record, row } of rows) {
+            entry.read += 1;
+            const externalId = plainBiginId(record.id) ?? '-';
+            if ('skip' in row) {
+                entry.skipped += 1;
+                recordError(entry, externalId, row.skip);
+                continue;
+            }
+            const dealId = links.resolve('Deals', row.dealId);
+            if (!dealId) {
+                entry.skipped += 1;
+                recordError(entry, externalId, 'its deal is not in BylineCRM');
+                continue;
+            }
+            const to = await this.resolveStage(tx, state, row.to);
+            const from = row.from === null ? null : await this.resolveStage(tx, state, row.from);
+            for (const [raw, choice] of [
+                [row.to, to],
+                [row.from, from],
+            ] as const) {
+                if (raw && choice?.unknown && !entry.unknownStages.some((u) => u.stage === raw))
+                    if (entry.unknownStages.length < TWENTY_IMPORT_ERRORS_KEPT)
+                        entry.unknownStages.push({ externalId, stage: raw });
+            }
+            pending.push({
+                externalId,
+                activity: {
+                    target: { type: 'opportunity', id: dealId },
+                    kind: 'deal.stage_changed',
+                    happenedAt: row.at,
+                    actor,
+                    properties: {
+                        diff: { stageId: { from: from?.id ?? null, to: to.id } },
+                        bigin: { from: row.from, to: row.to },
+                    },
+                    source: BIGIN_TIMELINE_SOURCE,
+                    idempotencyKey: `${HISTORY_KEY_PREFIX.StageHistory}${row.externalId}`,
+                },
+            });
+        }
+        await this.writeImported(tx, state, pending, entry);
+    }
+
+    /**
+     * Logged emails: each an `external.email` entry at the moment it was sent, on the record Bigin logged it on and on
+     * the person here whose address it went to (a deal's email reaches its contact's timeline too). The sender is
+     * the member with Bigin's user's address, when there is one. No body: the export has none.
+     */
+    private async writeEmails(
+        tx: WorkspaceClient,
+        state: RunState,
+        records: BiginRecord[],
+        entry: BiginImportObjectReport,
+    ): Promise<void> {
+        const rows = records.map((record) => ({ record, row: readEmail(record) }));
+        const read = rows.flatMap(({ row }) => ('skip' in row ? [] : [row]));
+        const links = await loadBiginLinks(
+            tx,
+            read.flatMap((row) => (row.record ? [{ object: row.record.object, id: row.record.id }] : [])),
+        );
+        const recipients = [...new Set(read.flatMap((row) => row.recipients))];
+        const people =
+            recipients.length === 0
+                ? []
+                : await tx.person.findMany({
+                      where: { emailPrimary: { in: recipients }, deletedAt: null },
+                      select: { id: true, emailPrimary: true },
+                  });
+        const personAt = new Map(people.map((p) => [p.emailPrimary!, p.id]));
+        const senders = [...new Set(read.map((row) => row.sentBy).filter((e): e is string => e !== null))];
+        const seats =
+            senders.length === 0
+                ? []
+                : await tx.workspaceMember.findMany({
+                      where: { user: { email: { in: senders } } },
+                      select: { id: true, user: { select: { email: true } } },
+                  });
+        const memberAt = new Map(seats.map((m) => [m.user.email, m.id]));
+        const actor = actorOf(state.context);
+        const pending: { externalId: string; activity: ImportedActivity }[] = [];
+        for (const { record, row } of rows) {
+            entry.read += 1;
+            const externalId = plainBiginId(record.id) ?? '-';
+            if ('skip' in row) {
+                entry.skipped += 1;
+                recordError(entry, externalId, row.skip);
+                continue;
+            }
+            const targets: RecordTarget[] = [];
+            const add = (target: RecordTarget) => {
+                if (!targets.some((t) => t.type === target.type && t.id === target.id)) targets.push(target);
+            };
+            if (row.record) {
+                const type = ({ Accounts: 'company', Contacts: 'person', Deals: 'opportunity' } as const)[
+                    row.record.object as 'Accounts' | 'Contacts' | 'Deals'
+                ];
+                // A Contact reused for someone else: the email is the person's it held when it was sent.
+                const id = type ? links.resolve(row.record.object, row.record.id, row.at) : null;
+                if (type && id) add({ type, id } as RecordTarget);
+            }
+            for (const address of row.recipients) {
+                const personId = personAt.get(address);
+                if (personId) add({ type: 'person', id: personId });
+            }
+            if (targets.length === 0) {
+                entry.skipped += 1;
+                recordError(entry, externalId, 'its record is not in BylineCRM');
+                continue;
+            }
+            const properties = {
+                email: { ...row.entry, sentByMemberId: row.sentBy ? (memberAt.get(row.sentBy) ?? null) : null },
+            };
+            for (const target of targets) {
+                pending.push({
+                    externalId,
+                    activity: {
+                        target,
+                        kind: EXTERNAL_EMAIL_KIND,
+                        happenedAt: row.at,
+                        actor,
+                        properties,
+                        source: BIGIN_TIMELINE_SOURCE,
+                        idempotencyKey: `${HISTORY_KEY_PREFIX.Emails}${row.externalId}:${target.type}:${target.id}`,
+                    },
+                });
+            }
+        }
+        await this.writeImported(tx, state, pending, entry);
+    }
+
+    /** A page's entries written; a row whose entries were all there already is `unchanged`, any other `created`. */
+    private async writeImported(
+        tx: WorkspaceClient,
+        state: RunState,
+        pending: readonly { externalId: string; activity: ImportedActivity }[],
+        entry: BiginImportObjectReport,
+    ): Promise<void> {
+        if (pending.length === 0) return;
+        const keys = pending.map((p) => p.activity.idempotencyKey);
+        const existing = new Set(
+            (
+                await tx.timelineActivity.findMany({
+                    where: { source: BIGIN_TIMELINE_SOURCE, idempotencyKey: { in: keys } },
+                    select: { idempotencyKey: true },
+                })
+            ).map((r) => r.idempotencyKey),
+        );
+        const fresh = new Set<string>();
+        const rows = new Set<string>();
+        for (const p of pending) {
+            rows.add(p.externalId);
+            if (!existing.has(p.activity.idempotencyKey)) fresh.add(p.externalId);
+        }
+        entry.created += fresh.size;
+        entry.unchanged += rows.size - fresh.size;
+        await recordImportedActivities(
+            tx,
+            state.context.workspaceId,
+            pending.filter((p) => !existing.has(p.activity.idempotencyKey)).map((p) => p.activity),
+        );
     }
 
     /**
@@ -962,7 +1231,10 @@ export class BiginImportRunner {
         }
     }
 
-    /** The module's cursors on the settings row: the records' and (at a pass's end) the deletions'. */
+    /**
+     * The module's cursors on the settings row: the records' and (at a pass's end) the deletions'. An export is a
+     * snapshot of its own day, not of now: it never moves the cursors a `changes` run reads the API from.
+     */
     private async saveModuleCursors(
         tx: WorkspaceClient,
         state: RunState,
@@ -970,6 +1242,7 @@ export class BiginImportRunner {
         records: string | null,
         deleted: string | null | undefined,
     ): Promise<void> {
+        if (state.source === 'export') return;
         const settings = await tx.biginImportSettings.findFirst({ select: { workspaceId: true, cursors: true } });
         if (!settings) return;
         const cursors = { ...stored<Record<string, string>>(settings.cursors) };
@@ -1110,6 +1383,13 @@ async function currentIdentity(tx: WorkspaceClient, personId: string): Promise<C
 
 const deletedKey = (module: BiginImportObject) => `${module}:deleted`;
 
+/** The workspace's entries a history phase wrote (in any run). */
+function countImported(tx: WorkspaceClient, phase: BiginHistoryPhase): Promise<number> {
+    return tx.timelineActivity.count({
+        where: { source: BIGIN_TIMELINE_SOURCE, idempotencyKey: { startsWith: HISTORY_KEY_PREFIX[phase] } },
+    });
+}
+
 async function trashed(tx: WorkspaceClient, type: CrossSourceType | 'note' | 'task', id: string): Promise<boolean> {
     const where = { id };
     const select = { deletedAt: true } as const;
@@ -1203,7 +1483,7 @@ async function currentOwner(
     return row === null ? undefined : row.ownerId;
 }
 
-function reportEntry(report: BiginImportObjectReport[], object: BiginImportObject): BiginImportObjectReport {
+function reportEntry(report: BiginImportObjectReport[], object: BiginImportPhase): BiginImportObjectReport {
     return report.find((r) => r.object === object)!;
 }
 

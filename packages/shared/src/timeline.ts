@@ -64,6 +64,29 @@ export const EXTERNAL_KIND_PATTERN = /^external\.[a-z][a-z0-9_]{0,63}$/;
 export const EXTERNAL_KIND_PREFIX = 'external.';
 
 /**
+ * An email another system logged on a record, carried over as an `external.` entry (BIGIN-1: a Bigin backup's
+ * Emails). There is no message here to open — such a log holds no body — so the entry carries what the log says
+ * in `properties.email` (`ExternalEmailEntry`).
+ */
+export const EXTERNAL_EMAIL_KIND = 'external.email';
+
+/** What an `external.email` entry shows: who sent it to whom, its subject, and what became of it. */
+export interface ExternalEmailEntry {
+    subject: string | null;
+    /** The sender's address as the log has it. */
+    from: string | null;
+    /** The recipients as the log lists them (comma-separated). */
+    to: string | null;
+    cc: string | null;
+    /** The log's own word for it: `Sent`, `Opened`, `Clicked`, `Bounced`, … */
+    status: string | null;
+    opens: number | null;
+    clicks: number | null;
+    /** The member who sent it, when the sender is one here. */
+    sentByMemberId: string | null;
+}
+
+/**
  * Who an entry is attributed to: a record's actors, plus the two the timeline adds — a stage
  * rule that moved a deal (P1-2), and an integration (`id` is the source it named).
  */

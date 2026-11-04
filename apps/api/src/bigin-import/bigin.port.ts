@@ -1,4 +1,4 @@
-import type { BiginImportObject } from '@bylinecrm/shared';
+import type { BiginHistoryPhase, BiginImportObject } from '@bylinecrm/shared';
 
 /**
  * Everything the importer asks Zoho Bigin, behind one interface. The HTTP adapter (`bigin.http.ts`)
@@ -104,6 +104,19 @@ export interface BiginApi {
         client: { accountsUrl: string; clientId: string; clientSecret: string },
         code: string,
     ): Promise<string>;
+}
+
+/**
+ * What a Bigin backup export carries that the API never served (BIGIN-1): each deal's stage history and the emails
+ * logged on records, read after the modules as a run's last phases. Only an export is one (`BiginExport`).
+ */
+export interface BiginHistorySource {
+    /** A page (1-based) of the phase's rows, in a fixed order; `total` is how many rows it has in all. */
+    history(phase: BiginHistoryPhase, page: number): Promise<BiginPage & { total: number }>;
+}
+
+export function isBiginHistorySource(source: unknown): source is BiginHistorySource {
+    return typeof (source as Partial<BiginHistorySource> | null)?.history === 'function';
 }
 
 export const BIGIN_PORT = Symbol('BIGIN_PORT');

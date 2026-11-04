@@ -43453,7 +43453,17 @@
                 "properties": {
                     "object": {
                         "type": "string",
-                        "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
+                        "enum": [
+                            "Accounts",
+                            "Contacts",
+                            "Deals",
+                            "Notes",
+                            "Tasks",
+                            "Events",
+                            "Calls",
+                            "StageHistory",
+                            "Emails"
+                        ]
                     },
                     "remote": {
                         "nullable": true,
@@ -43620,10 +43630,25 @@
                         "type": "string",
                         "enum": ["full", "changes"]
                     },
+                    "source": {
+                        "type": "string",
+                        "enum": ["api", "export"],
+                        "description": "`export`: read from a Bigin backup export's files by the operator's CLI, not from the API."
+                    },
                     "phase": {
                         "nullable": true,
                         "type": "string",
-                        "enum": ["Accounts", "Contacts", "Deals", "Notes", "Tasks", "Events", "Calls"]
+                        "enum": [
+                            "Accounts",
+                            "Contacts",
+                            "Deals",
+                            "Notes",
+                            "Tasks",
+                            "Events",
+                            "Calls",
+                            "StageHistory",
+                            "Emails"
+                        ]
                     },
                     "report": {
                         "type": "array",
@@ -43694,6 +43719,7 @@
                     "id",
                     "status",
                     "mode",
+                    "source",
                     "phase",
                     "report",
                     "error",

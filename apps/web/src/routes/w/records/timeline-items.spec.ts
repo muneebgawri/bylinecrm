@@ -20,6 +20,40 @@ function entry(partial: Partial<TimelineActivityView>): TimelineActivityView {
 }
 
 describe('wordsFor', () => {
+    it('BIGIN-1: reads an email Bigin logged by its sender, subject, recipient and what became of it', () => {
+        const logged = (email: Record<string, unknown>) =>
+            wordsFor(
+                entry({ kind: 'external.email', actor: { kind: 'import', id: 'run-1' }, properties: { email } }),
+                names,
+            );
+        const byMember = logged({
+            subject: 'Your release',
+            from: 'kate@pinion.example',
+            to: 'dana@acme.com',
+            cc: null,
+            status: 'Opened',
+            opens: 2,
+            clicks: 1,
+            sentByMemberId: 'm1',
+        });
+        expect(byMember).toEqual({
+            actor: 'Kate Morgan',
+            action: 'emailed “Your release” to dana@acme.com',
+            family: 'mail',
+            detail: [{ label: 'Opened', tone: 'success' }, { label: '2 opens' }, { label: '1 click' }],
+        });
+        expect(byMember.threadId).toBeUndefined();
+        // A sender who is no member here is told by their address; a bounce is no good news.
+        expect(
+            logged({ subject: null, from: 'old@pinion.example', to: null, status: 'Bounced', opens: 0, clicks: 0 }),
+        ).toMatchObject({
+            actor: 'old@pinion.example',
+            action: 'emailed with no subject',
+            detail: [{ label: 'Bounced', tone: 'neutral' }],
+        });
+        expect(logged({})).toMatchObject({ actor: 'An import', action: 'emailed with no subject', family: 'mail' });
+    });
+
     it('FR-CRMS-17: reads a completed transfer as a change of owner, with its reason', () => {
         const words = wordsFor(
             entry({

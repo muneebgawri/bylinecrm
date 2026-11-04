@@ -1,8 +1,10 @@
 import {
+    BIGIN_HISTORY_PHASES,
     BIGIN_IMPORT_OBJECTS,
     emptyBiginObjectReport,
+    type BiginImportPhase,
+    type BiginImportSource,
     type BiginImportMode,
-    type BiginImportObject,
     type BiginImportObjectReport,
     type BiginImportRunStatus,
     type BiginImportRunView,
@@ -62,10 +64,14 @@ export function biginSettingsView(row: BiginImportSettings | null): BiginImportS
     };
 }
 
-/** The report as saved, one entry per module in reading order; a counter added later reads as zero. */
+/**
+ * The report as saved, one entry per module in reading order — then the history phases a run read (an export's);
+ * a counter added later reads as zero.
+ */
 export function biginReportFrom(saved: unknown): BiginImportObjectReport[] {
     const entries = Array.isArray(saved) ? (saved as BiginImportObjectReport[]) : [];
-    return BIGIN_IMPORT_OBJECTS.map((object) => ({
+    const history = BIGIN_HISTORY_PHASES.filter((phase) => entries.some((r) => r.object === phase));
+    return [...BIGIN_IMPORT_OBJECTS, ...history].map((object) => ({
         ...emptyBiginObjectReport(object),
         ...(entries.find((r) => r.object === object) ?? {}),
     }));
@@ -77,7 +83,8 @@ export function biginRunView(row: BiginImportRun): BiginImportRunView {
         id: row.id,
         status: row.status as BiginImportRunStatus,
         mode: row.mode as BiginImportMode,
-        phase: (row.phase as BiginImportObject | null) ?? null,
+        source: row.source as BiginImportSource,
+        phase: (row.phase as BiginImportPhase | null) ?? null,
         report,
         error: row.error,
         failedRecords: report.reduce((sum, entry) => sum + entry.failed, 0),
@@ -104,6 +111,8 @@ export async function queueBiginRun(
         startedById: string | null;
         scheduled: boolean;
         createMembersRoleId?: string | null;
+        /** `export`: the run reads a backup export, driven by the CLI that holds it (never queued for a worker). */
+        source?: BiginImportSource;
     },
 ): Promise<BiginImportRun> {
     try {
@@ -114,6 +123,7 @@ export async function queueBiginRun(
                 startedById: input.startedById,
                 scheduled: input.scheduled,
                 createMembersRoleId: input.createMembersRoleId ?? null,
+                source: input.source ?? 'api',
             },
         });
     } catch (error) {

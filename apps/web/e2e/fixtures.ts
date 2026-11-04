@@ -16,12 +16,12 @@ import {
     type SlotlineEventTypeView,
     type CustomerExclusionSettingsView,
     type OutreachExclusionView,
+    type BiginImportObject,
 } from '@bylinecrm/shared';
 import type {
     ApiKeyView,
     BiginContactReusePage,
     BiginStageMapView,
-    BiginImportObjectReportView,
     BiginImportOverviewView,
     BiginImportRunView,
     AuthProvidersView,
@@ -1850,7 +1850,7 @@ export const twentyImport: TwentyImportOverviewView = {
 export const twentyImportRuns: TwentyImportRunView[] = [twentyImportRun];
 
 // ---- The Bigin importer (BIGIN-1) ---------------------------------------------------------------
-const biginCounts: Record<BiginImportObjectReportView['object'], [number, number, number, number]> = {
+const biginCounts: Record<BiginImportObject, [number, number, number, number]> = {
     Accounts: [412, 398, 6, 0],
     Contacts: [1840, 1795, 31, 2],
     Deals: [266, 260, 4, 0],
@@ -1864,8 +1864,9 @@ export const biginImportRun: BiginImportRunView = {
     id: '6b1f3c2e-7a44-4c1b-9e1a-2d6f0b9c4e11',
     status: 'succeeded',
     mode: 'changes',
+    source: 'api',
     phase: null,
-    report: (Object.keys(biginCounts) as BiginImportObjectReportView['object'][]).map((object) => {
+    report: (Object.keys(biginCounts) as BiginImportObject[]).map((object) => {
         const [remote, created, merged, skipped] = biginCounts[object];
         return {
             object,
@@ -1913,8 +1914,11 @@ export const biginImport: BiginImportOverviewView = {
         createMembers: null,
     },
     latestRun: biginImportRun,
-    linked: biginImportRun.report.map((r) => ({ object: r.object, count: r.after ?? 0 })),
-    cursors: biginImportRun.report.map((r) => ({ object: r.object, since: at(3) })),
+    linked: (Object.keys(biginCounts) as BiginImportObject[]).map((object) => ({
+        object,
+        count: biginCounts[object][1] + biginCounts[object][2],
+    })),
+    cursors: (Object.keys(biginCounts) as BiginImportObject[]).map((object) => ({ object, since: at(3) })),
     sync: { interval: 'hourly', nextRunAt: at(1), failures: 0, lastError: null, cutoverAt: null },
 };
 

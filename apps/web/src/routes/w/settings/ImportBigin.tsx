@@ -1,9 +1,10 @@
 import {
     BIGIN_DATA_CENTRES,
     BIGIN_IMPORT_OBJECT_LABELS,
+    BIGIN_IMPORT_PHASE_LABELS,
     TWENTY_SYNC_FAILURES_BEFORE_NOTICE,
     type BiginImportMode,
-    type BiginImportObject,
+    type BiginImportPhase,
     type TwentySyncInterval,
 } from '@bylinecrm/shared';
 import {
@@ -122,7 +123,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 const number = new Intl.NumberFormat();
 const count = (n: number | null | undefined) => (n === null || n === undefined ? '—' : number.format(n));
-const label = (object: BiginImportObject) => BIGIN_IMPORT_OBJECT_LABELS[object].label;
+const label = (phase: BiginImportPhase) => BIGIN_IMPORT_PHASE_LABELS[phase].label;
 
 function Alert({ children }: { children: React.ReactNode }) {
     return (
@@ -785,7 +786,8 @@ function RunReport({ run }: { run: BiginImportRunView }) {
                     {status.text}
                 </Badge>
                 <span className="text-text-muted">
-                    {run.scheduled ? 'Automatic' : 'Started by hand'} · {formatWhen(run.queuedAt)}
+                    {run.source === 'export' ? 'From a Bigin export' : run.scheduled ? 'Automatic' : 'Started by hand'}{' '}
+                    · {formatWhen(run.queuedAt)}
                     {run.phase ? ` · reading ${label(run.phase)}` : ''}
                 </span>
             </p>
