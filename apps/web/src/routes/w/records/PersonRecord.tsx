@@ -96,9 +96,9 @@ export function PersonRecord({
 
     // The primary phone, edited in place: in the properties and in the facts strip beside the compose (at a glance).
     const phoneControl = (
-        <div className="flex items-start gap-2">
+        <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
             <InlineText
-                className="min-w-0 flex-1"
+                className="min-w-32 flex-1"
                 label="Phone"
                 path="phones.primary.number"
                 type="tel"
