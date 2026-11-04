@@ -285,10 +285,12 @@ export type RecordInputOf<O extends RecordObject> = O extends 'person'
       ? CompanyInput
       : OpportunityInput;
 
+/** An empty id means "no record linked" (a deal without a contact): nothing is fetched. */
 export function useRecord<O extends RecordObject>(workspaceId: string, object: O, id: string) {
     return useQuery({
         queryKey: keys.record(workspaceId, object, id),
         queryFn: ({ signal }) => recordEndpoints[object].get(workspaceId, id, signal) as Promise<RecordViewOf<O>>,
+        enabled: id !== '',
     });
 }
 
