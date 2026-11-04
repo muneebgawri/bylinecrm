@@ -258,4 +258,48 @@ describe('person dedupe: merging people saved more than once', () => {
         expect((await dedupe.detect(workspace)).length).toBe(0);
         expect(await dedupe.merge(workspace, [p1, p2, p3], true)).toBeNull();
     });
+
+    it('a Bigin Contact’s current address joins its person to whoever holds it: auto if the names agree', async () => {
+        const person = async (nameFirst: string, nameLast: string, email: string, createdAt: string) => {
+            const created = await owner.person.create({
+                data: {
+                    workspaceId: workspace,
+                    nameFirst,
+                    nameLast,
+                    emails: { primary: email, additional: [] },
+                    createdBy: { kind: 'member', id: adminMember },
+                    createdAt: new Date(createdAt),
+                },
+            });
+            return created.id;
+        };
+        const link = (externalId: string, localId: string, email: string) =>
+            owner.biginImportLink.create({
+                data: {
+                    workspaceId: workspace,
+                    object: 'Contacts',
+                    externalId,
+                    localType: 'person',
+                    localId,
+                    snapshot: { name: '', email },
+                },
+            });
+        // The import kept Dana's old address; Bigin has her new one, which a later person already holds.
+        const danaOld = await person('Dana', 'Ruiz', `dana-old-${stamp}@example.test`, '2026-02-01T00:00:00Z');
+        const danaNew = await person('Dana', 'Ruiz', `dana-new-${stamp}@example.test`, '2026-03-01T00:00:00Z');
+        await link(`zcrm_dana_${stamp}`, danaOld, `Dana-New-${stamp}@example.test`);
+        // Lee's Contact names an address Sam holds: a shared inbox or a reuse, listed only.
+        const lee = await person('Lee', 'Park', `lee-${stamp}@example.test`, '2026-04-01T00:00:00Z');
+        const sam = await person('Sam', 'Ortiz', `office-${stamp}@example.test`, '2026-05-01T00:00:00Z');
+        await link(`zcrm_lee_${stamp}`, lee, `office-${stamp}@example.test`);
+
+        expect((await dedupe.detect(workspace)).map((g) => [g.tier, g.personIds])).toEqual([
+            ['auto', [danaOld, danaNew]],
+            ['auto_name_mismatch', [lee, sam]],
+        ]);
+        const report = await dedupe.run(workspace, { apply: true });
+        expect(report.merged).toBe(1);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: danaNew } })).mergedIntoId).toBe(danaOld);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: sam } })).deletedAt).toBeNull();
+    });
 });
