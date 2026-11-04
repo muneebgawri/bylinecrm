@@ -5,13 +5,16 @@ import { parseGmailMessage } from './parse-message';
 
 const b64 = (value: string | Buffer) => Buffer.from(value).toString('base64url');
 
+/** When Gmail received the fixtures: just after their Date header, as it is for real mail. */
+const RECEIVED = Date.parse('2026-10-09T09:30:05Z');
+
 function message(headers: Record<string, string>, payload: Partial<GmailPart> = {}): GmailRawMessage {
     return {
         id: 'm1',
         threadId: 't1',
         labelIds: ['INBOX'],
         snippet: 'It&#39;s &quot;here&quot;',
-        internalDate: '1760000000000',
+        internalDate: String(RECEIVED),
         payload: {
             mimeType: 'text/plain',
             headers: Object.entries(headers).map(([name, value]) => ({ name, value })),
@@ -105,7 +108,19 @@ describe('parseGmailMessage', () => {
 
     it('falls back to Gmail’s received time when the Date header does not parse', () => {
         const parsed = parseGmailMessage(message({ From: 'a@b.example', Date: 'not a date' }));
-        expect(parsed.sentAt.getTime()).toBe(1760000000000);
+        expect(parsed.sentAt.getTime()).toBe(RECEIVED);
+    });
+
+    it('takes Gmail’s received time over a Date header from the future', () => {
+        const parsed = parseGmailMessage(message({ From: 'a@b.example', Date: 'Wed, 08 Apr 2043 23:01:51 +0000' }));
+        expect(parsed.sentAt.getTime()).toBe(RECEIVED);
+    });
+
+    it('believes a Date header a few hours ahead of Gmail’s clock', () => {
+        const parsed = parseGmailMessage(
+            message({ From: 'a@b.example', Date: new Date(RECEIVED + 3 * 3600_000).toUTCString() }),
+        );
+        expect(parsed.sentAt.getTime()).toBe(RECEIVED + 3 * 3600_000);
     });
 
     it('has no sender when the message names none', () => {
@@ -130,7 +145,7 @@ describe('FR-CRMS-6 bounce reports (P3-2)', () => {
         threadId: 't9',
         labelIds: ['INBOX'],
         snippet: 'Address not found',
-        internalDate: '1760000000000',
+        internalDate: String(RECEIVED),
         payload: dsnPayload(fixture).payload,
     });
 

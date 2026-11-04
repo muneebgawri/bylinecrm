@@ -30,10 +30,9 @@ export const reputationSettings = named(
             description:
                 'REP-2: reply-rate floor in basis points (100 = 1%) under which a mailbox is paused for new recipients.',
         }),
-        replyRateMinSends: z
-            .number()
-            .int()
-            .meta({ description: 'REP-2: new-thread sends needed before the floor is judged.' }),
+        replyRateMinSends: z.number().int().meta({
+            description: 'REP-2: conversations written to (new or followed up) needed before the floor is judged.',
+        }),
         replyRateWindowDays: z
             .number()
             .int()

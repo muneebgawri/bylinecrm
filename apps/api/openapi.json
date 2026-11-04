@@ -38248,7 +38248,7 @@
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991,
-                        "description": "REP-2: new-thread sends needed before the floor is judged."
+                        "description": "REP-2: conversations written to (new or followed up) needed before the floor is judged."
                     },
                     "replyRateWindowDays": {
                         "type": "integer",

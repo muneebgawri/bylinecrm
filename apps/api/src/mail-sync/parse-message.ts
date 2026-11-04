@@ -196,12 +196,22 @@ function messageIds(value: string | null): string[] {
     return bracketed.length > 0 ? bracketed : value.split(/\s+/).filter((id) => id !== '');
 }
 
-/** The `Date` header when it parses; otherwise when Gmail received the message. */
+/** How far a sender's clock may run ahead of Gmail's before its `Date` header is not believed. */
+const CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The `Date` header when it parses and is not after Gmail received the message (by more than a clock's skew);
+ * otherwise when Gmail received it. The header is the sender's to write: one dated 2043 would otherwise stand as
+ * the person's last contact, and the newest message of every list, for years.
+ */
 function sentAt(date: string | null, internalDate: string | undefined): Date {
+    const parsed = internalDate ? new Date(Number(internalDate)) : null;
+    const received = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
     const fromHeader = date ? new Date(date) : null;
-    if (fromHeader && !Number.isNaN(fromHeader.getTime())) return fromHeader;
-    const received = internalDate ? new Date(Number(internalDate)) : null;
-    return received && !Number.isNaN(received.getTime()) ? received : new Date(0);
+    if (fromHeader && !Number.isNaN(fromHeader.getTime())) {
+        if (!received || fromHeader.getTime() <= received.getTime() + CLOCK_SKEW_MS) return fromHeader;
+    }
+    return received ?? new Date(0);
 }
 
 /** One line of text: whitespace runs collapsed, cut to the stored length. */

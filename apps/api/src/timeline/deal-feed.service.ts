@@ -102,7 +102,9 @@ export class DealFeedService {
                                 ? null
                                 : { amountMinor: Number(deal.amountMinor), currency: deal.currency },
                         owner: person(deal.ownerId),
-                        canOpen: !context.ownerScopeMemberId || deal.ownerId === context.ownerScopeMemberId,
+                        canOpen:
+                            context.capabilities.has('deal:read') &&
+                            (!context.ownerScopeMemberId || deal.ownerId === context.ownerScopeMemberId),
                     },
                     fromStage: moves[index]!.from ? (stages.get(moves[index]!.from!) ?? null) : null,
                     toStage: moves[index]!.to ? (stages.get(moves[index]!.to!) ?? null) : null,

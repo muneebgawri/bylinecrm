@@ -142,8 +142,13 @@ const TEXT_TYPES: Partial<Record<CustomFieldType, 'text' | 'email' | 'url' | 'nu
     phone: 'tel',
 };
 
+/** A URL field's value as a link: one typed without a scheme ("prnewswire.com/…") opens over https. */
+function linkTo(value: string): string {
+    return /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
+}
+
 /** A custom field's control from its definition's type: select → InlineSelect, boolean → yes/no, else text. */
-function CustomFieldControl({
+export function CustomFieldControl({
     definition,
     value,
     canEdit,
@@ -216,6 +221,7 @@ function CustomFieldControl({
             label={definition.label}
             path={path}
             type={TEXT_TYPES[definition.type] ?? 'text'}
+            href={definition.type === 'url' ? linkTo : undefined}
             value={value === null || value === undefined ? null : String(value)}
             canEdit={canEdit}
             reason={reason}
