@@ -44,6 +44,7 @@ describe('live deal feed', () => {
     let workspace: string;
     let admin: Browser;
     let rep: Browser;
+    let leads: Browser;
     let other: Browser;
     let otherWorkspace: string;
     let adminDeal: string;
@@ -100,6 +101,22 @@ describe('live deal feed', () => {
                 .expect(201),
         );
         await verifyAddress(app, http, `feed-rep-${stamp}@example.test`);
+        // A role with no deal capability at all (prod's "Leads Manager"): the feed is still everyone's.
+        const leadsRole = await as(admin)
+            .post(w('/roles'))
+            .send({ name: 'leads', capabilities: ['record:read', 'record:write'], recordScope: 'own' })
+            .expect(201);
+        const leadsInvite = await as(admin)
+            .post(w('/invites'))
+            .send({ email: `feed-leads-${stamp}@example.test`, roleId: (leadsRole.body as { id: string }).id })
+            .expect(201);
+        leads = browserFrom(
+            await http()
+                .post(`/api/auth/invites/${(leadsInvite.body as { token: string }).token}/signup`)
+                .send({ password })
+                .expect(201),
+        );
+        await verifyAddress(app, http, `feed-leads-${stamp}@example.test`);
         const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
         repMember = members.find((m) => m.email === `feed-rep-${stamp}@example.test`)!.id;
 
@@ -181,6 +198,13 @@ describe('live deal feed', () => {
 
         // The feed tells the headline; opening the deal is still refused.
         expect((await as(rep).get(w(`/opportunities/${adminDeal}`))).status).toBe(404);
+    });
+
+    it('is shown to a member without deal:read, who can open none of it', async () => {
+        const items = await feed(leads);
+        expect(items.some((i) => i.deal.id === adminDeal)).toBe(true);
+        expect(items.some((i) => i.deal.id === repDeal)).toBe(true);
+        expect(items.every((i) => !i.deal.canOpen)).toBe(true);
     });
 
     it('leaves out what an import wrote and every other workspace', async () => {
