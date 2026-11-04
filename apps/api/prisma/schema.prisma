@@ -25,6 +25,7 @@ model Workspace {
 
   leadPool          LeadPool?         @relation(fields: [leadPoolId], references: [id], onDelete: SetNull)
   leadPoolAddresses LeadPoolAddress[]
+  personAddresses   PersonAddress[]
 
   members WorkspaceMember[]
   roles   Role[]
@@ -628,6 +629,7 @@ model Person {
   mailDrafts   MailDraft[]
 
   leadPoolAddress LeadPoolAddress?
+  addresses       PersonAddress[]
 
   suppressions       Suppression[]
   unsubscribeTokens  UnsubscribeToken[]
@@ -3712,4 +3714,20 @@ model LeadPoolAddress {
   @@index([poolId, email])
   @@index([workspaceId])
   @@map("lead_pool_addresses")
+}
+
+/// A person's additional email, lower case, so "who lists this address" is answered by an index under row-level
+/// security (PERSON_FOR_ADDRESS). Written only by the `people_additional_addresses_sync` trigger and `backfill-person-addresses`.
+model PersonAddress {
+  personId        String   @map("person_id") @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  address         String
+  personCreatedAt DateTime @map("person_created_at") @db.Timestamptz
+
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([personId, address])
+  @@index([workspaceId, address, personCreatedAt, personId], map: "person_addresses_lookup_idx")
+  @@map("person_addresses")
 }
