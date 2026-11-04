@@ -58,7 +58,7 @@ export function lookupId(value: unknown): string | null {
 }
 
 /** When Bigin made the record (`Created_Time`), or null. */
-function createdAt(record: BiginRecord): Date | null {
+export function createdAt(record: BiginRecord): Date | null {
     const raw = text(record.Created_Time);
     const at = raw ? new Date(raw) : null;
     return at && !Number.isNaN(at.getTime()) ? at : null;
