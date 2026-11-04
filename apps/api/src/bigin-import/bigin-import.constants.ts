@@ -131,6 +131,9 @@ export const BIGIN_SECRET_SHOWN_CHARS = 4;
  */
 export const BIGIN_WRITE_CHUNK = 20;
 
+/** A record whose write takes longer than this is logged with its Bigin id, so a slow one can be found. */
+export const BIGIN_SLOW_WRITE_MS = 2_000;
+
 /** Applying the stage mapping to imported deals: one job per workspace on the import queue, under this id. */
 export const BIGIN_STAGE_APPLY_JOB = 'stage-apply';
 export const biginStageApplyJobId = (workspaceId: string): string => `bigin-stage-apply-${workspaceId}`;
