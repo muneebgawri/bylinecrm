@@ -164,7 +164,8 @@ export function DealFeedCard({ workspaceId, className }: { workspaceId: string; 
         return () => clearTimeout(timer);
     }, [items]);
 
-    if (feed.isError) throw feed.error;
+    // A side card: when the feed cannot be read it says so here, and never takes the dashboard down with it.
+    const failed = feed.isError;
     const now = new Date();
     const days: { day: string; items: DealFeedItemView[] }[] = [];
     for (const item of items ?? []) {
@@ -184,16 +185,27 @@ export function DealFeedCard({ workspaceId, className }: { workspaceId: string; 
                         What the team is doing with deals, as it happens.
                     </p>
                 </div>
-                <Badge status="success" shape="pill" className="shrink-0 gap-1.5">
-                    <span aria-hidden className="relative flex size-1.5">
-                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-70 motion-reduce:hidden" />
-                        <span className="relative inline-flex size-1.5 rounded-full bg-success" />
-                    </span>
-                    Live
-                </Badge>
+                {failed ? (
+                    <Badge status="neutral" shape="pill" className="shrink-0">
+                        Paused
+                    </Badge>
+                ) : (
+                    <Badge status="success" shape="pill" className="shrink-0 gap-1.5">
+                        <span aria-hidden className="relative flex size-1.5">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-70 motion-reduce:hidden" />
+                            <span className="relative inline-flex size-1.5 rounded-full bg-success" />
+                        </span>
+                        Live
+                    </Badge>
+                )}
             </CardHeader>
             <CardContent className="min-h-0 flex-1">
-                {!items ? (
+                {!items && failed ? (
+                    <EmptyState
+                        title="Deal activity is unavailable"
+                        body="It will show here again as soon as it can be read."
+                    />
+                ) : !items ? (
                     <LoadingRegion label="Loading the deal feed">
                         <Skeleton className="h-12" />
                         <Skeleton className="mt-2 h-12" />
