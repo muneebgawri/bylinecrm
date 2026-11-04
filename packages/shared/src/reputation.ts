@@ -37,7 +37,7 @@ export interface ReputationSettings {
      */
     primaryDomain: string | null;
     /**
-     * REP-2: the reply-rate floor, in basis points (100 = 1%). A mailbox whose replies over new-thread sends in
+     * REP-2: the reply-rate floor, in basis points (100 = 1%). A mailbox whose conversations replied to, over those it wrote in (new or followed up), in
      * the last `replyRateWindowDays` (since its last resume) fall under it, on at least `replyRateMinSends` sends,
      * is paused for new recipients until a manager resumes it.
      */
