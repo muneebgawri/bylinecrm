@@ -113,7 +113,7 @@ export class ReputationMonitor {
     }
 
     /**
-     * The reply-rate floor (REP-2, FR-CRMS-24): replies over new-thread sends from the mailbox in the window
+     * The reply-rate floor (REP-2, FR-CRMS-24): conversations replied to over conversations the mailbox wrote in, in the window
      * (since its last resume, so a resume is not undone by the same history). Under the floor on enough sends,
      * the mailbox is paused for new recipients (a pool mailbox: for everything) until a manager resumes it; a
      * `reply_rate` event (high) tells its owner and the reviewers.
@@ -128,21 +128,29 @@ export class ReputationMonitor {
         const s = await reputationSettingsIn(tx);
         const windowStart = new Date(now.getTime() - s.replyRateWindowDays * REPUTATION_WINDOW_MS);
         const since = mailbox.resumedAt && mailbox.resumedAt > windowStart ? mailbox.resumedAt : windowStart;
+        // Per conversation: each thread the mailbox sent into in the window — a new one or a follow-up on an older
+        // one — replied when someone outside the team wrote in it after the mailbox's first send there. A reply to a
+        // follow-up is a reply: judging new threads only, a mailbox whose answers come on follow-ups read as silent.
         const [row] = await tx.$queryRaw<{ sends: number; replied: number }[]>`
+            WITH sent AS (
+                SELECT m.thread_id, min(m.sent_at) AS first_sent
+                FROM mail_messages m
+                JOIN mail_message_copies c ON c.message_id = m.id AND c.mailbox_id = ${mailbox.id}::uuid AND c.direction = 'outbound'
+                WHERE m.sent_at >= ${since}
+                GROUP BY m.thread_id
+            )
             SELECT count(*)::int AS sends,
                    count(*) FILTER (WHERE EXISTS (
                        SELECT 1 FROM mail_messages r
                        JOIN mail_participants rp ON rp.message_id = r.id AND rp.role = 'from' AND rp.member_id IS NULL
-                       WHERE r.thread_id = m.thread_id AND r.direction = 'inbound' AND r.sent_at > m.sent_at
+                       WHERE r.thread_id = s.thread_id AND r.direction = 'inbound' AND r.sent_at > s.first_sent
                    ))::int AS replied
-            FROM mail_messages m
-            JOIN mail_message_copies c ON c.message_id = m.id AND c.mailbox_id = ${mailbox.id}::uuid AND c.direction = 'outbound'
-            WHERE m.sent_at >= ${since} AND m.in_reply_to IS NULL`;
+            FROM sent s`;
         const sends = row?.sends ?? 0;
         if (sends < s.replyRateMinSends) return;
         const rateBps = Math.floor(((row?.replied ?? 0) * 10_000) / sends);
         if (rateBps >= s.replyRateFloorBps) return;
-        const message = `${row?.replied ?? 0} replies to ${sends} new-thread messages since ${since.toISOString().slice(0, 10)} (${bpsText(rateBps)}), under the ${bpsText(s.replyRateFloorBps)} floor`;
+        const message = `replies in ${row?.replied ?? 0} of ${sends} conversations written to since ${since.toISOString().slice(0, 10)} (${bpsText(rateBps)}), under the ${bpsText(s.replyRateFloorBps)} floor`;
         const paused = await pauseMailbox(tx, this.events, context.workspaceId, mailbox.id, {
             code: 'reply_rate',
             message,
