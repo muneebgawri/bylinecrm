@@ -98,16 +98,16 @@ export async function rematchMessage(tx: WorkspaceClient, messageId: string): Pr
 
 /**
  * The subquery choosing an address's person: primary first, then the earliest additional. Over a row
- * source `a(address)`; calendar sync (CAL-1) re-matches meeting attendees with it too. Two lookups, each answered by
- * an index — the primary address's unique index, then `people_additional_addresses_idx` — never one OR that reads
- * every person.
+ * source `a(address)`; calendar sync (CAL-1) re-matches meeting attendees with it too. Two lookups, each a text
+ * equality on an index — the primary address's unique index, then `person_addresses` (kept by a trigger) — so the
+ * app role's row-level security can use both; never one OR, nor a jsonb test, that reads every person.
  */
 export const PERSON_FOR_ADDRESS = Prisma.sql`
     SELECT COALESCE(
         (SELECT p.id FROM people p WHERE p.deleted_at IS NULL AND p.email_primary = a.address LIMIT 1),
-        (SELECT p.id FROM people p
-         WHERE p.deleted_at IS NULL AND (lower((p.emails -> 'additional')::text))::jsonb @> jsonb_build_array(a.address)
-         ORDER BY p.created_at ASC, p.id ASC
+        (SELECT pa.person_id FROM person_addresses pa JOIN people p ON p.id = pa.person_id
+         WHERE pa.address = a.address AND p.deleted_at IS NULL
+         ORDER BY pa.person_created_at ASC, pa.person_id ASC
          LIMIT 1)
     )`;
 

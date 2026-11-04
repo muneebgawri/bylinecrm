@@ -10,6 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
+import { PERSON_FOR_ADDRESS } from '../../src/mail-sync/matching';
+import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
@@ -522,6 +524,19 @@ describe('mail sync', () => {
                 .send({ nameFirst: 'Lena', emails: { primary: null, additional: [] } });
             expect(moved.status).toBe(200);
             expect(await settled(matchOf)).toBeNull();
+        });
+
+        it('who an address belongs to is answered from indexes under the app role’s row-level security', async () => {
+            // With sequential scans priced out, a plan still reading a table means no index may serve it: under RLS
+            // only a leakproof condition (text equality) may use an index — a jsonb or lower() test never does.
+            const plan = await app.get(RlsPrismaService).withWorkspace(workspace, async (tx) => {
+                await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
+                const rows = await tx.$queryRaw<{ 'QUERY PLAN': string }[]>`
+                    EXPLAIN SELECT (${PERSON_FOR_ADDRESS}) FROM unnest(${[lena]}::text[]) AS a(address)`;
+                return rows.map((r) => r['QUERY PLAN']).join('\n');
+            });
+            expect(plan).toContain('person_addresses_lookup_idx');
+            expect(plan).not.toMatch(/Seq Scan on (people|person_addresses)/);
         });
     });
 
