@@ -40,7 +40,7 @@ import { customValuesFor, definitionsNeeded, type InferredCustom } from '../twen
 import { failureText } from '../twenty-import/import-runner';
 import { withoutLocalEdits } from '../twenty-import/twenty-sync';
 import { readBiginConnection, biginReportFrom } from './bigin-import.settings';
-import { BIGIN_PAGE_MAX, BIGIN_WRITE_CHUNK } from './bigin-import.constants';
+import { BIGIN_PAGE_MAX, BIGIN_SLOW_WRITE_MS, BIGIN_WRITE_CHUNK } from './bigin-import.constants';
 import { BiginSyncService } from './bigin-sync.service';
 import { isContactReused, reuseNoteText, type ContactIdentity } from './contact-reuse';
 import { markdownToRichText } from '../twenty-import/markdown';
@@ -425,6 +425,7 @@ export class BiginImportRunner {
                         continue;
                     }
                     await tx.$executeRawUnsafe('SAVEPOINT bigin_record');
+                    const started = Date.now();
                     try {
                         const kept: string[] = [];
                         const outcome = await this.write(tx, state, module, record, result, {
@@ -437,6 +438,12 @@ export class BiginImportRunner {
                             entry,
                         });
                         await tx.$executeRawUnsafe('RELEASE SAVEPOINT bigin_record');
+                        const took = Date.now() - started;
+                        if (took > BIGIN_SLOW_WRITE_MS) {
+                            this.logger.warn(
+                                `bigin import: ${module} ${externalId} took ${took} ms to write (${outcome})`,
+                            );
+                        }
                         entry[outcome] += 1;
                         if (outcome === 'skipped' && result.note) recordError(entry, externalId, result.note);
                         if (kept.length > 0) {
