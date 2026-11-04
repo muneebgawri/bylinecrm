@@ -1,5 +1,5 @@
 import type { BiginImportObject } from '@bylinecrm/shared';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import type { BiginLinkIndex } from './mappers';
 import type { DealSnapshot } from './stage-map';
@@ -81,10 +81,14 @@ export async function writeBiginLink(
     workspaceId: string,
     link: Omit<BiginLinkRow, 'snapshot'> & {
         externalUpdatedAt: Date | null;
+        /** When Bigin made the record (`Created_Time`): the record is dated from then, not from its import. */
+        externalCreatedAt?: Date | null | undefined;
         /** Contacts: their identity; Deals: their raw Bigin stage (`DealSnapshot`). */
         snapshot?: BiginLinkRow['snapshot'] | DealSnapshot | undefined;
     },
 ): Promise<void> {
+    if (link.externalCreatedAt)
+        await backdateToBigin(tx, link.localType, [{ id: link.localId, createdAt: link.externalCreatedAt }]);
     const data = {
         localType: link.localType,
         localId: link.localId,
@@ -98,6 +102,32 @@ export async function writeBiginLink(
         create: { workspaceId, object: link.object, externalId: link.externalId, ...data },
         update: data,
     });
+}
+
+/** The tables whose rows carry a Bigin record's creation time. */
+const DATED_TABLES: Partial<Record<BiginLocalType, string>> = {
+    person: 'people',
+    company: 'companies',
+    opportunity: 'opportunities',
+};
+
+/**
+ * Dates records from when Bigin made them: a record imported (or synced from Bigin via Twenty) in October 2026
+ * was created in Bigin years before, and "created" is what a rep filters leads by. Only ever earlier — a record
+ * made here before Bigin's copy keeps its own date — and only `created_at`: nothing a person edited. One statement
+ * for a batch; the importer passes one record, the one-off restore from a Bigin export a page.
+ */
+export async function backdateToBigin(
+    tx: WorkspaceClient,
+    localType: BiginLocalType,
+    rows: readonly { id: string; createdAt: Date }[],
+): Promise<number> {
+    const table = DATED_TABLES[localType];
+    if (!table || rows.length === 0) return 0;
+    return tx.$executeRaw`
+        UPDATE ${Prisma.raw(`"${table}"`)} AS t SET "created_at" = v.at
+        FROM unnest(${rows.map((r) => r.id)}::uuid[], ${rows.map((r) => r.createdAt)}::timestamptz[]) AS v(id, at)
+        WHERE t."id" = v.id AND t."created_at" > v.at`;
 }
 
 export function countBiginLinks(tx: WorkspaceClient, object: BiginImportObject): Promise<number> {
