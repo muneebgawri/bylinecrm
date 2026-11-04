@@ -23549,6 +23549,71 @@
                 "tags": ["timeline"]
             }
         },
+        "/api/w/{workspaceId}/deal-feed": {
+            "get": {
+                "operationId": "dealFeed_latest",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DealFeed"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["timeline"]
+            }
+        },
         "/api/w/{workspaceId}/rotation/settings": {
             "get": {
                 "operationId": "rotation_get",
@@ -42492,6 +42557,119 @@
                     }
                 },
                 "required": ["activity", "created"]
+            },
+            "DealFeedItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["created", "stage", "won", "lost", "paid"]
+                    },
+                    "happenedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "actor": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["member", "rule"]
+                            },
+                            "member": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                    },
+                                    "name": {
+                                        "nullable": true,
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["id", "name"]
+                            }
+                        },
+                        "required": ["kind", "member"]
+                    },
+                    "deal": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "amount": {
+                                "nullable": true,
+                                "allOf": [
+                                    {
+                                        "$ref": "#/components/schemas/Money"
+                                    }
+                                ]
+                            },
+                            "owner": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                    },
+                                    "name": {
+                                        "nullable": true,
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["id", "name"]
+                            },
+                            "canOpen": {
+                                "type": "boolean",
+                                "description": "Whether the caller may open the deal (their owner scope)."
+                            }
+                        },
+                        "required": ["id", "name", "amount", "owner", "canOpen"]
+                    },
+                    "fromStage": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "toStage": {
+                        "nullable": true,
+                        "type": "string"
+                    }
+                },
+                "required": ["id", "kind", "happenedAt", "actor", "deal", "fromStage", "toStage"]
+            },
+            "DealFeed": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DealFeedItem"
+                        }
+                    }
+                },
+                "required": ["items"]
             },
             "FilterGroup": {
                 "anyOf": [
