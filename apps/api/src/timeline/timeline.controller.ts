@@ -6,7 +6,8 @@ import { parseTarget } from '../records/targets';
 import { ExternalActivityDto, ListTimelineQueryDto } from './dto';
 import { TimelineService, type ExternalActivityResult, type TimelineActivityView } from './timeline.service';
 import { Returns } from '../openapi/responses';
-import { externalActivityResult, timelinePage } from './responses';
+import { dealFeed, externalActivityResult, timelinePage } from './responses';
+import { DealFeedService, type DealFeedItem } from './deal-feed.service';
 
 /**
  * A record's timeline. Reading one is reading the record (`record:read`); an integration adds
@@ -56,4 +57,21 @@ function splitKinds(raw: string | undefined): string[] {
         .split(',')
         .map((k) => k.trim())
         .filter((k) => k.length > 0);
+}
+
+/**
+ * The live deal feed: everyone in the workspace sees what the team does with deals — created, moved, won, lost,
+ * paid — as headlines, past their own owner scope (`deal:read`). The app polls it.
+ */
+@ApiTags('timeline')
+@TenantController('deal-feed')
+export class DealFeedController {
+    constructor(private readonly feed: DealFeedService) {}
+
+    @Requires('deal:read')
+    @Get()
+    @Returns(dealFeed)
+    async latest(): Promise<{ items: DealFeedItem[] }> {
+        return { items: await this.feed.latest() };
+    }
 }

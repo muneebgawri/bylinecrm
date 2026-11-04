@@ -118,6 +118,8 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/notifications$`), () => data.notificationsInbox],
     [new RegExp(`^${W}/notification-settings$`), () => data.notificationSettings],
     [new RegExp(`^${W}/my-tasks$`), () => data.myTasks],
+    // The dashboard's live deal feed; no activity in the fixtures.
+    [new RegExp(`^${W}/deal-feed$`), () => ({ items: [] })],
     // OWN-1: a record's transfers (the owner field's open offer); none in the fixtures.
     [new RegExp(`^${W}/transfers(\\?.*)?$`), () => []],
     // OWN-2: a company's other domains, and the ownership report; none in the fixtures.

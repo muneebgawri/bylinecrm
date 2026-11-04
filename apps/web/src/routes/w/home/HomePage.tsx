@@ -1,12 +1,13 @@
 import { PageHeader } from '@bylinecrm/ui';
 import { useWorkspaceId } from '../../params';
+import { DealFeedCard } from './DealFeedCard';
 import { MyTasksCard } from './MyTasksCard';
 import { DashboardKpis, DealsByStageCard, PipelinePulseCard, TopCompaniesCard } from './PipelineCards';
 
 /**
  * The dashboard (#192): the four numbers (people, open deals, pipeline value, won revenue), the
  * default pipeline at a glance, the deals by stage, the companies with the most open value, and
- * **My tasks**. Every figure is the API's; nothing here is estimated.
+ * **My tasks**, and the **Live deals** feed of what the whole team does with deals. Every figure is the API's; nothing here is estimated.
  */
 export function HomePage() {
     const workspaceId = useWorkspaceId();
@@ -23,8 +24,9 @@ export function HomePage() {
                 <DealsByStageCard workspaceId={workspaceId} className="col-span-12 xl:col-span-5" />
             </div>
             <div className="grid grid-cols-12 gap-4">
-                <TopCompaniesCard workspaceId={workspaceId} className="col-span-12 lg:col-span-5" />
-                <MyTasksCard workspaceId={workspaceId} className="col-span-12 lg:col-span-7" />
+                <TopCompaniesCard workspaceId={workspaceId} className="col-span-12 lg:col-span-6 xl:col-span-4" />
+                <MyTasksCard workspaceId={workspaceId} className="col-span-12 lg:col-span-6 xl:col-span-4" />
+                <DealFeedCard workspaceId={workspaceId} className="col-span-12 xl:col-span-4" />
             </div>
         </div>
     );
