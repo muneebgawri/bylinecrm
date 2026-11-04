@@ -684,6 +684,8 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
 
             const pat = await owner.person.findUniqueOrThrow({ where: { id: patId } });
             expect(pat).toMatchObject({ nameFirst: 'Pat', emailPrimary: `pat-${stamp}@early.example` });
+            // Dated from when Bigin made the Contact, not from the import.
+            expect(pat.createdAt.toISOString()).toBe('2026-01-05T10:00:00.000Z');
             const notes = await owner.noteTarget.findMany({
                 where: { targetType: 'person', targetId: patId },
                 include: { note: true },

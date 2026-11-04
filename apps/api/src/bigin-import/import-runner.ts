@@ -59,6 +59,7 @@ import {
 } from './cursor-policy';
 import { countBiginLinks, flagBiginDeleted, loadBiginLinks, writeBiginLink, type BiginLocalType } from './links';
 import {
+    createdAt,
     mapAccount,
     mapCall,
     mapContact,
@@ -619,13 +620,15 @@ export class BiginImportRunner {
         /** A Deal's raw Bigin stage, kept on its link: what the stage mapping is applied from later. */
         const dealSnapshot =
             module === 'Deals' ? { stage: (mapped as unknown as MappedDeal).stage ?? null } : undefined;
-        const link = (localId: string) =>
+        /** `dated`: the record is Bigin's own, so it takes Bigin's creation time — not a person a reuse made. */
+        const link = (localId: string, dated = true) =>
             writeBiginLink(tx, context.workspaceId, {
                 object: module,
                 externalId,
                 localType: type,
                 localId,
                 externalUpdatedAt: modified,
+                externalCreatedAt: dated ? createdAt(record) : null,
                 snapshot: identity ?? dealSnapshot,
             });
         const linked = page.links.link(module, externalId)?.localId ?? null;
@@ -857,7 +860,7 @@ export class BiginImportRunner {
             after: ContactIdentity;
             changedAt: Date;
             events: DomainEvent[];
-            link: (localId: string) => Promise<void>;
+            link: (localId: string, dated?: boolean) => Promise<void>;
         },
     ): Promise<Outcome> {
         const { context } = state;
@@ -902,7 +905,8 @@ export class BiginImportRunner {
                 after: reuse.after as unknown as Prisma.InputJsonValue,
             },
         });
-        await reuse.link(personId);
+        // The person is new to the Contact: it is not dated from when Bigin made the Contact for someone else.
+        await reuse.link(personId, false);
         return outcome;
     }
 
