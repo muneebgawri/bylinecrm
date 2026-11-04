@@ -1,7 +1,9 @@
 import {
     BIGIN_IMPORT_MODES,
     BIGIN_IMPORT_OBJECTS,
+    BIGIN_IMPORT_PHASES,
     BIGIN_IMPORT_RUN_STATUSES,
+    BIGIN_IMPORT_SOURCES,
     BIGIN_STAGE_APPLY_STATUSES,
     BIGIN_STAGE_MATCHES,
     BIGIN_STAGE_SOURCES,
@@ -14,6 +16,8 @@ import { twentyImportSync } from '../twenty-import/responses';
 /** The Bigin importer (BIGIN-1), as the API returns it. */
 const isoTime = z.iso.datetime();
 const object = z.enum(BIGIN_IMPORT_OBJECTS);
+/** A run's phase: a module, or (from an export) the stage history or the emails read after them. */
+const phase = z.enum(BIGIN_IMPORT_PHASES);
 
 export const biginImportSettings = named(
     'BiginImportSettings',
@@ -35,7 +39,7 @@ export const biginImportSettings = named(
 export const biginImportObjectReport = named(
     'BiginImportObjectReport',
     z.object({
-        object,
+        object: phase,
         remote: z.number().int().nullable(),
         before: z.number().int(),
         read: z.number().int(),
@@ -76,7 +80,10 @@ export const biginImportRun = named(
         id,
         status: z.enum(BIGIN_IMPORT_RUN_STATUSES),
         mode: z.enum(BIGIN_IMPORT_MODES),
-        phase: object.nullable(),
+        source: z.enum(BIGIN_IMPORT_SOURCES).meta({
+            description: "`export`: read from a Bigin backup export's files by the operator's CLI, not from the API.",
+        }),
+        phase: phase.nullable(),
         report: z.array(biginImportObjectReport),
         error: z.string().nullable(),
         failedRecords: z.number().int().meta({ description: 'Records that failed across every module.' }),

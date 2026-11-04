@@ -338,6 +338,46 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
     return [];
 }
 
+/**
+ * An entry an importer carries over from another system's history (BIGIN-1: a Bigin export's stage moves and logged
+ * emails), on the record it is about, at the moment it happened there. Written straight to the timeline — not as a
+ * domain event: what happened years ago is history, not news for the rules, sequences and webhooks to act on.
+ * `source` and `idempotencyKey` make it the one entry of its kind, as an integration's is.
+ */
+export interface ImportedActivity {
+    target: RecordTarget;
+    kind: string;
+    happenedAt: Date;
+    actor: TimelineActor;
+    properties: object;
+    source: string;
+    idempotencyKey: string;
+}
+
+/** Writes imported entries; one already written (a re-run) is left as it is. Returns how many were written. */
+export async function recordImportedActivities(
+    tx: WorkspaceClient,
+    workspaceId: string,
+    entries: readonly ImportedActivity[],
+): Promise<number> {
+    if (entries.length === 0) return 0;
+    const result = await tx.timelineActivity.createMany({
+        data: entries.map((e) => ({
+            workspaceId,
+            targetType: e.target.type,
+            targetId: e.target.id,
+            kind: e.kind,
+            happenedAt: e.happenedAt,
+            actor: asJson(e.actor),
+            properties: asJson(e.properties),
+            source: e.source,
+            idempotencyKey: e.idempotencyKey,
+        })),
+        skipDuplicates: true,
+    });
+    return result.count;
+}
+
 /** The display name a linked thing has right now, cached on the entry; `null` once it is gone. */
 async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): Promise<string | null> {
     switch (type) {

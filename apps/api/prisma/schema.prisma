@@ -1096,7 +1096,8 @@ model TimelineActivity {
   properties     Json          @default("{}")
   linkedType     LinkedObject? @map("linked_type")
   linkedId       String?       @map("linked_id") @db.Uuid
-  /// External entries only: the integration's name and its key, unique together per workspace.
+  /// External and imported entries only: the integration's (or importer's) name and its key, unique together per
+  /// workspace — a replayed report or a re-run import writes nothing new.
   source         String?
   idempotencyKey String?       @map("idempotency_key")
   /// Domain-event entries only: the outbox event that wrote it. One entry per (event, record), so a
@@ -2601,6 +2602,14 @@ enum BiginImportMode {
   @@map("bigin_import_mode")
 }
 
+/// Where a run reads Bigin: its REST API (the connection), or a backup export's CSV files (BIGIN-1).
+enum BiginImportSource {
+  api
+  export
+
+  @@map("bigin_import_source")
+}
+
 /// One run of the Bigin importer; the row is the truth the worker resumes from (`phase`, `cursor`), `report`
 /// what it did per module (`BiginImportObjectReport[]`). At most one queued or running run per workspace.
 model BiginImportRun {
@@ -2608,6 +2617,8 @@ model BiginImportRun {
   workspaceId         String               @map("workspace_id") @db.Uuid
   status              BiginImportRunStatus @default(queued)
   mode                BiginImportMode
+  /// An `export` run is driven by the CLI that holds the export's files, never by the queue.
+  source              BiginImportSource    @default(api)
   phase               String?
   /// Per module, where the pass is: `{ since, page, highWater, oldestFailure, done }`.
   cursor              Json                 @default("{}")

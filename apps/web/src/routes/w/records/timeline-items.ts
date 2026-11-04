@@ -1,4 +1,9 @@
-import { TRANSFER_REASON_CADENCE_ROTATION, type RecordObject, type SuppressionReason } from '@bylinecrm/shared';
+import {
+    EXTERNAL_EMAIL_KIND,
+    TRANSFER_REASON_CADENCE_ROTATION,
+    type RecordObject,
+    type SuppressionReason,
+} from '@bylinecrm/shared';
 import type { TimelineActivityView } from '../../../api/types';
 import { formatDate, formatDay } from '../../../lib/format';
 import { formatMoney } from '../../../lib/money';
@@ -62,6 +67,10 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
             ? `${OBJECT_LABEL[entry.target.type]}: ${names.recordNames?.get(entry.target.id) ?? '…'}`
             : undefined;
     const base = origin ? { actor, origin } : { actor };
+
+    if (entry.kind === EXTERNAL_EMAIL_KIND) {
+        return { ...base, ...externalEmailWords(entry, names), family: 'mail' };
+    }
 
     if (entry.kind.startsWith('external.')) {
         const title = typeof entry.properties['title'] === 'string' ? entry.properties['title'] : entry.kind.slice(9);
@@ -228,6 +237,40 @@ function emailWords(
     const actor = (sent ? member : undefined) ?? from ?? actorName(entry, names);
     const what = subject ? `“${subject}”` : 'an email with no subject';
     return { actor, action: `${sent ? 'sent' : 'wrote'} ${what}`, ...(threadId ? { threadId } : {}) };
+}
+
+/** How an email log's status reads as a chip: what became of it, good news green, a failure as is. */
+const EMAIL_STATUS_TONE: Record<string, 'success' | 'accent'> = { opened: 'success', clicked: 'success' };
+
+/**
+ * An email another system logged (BIGIN-1: a Bigin export's Emails): there is no thread to open, so the entry says
+ * what the log does — who sent it (the member, else the sender's address), its subject, to whom, and what became of
+ * it (status, opens, clicks).
+ */
+function externalEmailWords(
+    entry: TimelineActivityView,
+    names: NameSources,
+): Pick<TimelineWords, 'actor' | 'action' | 'detail'> {
+    const email = isRecord(entry.properties['email']) ? entry.properties['email'] : {};
+    const str = (key: string) => (typeof email[key] === 'string' && email[key] !== '' ? (email[key] as string) : null);
+    const count = (key: string) => (typeof email[key] === 'number' ? (email[key] as number) : 0);
+    const member = str('sentByMemberId') ? names.members.get(str('sentByMemberId')!) : undefined;
+    const subject = str('subject');
+    const to = str('to');
+    const status = str('status');
+    const opens = count('opens');
+    const clicks = count('clicks');
+    const detail = [
+        ...(status ? [{ label: status, tone: EMAIL_STATUS_TONE[status.toLowerCase()] ?? ('neutral' as const) }] : []),
+        ...(opens > 0 ? [{ label: `${opens} ${opens === 1 ? 'open' : 'opens'}` }] : []),
+        ...(clicks > 0 ? [{ label: `${clicks} ${clicks === 1 ? 'click' : 'clicks'}` }] : []),
+        ...(str('cc') ? [{ label: `Cc ${str('cc')}` }] : []),
+    ];
+    return {
+        actor: member ?? str('from') ?? actorName(entry, names),
+        action: `emailed ${subject ? `“${subject}”` : 'with no subject'}${to ? ` to ${to}` : ''}`,
+        ...(detail.length ? { detail } : {}),
+    };
 }
 
 /**

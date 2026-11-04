@@ -28,6 +28,35 @@ export const BIGIN_IMPORT_OBJECT_LABELS: Readonly<Record<BiginImportObject, { la
     Calls: { label: 'Calls', lands: 'Done tasks on their records ("Call: …")' },
 };
 
+/**
+ * What a run read from a Bigin backup export that the REST API never served (BIGIN-1): each deal's stage
+ * history and the emails logged on records. Read after the modules, whose links they resolve through.
+ */
+export const BIGIN_HISTORY_PHASES = ['StageHistory', 'Emails'] as const;
+export type BiginHistoryPhase = (typeof BIGIN_HISTORY_PHASES)[number];
+
+/** A run's phases, in order: the modules, then (from an export) the history. */
+export const BIGIN_IMPORT_PHASES = [...BIGIN_IMPORT_OBJECTS, ...BIGIN_HISTORY_PHASES] as const;
+export type BiginImportPhase = (typeof BIGIN_IMPORT_PHASES)[number];
+
+export function isBiginHistoryPhase(value: unknown): value is BiginHistoryPhase {
+    return typeof value === 'string' && (BIGIN_HISTORY_PHASES as readonly string[]).includes(value);
+}
+
+/** Every phase's words: the modules', and the history an export carries. */
+export const BIGIN_IMPORT_PHASE_LABELS: Readonly<Record<BiginImportPhase, { label: string; lands: string }>> = {
+    ...BIGIN_IMPORT_OBJECT_LABELS,
+    StageHistory: { label: 'Stage history', lands: 'Stage moves on deal timelines' },
+    Emails: { label: 'Emails', lands: 'Logged emails on record timelines' },
+};
+
+/** Where a run reads Bigin: its REST API through the stored connection, or a backup export's CSV files. */
+export const BIGIN_IMPORT_SOURCES = ['api', 'export'] as const;
+export type BiginImportSource = (typeof BIGIN_IMPORT_SOURCES)[number];
+
+/** `source` of the timeline entries an import carries over from Bigin: what makes a re-run write nothing new. */
+export const BIGIN_TIMELINE_SOURCE = 'bigin';
+
 export const BIGIN_IMPORT_RUN_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const;
 export type BiginImportRunStatus = (typeof BIGIN_IMPORT_RUN_STATUSES)[number];
 
@@ -90,7 +119,7 @@ export const BIGIN_DATA_CENTRES = [
  * with errors says so per module.
  */
 export interface BiginImportObjectReport {
-    object: BiginImportObject;
+    object: BiginImportPhase;
     /** Bigin's own count when the pass started; null when Bigin would not say. */
     remote: number | null;
     before: number;
@@ -134,7 +163,8 @@ export interface BiginImportRunView {
     id: string;
     status: BiginImportRunStatus;
     mode: BiginImportMode;
-    phase: BiginImportObject | null;
+    source: BiginImportSource;
+    phase: BiginImportPhase | null;
     report: BiginImportObjectReport[];
     error: string | null;
     /** Records that failed across every module: a run that finished with any says so. */
@@ -198,7 +228,7 @@ export interface BiginContactReuseView {
     after: { name: string; email: string | null };
 }
 
-export function emptyBiginObjectReport(object: BiginImportObject): BiginImportObjectReport {
+export function emptyBiginObjectReport(object: BiginImportPhase): BiginImportObjectReport {
     return {
         object,
         remote: null,

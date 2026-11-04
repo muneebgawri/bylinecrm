@@ -184,8 +184,9 @@ export class BiginImportWorkers implements OnApplicationBootstrap, OnModuleDestr
 
     private async resume(): Promise<void> {
         try {
+            // An export run is driven by the CLI that holds its files: a worker has nothing to read it from.
             const open = await this.ownerPrisma.biginImportRun.findMany({
-                where: { status: { in: ['queued', 'running'] } },
+                where: { status: { in: ['queued', 'running'] }, source: 'api' },
                 select: { id: true, workspaceId: true },
             });
             for (const run of open) await this.enqueue({ workspaceId: run.workspaceId, runId: run.id });
