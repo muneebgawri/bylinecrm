@@ -42,7 +42,8 @@ const name = z.string().trim().min(1).max(TEMPLATE_NAME_MAX);
 export const templateSubject = z.string().trim().max(TEMPLATE_SUBJECT_MAX);
 const kind = z.enum(TEMPLATE_KINDS);
 const visibility = z.enum(TEMPLATE_VISIBILITIES).meta({
-    description: '`private` (the default): you and administrators read it. `public`: every member does.',
+    description:
+        '`private` (the default): you, and anyone with `template:read_all`, read it. `public`: every member does.',
 });
 
 export class CreateTemplateDto extends createZodDto(

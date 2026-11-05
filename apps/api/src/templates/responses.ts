@@ -18,7 +18,8 @@ export const emailTemplateView = named(
         name: z.string(),
         kind: z.enum(TEMPLATE_KINDS),
         visibility: z.enum(TEMPLATE_VISIBILITIES).meta({
-            description: '`private`: its author and administrators read it. `public`: every member does.',
+            description:
+                '`private`: its author, and anyone with `template:read_all`, read it. `public`: every member does.',
         }),
         ownerMemberId: z.uuid().nullable().meta({ description: 'The member who wrote it; null for none.' }),
         subject: z.string().meta({ description: 'Plain text; variables are `{{path}}` tokens.' }),

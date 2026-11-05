@@ -11,8 +11,15 @@ describe('who reads a template', () => {
         expect(readableBy(as('m-1'))).toEqual({ OR: [{ visibility: 'public' }, { ownerMemberId: 'm-1' }] });
     });
 
-    it('an administrator: every one, an ownerless one included', () => {
-        expect(readableBy(as('m-1', ['workspace:admin']))).toEqual({});
+    it('template:read_all, on any role: every one, an ownerless one included', () => {
+        expect(readableBy(as('m-1', ['template:read_all']))).toEqual({});
+        expect(readableBy(as(null, ['template:read_all']))).toEqual({});
+    });
+
+    it('workspace:admin alone grants nothing here: the admin role reads all because it holds every capability', () => {
+        expect(readableBy(as('m-1', ['workspace:admin']))).toEqual({
+            OR: [{ visibility: 'public' }, { ownerMemberId: 'm-1' }],
+        });
     });
 
     it('no one (a key): the public ones only', () => {

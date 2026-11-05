@@ -28225,7 +28225,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 28,
+                        "maxItems": 29,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -28246,6 +28246,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -28277,7 +28278,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 28,
+                        "maxItems": 29,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -28298,6 +28299,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -32060,7 +32062,7 @@
                     "visibility": {
                         "type": "string",
                         "enum": ["private", "public"],
-                        "description": "`private` (the default): you and administrators read it. `public`: every member does."
+                        "description": "`private` (the default): you, and anyone with `template:read_all`, read it. `public`: every member does."
                     }
                 },
                 "required": ["name", "kind"]
@@ -32143,7 +32145,7 @@
                     "visibility": {
                         "type": "string",
                         "enum": ["private", "public"],
-                        "description": "`private` (the default): you and administrators read it. `public`: every member does."
+                        "description": "`private` (the default): you, and anyone with `template:read_all`, read it. `public`: every member does."
                     },
                     "version": {
                         "type": "integer",
@@ -34138,6 +34140,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -34275,6 +34278,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -40353,7 +40357,7 @@
                     "visibility": {
                         "type": "string",
                         "enum": ["private", "public"],
-                        "description": "`private`: its author and administrators read it. `public`: every member does."
+                        "description": "`private`: its author, and anyone with `template:read_all`, read it. `public`: every member does."
                     },
                     "ownerMemberId": {
                         "nullable": true,

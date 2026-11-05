@@ -64,8 +64,8 @@ type TemplateRow = Prisma.EmailTemplateGetPayload<object>;
 
 /**
  * Email templates (P2-4; FR-CRMS-3). A template is its author's own unless they make it public: a member reads
- * their own and the public ones; an administrator reads every one (an ownerless template would be no one's
- * otherwise). Only the author or an administrator changes who reads it. Two rules sit on the data rather than the route, because the route cannot see
+ * their own and the public ones; `template:read_all` (an admin's by construction, grantable to any role) reads every
+ * one, an ownerless one included. Only the author or a `template:read_all` holder changes who reads it. Two rules sit on the data rather than the route, because the route cannot see
  * them: a template that is — or would become — `outreach` needs `outreach:write` as well as the
  * route's `template:write`; and a PATCH must name the version it edited, so a concurrent edit is a
  * `409`, never a silent overwrite.
@@ -368,20 +368,20 @@ function versionConflict(edited: number, now: number): ApiException {
 }
 
 /**
- * The templates a caller reads: an administrator, all; a member, their own and the public ones; anyone else (a key),
- * the public ones. A template another member keeps private is not there for them at all — a `404`, as if it were not.
+ * The templates a caller reads: with `template:read_all`, all; a member, their own and the public ones; anyone else (a
+ * key without it), the public ones. A template another member keeps private is not there for them at all — a `404`, as if it were not.
  */
 export function readableBy(context: WorkspaceRunContext): Prisma.EmailTemplateWhereInput {
-    if (context.capabilities.has('workspace:admin')) return {};
+    if (context.capabilities.has('template:read_all')) return {};
     if (!context.memberId) return { visibility: 'public' };
     return { OR: [{ visibility: 'public' }, { ownerMemberId: context.memberId }] };
 }
 
-/** Only the author, or an administrator, says who reads a template. */
+/** Only the author, or a holder of `template:read_all`, says who reads a template. */
 function assertMaySetVisibility(context: WorkspaceRunContext, row: TemplateRow): void {
-    if (context.capabilities.has('workspace:admin')) return;
+    if (context.capabilities.has('template:read_all')) return;
     if (!row.ownerMemberId || row.ownerMemberId !== context.memberId) {
-        throw new ForbiddenException('only the author of a template, or an administrator, changes who can see it');
+        throw new ForbiddenException('only the author of a template, or template:read_all, changes who can see it');
     }
 }
 

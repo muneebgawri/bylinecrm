@@ -1401,7 +1401,7 @@ model EmailTemplate {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
-  /// `private`: its author and administrators read it. `public`: every member does.
+  /// `private`: its author, and anyone with `template:read_all`, read it. `public`: every member does.
   visibility    TemplateVisibility @default(private)
   /// The member who wrote it; null for an import, a key or the system (such a template is public).
   ownerMemberId String?            @map("owner_member_id") @db.Uuid
