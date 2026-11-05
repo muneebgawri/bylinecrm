@@ -1002,7 +1002,11 @@ export class BiginImportRunner {
                 const match = email ? await tx.person.findFirst({ where: { emailPrimary: email } }) : null;
                 if (match) {
                     if (match.deletedAt) events.push((await this.people.restoreIn(tx, context, match.id)).event);
-                    const patch = await localEdits('person', match.id, input);
+                    const patch = await withoutTakenAdditional(
+                        tx,
+                        match.id,
+                        await localEdits('person', match.id, input),
+                    );
                     const fill = await ownerFill('person', match.id);
                     const result = await this.people.updateIn(tx, context, match.id, { ...patch, ...fill });
                     if (result.event) events.push(result.event);
@@ -1010,7 +1014,11 @@ export class BiginImportRunner {
                     await link(match.id);
                     return 'merged';
                 }
-                const created = await this.people.createIn(tx, context, forCreate({ ...input, ownerId }));
+                const created = await this.people.createIn(
+                    tx,
+                    context,
+                    forCreate(await withoutTakenAdditional(tx, null, { ...input, ownerId })),
+                );
                 events.push(created.event);
                 await link(created.row.id);
                 return 'created';
@@ -1148,7 +1156,8 @@ export class BiginImportRunner {
         let outcome: Outcome;
         if (match) {
             if (match.deletedAt) reuse.events.push((await this.people.restoreIn(tx, context, match.id)).event);
-            const result = await this.people.updateIn(tx, context, match.id, reuse.input);
+            const input = await withoutTakenAdditional(tx, match.id, reuse.input);
+            const result = await this.people.updateIn(tx, context, match.id, input);
             if (result.event) reuse.events.push(result.event);
             personId = match.id;
             outcome = 'merged';
@@ -1156,7 +1165,7 @@ export class BiginImportRunner {
             const created = await this.people.createIn(
                 tx,
                 context,
-                forCreate({ ...reuse.input, ownerId: reuse.ownerId }),
+                forCreate(await withoutTakenAdditional(tx, null, { ...reuse.input, ownerId: reuse.ownerId })),
             );
             reuse.events.push(created.event);
             personId = created.row.id;
@@ -1360,14 +1369,47 @@ export async function outrankedContact(
 
 async function withoutTakenEmail(tx: WorkspaceClient, personId: string, patch: PersonInput): Promise<PersonInput> {
     const email = patch.emails?.primary;
-    if (!email) return patch;
-    const holder = await tx.person.findFirst({
-        where: { emailPrimary: email, id: { not: personId } },
-        select: { id: true },
-    });
-    if (!holder) return patch;
-    const { emails: _taken, ...rest } = patch;
-    return rest;
+    if (email) {
+        const holder = await tx.person.findFirst({
+            where: { OR: heldAs(email), id: { not: personId } },
+            select: { id: true },
+        });
+        if (holder) {
+            const { emails: _taken, ...rest } = patch;
+            return rest;
+        }
+    }
+    return withoutTakenAdditional(tx, personId, patch);
+}
+
+/** A person holding `address` as their primary email or an additional one: one person per address, either way. */
+const heldAs = (address: string) => [
+    { emailPrimary: address.toLowerCase() },
+    { addresses: { some: { address: address.toLowerCase() } } },
+];
+
+/**
+ * The input without the additional addresses another person here holds (`personId`'s own excepted; none for a new
+ * person): the database refuses an address two people hold (`people_address_taken`), and one Contact's second address
+ * must not cost it the whole record. The rest is applied; the address stays with its holder.
+ */
+async function withoutTakenAdditional(
+    tx: WorkspaceClient,
+    personId: string | null,
+    input: PersonInput,
+): Promise<PersonInput> {
+    const additional = input.emails?.additional ?? [];
+    if (!input.emails || additional.length === 0) return input;
+    const taken = new Set<string>();
+    for (const address of additional) {
+        const holder = await tx.person.findFirst({
+            where: { OR: heldAs(address), ...(personId ? { id: { not: personId } } : {}) },
+            select: { id: true },
+        });
+        if (holder) taken.add(address);
+    }
+    if (taken.size === 0) return input;
+    return { ...input, emails: { ...input.emails, additional: additional.filter((a) => !taken.has(a)) } };
 }
 
 async function currentIdentity(tx: WorkspaceClient, personId: string): Promise<ContactIdentity> {

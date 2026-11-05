@@ -209,7 +209,7 @@ export class PeopleService implements BulkRecords {
             });
             return { row, event: event(context, 'person.created', row.id) };
         } catch (error) {
-            throw uniqueViolation(error) ? await this.conflict(context, input.emails?.primary) : error;
+            throw uniqueViolation(error) ? await this.conflict(context, input.emails) : error;
         }
     }
 
@@ -264,27 +264,40 @@ export class PeopleService implements BulkRecords {
                 event: event(context, 'person.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),
             };
         } catch (error) {
-            throw uniqueViolation(error) ? await this.conflict(context, patch.emails?.primary) : error;
+            throw uniqueViolation(error) ? await this.conflict(context, patch.emails, id) : error;
         }
     }
 
-    /** The address is taken: says by whose person, so the saver knows whom to ask (no more of it is shown). */
+    /**
+     * An address is taken: which one, and by whose person, so the saver knows whom to ask (no more of it is shown). The
+     * primary address first, then each additional one, as the form lists them; the first another person holds is named.
+     */
     private async conflict(
         context: WorkspaceRunContext,
-        address: string | null | undefined,
+        emails: { primary?: string | null | undefined; additional?: readonly string[] | undefined } | null | undefined,
         exceptPersonId?: string,
     ): Promise<UniqueConflict> {
-        const holder = await this.ownership.addressHolder(context, address, exceptPersonId).catch(() => null);
-        if (!holder) return new UniqueConflict('a person with that primary email exists', 'emails.primary');
-        if (holder.workspaceName) {
-            return new UniqueConflict(
-                `a person with that primary email is already a lead in ${holder.workspaceName}`,
-                'emails.primary',
-            );
+        const listed: { address: string; field: string; label: string }[] = [
+            ...(emails?.primary
+                ? [{ address: emails.primary, field: 'emails.primary', label: 'that primary email' }]
+                : []),
+            ...(emails?.additional ?? []).map((address, i) => ({
+                address,
+                field: `emails.additional.${i}`,
+                label: `the email ${address}`,
+            })),
+        ];
+        for (const { address, field, label } of listed) {
+            const holder = await this.ownership.addressHolder(context, address, exceptPersonId).catch(() => null);
+            if (!holder) continue;
+            if (holder.workspaceName) {
+                return new UniqueConflict(`a person with ${label} is already a lead in ${holder.workspaceName}`, field);
+            }
+            const whose = holder.ownerName ? `owned by ${holder.ownerName}` : 'with no owner';
+            const where = holder.trashed ? ', in the trash' : '';
+            return new UniqueConflict(`a person with ${label} exists, ${whose}${where}`, field);
         }
-        const whose = holder.ownerName ? `owned by ${holder.ownerName}` : 'with no owner';
-        const where = holder.trashed ? ', in the trash' : '';
-        return new UniqueConflict(`a person with that primary email exists, ${whose}${where}`, 'emails.primary');
+        return new UniqueConflict('a person with that email exists', listed[0]?.field ?? 'emails.primary');
     }
 
     async removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }> {
@@ -306,7 +319,7 @@ export class PeopleService implements BulkRecords {
         if (!trashed) throw notFound();
         // A lead pool may have given the address to another workspace while this person was in the trash.
         await tx.person.updateMany({ where, data: { deletedAt: null } }).catch(async (error: unknown) => {
-            throw uniqueViolation(error) ? await this.conflict(context, trashed.emailPrimary, id) : error;
+            throw uniqueViolation(error) ? await this.conflict(context, { primary: trashed.emailPrimary }, id) : error;
         });
         return { row: await find(tx, context, id), event: event(context, 'person.restored', id) };
     }

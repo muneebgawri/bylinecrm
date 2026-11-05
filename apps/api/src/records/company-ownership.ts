@@ -242,8 +242,12 @@ export class CompanyOwnership {
         if (!address) return null;
         const email = address.trim().toLowerCase();
         return this.widened(context, async (tx) => {
+            // Its primary address or an additional one (`person_addresses`): one person per address, either way.
             const person = await tx.person.findFirst({
-                where: { emailPrimary: email, ...(exceptPersonId ? { id: { not: exceptPersonId } } : {}) },
+                where: {
+                    OR: [{ emailPrimary: email }, { addresses: { some: { address: email } } }],
+                    ...(exceptPersonId ? { id: { not: exceptPersonId } } : {}),
+                },
                 select: { deletedAt: true, owner: { select: { user: { select: { displayName: true } } } } },
             });
             if (person) {

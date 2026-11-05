@@ -326,6 +326,58 @@ describe('records', () => {
             await as(admin).get(w('/people/address-check?email=not-an-address')).expect(400);
         });
 
+        it('refuses a person with an address another person already lists, primary or additional', async () => {
+            const lead = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Lead', emails: { primary: `lead-${stamp}@x.test`, additional: [] } })
+                .expect(201);
+            // The lead gains a second address.
+            await as(admin)
+                .patch(w(`/people/${(lead.body as Person).id}`))
+                .send({ emails: { primary: `lead-${stamp}@x.test`, additional: [`Second-${stamp}@x.test`] } })
+                .expect(200);
+
+            // A new person whose primary is the lead's second address: refused, naming whose it is.
+            const asPrimary = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Copy', emails: { primary: `second-${stamp}@X.test`, additional: [] } })
+                .expect(409);
+            expect(asPrimary.body).toMatchObject({
+                code: 'conflict.unique',
+                fieldErrors: [{ path: 'emails.primary' }],
+            });
+            expect((asPrimary.body as { message: string }).message).toMatch(/exists, (owned by \S.*|with no owner)$/);
+
+            // Listing either of the lead's addresses as an additional one: refused, on that field.
+            const asAdditional = await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Copy',
+                    emails: {
+                        primary: `copy-${stamp}@x.test`,
+                        additional: [`other-${stamp}@x.test`, `lead-${stamp}@x.test`],
+                    },
+                })
+                .expect(409);
+            expect(asAdditional.body).toMatchObject({ fieldErrors: [{ path: 'emails.additional.1' }] });
+
+            // Another person gaining it by an edit: refused too.
+            const other = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Other', emails: { primary: `free2-${stamp}@x.test`, additional: [] } })
+                .expect(201);
+            await as(admin)
+                .patch(w(`/people/${(other.body as Person).id}`))
+                .send({ emails: { primary: `free2-${stamp}@x.test`, additional: [`second-${stamp}@x.test`] } })
+                .expect(409);
+
+            // The check before a create sees an additional address as held.
+            const check = await as(admin)
+                .get(w(`/people/address-check?email=${encodeURIComponent(`second-${stamp}@x.test`)}`))
+                .expect(200);
+            expect(check.body).toMatchObject({ available: false });
+        });
+
         it('a person needs a name or a primary email', async () => {
             await as(admin).post(w('/people')).send({ city: 'Nowhere' }).expect(422);
         });
