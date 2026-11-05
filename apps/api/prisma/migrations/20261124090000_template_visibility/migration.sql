@@ -1,8 +1,8 @@
 -- A template is its author's own unless they make it public: a member reads their own templates and the public ones,
 -- never another member's private template. `template:read_all` (an admin's by construction, grantable to any role)
--- reads every one. Owner decision: templates written before this become private to their author too. One no member
--- wrote (a key, the system) or one imported from Twenty stays public: it is the whole team's, and private it would be
--- readable only with `template:read_all`.
+-- reads every one. Owner decisions: templates written before this become private to their author too, and one whose
+-- author has left stays private, readable only with `template:read_all`. One no member wrote (a key, the system) or
+-- one imported from Twenty stays public: it was never anyone's own.
 
 -- CreateEnum
 CREATE TYPE "template_visibility" AS ENUM ('private', 'public');
@@ -20,10 +20,10 @@ UPDATE "email_templates" t
    AND m."id"::text = t."created_by" ->> 'id'
    AND m."workspace_id" = t."workspace_id";
 
--- Public: no owner, or a campaign imported from Twenty.
+-- Public: written by no member, or a campaign imported from Twenty.
 UPDATE "email_templates" t
    SET "visibility" = 'public'
- WHERE t."owner_member_id" IS NULL
+ WHERE t."created_by" ->> 'kind' IS DISTINCT FROM 'member'
     OR EXISTS (
         SELECT 1 FROM "twenty_import_links" l
          WHERE l."workspace_id" = t."workspace_id" AND l."local_type" = 'template' AND l."local_id" = t."id"
