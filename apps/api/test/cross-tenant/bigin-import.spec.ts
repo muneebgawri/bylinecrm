@@ -805,6 +805,39 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
                 `taken-${stamp}@dup.example`,
             );
         });
+
+        it('a new Contact whose address another person lists as an additional one is created without it, never failed', async () => {
+            const holder = await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Holder',
+                    emails: { primary: `holder-${stamp}@extra.example`, additional: [`shared-${stamp}@extra.example`] },
+                });
+            expect(holder.status, JSON.stringify(holder.body)).toBe(201);
+            const holderId = (holder.body as { id: string }).id;
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            const [contact] = bigin.seed('Contacts', [
+                {
+                    First_Name: 'Newcomer',
+                    Last_Name: 'Shared',
+                    Email: `Shared-${stamp}@extra.example`,
+                    Secondary_Email: `own-${stamp}@extra.example`,
+                    Owner: ownerOf(adminEmail),
+                },
+            ]);
+            const run = await runToEnd('changes');
+            const contacts = reportOf(run, 'Contacts');
+            expect(contacts.errors, JSON.stringify(contacts.errors)).toEqual([]);
+            expect(counts(contacts)).toMatchObject({ created: 1, failed: 0 });
+            expect(contacts.kept).toContainEqual({ externalId: contact!.id, fields: ['emails'] });
+            const made = await owner.person.findUniqueOrThrow({
+                where: { id: (await linkOf('Contacts', contact!.id))!.localId },
+            });
+            expect(made).toMatchObject({ nameFirst: 'Newcomer', emailPrimary: null });
+            expect(made.emails).toMatchObject({ additional: [`own-${stamp}@extra.example`] });
+            const kept = await owner.person.findUniqueOrThrow({ where: { id: holderId } });
+            expect(kept.emails).toMatchObject({ additional: [`shared-${stamp}@extra.example`] });
+        });
     });
 
     describe('the automatic sync', () => {

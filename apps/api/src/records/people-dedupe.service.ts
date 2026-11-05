@@ -296,11 +296,9 @@ export class PeopleDedupe {
         for (const { id } of live) {
             if (id === survivorId) continue;
             const dup = await tx.person.findUniqueOrThrow({ where: { id }, select: PERSON_FIELDS });
-            // The duplicate gives up its primary address first: the primary is unique per workspace, trash included.
-            await tx.person.update({
-                where: { id },
-                data: { emails: { primary: null, additional: emailsOf(dup.emails) } },
-            });
+            // The duplicate gives up every address first: an address is one person's, primary or additional, trash
+            // included (`people_address_taken`), so the survivor can only take them once the duplicate holds none.
+            await tx.person.update({ where: { id }, data: { emails: { primary: null, additional: [] } } });
             const next = combined(survivor, dup);
             survivor = await tx.person.update({
                 where: { id: survivorId },

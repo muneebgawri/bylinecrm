@@ -3,6 +3,7 @@ import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
+import type { Prisma } from '@prisma/client';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
@@ -11,6 +12,18 @@ import { PrismaService } from '../../src/infra/prisma.service';
 import { PeopleDedupe } from '../../src/records/people-dedupe.service';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
+
+/** A write past the API that shares an address, as an import did before `people_address_taken`: the rule off, in one transaction. */
+async function withoutAddressRule(
+    owner: PrismaService,
+    write: (tx: Prisma.TransactionClient) => Promise<unknown>,
+): Promise<void> {
+    await owner.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('ALTER TABLE "people" DISABLE TRIGGER people_address_taken');
+        await write(tx);
+        await tx.$executeRawUnsafe('ALTER TABLE "people" ENABLE TRIGGER people_address_taken');
+    });
+}
 
 function browserFrom(res: Response) {
     const raw = res.headers['set-cookie'] as string[] | undefined;
@@ -104,8 +117,13 @@ describe('person dedupe: merging people saved more than once', () => {
             emails: { primary: `rhoganson@${domain}`, additional: [] },
         });
         // Written past the API, as the import did: p2 also carries p1's address and is linked to its own Bigin Contact.
-        await owner.$executeRaw`UPDATE people SET emails = jsonb_set(emails, '{additional}', ${JSON.stringify([`RICK@${domain}`])}::jsonb),
-            city = 'Austin', owner_id = NULL WHERE id = ${p2}::uuid`;
+        await withoutAddressRule(
+            owner,
+            (
+                tx,
+            ) => tx.$executeRaw`UPDATE people SET emails = jsonb_set(emails, '{additional}', ${JSON.stringify([`RICK@${domain}`])}::jsonb),
+            city = 'Austin', owner_id = NULL WHERE id = ${p2}::uuid`,
+        );
         await owner.biginImportLink.create({
             data: {
                 workspaceId: workspace,
@@ -162,7 +180,11 @@ describe('person dedupe: merging people saved more than once', () => {
             otherSignup.browser,
             other,
         );
-        await owner.$executeRaw`UPDATE people SET emails = jsonb_set(emails, '{additional}', ${JSON.stringify([`rick@${domain}`])}::jsonb) WHERE id = ${otherB}::uuid`;
+        await withoutAddressRule(
+            owner,
+            (tx) =>
+                tx.$executeRaw`UPDATE people SET emails = jsonb_set(emails, '{additional}', ${JSON.stringify([`rick@${domain}`])}::jsonb) WHERE id = ${otherB}::uuid`,
+        );
         await settle(app);
     });
 

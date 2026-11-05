@@ -264,19 +264,27 @@ export class PeopleService implements BulkRecords {
                 event: event(context, 'person.updated', id, diffOf(view(current), view(after), DIFF_FIELDS)),
             };
         } catch (error) {
-            throw uniqueViolation(error) ? await this.conflict(context, patch.emails, id) : error;
+            throw uniqueViolation(error)
+                ? await this.conflict(context, patch.emails, id, stored<Emails>(current.emails))
+                : error;
         }
     }
 
     /**
      * An address is taken: which one, and by whose person, so the saver knows whom to ask (no more of it is shown). The
      * primary address first, then each additional one, as the form lists them; the first another person holds is named.
+     * On an edit only an address the write adds is named (`had`: the person's addresses before it): one they already
+     * share with someone from before is allowed, as the database's rule allows it, so it is never the reason.
      */
     private async conflict(
         context: WorkspaceRunContext,
         emails: { primary?: string | null | undefined; additional?: readonly string[] | undefined } | null | undefined,
         exceptPersonId?: string,
+        had?: Emails,
     ): Promise<UniqueConflict> {
+        const held = new Set(
+            [had?.primary, ...(had?.additional ?? [])].filter((a): a is string => !!a).map((a) => a.toLowerCase()),
+        );
         const listed: { address: string; field: string; label: string }[] = [
             ...(emails?.primary
                 ? [{ address: emails.primary, field: 'emails.primary', label: 'that primary email' }]
@@ -288,6 +296,7 @@ export class PeopleService implements BulkRecords {
             })),
         ];
         for (const { address, field, label } of listed) {
+            if (held.has(address.toLowerCase())) continue;
             const holder = await this.ownership.addressHolder(context, address, exceptPersonId).catch(() => null);
             if (!holder) continue;
             if (holder.workspaceName) {

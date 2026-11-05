@@ -1014,11 +1014,9 @@ export class BiginImportRunner {
                     await link(match.id);
                     return 'merged';
                 }
-                const created = await this.people.createIn(
-                    tx,
-                    context,
-                    forCreate(await withoutTakenAdditional(tx, null, { ...input, ownerId })),
-                );
+                const free = await withoutTakenAddresses(tx, { ...input, ownerId });
+                if (free.emails !== input.emails) page.kept.push('emails');
+                const created = await this.people.createIn(tx, context, forCreate(free));
                 events.push(created.event);
                 await link(created.row.id);
                 return 'created';
@@ -1165,7 +1163,7 @@ export class BiginImportRunner {
             const created = await this.people.createIn(
                 tx,
                 context,
-                forCreate(await withoutTakenAdditional(tx, null, { ...reuse.input, ownerId: reuse.ownerId })),
+                forCreate(await withoutTakenAddresses(tx, { ...reuse.input, ownerId: reuse.ownerId })),
             );
             reuse.events.push(created.event);
             personId = created.row.id;
@@ -1410,6 +1408,21 @@ async function withoutTakenAdditional(
     }
     if (taken.size === 0) return input;
     return { ...input, emails: { ...input.emails, additional: additional.filter((a) => !taken.has(a)) } };
+}
+
+/**
+ * A new person's input without the addresses another person here holds: no person had this primary email as theirs
+ * (the Contact would have merged into them), but one may list it as an additional address, and the database refuses an
+ * address two people hold (`people_address_taken`). The address stays with its holder; the Contact is created with the
+ * rest, so one shared address does not cost it the whole record.
+ */
+async function withoutTakenAddresses<I extends PersonInput>(tx: WorkspaceClient, input: I): Promise<I> {
+    const primary = input.emails?.primary;
+    let free = input;
+    if (primary && (await tx.person.findFirst({ where: { OR: heldAs(primary) }, select: { id: true } }))) {
+        free = { ...input, emails: { ...input.emails, primary: null } };
+    }
+    return withoutTakenAdditional(tx, null, free) as Promise<I>;
 }
 
 async function currentIdentity(tx: WorkspaceClient, personId: string): Promise<ContactIdentity> {
