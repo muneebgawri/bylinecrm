@@ -3324,7 +3324,7 @@ model GuardrailEvent {
   @@unique([workspaceId, dedupeKey])
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([workspaceId, actorMemberId, createdAt])
-  @@index([workspaceId, kind, actorMemberId, createdAt])
+  @@index([workspaceId, actorMemberId, kind, createdAt], map: "guardrail_events_actor_idx")
   @@map("guardrail_events")
 }
 

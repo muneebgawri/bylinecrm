@@ -26,3 +26,7 @@ CREATE INDEX "ownership_transfers_record_idx" ON "ownership_transfers"("workspac
 
 DROP INDEX "enrichment_answers_workspace_id_object_record_id_asked_at_idx";
 CREATE INDEX "enrichment_answers_record_idx" ON "enrichment_answers"("workspace_id", "record_id", "object", "asked_at" DESC);
+
+-- Guardrail counts are per actor and kind over a window: the actor (a uuid) leads, the kind is checked after.
+DROP INDEX "guardrail_events_workspace_id_kind_actor_member_id_created_at_i";
+CREATE INDEX "guardrail_events_actor_idx" ON "guardrail_events"("workspace_id", "actor_member_id", "kind", "created_at");
