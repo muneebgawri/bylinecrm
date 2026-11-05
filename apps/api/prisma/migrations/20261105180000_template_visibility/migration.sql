@@ -12,6 +12,11 @@ ALTER TABLE "email_templates"
     ADD COLUMN "visibility" "template_visibility" NOT NULL DEFAULT 'private',
     ADD COLUMN "owner_member_id" UUID;
 
+-- The two updates below are the one exception to "no backfills in migrations": they must land in the same transaction
+-- as the column. The column starts every row private with no owner, readable only with `template:read_all`, so a
+-- backfill left to a job would hide every author's own templates from them until it ran. The table is small (one
+-- row per template), and both updates are one statement each.
+
 -- The author, where a member wrote it and is still a member of the workspace.
 UPDATE "email_templates" t
    SET "owner_member_id" = m."id"

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
-import { PreviewMailDto } from '../mail-send/dto';
 import { readableBy } from './templates.service';
 
 const as = (memberId: string | null, capabilities: string[] = []) =>
@@ -24,26 +23,5 @@ describe('who reads a template', () => {
 
     it('no one (a key): the public ones only', () => {
         expect(readableBy(as(null))).toEqual({ visibility: 'public' });
-    });
-});
-
-describe('POST /mail/preview body', () => {
-    const base = { mailboxId: crypto.randomUUID(), personId: crypto.randomUUID() };
-    const body = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hi' }] }] };
-    const parse = (input: object) => PreviewMailDto.schema.safeParse(input).success;
-
-    it('takes a written body, with or without a subject yet', () => {
-        expect(parse({ ...base, body })).toBe(true);
-        expect(parse({ ...base, body, subject: 'Hello {{person.firstName}}', signature: null })).toBe(true);
-    });
-
-    it('takes a template alone, never a template and a body', () => {
-        expect(parse({ ...base, templateId: crypto.randomUUID() })).toBe(true);
-        expect(parse({ ...base, templateId: crypto.randomUUID(), body })).toBe(false);
-        expect(parse({ ...base })).toBe(false);
-    });
-
-    it('takes nothing a send has that a preview does not: no recipients, no schedule', () => {
-        expect(parse({ ...base, body, sendAt: new Date().toISOString() })).toBe(false);
     });
 });

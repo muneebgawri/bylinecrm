@@ -663,7 +663,7 @@ export class MailSendService {
             return { to: primaryOf(person, 'personId', 'to'), sender: member.user.displayName, parent: parentRow };
         });
 
-        const template = await this.templates.get(input.templateId);
+        const template = await this.templates.getForSequence(input.templateId);
         if (template.kind !== 'outreach') {
             throw new ApiException(422, 'unprocessable', 'a sequence sends outreach templates only', [
                 { path: 'templateId', message: 'not an outreach template' },

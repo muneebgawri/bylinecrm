@@ -507,7 +507,7 @@ export class SequenceRunner {
             tx.mailbox.findUniqueOrThrow({ where: { id: mailboxId }, select: { ownerMemberId: true } }),
         );
         return this.context.run({ workspaceId, memberId: mailbox.ownerMemberId, capabilities: new Set() }, async () => {
-            const template = await this.templates.get(templateId);
+            const template = await this.templates.getForSequence(templateId);
             const rendered = await this.renderer.render(
                 { kind: 'outreach', subject: template.subject, body: template.body },
                 { personId: e.personId, dealId: e.dealId ?? undefined, senderMemberId: mailbox.ownerMemberId },

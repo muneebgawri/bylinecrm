@@ -782,6 +782,9 @@ function ComposerForm({
                     <ComposerPreview
                         workspaceId={workspaceId}
                         personName={person.name}
+                        // A reply with no subject of its own goes out under the thread's, never rendered (the send's
+                        // rule): someone else's braces are not variables, so the preview shows it as text too.
+                        subject={reply && docToSubject(subject).trim() === '' ? threadSubject : undefined}
                         disabled={blank || !mailboxId}
                         input={() => {
                             // As the send would say it: the template while the message still is it, else as written.
@@ -792,13 +795,7 @@ function ComposerForm({
                                 mailboxId,
                                 personId: person.id,
                                 ...(dealId ? { dealId } : {}),
-                                ...(asTemplate
-                                    ? { templateId: fill.templateId }
-                                    : {
-                                          body,
-                                          // A reply with no subject of its own shows the thread's, as it will go.
-                                          subject: written || (reply ? threadSubject : ''),
-                                      }),
+                                ...(asTemplate ? { templateId: fill.templateId } : { body, subject: written }),
                                 ...(signatureTouched ? { signature } : {}),
                             };
                         }}

@@ -25,12 +25,15 @@ export function ComposerPreview({
     workspaceId,
     personName,
     input,
+    subject,
     disabled,
 }: {
     workspaceId: string;
     personName: string;
     /** The message as the composer would send it now. */
     input: () => PreviewMailInput;
+    /** The subject it goes under when that is not rendered: a reply's thread subject. */
+    subject?: string | undefined;
     disabled?: boolean;
 }) {
     const [open, setOpen] = useState(false);
@@ -71,7 +74,9 @@ export function ComposerPreview({
                             <>
                                 <p className="m-0 text-sm">
                                     <span className="text-text-muted">Subject: </span>
-                                    <span className="font-medium">{rendered.subject || '(no subject)'}</span>
+                                    <span className="font-medium">
+                                        {subject ?? (rendered.subject || '(no subject)')}
+                                    </span>
                                 </p>
                                 <EmailFrame
                                     html={rendered.html}

@@ -16,6 +16,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { actorOf } from '../records/actor';
 import { diffOf } from '../records/diff';
 import { readMailSettings } from '../templates/mail-settings.service';
+import { readableBy } from '../templates/templates.service';
 import type { CreateSequenceDto, StepInput, UpdateSequenceDto } from './dto';
 import { isTimeZone } from './schedule';
 import { SequenceRunner } from './sequence-runner';
@@ -152,7 +153,7 @@ export class SequencesService {
         return this.rls.withWorkspace(async (tx) => {
             const sequence = await find(tx, id, context);
             if (sequence.status === 'archived') throw new StateConflict('an archived sequence is read-only');
-            await validateSteps(tx, steps);
+            await validateSteps(tx, steps, context, sequence.steps);
             const existing = [...sequence.steps].sort((a, b) => a.position - b.position);
             if (sequence.status !== 'draft') {
                 const kept = existing.every((s, i) => steps[i]?.id === s.id && steps[i]?.kind === s.kind);
@@ -212,12 +213,23 @@ export class SequencesService {
             if (emails.length === 0) {
                 throw new ApiException(422, 'unprocessable', 'a sequence needs at least one email step to run');
             }
+            // Each one the caller may see: activating sends it, so a template its author keeps private is not
+            // someone else's to set going (`readableBy`). Once running, the sequence sends it whatever happens next.
             const templates = await tx.emailTemplate.findMany({
-                where: { id: { in: emails.map((s) => s.templateId!) }, deletedAt: null, kind: 'outreach' },
+                where: {
+                    id: { in: emails.map((s) => s.templateId!) },
+                    deletedAt: null,
+                    kind: 'outreach',
+                    ...readableBy(this.current()),
+                },
                 select: { id: true },
             });
             if (templates.length !== new Set(emails.map((s) => s.templateId)).size) {
-                throw new ApiException(422, 'unprocessable', 'every email step needs a live outreach template');
+                throw new ApiException(
+                    422,
+                    'unprocessable',
+                    'every email step needs a live outreach template you can see',
+                );
             }
             const settings = await readMailSettings(tx);
             if (!settings.postalAddress) {
@@ -343,13 +355,27 @@ function assertZone(zone: string): void {
     }
 }
 
-/** Email steps need a live outreach template; a reply in thread needs an email step before it. */
-async function validateSteps(tx: WorkspaceClient, steps: readonly StepInput[]): Promise<void> {
+/**
+ * Email steps need a live outreach template; a reply in thread needs an email step before it. A template a step newly
+ * names must be one the caller may see (`readableBy`); one a saved step already names is kept whoever saves the list,
+ * so another member's edit to a running sequence does not drop a template its author has since made private.
+ */
+async function validateSteps(
+    tx: WorkspaceClient,
+    steps: readonly StepInput[],
+    context: WorkspaceRunContext,
+    saved: readonly { templateId: string | null }[] = [],
+): Promise<void> {
     const templateIds = steps.flatMap((s) => (s.kind === 'email' ? [s.templateId] : []));
+    const kept = new Set(saved.flatMap((s) => (s.templateId ? [s.templateId] : [])));
     const live = new Map(
         (
             await tx.emailTemplate.findMany({
-                where: { id: { in: templateIds }, deletedAt: null },
+                where: {
+                    id: { in: templateIds },
+                    deletedAt: null,
+                    OR: [{ id: { in: [...kept] } }, readableBy(context)],
+                },
                 select: { id: true, kind: true },
             })
         ).map((t) => [t.id, t.kind]),

@@ -100,9 +100,18 @@ export class TemplatesService {
     }
 
     get(id: string): Promise<EmailTemplateView> {
-        this.current();
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => view(await find(tx, id, false, context)));
+    }
+
+    /**
+     * A template as a running sequence sends it, whoever may see it now. Who chose it was checked when its step was
+     * saved and when the sequence was activated (`readableBy`); a sequence runs as its mailbox's owner, or as no one
+     * for the pool, so filtering here would stop a sequence the day its template's author makes it private.
+     */
+    getForSequence(id: string): Promise<EmailTemplateView> {
+        this.current();
+        return this.rls.withWorkspace(async (tx) => view(await find(tx, id, false)));
     }
 
     /**
