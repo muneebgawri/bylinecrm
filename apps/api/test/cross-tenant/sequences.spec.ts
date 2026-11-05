@@ -422,7 +422,7 @@ describe('FR-CRMS-5 sequences', () => {
             ]);
             // Activation needs an email step; it has one.
             expect((await activate(seq.id)).status).toBe(200);
-            const kim = await person({ nameFirst: 'Kim', emails: { primary: address('kim'), additional: [] } });
+            const kim = await person({ nameFirst: 'Kim', emails: { primary: address('kim-private'), additional: [] } });
             await enrol(seq.id, [kim]);
             const e = await enrolment(seq.id, kim);
             await runner.run(workspace, e.id, new Date());
@@ -438,7 +438,7 @@ describe('FR-CRMS-5 sequences', () => {
                     identityKey: `kim-${stamp}@prospect.example`,
                     direction: 'inbound',
                     rfc822MessageId: `kim-${stamp}@prospect.example`,
-                    fromAddress: address('kim'),
+                    fromAddress: address('kim-private'),
                     sentAt: new Date(),
                     subject: 'Hi',
                     bodyText: 'Hello there',
@@ -453,7 +453,7 @@ describe('FR-CRMS-5 sequences', () => {
         it('reschedules — never drops — a step its mailbox’s cap refused', async () => {
             const seq = await sequence([{ kind: 'email', templateId: template }]);
             expect((await activate(seq.id)).status).toBe(200);
-            const lee = await person({ nameFirst: 'Lee', emails: { primary: address('lee'), additional: [] } });
+            const lee = await person({ nameFirst: 'Lee', emails: { primary: address('lee-private'), additional: [] } });
             await enrol(seq.id, [lee]);
             const e = await enrolment(seq.id, lee);
             await runner.run(workspace, e.id, new Date());
@@ -761,7 +761,7 @@ describe('FR-CRMS-5 sequences', () => {
             // The admin may see every template (template:read_all), so may choose it; the pool's run has no capabilities.
             const seq = await sequence([{ kind: 'email', templateId: privateTemplate }]);
             expect((await activate(seq.id)).status).toBe(200);
-            const kim = await person({ nameFirst: 'Kim', emails: { primary: address('kim'), additional: [] } });
+            const kim = await person({ nameFirst: 'Kim', emails: { primary: address('kim-private'), additional: [] } });
             expect(((await enrol(seq.id, [kim])).body as EnrolmentBatchResult).enrolled).toEqual([kim]);
             await runner.run(workspace, (await enrolment(seq.id, kim)).id, new Date());
             const outboundId = (await enrolment(seq.id, kim)).waitingOutboundId!;
@@ -791,7 +791,7 @@ describe('FR-CRMS-5 sequences', () => {
                 .patch(w(`/templates/${id}`))
                 .send({ visibility: 'private', version: 1 })
                 .expect(200);
-            const lee = await person({ nameFirst: 'Lee', emails: { primary: address('lee'), additional: [] } });
+            const lee = await person({ nameFirst: 'Lee', emails: { primary: address('lee-private'), additional: [] } });
             await enrol(seq.id, [lee]);
             await runner.run(workspace, (await enrolment(seq.id, lee)).id, new Date());
             const outboundId = (await enrolment(seq.id, lee)).waitingOutboundId!;
