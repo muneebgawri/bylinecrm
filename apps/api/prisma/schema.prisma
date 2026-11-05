@@ -951,7 +951,7 @@ model NoteTarget {
   note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   @@unique([noteId, targetType, targetId])
-  @@index([workspaceId, targetType, targetId])
+  @@index([workspaceId, targetId, targetType], map: "note_targets_record_idx")
   @@map("note_targets")
 }
 
@@ -1002,7 +1002,7 @@ model TaskTarget {
   task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, targetType, targetId])
-  @@index([workspaceId, targetType, targetId])
+  @@index([workspaceId, targetId, targetType], map: "task_targets_record_idx")
   @@map("task_targets")
 }
 
@@ -1025,7 +1025,7 @@ model Attachment {
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   author    WorkspaceMember? @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
-  @@index([workspaceId, targetType, targetId])
+  @@index([workspaceId, targetId, targetType], map: "attachments_record_idx")
   @@index([workspaceId, deletedAt])
   @@map("attachments")
 }
@@ -1109,8 +1109,8 @@ model TimelineActivity {
 
   @@unique([workspaceId, source, idempotencyKey])
   @@unique([workspaceId, eventId, targetType, targetId])
-  @@index([workspaceId, targetType, targetId, happenedAt(sort: Desc)])
-  @@index([workspaceId, linkedType, linkedId])
+  @@index([workspaceId, targetId, targetType, happenedAt(sort: Desc)], map: "timeline_activities_record_idx")
+  @@index([workspaceId, linkedId, linkedType], map: "timeline_activities_linked_idx")
   @@map("timeline_activities")
 }
 
@@ -2779,7 +2779,7 @@ model EnrichmentAnswer {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@index([workspaceId, object, recordId, askedAt(sort: Desc)])
+  @@index([workspaceId, recordId, object, askedAt(sort: Desc)], map: "enrichment_answers_record_idx")
   @@index([workspaceId, askedAt])
   @@map("enrichment_answers")
 }
@@ -3200,7 +3200,7 @@ model OwnershipTransfer {
   cadenceLapses CadenceLapse[]
 
   // One open proposal per record — the partial unique index `ownership_transfers_open_record_key` in the migration.
-  @@index([workspaceId, object, recordId, createdAt(sort: Desc)])
+  @@index([workspaceId, recordId, object, createdAt(sort: Desc)], map: "ownership_transfers_record_idx")
   @@index([moved(ops: JsonbPathOps)], type: Gin, map: "ownership_transfers_moved_idx")
   @@index([workspaceId, toMemberId, status])
   @@index([workspaceId, fromMemberId, status])
@@ -3324,7 +3324,7 @@ model GuardrailEvent {
   @@unique([workspaceId, dedupeKey])
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([workspaceId, actorMemberId, createdAt])
-  @@index([workspaceId, kind, actorMemberId, createdAt])
+  @@index([workspaceId, actorMemberId, kind, createdAt], map: "guardrail_events_actor_idx")
   @@map("guardrail_events")
 }
 
