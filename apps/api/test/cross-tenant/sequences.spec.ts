@@ -767,7 +767,8 @@ describe('FR-CRMS-5 sequences', () => {
             const outboundId = (await enrolment(seq.id, kim)).waitingOutboundId!;
             expect(outboundId).toBeTruthy();
             expect(await send.deliver(workspace, outboundId, noWait, Date.now() + 1000)).toBe('sent');
-            expect(gmail.sent.at(-1)!.raw).toContain('Private words.');
+            // The body is MIME-encoded in the raw message; the subject is rendered from the private template.
+            expect(gmail.sent.at(-1)!.raw).toContain('Subject: Hi Kim');
             await as(bystander)
                 .get(w(`/templates/${privateTemplate}`))
                 .expect(404);
@@ -780,7 +781,7 @@ describe('FR-CRMS-5 sequences', () => {
                     name: `Shared intro ${stamp}`,
                     kind: 'outreach',
                     visibility: 'public',
-                    subject: 'Hi',
+                    subject: 'Shared hello {{person.firstName}}',
                     body: doc(para(t('Shared words.'))),
                 });
             expect(shared.status).toBe(201);
@@ -796,7 +797,7 @@ describe('FR-CRMS-5 sequences', () => {
             await runner.run(workspace, (await enrolment(seq.id, lee)).id, new Date());
             const outboundId = (await enrolment(seq.id, lee)).waitingOutboundId!;
             expect(await send.deliver(workspace, outboundId, noWait, Date.now() + 1000)).toBe('sent');
-            expect(gmail.sent.at(-1)!.raw).toContain('Shared words.');
+            expect(gmail.sent.at(-1)!.raw).toContain('Subject: Shared hello Lee');
         });
 
         it('refuses a step, or an activation, that names a private template the caller cannot see', async () => {
