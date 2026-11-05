@@ -368,13 +368,17 @@ async function validateSteps(
 ): Promise<void> {
     const templateIds = steps.flatMap((s) => (s.kind === 'email' ? [s.templateId] : []));
     const kept = new Set(saved.flatMap((s) => (s.templateId ? [s.templateId] : [])));
+    // An empty filter (`template:read_all`) is never nested in an OR: Prisma reads an empty object there as no match.
+    const readable = readableBy(context);
+    const visible: Prisma.EmailTemplateWhereInput =
+        Object.keys(readable).length === 0 ? {} : { OR: [{ id: { in: [...kept] } }, readable] };
     const live = new Map(
         (
             await tx.emailTemplate.findMany({
                 where: {
                     id: { in: templateIds },
                     deletedAt: null,
-                    OR: [{ id: { in: [...kept] } }, readableBy(context)],
+                    ...visible,
                 },
                 select: { id: true, kind: true },
             })
