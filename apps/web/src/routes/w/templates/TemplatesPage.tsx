@@ -29,6 +29,7 @@ import { useDebounced } from '../../../lib/useDebounced';
 import { useWorkspaceId } from '../../params';
 import { CREATE_PARAM, paths } from '../../paths';
 import { KIND_LABEL, KindBadge, KindPicker } from './kind';
+import { VisibilityBadge } from './visibility';
 
 type Tab = 'all' | TemplateKind;
 
@@ -148,6 +149,12 @@ export function TemplatesPage() {
                             ),
                         },
                         { id: 'kind', header: 'Kind', phone: 'meta', cell: (t) => <KindBadge kind={t.kind} /> },
+                        {
+                            id: 'visibility',
+                            header: 'Who can see it',
+                            phone: 'meta',
+                            cell: (t) => <VisibilityBadge visibility={t.visibility} />,
+                        },
                         {
                             id: 'subject',
                             header: 'Subject',

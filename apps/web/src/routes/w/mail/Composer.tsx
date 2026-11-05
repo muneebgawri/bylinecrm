@@ -56,6 +56,9 @@ import {
 } from './compose';
 import { useDraftSaver, type DraftSaveState } from './draftSave';
 import { SchedulePicker } from './SchedulePicker';
+import { ComposerPreview } from './ComposerPreview';
+import { useTemplateVariables } from '../../../api/templates';
+import { VariablePicker } from '../templates/VariablePicker';
 import { fromLocalInput, senderTimeZone, toLocalInput } from './schedule';
 
 /** The person the mail is to and about: the record's person, or a deal's point of contact. */
@@ -298,6 +301,18 @@ function ComposerForm({
     const subjectRef = useRef<RichTextHandle>(null);
     const bodyRef = useRef<RichTextHandle>(null);
     const send = useSendMail(workspaceId);
+    // The template builder's picker (doc 50 §C), here too: it inserts where the writer last was, the message by
+    // default; typing `{{` opens it, and dismissing it then returns to the editor.
+    const variables = useTemplateVariables(workspaceId);
+    const target = useRef<'subject' | 'body'>('body');
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const openedByTyping = useRef(false);
+    const editorOf = () => (target.current === 'subject' ? subjectRef : bodyRef).current;
+    const openPicker = (field: 'subject' | 'body') => {
+        target.current = field;
+        openedByTyping.current = true;
+        setPickerOpen(true);
+    };
     // The signature (#193): the mailbox's as shown, until the sender edits or removes it for this message —
     // then this message's own, for that mailbox only; choosing another mailbox shows its signature.
     const mailboxSignature = useMailboxSignature(workspaceId, mailboxId);
@@ -575,6 +590,20 @@ function ComposerForm({
                             )}
                         </span>
                     )}
+                    <VariablePicker
+                        variables={variables.data}
+                        open={pickerOpen}
+                        onOpenChange={(next) => {
+                            if (next) openedByTyping.current = false;
+                            setPickerOpen(next);
+                        }}
+                        onPick={(path) => editorOf()?.insertVariable(path)}
+                        restoreFocus={() => {
+                            if (!openedByTyping.current) return false;
+                            editorOf()?.focus();
+                            return true;
+                        }}
+                    />
                     <TemplateMenu
                         workspaceId={workspaceId}
                         pending={preview.isPending}
@@ -627,6 +656,8 @@ function ComposerForm({
                     profile="subject"
                     value={subject}
                     onChange={setSubject}
+                    onFocus={() => (target.current = 'subject')}
+                    onVariableTrigger={() => openPicker('subject')}
                     handle={subjectRef}
                     aria-label="Subject"
                     placeholder={reply ? `Re: ${reply.subject.replace(/^re:\s*/i, '')}` : 'Subject'}
@@ -640,6 +671,8 @@ function ComposerForm({
                     profile="template"
                     value={body}
                     onChange={setBody}
+                    onFocus={() => (target.current = 'body')}
+                    onVariableTrigger={() => openPicker('body')}
                     handle={bodyRef}
                     autoFocus={autoFocus ?? false}
                     aria-label="Message"
@@ -746,6 +779,30 @@ function ComposerForm({
                     Add follow-up
                 </Button>
                 <div className="ml-auto flex items-center gap-2">
+                    <ComposerPreview
+                        workspaceId={workspaceId}
+                        personName={person.name}
+                        disabled={blank || !mailboxId}
+                        input={() => {
+                            // As the send would say it: the template while the message still is it, else as written.
+                            const asTemplate =
+                                fill && sendsAsTemplate({ fill, subject, body, replyToMessageId: reply?.messageId });
+                            const written = docToSubject(subject);
+                            return {
+                                mailboxId,
+                                personId: person.id,
+                                ...(dealId ? { dealId } : {}),
+                                ...(asTemplate
+                                    ? { templateId: fill.templateId }
+                                    : {
+                                          body,
+                                          // A reply with no subject of its own shows the thread's, as it will go.
+                                          subject: written || (reply ? threadSubject : ''),
+                                      }),
+                                ...(signatureTouched ? { signature } : {}),
+                            };
+                        }}
+                    />
                     {saveDrafts
                         ? (saver.state.kind !== 'none' || hasDraftContent(state) || onDiscard) && (
                               <Button size="sm" shape="square" variant="ghost" onClick={() => void discardDraft()}>

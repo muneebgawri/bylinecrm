@@ -1,6 +1,7 @@
 import {
     CUSTOM_VARIABLE_SOURCES,
     TEMPLATE_KINDS,
+    TEMPLATE_VISIBILITIES,
     TEMPLATE_VARIABLE_SOURCES,
     type MailSettings,
     type PostalAddress,
@@ -16,6 +17,10 @@ export const emailTemplateView = named(
         id,
         name: z.string(),
         kind: z.enum(TEMPLATE_KINDS),
+        visibility: z.enum(TEMPLATE_VISIBILITIES).meta({
+            description: '`private`: its author and administrators read it. `public`: every member does.',
+        }),
+        ownerMemberId: z.uuid().nullable().meta({ description: 'The member who wrote it; null for none.' }),
         subject: z.string().meta({ description: 'Plain text; variables are `{{path}}` tokens.' }),
         body: richText.meta({ description: 'The template subset of rich text; variables are `variable` nodes.' }),
         version: z.number().int().meta({ description: 'Name it when you PATCH (body `version` or `If-Match`).' }),

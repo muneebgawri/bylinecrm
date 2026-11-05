@@ -34,6 +34,8 @@ const member = { kind: 'member' as const, id: 'm-1' };
 export const template = (over: Partial<EmailTemplateView> = {}): EmailTemplateView => ({
     id: 't-1',
     name: 'Follow-up after a reply',
+    visibility: 'public',
+    ownerMemberId: 'm-1',
     kind: 'personal',
     subject: 'About {{company.name}}',
     body: {

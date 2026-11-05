@@ -35,7 +35,7 @@ import { assertCanChangeSend, canChangeSend, readableSends, type SendAccessCalle
 import { recordWhere } from '../records/record-scope';
 import { SignaturesService } from '../signatures/signatures.service';
 import { RenderService } from '../templates/render.service';
-import { withUnsubscribeUrl } from '../templates/render/compose';
+import { withUnsubscribeUrl, type ComposedEmail } from '../templates/render/compose';
 import { TemplatesService } from '../templates/templates.service';
 import { UnsubscribeService } from '../suppression/unsubscribe.service';
 import { fingerprint, type Fingerprint } from '../reputation/fingerprint';
@@ -61,6 +61,7 @@ import type { Smtp2GoTestResult } from '../smtp2go/responses';
 import { PoolRefusal, SendingPoolService } from '../sending-pool/sending-pool.service';
 import { RecipientSuppressed } from '../suppression/suppression.service';
 import { SendPolicy, type RecipientField, type SendRecipient } from './send-policy';
+import type { PreviewMailDto } from './dto';
 import { gmailShapeOf } from './mime-read';
 import { THREAD_PARENT_WAIT_MS, followAfter } from './thread-follow';
 import { SMTP2GO_PROVIDER_PREFIX } from '../smtp2go/smtp2go.constants';
@@ -431,6 +432,73 @@ export class MailSendService {
             : this.preparePersonal(input as PersonalRequest, send, when, options);
     }
 
+    /**
+     * What a message says, rendered for its person with its signature — one definition, for the send and for the
+     * composer's preview: a template the caller may read, or a subject and body checked by the templates' own rule.
+     */
+    private async renderContent(
+        input: {
+            personId: string;
+            dealId?: string | undefined;
+            templateId?: string | undefined;
+            subject?: string | undefined;
+            body?: RichText | undefined;
+            signature?: RichText | null | undefined;
+        },
+        mailboxId: string,
+        memberId: string,
+    ): Promise<ComposedEmail> {
+        let draft: { kind: 'personal'; subject: string; body: RichText };
+        if (input.templateId) {
+            const template = await this.templates.get(input.templateId);
+            if (template.kind === 'outreach') {
+                throw new ApiException(
+                    422,
+                    'unprocessable',
+                    'an outreach template is sent by a sequence, not one by one',
+                    [{ path: 'templateId', message: 'an outreach template' }],
+                );
+            }
+            draft = { kind: 'personal', subject: template.subject, body: template.body };
+        } else {
+            draft = { kind: 'personal', subject: input.subject ?? '', body: input.body! };
+            await this.templates.validateDraft(draft);
+        }
+        // The signature follows the body (#193): the mailbox's, or this message's as the composer sent it.
+        if (input.signature !== undefined) await this.signatures.assertMessageSignature(input.signature);
+        return this.renderer.render(draft, {
+            personId: input.personId,
+            dealId: input.dealId,
+            senderMemberId: memberId,
+            signature:
+                input.signature === undefined
+                    ? { from: 'mailbox', mailboxId }
+                    : { from: 'message', mailboxId, signature: input.signature },
+        });
+    }
+
+    /**
+     * The message as it would be sent, never sent (`POST /mail/preview`): from the caller's own personal mailbox, about
+     * a person they may read. A variable with no value is reported in `missing`, not refused: the preview says so.
+     */
+    async preview(input: PreviewMailDto): Promise<ComposedEmail> {
+        const context = this.current();
+        const memberId = context.memberId;
+        if (!memberId) throw new ApiException(403, 'forbidden', "mail is sent from a member's own mailbox");
+        const mailbox = await this.mailboxes.get(input.mailboxId);
+        if (mailbox.purpose !== 'personal' || mailbox.ownerMemberId !== memberId) {
+            throw new ApiException(403, 'forbidden', 'mail is sent from your own personal mailbox');
+        }
+        await this.rls.withWorkspace(async (tx) => {
+            const person = await tx.person.findFirst({
+                where: { id: input.personId, ...recordWhere(context, false) },
+                select: { id: true },
+            });
+            if (!person) throw new NotFoundException('person not found');
+        });
+        return this.renderContent(input, mailbox.id, memberId);
+    }
+
     /** A member's own send from their personal mailbox (P2-3), or a follow-up of one. */
     private async preparePersonal(
         input: PersonalRequest,
@@ -494,34 +562,7 @@ export class MailSendService {
             };
         });
 
-        // What it says: a template, or a subject and body checked by the templates' own rule.
-        let draft: { kind: 'personal'; subject: string; body: RichText };
-        if (input.templateId) {
-            const template = await this.templates.get(input.templateId);
-            if (template.kind === 'outreach') {
-                throw new ApiException(
-                    422,
-                    'unprocessable',
-                    'an outreach template is sent by a sequence, not one by one',
-                    [{ path: 'templateId', message: 'an outreach template' }],
-                );
-            }
-            draft = { kind: 'personal', subject: template.subject, body: template.body };
-        } else {
-            draft = { kind: 'personal', subject: input.subject ?? '', body: input.body! };
-            await this.templates.validateDraft(draft);
-        }
-        // The signature follows the body (#193): the mailbox's, or this message's as the composer sent it.
-        if (input.signature !== undefined) await this.signatures.assertMessageSignature(input.signature);
-        const rendered = await this.renderer.render(draft, {
-            personId: input.personId,
-            dealId: input.dealId,
-            senderMemberId: memberId,
-            signature:
-                input.signature === undefined
-                    ? { from: 'mailbox', mailboxId: mailbox.id }
-                    : { from: 'message', mailboxId: mailbox.id, signature: input.signature },
-        });
+        const rendered = await this.renderContent(input, mailbox.id, memberId);
         if (!rendered.sendable) throw new Unsendable(rendered.missing);
         // A reply with no subject of its own takes the parent's, as written — never rendered, so
         // braces in someone else's subject are not variables. A queued follow-up always does, template or

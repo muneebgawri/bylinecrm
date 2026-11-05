@@ -318,6 +318,7 @@ model WorkspaceMember {
   assignedTasks          Task[]
   authoredAttachments    Attachment[]
   savedViews             SavedView[]
+  ownedTemplates         EmailTemplate[]
   resumedMailboxes       Mailbox[]              @relation("MailboxResumedBy")
   configuredOAuthClients GoogleOAuthClient[]
   postmasterConnections  PostmasterConnection[]
@@ -1366,6 +1367,14 @@ model Mailbox {
   @@map("mailboxes")
 }
 
+/// Who reads a template: its author (and administrators), or every member.
+enum TemplateVisibility {
+  private
+  public
+
+  @@map("template_visibility")
+}
+
 enum TemplateKind {
   personal
   outreach
@@ -1392,13 +1401,19 @@ model EmailTemplate {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+  /// `private`: its author and administrators read it. `public`: every member does.
+  visibility    TemplateVisibility @default(private)
+  /// The member who wrote it; null for an import, a key or the system (such a template is public).
+  ownerMemberId String?            @map("owner_member_id") @db.Uuid
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     WorkspaceMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
 
   mailOutbound  MailOutbound[]
   sequenceSteps SequenceStep[]
 
   @@index([workspaceId, deletedAt, updatedAt(sort: Desc)])
+  @@index([workspaceId, ownerMemberId])
   @@map("email_templates")
 }
 

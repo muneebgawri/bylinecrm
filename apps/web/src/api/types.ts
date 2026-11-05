@@ -248,6 +248,7 @@ export type SetMailboxPoolInput = Loose<Schemas['SetMailboxPoolDto']>;
 export type UpdateSendingDomainInput = Loose<Schemas['UpdateSendingDomainDto']>;
 // ---- Sending, scheduling and reading mail on a record (P2-3, P2-5; P2-UI-1) --------------------
 export type SendMailInput = Loose<Schemas['SendMailDto']>;
+export type PreviewMailInput = Loose<Schemas['PreviewMailDto']>;
 export type MailSendAcceptedView = Schemas['MailSendAccepted'];
 /** Where one send stands: its status, its schedule and, when it failed, why. */
 export type MailOutboundView = Schemas['MailOutbound'];
