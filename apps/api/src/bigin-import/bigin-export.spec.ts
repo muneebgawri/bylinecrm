@@ -6,6 +6,7 @@ import { BiginExport, apiNameOf, recordFromRow, withPreviousStages, zonedIso } f
 import type { BiginConnection, BiginRecord } from './bigin.port';
 import { CsvParser, parseCsv } from './csv';
 import { mapContact, mapDeal, mapEvent, mapNote, mapTask } from './mappers';
+import { exportCliArgs } from './export-run';
 import { readEmail, readStageHistory } from './history';
 
 const users = new Map([['100', { name: 'Kate Morgan', email: 'kate@pinion.example' }]]);
@@ -283,5 +284,27 @@ describe('BIGIN-1 an export directory as the API', () => {
         expect((await BiginExport.open(join(dir, 'Data'), { timeZone: 'UTC' })).timeZone).toBe('UTC');
         await expect(BiginExport.open(join(dir, 'Metadata'), { timeZone: 'Not/AZone' })).rejects.toThrow();
         await expect(BiginExport.open(tmpdir() + '/no-such-export')).rejects.toThrow(/no Bigin export/);
+    });
+});
+
+describe('BIGIN-1 export CLI arguments', () => {
+    it('reads the slug and directory with or without --timezone, wherever the flag is', () => {
+        expect(exportCliArgs(['ws', '/export'])).toEqual({ slug: 'ws', dir: '/export' });
+        expect(exportCliArgs(['ws', '/export', '--timezone', 'Asia/Karachi'])).toEqual({
+            slug: 'ws',
+            dir: '/export',
+            timeZone: 'Asia/Karachi',
+        });
+        expect(exportCliArgs(['--timezone', 'UTC', 'ws', '/export'])).toEqual({
+            slug: 'ws',
+            dir: '/export',
+            timeZone: 'UTC',
+        });
+    });
+
+    it('refuses a missing argument, an extra one, or a flag without its zone', () => {
+        expect(exportCliArgs(['ws'])).toBeNull();
+        expect(exportCliArgs(['ws', '/export', 'extra'])).toBeNull();
+        expect(exportCliArgs(['ws', '/export', '--timezone'])).toBeNull();
     });
 });

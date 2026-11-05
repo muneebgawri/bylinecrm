@@ -47,3 +47,14 @@ export class BiginExportImport {
         );
     }
 }
+
+/** The CLI's arguments: `<workspace-slug> <export-dir> [--timezone <zone>]`, the flag anywhere; null when malformed. */
+export function exportCliArgs(args: readonly string[]): { slug: string; dir: string; timeZone?: string } | null {
+    const zoneAt = args.indexOf('--timezone');
+    const timeZone = zoneAt >= 0 ? args[zoneAt + 1] : undefined;
+    const rest = zoneAt >= 0 ? args.filter((_, i) => i !== zoneAt && i !== zoneAt + 1) : [...args];
+    const [slug, dir] = rest;
+    if (rest.length !== 2 || !slug || !dir || slug.startsWith('--') || dir.startsWith('--')) return null;
+    if (zoneAt >= 0 && (!timeZone || timeZone.startsWith('--'))) return null;
+    return timeZone ? { slug, dir, timeZone } : { slug, dir };
+}

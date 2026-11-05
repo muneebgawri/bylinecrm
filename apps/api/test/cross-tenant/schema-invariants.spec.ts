@@ -97,4 +97,26 @@ describe('schema invariants', () => {
         const history = tables.find((t) => t.name === '_prisma_migrations');
         expect(history?.grantsToAppRole).toBe(0);
     });
+
+    it('a lookup index on a row-secured table never keys an enum before an id the app looks records up by', async () => {
+        // Under the app role's RLS an index serves only leakproof conditions, and enum equality is not: an enum
+        // ahead of a uuid in a non-unique index leaves every lookup by that id reading the workspace's whole range.
+        // (Unique keys are exempt: their order serves conflict checks; small status queues are exempt by type.)
+        const rows = await owner.$queryRaw<{ index: string }[]>`
+            SELECT i.relname AS index
+            FROM pg_index ix
+            JOIN pg_class i ON i.oid = ix.indexrelid
+            JOIN pg_class c ON c.oid = ix.indrelid AND c.relrowsecurity
+            WHERE NOT ix.indisunique
+              AND EXISTS (
+                SELECT 1
+                FROM unnest(ix.indkey) WITH ORDINALITY AS e(attnum, pos)
+                JOIN pg_attribute ea ON ea.attrelid = c.oid AND ea.attnum = e.attnum
+                JOIN pg_type et ON et.oid = ea.atttypid AND et.typtype = 'e'
+                JOIN unnest(ix.indkey) WITH ORDINALITY AS u(attnum, pos) ON u.pos > e.pos AND u.pos <= ix.indnkeyatts
+                JOIN pg_attribute ua ON ua.attrelid = c.oid AND ua.attnum = u.attnum AND ua.atttypid = 'uuid'::regtype
+              )
+            ORDER BY 1`;
+        expect(rows.map((r) => r.index)).toEqual([]);
+    });
 });

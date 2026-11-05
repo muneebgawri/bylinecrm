@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { BiginImportRunView } from '@bylinecrm/shared';
 import { AppModule } from '../app.module';
-import { BiginExportImport } from '../bigin-import/export-run';
+import { BiginExportImport, exportCliArgs } from '../bigin-import/export-run';
 import { PrismaService } from '../infra/prisma.service';
 
 const USAGE = 'usage: node dist/cli/import-bigin-export.js <workspace-slug> <export-dir> [--timezone <IANA zone>]';
@@ -17,13 +17,9 @@ const USAGE = 'usage: node dist/cli/import-bigin-export.js <workspace-slug> <exp
  * `--timezone` says otherwise. Prints the report's counts — never a record.
  */
 async function main(): Promise<void> {
-    const args = process.argv.slice(2);
-    const zoneAt = args.indexOf('--timezone');
-    const timeZone = zoneAt >= 0 ? args[zoneAt + 1] : undefined;
-    const [slug, dir] = args.filter((_, i) => i !== zoneAt && i !== zoneAt + 1);
-    if (!slug || !dir || slug.startsWith('--') || dir.startsWith('--') || (zoneAt >= 0 && !timeZone)) {
-        throw new Error(USAGE);
-    }
+    const parsed = exportCliArgs(process.argv.slice(2));
+    if (!parsed) throw new Error(USAGE);
+    const { slug, dir, timeZone } = parsed;
     // A one-off process: no worker, relay or schedule of its own — the running API delivers what it records.
     for (const flag of [
         'WEBHOOK_WORKER',
