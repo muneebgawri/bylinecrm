@@ -25,7 +25,7 @@ export const notifications = {
         request<void>('POST', workspacePath(workspaceId, '/notifications/read'), { body: ids ? { ids } : {} }),
     settings: (workspaceId: string, signal?: AbortSignal) =>
         request<NotificationSettingsView>('GET', workspacePath(workspaceId, '/notification-settings'), { signal }),
-    updateSettings: (workspaceId: string, input: NotificationSettingsView) =>
+    updateSettings: (workspaceId: string, input: Partial<NotificationSettingsView>) =>
         request<NotificationSettingsView>('PUT', workspacePath(workspaceId, '/notification-settings'), { body: input }),
     myTasks: (workspaceId: string, signal?: AbortSignal) =>
         request<MyTaskView[]>('GET', workspacePath(workspaceId, '/my-tasks'), { signal }),
@@ -60,7 +60,7 @@ export function useNotificationSettings(workspaceId: string, enabled = true) {
 export function useUpdateNotificationSettings(workspaceId: string) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: (input: NotificationSettingsView) => notifications.updateSettings(workspaceId, input),
+        mutationFn: (input: Partial<NotificationSettingsView>) => notifications.updateSettings(workspaceId, input),
         onSuccess: (saved) => client.setQueryData(keys.settings(workspaceId), saved),
     });
 }

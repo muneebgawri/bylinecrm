@@ -646,6 +646,7 @@ export const notificationsInbox: NotificationsView = {
             invoice: null,
             cadence: null,
             payment: null,
+            email: null,
             createdAt: at(1),
             readAt: null,
             task: {
@@ -664,6 +665,7 @@ export const notificationsInbox: NotificationsView = {
             invoice: null,
             cadence: null,
             payment: null,
+            email: null,
             createdAt: at(26),
             readAt: at(25),
             task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },
@@ -671,7 +673,12 @@ export const notificationsInbox: NotificationsView = {
     ],
 };
 
-export const notificationSettings: NotificationSettingsView = { taskDigest: true };
+export const notificationSettings: NotificationSettingsView = {
+    taskDigest: true,
+    notifyEmailReplies: true,
+    notifyEmailClicks: true,
+    notifyEmailOpens: true,
+};
 
 export const attachments: AttachmentView[] = [
     {

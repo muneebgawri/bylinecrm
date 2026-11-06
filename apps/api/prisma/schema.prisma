@@ -361,7 +361,11 @@ model WorkspaceMember {
   suggestedLeads        CalendarEventParticipant[] @relation("CalendarParticipantLeadSuggestedFor")
 
   /// #192: the daily email of tasks due or overdue; the member turns it off.
-  taskDigest Boolean @default(true) @map("task_digest")
+  taskDigest         Boolean @default(true) @map("task_digest")
+  /// The bell for replies to, clicks in and opens of the member's own sends; each on unless turned off.
+  notifyEmailReplies Boolean @default(true) @map("notify_email_replies")
+  notifyEmailClicks  Boolean @default(true) @map("notify_email_clicks")
+  notifyEmailOpens   Boolean @default(true) @map("notify_email_opens")
 
   transfersFrom     OwnershipTransfer[] @relation("TransferFrom")
   transfersTo       OwnershipTransfer[] @relation("TransferTo")
@@ -1386,21 +1390,21 @@ enum TemplateKind {
 /// subset (`TEMPLATE_BODY_NODES`); variables are `variable` nodes in it and `{{path}}` tokens in
 /// `subject`. `version` is the optimistic-concurrency counter a PATCH must name.
 model EmailTemplate {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String       @map("workspace_id") @db.Uuid
-  name        String
-  kind        TemplateKind
-  subject     String       @default("")
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String             @map("workspace_id") @db.Uuid
+  name          String
+  kind          TemplateKind
+  subject       String             @default("")
   /// `RichText` from @bylinecrm/shared.
-  body        Json
-  version     Int          @default(1)
+  body          Json
+  version       Int                @default(1)
   /// `Actor` from @bylinecrm/shared.
-  createdBy   Json         @map("created_by")
+  createdBy     Json               @map("created_by")
   /// `Actor` from @bylinecrm/shared.
-  updatedBy   Json         @map("updated_by")
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+  updatedBy     Json               @map("updated_by")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz
   /// `private`: its author, and anyone with `template:read_all`, read it. `public`: every member does.
   visibility    TemplateVisibility @default(private)
   /// The member who wrote it; null for an import, a key or the system (such a template is public).
@@ -1650,6 +1654,7 @@ model MailOutbound {
   bounces           MailBounce[]
   trackingTokens    TrackingToken[]
   trackingHits      TrackingHit[]
+  notifications     Notification[]
 
   sequenceEnrolment SequenceEnrolment? @relation("EnrolmentSends", fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
   sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
@@ -1742,10 +1747,11 @@ model MailMessage {
   participants MailParticipant[]
   copies       MailMessageCopy[]
 
-  repliedFrom  MailOutbound[] @relation("MailOutboundReplyTo")
-  draftReplies MailDraft[]    @relation("MailDraftReplyTo")
-  outboundOf   MailOutbound[] @relation("MailOutboundStored")
-  bounces      MailBounce[]
+  repliedFrom   MailOutbound[] @relation("MailOutboundReplyTo")
+  draftReplies  MailDraft[]    @relation("MailDraftReplyTo")
+  outboundOf    MailOutbound[] @relation("MailOutboundStored")
+  bounces       MailBounce[]
+  notifications Notification[]
 
   @@unique([workspaceId, identityKey])
   @@index([workspaceId, threadId, sentAt])
@@ -3138,6 +3144,12 @@ enum NotificationKind {
   payment_created_deal
   /// INV-2: NewswireOS reported a payment from no one in the CRM (to holders of `invoice:verify`).
   payment_unmatched
+  /// A reply to an email the member sent from the CRM (to its sender; every reply).
+  email_replied
+  /// A link clicked in an email the member sent (to its sender; once per send).
+  email_clicked
+  /// An email the member sent was opened — approximate (to its sender; once per send).
+  email_opened
 
   @@map("notification_kind")
 }
@@ -3160,6 +3172,10 @@ model Notification {
   cadenceLapseId      String?          @map("cadence_lapse_id") @db.Uuid
   /// INV-2: the paid invoice NewswireOS reported, for `payment_*`.
   newswireosPaymentId String?          @map("newswireos_payment_id") @db.Uuid
+  /// The send, for `email_clicked` / `email_opened`.
+  mailOutboundId      String?          @map("mail_outbound_id") @db.Uuid
+  /// The inbound reply, for `email_replied`.
+  mailMessageId       String?          @map("mail_message_id") @db.Uuid
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
   readAt              DateTime?        @map("read_at") @db.Timestamptz
 
@@ -3171,6 +3187,8 @@ model Notification {
   invoice           DealInvoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   cadenceLapse      CadenceLapse?      @relation(fields: [cadenceLapseId], references: [id], onDelete: Cascade)
   newswireosPayment NewswireosPayment? @relation(fields: [newswireosPaymentId], references: [id], onDelete: Cascade)
+  mailOutbound      MailOutbound?      @relation(fields: [mailOutboundId], references: [id], onDelete: Cascade)
+  mailMessage       MailMessage?       @relation(fields: [mailMessageId], references: [id], onDelete: Cascade)
 
   @@unique([memberId, kind, taskId])
   @@unique([memberId, kind, transferId])
@@ -3178,6 +3196,8 @@ model Notification {
   @@unique([memberId, kind, invoiceId])
   @@unique([memberId, kind, cadenceLapseId])
   @@unique([memberId, kind, newswireosPaymentId])
+  @@unique([memberId, kind, mailOutboundId])
+  @@unique([memberId, kind, mailMessageId])
   @@index([memberId, createdAt])
   @@map("notifications")
 }
