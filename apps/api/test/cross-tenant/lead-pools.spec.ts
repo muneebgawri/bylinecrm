@@ -29,10 +29,10 @@ function browserFrom(res: Response): Browser {
 }
 
 /**
- * Lead pools: workspaces sharing one set of leads. A primary email one has as a customer or prospect
- * (the point of contact of an open or won deal) cannot be saved in another, either way round, and the
- * refusal names only the workspace that has it. A cold lead may be saved in both; a lost deal or the
- * trash holds nothing; a workspace outside the pool is untouched.
+ * Lead pools: workspaces sharing one set of leads. A primary email one has as a live lead, cold or not,
+ * cannot be saved in another, either way round, and the refusal names only the workspace that has it; the
+ * trash holds nothing; a workspace outside the pool is untouched. Mail is refused only to another
+ * workspace's customer or prospect (the point of contact of an open or won deal).
  */
 describe('lead pools', () => {
     let app: INestApplication;
@@ -125,14 +125,28 @@ describe('lead pools', () => {
         expect(JSON.stringify(refused.body)).toContain(`already a lead in ${pinionName}`);
     });
 
-    it('a cold lead may be saved in both', async () => {
+    it('a cold lead is refused in the other too, by the workspace name only', async () => {
         const address = `cold-${stamp}@x.test`;
         await as(pinion).post('/people').send(person(address)).expect(201);
         const check = await as(lexis)
             .get(`/people/address-check?email=${encodeURIComponent(address)}`)
             .expect(200);
-        expect(check.body).toEqual({ available: true, holder: null });
-        await as(lexis).post('/people').send(person(address)).expect(201);
+        expect(check.body).toEqual({
+            available: false,
+            holder: { ownerName: null, trashed: false, workspaceName: pinionName },
+        });
+        const refused = await as(lexis).post('/people').send(person(address)).expect(409);
+        expect(JSON.stringify(refused.body)).toContain(`already a lead in ${pinionName}`);
+    });
+
+    it('in its own workspace, a saved lead is told by its owner', async () => {
+        const address = `own-${stamp}@x.test`;
+        await as(pinion).post('/people').send(person(address)).expect(201);
+        const check = await as(pinion)
+            .get(`/people/address-check?email=${encodeURIComponent(address)}`)
+            .expect(200);
+        expect(check.body).toMatchObject({ available: false, holder: { trashed: false, workspaceName: null } });
+        expect((check.body as { holder: { ownerName: string | null } }).holder.ownerName).not.toBeNull();
     });
 
     it('holds both ways, and on a changed address too', async () => {
@@ -151,7 +165,7 @@ describe('lead pools', () => {
         expect(JSON.stringify(moved.body)).toContain(`already a lead in ${lexisName}`);
     });
 
-    it('a lost deal holds nothing', async () => {
+    it("a lost deal's contact is still a lead, so still refused", async () => {
         const address = `lost-${stamp}@x.test`;
         const { dealId } = await prospect(pinion, address);
         const lost = await lostStage(pinion);
@@ -159,7 +173,7 @@ describe('lead pools', () => {
             .post(`/opportunities/${dealId}/move`)
             .send({ stageId: lost, close: { lostReason: 'went with a competitor' } })
             .expect(201);
-        await as(lexis).post('/people').send(person(address)).expect(201);
+        await as(lexis).post('/people').send(person(address)).expect(409);
     });
 
     it('a workspace outside the pool is untouched', async () => {
