@@ -173,6 +173,8 @@ describe('email templates', () => {
                 .send({
                     name: 'Intro',
                     kind: 'personal',
+                    // Public, so the writer reads it: a new template is otherwise its author's own.
+                    visibility: 'public',
                     subject: 'Quick one for {{person.firstName}}',
                     body: body(para(t('Hi '), v('person.firstName'), t(' at '), v('company.name'))),
                 })
@@ -235,8 +237,13 @@ describe('email templates', () => {
                 .send({ kind: 'outreach', version: 1 })
                 .expect(403);
             // …and touching one an outreach writer made.
-            const cold = (await as(admin).post(w('/templates')).send({ name: 'Cold', kind: 'outreach' }).expect(201))
-                .body as Template;
+            // Public: the writer sees it, so what refuses them is the outreach rule, not visibility.
+            const cold = (
+                await as(admin)
+                    .post(w('/templates'))
+                    .send({ name: 'Cold', kind: 'outreach', visibility: 'public' })
+                    .expect(201)
+            ).body as Template;
             await as(writer)
                 .patch(w(`/templates/${cold.id}`))
                 .send({ name: 'Mine now', version: 1 })
@@ -335,6 +342,8 @@ describe('email templates', () => {
                     .send({
                         name: 'Render me',
                         kind: 'personal',
+                        // Public: these tests are of whose records the writer may render it for.
+                        visibility: 'public',
                         subject: '{{person.firstName}} × {{deal.name}}',
                         body: body(
                             para(t('Hi '), v('person.firstName'), t(' '), v('person.lastName')),
@@ -447,6 +456,109 @@ describe('email templates', () => {
             await as(writer)
                 .post(w(`/templates/${personal.id}/preview`))
                 .send({ personId: writersPerson, dealId: danasDeal })
+                .expect(404);
+        });
+    });
+
+    describe('who can see a template: its author, or template:read_all, unless it is public', () => {
+        let curator: Browser;
+        let curatorMemberId: string;
+        let adminMemberId: string;
+        beforeAll(async () => {
+            const role = await as(admin)
+                .post(w('/roles'))
+                .send({
+                    name: 'curator',
+                    capabilities: ['record:read', 'template:read', 'template:write', 'template:read_all'],
+                    recordScope: 'own',
+                })
+                .expect(201);
+            const email = `curator-${stamp}@example.test`;
+            const invite = await as(admin)
+                .post(w('/invites'))
+                .send({ email, roleId: (role.body as { id: string }).id })
+                .expect(201);
+            curator = browserFrom(
+                await http()
+                    .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+                    .send({ password })
+                    .expect(201),
+            );
+            await verifyAddress(app, http, email);
+            const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
+            const idOf = (address: string) => members.find((m) => m.email === address)!.id;
+            curatorMemberId = idOf(email);
+            adminMemberId = idOf(`admin-${stamp}@example.test`);
+        });
+
+        const create = (who: Browser, name: string, extra: Record<string, unknown> = {}) =>
+            as(who)
+                .post(w('/templates'))
+                .send({ name: `${name} ${stamp}`, kind: 'personal', ...extra })
+                .expect(201)
+                .then((r) => r.body as Template & { visibility: string; ownerMemberId: string | null });
+        const listed = (who: Browser) =>
+            as(who)
+                .get(w('/templates?limit=200'))
+                .then((r) => (r.body as { items: { id: string }[] }).items.map((i) => i.id));
+
+        it("a new template is its author's, private; another member cannot reach it by any route", async () => {
+            const mine = await create(admin, 'Private');
+            expect(mine).toMatchObject({ visibility: 'private', ownerMemberId: adminMemberId });
+            expect(await listed(writer)).not.toContain(mine.id);
+            await as(writer)
+                .get(w(`/templates/${mine.id}`))
+                .expect(404);
+            await as(writer)
+                .patch(w(`/templates/${mine.id}`))
+                .send({ name: 'Taken', version: 1 })
+                .expect(404);
+            await as(writer)
+                .delete(w(`/templates/${mine.id}`))
+                .expect(404);
+            await as(writer)
+                .post(w(`/templates/${mine.id}/duplicate`))
+                .expect(404);
+            await as(writer)
+                .post(w(`/templates/${mine.id}/preview`))
+                .send({ personId: writersPerson })
+                .expect(404);
+            await as(admin)
+                .get(w(`/templates/${mine.id}`))
+                .expect(200);
+        });
+
+        it('public: every member reads it, and only its author or template:read_all changes that', async () => {
+            const shared = await create(admin, 'Shared', { visibility: 'public' });
+            expect(await listed(writer)).toContain(shared.id);
+            await as(writer)
+                .get(w(`/templates/${shared.id}`))
+                .expect(200);
+            await as(writer)
+                .patch(w(`/templates/${shared.id}`))
+                .send({ visibility: 'private', version: 1 })
+                .expect(403);
+            // The curator is not an admin and did not write it; template:read_all lets them.
+            const changed = await as(curator)
+                .patch(w(`/templates/${shared.id}`))
+                .send({ visibility: 'private', version: 1 })
+                .expect(200);
+            expect(changed.body as { visibility: string }).toMatchObject({ visibility: 'private' });
+            await as(writer)
+                .get(w(`/templates/${shared.id}`))
+                .expect(404);
+        });
+
+        it("template:read_all, on a role that is not admin, sees another member's private template", async () => {
+            const writers = await create(writer, 'Writers own');
+            expect(await listed(curator)).toContain(writers.id);
+            await as(curator)
+                .get(w(`/templates/${writers.id}`))
+                .expect(200);
+            const curators = await create(curator, 'Curators own');
+            expect(curators.ownerMemberId).toBe(curatorMemberId);
+            await as(writer)
+                .get(w(`/templates/${curators.id}`))
                 .expect(404);
         });
     });

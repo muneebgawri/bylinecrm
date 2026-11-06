@@ -16552,6 +16552,81 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/mail/preview": {
+            "post": {
+                "operationId": "mailSend_preview",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreviewMailDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RenderedEmail"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mail/scheduled": {
             "get": {
                 "operationId": "mailSend_scheduled",
@@ -28150,7 +28225,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 28,
+                        "maxItems": 29,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -28171,6 +28246,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -28202,7 +28278,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 28,
+                        "maxItems": 29,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -28223,6 +28299,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -30924,6 +31001,114 @@
                 },
                 "required": ["mailboxId", "personId"]
             },
+            "PreviewMailDto__schema0": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreviewMailDto__schema0"
+                        }
+                    },
+                    "attrs": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "marks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64
+                                },
+                                "attrs": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            },
+                            "required": ["type"]
+                        }
+                    }
+                },
+                "required": ["type"],
+                "additionalProperties": {}
+            },
+            "PreviewMailDto": {
+                "type": "object",
+                "properties": {
+                    "mailboxId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "dealId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "templateId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "subject": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "body": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["doc"]
+                            },
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PreviewMailDto__schema0"
+                                }
+                            }
+                        },
+                        "required": ["type"]
+                    },
+                    "signature": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["doc"]
+                            },
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PreviewMailDto__schema0"
+                                }
+                            }
+                        },
+                        "required": ["type"],
+                        "description": "As on a send: this message’s signature, `null` for none; left out, the mailbox’s.",
+                        "nullable": true
+                    }
+                },
+                "required": ["mailboxId", "personId"],
+                "additionalProperties": false
+            },
             "RescheduleMailDto": {
                 "type": "object",
                 "properties": {
@@ -31873,6 +32058,11 @@
                             }
                         },
                         "required": ["type"]
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "enum": ["private", "public"],
+                        "description": "`private` (the default): you, and anyone with `template:read_all`, read it. `public`: every member does."
                     }
                 },
                 "required": ["name", "kind"]
@@ -31951,6 +32141,11 @@
                             }
                         },
                         "required": ["type"]
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "enum": ["private", "public"],
+                        "description": "`private` (the default): you, and anyone with `template:read_all`, read it. `public`: every member does."
                     },
                     "version": {
                         "type": "integer",
@@ -33945,6 +34140,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -34082,6 +34278,7 @@
                                 "pipeline:cadence",
                                 "email:send",
                                 "template:read",
+                                "template:read_all",
                                 "template:write",
                                 "template:send_test",
                                 "outreach:write",
@@ -40157,6 +40354,18 @@
                         "type": "string",
                         "enum": ["personal", "outreach"]
                     },
+                    "visibility": {
+                        "type": "string",
+                        "enum": ["private", "public"],
+                        "description": "`private`: its author, and anyone with `template:read_all`, read it. `public`: every member does."
+                    },
+                    "ownerMemberId": {
+                        "nullable": true,
+                        "description": "The member who wrote it; null for none.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
                     "subject": {
                         "type": "string",
                         "description": "Plain text; variables are `{{path}}` tokens."
@@ -40205,6 +40414,8 @@
                     "id",
                     "name",
                     "kind",
+                    "visibility",
+                    "ownerMemberId",
                     "subject",
                     "body",
                     "version",

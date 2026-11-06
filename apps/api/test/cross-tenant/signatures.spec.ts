@@ -587,7 +587,14 @@ describe('#193 email signatures', () => {
         it('a template preview shows the signature that would apply', async () => {
             const template = await as(admin)
                 .post(w('/templates'))
-                .send({ name: `Hello ${stamp}`, kind: 'personal', subject: 'Hi', body: doc(para(t('Template body'))) });
+                // Public: the member previews the admin's template.
+                .send({
+                    name: `Hello ${stamp}`,
+                    kind: 'personal',
+                    visibility: 'public',
+                    subject: 'Hi',
+                    body: doc(para(t('Template body'))),
+                });
             expect(template.status).toBe(201);
             const preview = await as(member)
                 .post(w(`/templates/${(template.body as { id: string }).id}/preview`))
@@ -605,6 +612,7 @@ describe('#193 email signatures', () => {
                 .send({
                     name: `Placed ${stamp}`,
                     kind: 'personal',
+                    visibility: 'public',
                     subject: 'Hi',
                     body: doc(para(t('Body first.')), para(v('sender.signature')), para(t('P.S. Friday works.'))),
                 });

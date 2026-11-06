@@ -10,6 +10,10 @@ import type { RichText } from './records.js';
 export const TEMPLATE_KINDS = ['personal', 'outreach'] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 
+/** Who reads a template: its author and administrators (`private`), or every member (`public`). */
+export const TEMPLATE_VISIBILITIES = ['private', 'public'] as const;
+export type TemplateVisibility = (typeof TEMPLATE_VISIBILITIES)[number];
+
 export const TEMPLATE_NAME_MAX = 200;
 export const TEMPLATE_SUBJECT_MAX = 300;
 /** The stored body's JSON, serialised: a template is a few paragraphs, not a document. */

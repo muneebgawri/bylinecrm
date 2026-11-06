@@ -27,6 +27,9 @@ export const CAPABILITIES = [
     // Mail
     'email:send',
     'template:read',
+    // See every template, another member's private one included, and change who can see it. In no default role: an
+    // admin holds it by construction and grants it to any other role.
+    'template:read_all',
     'template:write',
     'template:send_test',
     'outreach:write',

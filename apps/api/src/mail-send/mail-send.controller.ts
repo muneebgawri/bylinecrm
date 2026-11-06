@@ -3,7 +3,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
 import { parseTarget } from '../records/targets';
-import { ListRecordSendsQueryDto, ListScheduledQueryDto, RescheduleMailDto, SendMailDto } from './dto';
+import { ListRecordSendsQueryDto, ListScheduledQueryDto, PreviewMailDto, RescheduleMailDto, SendMailDto } from './dto';
+import type { ComposedEmail } from '../templates/render/compose';
+import { renderedEmail } from '../templates/responses';
 import { MailSendService } from './mail-send.service';
 import {
     mailOutboundView,
@@ -34,6 +36,18 @@ export class MailSendController {
     @Returns(mailSendAccepted)
     compose(@Body() body: SendMailDto): Promise<MailSendAccepted> {
         return this.send.compose(body);
+    }
+
+    /**
+     * The message rendered as it would be sent, signature included, and never sent: the composer's preview. `200`,
+     * with any variable that has no value named in `missing`.
+     */
+    @Requires('email:send')
+    @HttpCode(200)
+    @Post('preview')
+    @Returns(renderedEmail)
+    preview(@Body() body: PreviewMailDto): Promise<ComposedEmail> {
+        return this.send.preview(body);
     }
 
     /** The caller's scheduled sends (an admin's: everyone's), soonest first. */

@@ -140,6 +140,34 @@ export class SendMailDto extends createZodDto(
         }),
 ) {}
 
+/**
+ * `POST /mail/preview`: the message as `POST /mail/send` would send it to `personId`, signature included, rendered
+ * and never sent. A template, or a subject and body as written so far — a draft with no subject yet included.
+ */
+export class PreviewMailDto extends createZodDto(
+    z
+        .object({
+            mailboxId: z.uuid(),
+            personId: z.uuid(),
+            dealId: z.uuid().optional(),
+            templateId: z.uuid().optional(),
+            subject: templateSubject.optional(),
+            body: templateBody.optional(),
+            signature: signatureDoc.nullable().optional().meta({
+                description: 'As on a send: this message’s signature, `null` for none; left out, the mailbox’s.',
+            }),
+        })
+        .strict()
+        .superRefine((input, ctx) => {
+            if (input.templateId !== undefined && (input.subject !== undefined || input.body !== undefined)) {
+                ctx.addIssue({ code: 'custom', path: ['body'], message: 'a template or a subject and body, not both' });
+            }
+            if (input.templateId === undefined && input.body === undefined) {
+                ctx.addIssue({ code: 'custom', path: ['body'], message: 'a body, or a templateId' });
+            }
+        }),
+) {}
+
 /** `PATCH /mail/messages/:messageId` — move a scheduled send to another time. */
 export class RescheduleMailDto extends createZodDto(z.object({ sendAt, timeZone: timeZone.optional() }).strict()) {}
 

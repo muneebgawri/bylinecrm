@@ -5,6 +5,7 @@ import {
     TEMPLATE_BODY_MAX_CHARS,
     TEMPLATE_KINDS,
     TEMPLATE_NAME_MAX,
+    TEMPLATE_VISIBILITIES,
     TEMPLATE_SUBJECT_MAX,
     type RichTextNode,
 } from '@bylinecrm/shared';
@@ -40,6 +41,10 @@ export const templateBody = z
 const name = z.string().trim().min(1).max(TEMPLATE_NAME_MAX);
 export const templateSubject = z.string().trim().max(TEMPLATE_SUBJECT_MAX);
 const kind = z.enum(TEMPLATE_KINDS);
+const visibility = z.enum(TEMPLATE_VISIBILITIES).meta({
+    description:
+        '`private` (the default): you, and anyone with `template:read_all`, read it. `public`: every member does.',
+});
 
 export class CreateTemplateDto extends createZodDto(
     z.object({
@@ -47,6 +52,7 @@ export class CreateTemplateDto extends createZodDto(
         kind,
         subject: templateSubject.default(''),
         body: templateBody.default({ type: 'doc', content: [] }),
+        visibility: visibility.optional(),
     }),
 ) {}
 
@@ -61,6 +67,7 @@ export class UpdateTemplateDto extends createZodDto(
             kind,
             subject: templateSubject,
             body: templateBody,
+            visibility,
             version: z.number().int().min(1),
         })
         .partial()
