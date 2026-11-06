@@ -2,14 +2,14 @@ import 'reflect-metadata';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, type Emails } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
-import { PeopleDedupe } from '../../src/records/people-dedupe.service';
+import { PeopleDedupe, type AddressReport } from '../../src/records/people-dedupe.service';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
 
@@ -323,5 +323,107 @@ describe('person dedupe: merging people saved more than once', () => {
         expect(report.merged).toBe(1);
         expect((await owner.person.findUniqueOrThrow({ where: { id: danaNew } })).mergedIntoId).toBe(danaOld);
         expect((await owner.person.findUniqueOrThrow({ where: { id: sam } })).deletedAt).toBeNull();
+    });
+
+    it('a merge clears what people merged before still hold, so the survivor can take it', async () => {
+        const at = `@kim-${stamp}.test`;
+        const make = (nameLast: string, emails: object, createdAt: string, extra: object = {}) =>
+            owner.person.create({
+                data: {
+                    workspaceId: workspace,
+                    nameFirst: 'Kim',
+                    nameLast,
+                    emails,
+                    createdBy: { kind: 'member', id: adminMember },
+                    createdAt: new Date(createdAt),
+                    ...extra,
+                },
+            });
+        const k1 = await make('Lee', { primary: `kim${at}`, additional: [] }, '2026-02-01T00:00:00Z');
+        const k2 = await make('Lee', { primary: `klee${at}`, additional: [] }, '2026-03-01T00:00:00Z');
+        // Before merging gave up addresses: k2's earlier duplicate, trashed into k2, still holds k2's address.
+        await withoutAddressRule(owner, async (tx) => {
+            await tx.person.update({
+                where: { id: k2.id },
+                data: { emails: { primary: `klee${at}`, additional: [`kim${at}`] } },
+            });
+            await tx.person.create({
+                data: {
+                    workspaceId: workspace,
+                    nameFirst: 'Kim',
+                    nameLast: 'Lee',
+                    emails: { primary: null, additional: [`klee${at}`] },
+                    createdBy: { kind: 'member', id: adminMember },
+                    deletedAt: new Date(),
+                    mergedIntoId: k2.id,
+                },
+            });
+        });
+        const done = await dedupe.merge(workspace, [k1.id, k2.id], true);
+        expect(done).not.toBeNull();
+        const kept = await owner.person.findUniqueOrThrow({ where: { id: k1.id } });
+        expect(kept.emails).toEqual({ primary: `kim${at}`, additional: [`klee${at}`] });
+    });
+
+    it('people sharing an address who are not one person: the one it names keeps it, the rest give it up', async () => {
+        const at = `@wan-${stamp}.test`;
+        const make = (nameFirst: string, nameLast: string, emails: Emails, createdAt: string) =>
+            owner.person.create({
+                data: {
+                    workspaceId: workspace,
+                    nameFirst,
+                    nameLast,
+                    emails,
+                    createdBy: { kind: 'member', id: adminMember },
+                    createdAt: new Date(createdAt),
+                },
+            });
+        const jo = await make('Jo', 'Wan', { primary: `office${stamp}${at}`, additional: [] }, '2026-06-01T00:00:00Z');
+        const will = await make('Will', 'Yeo', { primary: `will${at}`, additional: [] }, '2026-07-01T00:00:00Z');
+        await withoutAddressRule(owner, async (tx) => {
+            await tx.person.update({
+                where: { id: jo.id },
+                data: { emails: { primary: `office${stamp}${at}`, additional: [`j.wan${at}`] } },
+            });
+            await tx.person.update({
+                where: { id: will.id },
+                data: { emails: { primary: `J.Wan${at}`, additional: [`will${at}`, `office${stamp}${at}`] } },
+            });
+        });
+        const mine = (r: AddressReport) => r.addresses.filter((a) => a.email.endsWith(at));
+
+        const dry = await dedupe.releaseAddresses(workspace, { apply: false });
+        expect(mine(dry)).toEqual([
+            expect.objectContaining({
+                email: `j.wan${at}`,
+                outcome: 'would release',
+                keeperId: jo.id,
+                fromIds: [will.id],
+            }),
+            expect.objectContaining({ email: `office${stamp}${at}`, outcome: 'unresolved', why: 'names none of them' }),
+        ]);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: will.id } })).emails).toEqual({
+            primary: `J.Wan${at}`,
+            additional: [`will${at}`, `office${stamp}${at}`],
+        });
+
+        const applied = await dedupe.releaseAddresses(workspace, { apply: true });
+        expect(mine(applied).map((a) => a.outcome)).toEqual(['released', 'unresolved']);
+        // Will's primary went with it; his next address became his primary.
+        expect((await owner.person.findUniqueOrThrow({ where: { id: will.id } })).emails).toEqual({
+            primary: `will${at}`,
+            additional: [`office${stamp}${at}`],
+        });
+        expect((await owner.person.findUniqueOrThrow({ where: { id: jo.id } })).emails).toEqual({
+            primary: `office${stamp}${at}`,
+            additional: [`j.wan${at}`],
+        });
+        const recorded = await owner.outboxEvent.findMany({
+            where: { workspaceId: workspace, type: 'person.updated', payload: { path: ['recordId'], equals: will.id } },
+        });
+        expect(recorded).toHaveLength(1);
+
+        const again = await dedupe.releaseAddresses(workspace, { apply: true });
+        expect(mine(again).map((a) => [a.email, a.outcome])).toEqual([[`office${stamp}${at}`, 'unresolved']]);
     });
 });
