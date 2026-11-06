@@ -481,7 +481,7 @@ export async function planFor(
     // booked here too — were both workspaces linked to NewswireOS, the payment would otherwise count twice.
     const byOwnId = match?.by === 'byline_contact_id' || match?.by === 'byline_company_id';
     const email = delivery.client?.email;
-    if (!byOwnId && email && (await poolHoldersIn(tx, [email])).has(email)) {
+    if (!byOwnId && email && (await poolHoldersIn(tx, [email], 'customer')).has(email)) {
         return { ...none, decision: 'pooled_elsewhere', opportunityId: null, target };
     }
     if (!target) return { ...none, decision: 'unmatched', opportunityId: null, target: null };

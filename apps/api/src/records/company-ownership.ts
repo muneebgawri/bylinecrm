@@ -257,8 +257,8 @@ export class CompanyOwnership {
                     workspaceName: null,
                 };
             }
-            // A workspace sharing this one's lead pool, with the person as a customer or prospect: only its name is told.
-            const pooled = (await poolHoldersIn(tx, [email])).get(email);
+            // A workspace sharing this one's lead pool, with the person as any lead: only its name is told.
+            const pooled = (await poolHoldersIn(tx, [email], 'lead')).get(email);
             return pooled ? { ownerName: null, trashed: false, workspaceName: pooled } : null;
         });
     }
@@ -269,7 +269,7 @@ export class CompanyOwnership {
      */
     poolHolders(context: WorkspaceRunContext, addresses: readonly string[]): Promise<Map<string, string>> {
         if (addresses.length === 0) return Promise.resolve(new Map());
-        return this.widened(context, (tx) => poolHoldersIn(tx, addresses));
+        return this.widened(context, (tx) => poolHoldersIn(tx, addresses, 'customer'));
     }
 
     private widened<T>(context: WorkspaceRunContext, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
@@ -361,11 +361,16 @@ async function duplicateCompanies(tx: WorkspaceClient): Promise<OwnershipConflic
 }
 
 /**
- * Of these (normalised) addresses, those another workspace of the caller's lead pool holds as a customer or prospect,
- * each to that workspace's name, in the caller's transaction. Empty for a workspace in no pool.
+ * Of these (normalised) addresses, those another workspace of the caller's lead pool holds, each to that workspace's
+ * name, in the caller's transaction. Empty for a workspace in no pool. `lead`: any live lead there, what blocks a save;
+ * `customer`: only a customer or prospect (point of contact of an open or won deal), what blocks mail and a payment.
  */
-export async function poolHoldersIn(tx: WorkspaceClient, addresses: readonly string[]): Promise<Map<string, string>> {
+export async function poolHoldersIn(
+    tx: WorkspaceClient,
+    addresses: readonly string[],
+    held: 'lead' | 'customer',
+): Promise<Map<string, string>> {
     const rows = await tx.$queryRaw<{ email: string; name: string }[]>`
-        SELECT email, workspace_name AS name FROM lead_pool_holders(${[...addresses]}::text[])`;
+        SELECT email, workspace_name AS name FROM lead_pool_holders(${[...addresses]}::text[], ${held === 'lead'})`;
     return new Map(rows.map((r) => [r.email, r.name] as const));
 }
