@@ -1,10 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { BiginStageApplyView, Capability, EventActor, StageKind } from '@bylinecrm/shared';
+import {
+    BIGIN_TIMELINE_SOURCE,
+    type BiginStageApplyView,
+    type Capability,
+    type EventActor,
+    type StageKind,
+} from '@bylinecrm/shared';
+import { Prisma } from '@prisma/client';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { StageMoveService } from '../pipelines/stage-move.service';
 import { fieldsEditedAfter } from '../timeline/timeline.service';
 import { BIGIN_STAGE_APPLY_PAGE, BIGIN_WRITE_CHUNK } from './bigin-import.constants';
+import { HISTORY_KEY_PREFIX } from './history';
 import { biginStageIndex, chooseStage, snapshotStage, type PipelineStageRef } from './stage-map';
 
 /** Moves deals only: no capability beyond what an import writes without one. */
@@ -19,6 +27,12 @@ const ACTOR: EventActor = { kind: 'import', id: null };
  * someone other than the import after Bigin last changed it is left where it is — the runner's local-edit
  * rule. Links are read a page at a time by Bigin id and written `BIGIN_WRITE_CHUNK` per transaction, so 100k
  * deals never make one long transaction; the progress is on the settings row. Running it again is harmless.
+ *
+ * Then the imported stage history (`stage-history:` entries, BIGIN-1) is re-pointed the same way: each entry's
+ * Bigin `from` and `to` are resolved again (`chooseStage`, as the runner wrote them) and an entry whose
+ * `diff.stageId` now differs gets the new stage ids — nothing else in it changes. Entries are read a page at a
+ * time along the timeline's `(workspace, source, key)` index and re-pointed `BIGIN_WRITE_CHUNK` per transaction
+ * through `repoint_imported_stage_history`, the one way the app role may change a timeline entry's stages.
  */
 @Injectable()
 export class BiginStageApplier {
@@ -48,6 +62,7 @@ export class BiginStageApplier {
                 finishedAt: null,
                 moved: 0,
                 skipped: 0,
+                historyRepointed: 0,
                 error: null,
             };
             await save(tx, workspaceId, progress);
@@ -95,6 +110,7 @@ export class BiginStageApplier {
                 }
                 await this.rls.withWorkspace((tx) => save(tx, workspaceId, progress));
             }
+            await this.repointHistory(workspaceId, stages, mapping, progress);
             progress.status = 'succeeded';
         } catch (error) {
             progress.status = 'failed';
@@ -103,6 +119,41 @@ export class BiginStageApplier {
         }
         progress.finishedAt = new Date().toISOString();
         await this.rls.withWorkspace((tx) => save(tx, workspaceId, progress));
+    }
+
+    /** The second pass: imported stage moves re-pointed to where their Bigin stages now resolve. */
+    private async repointHistory(
+        workspaceId: string,
+        stages: readonly PipelineStageRef[],
+        mapping: ReadonlyMap<string, string>,
+        progress: BiginStageApplyView,
+    ): Promise<void> {
+        let after = HISTORY_KEY_PREFIX.StageHistory;
+        for (;;) {
+            const entries = await this.rls.withWorkspace((tx) =>
+                tx.$queryRaw<HistoryEntry[]>(stageHistoryPage(workspaceId, after, BIGIN_STAGE_APPLY_PAGE)),
+            );
+            if (entries.length === 0) break;
+            after = entries.at(-1)!.key;
+            const changed = entries.flatMap((entry) => {
+                const target = repointed(stages, mapping, entry.properties);
+                return target ? [{ id: entry.id, ...target }] : [];
+            });
+            for (let i = 0; i < changed.length; i += BIGIN_WRITE_CHUNK) {
+                const chunk = changed.slice(i, i + BIGIN_WRITE_CHUNK);
+                // Via text[]: a chunk whose `from`s are all null is sent untyped, which Postgres reads as int[].
+                const [row] = await this.rls.withWorkspace(
+                    (tx) => tx.$queryRaw<{ n: number }[]>`
+                        SELECT repoint_imported_stage_history(
+                            ${chunk.map((c) => c.id)}::text[]::uuid[],
+                            ${chunk.map((c) => c.from)}::text[]::uuid[],
+                            ${chunk.map((c) => c.to)}::text[]::uuid[]
+                        ) AS n`,
+                );
+                progress.historyRepointed += row?.n ?? 0;
+            }
+            await this.rls.withWorkspace((tx) => save(tx, workspaceId, progress));
+        }
     }
 
     private async applyChunk(
@@ -149,6 +200,55 @@ export class BiginStageApplier {
         }
         return { moved, skipped };
     }
+}
+
+interface HistoryEntry {
+    id: string;
+    key: string;
+    properties: unknown;
+}
+
+/**
+ * A page of the workspace's imported stage moves after key `after`, in key order: a range on the unique index
+ * `(workspace_id, source, idempotency_key)` — equality on the workspace and the source, a range on the key, all
+ * conditions an index may serve under row-level security. The prefix and kind are checked on the rows read. The
+ * range is bounded below only (the first page starts at the bare prefix, below every key it begins): the database's
+ * collation is not C in production, where punctuation sorts differently, so a prefix range such as
+ * `< 'stage-history;'` would find nothing. Past the last entry the scan meets only the source's keys after it.
+ */
+export function stageHistoryPage(workspaceId: string, after: string, take: number): Prisma.Sql {
+    return Prisma.sql`
+        SELECT "id", "idempotency_key" AS key, "properties"
+        FROM "timeline_activities"
+        WHERE "workspace_id" = ${workspaceId}::uuid
+          AND "source" = ${BIGIN_TIMELINE_SOURCE}
+          AND "idempotency_key" > ${after}
+          AND "idempotency_key" LIKE ${`${HISTORY_KEY_PREFIX.StageHistory}%`}
+          AND "kind" = 'deal.stage_changed'
+        ORDER BY "idempotency_key"
+        LIMIT ${take}`;
+}
+
+/**
+ * Where an imported stage move points now, from the Bigin stages it keeps (`bigin.from`, `bigin.to`), resolved as
+ * the runner resolves them; null when it already points there or does not keep Bigin's stages.
+ */
+export function repointed(
+    stages: readonly PipelineStageRef[],
+    mapping: ReadonlyMap<string, string>,
+    properties: unknown,
+): { from: string | null; to: string } | null {
+    if (typeof properties !== 'object' || properties === null) return null;
+    const { bigin, diff } = properties as { bigin?: unknown; diff?: unknown };
+    if (typeof bigin !== 'object' || bigin === null) return null;
+    const raw = bigin as { from?: unknown; to?: unknown };
+    if (typeof raw.to !== 'string') return null;
+    const current = (diff as { stageId?: { from?: unknown; to?: unknown } } | null | undefined)?.stageId;
+    if (typeof current !== 'object' || current === null) return null;
+    const to = chooseStage(stages, mapping, raw.to).id;
+    const from = typeof raw.from === 'string' ? chooseStage(stages, mapping, raw.from).id : null;
+    if (current.to === to && (current.from ?? null) === from) return null;
+    return { from, to };
 }
 
 async function save(tx: WorkspaceClient, workspaceId: string, progress: BiginStageApplyView): Promise<void> {

@@ -44191,12 +44191,18 @@
                         "maximum": 9007199254740991,
                         "description": "Deals left in place: someone moved them by hand after Bigin last changed them."
                     },
+                    "historyRepointed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Imported stage-history entries re-pointed to the stages their Bigin stages now map to."
+                    },
                     "error": {
                         "nullable": true,
                         "type": "string"
                     }
                 },
-                "required": ["status", "requestedAt", "finishedAt", "moved", "skipped", "error"]
+                "required": ["status", "requestedAt", "finishedAt", "moved", "skipped", "historyRepointed", "error"]
             },
             "BiginStageMap": {
                 "type": "object",
@@ -44251,6 +44257,12 @@
                                     "minimum": -9007199254740991,
                                     "maximum": 9007199254740991
                                 },
+                                "history": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Imported stage-history entries that moved a deal into this stage."
+                                },
                                 "stageId": {
                                     "nullable": true,
                                     "description": "The explicit mapping; null when left to the name match.",
@@ -44270,7 +44282,7 @@
                                     "enum": ["mapped", "name", "closed", "fallback"]
                                 }
                             },
-                            "required": ["biginStage", "deals", "stageId", "targetStageId", "match"]
+                            "required": ["biginStage", "deals", "history", "stageId", "targetStageId", "match"]
                         }
                     },
                     "unread": {
