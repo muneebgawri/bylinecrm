@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { WorkspaceContext } from '../../src/infra/workspace-context';
 import { createApp } from '../../src/app';
@@ -324,6 +325,113 @@ describe('records', () => {
                 .expect(200);
             expect(free.body).toEqual({ available: true, holder: null });
             await as(admin).get(w('/people/address-check?email=not-an-address')).expect(400);
+        });
+
+        it('refuses a person with an address another person already lists, primary or additional', async () => {
+            const lead = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Lead', emails: { primary: `lead-${stamp}@x.test`, additional: [] } })
+                .expect(201);
+            // The lead gains a second address.
+            await as(admin)
+                .patch(w(`/people/${(lead.body as Person).id}`))
+                .send({ emails: { primary: `lead-${stamp}@x.test`, additional: [`Second-${stamp}@x.test`] } })
+                .expect(200);
+
+            // A new person whose primary is the lead's second address: refused, naming whose it is.
+            const asPrimary = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Copy', emails: { primary: `second-${stamp}@X.test`, additional: [] } })
+                .expect(409);
+            expect(asPrimary.body).toMatchObject({
+                code: 'conflict.unique',
+                fieldErrors: [{ path: 'emails.primary' }],
+            });
+            expect((asPrimary.body as { message: string }).message).toMatch(/exists, (owned by \S.*|with no owner)$/);
+
+            // Listing either of the lead's addresses as an additional one: refused, on that field.
+            const asAdditional = await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Copy',
+                    emails: {
+                        primary: `copy-${stamp}@x.test`,
+                        additional: [`other-${stamp}@x.test`, `lead-${stamp}@x.test`],
+                    },
+                })
+                .expect(409);
+            expect(asAdditional.body).toMatchObject({ fieldErrors: [{ path: 'emails.additional.1' }] });
+
+            // Another person gaining it by an edit: refused too.
+            const other = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Other', emails: { primary: `free2-${stamp}@x.test`, additional: [] } })
+                .expect(201);
+            await as(admin)
+                .patch(w(`/people/${(other.body as Person).id}`))
+                .send({ emails: { primary: `free2-${stamp}@x.test`, additional: [`second-${stamp}@x.test`] } })
+                .expect(409);
+
+            // The check before a create sees an additional address as held.
+            const check = await as(admin)
+                .get(w(`/people/address-check?email=${encodeURIComponent(`second-${stamp}@x.test`)}`))
+                .expect(200);
+            expect(check.body).toMatchObject({ available: false });
+        });
+
+        it('two people sharing an address from before still edit; a 409 names the address the edit adds', async () => {
+            const make = async (nameFirst: string, primary: string) =>
+                (
+                    (
+                        await as(admin)
+                            .post(w('/people'))
+                            .send({ nameFirst, emails: { primary, additional: [] } })
+                            .expect(201)
+                    ).body as Person
+                ).id;
+            const holderId = await make('Holder', `holder-${stamp}@y.test`);
+            const sharerId = await make('Sharer', `sharer-${stamp}@y.test`);
+            await make('Taken', `taken-${stamp}@y.test`);
+            // A share from before the rule: written with the rule's trigger off, in one transaction.
+            const owner = app.get(PrismaService);
+            await owner.$transaction([
+                owner.$executeRawUnsafe('ALTER TABLE "people" DISABLE TRIGGER people_address_taken'),
+                owner.$executeRawUnsafe(
+                    `UPDATE "people" SET emails = jsonb_set(emails, '{additional}', $1::jsonb) WHERE id = $2::uuid`,
+                    JSON.stringify([`holder-${stamp}@y.test`]),
+                    sharerId,
+                ),
+                owner.$executeRawUnsafe('ALTER TABLE "people" ENABLE TRIGGER people_address_taken'),
+            ]);
+            expect(holderId).toBeTruthy();
+
+            // An edit that keeps the shared address and adds nothing taken: saved.
+            await as(admin)
+                .patch(w(`/people/${sharerId}`))
+                .send({ jobTitle: 'Editor' })
+                .expect(200);
+            await as(admin)
+                .patch(w(`/people/${sharerId}`))
+                .send({
+                    emails: {
+                        primary: `sharer-${stamp}@y.test`,
+                        additional: [`holder-${stamp}@y.test`, `free-${stamp}@y.test`],
+                    },
+                })
+                .expect(200);
+
+            // Adding a taken one: the 409 names it, not the shared one listed before it.
+            const refused = await as(admin)
+                .patch(w(`/people/${sharerId}`))
+                .send({
+                    emails: {
+                        primary: `sharer-${stamp}@y.test`,
+                        additional: [`holder-${stamp}@y.test`, `free-${stamp}@y.test`, `taken-${stamp}@y.test`],
+                    },
+                })
+                .expect(409);
+            expect(refused.body).toMatchObject({ fieldErrors: [{ path: 'emails.additional.2' }] });
+            expect((refused.body as { message: string }).message).toContain(`taken-${stamp}@y.test`);
         });
 
         it('a person needs a name or a primary email', async () => {
