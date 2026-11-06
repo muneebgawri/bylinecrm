@@ -13,6 +13,8 @@ import type {
     MailThreadView,
     RescheduleMailInput,
     SaveMailDraftInput,
+    PreviewMailInput,
+    RenderedEmailView,
     SendMailInput,
 } from './types';
 
@@ -31,6 +33,9 @@ import type {
 export const mail = {
     send: (workspaceId: string, input: SendMailInput) =>
         request<MailSendAcceptedView>('POST', workspacePath(workspaceId, '/mail/send'), { body: input }),
+    /** The message rendered as it would be sent, signature included, and never sent. */
+    preview: (workspaceId: string, input: PreviewMailInput) =>
+        request<RenderedEmailView>('POST', workspacePath(workspaceId, '/mail/preview'), { body: input }),
     message: (workspaceId: string, messageId: string, signal?: AbortSignal) =>
         request<MailOutboundView>('GET', workspacePath(workspaceId, `/mail/messages/${messageId}`), { signal }),
     reschedule: (workspaceId: string, messageId: string, input: RescheduleMailInput) =>

@@ -1,4 +1,10 @@
-import { formatPostalAddress, TEMPLATE_NAME_MAX, type RichText, type TemplateKind } from '@bylinecrm/shared';
+import {
+    formatPostalAddress,
+    TEMPLATE_NAME_MAX,
+    type RichText,
+    type TemplateKind,
+    type TemplateVisibility,
+} from '@bylinecrm/shared';
 import {
     Button,
     cn,
@@ -46,6 +52,7 @@ import { KindMenu, OUTREACH_REASON } from './kind';
 import { resolutionLine, templateVariablePaths } from './preview';
 import { docToSubject, subjectToDoc } from './subject';
 import { VariablePicker } from './VariablePicker';
+import { VisibilityPicker, useMaySetVisibility } from './visibility';
 
 /** The route segment, named once (an untyped `useParams` is a known trap). */
 export const TEMPLATE_PARAM = 'templateId';
@@ -121,6 +128,7 @@ interface Draft {
     kind: TemplateKind;
     subject: RichText;
     body: RichText;
+    visibility: TemplateVisibility;
 }
 
 function draftFrom(template: EmailTemplateView): Draft {
@@ -129,12 +137,19 @@ function draftFrom(template: EmailTemplateView): Draft {
         kind: template.kind,
         subject: subjectToDoc(template.subject),
         body: template.body as RichText,
+        visibility: template.visibility,
     };
 }
 
 /** What a draft saves as: the subject back to `{{path}}` text. */
 function toSaved(draft: Draft) {
-    return { name: draft.name.trim(), kind: draft.kind, subject: docToSubject(draft.subject), body: draft.body };
+    return {
+        name: draft.name.trim(),
+        kind: draft.kind,
+        subject: docToSubject(draft.subject),
+        body: draft.body,
+        visibility: draft.visibility,
+    };
 }
 
 function TemplateEditor({
@@ -153,6 +168,7 @@ function TemplateEditor({
     // An outreach template is changed only by a role that may write outreach (the API's rule too).
     const canEdit = write.allowed && (template.kind !== 'outreach' || outreachWrite);
     const editReason = !write.allowed ? write.reason : canEdit ? '' : OUTREACH_REASON;
+    const maySetVisibility = useMaySetVisibility(template);
 
     const [draft, setDraft] = useState<Draft>(() => draftFrom(template));
     const [saved, setSaved] = useState(() => JSON.stringify(toSaved(draftFrom(template))));
@@ -260,6 +276,7 @@ function TemplateEditor({
             readOnly={!canEdit}
             subjectRef={subjectRef}
             bodyRef={bodyRef}
+            maySetVisibility={maySetVisibility}
             onFocus={(field) => (target.current = field)}
             onTrigger={(field) => {
                 target.current = field;
@@ -401,6 +418,7 @@ function EditPane({
     draft,
     setDraft,
     readOnly,
+    maySetVisibility,
     subjectRef,
     bodyRef,
     onFocus,
@@ -414,6 +432,7 @@ function EditPane({
     draft: Draft;
     setDraft: React.Dispatch<React.SetStateAction<Draft>>;
     readOnly: boolean;
+    maySetVisibility: boolean;
     subjectRef: React.RefObject<RichTextHandle | null>;
     bodyRef: React.RefObject<RichTextHandle | null>;
     onFocus: (field: 'subject' | 'body') => void;
@@ -441,6 +460,11 @@ function EditPane({
                     </span>
                 )}
             </label>
+            <VisibilityPicker
+                value={draft.visibility}
+                onChange={(visibility) => setDraft((d) => ({ ...d, visibility }))}
+                disabled={readOnly || !maySetVisibility}
+            />
             <div className="flex flex-col gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <span id="template-subject-label" className="text-[13px] font-medium">

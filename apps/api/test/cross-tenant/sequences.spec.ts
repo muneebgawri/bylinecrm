@@ -719,6 +719,147 @@ describe('FR-CRMS-5 sequences', () => {
         });
     });
 
+    describe('a private outreach template: chosen by someone who may see it, then sent whoever may', () => {
+        let author: Browser;
+        let bystander: Browser;
+        let privateTemplate: string;
+
+        beforeAll(async () => {
+            const join = async (label: string, capabilities: string[]) => {
+                const role = await as(admin)
+                    .post(w('/roles'))
+                    .send({ name: `${label} ${stamp}`, capabilities, recordScope: 'all' })
+                    .expect(201);
+                const email = `seq-${label}-${stamp}@example.com`;
+                const invite = await as(admin)
+                    .post(w('/invites'))
+                    .send({ email, roleId: (role.body as { id: string }).id });
+                expect(invite.status, JSON.stringify(invite.body)).toBe(201);
+                const joined = await http()
+                    .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+                    .send({ password });
+                expect(joined.status, JSON.stringify(joined.body)).toBe(201);
+                await verifyAddress(app, http, email);
+                return browserFrom(joined);
+            };
+            author = await join('author', ['record:read', 'template:read', 'template:write', 'outreach:write']);
+            bystander = await join('outsider', ['record:read', 'template:read', 'template:write', 'sequence:write']);
+            const res = await as(author)
+                .post(w('/templates'))
+                .send({
+                    name: `Private intro ${stamp}`,
+                    kind: 'outreach',
+                    subject: 'Hi {{person.firstName}}',
+                    body: doc(para(t('Private words.'))),
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            expect(res.body as { visibility: string }).toMatchObject({ visibility: 'private' });
+            privateTemplate = (res.body as { id: string }).id;
+        });
+
+        it('sends it from the pool, whose owner may not see it, and the bystander still cannot read it', async () => {
+            // The admin may see every template (template:read_all), so may choose it; the pool's run has no capabilities.
+            const seq = await sequence([{ kind: 'email', templateId: privateTemplate }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            const kim = await person({ nameFirst: 'Kim', emails: { primary: address('kim-hidden'), additional: [] } });
+            expect(((await enrol(seq.id, [kim])).body as EnrolmentBatchResult).enrolled).toEqual([kim]);
+            await runner.run(workspace, (await enrolment(seq.id, kim)).id, new Date());
+            const outboundId = (await enrolment(seq.id, kim)).waitingOutboundId!;
+            expect(outboundId).toBeTruthy();
+            expect(await send.deliver(workspace, outboundId, noWait, Date.now() + 1000)).toBe('sent');
+            // The body is MIME-encoded in the raw message; the subject is rendered from the private template.
+            expect(gmail.sent.at(-1)!.raw).toContain('Subject: Hi Kim');
+            await as(bystander)
+                .get(w(`/templates/${privateTemplate}`))
+                .expect(404);
+        });
+
+        it('keeps sending once its author makes it private after the sequence started', async () => {
+            const shared = await as(author)
+                .post(w('/templates'))
+                .send({
+                    name: `Shared intro ${stamp}`,
+                    kind: 'outreach',
+                    visibility: 'public',
+                    subject: 'Shared hello {{person.firstName}}',
+                    body: doc(para(t('Shared words.'))),
+                });
+            expect(shared.status).toBe(201);
+            const id = (shared.body as { id: string }).id;
+            const seq = await sequence([{ kind: 'email', templateId: id }]);
+            expect((await activate(seq.id)).status).toBe(200);
+            await as(author)
+                .patch(w(`/templates/${id}`))
+                .send({ visibility: 'private', version: 1 })
+                .expect(200);
+            const lee = await person({ nameFirst: 'Lee', emails: { primary: address('lee-hidden'), additional: [] } });
+            await enrol(seq.id, [lee]);
+            await runner.run(workspace, (await enrolment(seq.id, lee)).id, new Date());
+            const outboundId = (await enrolment(seq.id, lee)).waitingOutboundId!;
+            expect(await send.deliver(workspace, outboundId, noWait, Date.now() + 1000)).toBe('sent');
+            expect(gmail.sent.at(-1)!.raw).toContain('Subject: Shared hello Lee');
+        });
+
+        it('resumes a paused sequence whose template its author has since made private', async () => {
+            const made = await as(author)
+                .post(w('/templates'))
+                .send({
+                    name: `Paused intro ${stamp}`,
+                    kind: 'outreach',
+                    visibility: 'public',
+                    subject: 'Paused hello {{person.firstName}}',
+                    body: doc(para(t('Paused words.'))),
+                });
+            expect(made.status).toBe(201);
+            const templateId = (made.body as { id: string }).id;
+            const created = await as(bystander)
+                .post(w('/sequences'))
+                .send({
+                    name: `Paused ${stamp}`,
+                    timeZone: 'UTC',
+                    window: { startMinute: 0, endMinute: 1440, days: 127 },
+                });
+            expect(created.status, JSON.stringify(created.body)).toBe(201);
+            const id = (created.body as SequenceView).id;
+            await as(bystander)
+                .put(w(`/sequences/${id}/steps`))
+                .send({ steps: [{ kind: 'email', templateId }] })
+                .expect(200);
+            await as(bystander)
+                .post(w(`/sequences/${id}/activate`))
+                .expect(200);
+            await as(bystander)
+                .post(w(`/sequences/${id}/pause`))
+                .expect(200);
+            await as(author)
+                .patch(w(`/templates/${templateId}`))
+                .send({ visibility: 'private', version: 1 })
+                .expect(200);
+            await as(bystander)
+                .get(w(`/templates/${templateId}`))
+                .expect(404);
+            const resumed = await as(bystander).post(w(`/sequences/${id}/activate`));
+            expect(resumed.status, JSON.stringify(resumed.body)).toBe(200);
+        });
+
+        it('refuses a step, or an activation, that names a private template the caller cannot see', async () => {
+            const created = await as(bystander)
+                .post(w('/sequences'))
+                .send({
+                    name: `Theirs ${stamp}`,
+                    timeZone: 'UTC',
+                    window: { startMinute: 0, endMinute: 1440, days: 127 },
+                });
+            expect(created.status, JSON.stringify(created.body)).toBe(201);
+            const id = (created.body as SequenceView).id;
+            const put = await as(bystander)
+                .put(w(`/sequences/${id}/steps`))
+                .send({ steps: [{ kind: 'email', templateId: privateTemplate }] });
+            expect(put.status, JSON.stringify(put.body)).toBe(422);
+            expect(JSON.stringify(put.body)).toContain('no such template');
+        });
+    });
+
     describe('#136 task step (doc 50 §D: "Call if no reply → owner")', () => {
         it('creates a task on the person for their owner, due now, then moves straight on', async () => {
             const seq = await sequence([

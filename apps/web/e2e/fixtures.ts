@@ -756,6 +756,8 @@ export const templates: EmailTemplateView[] = [
         id: IDS.template,
         name: 'Follow-up after a reply',
         kind: 'personal',
+        visibility: 'public',
+        ownerMemberId: null,
         subject: 'Re: {{company.name}} — distribution options',
         body: {
             type: 'doc',
@@ -782,6 +784,8 @@ export const templates: EmailTemplateView[] = [
         id: IDS.outreachTemplate,
         name: 'Intro — PR distribution offer',
         kind: 'outreach',
+        visibility: 'public',
+        ownerMemberId: null,
         subject: 'Quick one for {{person.firstName}}',
         body: {
             type: 'doc',

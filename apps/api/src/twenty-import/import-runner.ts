@@ -765,7 +765,8 @@ export class TwentyImportRunner {
                     await link('template', existing.localId);
                     return Object.keys(result.diff).length > 0 ? 'updated' : 'unchanged';
                 }
-                const created = await this.templates.createIn(tx, context, input);
+                // A campaign was the whole team's in Twenty: it arrives public, whoever ran the import.
+                const created = await this.templates.createIn(tx, context, { ...input, visibility: 'public' });
                 await link('template', created.id);
                 return 'created';
             }

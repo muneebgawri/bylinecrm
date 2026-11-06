@@ -133,6 +133,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'pipeline:cadence': 'Set follow-up cadences and run the lead rotation',
     'email:send': 'Send email',
     'template:read': 'See email templates',
+    'template:read_all': "See every template, other members' private ones included, and change who can see them",
     'template:write': 'Create and edit email templates',
     'template:send_test': 'Send test emails',
     'outreach:write': 'Create outreach templates',

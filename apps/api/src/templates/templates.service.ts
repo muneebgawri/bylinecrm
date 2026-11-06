@@ -10,6 +10,7 @@ import {
     type DomainEventType,
     type FieldChange,
     type EmailTemplateBody,
+    type TemplateVisibility,
     type RecordObject,
     type RichText,
     type TemplateKind,
@@ -35,6 +36,8 @@ export interface TemplateInput {
     kind: TemplateKind;
     subject: string;
     body: RichText;
+    /** Absent on a create: private for a member's template. */
+    visibility?: TemplateVisibility | undefined;
 }
 
 /** A partial update: each field, or nothing. */
@@ -48,7 +51,7 @@ export interface ListTemplatesQuery {
 }
 
 /** The fields a template's `updated` event reports. */
-const DIFF_FIELDS = ['name', 'kind', 'subject', 'body'] as const;
+const DIFF_FIELDS = ['name', 'kind', 'subject', 'body', 'visibility'] as const;
 /** Where a custom variable's definitions live: `deal` is the opportunity object. */
 const SOURCE_OBJECT: Record<CustomVariableSource, RecordObject> = {
     person: 'person',
@@ -60,8 +63,9 @@ const COPY_SUFFIX = ' (copy)';
 type TemplateRow = Prisma.EmailTemplateGetPayload<object>;
 
 /**
- * Email templates (P2-4; FR-CRMS-3). Workspace-wide: every member who may read templates reads
- * all of them. Two rules sit on the data rather than the route, because the route cannot see
+ * Email templates (P2-4; FR-CRMS-3). A template is its author's own unless they make it public: a member reads
+ * their own and the public ones; `template:read_all` (an admin's by construction, grantable to any role) reads every
+ * one, an ownerless one included. Only the author or a `template:read_all` holder changes who reads it. Two rules sit on the data rather than the route, because the route cannot see
  * them: a template that is — or would become — `outreach` needs `outreach:write` as well as the
  * route's `template:write`; and a PATCH must name the version it edited, so a concurrent edit is a
  * `409`, never a silent overwrite.
@@ -82,6 +86,7 @@ export class TemplatesService {
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.emailTemplate.findMany({
                     where: {
+                        ...readableBy(this.current()),
                         deletedAt: deleted ? { not: null } : null,
                         ...(query.kind ? { kind: query.kind } : {}),
                         ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
@@ -95,6 +100,16 @@ export class TemplatesService {
     }
 
     get(id: string): Promise<EmailTemplateView> {
+        const context = this.current();
+        return this.rls.withWorkspace(async (tx) => view(await find(tx, id, false, context)));
+    }
+
+    /**
+     * A template as a running sequence sends it, whoever may see it now. Who chose it was checked when its step was
+     * saved and when the sequence was activated (`readableBy`); a sequence runs as its mailbox's owner, or as no one
+     * for the pool, so filtering here would stop a sequence the day its template's author makes it private.
+     */
+    getForSequence(id: string): Promise<EmailTemplateView> {
         this.current();
         return this.rls.withWorkspace(async (tx) => view(await find(tx, id, false)));
     }
@@ -145,11 +160,16 @@ export class TemplatesService {
         assertMayWriteKind(context, input.kind);
         const actor = actorOf(context);
         await this.assertValid(tx, input);
+        // Written by a member: theirs, private unless they say otherwise. By no one (an import, a key): public, or
+        // only administrators would ever read it.
+        const owner = context.memberId ?? null;
         const created = await tx.emailTemplate.create({
             data: {
                 workspaceId: context.workspaceId,
                 name: input.name,
                 kind: input.kind,
+                ownerMemberId: owner,
+                visibility: owner ? (input.visibility ?? 'private') : 'public',
                 subject: input.subject,
                 body: input.body as Prisma.InputJsonObject,
                 createdBy: actor as Prisma.InputJsonObject,
@@ -183,16 +203,20 @@ export class TemplatesService {
         editedVersion: number | null,
     ): Promise<{ row: TemplateRow; diff: Record<string, FieldChange> }> {
         const actor = actorOf(context);
-        const current = await find(tx, id, false);
+        const current = await find(tx, id, false, context);
         assertMayWriteKind(context, current.kind);
         if (patch.kind) assertMayWriteKind(context, patch.kind);
+        if (patch.visibility !== undefined && patch.visibility !== current.visibility) {
+            assertMaySetVisibility(context, current);
+        }
         const edited = editedVersion ?? current.version;
         if (current.version !== edited) throw versionConflict(edited, current.version);
-        const next: EmailTemplateBody = {
+        const next: EmailTemplateBody & { visibility: TemplateVisibility } = {
             name: patch.name ?? current.name,
             kind: patch.kind ?? current.kind,
             subject: patch.subject ?? current.subject,
             body: patch.body ?? (current.body as unknown as RichText),
+            visibility: patch.visibility ?? current.visibility,
         };
         const diff = diffOf(view(current), { ...view(current), ...next }, DIFF_FIELDS);
         if (isEmpty(diff)) return { row: current, diff };
@@ -205,6 +229,7 @@ export class TemplatesService {
                 kind: next.kind,
                 subject: next.subject,
                 body: next.body as Prisma.InputJsonObject,
+                visibility: next.visibility,
                 version: { increment: 1 },
                 updatedBy: actor as Prisma.InputJsonObject,
             },
@@ -221,7 +246,7 @@ export class TemplatesService {
         const context = this.current();
         const actor = actorOf(context);
         await this.rls.withWorkspace(async (tx) => {
-            const current = await find(tx, id, false);
+            const current = await find(tx, id, false, context);
             assertMayWriteKind(context, current.kind);
             await tx.emailTemplate.update({
                 where: { id },
@@ -235,7 +260,7 @@ export class TemplatesService {
         const context = this.current();
         const actor = actorOf(context);
         const row = await this.rls.withWorkspace(async (tx) => {
-            const current = await find(tx, id, true);
+            const current = await find(tx, id, true, context);
             assertMayWriteKind(context, current.kind);
             const restored = await tx.emailTemplate.update({
                 where: { id },
@@ -249,8 +274,8 @@ export class TemplatesService {
 
     /** A new template with the same content, named "<name> (copy)", at version 1. */
     async duplicate(id: string): Promise<EmailTemplateView> {
-        this.current();
-        const source = await this.rls.withWorkspace(async (tx) => find(tx, id, false));
+        const context = this.current();
+        const source = await this.rls.withWorkspace(async (tx) => find(tx, id, false, context));
         return this.create({
             name: `${source.name.slice(0, TEMPLATE_NAME_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`,
             kind: source.kind,
@@ -351,9 +376,37 @@ function versionConflict(edited: number, now: number): ApiException {
     return new ApiException(409, 'conflict', `the template changed since version ${edited}; it is now version ${now}`);
 }
 
-/** A template in one state (live, or in the trash when `deleted`), or `404`. */
-async function find(tx: WorkspaceClient, id: string, deleted: boolean): Promise<TemplateRow> {
-    const row = await tx.emailTemplate.findFirst({ where: { id, deletedAt: deleted ? { not: null } : null } });
+/**
+ * The templates a caller reads: with `template:read_all`, all; a member, their own and the public ones; anyone else (a
+ * key without it), the public ones. A template another member keeps private is not there for them at all — a `404`, as if it were not.
+ */
+export function readableBy(context: WorkspaceRunContext): Prisma.EmailTemplateWhereInput {
+    if (context.capabilities.has('template:read_all')) return {};
+    if (!context.memberId) return { visibility: 'public' };
+    return { OR: [{ visibility: 'public' }, { ownerMemberId: context.memberId }] };
+}
+
+/** Only the author, or a holder of `template:read_all`, says who reads a template. */
+function assertMaySetVisibility(context: WorkspaceRunContext, row: TemplateRow): void {
+    if (context.capabilities.has('template:read_all')) return;
+    if (!row.ownerMemberId || row.ownerMemberId !== context.memberId) {
+        throw new ForbiddenException('only the author of a template, or template:read_all, changes who can see it');
+    }
+}
+
+/**
+ * A template in one state (live, or in the trash when `deleted`), or `404`. With a caller, only one they may read:
+ * every route passes theirs. Without one, any — the renderer's and the Twenty importer's own reads.
+ */
+async function find(
+    tx: WorkspaceClient,
+    id: string,
+    deleted: boolean,
+    context?: WorkspaceRunContext,
+): Promise<TemplateRow> {
+    const row = await tx.emailTemplate.findFirst({
+        where: { id, deletedAt: deleted ? { not: null } : null, ...(context ? readableBy(context) : {}) },
+    });
     if (!row) throw new NotFoundException('template not found');
     return row;
 }
@@ -363,6 +416,8 @@ export function view(row: TemplateRow): EmailTemplateView {
         id: row.id,
         name: row.name,
         kind: row.kind,
+        visibility: row.visibility,
+        ownerMemberId: row.ownerMemberId,
         subject: row.subject,
         body: row.body as unknown as RichText,
         version: row.version,
