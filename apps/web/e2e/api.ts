@@ -91,6 +91,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/mail/oauth-client/status$`), () => data.oauthClientStatus],
     [new RegExp(`^${W}/mail/oauth-client$`), () => data.oauthClient],
     [new RegExp(`^${W}/mail/blocklist$`), () => data.blocklist],
+    [new RegExp(`^${W}/mail/history-backfill$`), () => data.mailHistoryBackfill],
     [new RegExp(`^${W}/suppressions$`), () => data.page(data.suppressions)],
     [new RegExp(`^${W}/outreach/region-policy/changes$`), () => data.regionPolicyChanges],
     [new RegExp(`^${W}/outreach/region-policy$`), () => data.regionPolicy],
