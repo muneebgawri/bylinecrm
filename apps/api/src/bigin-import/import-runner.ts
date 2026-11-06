@@ -33,6 +33,7 @@ import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { StageMoveService } from '../pipelines/stage-move.service';
 import { actorOf } from '../records/actor';
+import { refreshContactStatus } from '../customers/contact-status.service';
 import { CompaniesService, type CompanyInput } from '../records/companies.service';
 import { companyDomain } from '../records/company-domain';
 import { CustomFieldsService } from '../records/custom-fields/custom-fields.service';
@@ -564,17 +565,25 @@ export class BiginImportRunner {
                 });
             }
         }
-        await this.writeImported(tx, state, pending, entry);
+        const written = await this.writeImported(tx, state, pending, entry);
+        // An email sent to a person is a contact attempt: their status, attempts and last contact re-derived.
+        await refreshContactStatus(
+            tx,
+            written.flatMap((a) => (a.target.type === 'person' ? [a.target.id] : [])),
+        );
     }
 
-    /** A page's entries written; a row whose entries were all there already is `unchanged`, any other `created`. */
+    /**
+     * A page's entries written; a row whose entries were all there already is `unchanged`, any other `created`.
+     * Returns the entries that were new.
+     */
     private async writeImported(
         tx: WorkspaceClient,
         state: RunState,
         pending: readonly { externalId: string; activity: ImportedActivity }[],
         entry: BiginImportObjectReport,
-    ): Promise<void> {
-        if (pending.length === 0) return;
+    ): Promise<ImportedActivity[]> {
+        if (pending.length === 0) return [];
         const keys = pending.map((p) => p.activity.idempotencyKey);
         const existing = new Set(
             (
@@ -592,11 +601,9 @@ export class BiginImportRunner {
         }
         entry.created += fresh.size;
         entry.unchanged += rows.size - fresh.size;
-        await recordImportedActivities(
-            tx,
-            state.context.workspaceId,
-            pending.filter((p) => !existing.has(p.activity.idempotencyKey)).map((p) => p.activity),
-        );
+        const written = pending.filter((p) => !existing.has(p.activity.idempotencyKey)).map((p) => p.activity);
+        await recordImportedActivities(tx, state.context.workspaceId, written);
+        return written;
     }
 
     /**

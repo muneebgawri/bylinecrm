@@ -7,6 +7,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
+import { refreshContactStatus } from '../../src/customers/contact-status.service';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { verifyAddress } from '../support/mail';
@@ -229,6 +230,90 @@ describe('#242 contact status, deal fields, won deals as customers', () => {
                 .put(w(`/people/${personId}/contact-status`, b.id))
                 .send({ status: 'engaged' })
                 .expect(404);
+        });
+    });
+
+    describe('contact attempts from imported emails', () => {
+        let boId: string;
+        const external = (ws: string, targetId: string, key: string, at: string, subject: string, status: string) =>
+            owner.timelineActivity.create({
+                data: {
+                    workspaceId: ws,
+                    targetType: 'person',
+                    targetId,
+                    kind: 'external.email',
+                    happenedAt: new Date(at),
+                    actor: { kind: 'import' },
+                    properties: { email: { to: [`bo@${domain}`], subject, status } },
+                    source: 'test-import',
+                    idempotencyKey: `${stamp}:${key}`,
+                },
+            });
+
+        beforeAll(async () => {
+            boId = (
+                (
+                    await as(a.who)
+                        .post(w('/people'))
+                        .send({ nameFirst: 'Bo', companyId, emails: { primary: `bo@${domain}`, additional: [] } })
+                        .expect(201)
+                ).body as { id: string }
+            ).id;
+            await settle(app);
+        });
+
+        it('counts imported emails that went, once each, beside synced mail', async () => {
+            // Counted: sent, and clicked (the latest contact).
+            await external(a.id, boId, 'intro', '2026-08-01T10:00:00Z', 'Intro', 'Sent');
+            await external(a.id, boId, 'third', '2026-09-21T10:00:00Z', 'Third', 'Clicked');
+            // Never went: not attempts.
+            await external(a.id, boId, 'failed', '2026-08-02T10:00:00Z', 'Retry', 'Failed');
+            await external(a.id, boId, 'pending', '2026-08-03T10:00:00Z', 'Queued', 'Pending');
+            // The synced mailbox holds this one too (same subject, five minutes apart): counted once, as mail.
+            await external(a.id, boId, 'dup', '2026-09-20T10:00:00Z', '  Follow up ', 'Opened');
+            // Another workspace's entry naming the same id is not this person's.
+            await external(b.id, boId, 'other-tenant', '2026-10-01T10:00:00Z', 'Elsewhere', 'Sent');
+            const thread = await owner.mailThread.create({
+                data: { workspaceId: a.id, subject: 'Follow up', lastMessageAt: new Date('2026-09-20T10:05:00Z') },
+            });
+            await owner.mailMessage.create({
+                data: {
+                    workspaceId: a.id,
+                    threadId: thread.id,
+                    identityKey: `${stamp}:dup`,
+                    direction: 'outbound',
+                    fromAddress: `customers-a-${stamp}@example.test`,
+                    sentAt: new Date('2026-09-20T10:05:00Z'),
+                    subject: 'follow UP',
+                    participants: {
+                        create: { workspaceId: a.id, role: 'to', address: `bo@${domain}`, personId: boId },
+                    },
+                },
+            });
+
+            await rls.withWorkspace(a.id, (tx) => refreshContactStatus(tx, [boId]));
+            const bo = await owner.person.findUniqueOrThrow({ where: { id: boId } });
+            expect(bo.contactAttempts).toBe(3); // the synced mail, Intro, Third
+            expect(bo.lastContactedAt?.toISOString()).toBe('2026-09-21T10:00:00.000Z');
+            expect(bo.contactStatus).toBe('unresponsive');
+        });
+
+        it('finds a person’s imported emails from the timeline index under row-level security', async () => {
+            // With sequential scans priced out, a plan still reading the table means no index may serve it: under
+            // RLS only leakproof conditions (uuid equality) may use one. Mirrors the function's imported-email part.
+            const plan = await rls.withWorkspace(a.id, async (tx) => {
+                await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
+                const rows = await tx.$queryRaw<{ 'QUERY PLAN': string }[]>`
+                    EXPLAIN SELECT ext.* FROM people p CROSS JOIN LATERAL (
+                        SELECT count(*), max(t.happened_at) FROM timeline_activities t
+                        WHERE t.workspace_id = p.workspace_id AND t.target_id = p.id
+                          AND t.target_type = 'person' AND t.kind = 'external.email'
+                          AND coalesce(t.properties -> 'email' ->> 'status', '') NOT IN ('Failed', 'Pending')
+                    ) ext WHERE p.id = ANY(${[boId]}::uuid[])`;
+                return rows.map((r) => r['QUERY PLAN']).join('\n');
+            });
+            expect(plan).toContain('timeline_activities_record_idx');
+            expect(plan).not.toMatch(/Seq Scan on timeline_activities/);
         });
     });
 
