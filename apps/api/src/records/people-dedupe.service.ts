@@ -16,6 +16,7 @@ import {
     firstContacts,
     groupDuplicates,
     moveRelated,
+    normaliseEmail,
     type DuplicateGroup,
     DUPLICATE_TIERS,
     type DuplicateTier,
@@ -484,9 +485,28 @@ export class PeopleDedupe {
             why: u.why,
         }));
         const emails = new Map(people.map((p) => [p.id, p.emails as unknown]));
+        // Primaries outside the group, trash included: an address promoted to primary must be nobody else's.
+        const outside = await tx.person.findMany({
+            where: {
+                workspaceId,
+                id: { notIn: [...personIds] },
+                emailPrimary: { in: [...new Set(people.flatMap((p) => emailsOf(p.emails)))] },
+            },
+            select: { emailPrimary: true },
+        });
+        const primariesOutside = outside.map((p) => p.emailPrimary!);
         const changed = new Set<string>();
         for (const r of releases) {
-            const next = new Map(r.fromIds.map((id) => [id, withoutAddress(emails.get(id), r.email)]));
+            // One at a time, so two people giving up an address never promote the same one.
+            const next = new Map<string, Emails>();
+            for (const id of r.fromIds) {
+                const taken = new Set(primariesOutside);
+                for (const [other, e] of [...emails, ...next]) {
+                    const primary = normaliseEmail((e as Partial<Emails> | null)?.primary);
+                    if (other !== id && primary) taken.add(primary);
+                }
+                next.set(id, withoutAddress(emails.get(id), r.email, taken));
+            }
             const stranded = r.fromIds.find((id) => !name(id) && next.get(id)!.primary === null);
             if (stranded) {
                 results.push({
