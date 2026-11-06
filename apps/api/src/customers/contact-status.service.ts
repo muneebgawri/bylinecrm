@@ -9,15 +9,24 @@ import { PeopleService } from '../records/people.service';
 import type { PersonView } from '../records/responses';
 import { SuppressionService } from '../suppression/suppression.service';
 
+/** People re-derived per statement, so a large set never makes one long statement. */
+const REFRESH_CHUNK = 1000;
+
 /**
  * Re-derives the contact status (#242), contact attempts and last-contacted time of these people in `tx`, through the
- * migration's `refresh_contact_status()` — the one definition of the rules. Returns how many rows changed.
+ * migration's `refresh_contact_status()` — the one definition of the rules — `REFRESH_CHUNK` people per statement.
+ * Returns how many rows changed.
  */
 export async function refreshContactStatus(tx: WorkspaceClient, personIds: readonly string[]): Promise<number> {
     const ids = [...new Set(personIds)];
-    if (ids.length === 0) return 0;
-    const [row] = await tx.$queryRaw<{ changed: number }[]>`SELECT refresh_contact_status(${ids}::uuid[]) AS changed`;
-    return Number(row?.changed ?? 0);
+    let changed = 0;
+    for (let i = 0; i < ids.length; i += REFRESH_CHUNK) {
+        const chunk = ids.slice(i, i + REFRESH_CHUNK);
+        const [row] = await tx.$queryRaw<{ changed: number }[]>`
+            SELECT refresh_contact_status(${chunk}::uuid[]) AS changed`;
+        changed += Number(row?.changed ?? 0);
+    }
+    return changed;
 }
 
 /**

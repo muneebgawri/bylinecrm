@@ -1964,7 +1964,10 @@ export const biginContactReuses: BiginContactReusePage = {
     nextCursor: null,
 };
 
-/** The Bigin stage mapping: Bigin's picklist, one stage mapped, the others matched or left to the first stage. */
+/**
+ * The Bigin stage mapping: Bigin's picklist, one stage mapped, the others matched or left to the first stage, and one
+ * stage only imported history names.
+ */
 export const biginStageMap: BiginStageMapView = {
     source: 'bigin',
     error: null,
@@ -1974,6 +1977,7 @@ export const biginStageMap: BiginStageMapView = {
         {
             biginStage: 'First Followup Done',
             deals: 41_210,
+            history: 52_870,
             stageId: stages[1]!.id,
             targetStageId: stages[1]!.id,
             match: 'mapped',
@@ -1981,15 +1985,46 @@ export const biginStageMap: BiginStageMapView = {
         {
             biginStage: 'Second Follow Up Done',
             deals: 28_904,
+            history: 31_002,
             stageId: null,
             targetStageId: stages[0]!.id,
             match: 'fallback',
         },
-        { biginStage: 'Meeting', deals: 3_118, stageId: null, targetStageId: stages[3]!.id, match: 'name' },
-        { biginStage: 'Closed Won', deals: 902, stageId: null, targetStageId: stages[4]!.id, match: 'closed' },
+        {
+            biginStage: 'Final Followup Done',
+            deals: 0,
+            history: 1_076,
+            stageId: null,
+            targetStageId: stages[0]!.id,
+            match: 'fallback',
+        },
+        {
+            biginStage: 'Meeting',
+            deals: 3_118,
+            history: 3_540,
+            stageId: null,
+            targetStageId: stages[3]!.id,
+            match: 'name',
+        },
+        {
+            biginStage: 'Closed Won',
+            deals: 902,
+            history: 902,
+            stageId: null,
+            targetStageId: stages[4]!.id,
+            match: 'closed',
+        },
     ],
     unread: 0,
-    apply: { status: 'succeeded', requestedAt: at(2), finishedAt: at(2), moved: 41_180, skipped: 30, error: null },
+    apply: {
+        status: 'succeeded',
+        requestedAt: at(2),
+        finishedAt: at(2),
+        moved: 41_180,
+        skipped: 30,
+        historyRepointed: 1_076,
+        error: null,
+    },
 };
 
 /** SMTP2Go pool mailboxes (TRANS-1): one, its hook heard from. */

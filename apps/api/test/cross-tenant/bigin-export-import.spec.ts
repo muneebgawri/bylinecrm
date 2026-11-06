@@ -456,6 +456,11 @@ describe('FR-CRMS-25 BIGIN-1 Bigin export import', () => {
         expect(dealMail.map((e) => (e.properties['email'] as { subject: string }).subject)).toEqual(['Your quote']);
         const samMail = await timeline(`person:${samId}`, 'external.email');
         expect(samMail.map((e) => (e.properties['email'] as { subject: string }).subject)).toEqual(['Your quote']);
+        // Each is a contact attempt on the person it went to, re-derived as it is imported.
+        if (!danaId || !samId) throw new Error('Dana and Sam are imported');
+        const dana = await owner.person.findUniqueOrThrow({ where: { id: danaId } });
+        expect(dana).toMatchObject({ contactAttempts: 1, lastContactedAt: new Date('2024-01-06T16:15:00.000Z') });
+        expect(await owner.person.findUniqueOrThrow({ where: { id: samId } })).toMatchObject({ contactAttempts: 1 });
     });
 
     it('a second run updates rather than duplicates, and adds no history twice', async () => {

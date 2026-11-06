@@ -66,7 +66,10 @@ export const personView = named(
             .enum(CONTACT_STATUSES)
             .nullable()
             .meta({ description: 'A member’s choice, which outranks everything but `do_not_contact`.' }),
-        contactAttempts: z.number().int().meta({ description: 'Derived: messages sent to them.' }),
+        contactAttempts: z
+            .number()
+            .int()
+            .meta({ description: 'Derived: emails sent to them, from a connected mailbox or imported.' }),
         lastContactedAt: dateTime.nullable().meta({ description: 'Derived: when the last message was sent to them.' }),
         cadenceOverdue: z.boolean().meta({
             description: 'Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed.',
@@ -161,11 +164,10 @@ export const opportunityView = named(
         leadSource: z.string().nullable(),
         lastContactedAt: dateTime
             .nullable()
-            .meta({ description: 'Derived: when mail was last sent to the point of contact.' }),
-        contactAttempts: z
-            .number()
-            .int()
-            .meta({ description: 'Derived: messages sent to the point of contact; 0 when the deal has none.' }),
+            .meta({ description: 'Derived: when an email was last sent to the point of contact.' }),
+        contactAttempts: z.number().int().meta({
+            description: 'Derived: emails sent to the point of contact (synced or imported); 0 when the deal has none.',
+        }),
         cadenceDueAt: dateTime.nullable().meta({
             description:
                 'Derived (CADENCE-1): when the next touch is due under its stage’s cadence; null when no cadence applies (closed, unowned, a customer, excluded or suppressed contact).',
