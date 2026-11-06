@@ -605,7 +605,7 @@ function StageMapCard({ workspaceId }: { workspaceId: string }) {
                 <p className="m-0 text-text-muted">
                     Which stage of the default pipeline each Bigin deal stage lands in. A stage left automatic goes to a
                     stage of the same name, then won or lost by its wording, else the first stage. Syncs use the mapping
-                    from the next run; Apply moves deals already imported.
+                    from the next run; Apply moves deals already imported and re-points their imported stage history.
                 </p>
                 {map.isError ? (
                     <Alert>{failureText(map.error)}</Alert>
@@ -643,6 +643,12 @@ function StageMapCard({ workspaceId }: { workspaceId: string }) {
                                             header: 'Deals',
                                             phone: 'secondary',
                                             cell: (row: Row) => count(row.deals),
+                                        },
+                                        {
+                                            id: 'history',
+                                            header: 'History entries',
+                                            phone: 'hidden',
+                                            cell: (row: Row) => count(row.history),
                                         },
                                         {
                                             id: 'stage',
@@ -718,10 +724,10 @@ function StageMapCard({ workspaceId }: { workspaceId: string }) {
                             {view.apply && (
                                 <span className="text-text-muted">
                                     {going
-                                        ? `Applying… ${count(view.apply.moved)} moved so far`
+                                        ? `Applying… ${count(view.apply.moved)} moved, ${count(view.apply.historyRepointed)} history entries re-pointed so far`
                                         : view.apply.status === 'failed'
                                           ? `Last apply failed: ${view.apply.error ?? 'unknown error'}`
-                                          : `Last applied ${formatDate(view.apply.finishedAt ?? view.apply.requestedAt)}: ${count(view.apply.moved)} moved, ${count(view.apply.skipped)} left where someone moved them`}
+                                          : `Last applied ${formatDate(view.apply.finishedAt ?? view.apply.requestedAt)}: ${count(view.apply.moved)} moved, ${count(view.apply.skipped)} left where someone moved them, ${count(view.apply.historyRepointed)} history entries re-pointed`}
                                 </span>
                             )}
                         </div>
@@ -733,7 +739,7 @@ function StageMapCard({ workspaceId }: { workspaceId: string }) {
                 open={applying}
                 onOpenChange={setApplying}
                 title="Apply the mapping to imported deals?"
-                body="Every deal imported from Bigin moves to the stage its Bigin stage now lands in, closing or reopening it as needed. A deal someone moved by hand since Bigin last changed it stays where it is."
+                body="Every deal imported from Bigin moves to the stage its Bigin stage now lands in, closing or reopening it as needed. A deal someone moved by hand since Bigin last changed it stays where it is. Imported stage history is re-pointed to the mapped stages too."
                 confirm="Apply"
                 pending={apply.isPending}
                 error={apply.isError ? failureText(apply.error) : undefined}

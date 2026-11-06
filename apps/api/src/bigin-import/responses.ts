@@ -166,6 +166,9 @@ export const biginStageApply = named(
             .number()
             .int()
             .meta({ description: 'Deals left in place: someone moved them by hand after Bigin last changed them.' }),
+        historyRepointed: z.number().int().meta({
+            description: 'Imported stage-history entries re-pointed to the stages their Bigin stages now map to.',
+        }),
         error: z.string().nullable(),
     }),
 );
@@ -184,6 +187,10 @@ export const biginStageMap = named(
             z.object({
                 biginStage: z.string(),
                 deals: z.number().int(),
+                history: z
+                    .number()
+                    .int()
+                    .meta({ description: 'Imported stage-history entries that moved a deal into this stage.' }),
                 stageId: id.nullable().meta({ description: 'The explicit mapping; null when left to the name match.' }),
                 targetStageId: id,
                 match: z.enum(BIGIN_STAGE_MATCHES),
