@@ -213,14 +213,15 @@ export class SequencesService {
             if (emails.length === 0) {
                 throw new ApiException(422, 'unprocessable', 'a sequence needs at least one email step to run');
             }
-            // Each one the caller may see: activating sends it, so a template its author keeps private is not
-            // someone else's to set going (`readableBy`). Once running, the sequence sends it whatever happens next.
+            // A draft's first activation: each template one the caller may see, so a template its author keeps
+            // private is not someone else's to set going (`readableBy`). A paused sequence has started: resuming it
+            // sends what it sent before, whoever may see its templates now (as a running one keeps sending them).
             const templates = await tx.emailTemplate.findMany({
                 where: {
                     id: { in: emails.map((s) => s.templateId!) },
                     deletedAt: null,
                     kind: 'outreach',
-                    ...readableBy(this.current()),
+                    ...(row.status === 'draft' ? readableBy(this.current()) : {}),
                 },
                 select: { id: true },
             });

@@ -800,6 +800,48 @@ describe('FR-CRMS-5 sequences', () => {
             expect(gmail.sent.at(-1)!.raw).toContain('Subject: Shared hello Lee');
         });
 
+        it('resumes a paused sequence whose template its author has since made private', async () => {
+            const made = await as(author)
+                .post(w('/templates'))
+                .send({
+                    name: `Paused intro ${stamp}`,
+                    kind: 'outreach',
+                    visibility: 'public',
+                    subject: 'Paused hello {{person.firstName}}',
+                    body: doc(para(t('Paused words.'))),
+                });
+            expect(made.status).toBe(201);
+            const templateId = (made.body as { id: string }).id;
+            const created = await as(bystander)
+                .post(w('/sequences'))
+                .send({
+                    name: `Paused ${stamp}`,
+                    timeZone: 'UTC',
+                    window: { startMinute: 0, endMinute: 1440, days: 127 },
+                });
+            expect(created.status, JSON.stringify(created.body)).toBe(201);
+            const id = (created.body as SequenceView).id;
+            await as(bystander)
+                .put(w(`/sequences/${id}/steps`))
+                .send({ steps: [{ kind: 'email', templateId }] })
+                .expect(200);
+            await as(bystander)
+                .post(w(`/sequences/${id}/activate`))
+                .expect(200);
+            await as(bystander)
+                .post(w(`/sequences/${id}/pause`))
+                .expect(200);
+            await as(author)
+                .patch(w(`/templates/${templateId}`))
+                .send({ visibility: 'private', version: 1 })
+                .expect(200);
+            await as(bystander)
+                .get(w(`/templates/${templateId}`))
+                .expect(404);
+            const resumed = await as(bystander).post(w(`/sequences/${id}/activate`));
+            expect(resumed.status, JSON.stringify(resumed.body)).toBe(200);
+        });
+
         it('refuses a step, or an activation, that names a private template the caller cannot see', async () => {
             const created = await as(bystander)
                 .post(w('/sequences'))
