@@ -316,16 +316,22 @@ export function addressKeepers(people: readonly (NamedCandidate & { id: string }
 }
 
 /**
- * `emails` without `email`: a primary given up is replaced by the first additional address left, so the person
- * keeps a primary while they have any address.
+ * `emails` without `email`: a primary given up is replaced by the first additional address left that is nobody
+ * else's primary (`takenPrimaries`, normalised — a primary is unique per workspace), so the person keeps a primary
+ * while they have one to give.
  */
-export function withoutAddress(emails: unknown, email: string): Emails {
+export function withoutAddress(
+    emails: unknown,
+    email: string,
+    takenPrimaries: ReadonlySet<string> = new Set(),
+): Emails {
     const e = (emails ?? {}) as Partial<Emails>;
     const keep = (v: unknown): v is string => typeof v === 'string' && normaliseEmail(v) !== email;
     const additional = (Array.isArray(e.additional) ? e.additional : []).filter(keep);
     if (keep(e.primary)) return { primary: e.primary, additional };
-    const [next, ...rest] = additional;
-    return { primary: next ?? null, additional: rest };
+    const at = additional.findIndex((a) => !takenPrimaries.has(normaliseEmail(a) ?? ''));
+    if (at < 0) return { primary: null, additional };
+    return { primary: additional[at]!, additional: additional.filter((_, i) => i !== at) };
 }
 
 // ─── Ownership ──────────────────────────────────────────────────────────────────────────────────

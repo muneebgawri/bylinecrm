@@ -426,4 +426,43 @@ describe('person dedupe: merging people saved more than once', () => {
         const again = await dedupe.releaseAddresses(workspace, { apply: true });
         expect(mine(again).map((a) => [a.email, a.outcome])).toEqual([[`office${stamp}${at}`, 'unresolved']]);
     });
+
+    it('giving up a primary never promotes an address that is someone else’s primary, trash included', async () => {
+        const at = `@ross-${stamp}.test`;
+        const make = (nameFirst: string, nameLast: string, emails: Emails, createdAt: string, extra: object = {}) =>
+            owner.person.create({
+                data: {
+                    workspaceId: workspace,
+                    nameFirst,
+                    nameLast,
+                    emails,
+                    createdBy: { kind: 'member', id: adminMember },
+                    createdAt: new Date(createdAt),
+                    ...extra,
+                },
+            });
+        const ann = await make('Ann', 'Ross', { primary: `desk${stamp}${at}`, additional: [] }, '2026-06-01T00:00:00Z');
+        const ben = await make('Ben', 'Ode', { primary: `ben${at}`, additional: [] }, '2026-07-01T00:00:00Z');
+        await make('Cy', 'Fox', { primary: `cy${at}`, additional: [] }, '2026-05-01T00:00:00Z', {
+            deletedAt: new Date(),
+        });
+        await withoutAddressRule(owner, async (tx) => {
+            await tx.person.update({
+                where: { id: ann.id },
+                data: { emails: { primary: `desk${stamp}${at}`, additional: [`a.ross${at}`] } },
+            });
+            await tx.person.update({
+                where: { id: ben.id },
+                data: { emails: { primary: `A.Ross${at}`, additional: [`cy${at}`, `ben${at}`] } },
+            });
+        });
+        const report = await dedupe.releaseAddresses(workspace, { apply: true });
+        expect(report.addresses.filter((a) => a.email.endsWith(at)).map((a) => [a.email, a.outcome])).toEqual([
+            [`a.ross${at}`, 'released'],
+        ]);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: ben.id } })).emails).toEqual({
+            primary: `ben${at}`,
+            additional: [`cy${at}`],
+        });
+    });
 });
