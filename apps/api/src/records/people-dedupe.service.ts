@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { DomainEvent } from '@bylinecrm/shared';
+import type { DomainEvent, Emails } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { PrismaService } from '../infra/prisma.service';
@@ -8,6 +8,7 @@ import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { TransfersService } from '../transfers/transfers.service';
 import {
     addCounts,
+    addressKeepers,
     chooseOwner,
     combined,
     EMPTY_PERSON_COUNTS,
@@ -20,6 +21,7 @@ import {
     type DuplicateTier,
     type OwnerDecision,
     type PersonMergeCounts,
+    withoutAddress,
 } from './merge-people';
 
 const PERSON_FIELDS = {
@@ -59,6 +61,26 @@ export interface DedupeGroupResult {
     counts: PersonMergeCounts;
 }
 
+/** One address shared by people of a name-mismatch group: who keeps it, who gives it up — or why nobody does. */
+export interface AddressResult {
+    email: string;
+    /** `released`, `would release`, `unresolved` (a person decides), or `failed: …`. */
+    outcome: string;
+    keeperId: string | null;
+    keeperName: string | null;
+    fromIds: string[];
+    fromNames: string[];
+    why: string;
+}
+
+export interface AddressReport {
+    applied: boolean;
+    addresses: AddressResult[];
+    released: number;
+    unresolved: number;
+    failed: number;
+}
+
 export interface DedupeReport {
     applied: boolean;
     groups: DedupeGroupResult[];
@@ -66,6 +88,12 @@ export interface DedupeReport {
     merged: number;
     failed: number;
     totals: PersonMergeCounts;
+}
+
+class RolledBack extends Error {
+    constructor() {
+        super('dry run');
+    }
 }
 
 class DryRun extends Error {
@@ -293,6 +321,12 @@ export class PeopleDedupe {
         const counts = { ...EMPTY_PERSON_COUNTS };
         const mergedIds: string[] = [];
         const now = new Date();
+        // People merged into one of these before merging gave up addresses still hold copies of them (trashed, and
+        // counted by `people_address_taken`): what they held is the person they were merged into's already.
+        await tx.person.updateMany({
+            where: { workspaceId, mergedIntoId: { in: live.map((p) => p.id) }, deletedAt: { not: null } },
+            data: { emails: { primary: null, additional: [] } },
+        });
         for (const { id } of live) {
             if (id === survivorId) continue;
             const dup = await tx.person.findUniqueOrThrow({ where: { id }, select: PERSON_FIELDS });
@@ -352,6 +386,153 @@ export class PeopleDedupe {
         ];
         await this.events.recordAll(tx, events);
         return { decision: { ...decision, ownerId: to ?? from }, counts };
+    }
+
+    /**
+     * People who share an address but are not one person (the `auto_name_mismatch` groups, never merged): each
+     * shared address goes to the holder it names (`addressKeepers`) and the others give it up, recorded as their
+     * `person.updated` (`emails`, by the system) — timeline, webhooks, and mail and calendar re-link as for any edit.
+     * One transaction per group, the people locked and read again; without `apply` each is rolled back. An address
+     * naming none or several of its holders, or whose giving up would leave a person with neither a name nor an
+     * address, is unresolved and listed. Re-running finds only what is left.
+     */
+    async releaseAddresses(
+        workspaceId: string,
+        options: { apply: boolean; onGroup?: () => void },
+    ): Promise<AddressReport> {
+        const groups = (await this.detect(workspaceId)).filter((g) => g.tier === 'auto_name_mismatch');
+        const report: AddressReport = { applied: options.apply, addresses: [], released: 0, unresolved: 0, failed: 0 };
+        for (const group of groups) {
+            let results: AddressResult[];
+            try {
+                results = await this.releaseGroup(workspaceId, group.personIds, options.apply);
+            } catch (error) {
+                const message = `failed: ${error instanceof Error ? error.message : String(error)}`;
+                results = [
+                    {
+                        email: group.why,
+                        outcome: message,
+                        keeperId: null,
+                        keeperName: null,
+                        fromIds: group.personIds,
+                        fromNames: [],
+                        why: group.personIds.join(' '),
+                    },
+                ];
+            }
+            for (const r of results) {
+                if (r.outcome === 'released' || r.outcome === 'would release') report.released += 1;
+                else if (r.outcome === 'unresolved') report.unresolved += 1;
+                else report.failed += 1;
+                report.addresses.push(r);
+            }
+            options.onGroup?.();
+        }
+        return report;
+    }
+
+    private async releaseGroup(
+        workspaceId: string,
+        personIds: readonly string[],
+        apply: boolean,
+    ): Promise<AddressResult[]> {
+        const hooks: (() => void)[] = [];
+        let results: AddressResult[] = [];
+        try {
+            await this.ownerPrisma.$transaction(
+                (tx) =>
+                    insideTransaction(hooks, async () => {
+                        results = await this.releaseIn(tx, workspaceId, personIds, apply);
+                        if (!apply) throw new RolledBack();
+                    }),
+                { maxWait: 10_000, timeout: 120_000 },
+            );
+            for (const hook of hooks) hook();
+        } catch (error) {
+            if (!(error instanceof RolledBack)) throw error;
+        }
+        return results;
+    }
+
+    private async releaseIn(
+        tx: Prisma.TransactionClient,
+        workspaceId: string,
+        personIds: readonly string[],
+        apply: boolean,
+    ): Promise<AddressResult[]> {
+        await tx.$queryRaw`
+            SELECT id FROM people WHERE workspace_id = ${workspaceId}::uuid AND id::text = ANY(${[...personIds]})
+               AND deleted_at IS NULL ORDER BY created_at, id FOR UPDATE`;
+        const people = await tx.person.findMany({
+            where: { workspaceId, id: { in: [...personIds] }, deletedAt: null },
+            select: { id: true, nameFirst: true, nameLast: true, emails: true },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+        const byId = new Map(people.map((p) => [p.id, p]));
+        const name = (id: string) => {
+            const p = byId.get(id)!;
+            return `${p.nameFirst} ${p.nameLast}`.trim();
+        };
+        const { releases, unresolved } = addressKeepers(people);
+        const results: AddressResult[] = unresolved.map((u) => ({
+            email: u.email,
+            outcome: 'unresolved',
+            keeperId: null,
+            keeperName: null,
+            fromIds: u.holderIds,
+            fromNames: u.holderIds.map(name),
+            why: u.why,
+        }));
+        const emails = new Map(people.map((p) => [p.id, p.emails as unknown]));
+        const changed = new Set<string>();
+        for (const r of releases) {
+            const next = new Map(r.fromIds.map((id) => [id, withoutAddress(emails.get(id), r.email)]));
+            const stranded = r.fromIds.find((id) => !name(id) && next.get(id)!.primary === null);
+            if (stranded) {
+                results.push({
+                    email: r.email,
+                    outcome: 'unresolved',
+                    keeperId: r.keeperId,
+                    keeperName: name(r.keeperId),
+                    fromIds: r.fromIds,
+                    fromNames: r.fromIds.map(name),
+                    why: `${stranded} would have neither a name nor an address`,
+                });
+                continue;
+            }
+            for (const [id, e] of next) {
+                emails.set(id, e);
+                changed.add(id);
+            }
+            results.push({
+                email: r.email,
+                outcome: apply ? 'released' : 'would release',
+                keeperId: r.keeperId,
+                keeperName: name(r.keeperId),
+                fromIds: r.fromIds,
+                fromNames: r.fromIds.map(name),
+                why: 'the address names the keeper',
+            });
+        }
+        const actor = { kind: 'system', id: null } as const;
+        const occurredAt = new Date().toISOString();
+        const events: DomainEvent[] = [];
+        for (const id of changed) {
+            const before = byId.get(id)!.emails;
+            const after = emails.get(id) as Emails;
+            await tx.person.update({ where: { id }, data: { emails: after } });
+            events.push({
+                type: 'person.updated',
+                object: 'person',
+                workspaceId,
+                actor,
+                occurredAt,
+                recordId: id,
+                diff: { emails: { from: before, to: after } },
+            });
+        }
+        if (events.length > 0) await this.events.recordAll(tx, events);
+        return results.sort((a, b) => a.email.localeCompare(b.email));
     }
 
     private async memberLabel(workspaceId: string, memberId: string): Promise<string> {

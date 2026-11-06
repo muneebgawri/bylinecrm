@@ -3,13 +3,18 @@ import { writeFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../infra/prisma.service';
-import { PeopleDedupe, type DedupeGroupResult, type DedupeReport } from '../records/people-dedupe.service';
+import {
+    PeopleDedupe,
+    type AddressReport,
+    type DedupeGroupResult,
+    type DedupeReport,
+} from '../records/people-dedupe.service';
 
 const USAGE =
-    'usage: node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review] [--limit <n>] [--csv <file>]';
+    'usage: node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review | --release-addresses] [--limit <n>] [--csv <file>]';
 
 /**
- * `node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review] [--limit <n>] [--csv <file>]`
+ * `node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review | --release-addresses] [--limit <n>] [--csv <file>]`
  * — run on the server inside the api container. Merges people saved more than once (the 2026-10-12 Twenty
  * import's duplicates, `PeopleDedupe`). Tiers: `auto` (the people share an address and their names agree),
  * `auto_name_mismatch` (they share an address but the names differ — listed in the CSV, never merged) and `review` (only the name
@@ -18,12 +23,17 @@ const USAGE =
  * merges of one run; each group is its own transaction and merged people go to the trash, so re-running resumes
  * where it stopped and changes nothing once done. `--csv` writes every group (survivor, owner and why). The domain
  * events go to the outbox; the running API's relay delivers them (timeline, webhooks). Take a backup first.
+ *
+ * `--release-addresses` merges nothing: for the `auto_name_mismatch` groups, each shared address goes to the person
+ * it names and the others give it up (`PeopleDedupe.releaseAddresses`); the rest are listed as unresolved. Dry run
+ * unless `--apply`; `--csv` writes one row per shared address.
  */
 async function main(): Promise<void> {
     const args = process.argv.slice(2);
     const slug = args[0];
     const apply = args.includes('--apply');
     const includeReview = args.includes('--include-review');
+    const releaseAddresses = args.includes('--release-addresses');
     const value = (flag: string) => {
         const at = args.indexOf(flag);
         if (at < 0) return undefined;
@@ -34,7 +44,12 @@ async function main(): Promise<void> {
     const csv = value('--csv');
     const limitArg = value('--limit');
     const limit = limitArg === undefined ? undefined : Number(limitArg);
-    if (!slug || slug.startsWith('--') || (limit !== undefined && !(Number.isInteger(limit) && limit > 0))) {
+    if (
+        !slug ||
+        slug.startsWith('--') ||
+        (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) ||
+        (releaseAddresses && (includeReview || limit !== undefined))
+    ) {
         throw new Error(USAGE);
     }
     // A one-off process: no worker, relay or schedule of its own — the running API delivers what it records.
@@ -57,14 +72,27 @@ async function main(): Promise<void> {
         const workspace = await app.get(PrismaService).workspace.findUnique({ where: { slug }, select: { id: true } });
         if (!workspace) throw new Error(`no workspace ${slug}`);
         let seen = 0;
+        const progress = () => {
+            seen += 1;
+            if (seen % 50 === 0) console.error(`… ${seen} groups`);
+        };
+        if (releaseAddresses) {
+            const report = await app.get(PeopleDedupe).releaseAddresses(workspace.id, { apply, onGroup: progress });
+            console.log(
+                `${apply ? 'released' : 'would release'}: ${report.released} addresses; unresolved ${report.unresolved}; failed ${report.failed}`,
+            );
+            if (csv) {
+                writeFileSync(csv, addressCsv(report));
+                console.log(`wrote ${report.addresses.length} addresses to ${csv}`);
+            }
+            if (report.failed > 0) process.exitCode = 1;
+            return;
+        }
         const report = await app.get(PeopleDedupe).run(workspace.id, {
             apply,
             includeReview,
             limit,
-            onGroup: () => {
-                seen += 1;
-                if (seen % 50 === 0) console.error(`… ${seen} groups`);
-            },
+            onGroup: progress,
         });
         printReport(report);
         if (csv) {
@@ -103,6 +131,18 @@ function line(g: DedupeGroupResult): string {
     );
 }
 
+const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+function addressCsv(report: AddressReport): string {
+    const head = ['email', 'outcome', 'keeper_id', 'keeper_name', 'from_ids', 'from_names', 'why'];
+    const rows = report.addresses.map((a) =>
+        [a.email, a.outcome, a.keeperId ?? '', a.keeperName ?? '', a.fromIds.join(' '), a.fromNames.join(' | '), a.why]
+            .map(cell)
+            .join(','),
+    );
+    return [head.join(','), ...rows].join('\n') + '\n';
+}
+
 function toCsv(groups: readonly DedupeGroupResult[]): string {
     const head = [
         'tier',
@@ -118,7 +158,6 @@ function toCsv(groups: readonly DedupeGroupResult[]): string {
         'owner_why',
         'why',
     ];
-    const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = groups.map((g) =>
         [
             g.tier,

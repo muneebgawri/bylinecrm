@@ -252,6 +252,82 @@ export function groupDuplicates(people: readonly DedupeCandidate[]): DuplicateGr
     return groups.sort((a, b) => byOrder(a.personIds[0]!, b.personIds[0]!) || a.tier.localeCompare(b.tier));
 }
 
+// ─── Shared addresses of different people ───────────────────────────────────────────────────────
+
+/** An address is one person's (`people_address_taken`); the others holding it give it up. */
+export interface AddressRelease {
+    email: string;
+    keeperId: string;
+    /** Oldest first. */
+    fromIds: string[];
+}
+
+/** An address shared by people of a name-mismatch group that the rule cannot give to one of them. */
+export interface AddressUnresolved {
+    email: string;
+    /** Oldest first. */
+    holderIds: string[];
+    why: string;
+}
+
+/**
+ * For people who share addresses but are not one person (an `auto_name_mismatch` group): each address held by
+ * two or more goes to the one holder its local part spells (`spells`: `j.wan` → Jazzmin Wan), and the rest give it
+ * up. An address naming none of them (`info@`, a colleague's) or more than one is unresolved — a person decides.
+ * Only addresses stored on the people count; `people` oldest first.
+ */
+export function addressKeepers(people: readonly (NamedCandidate & { id: string })[]): {
+    releases: AddressRelease[];
+    unresolved: AddressUnresolved[];
+} {
+    const holders = new Map<string, string[]>();
+    for (const p of people) {
+        for (const email of emailsOf(p.emails)) holders.set(email, [...(holders.get(email) ?? []), p.id]);
+    }
+    const tokens = new Map(people.map((p) => [p.id, nameTokens(p.nameFirst, p.nameLast)]));
+    const locals = new Map(people.map((p) => [p.id, localParts(p.emails)]));
+    const releases: AddressRelease[] = [];
+    const unresolved: AddressUnresolved[] = [];
+    for (const [email, ids] of holders) {
+        if (ids.length < 2) continue;
+        const local = email
+            .slice(0, email.lastIndexOf('@'))
+            .replace(/\+.*$/, '')
+            .replace(/[^a-z0-9]/g, '');
+        // A person named only after their own mailbox (`Marketing` at marketing@) is nameless (`namesAgree`): it
+        // names nobody, so it keeps nothing from a person with a name.
+        const named = FILLER.has(local)
+            ? []
+            : ids.filter((id) => {
+                  const t = tokens.get(id)!;
+                  return t.length > 0 && !(t.length === 1 && locals.get(id)!.includes(t[0]!)) && spells(local, t);
+              });
+        if (named.length === 1) {
+            releases.push({ email, keeperId: named[0]!, fromIds: ids.filter((id) => id !== named[0]) });
+        } else {
+            unresolved.push({
+                email,
+                holderIds: ids,
+                why: named.length === 0 ? 'names none of them' : 'names more than one of them',
+            });
+        }
+    }
+    return { releases, unresolved };
+}
+
+/**
+ * `emails` without `email`: a primary given up is replaced by the first additional address left, so the person
+ * keeps a primary while they have any address.
+ */
+export function withoutAddress(emails: unknown, email: string): Emails {
+    const e = (emails ?? {}) as Partial<Emails>;
+    const keep = (v: unknown): v is string => typeof v === 'string' && normaliseEmail(v) !== email;
+    const additional = (Array.isArray(e.additional) ? e.additional : []).filter(keep);
+    if (keep(e.primary)) return { primary: e.primary, additional };
+    const [next, ...rest] = additional;
+    return { primary: next ?? null, additional: rest };
+}
+
 // ─── Ownership ──────────────────────────────────────────────────────────────────────────────────
 
 /** A member reaching one of the duplicates: a CRM send, a sequence step, mail they sent from Gmail, a note or task. */

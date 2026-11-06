@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    addressKeepers,
     chooseOwner,
     combined,
     emailsOf,
@@ -7,6 +8,7 @@ import {
     nameTokens,
     namesAgree,
     type MergeablePerson,
+    withoutAddress,
 } from './merge-people';
 
 const at = (day: number) => new Date(Date.UTC(2026, 9, day));
@@ -238,5 +240,53 @@ describe('combined', () => {
         const c = combined({ ...base, emails: { primary: null, additional: [] } }, dup);
         expect(c.emails.primary).toBe('r.h@gmail.com');
         expect(emailsOf(c.emails)).toEqual(['r.h@gmail.com', 'a@x.test', 'rick@acme.test']);
+    });
+});
+
+describe('addressKeepers', () => {
+    it('gives a shared address to the one holder it spells; one naming none or several is unresolved', () => {
+        const jazz = person('a', 1, 'Jazzmin', 'Wan', ['j.wan@swan.biz', 'info@swan.biz', 'office@swan.biz']);
+        const will = person('b', 2, 'William', 'Yeo', ['will@yeo.sg', 'J.Wan@swan.biz', 'info@swan.biz']);
+        const jo = person('c', 3, 'Jo', 'Wu', ['office@swan.biz']);
+        expect(addressKeepers([jazz, will, jo])).toEqual({
+            releases: [{ email: 'j.wan@swan.biz', keeperId: 'a', fromIds: ['b'] }],
+            unresolved: [
+                { email: 'info@swan.biz', holderIds: ['a', 'b'], why: 'names none of them' },
+                { email: 'office@swan.biz', holderIds: ['a', 'c'], why: 'names none of them' },
+            ],
+        });
+    });
+
+    it('a person named only after the mailbox keeps nothing from a person with a name', () => {
+        const box = person('a', 1, 'Marketing', '', ['marketing@studio.com']);
+        const whitney = person('b', 2, 'Whitney', 'Hatfield', ['marketing@studio.com']);
+        expect(addressKeepers([box, whitney]).unresolved).toEqual([
+            { email: 'marketing@studio.com', holderIds: ['a', 'b'], why: 'names none of them' },
+        ]);
+    });
+
+    it('a local part spelling two holders is unresolved', () => {
+        const a = person('a', 1, 'Sam', 'Lee', ['slee@x.com']);
+        const b = person('b', 2, 'Sara', 'Lee', ['slee@x.com']);
+        expect(addressKeepers([a, b]).unresolved).toEqual([
+            { email: 'slee@x.com', holderIds: ['a', 'b'], why: 'names more than one of them' },
+        ]);
+    });
+});
+
+describe('withoutAddress', () => {
+    it('drops the address in any case; a primary given up is replaced by the next address', () => {
+        expect(withoutAddress({ primary: 'J.Wan@x.com', additional: ['w@x.com', 'v@x.com'] }, 'j.wan@x.com')).toEqual({
+            primary: 'w@x.com',
+            additional: ['v@x.com'],
+        });
+        expect(withoutAddress({ primary: 'w@x.com', additional: ['J.WAN@x.com'] }, 'j.wan@x.com')).toEqual({
+            primary: 'w@x.com',
+            additional: [],
+        });
+        expect(withoutAddress({ primary: 'j.wan@x.com', additional: [] }, 'j.wan@x.com')).toEqual({
+            primary: null,
+            additional: [],
+        });
     });
 });
