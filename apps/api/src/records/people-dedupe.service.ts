@@ -398,19 +398,20 @@ export class PeopleDedupe {
      * (`emails`, by the system) — timeline, webhooks, and mail and calendar re-link as for any edit. One transaction
      * per group, the people locked and read again; without `apply` each is rolled back. Unresolved and listed: an
      * address no rule settles, one whose giving up would leave a person with neither a name nor an address, and
-     * one with mail linked to a person who would give it up, unless the address names the keeper. Re-running
-     * finds only what is left.
+     * one with mail linked to a person who would give it up, unless the address names the keeper. `decided`
+     * (address → keeper id) is a person's choice for such an address: it goes to that keeper, mail or not — the mail
+     * follows the address as for any edit. Re-running finds only what is left.
      */
     async releaseAddresses(
         workspaceId: string,
-        options: { apply: boolean; onGroup?: () => void },
+        options: { apply: boolean; decided?: ReadonlyMap<string, string> | undefined; onGroup?: () => void },
     ): Promise<AddressReport> {
         const groups = (await this.detect(workspaceId)).filter((g) => g.tier === 'auto_name_mismatch');
         const report: AddressReport = { applied: options.apply, addresses: [], released: 0, unresolved: 0, failed: 0 };
         for (const group of groups) {
             let results: AddressResult[];
             try {
-                results = await this.releaseGroup(workspaceId, group.personIds, options.apply);
+                results = await this.releaseGroup(workspaceId, group.personIds, options.apply, options.decided);
             } catch (error) {
                 const message = `failed: ${error instanceof Error ? error.message : String(error)}`;
                 results = [
@@ -440,6 +441,7 @@ export class PeopleDedupe {
         workspaceId: string,
         personIds: readonly string[],
         apply: boolean,
+        decided?: ReadonlyMap<string, string>,
     ): Promise<AddressResult[]> {
         const hooks: (() => void)[] = [];
         let results: AddressResult[] = [];
@@ -447,7 +449,7 @@ export class PeopleDedupe {
             await this.ownerPrisma.$transaction(
                 (tx) =>
                     insideTransaction(hooks, async () => {
-                        results = await this.releaseIn(tx, workspaceId, personIds, apply);
+                        results = await this.releaseIn(tx, workspaceId, personIds, apply, decided);
                         if (!apply) throw new RolledBack();
                     }),
                 { maxWait: 10_000, timeout: 120_000 },
@@ -464,6 +466,7 @@ export class PeopleDedupe {
         workspaceId: string,
         personIds: readonly string[],
         apply: boolean,
+        decided?: ReadonlyMap<string, string>,
     ): Promise<AddressResult[]> {
         await tx.$queryRaw`
             SELECT id FROM people WHERE workspace_id = ${workspaceId}::uuid AND id::text = ANY(${[...personIds]})
@@ -482,9 +485,10 @@ export class PeopleDedupe {
         const { releases, unresolved } = addressKeepers(
             people,
             await this.companiesOfAddresses(tx, workspaceId, addresses),
+            decided,
         );
-        // Mail already linked to a person by an address (stored lower case): only the name rule may take that
-        // address from them.
+        // Mail already linked to a person by an address (stored lower case): only the name rule or a person's
+        // choice may take that address from them.
         const mailed = await tx.$queryRaw<{ person_id: string; address: string }[]>`
             SELECT DISTINCT person_id::text, address FROM mail_participants
              WHERE workspace_id = ${workspaceId}::uuid AND person_id::text = ANY(${[...personIds]})
@@ -523,7 +527,10 @@ export class PeopleDedupe {
                 next.set(id, withoutAddress(emails.get(id), r.email, taken));
             }
             const stranded = r.fromIds.find((id) => !name(id) && next.get(id)!.primary === null);
-            const mailedTo = r.by === 'name' ? undefined : r.fromIds.find((id) => hasMail.has(`${id} ${r.email}`));
+            const mailedTo =
+                r.by === 'name' || r.by === 'decided'
+                    ? undefined
+                    : r.fromIds.find((id) => hasMail.has(`${id} ${r.email}`));
             if (stranded || mailedTo) {
                 results.push({
                     email: r.email,

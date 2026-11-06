@@ -470,6 +470,19 @@ describe('person dedupe: merging people saved more than once', () => {
 
         const again = await dedupe.releaseAddresses(workspace, { apply: true });
         expect(mine(again).map((a) => [a[0], a[1]])).toEqual([[`desk${swan}`, 'unresolved']]);
+
+        // A person chooses Dee for desk@: Jo gives it up, mail or not.
+        const decided = await dedupe.releaseAddresses(workspace, {
+            apply: true,
+            decided: new Map([[`desk${swan}`, dee.id]]),
+        });
+        expect(mine(decided)).toEqual([[`desk${swan}`, 'released', dee.id, 'a person chose the keeper']]);
+        expect((await owner.person.findUniqueOrThrow({ where: { id: jo.id } })).emails).toEqual({
+            primary: `office${own}`,
+            additional: [`j.wan${swan}`],
+        });
+        const last = await dedupe.releaseAddresses(workspace, { apply: false });
+        expect(mine(last)).toEqual([]);
     });
 
     it('giving up a primary never promotes an address that is someone else’s primary, trash included', async () => {
