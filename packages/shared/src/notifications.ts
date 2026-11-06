@@ -40,6 +40,12 @@ export const NOTIFICATION_KINDS = [
     'payment_created_deal',
     // INV-2: NewswireOS reported a payment from no one in the CRM (to holders of `invoice:verify`).
     'payment_unmatched',
+    // A reply to an email the member sent from the CRM (a follow-up or sequence step included): every reply.
+    'email_replied',
+    // The person clicked a link in it: once per send.
+    'email_clicked',
+    // The person's mail app fetched its tracking image: once per send; approximate (apps preload images).
+    'email_opened',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -63,7 +69,18 @@ export interface TaskSummary {
  * What a notification is about (GUARD-2): one polymorphic target, whatever the kind. The typed summaries below
  * carry what the bell shows of each; new kinds add a target type here rather than a model of their own.
  */
-export const NOTIFICATION_TARGET_TYPES = ['task', 'transfer', 'guardrail', 'invoice', 'cadence', 'payment'] as const;
+export const NOTIFICATION_TARGET_TYPES = [
+    'task',
+    'transfer',
+    'guardrail',
+    'invoice',
+    'cadence',
+    'payment',
+    // A send (`MailOutbound`): an `email_clicked` / `email_opened`, once per send.
+    'email',
+    // An inbound message answering a send (`MailMessage`): an `email_replied`, once per reply.
+    'reply',
+] as const;
 export type NotificationTargetType = (typeof NOTIFICATION_TARGET_TYPES)[number];
 export interface NotificationTarget {
     type: NotificationTargetType;
@@ -86,6 +103,8 @@ export interface NotificationView {
     cadence: CadenceLapseSummary | null;
     /** For a `payment_*` kind (INV-2): the paid invoice NewswireOS reported, and the deal it is on. */
     payment: NewswireosPaymentSummary | null;
+    /** For an `email_*` kind: the send it is about, whom to, and (a click) the link. */
+    email: EmailEngagementSummary | null;
     /** ISO 8601. */
     createdAt: string;
     /** ISO 8601; null while unread. */
@@ -110,6 +129,27 @@ export interface MyTaskView extends TaskSummary {
 export interface NotificationSettings {
     /** The daily email of tasks due or overdue, and (GUARD-2) guardrail alerts of the last day (on unless turned off). */
     taskDigest: boolean;
+    /** A bell notification for each reply to an email the member sent (on unless turned off). */
+    notifyEmailReplies: boolean;
+    /** A bell notification the first time a send of theirs has a link clicked. */
+    notifyEmailClicks: boolean;
+    /** A bell notification the first time a send of theirs is opened — approximate: mail apps preload images. */
+    notifyEmailOpens: boolean;
+}
+
+/** A send a member made, as the bell shows a reply to, click in or open of it. */
+export interface EmailEngagementSummary {
+    /** The send, for `email_clicked` / `email_opened`; null for a reply (see `messageId`). */
+    outboundId: string | null;
+    /** The reply, for `email_replied`; null otherwise. */
+    messageId: string | null;
+    /** The send's subject; for a reply, the reply's. */
+    subject: string;
+    /** The person it went to (a reply: who wrote it); null when not in the CRM or since deleted. */
+    personId: string | null;
+    personName: string | null;
+    /** The link clicked, for `email_clicked`; null otherwise. */
+    url: string | null;
 }
 
 /** INV-2: a paid invoice NewswireOS reported, as the bell shows it. */

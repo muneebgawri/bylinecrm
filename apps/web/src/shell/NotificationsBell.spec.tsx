@@ -1,11 +1,75 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NotificationsView } from '../api/types';
+import type { NotificationSettingsView, NotificationsView } from '../api/types';
 import { json, renderAt, route, stubApi } from '../routes/w/settings/settingsTestKit';
 import { NotificationsBell } from './NotificationsBell';
 
 const WS = 'ws-1';
+
+const SETTINGS: NotificationSettingsView = {
+    taskDigest: true,
+    notifyEmailReplies: true,
+    notifyEmailClicks: true,
+    notifyEmailOpens: true,
+};
+
+const NONE = { task: null, transfer: null, guardrail: null, invoice: null, cadence: null, payment: null } as const;
+
+/** A reply, a click and an open of sends the member made. */
+const ENGAGEMENT: NotificationsView = {
+    unread: 3,
+    items: [
+        {
+            ...NONE,
+            id: 'e-1',
+            kind: 'email_replied',
+            target: { type: 'reply', id: 'm-1' },
+            createdAt: '2026-11-06T09:00:00Z',
+            readAt: null,
+            email: {
+                outboundId: null,
+                messageId: 'm-1',
+                subject: 'Re: Quick question',
+                personId: 'p-1',
+                personName: 'Pat Prospect',
+                url: null,
+            },
+        },
+        {
+            ...NONE,
+            id: 'e-2',
+            kind: 'email_clicked',
+            target: { type: 'email', id: 'o-1' },
+            createdAt: '2026-11-06T08:00:00Z',
+            readAt: null,
+            email: {
+                outboundId: 'o-1',
+                messageId: null,
+                subject: 'Pricing',
+                personId: 'p-1',
+                personName: 'Pat Prospect',
+                url: 'https://example.test/pricing',
+            },
+        },
+        {
+            ...NONE,
+            id: 'e-3',
+            kind: 'email_opened',
+            target: { type: 'email', id: 'o-1' },
+            createdAt: '2026-11-06T07:00:00Z',
+            readAt: null,
+            email: {
+                outboundId: 'o-1',
+                messageId: null,
+                subject: 'Pricing',
+                personId: null,
+                personName: null,
+                url: null,
+            },
+        },
+    ],
+};
 
 const INBOX: NotificationsView = {
     unread: 1,
@@ -19,6 +83,7 @@ const INBOX: NotificationsView = {
             invoice: null,
             cadence: null,
             payment: null,
+            email: null,
             createdAt: '2026-10-18T09:00:00Z',
             readAt: null,
             task: {
@@ -37,6 +102,7 @@ const INBOX: NotificationsView = {
             invoice: null,
             cadence: null,
             payment: null,
+            email: null,
             createdAt: '2026-10-17T09:00:00Z',
             readAt: '2026-10-17T10:00:00Z',
             task: {
@@ -65,8 +131,7 @@ describe('#192 the bell: a member’s task notifications', () => {
     it('says how many are unread, lists them with what they are about, and opens the record, marking it read', async () => {
         const seen = stubApi([
             (r) => (r.method === 'GET' && r.url.endsWith('/notifications') ? json(INBOX) : undefined),
-            (r) =>
-                r.method === 'GET' && r.url.endsWith('/notification-settings') ? json({ taskDigest: true }) : undefined,
+            (r) => (r.method === 'GET' && r.url.endsWith('/notification-settings') ? json(SETTINGS) : undefined),
             (r) =>
                 r.method === 'POST' && r.url.endsWith('/notifications/read')
                     ? new Response(null, { status: 204 })
@@ -85,8 +150,7 @@ describe('#192 the bell: a member’s task notifications', () => {
     it('marks all read, and shows no unread count when there is none', async () => {
         const seen = stubApi([
             (r) => (r.method === 'GET' && r.url.endsWith('/notifications') ? json(INBOX) : undefined),
-            (r) =>
-                r.method === 'GET' && r.url.endsWith('/notification-settings') ? json({ taskDigest: true }) : undefined,
+            (r) => (r.method === 'GET' && r.url.endsWith('/notification-settings') ? json(SETTINGS) : undefined),
             (r) =>
                 r.method === 'POST' && r.url.endsWith('/notifications/read')
                     ? new Response(null, { status: 204 })
@@ -102,11 +166,10 @@ describe('#192 the bell: a member’s task notifications', () => {
         const seen = stubApi([
             (r) =>
                 r.method === 'GET' && r.url.endsWith('/notifications') ? json({ unread: 0, items: [] }) : undefined,
-            (r) =>
-                r.method === 'GET' && r.url.endsWith('/notification-settings') ? json({ taskDigest: true }) : undefined,
+            (r) => (r.method === 'GET' && r.url.endsWith('/notification-settings') ? json(SETTINGS) : undefined),
             (r) =>
                 r.method === 'PUT' && r.url.endsWith('/notification-settings')
-                    ? json({ taskDigest: false })
+                    ? json({ ...SETTINGS, taskDigest: false })
                     : undefined,
         ]);
         bell();
@@ -116,5 +179,46 @@ describe('#192 the bell: a member’s task notifications', () => {
         expect(digest).toBeChecked();
         await userEvent.click(digest);
         await waitFor(() => expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({ taskDigest: false }));
+    });
+
+    it('shows replies, clicks and opens of my sends, each opening the person', async () => {
+        const seen = stubApi([
+            (r) => (r.method === 'GET' && r.url.endsWith('/notifications') ? json(ENGAGEMENT) : undefined),
+            (r) => (r.method === 'GET' && r.url.endsWith('/notification-settings') ? json(SETTINGS) : undefined),
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/notifications/read')
+                    ? new Response(null, { status: 204 })
+                    : undefined,
+        ]);
+        bell();
+        await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 3 unread' }));
+        const panel = await screen.findByRole('dialog', { name: 'Notifications' });
+        expect(within(panel).getByRole('link', { name: /Pat Prospect clicked a link.*Pricing/ })).toBeInTheDocument();
+        // An open of a send to no one in the CRM opens nothing.
+        expect(within(panel).getByText('Someone opened your email')).toBeInTheDocument();
+        expect(within(panel).queryByRole('link', { name: /Someone opened your email/ })).toBeNull();
+        await userEvent.click(within(panel).getByRole('link', { name: /Reply from Pat Prospect.*Re: Quick question/ }));
+        expect(await screen.findByText('person page')).toBeInTheDocument();
+        await waitFor(() => expect(seen.find((r) => r.method === 'POST')?.body).toEqual({ ids: ['e-1'] }));
+    });
+
+    it('turns email opens off, changing only that setting', async () => {
+        const seen = stubApi([
+            (r) =>
+                r.method === 'GET' && r.url.endsWith('/notifications') ? json({ unread: 0, items: [] }) : undefined,
+            (r) => (r.method === 'GET' && r.url.endsWith('/notification-settings') ? json(SETTINGS) : undefined),
+            (r) =>
+                r.method === 'PUT' && r.url.endsWith('/notification-settings')
+                    ? json({ ...SETTINGS, notifyEmailOpens: false })
+                    : undefined,
+        ]);
+        bell();
+        await userEvent.click(await screen.findByRole('button', { name: 'Notifications' }));
+        expect(await screen.findByRole('switch', { name: /replies to emails i send/i })).toBeChecked();
+        expect(screen.getByRole('switch', { name: /links clicked/i })).toBeChecked();
+        const opens = screen.getByRole('switch', { name: /emails i send opened \(approximate/i });
+        await userEvent.click(opens);
+        await waitFor(() => expect(seen.find((r) => r.method === 'PUT')?.body).toEqual({ notifyEmailOpens: false }));
+        await waitFor(() => expect(opens).not.toBeChecked());
     });
 });

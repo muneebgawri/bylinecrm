@@ -81,6 +81,15 @@ const paymentSummary = z.object({
     opportunityName: z.string().nullable(),
 });
 
+const emailSummary = z.object({
+    outboundId: id.nullable().meta({ description: 'The send, for `email_clicked` / `email_opened`.' }),
+    messageId: id.nullable().meta({ description: 'The reply, for `email_replied`.' }),
+    subject: z.string().meta({ description: 'The send’s subject; for a reply, the reply’s. Never a body.' }),
+    personId: id.nullable().meta({ description: 'Whom it went to (a reply: who wrote it); null when not in the CRM.' }),
+    personName: z.string().nullable(),
+    url: z.string().nullable().meta({ description: 'For `email_clicked`: the first link clicked.' }),
+});
+
 const taskSummary = {
     id,
     title: z.string(),
@@ -96,7 +105,7 @@ export const notificationsView = named(
                 id,
                 kind: z.enum(NOTIFICATION_KINDS).meta({
                     description:
-                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM.',
+                        '`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM. `email_replied`: someone replied to an email you sent from the CRM (a follow-up or sequence step included) — every reply. `email_clicked`: a link in it was clicked (once per send). `email_opened`: it was opened (once per send; approximate, as mail apps preload images).',
                 }),
                 target: z
                     .object({ type: z.enum(NOTIFICATION_TARGET_TYPES), id })
@@ -116,6 +125,9 @@ export const notificationsView = named(
                 cadence: cadenceSummary.nullable().meta({
                     description: 'For `cadence_warning` (CADENCE-1): the lapsed deal, and when it rotates.',
                 }),
+                email: emailSummary.nullable().meta({
+                    description: 'For an `email_*` kind: the send (or the reply), whom it is about and the link.',
+                }),
                 createdAt: isoTime,
                 readAt: isoTime.nullable(),
             }),
@@ -130,6 +142,13 @@ export const notificationSettingsView = named(
     'NotificationSettings',
     z.object({
         taskDigest: z.boolean().meta({ description: 'The daily email of tasks due or overdue.' }),
+        notifyEmailReplies: z.boolean().meta({ description: 'The bell for each reply to an email you sent.' }),
+        notifyEmailClicks: z
+            .boolean()
+            .meta({ description: 'The bell the first time a link is clicked in an email you sent.' }),
+        notifyEmailOpens: z.boolean().meta({
+            description: 'The bell the first time an email you sent is opened. Approximate: mail apps preload images.',
+        }),
     }),
 );
 

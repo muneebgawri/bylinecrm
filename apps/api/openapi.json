@@ -32802,9 +32802,17 @@
                 "properties": {
                     "taskDigest": {
                         "type": "boolean"
+                    },
+                    "notifyEmailReplies": {
+                        "type": "boolean"
+                    },
+                    "notifyEmailClicks": {
+                        "type": "boolean"
+                    },
+                    "notifyEmailOpens": {
+                        "type": "boolean"
                     }
-                },
-                "required": ["taskDigest"]
+                }
             },
             "PutEnrichmentSettingsDto": {
                 "type": "object",
@@ -41458,16 +41466,28 @@
                                         "cadence_rotated",
                                         "payment_needs_deal",
                                         "payment_created_deal",
-                                        "payment_unmatched"
+                                        "payment_unmatched",
+                                        "email_replied",
+                                        "email_clicked",
+                                        "email_opened"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM. `email_replied`: someone replied to an email you sent from the CRM (a follow-up or sequence step included) — every reply. `email_clicked`: a link in it was clicked (once per send). `email_opened`: it was opened (once per send; approximate, as mail apps preload images)."
                                 },
                                 "target": {
                                     "type": "object",
                                     "properties": {
                                         "type": {
                                             "type": "string",
-                                            "enum": ["task", "transfer", "guardrail", "invoice", "cadence", "payment"]
+                                            "enum": [
+                                                "task",
+                                                "transfer",
+                                                "guardrail",
+                                                "invoice",
+                                                "cadence",
+                                                "payment",
+                                                "email",
+                                                "reply"
+                                            ]
                                         },
                                         "id": {
                                             "type": "string",
@@ -41844,6 +41864,51 @@
                                         "rotateAt"
                                     ]
                                 },
+                                "email": {
+                                    "nullable": true,
+                                    "description": "For an `email_*` kind: the send (or the reply), whom it is about and the link.",
+                                    "type": "object",
+                                    "properties": {
+                                        "outboundId": {
+                                            "nullable": true,
+                                            "description": "The send, for `email_clicked` / `email_opened`.",
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "messageId": {
+                                            "nullable": true,
+                                            "description": "The reply, for `email_replied`.",
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "subject": {
+                                            "type": "string",
+                                            "description": "The send’s subject; for a reply, the reply’s. Never a body."
+                                        },
+                                        "personId": {
+                                            "nullable": true,
+                                            "description": "Whom it went to (a reply: who wrote it); null when not in the CRM.",
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "personName": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        },
+                                        "url": {
+                                            "nullable": true,
+                                            "description": "For `email_clicked`: the first link clicked.",
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": ["outboundId", "messageId", "subject", "personId", "personName", "url"]
+                                },
                                 "createdAt": {
                                     "type": "string",
                                     "format": "date-time",
@@ -41866,6 +41931,7 @@
                                 "invoice",
                                 "payment",
                                 "cadence",
+                                "email",
                                 "createdAt",
                                 "readAt"
                             ]
@@ -41917,9 +41983,21 @@
                     "taskDigest": {
                         "type": "boolean",
                         "description": "The daily email of tasks due or overdue."
+                    },
+                    "notifyEmailReplies": {
+                        "type": "boolean",
+                        "description": "The bell for each reply to an email you sent."
+                    },
+                    "notifyEmailClicks": {
+                        "type": "boolean",
+                        "description": "The bell the first time a link is clicked in an email you sent."
+                    },
+                    "notifyEmailOpens": {
+                        "type": "boolean",
+                        "description": "The bell the first time an email you sent is opened. Approximate: mail apps preload images."
                     }
                 },
-                "required": ["taskDigest"]
+                "required": ["taskDigest", "notifyEmailReplies", "notifyEmailClicks", "notifyEmailOpens"]
             },
             "SequenceStep": {
                 "type": "object",
