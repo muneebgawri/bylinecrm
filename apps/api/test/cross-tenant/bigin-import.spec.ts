@@ -25,7 +25,7 @@ import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { BiginImportWorkers } from '../../src/bigin-import/bigin-import.workers';
 import { BiginImportRunner } from '../../src/bigin-import/import-runner';
-import { BiginStageApplier } from '../../src/bigin-import/stage-apply';
+import { BiginStageApplier, stageHistoryPage } from '../../src/bigin-import/stage-apply';
 import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { ENV, parseEnv } from '../../src/config/env';
 import { PrismaService } from '../../src/infra/prisma.service';
@@ -977,6 +977,32 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             const dealOf = async (bid: string) =>
                 owner.opportunity.findUniqueOrThrow({ where: { id: (await linkOf('Deals', bid))!.localId } });
 
+            // An imported stage move (BIGIN-1, in the runner's shape) from a stage Bigin no longer lists to one that
+            // had no stage here: both placed in the first open stage.
+            const firstOpen = (
+                await owner.pipelineStage.findFirstOrThrow({
+                    where: { pipeline: { workspaceId: workspace, isDefault: true }, kind: 'open' },
+                    orderBy: { position: 'asc' },
+                })
+            ).id;
+            const historyProperties = {
+                diff: { stageId: { from: firstOpen, to: firstOpen } },
+                bigin: { from: 'Second Follow Up Done', to: 'Only In History' },
+            };
+            const entry = await owner.timelineActivity.create({
+                data: {
+                    workspaceId: workspace,
+                    targetType: 'opportunity',
+                    targetId: (await dealOf(first!.id)).id,
+                    kind: 'deal.stage_changed',
+                    happenedAt: new Date('2024-01-07T05:00:00Z'),
+                    actor: { kind: 'import', id: null },
+                    properties: historyProperties,
+                    source: 'bigin',
+                    idempotencyKey: `stage-history:${stamp}`,
+                },
+            });
+
             // Bigin's picklist, then the stages deals carry when Bigin will not say.
             bigin.dealStages = ['Qualification', 'Second Follow Up Done', 'Never Used'];
             const listed = await as(admin).get(w('/import/bigin/stage-map'));
@@ -986,6 +1012,8 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             const row = (name: string, m = map) => m.rows.find((r) => r.biginStage === name)!;
             expect(row('Second Follow Up Done')).toMatchObject({ deals: 2, stageId: null, match: 'fallback' });
             expect(row('Never Used').deals).toBe(0);
+            // A stage only imported history names is listed, so it can be mapped.
+            expect(row('Only In History')).toMatchObject({ deals: 0, history: 1, match: 'fallback' });
             expect(row('Pending Press Release').deals).toBeGreaterThan(0);
             bigin.dealStages = null;
             const fallback = (await as(admin).get(w('/import/bigin/stage-map'))).body as BiginStageMapView;
@@ -1024,6 +1052,12 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             await app.get(BiginStageApplier).apply(workspace);
             const applied = ((await as(admin).get(w('/import/bigin/stage-map'))).body as BiginStageMapView).apply!;
             expect(applied).toMatchObject({ status: 'succeeded', error: null });
+            // The imported move is re-pointed: the stage it left now maps to Meeting; nothing else in it changes.
+            expect(applied.historyRepointed).toBeGreaterThanOrEqual(1);
+            expect((await owner.timelineActivity.findUniqueOrThrow({ where: { id: entry.id } })).properties).toEqual({
+                ...historyProperties,
+                diff: { stageId: { from: meeting.id, to: firstOpen } },
+            });
             expect(applied.moved).toBeGreaterThanOrEqual(1);
             expect(applied.skipped).toBeGreaterThanOrEqual(1);
             const firstDeal = await dealOf(first!.id);
@@ -1035,6 +1069,67 @@ describe('FR-CRMS-25 BIGIN-1 Bigin importer', () => {
             ).toMatchObject({ reason: 'import' });
             expect((await dealOf(second!.id)).stageId).toBe(handStage.id);
             expect((await dealOf(third!.id)).stageId).not.toBe(meeting.id);
+            // Applying again re-points nothing more.
+            await as(admin).post(w('/import/bigin/stage-map/apply')).expect(202);
+            await app.get(BiginStageApplier).apply(workspace);
+            const reapplied = ((await as(admin).get(w('/import/bigin/stage-map'))).body as BiginStageMapView).apply!;
+            expect(reapplied).toMatchObject({ status: 'succeeded', historyRepointed: 0 });
+
+            // Another workspace cannot re-point this workspace's entry, and the app role still cannot rewrite one.
+            const rls = app.get(RlsPrismaService);
+            const [crossed] = await rls.withWorkspace(
+                otherWorkspace,
+                (tx) => tx.$queryRaw<{ n: number }[]>`
+                    SELECT repoint_imported_stage_history(${[entry.id]}::uuid[], ${[null]}::text[]::uuid[], ${[firstOpen]}::uuid[]) AS n`,
+            );
+            expect(crossed!.n).toBe(0);
+            await expect(
+                rls.withWorkspace(workspace, (tx) =>
+                    tx.timelineActivity.updateMany({ where: { id: entry.id }, data: { properties: {} } }),
+                ),
+            ).rejects.toThrow(/permission denied/);
+            const kept = await owner.timelineActivity.findUniqueOrThrow({ where: { id: entry.id } });
+            expect((kept.properties as Record<string, unknown>)['diff']).toEqual({
+                stageId: { from: meeting.id, to: firstOpen },
+            });
+
+            // The history pass pages along the timeline's unique index under row-level security.
+            const plan = await rls.withWorkspace(workspace, async (tx) => {
+                await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
+                const rows = await tx.$queryRaw<{ 'QUERY PLAN': string }[]>`
+                    EXPLAIN ${stageHistoryPage(workspace, 'stage-history:', 500)}`;
+                return rows.map((r) => r['QUERY PLAN']).join('\n');
+            });
+            expect(plan).toContain('timeline_activities_workspace_id_source_idempotency_key_key');
+            expect(plan).toMatch(/Index Cond: .*idempotency_key > /);
+            expect(plan).not.toMatch(/Seq Scan on timeline_activities|Sort/);
+
+            // The page is bounded below only (`key > after`, from the bare prefix), never by a prefix range: under
+            // a non-C collation (production's) punctuation sorts differently, so `< 'stage-history;'` finds nothing.
+            // The lower bound holds under every collation production might use; this database is C, so each is named.
+            const keys = [
+                'stage-history:6012345000001234567',
+                'stage-history:1',
+                'stage-history:zcrm_9',
+                'stage-history:-',
+            ];
+            const collations = (
+                await owner.$queryRaw<{ name: string }[]>`
+                    SELECT collname AS name FROM pg_collation
+                    WHERE collname IN ('C', 'en-US-x-icu', 'und-x-icu', 'en_US.utf8', 'en_US.UTF-8')`
+            ).map((c) => c.name);
+            expect(collations).toContain('en-US-x-icu');
+            for (const name of collations) {
+                const quoted = `"${name.replace(/"/g, '""')}"`;
+                const [check] = await owner.$queryRawUnsafe<{ after: boolean; naive: boolean }[]>(
+                    `SELECT bool_and(k COLLATE ${quoted} > 'stage-history:') AS after,
+                            bool_and(k COLLATE ${quoted} < 'stage-history;') AS naive
+                     FROM unnest($1::text[]) AS k`,
+                    keys,
+                );
+                expect(check!.after, name).toBe(true);
+                if (name === 'en-US-x-icu') expect(check!.naive, 'a prefix range would miss keys').toBe(false);
+            }
 
             // A later run resolves through the mapping too, and never calls the mapped stage unknown.
             bigin.update(

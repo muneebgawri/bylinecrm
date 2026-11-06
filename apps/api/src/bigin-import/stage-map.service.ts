@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { BiginStageApplyView, BiginStageMapRow, BiginStageMapView, StageKind } from '@bylinecrm/shared';
+import {
+    BIGIN_TIMELINE_SOURCE,
+    type BiginStageApplyView,
+    type BiginStageMapRow,
+    type BiginStageMapView,
+    type StageKind,
+} from '@bylinecrm/shared';
 import { ApiException, UnknownReference } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
@@ -9,6 +15,7 @@ import { readBiginConnection } from './bigin-import.settings';
 import { BiginImportWorkers } from './bigin-import.workers';
 import { BiginApiError } from './bigin.http';
 import { BIGIN_PORT, type BiginApi } from './bigin.port';
+import { HISTORY_KEY_PREFIX } from './history';
 import { biginStageIndex, biginStageKey, chooseStage, type PipelineStageRef } from './stage-map';
 
 export interface BiginStageMappingInput {
@@ -19,7 +26,8 @@ export interface BiginStageMappingInput {
 /**
  * The Bigin stage mapping's API: Bigin's stage list (its Deals `Stage` picklist, read now; else the stages
  * imported deals carry), how many imported deals hold each, where each lands now and why, the workspace's
- * explicit choices, and applying them to deals already imported (a queued job: there are 100k+ of them).
+ * explicit choices, and applying them to deals already imported (a queued job: there are 100k+ of them). Bigin
+ * stages only imported stage history names (a stage since taken out of Bigin) are listed too, so they can be mapped.
  */
 @Injectable()
 export class BiginStageMapService {
@@ -37,8 +45,12 @@ export class BiginStageMapService {
             const stored = await readBiginConnection(tx, this.secrets);
             if (!stored) throw noConnection();
             const pipeline = await defaultPipeline(tx);
-            const [mappings, counts] = await Promise.all([tx.biginStageMapping.findMany(), stageCounts(tx)]);
-            return { connection: stored.connection, apply: stored.row.stageApply, pipeline, mappings, counts };
+            const [mappings, counts, history] = await Promise.all([
+                tx.biginStageMapping.findMany(),
+                stageCounts(tx),
+                historyStages(tx),
+            ]);
+            return { connection: stored.connection, apply: stored.row.stageApply, pipeline, mappings, counts, history };
         });
         // Bigin is read outside any transaction; a picklist it will not give falls back to the imported stages.
         let picklist: string[] | null = null;
@@ -55,6 +67,7 @@ export class BiginStageMapService {
         for (const name of [
             ...(picklist ?? []),
             ...read.counts.seen.keys(),
+            ...read.history.seen,
             ...read.mappings.map((m) => m.biginStage),
         ]) {
             const key = biginStageKey(name);
@@ -66,6 +79,7 @@ export class BiginStageMapService {
             return {
                 biginStage,
                 deals: read.counts.byKey.get(key) ?? 0,
+                history: read.history.byKey.get(key) ?? 0,
                 stageId: explicit && read.pipeline.stages.some((s) => s.id === explicit) ? explicit : null,
                 targetStageId: choice.id,
                 match: choice.match,
@@ -78,7 +92,7 @@ export class BiginStageMapService {
             stages: read.pipeline.stages,
             rows,
             unread: read.counts.unread,
-            apply: (read.apply as BiginStageApplyView | null) ?? null,
+            apply: applyView(read.apply),
         };
     }
 
@@ -115,7 +129,7 @@ export class BiginStageMapService {
         return this.rls.withWorkspace(async (tx) => {
             const settings = await tx.biginImportSettings.findFirst({ select: { stageApply: true } });
             if (!settings) throw noConnection();
-            const current = settings.stageApply as BiginStageApplyView | null;
+            const current = applyView(settings.stageApply);
             if (current && (current.status === 'queued' || current.status === 'running')) return current;
             const queued: BiginStageApplyView = {
                 status: 'queued',
@@ -123,6 +137,7 @@ export class BiginStageMapService {
                 finishedAt: null,
                 moved: 0,
                 skipped: 0,
+                historyRepointed: 0,
                 error: null,
             };
             await tx.$executeRaw`UPDATE "bigin_import_settings" SET "stage_apply" = ${JSON.stringify(queued)}::jsonb WHERE "workspace_id" = ${workspaceId}::uuid`;
@@ -174,6 +189,40 @@ async function stageCounts(
         byKey.set(key, (byKey.get(key) ?? 0) + row.n);
     }
     return { seen, byKey, unread };
+}
+
+/**
+ * The Bigin stages imported stage history names (as `bigin.to` or `bigin.from`), and per stage how many entries moved
+ * a deal into it. Read along the timeline's `(workspace, source, key)` index: the workspace's Bigin entries only.
+ */
+async function historyStages(tx: WorkspaceClient): Promise<{ seen: Set<string>; byKey: Map<string, number> }> {
+    const rows = await tx.$queryRaw<{ stage: string; entered: number }[]>`
+        SELECT s.stage, count(*) FILTER (WHERE s.side = 'to')::int AS entered
+        FROM "timeline_activities" t
+        CROSS JOIN LATERAL (
+            VALUES ('to', t."properties" -> 'bigin' ->> 'to'), ('from', t."properties" -> 'bigin' ->> 'from')
+        ) AS s(side, stage)
+        WHERE t."source" = ${BIGIN_TIMELINE_SOURCE}
+          AND t."idempotency_key" LIKE ${`${HISTORY_KEY_PREFIX.StageHistory}%`}
+          AND t."kind" = 'deal.stage_changed'
+          AND s.stage IS NOT NULL
+        GROUP BY 1`;
+    const seen = new Set<string>();
+    const byKey = new Map<string, number>();
+    for (const row of rows) {
+        if (!row.stage.trim()) continue;
+        seen.add(row.stage);
+        const key = biginStageKey(row.stage);
+        byKey.set(key, (byKey.get(key) ?? 0) + row.entered);
+    }
+    return { seen, byKey };
+}
+
+/** The stored apply progress; one saved before history was re-pointed counts none. */
+function applyView(stored: unknown): BiginStageApplyView | null {
+    if (!stored) return null;
+    const view = stored as BiginStageApplyView;
+    return { ...view, historyRepointed: view.historyRepointed ?? 0 };
 }
 
 function noConnection(): ApiException {

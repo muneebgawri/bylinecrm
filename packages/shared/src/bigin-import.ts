@@ -287,6 +287,8 @@ export interface BiginStageApplyView {
     moved: number;
     /** Deals left where they are because someone moved them by hand after Bigin last changed them. */
     skipped: number;
+    /** Imported stage-history entries re-pointed to the stages their Bigin stages now map to. */
+    historyRepointed: number;
     error: string | null;
 }
 
@@ -295,6 +297,8 @@ export interface BiginStageMapRow {
     biginStage: string;
     /** Imported deals whose link holds this stage (zero included). */
     deals: number;
+    /** Imported stage-history entries that moved a deal into this stage (zero included). */
+    history: number;
     /** The workspace's explicit choice; null when the stage is left to the name match and the heuristic. */
     stageId: string | null;
     /** Where a deal in this Bigin stage lands now, and why. */
