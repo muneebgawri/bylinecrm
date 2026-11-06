@@ -244,30 +244,53 @@ describe('combined', () => {
 });
 
 describe('addressKeepers', () => {
-    it('gives a shared address to the one holder it spells; one naming none or several is unresolved', () => {
-        const jazz = person('a', 1, 'Jazzmin', 'Wan', ['j.wan@swan.biz', 'info@swan.biz', 'office@swan.biz']);
-        const will = person('b', 2, 'William', 'Yeo', ['will@yeo.sg', 'J.Wan@swan.biz', 'info@swan.biz']);
-        const jo = person('c', 3, 'Jo', 'Wu', ['office@swan.biz']);
-        expect(addressKeepers([jazz, will, jo])).toEqual({
-            releases: [{ email: 'j.wan@swan.biz', keeperId: 'a', fromIds: ['b'] }],
-            unresolved: [
-                { email: 'info@swan.biz', holderIds: ['a', 'b'], why: 'names none of them' },
-                { email: 'office@swan.biz', holderIds: ['a', 'c'], why: 'names none of them' },
+    it('the name first, then the company whose domain it is, then whose primary it is; else unresolved', () => {
+        const jazz = { ...person('a', 1, 'Jazzmin', 'Wan', ['j.wan@swan.biz', 'info@swan.biz', 'office@swan.biz']) };
+        const will = {
+            ...person('b', 2, 'William', 'Yeo', ['will@yeo.sg', 'J.Wan@swan.biz', 'info@swan.biz', 'desk@swan.biz']),
+            companyId: 'swan',
+        };
+        const jo = person('c', 3, 'Jo', 'Wu', ['office@swan.biz', 'desk@swan.biz']);
+        const kim = person('d', 4, 'Kim', 'Ho', ['desk@hub.io', 'desk@swan.biz']);
+        const companyOf = new Map([
+            ['info@swan.biz', 'swan'],
+            ['desk@swan.biz', 'swan'],
+            ['office@swan.biz', 'swan'],
+        ]);
+        expect(addressKeepers([jazz, will, jo, kim], companyOf)).toEqual({
+            releases: [
+                // Spelled: Jazzmin keeps it, though Will is the one at the company.
+                { email: 'j.wan@swan.biz', keeperId: 'a', fromIds: ['b'], by: 'name' },
+                // Swan's address: Will is at Swan.
+                { email: 'info@swan.biz', keeperId: 'b', fromIds: ['a'], by: 'company' },
+                // Nobody at Swan holds it: Jo, whose primary it is.
+                { email: 'office@swan.biz', keeperId: 'c', fromIds: ['a'], by: 'primary' },
+                { email: 'desk@swan.biz', keeperId: 'b', fromIds: ['c', 'd'], by: 'company' },
             ],
+            unresolved: [],
         });
     });
 
-    it('a person named only after the mailbox keeps nothing from a person with a name', () => {
-        const box = person('a', 1, 'Marketing', '', ['marketing@studio.com']);
+    it('an address no rule settles is unresolved', () => {
+        const a = person('a', 1, 'Ann', 'Bo', ['ann@x.com', 'team@x.com']);
+        const b = person('b', 2, 'Ben', 'Cy', ['ben@x.com', 'team@x.com']);
+        expect(addressKeepers([a, b]).unresolved).toEqual([
+            { email: 'team@x.com', holderIds: ['a', 'b'], why: 'no rule settles it' },
+        ]);
+    });
+
+    it('a person named only after the mailbox keeps nothing by name', () => {
+        const box = person('a', 1, 'Marketing', '', ['box@studio.com', 'marketing@studio.com']);
         const whitney = person('b', 2, 'Whitney', 'Hatfield', ['marketing@studio.com']);
-        expect(addressKeepers([box, whitney]).unresolved).toEqual([
-            { email: 'marketing@studio.com', holderIds: ['a', 'b'], why: 'names none of them' },
+        // Not the box by its name: Whitney, whose primary it is.
+        expect(addressKeepers([box, whitney]).releases).toEqual([
+            { email: 'marketing@studio.com', keeperId: 'b', fromIds: ['a'], by: 'primary' },
         ]);
     });
 
     it('a local part spelling two holders is unresolved', () => {
-        const a = person('a', 1, 'Sam', 'Lee', ['slee@x.com']);
-        const b = person('b', 2, 'Sara', 'Lee', ['slee@x.com']);
+        const a = person('a', 1, 'Sam', 'Lee', ['sam@x.com', 'slee@x.com']);
+        const b = person('b', 2, 'Sara', 'Lee', ['sara@x.com', 'slee@x.com']);
         expect(addressKeepers([a, b]).unresolved).toEqual([
             { email: 'slee@x.com', holderIds: ['a', 'b'], why: 'names more than one of them' },
         ]);

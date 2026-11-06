@@ -260,7 +260,16 @@ export interface AddressRelease {
     keeperId: string;
     /** Oldest first. */
     fromIds: string[];
+    /** Which rule chose the keeper. */
+    by: 'name' | 'company' | 'primary';
 }
+
+/** Why each rule gives the address to its keeper, as the report says it. */
+export const KEEPER_WHY: Record<AddressRelease['by'], string> = {
+    name: 'the address names the keeper',
+    company: 'the keeper is at the company whose domain it is',
+    primary: 'it is the keeper’s primary address',
+};
 
 /** An address shared by people of a name-mismatch group that the rule cannot give to one of them. */
 export interface AddressUnresolved {
@@ -272,11 +281,18 @@ export interface AddressUnresolved {
 
 /**
  * For people who share addresses but are not one person (an `auto_name_mismatch` group): each address held by
- * two or more goes to the one holder its local part spells (`spells`: `j.wan` → Jazzmin Wan), and the rest give it
- * up. An address naming none of them (`info@`, a colleague's) or more than one is unresolved — a person decides.
- * Only addresses stored on the people count; `people` oldest first.
+ * two or more goes to one holder, and the rest give it up. The keeper is, in order:
+ * 1. the one holder its local part spells (`spells`: `j.wan` → Jazzmin Wan);
+ * 2. the one holder at the company whose domain it is (`companyOf`, OWN-2's company-domain rule — `info@acme.com` is
+ *    Acme's, so the person saved at Acme keeps it);
+ * 3. the one holder whose primary address it is (the record saved by that address).
+ * An address none of these settles is unresolved — a person decides. Only addresses stored on the people count;
+ * `people` oldest first.
  */
-export function addressKeepers(people: readonly (NamedCandidate & { id: string })[]): {
+export function addressKeepers(
+    people: readonly (NamedCandidate & { id: string; companyId?: string | null })[],
+    companyOf: ReadonlyMap<string, string | null> = new Map(),
+): {
     releases: AddressRelease[];
     unresolved: AddressUnresolved[];
 } {
@@ -284,6 +300,7 @@ export function addressKeepers(people: readonly (NamedCandidate & { id: string }
     for (const p of people) {
         for (const email of emailsOf(p.emails)) holders.set(email, [...(holders.get(email) ?? []), p.id]);
     }
+    const byId = new Map(people.map((p) => [p.id, p]));
     const tokens = new Map(people.map((p) => [p.id, nameTokens(p.nameFirst, p.nameLast)]));
     const locals = new Map(people.map((p) => [p.id, localParts(p.emails)]));
     const releases: AddressRelease[] = [];
@@ -302,13 +319,26 @@ export function addressKeepers(people: readonly (NamedCandidate & { id: string }
                   const t = tokens.get(id)!;
                   return t.length > 0 && !(t.length === 1 && locals.get(id)!.includes(t[0]!)) && spells(local, t);
               });
-        if (named.length === 1) {
-            releases.push({ email, keeperId: named[0]!, fromIds: ids.filter((id) => id !== named[0]) });
+        const company = companyOf.get(email) ?? null;
+        const atCompany = company ? ids.filter((id) => byId.get(id)!.companyId === company) : [];
+        const primary = ids.filter(
+            (id) => normaliseEmail((byId.get(id)!.emails as Partial<Emails> | null)?.primary) === email,
+        );
+        const rule: [AddressRelease['by'], string[]] | undefined = (
+            [
+                ['name', named],
+                ['company', atCompany],
+                ['primary', primary],
+            ] as [AddressRelease['by'], string[]][]
+        ).find(([, keepers]) => keepers.length === 1);
+        if (rule) {
+            const keeperId = rule[1][0]!;
+            releases.push({ email, keeperId, fromIds: ids.filter((id) => id !== keeperId), by: rule[0] });
         } else {
             unresolved.push({
                 email,
                 holderIds: ids,
-                why: named.length === 0 ? 'names none of them' : 'names more than one of them',
+                why: named.length > 1 ? 'names more than one of them' : 'no rule settles it',
             });
         }
     }

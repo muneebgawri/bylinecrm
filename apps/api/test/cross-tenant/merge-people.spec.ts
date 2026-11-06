@@ -365,9 +365,18 @@ describe('person dedupe: merging people saved more than once', () => {
         expect(kept.emails).toEqual({ primary: `kim${at}`, additional: [`klee${at}`] });
     });
 
-    it('people sharing an address who are not one person: the one it names keeps it, the rest give it up', async () => {
-        const at = `@wan-${stamp}.test`;
-        const make = (nameFirst: string, nameLast: string, emails: Emails, createdAt: string) =>
+    it('people sharing an address who are not one person: by name, then company domain, then primary', async () => {
+        const swan = `@wan-${stamp}.com`;
+        const own = `@jo-${stamp}.com`;
+        const company = await owner.company.create({
+            data: {
+                workspaceId: workspace,
+                name: 'Swan',
+                domain: `wan-${stamp}.com`,
+                createdBy: { kind: 'member', id: adminMember },
+            },
+        });
+        const make = (nameFirst: string, nameLast: string, emails: Emails, createdAt: string, extra: object = {}) =>
             owner.person.create({
                 data: {
                     workspaceId: workspace,
@@ -376,55 +385,91 @@ describe('person dedupe: merging people saved more than once', () => {
                     emails,
                     createdBy: { kind: 'member', id: adminMember },
                     createdAt: new Date(createdAt),
+                    ...extra,
                 },
             });
-        const jo = await make('Jo', 'Wan', { primary: `office${stamp}${at}`, additional: [] }, '2026-06-01T00:00:00Z');
-        const will = await make('Will', 'Yeo', { primary: `will${at}`, additional: [] }, '2026-07-01T00:00:00Z');
+        const jo = await make('Jo', 'Wan', { primary: `office${own}`, additional: [] }, '2026-06-01T00:00:00Z');
+        const will = await make('Will', 'Yeo', { primary: `will${swan}`, additional: [] }, '2026-07-01T00:00:00Z', {
+            companyId: company.id,
+        });
+        const dee = await make('Dee', 'Fox', { primary: `desk${swan}`, additional: [] }, '2026-08-01T00:00:00Z');
         await withoutAddressRule(owner, async (tx) => {
             await tx.person.update({
                 where: { id: jo.id },
-                data: { emails: { primary: `office${stamp}${at}`, additional: [`j.wan${at}`] } },
+                data: {
+                    emails: { primary: `office${own}`, additional: [`j.wan${swan}`, `info${swan}`, `desk${swan}`] },
+                },
             });
             await tx.person.update({
                 where: { id: will.id },
-                data: { emails: { primary: `J.Wan${at}`, additional: [`will${at}`, `office${stamp}${at}`] } },
+                data: {
+                    emails: { primary: `J.Wan${swan}`, additional: [`will${swan}`, `office${own}`, `info${swan}`] },
+                },
             });
         });
-        const mine = (r: AddressReport) => r.addresses.filter((a) => a.email.endsWith(at));
+        // Mail reached Jo at desk@: only the name rule may take an address with mail on it.
+        const thread = await owner.mailThread.create({
+            data: { workspaceId: workspace, subject: 'Desk', lastMessageAt: new Date('2026-08-02T00:00:00Z') },
+        });
+        const message = await owner.mailMessage.create({
+            data: {
+                workspaceId: workspace,
+                threadId: thread.id,
+                identityKey: `desk-${stamp}`,
+                direction: 'inbound',
+                fromAddress: `desk${swan}`,
+                sentAt: new Date('2026-08-02T00:00:00Z'),
+                subject: 'Desk',
+            },
+        });
+        await owner.mailParticipant.create({
+            data: {
+                workspaceId: workspace,
+                messageId: message.id,
+                role: 'from',
+                address: `desk${swan}`,
+                personId: jo.id,
+            },
+        });
+        const mine = (r: AddressReport) =>
+            r.addresses.filter((a) => a.email.includes(stamp)).map((a) => [a.email, a.outcome, a.keeperId, a.why]);
 
         const dry = await dedupe.releaseAddresses(workspace, { apply: false });
         expect(mine(dry)).toEqual([
-            expect.objectContaining({
-                email: `j.wan${at}`,
-                outcome: 'would release',
-                keeperId: jo.id,
-                fromIds: [will.id],
-            }),
-            expect.objectContaining({ email: `office${stamp}${at}`, outcome: 'unresolved', why: 'names none of them' }),
+            [`desk${swan}`, 'unresolved', dee.id, 'Jo Wan has mail on it'],
+            [`info${swan}`, 'would release', will.id, 'the keeper is at the company whose domain it is'],
+            [`j.wan${swan}`, 'would release', jo.id, 'the address names the keeper'],
+            [`office${own}`, 'would release', jo.id, 'it is the keeper’s primary address'],
         ]);
         expect((await owner.person.findUniqueOrThrow({ where: { id: will.id } })).emails).toEqual({
-            primary: `J.Wan${at}`,
-            additional: [`will${at}`, `office${stamp}${at}`],
+            primary: `J.Wan${swan}`,
+            additional: [`will${swan}`, `office${own}`, `info${swan}`],
         });
 
         const applied = await dedupe.releaseAddresses(workspace, { apply: true });
-        expect(mine(applied).map((a) => a.outcome)).toEqual(['released', 'unresolved']);
-        // Will's primary went with it; his next address became his primary.
+        expect(mine(applied).map((a) => a[1])).toEqual(['unresolved', 'released', 'released', 'released']);
+        // Will's primary went with j.wan@; his next address became his primary.
         expect((await owner.person.findUniqueOrThrow({ where: { id: will.id } })).emails).toEqual({
-            primary: `will${at}`,
-            additional: [`office${stamp}${at}`],
+            primary: `will${swan}`,
+            additional: [`info${swan}`],
         });
         expect((await owner.person.findUniqueOrThrow({ where: { id: jo.id } })).emails).toEqual({
-            primary: `office${stamp}${at}`,
-            additional: [`j.wan${at}`],
+            primary: `office${own}`,
+            additional: [`j.wan${swan}`, `desk${swan}`],
         });
-        const recorded = await owner.outboxEvent.findMany({
-            where: { workspaceId: workspace, type: 'person.updated', payload: { path: ['recordId'], equals: will.id } },
+        expect((await owner.person.findUniqueOrThrow({ where: { id: dee.id } })).emails).toEqual({
+            primary: `desk${swan}`,
+            additional: [],
         });
-        expect(recorded).toHaveLength(1);
+        for (const id of [will.id, jo.id]) {
+            const recorded = await owner.outboxEvent.findMany({
+                where: { workspaceId: workspace, type: 'person.updated', payload: { path: ['recordId'], equals: id } },
+            });
+            expect(recorded).toHaveLength(1);
+        }
 
         const again = await dedupe.releaseAddresses(workspace, { apply: true });
-        expect(mine(again).map((a) => [a.email, a.outcome])).toEqual([[`office${stamp}${at}`, 'unresolved']]);
+        expect(mine(again).map((a) => [a[0], a[1]])).toEqual([[`desk${swan}`, 'unresolved']]);
     });
 
     it('giving up a primary never promotes an address that is someone else’s primary, trash included', async () => {
