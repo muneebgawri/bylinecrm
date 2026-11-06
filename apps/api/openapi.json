@@ -35382,7 +35382,7 @@
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991,
-                        "description": "Derived: messages sent to them."
+                        "description": "Derived: emails sent to them, from a connected mailbox or imported."
                     },
                     "lastContactedAt": {
                         "nullable": true,
@@ -35787,7 +35787,7 @@
                     },
                     "lastContactedAt": {
                         "nullable": true,
-                        "description": "Derived: when mail was last sent to the point of contact.",
+                        "description": "Derived: when an email was last sent to the point of contact.",
                         "example": "2026-10-09T09:30:00.000Z",
                         "type": "string",
                         "format": "date-time",
@@ -35797,7 +35797,7 @@
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991,
-                        "description": "Derived: messages sent to the point of contact; 0 when the deal has none."
+                        "description": "Derived: emails sent to the point of contact (synced or imported); 0 when the deal has none."
                     },
                     "cadenceDueAt": {
                         "nullable": true,
