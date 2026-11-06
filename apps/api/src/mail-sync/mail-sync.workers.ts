@@ -4,7 +4,12 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
 import { DelegationService } from '../mail-accounts/delegation.service';
-import { MAIL_SYNC_EVERY_MS, MAIL_SYNC_QUEUE, MAIL_SYNC_WORKER_CONCURRENCY } from './mail-sync.constants';
+import {
+    MAIL_BACKFILL_JOBS_AT_ONCE,
+    MAIL_SYNC_EVERY_MS,
+    MAIL_SYNC_QUEUE,
+    MAIL_SYNC_WORKER_CONCURRENCY,
+} from './mail-sync.constants';
 import { GmailUsageAlert } from './gmail-usage';
 import { MailSyncService } from './mail-sync.service';
 import { queueFailure, rateLimitCooldownUntil, type RateLimitRecord } from './retry';
@@ -17,6 +22,8 @@ export interface MailSyncJob {
 
 const SYNC_JOB = 'sync';
 const TICK_JOB = 'tick';
+/** One step (a window) of a mailbox's history backfill; its id is `backfill-<mailbox id>`, so one at a time. */
+const BACKFILL_JOB = 'backfill';
 
 /**
  * Puts mailbox syncs on the queue, and (in a worker process, `MAIL_SYNC_WORKER`) runs them. A tick
@@ -25,6 +32,10 @@ const TICK_JOB = 'tick';
  * mailbox already queued or running is not queued twice. A run that throws is retried by the
  * queue's backoff (`MAIL_SYNC_JOB_ATTEMPTS`), except one Gmail rate-limited: its cool-down decides
  * (`queueFailure`). The next tick picks up anything else.
+ *
+ * A mailbox whose history backfill is running gets one step (one window) per job; each tick queues the next steps,
+ * at most `MAIL_BACKFILL_JOBS_AT_ONCE` at a time so the incremental syncs keep their slots. A backfill so carries on
+ * across restarts and deploys, from its cursor, until it reaches its floor or the byte budget.
  */
 @Injectable()
 export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy {
@@ -48,6 +59,15 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
         return true;
     }
 
+    /** Queues the next step of the mailbox's history backfill; `false` when one is already queued or running. */
+    async enqueueBackfill(job: MailSyncJob): Promise<boolean> {
+        const jobId = `${BACKFILL_JOB}-${job.mailboxId}`;
+        const existing = await this.queue.getJob(jobId);
+        if (existing && !(await existing.isCompleted()) && !(await existing.isFailed())) return false;
+        await this.queue.add(BACKFILL_JOB, job, { jobId });
+        return true;
+    }
+
     async onApplicationBootstrap(): Promise<void> {
         if (!this.env.MAIL_SYNC_WORKER) return;
         this.worker = new Worker(MAIL_SYNC_QUEUE, (job) => this.process(job), {
@@ -68,6 +88,14 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
             const { workspaceId, mailboxId } = job.data as MailSyncJob;
             try {
                 return await this.sync.syncMailbox(workspaceId, mailboxId);
+            } catch (error) {
+                throw queueFailure(error);
+            }
+        }
+        if (job.name === BACKFILL_JOB) {
+            const { workspaceId, mailboxId } = job.data as MailSyncJob;
+            try {
+                return await this.sync.backfillStep(workspaceId, mailboxId);
             } catch (error) {
                 throw queueFailure(error);
             }
@@ -102,6 +130,34 @@ export class MailSyncWorkers implements OnApplicationBootstrap, OnModuleDestroy 
             // the per-user limit tripped for days (the service inboxes, from 2026-10-25).
             if (rateLimitCooldownUntil((m.syncState?.lastError ?? null) as RateLimitRecord | null) > now) continue;
             if (await this.enqueue({ workspaceId: m.workspaceId, mailboxId: m.id })) queued += 1;
+        }
+        try {
+            queued += await this.queueBackfillSteps(now);
+        } catch (error) {
+            this.logger.error(`mail history backfill queueing failed: ${String(error)}`);
+        }
+        return queued;
+    }
+
+    /** The next steps of the running backfills, least recently advanced first, up to `MAIL_BACKFILL_JOBS_AT_ONCE`. */
+    private async queueBackfillSteps(now: number): Promise<number> {
+        const pending = await this.queue.getJobs(['active', 'waiting', 'delayed', 'prioritized']);
+        let slots = MAIL_BACKFILL_JOBS_AT_ONCE - pending.filter((j) => j?.name === BACKFILL_JOB).length;
+        if (slots <= 0) return 0;
+        const running = await this.ownerPrisma.mailboxSyncState.findMany({
+            where: { backfillStatus: 'running', mailbox: { status: 'connected', transport: 'gmail' } },
+            select: { mailboxId: true, workspaceId: true, lastError: true },
+            orderBy: { updatedAt: 'asc' },
+        });
+        let queued = 0;
+        for (const r of running) {
+            if (slots <= 0) break;
+            // A mailbox Gmail is throttling waits out its cool-down for its backfill too: they share its quota.
+            if (rateLimitCooldownUntil((r.lastError ?? null) as RateLimitRecord | null) > now) continue;
+            if (await this.enqueueBackfill({ workspaceId: r.workspaceId, mailboxId: r.mailboxId })) {
+                queued += 1;
+                slots -= 1;
+            }
         }
         return queued;
     }

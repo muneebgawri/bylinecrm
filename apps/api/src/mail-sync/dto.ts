@@ -3,6 +3,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import {
     INTEGRATION_SENDERS_MAX,
+    MAIL_HISTORY_FLOOR_DEFAULT,
     MAIL_THREADS_LIMIT_DEFAULT,
     MAIL_THREADS_LIMIT_MAX,
     SERVICE_MAIL_LIMIT_DEFAULT,
@@ -80,4 +81,14 @@ export class SentCountsQueryDto extends createZodDto(
                 (Date.parse(q.through) - Date.parse(q.day)) / 86_400_000 + 1 <= SENT_COUNTS_RANGE_DAYS_MAX,
             { message: `a range spans at most ${SENT_COUNTS_RANGE_DAYS_MAX} days`, path: ['through'] },
         ),
+) {}
+
+/** `POST /mail/history-backfill` — starts every mailbox's history backfill down to `since` (an admin's). */
+export class StartHistoryBackfillDto extends createZodDto(
+    z.object({
+        since: z.iso
+            .date()
+            .default(MAIL_HISTORY_FLOOR_DEFAULT)
+            .meta({ description: 'The floor, `YYYY-MM-DD` (UTC); defaults to the product floor.' }),
+    }),
 ) {}

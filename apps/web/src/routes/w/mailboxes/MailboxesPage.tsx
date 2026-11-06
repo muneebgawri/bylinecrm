@@ -35,6 +35,7 @@ import { useWorkspaceId } from '../../params';
 import { CREATE_PARAM } from '../../paths';
 import { BlocklistSection } from './BlocklistSection';
 import { DomainHealthSection } from './DomainHealthSection';
+import { MailHistorySection } from './MailHistorySection';
 import { PoolHealthSection } from './PoolHealthSection';
 import { ConnectMailboxDialog, PURPOSE_LABEL } from './ConnectMailboxDialog';
 import {
@@ -127,6 +128,7 @@ export function MailboxesPage() {
             <PoolHealthSection workspaceId={workspaceId} />
             <DomainHealthSection workspaceId={workspaceId} />
             <BlocklistSection workspaceId={workspaceId} />
+            {can(membership, 'workspace:admin') && <MailHistorySection workspaceId={workspaceId} />}
             {manage && (
                 <ConnectMailboxDialog workspaceId={workspaceId} open={connecting} onOpenChange={setConnecting} />
             )}

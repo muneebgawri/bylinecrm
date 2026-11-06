@@ -70,6 +70,7 @@ function api(extra: FakeRoute[] = [], blocklist: BlocklistEntryView[] = []) {
         },
         (r) => (r.method === 'GET' && r.url.endsWith('/mailboxes') ? json(MAILBOXES) : undefined),
         (r) => (r.method === 'GET' && r.url.endsWith('/mail/blocklist') ? json(blocklist) : undefined),
+        (r) => (r.method === 'GET' && r.url.endsWith('/mail/history-backfill') ? json(history()) : undefined),
         (r) =>
             r.url.endsWith('/members/summary')
                 ? json([
@@ -79,6 +80,25 @@ function api(extra: FakeRoute[] = [], blocklist: BlocklistEntryView[] = []) {
                 : undefined,
     ]);
 }
+
+const history = (status: 'running' | null = null) => ({
+    floor: '2023-04-01',
+    usedBytes: 0,
+    maxBytes: 4 * 1024 ** 3,
+    mailboxes: [
+        {
+            mailboxId: 'mb-1',
+            email: 'kate@example.com',
+            status,
+            floor: status ? '2023-04-01T00:00:00.000Z' : null,
+            reachedBack: null,
+            completedAt: null,
+            imported: 0,
+            listed: 0,
+            unmatched: 0,
+        },
+    ],
+});
 
 const ALL: Capability[] = ['mailbox:read', 'mailbox:manage', 'workspace:admin', 'record:read'];
 
@@ -151,8 +171,11 @@ describe('FR-CRMS-1: connecting a Google mailbox', () => {
         api();
         page('?connect=connected');
         expect(await screen.findByText('Mailbox connected')).toBeInTheDocument();
-        const row = (await screen.findAllByText('kate@example.com'))[0]?.closest('tr');
-        expect(row && within(row).getByText('Just connected')).toBeTruthy();
+        // Kate's mailbox is listed twice — in the mailboxes and in the mail history; its mailbox row is the one marked.
+        await waitFor(() => {
+            const rows = screen.getAllByText('kate@example.com').map((cell) => cell.closest('tr'));
+            expect(rows.some((row) => row && within(row).queryByText('Just connected'))).toBe(true);
+        });
     });
 
     it('#129 says Postmaster Tools connected when that is what the callback finished, and marks no mailbox', async () => {
@@ -246,5 +269,37 @@ describe('FR-CRMS-2: the blocklist removes mail it covers', () => {
         await userEvent.click(within(dialog).getByRole('button', { name: 'Block' }));
         expect(await within(dialog).findByText(/an address like someone@example.com/)).toBeInTheDocument();
         expect(seen.some((r) => r.method === 'POST')).toBe(false);
+    });
+});
+
+describe('mail history: an admin brings older Gmail mail onto the records', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        toasts.clear();
+    });
+
+    it('starts the import after saying what it does, and shows each mailbox importing', async () => {
+        const seen = api([
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/mail/history-backfill')
+                    ? json(history('running'), 202)
+                    : undefined,
+        ]);
+        page();
+        const section = await screen.findByRole('region', { name: 'Mail history' });
+        expect(await within(section).findByText('Not started')).toBeInTheDocument();
+        await userEvent.click(within(section).getByRole('button', { name: 'Import mail since 1 Apr 2023' }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText(/other mail is not stored/)).toBeInTheDocument();
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Start import' }));
+        expect(await within(section).findByText('Importing')).toBeInTheDocument();
+        expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/mail/history-backfill'))).toBe(true);
+    });
+
+    it('is not shown to a member who is not an admin', async () => {
+        api();
+        page('', ['mailbox:read', 'mailbox:manage', 'record:read']);
+        expect(await screen.findByRole('heading', { name: 'Blocklist' })).toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Mail history' })).toBeNull();
     });
 });

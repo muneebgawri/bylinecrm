@@ -168,6 +168,7 @@ export type MailboxDisconnectedView = Schemas['MailboxDisconnected'];
 export type MailboxCheckView = Schemas['MailboxCheck'];
 export type MailboxSyncView = Schemas['MailboxSync'];
 export type MailboxSyncTriggeredView = Schemas['MailboxSyncTriggered'];
+export type MailHistoryBackfillView = Schemas['MailHistoryBackfill'];
 // ---- Calendar sync (CAL-1) -------------------------------------------------------------------
 export type CalendarSyncView = Schemas['CalendarSync'];
 export type CalendarSyncTriggeredView = Schemas['CalendarSyncTriggered'];

@@ -54,6 +54,7 @@ import type {
     DelegationView,
     InviteView,
     MailboxSyncView,
+    MailHistoryBackfillView,
     MailboxView,
     LeadSuggestionView,
     MeetingKpisView,
@@ -1175,6 +1176,26 @@ export const meetingKpis: MeetingKpisView = {
             newLeads: 1,
             awaitingCustomer: 0,
             suggestedLeads: 0,
+        },
+    ],
+};
+
+/** The mail history backfill (admins): Kate's mailbox halfway back to the floor. */
+export const mailHistoryBackfill: MailHistoryBackfillView = {
+    floor: '2023-04-01',
+    usedBytes: 512 * 1024 ** 2,
+    maxBytes: 4 * 1024 ** 3,
+    mailboxes: [
+        {
+            mailboxId: IDS.mailbox,
+            email: 'kate.morgan@example.com',
+            status: 'running',
+            floor: '2023-04-01T00:00:00.000Z',
+            reachedBack: at(24 * 400),
+            completedAt: null,
+            imported: 1240,
+            listed: 5310,
+            unmatched: 3870,
         },
     ],
 };

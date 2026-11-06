@@ -68,6 +68,8 @@ export interface GmailMessageHeaders {
     id: string;
     threadId: string;
     headers: GmailHeader[];
+    /** The message's labels, when Gmail returned them: enough to pass over a draft, spam or trash unread. */
+    labelIds?: string[];
 }
 
 /** What Gmail returns for a sent message: its id, and the thread it went into. */

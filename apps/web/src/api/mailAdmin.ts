@@ -16,6 +16,7 @@ import type {
     PatchDelegationInput,
     GoogleOAuthClientStatusView,
     GoogleOAuthClientView,
+    MailHistoryBackfillView,
     MailSettingsView,
     MailboxCheckView,
     MailboxConnectStartView,
@@ -108,6 +109,16 @@ export const mailboxes = {
         request<CalendarSyncView>('GET', workspacePath(workspaceId, `/mailboxes/${mailboxId}/calendar`), { signal }),
     calendarSync: (workspaceId: string, mailboxId: string) =>
         request<CalendarSyncTriggeredView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/calendar/sync`)),
+};
+
+/** The workspace's mail history backfill (an admin's): every Gmail mailbox's mail back to a floor. */
+export const mailHistoryBackfill = {
+    get: (workspaceId: string, signal?: AbortSignal) =>
+        request<MailHistoryBackfillView>('GET', workspacePath(workspaceId, '/mail/history-backfill'), { signal }),
+    start: (workspaceId: string, since?: string) =>
+        request<MailHistoryBackfillView>('POST', workspacePath(workspaceId, '/mail/history-backfill'), {
+            body: since ? { since } : {},
+        }),
 };
 
 /** Addresses and domains whose mail is never imported, and removed when added (P2-2). */
@@ -383,5 +394,22 @@ export function useRemoveBlocklistEntry(workspaceId: string) {
     return useMutation({
         mutationFn: (entryId: string) => blocklist.remove(workspaceId, entryId),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.blocklist(workspaceId) }),
+    });
+}
+
+/** Where each mailbox's history backfill stands; refreshed every minute while one is running. */
+export const useMailHistoryBackfill = (workspaceId: string, enabled = true) =>
+    useQuery({
+        queryKey: keys.mailHistoryBackfill(workspaceId),
+        queryFn: ({ signal }) => mailHistoryBackfill.get(workspaceId, signal),
+        enabled,
+        refetchInterval: (q) => (q.state.data?.mailboxes.some((m) => m.status === 'running') ? 60_000 : false),
+    });
+
+export function useStartMailHistoryBackfill(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: () => mailHistoryBackfill.start(workspaceId),
+        onSuccess: (view) => client.setQueryData(keys.mailHistoryBackfill(workspaceId), view),
     });
 }

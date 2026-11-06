@@ -107,6 +107,7 @@ export const keys = {
     /** The workspace's Slotline booking site and its hook (CAL-2). */
     slotlineSettings: (workspaceId: string) => ['w', workspaceId, 'integrations', 'slotline'] as const,
     blocklist: (workspaceId: string) => ['w', workspaceId, 'mail', 'blocklist'] as const,
+    mailHistoryBackfill: (workspaceId: string) => ['w', workspaceId, 'mail', 'history-backfill'] as const,
     suppressions: (workspaceId: string) => ['w', workspaceId, 'suppressions'] as const,
     sendingPool: (workspaceId: string) => ['w', workspaceId, 'sending-pool'] as const,
     /** The region policy and its change history (#141); one key so a change refreshes both. */

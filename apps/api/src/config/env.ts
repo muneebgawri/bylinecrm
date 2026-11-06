@@ -87,6 +87,16 @@ export const envSchema = z
          */
         MAIL_SYNC_WORKER: flag('1'),
         /**
+         * The most the mail history backfill may store, in bytes, summed over every mailbox (an over-estimate of what
+         * it wrote). Reached, the backfill stops (`budget_reached`) and resumes only when started again — the guard
+         * on a nearly full disk. 4 GiB by default.
+         */
+        MAIL_BACKFILL_MAX_BYTES: z.coerce
+            .number()
+            .int()
+            .positive()
+            .default(4 * 1024 ** 3),
+        /**
          * Whether this process runs the mail-send worker (P2-3): the job that sends a queued message
          * through Gmail. On by default; a separate worker process sets `1` there and `0` on the API.
          * The cross-tenant suite sets `0` and delivers sends itself against a fake Gmail.

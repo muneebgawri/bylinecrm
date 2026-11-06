@@ -5,6 +5,29 @@
 
 /** How far back the first import of a mailbox reaches. */
 export const MAIL_INITIAL_SYNC_DAYS = 30;
+
+/**
+ * The mail history backfill: a mailbox's sync reaches back past its first import to a history floor, once, so mail
+ * account managers sent from Gmail before the CRM — and the replies — is on the records and counts toward contact
+ * status. Product decision (2026-11): every connected mailbox, back to this date.
+ */
+export const MAIL_HISTORY_FLOOR_DEFAULT = '2023-04-01';
+/** The backfill walks back this many calendar months (UTC) per step, newest first: a step is one window. */
+export const MAIL_BACKFILL_WINDOW_MONTHS = 1;
+/**
+ * What a backfilled message is first read with (`format=metadata`, a third of a full read): enough to tell whether
+ * it concerns a person. Only one that does is read whole and stored — the disk is the limit (2026-11: 92% full).
+ */
+export const MAIL_BACKFILL_METADATA_HEADERS = ['From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'Message-ID'] as const;
+/** A backfill step holds its mailbox this long, renewed after every chunk: the CLI and the worker never race. */
+export const MAIL_BACKFILL_LEASE_MS = 15 * 60 * 1000;
+/** Backfill steps the worker keeps queued at once: they share its slots with every mailbox's incremental sync. */
+export const MAIL_BACKFILL_JOBS_AT_ONCE = 2;
+/**
+ * Added to a stored message's own bytes (bodies, subject, snippet; uncompressed) for its participants, its copy, its
+ * thread rows and their index entries, when the budget counts what the backfill wrote: an over-estimate on purpose.
+ */
+export const MAIL_BACKFILL_ROW_OVERHEAD_BYTES = 2048;
 /**
  * When Gmail no longer has the history after the stored cursor (`404`), the mailbox is re-listed
  * from its last good sync less this margin — never further back than the first import's window.
