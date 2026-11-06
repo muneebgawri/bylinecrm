@@ -284,6 +284,17 @@ describe('withoutAddress', () => {
             primary: 'w@x.com',
             additional: [],
         });
+        // The next address is someone else's primary: it stays additional, and the one after it is promoted.
+        expect(
+            withoutAddress(
+                { primary: 'j.wan@x.com', additional: ['W@x.com', 'v@x.com'] },
+                'j.wan@x.com',
+                new Set(['w@x.com']),
+            ),
+        ).toEqual({ primary: 'v@x.com', additional: ['W@x.com'] });
+        expect(
+            withoutAddress({ primary: 'j.wan@x.com', additional: ['w@x.com'] }, 'j.wan@x.com', new Set(['w@x.com'])),
+        ).toEqual({ primary: null, additional: ['w@x.com'] });
         expect(withoutAddress({ primary: 'j.wan@x.com', additional: [] }, 'j.wan@x.com')).toEqual({
             primary: null,
             additional: [],
