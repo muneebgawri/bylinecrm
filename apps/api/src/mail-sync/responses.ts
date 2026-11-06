@@ -126,6 +126,33 @@ export const blocklistEntryCreated = named(
 export type MailThreadSummary = z.output<typeof mailThreadSummary>;
 export type MailThreadView = z.output<typeof mailThreadView>;
 export type MailMessageView = z.output<typeof mailMessageView>;
+export const mailHistoryBackfillView = named(
+    'MailHistoryBackfill',
+    z.object({
+        floor: z.iso.date().meta({ description: 'How far back a start reaches (`YYYY-MM-DD`): the default floor.' }),
+        usedBytes: z.number().int().meta({
+            description: 'What the backfill has stored so far over every workspace, in bytes (an over-estimate).',
+        }),
+        maxBytes: z.number().int().meta({ description: 'Where the backfill stops (`MAIL_BACKFILL_MAX_BYTES`).' }),
+        mailboxes: z.array(
+            z.object({
+                mailboxId: id,
+                email: z.string(),
+                status: z.enum(['running', 'done', 'budget_reached']).nullable().meta({
+                    description: 'Null: never started for this mailbox.',
+                }),
+                floor: dateTime.nullable().meta({ description: "The mailbox's history floor." }),
+                reachedBack: dateTime.nullable().meta({ description: 'Every window from here to now is done.' }),
+                completedAt: dateTime.nullable(),
+                imported: z.number().int(),
+                listed: z.number().int(),
+                unmatched: z.number().int().meta({ description: 'Read as headers only; no participant a person.' }),
+            }),
+        ),
+    }),
+);
+
+export type MailHistoryBackfillView = z.output<typeof mailHistoryBackfillView>;
 export type MailboxSyncView = z.output<typeof mailboxSyncView>;
 export type MailboxSyncTriggered = z.output<typeof mailboxSyncTriggered>;
 export type BlocklistEntryView = z.output<typeof blocklistEntryView>;

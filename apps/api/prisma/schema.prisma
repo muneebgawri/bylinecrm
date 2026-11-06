@@ -1811,6 +1811,19 @@ model MailboxSyncState {
   /// `rateLimitedRuns` counts consecutive runs that ended rate-limited — the tick's cool-down reads it.
   lastError           Json?          @map("last_error")
   fullSyncCompletedAt DateTime?      @map("full_sync_completed_at") @db.Timestamptz
+  /// History backfill: how far back the mailbox's mail is wanted (null: only the first import's window).
+  historyFloor        DateTime?      @map("history_floor") @db.Timestamptz
+  /// The backfill's cursor: everything from here to now is covered; the walk goes on below it, a window at a time.
+  backfillBefore      DateTime?      @map("backfill_before") @db.Timestamptz
+  /// `running`, `done` or `budget_reached` (stopped at MAIL_BACKFILL_MAX_BYTES; resumes when started again).
+  backfillStatus      String?        @map("backfill_status")
+  /// The backfill's counts so far (`BackfillProgress`).
+  backfillProgress    Json?          @map("backfill_progress")
+  /// What the backfill stored for this mailbox, in bytes (an over-estimate): the budget reads their sum.
+  backfillBytes       BigInt         @default(0) @map("backfill_bytes")
+  /// A backfill step holds the mailbox until then, so the CLI and the worker never walk one window twice at once.
+  backfillLeaseUntil  DateTime?      @map("backfill_lease_until") @db.Timestamptz
+  backfillCompletedAt DateTime?      @map("backfill_completed_at") @db.Timestamptz
   updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

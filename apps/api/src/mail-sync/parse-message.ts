@@ -57,9 +57,14 @@ const ADDRESS_HEADERS: readonly [string, MailParticipantRole][] = [
     ['bcc', 'bcc'],
 ];
 
+/** Everyone a message names in From, To, Cc and Bcc: what a full read and a header-only read (`format=metadata`) share. */
+export function participantsOf(headers: GmailHeader[]): ParsedParticipant[] {
+    return ADDRESS_HEADERS.flatMap(([name, role]) => addresses(headerValues(headers, name), role));
+}
+
 export function parseGmailMessage(raw: GmailRawMessage): ParsedMessage {
     const headers = raw.payload.headers ?? [];
-    const participants = ADDRESS_HEADERS.flatMap(([name, role]) => addresses(headerValues(headers, name), role));
+    const participants = participantsOf(headers);
     const from = participants.find((p) => p.role === 'from')?.address ?? '';
     const bodies = collectBodies(raw.payload);
     const html = bodies.html !== null ? capBody(sanitizeMailHtml(bodies.html)) : null;

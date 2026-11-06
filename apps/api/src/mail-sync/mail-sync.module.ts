@@ -8,7 +8,13 @@ import { BlocklistService } from './blocklist.service';
 import { GmailHttp } from './gmail.http';
 import { GmailUsageAlert } from './gmail-usage';
 import { GMAIL_PORT } from './gmail.port';
-import { BlocklistController, MailThreadsController, MailboxSyncController } from './mail-sync.controllers';
+import {
+    BlocklistController,
+    MailHistoryBackfillController,
+    MailThreadsController,
+    MailboxSyncController,
+} from './mail-sync.controllers';
+import { MailHistoryBackfill } from './history-backfill.service';
 import { IntegrationMailController } from './integration-mail.controller';
 import { IntegrationMailService } from './integration-mail.service';
 import { MAIL_SYNC_JOB_ATTEMPTS, MAIL_SYNC_JOB_BACKOFF_MS, MAIL_SYNC_QUEUE } from './mail-sync.constants';
@@ -40,7 +46,13 @@ import { GmailQuota } from './quota';
             },
         }),
     ],
-    controllers: [MailThreadsController, MailboxSyncController, BlocklistController, IntegrationMailController],
+    controllers: [
+        MailThreadsController,
+        MailboxSyncController,
+        MailHistoryBackfillController,
+        BlocklistController,
+        IntegrationMailController,
+    ],
     providers: [
         { provide: GMAIL_PORT, useClass: GmailHttp },
         GmailQuota,
@@ -51,6 +63,7 @@ import { GmailQuota } from './quota';
         BlocklistService,
         MailSyncWorkers,
         MailSyncSubscriber,
+        MailHistoryBackfill,
     ],
     // Sending (P2-3) uses the same Gmail port, quota and retry (`MailSyncService.gmailRequest`) and
     // stores what it sent through sync's one writer (`importMessage`).

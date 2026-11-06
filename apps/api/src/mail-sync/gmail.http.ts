@@ -89,7 +89,13 @@ export class GmailHttp implements GmailPort {
                   .filter((h) => typeof h.name === 'string' && typeof h.value === 'string')
                   .map((h) => ({ name: h.name as string, value: h.value as string }))
             : [];
-        return { id: body['id'], threadId: body['threadId'], headers };
+        const labels = body['labelIds'];
+        return {
+            id: body['id'],
+            threadId: body['threadId'],
+            headers,
+            ...(Array.isArray(labels) ? { labelIds: labels.filter((l): l is string => typeof l === 'string') } : {}),
+        };
     }
 
     async send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {

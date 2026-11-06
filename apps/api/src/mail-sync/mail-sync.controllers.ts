@@ -6,18 +6,21 @@ import { MailboxesService } from '../mail-accounts/mailboxes.service';
 import { Returns } from '../openapi/responses';
 import { parseTarget } from '../records/targets';
 import { BlocklistService } from './blocklist.service';
-import { CreateBlocklistEntryDto, ListThreadsQueryDto } from './dto';
+import { CreateBlocklistEntryDto, ListThreadsQueryDto, StartHistoryBackfillDto } from './dto';
+import { MailHistoryBackfill } from './history-backfill.service';
 import { MailReadService } from './mail-read.service';
 import { MailSyncWorkers } from './mail-sync.workers';
 import {
     blocklistEntryCreated,
     blocklistEntryView,
+    mailHistoryBackfillView,
     mailThreadPage,
     mailThreadView,
     mailboxSyncTriggered,
     mailboxSyncView,
     type BlocklistEntryCreated,
     type BlocklistEntryView,
+    type MailHistoryBackfillView,
     type MailThreadSummary,
     type MailThreadView,
     type MailboxSyncTriggered,
@@ -76,6 +79,32 @@ export class MailboxSyncController {
         const workspaceId = this.context.get()!.workspaceId;
         const queued = await this.workers.enqueue({ workspaceId, mailboxId });
         return { sync: await this.mail.readSyncState(mailboxId), queued };
+    }
+}
+
+/**
+ * The workspace's mail history backfill (an admin's): every Gmail mailbox's mail back to a floor, brought onto the
+ * records it concerns by the sync itself, a month at a time. Only mail with a person of the workspace in it is stored.
+ */
+@ApiTags('mail')
+@TenantController('mail/history-backfill')
+export class MailHistoryBackfillController {
+    constructor(private readonly backfill: MailHistoryBackfill) {}
+
+    @Requires('workspace:admin')
+    @Get()
+    @Returns(mailHistoryBackfillView)
+    view(): Promise<MailHistoryBackfillView> {
+        return this.backfill.view();
+    }
+
+    /** Starts (or resumes, after the byte budget stopped it) every connected Gmail mailbox's backfill down to `since`. */
+    @Requires('workspace:admin')
+    @HttpCode(202)
+    @Post()
+    @Returns(mailHistoryBackfillView)
+    start(@Body() body: StartHistoryBackfillDto): Promise<MailHistoryBackfillView> {
+        return this.backfill.start(body.since);
     }
 }
 

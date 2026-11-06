@@ -220,6 +220,8 @@ export class FakeGmail implements GmailPort {
         const box = this.box(email);
         const after = /after:(\d+)/.exec(input.query);
         const since = after ? Number(after[1]) * 1000 : 0;
+        const before = /before:(\d+)/.exec(input.query);
+        const until = before ? Number(before[1]) * 1000 : Infinity;
         const byMessageId = /rfc822msgid:(\S+)/.exec(input.query)?.[1];
         const sentOnly = /(?:^|\s)in:sent(?:\s|$)/.test(input.query);
         const to = /(?:^|\s)to:(\S+)/.exec(input.query)?.[1]?.toLowerCase();
@@ -228,7 +230,9 @@ export class FakeGmail implements GmailPort {
             .map((id) => box.messages.get(id)!)
             .filter(
                 (m) =>
-                    Number(m.internalDate) >= since && !(m.labelIds ?? []).some((l) => l === 'SPAM' || l === 'TRASH'),
+                    Number(m.internalDate) >= since &&
+                    Number(m.internalDate) < until &&
+                    !(m.labelIds ?? []).some((l) => l === 'SPAM' || l === 'TRASH'),
             )
             .filter((m) => byMessageId === undefined || headerOf(m.payload, 'message-id') === `<${byMessageId}>`)
             .filter((m) => !sentOnly || (m.labelIds ?? []).includes('SENT'))
@@ -275,6 +279,7 @@ export class FakeGmail implements GmailPort {
             id: message.id,
             threadId: message.threadId,
             headers: (message.payload.headers ?? []).filter((h) => wanted.has(h.name.toLowerCase())),
+            labelIds: [...(message.labelIds ?? [])],
         };
     }
 
