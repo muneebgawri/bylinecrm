@@ -60,6 +60,7 @@ LOCK=${NEWSWIREOS_LOCK:-/opt/newswireos-runtime/deploy.lock}
 SRC_DIR=${EDGE_CONF_DIR:-$HERE}
 RUNTIME=$BYLINECRM_RUNTIME
 HOST=$BYLINECRM_PUBLIC_HOST
+TRACKING_HOST=${BYLINECRM_TRACKING_HOST:-}
 CERT_DIR=${CERT_DIR:-/etc/letsencrypt/live}
 
 SRC="$SRC_DIR/edge-$MODE.conf.tpl"
@@ -111,7 +112,19 @@ tmp="$DYN/.$BYLINECRM_EDGE_CONF.tmp"
 # `# cloudflare-only` lines stay only for an environment behind Cloudflare's proxy (lib.sh).
 drop_cf=()
 [ "$BYLINECRM_EDGE_CLOUDFLARE_ONLY" = 1 ] || drop_cf=(-e '/# cloudflare-only$/d')
-sed ${drop_cf[@]+"${drop_cf[@]}"} -e "s/__HOST__/$HOST/g" -e "s/__ENV__/$BYLINECRM_ENV/g" -e "s/__WEB_UPSTREAM__/$WEB_UPSTREAM/g" "$SRC" >"$tmp"
+render() {
+    sed ${drop_cf[@]+"${drop_cf[@]}"} -e "s/__HOST__/$HOST/g" -e "s/__TRACKING_HOST__/$TRACKING_HOST/g" \
+        -e "s/__ENV__/$BYLINECRM_ENV/g" -e "s/__WEB_UPSTREAM__/$WEB_UPSTREAM/g" "$1"
+}
+render "$SRC" >"$tmp"
+# The short-link host (P3-4), when the environment has one: its https blocks once certbot has issued its
+# certificate, its http-only block (the ACME challenge) until then — so it never holds up the main host.
+if [ -n "$TRACKING_HOST" ]; then
+    tracking_mode=http
+    [ "$MODE" = https ] && docker exec "$EDGE" test -s "$CERT_DIR/$TRACKING_HOST/fullchain.pem" && tracking_mode=https
+    render "$SRC_DIR/edge-tracking-$tracking_mode.conf.tpl" >>"$tmp"
+    echo "install-edge: short-link host $TRACKING_HOST ($tracking_mode)" >&2
+fi
 chmod 644 "$tmp"
 mv -f "$tmp" "$TARGET"
 

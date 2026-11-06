@@ -24,6 +24,7 @@ bylinecrm_env() {
             : "${BYLINECRM_WEB_MEM:=64m}"
             # Not behind Cloudflare's proxy (two levels deep, outside Universal SSL): direct is the only way in.
             : "${BYLINECRM_EDGE_CLOUDFLARE_ONLY:=0}"
+            : "${BYLINECRM_TRACKING_HOST:=}"
             ;;
         production)
             : "${BYLINECRM_RUNTIME:=/opt/bylinecrm-production-runtime}"
@@ -35,6 +36,9 @@ bylinecrm_env() {
             : "${BYLINECRM_WEB_MEM:=64m}"
             # Behind Cloudflare's proxy: the edge refuses a connection that did not come from it.
             : "${BYLINECRM_EDGE_CLOUDFLARE_ONLY:=1}"
+            # The workspace's short-link domain (P3-4): a DNS-only CNAME to the public host, so the API's
+            # CNAME check can see it; the edge serves only the tracking routes on it (edge-tracking-*.tpl).
+            : "${BYLINECRM_TRACKING_HOST:=links.pinionnewswire.com}"
             ;;
         *)
             echo "bylinecrm: unknown environment '${env}' (staging | production)" >&2
@@ -66,7 +70,7 @@ bylinecrm_env() {
         BYLINECRM_RELEASES BYLINECRM_API_MEM BYLINECRM_POSTGRES_MEM BYLINECRM_VALKEY_MEM \
         BYLINECRM_VALKEY_MAXMEMORY BYLINECRM_WEB_MEM BYLINECRM_MIGRATE_MEM BYLINECRM_EDGE_CONF \
         BYLINECRM_WEB_ALIAS BYLINECRM_APP_ENV BYLINECRM_PG_ENV BYLINECRM_BACKUP_DIR \
-        BYLINECRM_BACKUP_REMOTE BYLINECRM_RCLONE_CONF BYLINECRM_EDGE_CLOUDFLARE_ONLY
+        BYLINECRM_BACKUP_REMOTE BYLINECRM_RCLONE_CONF BYLINECRM_EDGE_CLOUDFLARE_ONLY BYLINECRM_TRACKING_HOST
 }
 
 # Reads BYLINECRM_BACKUP_REMOTE and BYLINECRM_RCLONE_CONF from the environment's backup.env (#166)
