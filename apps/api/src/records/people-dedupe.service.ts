@@ -6,6 +6,7 @@ import { PrismaService } from '../infra/prisma.service';
 import { insideTransaction } from '../infra/transaction-scope';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { TransfersService } from '../transfers/transfers.service';
+import { companyDomainOfAddress, normalisedDomain } from './company-ownership';
 import {
     addCounts,
     addressKeepers,
@@ -15,6 +16,7 @@ import {
     emailsOf,
     firstContacts,
     groupDuplicates,
+    KEEPER_WHY,
     moveRelated,
     normaliseEmail,
     type DuplicateGroup,
@@ -391,11 +393,13 @@ export class PeopleDedupe {
 
     /**
      * People who share an address but are not one person (the `auto_name_mismatch` groups, never merged): each
-     * shared address goes to the holder it names (`addressKeepers`) and the others give it up, recorded as their
-     * `person.updated` (`emails`, by the system) — timeline, webhooks, and mail and calendar re-link as for any edit.
-     * One transaction per group, the people locked and read again; without `apply` each is rolled back. An address
-     * naming none or several of its holders, or whose giving up would leave a person with neither a name nor an
-     * address, is unresolved and listed. Re-running finds only what is left.
+     * shared address goes to one holder (`addressKeepers`: the one it names, else the one at the company whose
+     * domain it is, else the one whose primary it is) and the others give it up, recorded as their `person.updated`
+     * (`emails`, by the system) — timeline, webhooks, and mail and calendar re-link as for any edit. One transaction
+     * per group, the people locked and read again; without `apply` each is rolled back. Unresolved and listed: an
+     * address no rule settles, one whose giving up would leave a person with neither a name nor an address, and
+     * one with mail linked to a person who would give it up, unless the address names the keeper. Re-running
+     * finds only what is left.
      */
     async releaseAddresses(
         workspaceId: string,
@@ -466,7 +470,7 @@ export class PeopleDedupe {
                AND deleted_at IS NULL ORDER BY created_at, id FOR UPDATE`;
         const people = await tx.person.findMany({
             where: { workspaceId, id: { in: [...personIds] }, deletedAt: null },
-            select: { id: true, nameFirst: true, nameLast: true, emails: true },
+            select: { id: true, nameFirst: true, nameLast: true, emails: true, companyId: true },
             orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         });
         const byId = new Map(people.map((p) => [p.id, p]));
@@ -474,7 +478,18 @@ export class PeopleDedupe {
             const p = byId.get(id)!;
             return `${p.nameFirst} ${p.nameLast}`.trim();
         };
-        const { releases, unresolved } = addressKeepers(people);
+        const addresses = [...new Set(people.flatMap((p) => emailsOf(p.emails)))];
+        const { releases, unresolved } = addressKeepers(
+            people,
+            await this.companiesOfAddresses(tx, workspaceId, addresses),
+        );
+        // Mail already linked to a person by an address (stored lower case): only the name rule may take that
+        // address from them.
+        const mailed = await tx.$queryRaw<{ person_id: string; address: string }[]>`
+            SELECT DISTINCT person_id::text, address FROM mail_participants
+             WHERE workspace_id = ${workspaceId}::uuid AND person_id::text = ANY(${[...personIds]})
+               AND address = ANY(${addresses})`;
+        const hasMail = new Set(mailed.map((m) => `${m.person_id} ${m.address}`));
         const results: AddressResult[] = unresolved.map((u) => ({
             email: u.email,
             outcome: 'unresolved',
@@ -490,7 +505,7 @@ export class PeopleDedupe {
             where: {
                 workspaceId,
                 id: { notIn: [...personIds] },
-                emailPrimary: { in: [...new Set(people.flatMap((p) => emailsOf(p.emails)))] },
+                emailPrimary: { in: addresses },
             },
             select: { emailPrimary: true },
         });
@@ -508,7 +523,8 @@ export class PeopleDedupe {
                 next.set(id, withoutAddress(emails.get(id), r.email, taken));
             }
             const stranded = r.fromIds.find((id) => !name(id) && next.get(id)!.primary === null);
-            if (stranded) {
+            const mailedTo = r.by === 'name' ? undefined : r.fromIds.find((id) => hasMail.has(`${id} ${r.email}`));
+            if (stranded || mailedTo) {
                 results.push({
                     email: r.email,
                     outcome: 'unresolved',
@@ -516,7 +532,9 @@ export class PeopleDedupe {
                     keeperName: name(r.keeperId),
                     fromIds: r.fromIds,
                     fromNames: r.fromIds.map(name),
-                    why: `${stranded} would have neither a name nor an address`,
+                    why: stranded
+                        ? `${stranded} would have neither a name nor an address`
+                        : `${name(mailedTo!) || mailedTo} has mail on it`,
                 });
                 continue;
             }
@@ -531,7 +549,7 @@ export class PeopleDedupe {
                 keeperName: name(r.keeperId),
                 fromIds: r.fromIds,
                 fromNames: r.fromIds.map(name),
-                why: 'the address names the keeper',
+                why: KEEPER_WHY[r.by],
             });
         }
         const actor = { kind: 'system', id: null } as const;
@@ -553,6 +571,47 @@ export class PeopleDedupe {
         }
         if (events.length > 0) await this.events.recordAll(tx, events);
         return results.sort((a, b) => a.email.localeCompare(b.email));
+    }
+
+    /**
+     * The live company whose domain each address is at (`companyDomainOfAddress`; free mail is at none), as
+     * `CompanyOwnership.companyForDomain` reads it: the company's own domain first — the earliest saved — then one
+     * of its other domains.
+     */
+    private async companiesOfAddresses(
+        tx: Prisma.TransactionClient,
+        workspaceId: string,
+        addresses: readonly string[],
+    ): Promise<Map<string, string | null>> {
+        const keyOf = new Map(
+            addresses.map((a) => {
+                const d = companyDomainOfAddress(a);
+                return [a, d ? normalisedDomain(d) : null] as const;
+            }),
+        );
+        const keys = [...new Set([...keyOf.values()].filter((k): k is string => k !== null))];
+        const forms = keys.flatMap((k) => [k, `www.${k}`]);
+        const company = new Map<string, string>();
+        if (keys.length > 0) {
+            const own = await tx.company.findMany({
+                where: { workspaceId, deletedAt: null, domain: { in: forms } },
+                select: { id: true, domain: true },
+                orderBy: { createdAt: 'asc' },
+            });
+            for (const c of own) {
+                const k = normalisedDomain(c.domain!);
+                if (!company.has(k)) company.set(k, c.id);
+            }
+            const other = await tx.companyDomain.findMany({
+                where: { domain: { in: forms }, company: { workspaceId, deletedAt: null } },
+                select: { domain: true, companyId: true },
+            });
+            for (const c of other) {
+                const k = normalisedDomain(c.domain);
+                if (!company.has(k)) company.set(k, c.companyId);
+            }
+        }
+        return new Map(addresses.map((a) => [a, company.get(keyOf.get(a) ?? '') ?? null]));
     }
 
     private async memberLabel(workspaceId: string, memberId: string): Promise<string> {
