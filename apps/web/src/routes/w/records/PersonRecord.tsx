@@ -1,8 +1,8 @@
 import { Badge, FactGrid, toast } from '@bylinecrm/ui';
 import { CONTACT_STATUS_LABELS, CONTACT_STATUSES, type ContactStatus } from '@bylinecrm/shared';
 import { Building2, Handshake, ListTodo, Mail, Send, StickyNote } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useSetContactStatus } from '../../../api/customers';
 import { useCustomFields, usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
@@ -11,7 +11,7 @@ import { CopyButton } from '../../../components/CopyButton';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { useCompanyCreator } from '../../../components/useCompanyCreator';
 import { formatDay } from '../../../lib/format';
-import { paths } from '../../paths';
+import { COMPOSE_PARAM, paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AskIntroduction } from './AskIntroduction';
 import { AttachmentsPanel } from './AttachmentsPanel';
@@ -79,6 +79,19 @@ export function PersonRecord({
     const ownerId = useId();
     const target = { type: 'person' as const, id: person.id };
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
+
+    // "Start new email" (⌘K, a company's people) lands here with `?compose=1`: the composer opens at once and
+    // the parameter is dropped, so a reload or the back button does not open it again.
+    const location = useLocation();
+    const navigate = useNavigate();
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get(COMPOSE_PARAM) !== '1') return;
+        params.delete(COMPOSE_PARAM);
+        const search = params.toString();
+        navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true });
+        compose.current?.start();
+    }, [location.pathname, location.search, navigate]);
 
     useRecordCommands({
         layout,
