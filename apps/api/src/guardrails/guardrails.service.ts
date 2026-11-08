@@ -67,13 +67,21 @@ export class GuardrailsService {
             const found = await tx.workspaceMember.count({ where: { id: { in: ids }, leftAt: null } });
             if (found !== ids.length)
                 throw new UnknownReference('sharedMailboxMemberIds', 'every shared mailbox must be a member');
-            const data = { poachEmailAtOnce: input.poachEmailAtOnce, sharedMailboxMemberIds: ids };
+            const data = {
+                poachEmailAtOnce: input.poachEmailAtOnce,
+                sharedMailboxMemberIds: ids,
+                offCrmColdAlerts: input.offCrmColdAlerts,
+            };
             const row = await tx.guardrailSettings.upsert({
                 where: { workspaceId },
                 create: { workspaceId, ...data },
                 update: data,
             });
-            return { poachEmailAtOnce: row.poachEmailAtOnce, sharedMailboxMemberIds: row.sharedMailboxMemberIds };
+            return {
+                poachEmailAtOnce: row.poachEmailAtOnce,
+                sharedMailboxMemberIds: row.sharedMailboxMemberIds,
+                offCrmColdAlerts: row.offCrmColdAlerts,
+            };
         });
     }
 

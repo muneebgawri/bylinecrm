@@ -2308,6 +2308,8 @@ model GuardrailSettings {
   poachEmailAtOnce       Boolean  @default(false) @map("poach_email_at_once")
   /// Members that are shared mailboxes (outreach@): leads they own count as nobody's to GUARD-1 and GUARD-2.
   sharedMailboxMemberIds String[] @default([]) @map("shared_mailbox_member_ids") @db.Uuid
+  /// GUARD-3: first-touch mail to outside addresses sent from Gmail rather than the CRM is recorded and reported.
+  offCrmColdAlerts       Boolean  @default(true) @map("off_crm_cold_alerts")
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3134,6 +3136,7 @@ enum NotificationKind {
   invoice_coverage_lost
   /// GUARD-2: a member mailed another member's lead or a customer (to the owner, managers and admins).
   guardrail_poach_suspected
+  guardrail_off_crm_cold
   /// CADENCE-1: a lead of theirs missed its cadence; it rotates after the grace (to the owner).
   cadence_warning
   /// CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).
@@ -3293,6 +3296,8 @@ enum GuardrailKind {
   /// GUARD-2: mail that left (Gmail sync or a CRM send) to another member's lead, or to a customer on the exclusions.
   poach_suspected
   pooled_customer
+  /// GUARD-3: first-touch mail to an outside address sent from Gmail, not the CRM.
+  off_crm_cold
 
   @@map("guardrail_kind")
 }

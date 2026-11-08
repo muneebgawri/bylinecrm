@@ -79,6 +79,8 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     rejected_sends: 'high',
     poach_suspected: 'medium',
     pooled_customer: 'medium',
+    // GUARD-3: the detector sets its own ladder; this is the kind's floor.
+    off_crm_cold: 'low',
 };
 
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;

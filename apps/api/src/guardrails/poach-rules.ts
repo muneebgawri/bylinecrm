@@ -1,4 +1,9 @@
-import { POACH_HIGH_LEADS, type GuardrailSeverity } from '@bylinecrm/shared';
+import {
+    OFF_CRM_COLD_HIGH_RECIPIENTS,
+    OFF_CRM_COLD_MEDIUM_RECIPIENTS,
+    POACH_HIGH_LEADS,
+    type GuardrailSeverity,
+} from '@bylinecrm/shared';
 
 /**
  * GUARD-2's rules (FR-CRMS-22), as pure functions over facts the detector read: which recipients of a message
@@ -130,4 +135,67 @@ export function poachMessage(input: {
     const when = `${input.sentAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
     const subject = input.subject.trim() === '' ? '(no subject)' : `“${input.subject.trim().slice(0, 200)}”`;
     return `${input.senderName} (${input.senderAddress}) wrote to ${input.address}${whose}, ${when}: ${subject}`;
+}
+
+/**
+ * GUARD-3: what a message that left a member's Gmail without the CRM needs to be cold mail, over the same facts as
+ * GUARD-2. The caller has already established that no CRM send is linked and the message answers nothing
+ * (`In-Reply-To` empty).
+ */
+export interface OffCrmColdFacts {
+    recipients: readonly PoachRecipient[];
+    internalDomains: ReadonlySet<string>;
+    /** Addresses that wrote in the thread before this message. */
+    threadSenders: ReadonlySet<string>;
+}
+
+export interface OffCrmColdFinding {
+    address: string;
+    personId: string | null;
+    companyId: string | null;
+}
+
+/**
+ * The outside addresses a first-touch message reached: every recipient that is neither a member nor on the
+ * workspace's own domains — unless someone outside wrote in the thread first, in which case the message is an
+ * answer, whatever its headers say, and nothing is cold. One finding per address.
+ */
+export function offCrmColdFindings(facts: OffCrmColdFacts): OffCrmColdFinding[] {
+    for (const who of facts.threadSenders) if (!isInternal(who, facts.internalDomains)) return [];
+    const seen = new Set<string>();
+    const findings: OffCrmColdFinding[] = [];
+    for (const r of facts.recipients) {
+        const address = r.address.toLowerCase();
+        if (seen.has(address)) continue;
+        seen.add(address);
+        if (r.memberId || isInternal(address, facts.internalDomains)) continue;
+        findings.push({ address, personId: r.personId, companyId: r.companyId });
+    }
+    return findings;
+}
+
+/**
+ * GUARD-3's ladder: one or two outside addresses in the window is `low` (the audit row alone; a vendor, a
+ * partner); `OFF_CRM_COLD_MEDIUM_RECIPIENTS` is `medium` (reviewers told); `OFF_CRM_COLD_HIGH_RECIPIENTS` is
+ * `high` (emailed at once, when on).
+ */
+export function offCrmColdSeverity(distinctRecipientsInWindow: number): GuardrailSeverity {
+    if (distinctRecipientsInWindow >= OFF_CRM_COLD_HIGH_RECIPIENTS) return 'high';
+    if (distinctRecipientsInWindow >= OFF_CRM_COLD_MEDIUM_RECIPIENTS) return 'medium';
+    return 'low';
+}
+
+/** What a GUARD-3 alert says: who, whom, when, the subject and the day's count — never the body. */
+export function offCrmColdMessage(input: {
+    senderName: string;
+    senderAddress: string;
+    address: string;
+    recipientsInWindow: number;
+    sentAt: Date;
+    subject: string;
+}): string {
+    const when = `${input.sentAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+    const subject = input.subject.trim() === '' ? '(no subject)' : `“${input.subject.trim().slice(0, 200)}”`;
+    const n = input.recipientsInWindow;
+    return `${input.senderName} (${input.senderAddress}) sent cold mail from Gmail, not the CRM, to ${input.address}, ${when}: ${subject} — ${n} outside ${n === 1 ? 'address' : 'addresses'} in 24 hours`;
 }

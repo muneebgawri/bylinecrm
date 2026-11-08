@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { POACH_DEDUPE_WINDOW_MS, POACH_HIGH_WINDOW_MS, POACH_LOOKBACK_MS, type DomainEvent } from '@bylinecrm/shared';
+import {
+    OFF_CRM_COLD_WINDOW_MS,
+    POACH_DEDUPE_WINDOW_MS,
+    POACH_HIGH_WINDOW_MS,
+    POACH_LOOKBACK_MS,
+    type DomainEvent,
+} from '@bylinecrm/shared';
 import { isFreeMailDomain } from '../enrichment/email-domain';
 import { DomainEvents } from '../events/domain-events.service';
 import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
@@ -14,9 +20,13 @@ import {
     domainOf,
     isCalendarMail,
     leadKey,
+    offCrmColdFindings,
+    offCrmColdMessage,
+    offCrmColdSeverity,
     poachFindings,
     poachMessage,
     poachSeverity,
+    type OffCrmColdFinding,
     type PoachFinding,
     type PoachRecipient,
 } from './poach-rules';
@@ -36,6 +46,13 @@ import { recordGuardrailEvents, reviewersIn } from './record';
  * invitations and answers are not judged; members and the workspace's own domains are internal; free-mail domains
  * never match a company; a lead a shared mailbox (outreach@, Settings → Guardrails) or a member who has left owns
  * is nobody's; pool (sequence) mail is the enrolment guard's; and one alert per sender, owner and lead within `POACH_DEDUPE_WINDOW_MS`.
+ *
+ * The same judgement is GUARD-3's (`off_crm_cold`, Settings → Guardrails, on by default): a message synced from
+ * Gmail with no CRM send linked, answering nothing, in a thread nobody outside wrote in first, is cold mail sent
+ * around the CRM. Every outside recipient is an event (the audit the Workspace compliance rule is tuned against);
+ * reviewers are told once the sender reached `OFF_CRM_COLD_MEDIUM_RECIPIENTS` outside addresses in
+ * `OFF_CRM_COLD_WINDOW_MS`, and at `high` by email too when `poachEmailAtOnce` is on. One event per (sender,
+ * address) in the window, so a bump the next morning tells nothing new.
  */
 
 @Injectable()
@@ -57,6 +74,7 @@ export class PoachDetector {
                     subject: true,
                     sentAt: true,
                     fromAddress: true,
+                    inReplyTo: true,
                     participants: { select: { role: true, address: true, personId: true, memberId: true } },
                     _count: { select: { outboundOf: true } },
                 },
@@ -75,23 +93,42 @@ export class PoachDetector {
                 where: { message: { threadId: message.threadId } },
                 select: { role: true, address: true, memberId: true, message: { select: { sentAt: true } } },
             });
+            const internal = await internalDomains(tx);
+            const threadSenders = new Set(
+                thread
+                    .filter((p) => p.role === 'from' && p.message.sentAt < message.sentAt)
+                    .map((p) => p.address.toLowerCase()),
+            );
             const findings = poachFindings({
                 senderId: sender.memberId,
                 recipients: facts,
-                internalDomains: await internalDomains(tx),
+                internalDomains: internal,
                 threadMembers: new Set(thread.flatMap((p) => (p.memberId ? [p.memberId] : []))),
-                threadSenders: new Set(
-                    thread
-                        .filter((p) => p.role === 'from' && p.message.sentAt < message.sentAt)
-                        .map((p) => p.address.toLowerCase()),
-                ),
+                threadSenders,
             });
-            if (findings.length === 0) return 0;
+            // GUARD-3: only mail that went around the CRM, and only a first touch.
+            const cold =
+                settings.offCrmColdAlerts && message._count.outboundOf === 0 && message.inReplyTo === null
+                    ? offCrmColdFindings({ recipients: facts, internalDomains: internal, threadSenders })
+                    : [];
+            if (findings.length === 0 && cold.length === 0) return 0;
 
             const context: WorkspaceRunContext = { workspaceId, capabilities: new Set() };
             let written = 0;
+            for (const finding of cold) {
+                if (await this.recentlyAlerted(tx, 'off_crm_cold', sender.memberId, finding, now)) continue;
+                const ok = await this.raiseCold(tx, context, {
+                    finding,
+                    emailAtOnce: settings.poachEmailAtOnce,
+                    sender,
+                    fromAddress,
+                    message,
+                    now,
+                });
+                if (ok) written += 1;
+            }
             for (const finding of findings) {
-                if (await this.recentlyAlerted(tx, sender.memberId, finding, now)) continue;
+                if (await this.recentlyAlerted(tx, 'poach_suspected', sender.memberId, finding, now)) continue;
                 const ok = await this.raise(tx, context, {
                     finding,
                     emailAtOnce: settings.poachEmailAtOnce,
@@ -107,24 +144,102 @@ export class PoachDetector {
         });
     }
 
-    /** One alert per (sender, owner, lead) within the dedupe window. */
+    /**
+     * One alert per (sender, owner, lead) within the dedupe window (GUARD-2), or per (sender, address) within
+     * GUARD-3's window.
+     */
     private async recentlyAlerted(
         tx: WorkspaceClient,
+        kind: 'poach_suspected' | 'off_crm_cold',
         senderId: string,
-        finding: PoachFinding,
+        finding: PoachFinding | OffCrmColdFinding,
         now: Date,
     ): Promise<boolean> {
+        const window = kind === 'poach_suspected' ? POACH_DEDUPE_WINDOW_MS : OFF_CRM_COLD_WINDOW_MS;
         const hit = await tx.guardrailEvent.findFirst({
             where: {
-                kind: 'poach_suspected',
+                kind,
                 actorMemberId: senderId,
-                ownerMemberId: finding.ownerId,
+                ...('ownerId' in finding ? { ownerMemberId: finding.ownerId } : {}),
                 ...(finding.personId ? { personId: finding.personId } : { address: finding.address }),
-                createdAt: { gte: new Date(now.getTime() - POACH_DEDUPE_WINDOW_MS) },
+                createdAt: { gte: new Date(now.getTime() - window) },
             },
             select: { id: true },
         });
         return hit !== null;
+    }
+
+    /** GUARD-3: the event for one outside recipient of a first-touch mail that went around the CRM. */
+    private async raiseCold(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        input: {
+            finding: OffCrmColdFinding;
+            /** Settings → Guardrails: a `high` alert is also emailed at once. */
+            emailAtOnce: boolean;
+            sender: { memberId: string; name: string };
+            fromAddress: string;
+            message: { id: string; threadId: string; subject: string; sentAt: Date };
+            now: Date;
+        },
+    ): Promise<boolean> {
+        const { finding, sender, message } = input;
+        const earlier = await tx.guardrailEvent.findMany({
+            where: {
+                kind: 'off_crm_cold',
+                actorMemberId: sender.memberId,
+                createdAt: { gte: new Date(input.now.getTime() - OFF_CRM_COLD_WINDOW_MS) },
+            },
+            select: { personId: true, address: true },
+        });
+        const recipients = new Set([...earlier.map(leadKey), leadKey(finding)]);
+        const severity = offCrmColdSeverity(recipients.size);
+        // `low` is the audit row alone: a vendor or a partner mailed once is nobody's concern.
+        const told = severity === 'low' ? new Set<string>() : new Set<string>(await reviewersIn(tx, sender.memberId));
+        const text = offCrmColdMessage({
+            senderName: sender.name,
+            senderAddress: input.fromAddress,
+            address: finding.address,
+            recipientsInWindow: recipients.size,
+            sentAt: message.sentAt,
+            subject: message.subject,
+        });
+        const [event] = await recordGuardrailEvents(
+            tx,
+            this.events,
+            context,
+            [
+                {
+                    kind: 'off_crm_cold',
+                    outcome: 'warned',
+                    severity,
+                    path: 'sync',
+                    actorMemberId: sender.memberId,
+                    personId: finding.personId,
+                    companyId: finding.companyId,
+                    address: finding.address,
+                    message: text,
+                    detail: {
+                        messageId: message.id,
+                        threadId: message.threadId,
+                        subject: message.subject.slice(0, 200),
+                        sentAt: message.sentAt.toISOString(),
+                        recipients: String(recipients.size),
+                    },
+                    notifiedMemberIds: [...told],
+                    dedupeKey: `off_crm_cold:${message.id}:${finding.address}`,
+                },
+            ],
+            true,
+        );
+        if (!event) return false;
+        if (told.size > 0)
+            await notify(tx, context.workspaceId, told, 'guardrail_off_crm_cold', [
+                { type: 'guardrail', id: event.id },
+            ]);
+        if (input.emailAtOnce && severity === 'high')
+            await this.emailAtOnce(tx, context.workspaceId, event.id, told, text);
+        return true;
     }
 
     private async raise(

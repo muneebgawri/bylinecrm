@@ -30,6 +30,8 @@ export const NOTIFICATION_KINDS = [
     'invoice_coverage_lost',
     // GUARD-2: a member mailed another member's lead or a customer (to the owner and reviewers).
     'guardrail_poach_suspected',
+    // GUARD-3: a member sent cold mail from Gmail instead of the CRM, several recipients in a day (to reviewers).
+    'guardrail_off_crm_cold',
     // CADENCE-1: a lead of theirs missed its cadence and rotates after the grace (to the owner).
     'cadence_warning',
     // CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).

@@ -224,6 +224,11 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         await owner.outreachExclusion.create({
             data: { workspaceId: workspace, address: `cy@cust-${stamp}.test`, reason: 'customer', source: 'won_deal' },
         });
+        // GUARD-3 is on by default; these are GUARD-2's tests, so it is off until its own test turns it on.
+        await as(admin)
+            .put(w('/guardrails/settings'))
+            .send({ poachEmailAtOnce: false, offCrmColdAlerts: false, sharedMailboxMemberIds: [] })
+            .expect(200);
     });
 
     afterAll(async () => {
@@ -295,14 +300,21 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
     it('emails a high alert at once only when an admin turned it on (Settings → Guardrails)', async () => {
         const settings = async (who: Browser) =>
             (await as(who).get(w('/guardrails/settings')).expect(200)).body as GuardrailSettingsView;
-        expect(await settings(mia)).toEqual({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] });
+        expect(await settings(mia)).toEqual({
+            poachEmailAtOnce: false,
+            offCrmColdAlerts: false,
+            sharedMailboxMemberIds: [],
+        });
         expect(
-            (await as(mia).put(w('/guardrails/settings')).send({ poachEmailAtOnce: true, sharedMailboxMemberIds: [] }))
-                .status,
+            (
+                await as(mia)
+                    .put(w('/guardrails/settings'))
+                    .send({ poachEmailAtOnce: true, offCrmColdAlerts: false, sharedMailboxMemberIds: [] })
+            ).status,
         ).toBe(403);
         await as(admin)
             .put(w('/guardrails/settings'))
-            .send({ poachEmailAtOnce: true, sharedMailboxMemberIds: [] })
+            .send({ poachEmailAtOnce: true, offCrmColdAlerts: false, sharedMailboxMemberIds: [] })
             .expect(200);
         expect((await settings(mia)).poachEmailAtOnce).toBe(true);
 
@@ -321,7 +333,7 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         expect(mailTo(emails.ana, 'guardrail_alert')).toHaveLength(0);
         await as(admin)
             .put(w('/guardrails/settings'))
-            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] })
+            .send({ poachEmailAtOnce: false, offCrmColdAlerts: false, sharedMailboxMemberIds: [] })
             .expect(200);
     });
 
@@ -332,18 +344,22 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
             (
                 await as(admin)
                     .put(w('/guardrails/settings'))
-                    .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [otherWorkspace] })
+                    .send({
+                        poachEmailAtOnce: false,
+                        offCrmColdAlerts: false,
+                        sharedMailboxMemberIds: [otherWorkspace],
+                    })
             ).status,
         ).toBe(422);
         await as(admin)
             .put(w('/guardrails/settings'))
-            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [outreachId] })
+            .send({ poachEmailAtOnce: false, offCrmColdAlerts: false, sharedMailboxMemberIds: [outreachId] })
             .expect(200);
         expect(await detector.judge(workspace, (await synced({ to: [`pooled@pooled-${stamp}.test`] })).id)).toBe(0);
         expect((await owner.person.findUniqueOrThrow({ where: { id: pooled } })).ownerId).toBe(outreachId);
         await as(admin)
             .put(w('/guardrails/settings'))
-            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] })
+            .send({ poachEmailAtOnce: false, offCrmColdAlerts: false, sharedMailboxMemberIds: [] })
             .expect(200);
         expect(await detector.judge(workspace, (await synced({ to: [`pooled@pooled-${stamp}.test`] })).id)).toBe(1);
     });
@@ -395,6 +411,53 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         expect(rows.find((r) => r.memberId === benId)).toMatchObject({ syncedVia: null, mailboxes: [] });
         expect(rows[0]!.syncedVia).toBeNull();
         expect((await as(ana).get(w('/guardrails/mailbox-coverage'))).status).toBe(403);
+    });
+
+    it('GUARD-3: flags a first touch to an outside address sent around the CRM — once per address a day, medium at three, off when turned off', async () => {
+        // On by default: a workspace that never saved settings has it.
+        expect((await as(otherAdmin).get(w('/guardrails/settings', otherWorkspace)).expect(200)).body).toMatchObject({
+            offCrmColdAlerts: true,
+        });
+        const settings = (over: { offCrmColdAlerts: boolean }) =>
+            as(admin)
+                .put(w('/guardrails/settings'))
+                .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [], ...over })
+                .expect(200);
+        await settings({ offCrmColdAlerts: true });
+        const vendor = `new@vendor-${stamp}.test`;
+        const told = () =>
+            owner.notification.count({ where: { workspaceId: workspace, kind: 'guardrail_off_crm_cold' } });
+
+        // A first touch nobody owns: GUARD-2 is silent, GUARD-3 writes the audit row — low, so nobody is told.
+        expect(await detector.judge(workspace, (await synced({ to: [vendor], subject: 'Hello there' })).id)).toBe(1);
+        const event = await owner.guardrailEvent.findFirst({
+            where: { workspaceId: workspace, kind: 'off_crm_cold', address: vendor },
+        });
+        expect(event).toMatchObject({ severity: 'low', path: 'sync', outcome: 'warned', actorMemberId: anaId });
+        expect(event!.message).toContain('from Gmail, not the CRM');
+        expect(event!.message).toContain('Hello there');
+        expect(event!.message).not.toContain(BODY);
+        expect(await told()).toBe(0);
+        // The same address again in the window tells nothing new.
+        expect(await detector.judge(workspace, (await synced({ to: [vendor] })).id)).toBe(0);
+
+        // A thread someone outside wrote in first is an answer, whatever the headers say.
+        const them = `them@partner-${stamp}.test`;
+        const inbound = await synced({ to: [emails.ana], fromAddress: them, sentAt: new Date(Date.now() - 60_000) });
+        expect(await detector.judge(workspace, (await synced({ to: [them], threadId: inbound.threadId })).id)).toBe(0);
+
+        // The third distinct outside address in a day is medium: the reviewers are told.
+        expect(await detector.judge(workspace, (await synced({ to: [`b@vendor-${stamp}.test`] })).id)).toBe(1);
+        expect(await detector.judge(workspace, (await synced({ to: [`c@vendor-${stamp}.test`] })).id)).toBe(1);
+        const third = await owner.guardrailEvent.findFirst({
+            where: { workspaceId: workspace, kind: 'off_crm_cold', address: `c@vendor-${stamp}.test` },
+        });
+        expect(third!.severity).toBe('medium');
+        expect(await told()).toBeGreaterThan(0);
+
+        // Off: the same mail raises nothing.
+        await settings({ offCrmColdAlerts: false });
+        expect(await detector.judge(workspace, (await synced({ to: [`d@vendor-${stamp}.test`] })).id)).toBe(0);
     });
 
     it('never crosses workspaces: another workspace cannot judge, read or list this one’s', async () => {
