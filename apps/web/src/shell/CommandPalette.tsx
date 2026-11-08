@@ -17,7 +17,7 @@ import { useSearch } from '../api/lists';
 import type { SearchResults } from '../api/types';
 import { useCommands, type Command } from '../commands/registry';
 import { useDebounced } from '../lib/useDebounced';
-import { paths } from '../routes/paths';
+import { paths, withCompose } from '../routes/paths';
 import { formatShortcut } from '../commands/shortcuts';
 import { PALETTE_RECENTS_KEY, PALETTE_RECENTS_LIMIT } from './storage';
 
@@ -49,10 +49,17 @@ function paletteFilter(value: string, search: string, keywords?: string[]): numb
 }
 type SearchHit = SearchResults[RecordObject][number];
 
+/**
+ * What the palette is for while open: everything, or (GUARD-3's "Start new email…") a person to write to —
+ * people only, no commands, and the pick opens their page with the composer ready.
+ */
+export type PaletteMode = 'all' | 'email';
+
 export interface CommandPaletteProps {
     workspaceId: string;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    mode?: PaletteMode;
 }
 
 /**
@@ -60,12 +67,13 @@ export interface CommandPaletteProps {
  * available registered command grouped as `PALETTE_GROUPS` orders them; "Suggested" is the
  * commands run most recently (persisted per viewer). Enter runs, Esc closes.
  */
-export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ workspaceId, open, onOpenChange, mode = 'all' }: CommandPaletteProps) {
     const all = useCommands();
+    const emailing = mode === 'email';
     const navigate = useNavigate();
     const [q, setQ] = useState('');
     const term = useDebounced(q);
-    const results = useSearch(workspaceId, open ? term : '', RECORD_OBJECTS, PALETTE_RESULTS);
+    const results = useSearch(workspaceId, open ? term : '', emailing ? ['person'] : RECORD_OBJECTS, PALETTE_RESULTS);
     // The hits arrive after typing has settled, when cmdk has already highlighted a command: the best
     // record the caller may open is highlighted instead, so Enter opens it.
     const [highlighted, setHighlighted] = useState('');
@@ -100,11 +108,12 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
         close(false);
     };
     const openHit = (hit: SearchHit) => {
+        const path = hitPath(workspaceId, hit);
         chosen.current = {
             id: `record.${hit.id}`,
             title: hit.title,
             group: 'Records',
-            run: () => navigate(hitPath(workspaceId, hit)),
+            run: () => navigate(emailing && hit.object === 'person' ? withCompose(path) : path),
         };
         close(false);
     };
@@ -124,11 +133,25 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
                 command.run();
             }}
         >
-            <CommandInput placeholder="Search for a page, a record or an action…" value={q} onValueChange={setQ} />
+            <CommandInput
+                placeholder={
+                    emailing
+                        ? 'Who do you want to email? Type a name or address…'
+                        : 'Search for a page, a record or an action…'
+                }
+                value={q}
+                onValueChange={setQ}
+            />
             <CommandList>
-                <CommandEmpty>{results.isFetching ? 'Searching…' : 'Nothing matches.'}</CommandEmpty>
+                <CommandEmpty>
+                    {results.isFetching
+                        ? 'Searching…'
+                        : emailing && q.trim() === ''
+                          ? 'Type to find a person.'
+                          : 'Nothing matches.'}
+                </CommandEmpty>
                 {q.trim() !== '' &&
-                    RECORD_GROUPS.map(({ object, heading }) => {
+                    RECORD_GROUPS.filter((g) => !emailing || g.object === 'person').map(({ object, heading }) => {
                         const hits = results.data?.[object] ?? [];
                         return (
                             hits.length > 0 && (
@@ -165,23 +188,24 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
                             )
                         );
                     })}
-                {suggested.length > 0 && (
+                {!emailing && suggested.length > 0 && (
                     <CommandGroup heading="Suggested">
                         {suggested.map((command) => (
                             <Item key={`recent-${command.id}`} command={command} onRun={run} />
                         ))}
                     </CommandGroup>
                 )}
-                {groups.map(
-                    ({ group, commands }) =>
-                        commands.length > 0 && (
-                            <CommandGroup key={group} heading={group}>
-                                {commands.map((command) => (
-                                    <Item key={command.id} command={command} onRun={run} />
-                                ))}
-                            </CommandGroup>
-                        ),
-                )}
+                {!emailing &&
+                    groups.map(
+                        ({ group, commands }) =>
+                            commands.length > 0 && (
+                                <CommandGroup key={group} heading={group}>
+                                    {commands.map((command) => (
+                                        <Item key={command.id} command={command} onRun={run} />
+                                    ))}
+                                </CommandGroup>
+                            ),
+                    )}
             </CommandList>
             <div className="flex gap-4 border-t border-border px-4.5 py-2.5 text-xs text-text-faint">
                 <span>↑↓ to move</span>

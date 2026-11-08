@@ -1,12 +1,23 @@
 import { DEFAULT_CURRENCY } from '@bylinecrm/shared';
-import { Badge, FactGrid } from '@bylinecrm/ui';
-import { ListTodo, StickyNote, Handshake, Users } from 'lucide-react';
-import { useId, useState } from 'react';
+import {
+    Badge,
+    Button,
+    Dialog,
+    DialogBody,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+    FactGrid,
+} from '@bylinecrm/ui';
+import { ListTodo, Mail, StickyNote, Handshake, Users } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
 import { usePatchRecord } from '../../../api/records';
 import type { CompanyView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { formatMoney, minorDigits, toMajor, toMinor } from '../../../lib/money';
 import { paths } from '../../paths';
+import type { ComposerPerson } from '../mail/Composer';
+import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { CompanyDomainsCard } from './CompanyDomainsCard';
 import { EnrichmentPanel } from './EnrichmentPanel';
@@ -23,7 +34,11 @@ import { TasksPanel } from './TasksPanel';
 import { TimelinePanel } from './TimelinePanel';
 import { useRecordCommands } from './useRecordCommands';
 
-/** The company record: the same frame; its timeline merges its people's; no compose box. */
+/**
+ * The company record: the same frame; its timeline merges its people's. Its compose box (GUARD-3's "Start new
+ * email") writes to one of the company's people: the only one with an address straight away, else whichever
+ * the rep picks — so a first email to a customer or prospect starts in the CRM and continues in Gmail.
+ */
 export function CompanyRecord({
     workspaceId,
     company,
@@ -48,17 +63,47 @@ export function CompanyRecord({
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
     const currency = company.arr?.currency ?? DEFAULT_CURRENCY;
 
+    const companyPeople = people.items;
+    const companyDeals = deals.items;
+
+    // Start new email: whom at this company. One person with an address needs no asking.
+    const compose = useRef<RecordComposeHandle>(null);
+    const [recipient, setRecipient] = useState<ComposerPerson | null>(null);
+    const [choosing, setChoosing] = useState(false);
+    const mailable = companyPeople.filter((p) => p.emails.primary);
+    const asRecipient = (p: (typeof mailable)[number]): ComposerPerson => ({
+        id: p.id,
+        name: personName(p),
+        email: p.emails.primary,
+        source: p.source ?? null,
+    });
+    const startEmail = () => {
+        if (recipient) return compose.current?.start();
+        if (mailable.length === 1) {
+            setRecipient(asRecipient(mailable[0]!));
+            // The composer mounts with the person on the next render; focus it then.
+            setTimeout(() => compose.current?.start(), 0);
+            return;
+        }
+        setChoosing(true);
+    };
+    const choose = (p: (typeof mailable)[number]) => {
+        setRecipient(asRecipient(p));
+        setChoosing(false);
+        setTimeout(() => compose.current?.start(), 0);
+    };
+    const noOneToEmail = people.data && mailable.length === 0;
+
     useRecordCommands({
         layout,
         onNote: write.allowed ? () => setNotesOpen(true) : undefined,
         onTask: write.allowed ? () => setTasksOpen(true) : undefined,
         onOwner: write.allowed ? () => document.getElementById(ownerId)?.focus() : undefined,
+        onCompose: noOneToEmail ? undefined : startEmail,
+        composeTitle: 'Start new email to someone here',
         prev: siblings?.prev,
         next: siblings?.next,
     });
-
-    const companyPeople = people.items;
-    const companyDeals = deals.items;
 
     const standard: PropertyRow[] = [
         {
@@ -180,6 +225,16 @@ export function CompanyRecord({
     ];
 
     const actions: RecordAction[] = [
+        {
+            id: 'email',
+            label: 'Start new email',
+            short: 'Email',
+            icon: <Mail aria-hidden />,
+            onSelect: startEmail,
+            disabled: !!noOneToEmail,
+            reason: noOneToEmail ? 'No one at this company has an email address yet.' : undefined,
+            hint: 'Write a first email to someone here (e)',
+        },
         {
             id: 'note',
             label: 'Add note',
@@ -316,7 +371,28 @@ export function CompanyRecord({
                 </>
             }
         >
+            {recipient && <RecordCompose workspaceId={workspaceId} person={recipient} handle={compose} />}
             <TimelinePanel workspaceId={workspaceId} target={target} />
+            <Dialog open={choosing} onOpenChange={setChoosing}>
+                <DialogContent>
+                    <DialogTitle>Start new email</DialogTitle>
+                    <DialogDescription>Whom at {company.name} do you want to write to?</DialogDescription>
+                    <DialogBody className="flex flex-col gap-1">
+                        {mailable.map((p) => (
+                            <Button
+                                key={p.id}
+                                type="button"
+                                variant="ghost"
+                                className="justify-start"
+                                onClick={() => choose(p)}
+                            >
+                                <span className="truncate font-medium">{personName(p)}</span>
+                                <span className="ml-2 truncate text-text-muted">{p.jobTitle ?? p.emails.primary}</span>
+                            </Button>
+                        ))}
+                    </DialogBody>
+                </DialogContent>
+            </Dialog>
         </RecordLayout>
     );
 }
