@@ -98,6 +98,7 @@ export function LeadsPipeline() {
                                         <LeadCard
                                             key={p.id}
                                             person={p}
+                                            laneIds={list.map((x) => x.id)}
                                             workspaceId={workspaceId}
                                             canMove={canWrite}
                                             moving={move.isPending && move.variables?.id === p.id}
@@ -130,12 +131,15 @@ function name(p: PersonView): string {
 
 function LeadCard({
     person,
+    laneIds,
     workspaceId,
     canMove,
     moving,
     onMove,
 }: {
     person: PersonView;
+    /** The lane's people in order: the record page's prev/next walk them. */
+    laneIds: readonly string[];
     workspaceId: string;
     canMove: boolean;
     moving: boolean;
@@ -153,6 +157,7 @@ function LeadCard({
                 <div className="min-w-0 flex-1">
                     <Link
                         to={paths.person(workspaceId, person.id)}
+                        state={{ list: { ids: laneIds } }}
                         className="block truncate text-sm font-semibold hover:underline max-md:flex max-md:min-h-touch max-md:items-center"
                     >
                         {label}
