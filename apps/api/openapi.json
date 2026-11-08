@@ -31,7 +31,8 @@
                                 "spam_rate",
                                 "rejected_sends",
                                 "poach_suspected",
-                                "pooled_customer"
+                                "pooled_customer",
+                                "off_crm_cold"
                             ]
                         }
                     },
@@ -28163,7 +28164,11 @@
                 "properties": {
                     "poachEmailAtOnce": {
                         "type": "boolean",
-                        "description": "A `high` poaching alert is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default."
+                        "description": "A `high` alert — poaching (GUARD-2) or cold mail outside the CRM (GUARD-3) — is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default."
+                    },
+                    "offCrmColdAlerts": {
+                        "type": "boolean",
+                        "description": "GUARD-3: a member’s first-touch mail to an outside address, sent from Gmail rather than through the CRM, is recorded as `off_crm_cold`; reviewers are told once a member reaches several such recipients in a day. On by default."
                     },
                     "sharedMailboxMemberIds": {
                         "maxItems": 50,
@@ -28176,7 +28181,7 @@
                         "description": "Members that are shared mailboxes (an outreach@ many people send from). Leads they own are treated as nobody’s by the recipient guard and the poaching detector — any member may mail them, with no block and no alert. Ownership is not changed. Each must be a member of the workspace."
                     }
                 },
-                "required": ["poachEmailAtOnce", "sharedMailboxMemberIds"]
+                "required": ["poachEmailAtOnce", "offCrmColdAlerts", "sharedMailboxMemberIds"]
             },
             "MarkLegitimateDto": {
                 "type": "object",
@@ -37678,7 +37683,8 @@
                             "spam_rate",
                             "rejected_sends",
                             "poach_suspected",
-                            "pooled_customer"
+                            "pooled_customer",
+                            "off_crm_cold"
                         ],
                         "description": "Why: `suppressed`, `excluded_customer` / `excluded_account_managed` (outreach exclusions), `owned_by_other` (another member’s person or company), `in_negotiation` (an open deal another member owns), `cold_to_known` (a sequence for a warm contact), `repeat_blocks` (three blocks on owned addresses by one member in a day), `poach_suspected` (GUARD-2: mail seen through sync or sent from the CRM to another member’s lead or a customer)."
                     },
@@ -37883,7 +37889,11 @@
                 "properties": {
                     "poachEmailAtOnce": {
                         "type": "boolean",
-                        "description": "A `high` poaching alert is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default."
+                        "description": "A `high` alert — poaching (GUARD-2) or cold mail outside the CRM (GUARD-3) — is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default."
+                    },
+                    "offCrmColdAlerts": {
+                        "type": "boolean",
+                        "description": "GUARD-3: a member’s first-touch mail to an outside address, sent from Gmail rather than through the CRM, is recorded as `off_crm_cold`; reviewers are told once a member reaches several such recipients in a day. On by default."
                     },
                     "sharedMailboxMemberIds": {
                         "maxItems": 50,
@@ -37896,7 +37906,7 @@
                         "description": "Members that are shared mailboxes (an outreach@ many people send from). Leads they own are treated as nobody’s by the recipient guard and the poaching detector — any member may mail them, with no block and no alert. Ownership is not changed. Each must be a member of the workspace."
                     }
                 },
-                "required": ["poachEmailAtOnce", "sharedMailboxMemberIds"]
+                "required": ["poachEmailAtOnce", "offCrmColdAlerts", "sharedMailboxMemberIds"]
             },
             "BylineSettings": {
                 "type": "object",
@@ -41462,6 +41472,7 @@
                                         "invoice_needs_review",
                                         "invoice_coverage_lost",
                                         "guardrail_poach_suspected",
+                                        "guardrail_off_crm_cold",
                                         "cadence_warning",
                                         "cadence_rotated",
                                         "payment_needs_deal",
@@ -41471,7 +41482,7 @@
                                         "email_clicked",
                                         "email_opened"
                                     ],
-                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM. `email_replied`: someone replied to an email you sent from the CRM (a follow-up or sequence step included) — every reply. `email_clicked`: a link in it was clicked (once per send). `email_opened`: it was opened (once per send; approximate, as mail apps preload images)."
+                                    "description": "`task_assigned`: someone else assigned the task to you (a sequence’s task step included). `task_due`: it came due. `transfer_*` (OWN-1): a record offered to you, your offer decided, or a manager moved a record to or from you. `guardrail_repeat_blocks` (GUARD-1): a member was stopped three times in a day from mailing others’ leads. `guardrail_alert` (REP-1): a sender-reputation finding about your mailbox, or (at high severity) a member’s. `invoice_needs_review` (INV-1): an invoice on a deal waits for finance. `invoice_coverage_lost` (INV-1): a refund left a deal’s verified invoices short of its amount. `guardrail_poach_suspected` (GUARD-2): a member mailed your lead, or (as a reviewer) another member’s lead or a customer. `guardrail_off_crm_cold` (GUARD-3, reviewers): a member sent cold mail from Gmail rather than through the CRM to several outside addresses in a day. `cadence_warning` (CADENCE-1): a lead of yours missed its follow-up cadence and rotates after the grace unless touched. `cadence_rotated` (CADENCE-1): a lead was rotated to the next rep (its `transfer`). `payment_needs_deal` (INV-2): a client of yours paid and has several open deals — choose which. `payment_created_deal` (INV-2): a client of yours paid with no open deal, so one was made. `payment_unmatched` (INV-2): NewswireOS reported a payment from no one in the CRM. `email_replied`: someone replied to an email you sent from the CRM (a follow-up or sequence step included) — every reply. `email_clicked`: a link in it was clicked (once per send). `email_opened`: it was opened (once per send; approximate, as mail apps preload images)."
                                 },
                                 "target": {
                                     "type": "object",
@@ -41638,7 +41649,8 @@
                                                 "spam_rate",
                                                 "rejected_sends",
                                                 "poach_suspected",
-                                                "pooled_customer"
+                                                "pooled_customer",
+                                                "off_crm_cold"
                                             ]
                                         },
                                         "actor": {

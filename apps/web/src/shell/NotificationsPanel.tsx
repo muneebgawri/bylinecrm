@@ -36,6 +36,7 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     invoice_needs_review: 'Invoice waiting for finance',
     invoice_coverage_lost: 'Refund: deal no longer paid in full',
     guardrail_poach_suspected: 'Another member’s lead mailed',
+    guardrail_off_crm_cold: 'Cold mail outside the CRM',
     cadence_warning: 'Follow-up overdue',
     cadence_rotated: 'Lead rotated',
     payment_needs_deal: 'Payment received: which deal?',
@@ -60,6 +61,7 @@ const KIND_LOOK: Record<Item['kind'], { icon: ReactNode; tone: Tone }> = {
     invoice_needs_review: { icon: <CircleDollarSign />, tone: 'warning' },
     invoice_coverage_lost: { icon: <CircleDollarSign />, tone: 'danger' },
     guardrail_poach_suspected: { icon: <ShieldAlert />, tone: 'danger' },
+    guardrail_off_crm_cold: { icon: <ShieldAlert />, tone: 'danger' },
     cadence_warning: { icon: <CalendarClock />, tone: 'warning' },
     cadence_rotated: { icon: <ArrowRightLeft />, tone: 'neutral' },
     payment_needs_deal: { icon: <CircleDollarSign />, tone: 'warning' },
@@ -208,7 +210,12 @@ export function NotificationsPanel({
 function guardrailLine(item: Item): string {
     const g = item.guardrail!;
     // GUARD-2: who, whom, when and the subject — the event's own words; never the body.
-    if (item.kind === 'guardrail_alert' || item.kind === 'guardrail_poach_suspected') return g.message;
+    if (
+        item.kind === 'guardrail_alert' ||
+        item.kind === 'guardrail_poach_suspected' ||
+        item.kind === 'guardrail_off_crm_cold'
+    )
+        return g.message;
     return `${g.actor?.name ?? 'A member'} was stopped ${g.count} times today from mailing others’ leads`;
 }
 

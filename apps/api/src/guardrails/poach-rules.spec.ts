@@ -1,3 +1,4 @@
+import { OFF_CRM_COLD_HIGH_RECIPIENTS, OFF_CRM_COLD_MEDIUM_RECIPIENTS } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 import { syncedMembers, type SyncSource } from './mailbox-coverage';
@@ -5,9 +6,13 @@ import { effectiveOwner } from './guardrail-settings';
 import {
     isCalendarMail,
     isInternal,
+    offCrmColdFindings,
+    offCrmColdMessage,
+    offCrmColdSeverity,
     poachFindings,
     poachMessage,
     poachSeverity,
+    type OffCrmColdFacts,
     type PoachFacts,
     type PoachRecipient,
 } from './poach-rules';
@@ -179,5 +184,61 @@ describe('GUARD-1/2 shared mailboxes', () => {
         expect(
             poachFindings(facts({ recipients: [recipient({ ownerId: effectiveOwner('outreach', shared) })] })),
         ).toEqual([]);
+    });
+});
+
+describe('GUARD-3 cold mail outside the CRM', () => {
+    const cold = (over: Partial<OffCrmColdFacts> = {}): OffCrmColdFacts => ({
+        recipients: [
+            recipient({ ownerId: X }),
+            recipient({ address: 'eli@other.com', personId: null, companyId: null }),
+        ],
+        internalDomains: new Set(['byline.example']),
+        threadSenders: new Set(),
+        ...over,
+    });
+
+    it('flags every outside recipient of a first-touch mail, the sender’s own leads included', () => {
+        expect(offCrmColdFindings(cold())).toEqual([
+            { address: 'dana@acme.com', personId: 'person-1', companyId: 'company-1' },
+            { address: 'eli@other.com', personId: null, companyId: null },
+        ]);
+    });
+
+    it('flags nothing once someone outside wrote in the thread first (an answer, whatever the headers)', () => {
+        expect(offCrmColdFindings(cold({ threadSenders: new Set(['dana@acme.com']) }))).toEqual([]);
+        // A colleague writing first does not make it an answer.
+        expect(offCrmColdFindings(cold({ threadSenders: new Set(['ana@byline.example']) }))).toHaveLength(2);
+    });
+
+    it('ignores members and the workspace’s own domains, and counts an address once', () => {
+        const recipients = [
+            recipient({ address: 'ana@byline.example' }),
+            recipient({ address: 'mia@elsewhere.com', memberId: Y }),
+            recipient({ address: 'Dana@acme.com' }),
+            recipient({ address: 'dana@acme.com' }),
+        ];
+        expect(offCrmColdFindings(cold({ recipients }))).toHaveLength(1);
+    });
+
+    it('climbs the ladder by distinct outside addresses in the window', () => {
+        expect(offCrmColdSeverity(1)).toBe('low');
+        expect(offCrmColdSeverity(OFF_CRM_COLD_MEDIUM_RECIPIENTS)).toBe('medium');
+        expect(offCrmColdSeverity(OFF_CRM_COLD_HIGH_RECIPIENTS)).toBe('high');
+    });
+
+    it('says who, whom, when, the subject and the count — never the body', () => {
+        expect(
+            offCrmColdMessage({
+                senderName: 'Sam',
+                senderAddress: 'sam@byline.example',
+                address: 'dana@acme.com',
+                recipientsInWindow: 4,
+                sentAt: new Date('2026-11-08T09:30:00Z'),
+                subject: ' Quick question ',
+            }),
+        ).toBe(
+            'Sam (sam@byline.example) sent cold mail from Gmail, not the CRM, to dana@acme.com, 2026-11-08 09:30 UTC: “Quick question” — 4 outside addresses in 24 hours',
+        );
     });
 });

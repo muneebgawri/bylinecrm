@@ -21,6 +21,7 @@ import { labelled, labelTargets } from './task-labels';
 /** GUARD-2: the guardrail notifications a digest lists — those of the last day, once each. */
 const DIGEST_ALERT_KINDS = [
     'guardrail_poach_suspected',
+    'guardrail_off_crm_cold',
     'cadence_warning',
 ] as const satisfies readonly NotificationKind[];
 const DAY_MS = 24 * 60 * 60 * 1000;
