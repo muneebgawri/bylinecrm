@@ -454,6 +454,21 @@ function ComposerForm({
     };
     const changeFollowUp = (key: string, change: Partial<FollowUpDraft>) =>
         setFollowUps((list) => list.map((f) => (f.key === key ? { ...f, ...change } : f)));
+    // A follow-up filled from a template (the 2nd, 3rd, 4th nudge each have their own): its body, under the
+    // thread's subject. The editor takes its content when it mounts, so the row remounts (`fills`).
+    const [fills, setFills] = useState<Record<string, number>>({});
+    const applyFollowUpTemplate = async (key: string, template: EmailTemplateView) => {
+        setError(null);
+        try {
+            const rendered = await preview.mutateAsync(template);
+            setMissing((m) => [...new Set([...m, ...rendered.missing])]);
+        } catch (e) {
+            setError(`The template could not be checked for ${person.name}: ${failureText(e)}`);
+            return;
+        }
+        changeFollowUp(key, { body: template.body });
+        setFills((f) => ({ ...f, [key]: (f[key] ?? 0) + 1 }));
+    };
 
     /** Back to an empty composer: after a send, or a draft discarded. */
     const reset = () => {
@@ -725,11 +740,14 @@ function ComposerForm({
                 <ol aria-label="Follow-ups" className="m-0 list-none border-t border-border p-0">
                     {followUps.map((f, index) => (
                         <FollowUpRow
-                            key={`${f.key}-${generation}`}
+                            key={`${f.key}-${generation}-${fills[f.key] ?? 0}`}
+                            workspaceId={workspaceId}
                             followUp={f}
                             number={index + 1}
                             threadSubject={threadSubject}
                             missing={missing}
+                            templatePending={preview.isPending}
+                            onTemplate={(t) => void applyFollowUpTemplate(f.key, t)}
                             onChange={(change) => changeFollowUp(f.key, change)}
                             onRemove={() => setFollowUps((list) => list.filter((x) => x.key !== f.key))}
                         />
@@ -854,17 +872,24 @@ function ComposerForm({
  * to the email before it, and not at all if the person answers first.
  */
 function FollowUpRow({
+    workspaceId,
     followUp,
     number,
     threadSubject,
     missing,
+    templatePending,
+    onTemplate,
     onChange,
     onRemove,
 }: {
+    workspaceId: string;
     followUp: FollowUpDraft;
     number: number;
     threadSubject: string;
     missing: readonly string[];
+    templatePending: boolean;
+    /** Fill this follow-up from a personal template (its body; the subject stays the thread's). */
+    onTemplate: (template: EmailTemplateView) => void;
     onChange: (change: Partial<FollowUpDraft>) => void;
     onRemove: () => void;
 }) {
@@ -887,11 +912,18 @@ function FollowUpRow({
                 <span id={`${id}-zone`} className="text-xs">
                     {zone} · unless they answer first
                 </span>
+                <span className="ml-auto flex items-center gap-1">
+                    <TemplateMenu
+                        workspaceId={workspaceId}
+                        pending={templatePending}
+                        label={`Template for follow-up ${number}`}
+                        onPick={onTemplate}
+                    />
+                </span>
                 <Button
                     size="xs"
                     shape="square"
                     variant="ghost"
-                    className="ml-auto"
                     aria-label={`Remove follow-up ${number}`}
                     onClick={onRemove}
                 >
@@ -1102,10 +1134,13 @@ function RecipientAdder({
 function TemplateMenu({
     workspaceId,
     pending,
+    label,
     onPick,
 }: {
     workspaceId: string;
     pending: boolean;
+    /** The trigger's accessible name when several menus share a composer ("Template for follow-up 2"). */
+    label?: string;
     onPick: (template: EmailTemplateView) => void;
 }) {
     const [open, setOpen] = useState(false);
@@ -1118,7 +1153,14 @@ function TemplateMenu({
             onOpenChange={setOpen}
             widthClass="w-[min(22rem,calc(100vw-2rem))]"
             trigger={
-                <Button size="xs" shape="square" variant="ghost" loading={pending} aria-haspopup="dialog">
+                <Button
+                    size="xs"
+                    shape="square"
+                    variant="ghost"
+                    loading={pending}
+                    aria-haspopup="dialog"
+                    {...(label ? { 'aria-label': label } : {})}
+                >
                     <FileText aria-hidden />
                     Template
                 </Button>
