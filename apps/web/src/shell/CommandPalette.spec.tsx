@@ -6,12 +6,13 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../api/queries';
 import { commands } from '../commands/registry';
-import { CommandPalette } from './CommandPalette';
+import { CommandPalette, type PaletteMode } from './CommandPalette';
 
 const WS = '11111111-2222-4333-8444-555555555555';
 
 function Where() {
-    return <span data-testid="where">{useLocation().pathname}</span>;
+    const location = useLocation();
+    return <span data-testid="where">{location.pathname + location.search}</span>;
 }
 
 function render(ui: ReactElement) {
@@ -35,7 +36,13 @@ function render(ui: ReactElement) {
 }
 
 /** The palette as the shell holds it: open until a command closes it. */
-function Palette({ onOpenChange = () => undefined }: { onOpenChange?: (open: boolean) => void }) {
+function Palette({
+    onOpenChange = () => undefined,
+    mode,
+}: {
+    onOpenChange?: (open: boolean) => void;
+    mode?: PaletteMode;
+}) {
     const [open, setOpen] = useState(true);
     return (
         <CommandPalette
@@ -45,6 +52,7 @@ function Palette({ onOpenChange = () => undefined }: { onOpenChange?: (open: boo
                 setOpen(next);
                 onOpenChange(next);
             }}
+            {...(mode ? { mode } : {})}
         />
     );
 }
@@ -97,6 +105,43 @@ describe('CommandPalette', () => {
         expect(String(fetchMock.mock.calls[0]?.[0])).toContain('q=matt%40ac');
         await user.click(screen.getByText('Matt Smith'));
         await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(`/w/${WS}/people/p1`));
+    });
+
+    it('GUARD-3 “Start new email…”: in email mode lists people only and opens the pick with the composer ready', async () => {
+        const user = userEvent.setup();
+        const fetchMock = vi.fn(
+            async (_input: string) =>
+                new Response(
+                    JSON.stringify({
+                        person: [
+                            {
+                                object: 'person',
+                                id: 'p1',
+                                title: 'Matt Smith',
+                                subtitle: 'matt@acme.com',
+                                owner: { memberId: 'm1', name: 'Jonah Reid', leftAt: null },
+                                canOpen: true,
+                            },
+                        ],
+                        company: [],
+                        opportunity: [],
+                    }),
+                    { status: 200, headers: { 'Content-Type': 'application/json' } },
+                ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const off = commands.registerMany([
+            { id: 'nav.people', title: 'People', group: 'Go to', shortcut: 'g p', run: () => undefined },
+        ]);
+        render(<Palette mode="email" />);
+
+        expect(await screen.findByPlaceholderText(/Who do you want to email/)).toBeInTheDocument();
+        expect(screen.queryByText('Go to')).not.toBeInTheDocument();
+        await user.type(screen.getByRole('combobox'), 'matt');
+        await user.click(await screen.findByText('Matt Smith'));
+        await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(`/w/${WS}/people/p1?compose=1`));
+        expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('company');
+        off();
     });
 
     it('lists registered commands by group, runs one on select, and remembers it as suggested', async () => {

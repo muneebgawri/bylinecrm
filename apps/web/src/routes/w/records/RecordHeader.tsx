@@ -1,7 +1,7 @@
 import { Avatar, Button, cn } from '@bylinecrm/ui';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 export interface RecordHeaderProps {
     name: string;
@@ -37,6 +37,8 @@ export function RecordHeader({
     layout,
     className,
 }: RecordHeaderProps) {
+    // The list the record came from rides along, so prev/next keep working after the first step.
+    const listState = useLocation().state as unknown;
     return (
         <header
             className={cn(
@@ -45,9 +47,9 @@ export function RecordHeader({
                 className,
             )}
         >
-            {layout === 'page' && (back || siblings) && (
+            {((layout === 'page' && back) || siblings) && (
                 <div className="flex items-center gap-1">
-                    {back && (
+                    {layout === 'page' && back && (
                         <Button asChild variant="ghost" size="sm" shape="square" className="-ml-2 text-text-muted">
                             <Link to={back.to}>
                                 <ChevronLeft aria-hidden className="size-4" />
@@ -68,7 +70,7 @@ export function RecordHeader({
                                 aria-label="Previous record"
                             >
                                 {siblings.prev ? (
-                                    <Link to={siblings.prev}>
+                                    <Link to={siblings.prev} state={listState}>
                                         <ChevronLeft aria-hidden className="size-4" />
                                     </Link>
                                 ) : (
@@ -85,7 +87,7 @@ export function RecordHeader({
                                 aria-label="Next record"
                             >
                                 {siblings.next ? (
-                                    <Link to={siblings.next}>
+                                    <Link to={siblings.next} state={listState}>
                                         <ChevronRight aria-hidden className="size-4" />
                                     </Link>
                                 ) : (
