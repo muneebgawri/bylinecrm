@@ -98,6 +98,7 @@ import type {
     MyTaskView,
     NotificationSettingsView,
     NotificationsView,
+    QuoSettingsView,
 } from '../src/api/types';
 
 /**
@@ -2163,6 +2164,16 @@ export const newswireosDealWonDeliveries: NewswireosDealWonDeliveryView[] = [
 ];
 
 /** The BylineAI link (BYL-1): linked, two members dealt leads in turn, a lead heard from. */
+export const quoSettings: QuoSettingsView = {
+    configured: true,
+    webhookUrl: 'https://crm.example.com/api/w/0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b/inbound/quo',
+    webhookRegistered: true,
+    matchedMemberIds: members.slice(0, 2).map((m) => m.id),
+    unmatchedQuoEmails: ['ops@quo.example'],
+    lastDeliveryAt: at(2),
+    lastDeliveryResult: 'recorded',
+};
+
 export const bylineSettings: BylineSettingsView = {
     configured: true,
     apiConfigured: true,

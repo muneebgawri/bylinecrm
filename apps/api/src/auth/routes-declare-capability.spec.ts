@@ -60,9 +60,9 @@ describe('tenant routes declare a capability', () => {
         expect(requiredCapabilities(bulk?.capability)).toEqual(['deal:bulk', 'deal:edit']);
     });
 
-    it('the signed inbound receivers, which no member calls, are exactly these (BYL-1)', () => {
+    it('the signed inbound receivers, which no member calls, are exactly these (BYL-1, CALL-1)', () => {
         const inbound = routes.filter((r) => typeof r.inboundReason === 'string').map((r) => r.route);
-        expect(inbound).toEqual(['BylineInboundController.receive']);
+        expect(inbound.sort()).toEqual(['BylineInboundController.receive', 'QuoHookController.receive']);
     });
 
     it('the routes open to any member are exactly the ones about the caller themselves', () => {

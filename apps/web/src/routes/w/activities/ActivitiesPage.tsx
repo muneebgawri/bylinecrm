@@ -28,6 +28,7 @@ import {
     Pencil,
     Search,
     SquareCheck,
+    PhoneCall,
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -59,6 +60,7 @@ const ICON: Record<TimelineWords['family'], { icon: ReactNode; tone: Tone }> = {
     external: { icon: <DollarSign />, tone: 'success' },
     mail: { icon: <Mail />, tone: 'accent' },
     meeting: { icon: <CalendarDays />, tone: 'info' },
+    call: { icon: <PhoneCall />, tone: 'accent' },
 };
 
 /**

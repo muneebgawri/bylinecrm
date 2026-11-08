@@ -22,6 +22,7 @@ import {
     Paperclip,
     Pencil,
     SquareCheck,
+    PhoneCall,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
@@ -46,6 +47,7 @@ const FILTERS = [
     { id: 'external', label: 'External', kinds: 'external.' },
     { id: 'emails', label: 'Emails', kinds: 'linked-email' },
     { id: 'meetings', label: 'Meetings', kinds: 'linked-meeting' },
+    { id: 'calls', label: 'Calls', kinds: 'linked-call' },
 ] as const;
 
 const ICON: Record<TimelineWords['family'], { icon: React.ReactNode; tone: Tone }> = {
@@ -57,6 +59,7 @@ const ICON: Record<TimelineWords['family'], { icon: React.ReactNode; tone: Tone 
     external: { icon: <DollarSign />, tone: 'success' },
     mail: { icon: <Mail />, tone: 'accent' },
     meeting: { icon: <CalendarDays />, tone: 'info' },
+    call: { icon: <PhoneCall />, tone: 'accent' },
 };
 
 /**

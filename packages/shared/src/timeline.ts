@@ -30,6 +30,7 @@ export const LINKED_OBJECTS = [
     'meeting',
     'transfer',
     'invoice',
+    'call',
 ] as const;
 export type LinkedObject = (typeof LINKED_OBJECTS)[number];
 
