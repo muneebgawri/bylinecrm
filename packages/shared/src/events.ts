@@ -9,6 +9,7 @@ import type { SuppressionEventPayload } from './suppression.js';
 import type { GuardrailEventPayload } from './guardrails.js';
 import type { TransferEventPayload } from './transfers.js';
 import type { InvoiceEventPayload } from './invoices.js';
+import type { CallSummary } from './calls.js';
 
 /**
  * The objects an event can be about: the record objects, the things attached to them, and the
@@ -31,6 +32,7 @@ export const EVENT_OBJECTS = [
     'transfer',
     'invoice',
     'guardrail',
+    'call',
 ] as const;
 export type EventObject = (typeof EVENT_OBJECTS)[number];
 
@@ -178,6 +180,10 @@ export const DOMAIN_EVENT_TYPES = [
     // moves it then and not before.
     'invoice.verified',
     'invoice.invalidated',
+    // CALL-1: a call Quo reported or a member logged (`targets`: the person), and a later change to it — the
+    // outcome written down, Quo's recording, summary or transcript arriving.
+    'call.logged',
+    'call.updated',
     // Part of a verified invoice was refunded (INV-1): it still counts, net of the refund (`invoice` has both amounts).
     'invoice.refunded',
     // Guardrails (GUARD-1b, FR-CRMS-21): `recordId` is the guardrail event, `guardrail` what happened — a send,
@@ -256,6 +262,8 @@ interface DomainEventBase {
     tracking?: EmailTrackingPayload;
     /** Present on `meeting.*`: the meeting, without its description. */
     meeting?: MeetingSummary;
+    /** Present on `call.*` (CALL-1): the call, without its transcript or note. */
+    call?: CallSummary;
     /** Present on `transfer.*`: what moves, from whom to whom, and the identities a receiver matches on. */
     transfer?: TransferEventPayload;
     /** Present on `invoice.*`: the invoice, and whether the deal's verified invoices now cover its amount. */

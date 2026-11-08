@@ -1,6 +1,6 @@
 import { Badge, FactGrid, toast } from '@bylinecrm/ui';
 import { CONTACT_STATUS_LABELS, CONTACT_STATUSES, type ContactStatus } from '@bylinecrm/shared';
-import { Building2, Handshake, ListTodo, Mail, Send, StickyNote } from 'lucide-react';
+import { Building2, Handshake, ListTodo, Mail, Phone, Send, StickyNote } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useSetContactStatus } from '../../../api/customers';
@@ -15,6 +15,7 @@ import { paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AskIntroduction } from './AskIntroduction';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { CallPanel } from './CallPanel';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
@@ -71,6 +72,8 @@ export function PersonRecord({
     const [tasksOpen, setTasksOpen] = useState(false);
     const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState(false);
+    // CALL-1: "Call" opens the number in Quo and the call-notes panel.
+    const [calling, setCalling] = useState(false);
     const compose = useRef<RecordComposeHandle>(null);
     // GUARD-1: another member's lead is theirs to mail; anyone else asks them for an introduction.
     const membership = useMembership();
@@ -344,6 +347,16 @@ export function PersonRecord({
               ]
             : []),
         {
+            id: 'call',
+            label: 'Call',
+            short: 'Call',
+            icon: <Phone aria-hidden />,
+            onSelect: () => setCalling(true),
+            disabled: !person.phones.primary,
+            reason: person.phones.primary ? undefined : 'No phone number on this person.',
+            hint: 'Call in Quo and take notes',
+        },
+        {
             id: 'email',
             label: othersLead ? 'Ask for an introduction' : 'Email',
             short: othersLead ? 'Intro' : 'Email',
@@ -545,6 +558,14 @@ export function PersonRecord({
                 />
             )}
             <TimelinePanel workspaceId={workspaceId} target={target} />
+            <CallPanel
+                workspaceId={workspaceId}
+                personId={person.id}
+                personName={personName(person)}
+                phone={person.phones.primary}
+                open={calling}
+                onOpenChange={setCalling}
+            />
             {enrolling && (
                 <EnrolDialog
                     workspaceId={workspaceId}
