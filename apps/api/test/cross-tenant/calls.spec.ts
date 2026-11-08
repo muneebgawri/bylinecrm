@@ -29,6 +29,17 @@ function browserFrom(res: Response): Browser {
 
 const KEY = Buffer.from('calls-spec-signing-key-32-bytes!').toString('base64');
 
+/** Asks again, briefly, for what a consumer writes after the request was answered; the last answer when it never comes. */
+async function eventually<T>(read: () => Promise<T | null>, tries = 40, gapMs = 250): Promise<T | null> {
+    let last: T | null = null;
+    for (let i = 0; i < tries; i += 1) {
+        last = await read();
+        if (last !== null) return last;
+        await new Promise((r) => setTimeout(r, gapMs));
+    }
+    return last;
+}
+
 /** Quo as the suite sees it: the admin's user, one webhook, and the calls the test puts there. */
 class FakeQuo implements QuoApi {
     calls = new Map<string, QuoCall>();
@@ -186,10 +197,14 @@ describe('CALL-1 calls with Quo', () => {
         const after = await owner.call.findUniqueOrThrow({ where: { id: call.id } });
         expect(after.recordings).toEqual([{ url: 'https://recordings.example/r1.mp3', durationSec: 90 }]);
         expect(await owner.call.count({ where: { workspaceId: workspace, externalId: 'AC1' } })).toBe(1);
-        const timeline = await as(admin)
-            .get(w(`/timeline?targetType=person&targetId=${personId}&kinds=linked-call`))
-            .expect(200);
-        const kinds = ((timeline.body as { items: { kind: string }[] }).items ?? []).map((i) => i.kind);
+        // The timeline is written by the outbox consumer a moment after the delivery was answered.
+        const kinds = await eventually(async () => {
+            const timeline = await as(admin)
+                .get(w(`/timeline?targetType=person&targetId=${personId}&kinds=linked-call`))
+                .expect(200);
+            const found = ((timeline.body as { items: { kind: string }[] }).items ?? []).map((i) => i.kind);
+            return found.includes('linked-call.logged') && found.includes('linked-call.updated') ? found : null;
+        });
         expect(kinds).toContain('linked-call.logged');
         expect(kinds).toContain('linked-call.updated');
     });
