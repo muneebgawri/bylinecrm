@@ -12,8 +12,11 @@ function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+/** The workspace's `pr_link` field, as the custom-fields list returns it. */
+const PR_LINK_FIELD = { key: 'pr_link', label: 'Pr link', type: 'url', options: [], required: false, archivedAt: null };
+
 /** The address check answers `holder`; a create answers a new person. Every call is kept. */
-function stubApi(holder: { ownerName: string | null; trashed: boolean } | null) {
+function stubApi(holder: { ownerName: string | null; trashed: boolean } | null, fields: unknown[] = []) {
     const calls: { method: string; url: string; body: unknown }[] = [];
     vi.stubGlobal(
         'fetch',
@@ -22,6 +25,7 @@ function stubApi(holder: { ownerName: string | null; trashed: boolean } | null) 
             const method = init?.method ?? 'GET';
             calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
             if (url.includes('/people/address-check')) return json({ available: holder === null, holder });
+            if (url.includes('/custom-fields')) return json(fields);
             if (method === 'POST' && url.split('?')[0]!.endsWith('/people')) return json({ id: 'p9' }, 201);
             return json({});
         }),
@@ -55,7 +59,7 @@ describe('Add person: the address first', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Jane Doe already has this person.');
         expect(screen.queryByLabelText(/First name/)).toBeNull();
         expect(calls.some((c) => c.method === 'POST')).toBe(false);
-        expect(calls[0]!.url).toContain('email=dyoung%40ftrintel.com');
+        expect(calls.find((c) => c.url.includes('/address-check'))!.url).toContain('email=dyoung%40ftrintel.com');
     });
 
     it('a free address opens the details, and the person is saved with them', async () => {
@@ -82,6 +86,28 @@ describe('Add person: the address first', () => {
         renderDialog();
         await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
         expect(await screen.findByLabelText(/First name/)).toBeInTheDocument();
-        expect(calls).toHaveLength(0);
+        expect(calls.some((c) => c.url.includes('/address-check'))).toBe(false);
+    });
+
+    it('the PR link is saved with the lead where the workspace has the field', async () => {
+        const calls = stubApi(null, [PR_LINK_FIELD]);
+        renderDialog();
+        await userEvent.type(screen.getByLabelText(/Email/), 'new@lead.example');
+        await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        await userEvent.type(await screen.findByLabelText(/Pr link/), 'https://www.prweb.com/x');
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+        expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({
+            custom: { pr_link: 'https://www.prweb.com/x' },
+        });
+    });
+
+    it('no PR link box where the workspace has no such field', async () => {
+        stubApi(null);
+        renderDialog();
+        await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
+        expect(await screen.findByLabelText(/First name/)).toBeInTheDocument();
+        expect(screen.queryByLabelText(/Pr link/)).toBeNull();
     });
 });

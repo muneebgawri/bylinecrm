@@ -21,9 +21,10 @@ import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
-import { people } from '../../../api/records';
+import { people, useCustomFields } from '../../../api/records';
 import type { AddressCheckView, BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
 import { failureText } from '../../../lib/errors';
+import { PR_LINK_KEY } from '../records/PersonRecord';
 import { LIST_COPY, type ListObject } from './listConfig';
 
 /** The shared dialog and message, re-exported where the lists and the deals page already read them. */
@@ -206,6 +207,7 @@ export function CreateRecordDialog<O extends ListObject>({
     const [jobTitle, setJobTitle] = useState('');
     const [phone, setPhone] = useState('');
     const [extension, setExtension] = useState('');
+    const [prLinkValue, setPrLinkValue] = useState('');
     /** A person's step: the address first, then the rest once it is known to be free (or left out). */
     const [step, setStep] = useState<'email' | 'details'>('email');
     const [checking, setChecking] = useState(false);
@@ -215,6 +217,10 @@ export function CreateRecordDialog<O extends ListObject>({
     const copy = LIST_COPY[object];
     const person = object === 'person';
     const askingEmail = person && step === 'email';
+    // The PR link a lead is saved with: only where the workspace has the field (`pr_link`, as on the record).
+    const prLink = useCustomFields(workspaceId, 'person').data?.find(
+        (d) => d.key === PR_LINK_KEY && d.archivedAt === null,
+    );
 
     const checkEmail = async () => {
         const address = email.trim();
@@ -258,6 +264,7 @@ export function CreateRecordDialog<O extends ListObject>({
                             },
                         }
                       : {}),
+                  ...(prLink && prLinkValue.trim() ? { custom: { [prLink.key]: prLinkValue.trim() } } : {}),
                   ...(handToOwner ? { handToOwner: true } : {}),
               }
             : { name: a.trim(), ...(b.trim() ? { domain: b.trim() } : {}) };
@@ -356,6 +363,17 @@ export function CreateRecordDialog<O extends ListObject>({
                                 <Field label="Last name">
                                     <Input value={b} onChange={(e) => setB(e.target.value)} autoComplete="off" />
                                 </Field>
+                                {prLink && (
+                                    <Field label={prLink.label}>
+                                        <Input
+                                            type="url"
+                                            value={prLinkValue}
+                                            onChange={(e) => setPrLinkValue(e.target.value)}
+                                            placeholder="https://"
+                                            autoComplete="off"
+                                        />
+                                    </Field>
+                                )}
                                 <Field label="Job title">
                                     <Input
                                         value={jobTitle}
