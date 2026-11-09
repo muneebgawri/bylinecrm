@@ -23,6 +23,7 @@ import {
     UserCheck,
     Users,
     Workflow,
+    Phone,
 } from 'lucide-react';
 import { paths } from '../routes/paths';
 import type { NavGroup, NavItem } from './nav';
@@ -253,6 +254,15 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
                 label: 'BylineAI',
                 description: 'Where BylineAI’s leads come in and which reps they go to.',
                 to: paths.settingsByline,
+                requires: 'workspace:admin',
+            },
+            // Calls with Quo (CALL-1): the API key registers the webhook; members are matched to Quo's users.
+            {
+                id: 'quo',
+                icon: Phone,
+                label: 'Quo',
+                description: 'Calls: the Quo link, and which members Quo’s users are.',
+                to: paths.settingsQuo,
                 requires: 'workspace:admin',
             },
         ],

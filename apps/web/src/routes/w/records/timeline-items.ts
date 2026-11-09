@@ -24,7 +24,7 @@ export interface TimelineWords {
     /** "updated the record", "added a note", "paid an order" */
     action: string;
     /** `note`, `task`, `attachment`, `stage`, `external`, `record` — the marker's icon family. */
-    family: 'record' | 'note' | 'task' | 'attachment' | 'stage' | 'external' | 'mail' | 'meeting';
+    family: 'record' | 'note' | 'task' | 'attachment' | 'stage' | 'external' | 'mail' | 'meeting' | 'call';
     /** The entry's origin when it is shown on a merged (company) timeline. */
     origin?: string;
     /** Supporting chips: a field diff, a stage move, an amount. */
@@ -93,6 +93,10 @@ export function wordsFor(entry: TimelineActivityView, names: NameSources): Timel
 
     if (entry.kind.startsWith('linked-meeting.')) {
         return { ...base, ...meetingWords(entry, names), family: 'meeting' };
+    }
+
+    if (entry.kind.startsWith('linked-call.')) {
+        return { ...base, ...callWords(entry), family: 'call' };
     }
 
     if (entry.kind === 'linked-transfer.completed') {
@@ -322,4 +326,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMoney(value: unknown): value is { amountMinor: number; currency: string } {
     return isRecord(value) && typeof value['amountMinor'] === 'number' && typeof value['currency'] === 'string';
+}
+
+const CALL_STATUS_TEXT: Record<string, string> = {
+    answered: 'answered',
+    missed: 'missed',
+    voicemail: 'went to voicemail',
+    unanswered: 'not answered',
+    logged: 'logged',
+};
+const CALL_DISPOSITION_TEXT: Record<string, string> = {
+    connected: 'Connected',
+    voicemail: 'Left voicemail',
+    no_answer: 'No answer',
+    busy: 'Busy',
+    wrong_number: 'Wrong number',
+    callback: 'Call back later',
+    not_interested: 'Not interested',
+};
+
+/** What a call's entry says (CALL-1): which way, how it went, how long, and whether Quo recorded it. */
+function callWords(entry: TimelineActivityView): Pick<TimelineWords, 'action' | 'detail'> {
+    const call = isRecord(entry.properties['call']) ? entry.properties['call'] : {};
+    const direction = call['direction'] === 'inbound' ? 'took a call from' : 'called';
+    const number =
+        (call['direction'] === 'inbound' ? call['fromNumber'] : call['toNumber']) ??
+        (isRecord(entry.properties['linked']) ? entry.properties['linked']['name'] : null);
+    const status = typeof call['status'] === 'string' ? CALL_STATUS_TEXT[call['status']] : undefined;
+    const updated = entry.kind === 'linked-call.updated';
+    const action = updated
+        ? `${direction} ${typeof number === 'string' ? number : 'a number'} — updated`
+        : `${direction} ${typeof number === 'string' ? number : 'a number'}${status && status !== 'logged' ? ` (${status})` : ''}`;
+    const detail: { label: string; tone?: 'neutral' | 'accent' | 'success' }[] = [];
+    if (typeof call['disposition'] === 'string')
+        detail.push({ label: CALL_DISPOSITION_TEXT[call['disposition']] ?? call['disposition'], tone: 'accent' });
+    if (typeof call['durationSec'] === 'number' && call['durationSec'] > 0)
+        detail.push({ label: `${Math.round(call['durationSec'] / 60)} min` });
+    if (call['hasRecording'] === true) detail.push({ label: 'Recorded', tone: 'success' });
+    return { action, ...(detail.length ? { detail } : {}) };
 }

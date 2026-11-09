@@ -32,6 +32,7 @@ import { SIDEBAR_COLLAPSED_KEY } from './storage';
  * Overlays the person opens, not the first frame: the palette (cmdk), the shortcuts sheet and the
  * profile dialog load on first open and stay mounted after, so closing still animates (#131).
  */
+import type { PaletteMode } from './CommandPalette';
 const CommandPalette = lazy(() => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })));
 const ShortcutsSheet = lazy(() => import('./ShortcutsSheet').then((m) => ({ default: m.ShortcutsSheet })));
 const ProfileDialog = lazy(() => import('./ProfileDialog').then((m) => ({ default: m.ProfileDialog })));
@@ -71,6 +72,11 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
     const [collapsed, setCollapsed] = usePersistedState(SIDEBAR_COLLAPSED_KEY, isBoolean, false);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const [paletteMode, setPaletteMode] = useState<PaletteMode>('all');
+    const openPalette = useCallback((mode: PaletteMode = 'all') => {
+        setPaletteMode(mode);
+        setPaletteOpen(true);
+    }, []);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const profile = useProfile();
@@ -88,7 +94,7 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
 
     useShellCommands({
         workspaceId,
-        openPalette: () => setPaletteOpen(true),
+        openPalette,
         openShortcuts: () => setShortcutsOpen(true),
         // Every member's own profile page: name, signature details and signatures.
         openProfile: () => navigate(paths.profile(workspaceId)),
@@ -150,7 +156,7 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
                             workspaceId={workspaceId}
                             onToggleSidebar={toggleSidebar}
                             sidebarCollapsed={narrow ? !drawerOpen : collapsed}
-                            onOpenPalette={() => setPaletteOpen(true)}
+                            onOpenPalette={() => openPalette()}
                         />
                         <OfflineBanner />
                         <main className="min-w-0 flex-1 overflow-y-auto">
@@ -165,7 +171,12 @@ function Shell({ workspaceId, signedIn }: { workspaceId: string; signedIn: boole
             </Suspense>
             <Suspense fallback={null}>
                 {paletteLoaded && (
-                    <CommandPalette workspaceId={workspaceId} open={paletteOpen} onOpenChange={setPaletteOpen} />
+                    <CommandPalette
+                        workspaceId={workspaceId}
+                        open={paletteOpen}
+                        onOpenChange={setPaletteOpen}
+                        mode={paletteMode}
+                    />
                 )}
                 {shortcutsLoaded && <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />}
                 {profileLoaded && profile.data && (
@@ -193,7 +204,7 @@ function useShellCommands({
     toggleSidebar,
 }: {
     workspaceId: string;
-    openPalette: () => void;
+    openPalette: (mode?: PaletteMode) => void;
     openShortcuts: () => void;
     openProfile: () => void;
     toggleSidebar: () => void;
@@ -216,6 +227,16 @@ function useShellCommands({
                 if (item.shortcut) command.shortcut = item.shortcut;
                 return command;
             }),
+            {
+                // GUARD-3: a first email starts in the CRM (its header lets it through the Workspace rule), so
+                // the composer is one command away from anywhere; the thread then continues in Gmail.
+                id: 'mail.start',
+                title: 'Start new email…',
+                group: 'Create',
+                keywords: ['email', 'compose', 'write', 'mail', 'cold', 'outreach'],
+                when: () => can(membership, 'record:read'),
+                run: () => openPalette('email'),
+            },
             {
                 id: 'create.person',
                 title: 'New person',
@@ -303,7 +324,7 @@ function useShellCommands({
                 when: () => can(membership, 'workspace:admin'),
                 run: () => navigate(paths.settingsImportBigin(workspaceId)),
             },
-            { id: 'palette.open', title: 'Search…', group: 'Account', shortcut: 'mod+k', run: openPalette },
+            { id: 'palette.open', title: 'Search…', group: 'Account', shortcut: 'mod+k', run: () => openPalette() },
             { id: 'sidebar.toggle', title: 'Toggle sidebar', group: 'Account', shortcut: '[', run: toggleSidebar },
             {
                 id: 'theme.toggle',

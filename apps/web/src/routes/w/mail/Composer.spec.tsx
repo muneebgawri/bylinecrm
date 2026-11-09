@@ -337,6 +337,35 @@ describe('queued follow-ups: the compose box queues emails that go later in the 
         expect(JSON.stringify(body.followUps[0]!.body)).toContain('Any thoughts?');
     });
 
+    it('fills a follow-up from a personal template — its body, under the thread’s subject — and sends it', async () => {
+        const seen = composer([
+            mailboxesRoute(MAILBOXES),
+            (r) =>
+                r.method === 'GET' && r.url.includes('/templates?')
+                    ? json({ items: [template()], nextCursor: null })
+                    : undefined,
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/templates/t-1/preview')
+                    ? json({ subject: 'About Acme', html: '<p>Hi</p>', text: 'Hi', missing: [], sendable: true })
+                    : undefined,
+            sendRoute,
+        ]);
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Template for follow-up 1' }));
+        await userEvent.click(await screen.findByRole('button', { name: /Follow-up after a reply/ }));
+        await waitFor(() =>
+            expect(screen.getByRole('textbox', { name: 'Follow-up 1 message' })).toHaveTextContent('person.firstName'),
+        );
+        // The thread's subject stays: the template's is not copied into the follow-up.
+        expect(screen.getByRole('textbox', { name: 'Follow-up 1 subject' })).toHaveTextContent('');
+        expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveTextContent('Hello');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        const body = seen.find((r) => r.url.endsWith('/mail/send'))?.body as { followUps: { body: unknown }[] };
+        expect(JSON.stringify(body.followUps[0]!.body)).toContain('person.firstName');
+    });
+
     it('refuses a follow-up timed before the email it follows, sending nothing', async () => {
         const seen = composer([mailboxesRoute(MAILBOXES), sendRoute]);
         await write('Hello', 'Hi Dana');

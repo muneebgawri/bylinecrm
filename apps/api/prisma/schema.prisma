@@ -129,6 +129,9 @@ model Workspace {
   rotationMembers               RotationMember[]
   cadenceLapses                 CadenceLapse[]
 
+  calls       Call[]
+  quoSettings QuoSettings?
+
   @@map("workspaces")
 }
 
@@ -376,8 +379,12 @@ model WorkspaceMember {
   guardrailsOwned    GuardrailEvent[] @relation("GuardrailOwner")
   guardrailsReviewed GuardrailEvent[] @relation("GuardrailReviewer")
 
-  rotationMembership RotationMember?
-  cadenceLapses      CadenceLapse[]
+  rotationMembership    RotationMember?
+  cadenceLapses         CadenceLapse[]
+  /// CALL-1: the member's user in Quo (matched by email when the admin saved the key); null when none.
+  quoUserId             String?         @map("quo_user_id")
+  calls                 Call[]          @relation("CallMember")
+  quoSettingsConfigured QuoSettings[]   @relation("QuoConfiguredBy")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -644,6 +651,7 @@ model Person {
   meetingParticipations CalendarEventParticipant[]
   guardrails            GuardrailEvent[]
   bylineLeads           BylineLead[]
+  calls                 Call[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -938,6 +946,7 @@ model Note {
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   author    WorkspaceMember? @relation(fields: [authorId], references: [id], onDelete: SetNull)
   targets   NoteTarget[]
+  calls     Call[]
 
   @@index([workspaceId, deletedAt])
   @@index([search], type: Gin)
@@ -1082,6 +1091,7 @@ enum LinkedObject {
   meeting
   transfer
   invoice
+  call
 
   @@map("linked_object")
 }
@@ -2308,6 +2318,8 @@ model GuardrailSettings {
   poachEmailAtOnce       Boolean  @default(false) @map("poach_email_at_once")
   /// Members that are shared mailboxes (outreach@): leads they own count as nobody's to GUARD-1 and GUARD-2.
   sharedMailboxMemberIds String[] @default([]) @map("shared_mailbox_member_ids") @db.Uuid
+  /// GUARD-3: first-touch mail to outside addresses sent from Gmail rather than the CRM is recorded and reported.
+  offCrmColdAlerts       Boolean  @default(true) @map("off_crm_cold_alerts")
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3134,6 +3146,7 @@ enum NotificationKind {
   invoice_coverage_lost
   /// GUARD-2: a member mailed another member's lead or a customer (to the owner, managers and admins).
   guardrail_poach_suspected
+  guardrail_off_crm_cold
   /// CADENCE-1: a lead of theirs missed its cadence; it rotates after the grace (to the owner).
   cadence_warning
   /// CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).
@@ -3293,6 +3306,8 @@ enum GuardrailKind {
   /// GUARD-2: mail that left (Gmail sync or a CRM send) to another member's lead, or to a customer on the exclusions.
   poach_suspected
   pooled_customer
+  /// GUARD-3: first-touch mail to an outside address sent from Gmail, not the CRM.
+  off_crm_cold
 
   @@map("guardrail_kind")
 }
@@ -3789,4 +3804,94 @@ model PersonAddress {
   @@id([personId, address])
   @@index([workspaceId, address, personCreatedAt, personId], map: "person_addresses_lookup_idx")
   @@map("person_addresses")
+}
+
+/// CALL-1: Settings → Quo. The API key Quo is asked with (sealed) and the webhook the CRM registered there
+/// (its id, and the `whsec_` key deliveries are signed with, sealed). One row per workspace.
+model QuoSettings {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId             String    @unique @map("workspace_id") @db.Uuid
+  apiKeyCiphertext        String    @map("api_key_ciphertext")
+  webhookId               String?   @map("webhook_id")
+  webhookSecretCiphertext String?   @map("webhook_secret_ciphertext")
+  /// Quo users with no member at their email, as the admin last saved; shown so they can be invited.
+  unmatchedQuoEmails      String[]  @default([]) @map("unmatched_quo_emails")
+  configuredById          String    @map("configured_by_id") @db.Uuid
+  lastDeliveryAt          DateTime? @map("last_delivery_at") @db.Timestamptz
+  lastDeliveryResult      String?   @map("last_delivery_result")
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember @relation("QuoConfiguredBy", fields: [configuredById], references: [id], onDelete: Cascade)
+
+  @@map("quo_settings")
+}
+
+enum CallDirection {
+  outbound
+  inbound
+
+  @@map("call_direction")
+}
+
+enum CallStatus {
+  answered
+  missed
+  voicemail
+  unanswered
+  logged
+
+  @@map("call_status")
+}
+
+enum CallDisposition {
+  connected
+  voicemail
+  no_answer
+  busy
+  wrong_number
+  callback
+  not_interested
+
+  @@map("call_disposition")
+}
+
+/// CALL-1: a call between a member and a person — Quo's report (`provider` quo, `externalId` its call id) or a
+/// member's own log from the Call panel (`provider` manual), the two merged when Quo reports the call that was
+/// logged. Numbers in E.164. `recordings`, `summary` and `transcript` are Quo's, in @bylinecrm/shared's shapes.
+model Call {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String           @map("workspace_id") @db.Uuid
+  provider     String           @default("quo")
+  externalId   String?          @map("external_id")
+  personId     String?          @map("person_id") @db.Uuid
+  memberId     String?          @map("member_id") @db.Uuid
+  direction    CallDirection
+  status       CallStatus
+  fromNumber   String?          @map("from_number")
+  toNumber     String?          @map("to_number")
+  startedAt    DateTime         @map("started_at") @db.Timestamptz
+  answeredAt   DateTime?        @map("answered_at") @db.Timestamptz
+  completedAt  DateTime?        @map("completed_at") @db.Timestamptz
+  durationSec  Int?             @map("duration_sec")
+  hasVoicemail Boolean          @default(false) @map("has_voicemail")
+  recordings   Json             @default("[]")
+  summary      Json?
+  transcript   Json?
+  disposition  CallDisposition?
+  noteId       String?          @map("note_id") @db.Uuid
+  quoLink      String?          @map("quo_link")
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  member    WorkspaceMember? @relation("CallMember", fields: [memberId], references: [id], onDelete: SetNull)
+  note      Note?            @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, provider, externalId])
+  @@index([workspaceId, personId, startedAt])
+  @@index([workspaceId, memberId, startedAt])
+  @@map("calls")
 }

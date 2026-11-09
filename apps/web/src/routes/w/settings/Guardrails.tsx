@@ -126,7 +126,7 @@ export function Guardrails() {
                             )}
                             {admin && settings.data && (
                                 <Button shape="square" size="sm" onClick={() => setEditingPoaching(true)}>
-                                    Poaching alerts
+                                    Mail alerts
                                 </Button>
                             )}
                         </div>

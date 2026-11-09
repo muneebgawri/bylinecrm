@@ -218,7 +218,8 @@ const richTextNode: z.ZodType<RichTextNode> = z.lazy(() =>
         })
         .passthrough(),
 );
-const richText = z.object({ type: z.literal('doc'), content: z.array(richTextNode).optional() });
+/** A rich-text document as the editors produce it; the notes' and (CALL-1) the Call panel's body. */
+export const richText = z.object({ type: z.literal('doc'), content: z.array(richTextNode).optional() });
 
 const noteFields = { title: text(300), body: richText, targets };
 export class CreateNoteDto extends createZodDto(z.object(noteFields).partial().required({ targets: true })) {}

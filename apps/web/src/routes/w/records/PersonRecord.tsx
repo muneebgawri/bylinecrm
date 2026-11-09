@@ -1,8 +1,8 @@
 import { Badge, FactGrid, toast } from '@bylinecrm/ui';
 import { CONTACT_STATUS_LABELS, CONTACT_STATUSES, type ContactStatus } from '@bylinecrm/shared';
-import { Building2, Handshake, ListTodo, Mail, Send, StickyNote } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Building2, Handshake, ListTodo, Mail, Phone, Send, StickyNote } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useSetContactStatus } from '../../../api/customers';
 import { useCustomFields, usePatchRecord, useRecord } from '../../../api/records';
 import type { PersonView } from '../../../api/types';
@@ -11,10 +11,11 @@ import { CopyButton } from '../../../components/CopyButton';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { useCompanyCreator } from '../../../components/useCompanyCreator';
 import { formatDay } from '../../../lib/format';
-import { paths } from '../../paths';
+import { COMPOSE_PARAM, paths } from '../../paths';
 import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AskIntroduction } from './AskIntroduction';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { CallPanel } from './CallPanel';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import { InlineSelect, InlineText } from './InlineEdit';
 import { NotesPanel } from './NotesPanel';
@@ -71,6 +72,8 @@ export function PersonRecord({
     const [tasksOpen, setTasksOpen] = useState(false);
     const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState(false);
+    // CALL-1: "Call" opens the number in Quo and the call-notes panel.
+    const [calling, setCalling] = useState(false);
     const compose = useRef<RecordComposeHandle>(null);
     // GUARD-1: another member's lead is theirs to mail; anyone else asks them for an introduction.
     const membership = useMembership();
@@ -79,6 +82,19 @@ export function PersonRecord({
     const ownerId = useId();
     const target = { type: 'person' as const, id: person.id };
     const save = (p: Record<string, unknown>) => patch.mutateAsync(p);
+
+    // "Start new email" (⌘K, a company's people) lands here with `?compose=1`: the composer opens at once and
+    // the parameter is dropped, so a reload or the back button does not open it again.
+    const location = useLocation();
+    const navigate = useNavigate();
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get(COMPOSE_PARAM) !== '1') return;
+        params.delete(COMPOSE_PARAM);
+        const search = params.toString();
+        navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true });
+        compose.current?.start();
+    }, [location.pathname, location.search, navigate]);
 
     useRecordCommands({
         layout,
@@ -344,6 +360,16 @@ export function PersonRecord({
               ]
             : []),
         {
+            id: 'call',
+            label: 'Call',
+            short: 'Call',
+            icon: <Phone aria-hidden />,
+            onSelect: () => setCalling(true),
+            disabled: !person.phones.primary,
+            reason: person.phones.primary ? undefined : 'No phone number on this person.',
+            hint: 'Call in Quo and take notes',
+        },
+        {
             id: 'email',
             label: othersLead ? 'Ask for an introduction' : 'Email',
             short: othersLead ? 'Intro' : 'Email',
@@ -545,6 +571,14 @@ export function PersonRecord({
                 />
             )}
             <TimelinePanel workspaceId={workspaceId} target={target} />
+            <CallPanel
+                workspaceId={workspaceId}
+                personId={person.id}
+                personName={personName(person)}
+                phone={person.phones.primary}
+                open={calling}
+                onOpenChange={setCalling}
+            />
             {enrolling && (
                 <EnrolDialog
                     workspaceId={workspaceId}

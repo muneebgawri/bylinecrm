@@ -39,6 +39,11 @@ import type { TransferMember } from './transfers.js';
  * GUARD-2 (FR-CRMS-22), measured from mail that left (Gmail sync and CRM sends alike):
  * - `poach_suspected` — a member mailed a person, or a company domain, another member owns (not as a reply in a
  *   thread the owner is on), or a customer on the outreach exclusions. Who, whom, when and subject only.
+ *
+ * GUARD-3, measured from Gmail sync alone (a CRM send is never one):
+ * - `off_crm_cold` — a member wrote first to an outside address from Gmail, not through the CRM: no CRM send is
+ *   linked, the message answers nothing, and nobody outside the workspace wrote in the thread before. Every such
+ *   recipient is an event (the audit); reviewers are told from `medium` (several recipients in a day) up.
  */
 export const GUARDRAIL_KINDS = [
     'suppressed',
@@ -66,6 +71,8 @@ export const GUARDRAIL_KINDS = [
     'poach_suspected',
     // Lead pools: mail to a customer or prospect of another workspace in this one's pool.
     'pooled_customer',
+    // GUARD-3: a first-touch mail to an outside address sent from Gmail rather than through the CRM.
+    'off_crm_cold',
 ] as const;
 export type GuardrailKind = (typeof GUARDRAIL_KINDS)[number];
 
@@ -131,6 +138,7 @@ export const GUARDRAIL_KIND_LABELS: Readonly<Record<GuardrailKind, string>> = {
     rejected_sends: 'Sends rejected by SMTP2Go',
     poach_suspected: 'Mailed another member’s lead',
     pooled_customer: 'Another workspace’s customer or prospect',
+    off_crm_cold: 'Cold mail outside the CRM',
 };
 
 /** The kinds that are about a mailbox's sending rather than one recipient (REP-1). */
@@ -207,14 +215,23 @@ export const POACH_DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
  */
 export const POACH_LOOKBACK_MS = 48 * 60 * 60 * 1000;
 
+/** GUARD-3: an `off_crm_cold` event is `medium` once a member wrote first to this many outside addresses… */
+export const OFF_CRM_COLD_MEDIUM_RECIPIENTS = 3;
+/** …and `high` at this many… */
+export const OFF_CRM_COLD_HIGH_RECIPIENTS = 10;
+/** …within this long (a UTC-free sliding day). One event per (sender, address) within it. */
+export const OFF_CRM_COLD_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /** GUARD-2: how many members an admin may mark as shared mailboxes. */
 export const GUARDRAIL_SHARED_MAILBOXES_MAX = 50;
 
 /**
  * Settings → Guardrails (GUARD-2), set by admins; no row means the defaults (both off / empty).
  *
- * - `poachEmailAtOnce` — a `high` poaching alert is also emailed to the owner and the reviewers at once. Off by
- *   default: the bell and the daily digest always tell.
+ * - `poachEmailAtOnce` — a `high` alert (poaching, GUARD-2; cold mail outside the CRM, GUARD-3) is also emailed to
+ *   the owner and the reviewers at once. Off by default: the bell and the daily digest always tell.
+ * - `offCrmColdAlerts` — GUARD-3 is on: a member's first-touch mail to an outside address sent from Gmail rather
+ *   than through the CRM is recorded, and reviewers are told from `medium` up. On by default.
  * - `sharedMailboxMemberIds` — members that are shared mailboxes (an `outreach@` many people send from). Leads they
  *   own are treated as nobody's by the recipient guard (GUARD-1) and the poaching detector (GUARD-2): any member may
  *   mail them, with no block and no alert. Ownership itself is not changed.
@@ -222,6 +239,7 @@ export const GUARDRAIL_SHARED_MAILBOXES_MAX = 50;
 export interface GuardrailSettingsView {
     poachEmailAtOnce: boolean;
     sharedMailboxMemberIds: string[];
+    offCrmColdAlerts: boolean;
 }
 
 /**

@@ -18,9 +18,10 @@ import type { GuardrailSettingsView } from '../../../api/types';
 import { failureText } from '../../../lib/errors';
 
 /**
- * Settings → Guardrails → Poaching alerts (GUARD-2), admins only: whether a high alert is also emailed at once (off
- * by default; the bell and the daily digest always tell), and which members are shared mailboxes — leads they own
- * count as nobody's, so any member may mail them with no block and no alert. Ownership itself is not changed.
+ * Settings → Guardrails → Mail alerts (GUARD-2/3), admins only: whether a high alert is also emailed at once (off
+ * by default; the bell and the daily digest always tell), whether cold mail sent from Gmail around the CRM is
+ * flagged (GUARD-3, on by default), and which members are shared mailboxes — leads they own count as nobody's, so
+ * any member may mail them with no block and no alert. Ownership itself is not changed.
  */
 export function GuardrailSettingsDialog({
     workspaceId,
@@ -35,14 +36,16 @@ export function GuardrailSettingsDialog({
     const members = useMailboxCoverage(workspaceId).data ?? [];
     const [emailAtOnce, setEmailAtOnce] = useState(settings.poachEmailAtOnce);
     const [shared, setShared] = useState<string[]>(settings.sharedMailboxMemberIds);
+    const [offCrmCold, setOffCrmCold] = useState(settings.offCrmColdAlerts);
     const switchId = useId();
+    const coldId = useId();
     const submit = (event: FormEvent) => {
         event.preventDefault();
         update.mutate(
-            { poachEmailAtOnce: emailAtOnce, sharedMailboxMemberIds: shared },
+            { poachEmailAtOnce: emailAtOnce, sharedMailboxMemberIds: shared, offCrmColdAlerts: offCrmCold },
             {
                 onSuccess: () => {
-                    toast({ title: 'Poaching alerts saved', tone: 'success' });
+                    toast({ title: 'Mail alerts saved', tone: 'success' });
                     onClose();
                 },
             },
@@ -53,21 +56,31 @@ export function GuardrailSettingsDialog({
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent>
                 <form onSubmit={submit} noValidate>
-                    <DialogTitle>Poaching alerts</DialogTitle>
+                    <DialogTitle>Mail alerts</DialogTitle>
                     <DialogDescription>
-                        Mail a member sends to another member’s lead or a customer is flagged here, in the bell and in
-                        the daily digest.
+                        Mail a member sends to another member’s lead or a customer, and cold mail sent from Gmail
+                        instead of the CRM, is flagged here, in the bell and in the daily digest.
                     </DialogDescription>
                     <DialogBody className="flex flex-col gap-4">
                         <div className="flex items-center justify-between gap-3">
                             <label htmlFor={switchId} className="text-[13px]">
-                                <span className="block font-medium text-text">Email high poaching alerts at once</span>
+                                <span className="block font-medium text-text">Email high alerts at once</span>
                                 <span className="block text-text-muted">
                                     The lead’s owner and the managers get an email as soon as one is high. Off: the bell
                                     and the digest only.
                                 </span>
                             </label>
                             <Switch id={switchId} checked={emailAtOnce} onCheckedChange={setEmailAtOnce} />
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                            <label htmlFor={coldId} className="text-[13px]">
+                                <span className="block font-medium text-text">Flag cold mail sent outside the CRM</span>
+                                <span className="block text-text-muted">
+                                    A first email to an outside address sent from Gmail, not through the CRM, is
+                                    recorded. Managers are told once a member reaches several in a day.
+                                </span>
+                            </label>
+                            <Switch id={coldId} checked={offCrmCold} onCheckedChange={setOffCrmCold} />
                         </div>
                         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
                             <legend className="mb-1 text-[13px] font-medium text-text">Shared mailboxes</legend>
