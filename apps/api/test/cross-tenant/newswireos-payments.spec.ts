@@ -566,11 +566,11 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
 
     it('lead pool: a payment from another pooled workspace’s client is not booked here too', async () => {
         const pool = await owner.leadPool.create({ data: { name: `inv2-pool-${stamp}` } });
-        await owner.workspace.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { leadPoolId: pool.id } });
         try {
             const slug = `pooled-${stamp}`;
             const email = `held@${slug}.test`;
-            // A cold lead here; B's prospect (a deal with them), so the pool protects them for B.
+            // A lead saved in both before the workspaces were pooled (a pool now refuses the second save);
+            // cold here, B's prospect (a deal with them), so the pool protects them for B.
             await as(a.who)
                 .post(w('/people'))
                 .send({ nameFirst: 'Held', nameLast: 'Lead', emails: { primary: email, additional: [] } })
@@ -583,6 +583,7 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
                         .expect(201)
                 ).body as { id: string }
             ).id;
+            await owner.workspace.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { leadPoolId: pool.id } });
             const co = (
                 (
                     await as(b.who)
