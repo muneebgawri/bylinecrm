@@ -18,7 +18,7 @@ import { Link, Navigate } from 'react-router';
 import { CSRF_COOKIE } from '@bylinecrm/shared';
 import { readCookie } from '../../api/client';
 import { useMe, useProviders } from '../../api/queries';
-import { LogoMark } from '../../shell/LogoMark';
+import { LogoMark, Wordmark } from '../../shell/LogoMark';
 import { step } from '../auth/AuthLayout';
 import { paths } from '../paths';
 
@@ -100,8 +100,7 @@ export function Landing() {
                         className="hero-in flex items-center gap-2 max-md:min-h-touch"
                         style={step(0)}
                     >
-                        <LogoMark />
-                        <span className="text-lg font-semibold tracking-tight">BylineCRM</span>
+                        <Wordmark className="h-8" />
                     </Link>
                     <nav className="hero-in flex items-center gap-2" style={step(1)}>
                         <Button asChild variant="ghost">

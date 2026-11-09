@@ -1,7 +1,7 @@
 import { cn } from '@bylinecrm/ui';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
-import { LogoMark } from '../../shell/LogoMark';
+import { Wordmark } from '../../shell/LogoMark';
 import { paths } from '../paths';
 
 /** The left column on a wide screen: an eyebrow chip, a big heading, a line of copy. */
@@ -86,14 +86,13 @@ export function AuthFrame({
                 aria-hidden
                 className="pointer-events-none absolute inset-0 text-border-strong [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(700px_circle_at_center,white,transparent)]"
             />
-            <header className="relative z-20 flex h-20 items-center justify-between px-6 lg:px-12">
+            <header className="relative z-20 flex h-20 items-center justify-between gap-4 px-6 lg:px-12">
                 <Link
                     to={paths.signIn}
-                    className="hero-in flex items-center gap-2 text-sm font-semibold max-md:min-h-touch"
+                    className="hero-in flex shrink-0 items-center gap-2 text-sm font-semibold max-md:min-h-touch"
                     style={step(0)}
                 >
-                    <LogoMark />
-                    BylineCRM
+                    <Wordmark />
                 </Link>
                 {aside && (
                     <p className="hero-in m-0 text-sm text-text-muted" style={step(1)}>

@@ -1,17 +1,21 @@
 import { cn } from '@bylinecrm/ui';
 
-/** The black square with the letter: the product's mark, in the sidebar and on the auth card. */
+/**
+ * The product's mark (`public/favicon.svg`, the same file as the tab's icon): in the sidebar, the workspace list
+ * and the landing footer. Decorative — the name beside it, or the control's label, names it.
+ */
 export function LogoMark({ className, size = 'md' }: { className?: string; size?: 'md' | 'lg' }) {
     return (
-        <span
+        <img
+            src="/favicon.svg"
+            alt=""
             aria-hidden
-            className={cn(
-                'grid shrink-0 place-items-center rounded-[9px] bg-primary font-bold text-primary-foreground',
-                size === 'md' ? 'size-8 text-[13px]' : 'size-11 rounded-xl text-lg',
-                className,
-            )}
-        >
-            B
-        </span>
+            className={cn('shrink-0 object-contain', size === 'md' ? 'size-8' : 'size-11', className)}
+        />
     );
+}
+
+/** The wordmark (`public/bylinecrm-wordmark.svg`): where the product names itself, on the landing and sign-in pages. */
+export function Wordmark({ className }: { className?: string }) {
+    return <img src="/bylinecrm-wordmark.svg" alt="BylineCRM" className={cn('h-7 w-auto shrink-0', className)} />;
 }
