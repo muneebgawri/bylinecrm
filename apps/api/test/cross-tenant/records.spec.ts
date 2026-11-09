@@ -721,6 +721,55 @@ describe('records', () => {
             expect(global.person.map((h) => h.title)).toEqual(['Mina Harker']);
         });
 
+        it('another workspace searching the same additional email finds nothing', async () => {
+            const second = `cross-${stamp}@elsewhere.test`;
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Lucy',
+                    nameLast: 'Westenra',
+                    emails: { primary: `lw-${stamp}@whitby.test`, additional: [second] },
+                })
+                .expect(201);
+            const theirs = (path: string) => `/api/w/${otherWorkspace}${path}`;
+            const listed = await as(other)
+                .get(theirs(`/people?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((listed.body as Page<Person>).items).toEqual([]);
+            const global = (
+                await as(other)
+                    .get(theirs(`/search?q=${encodeURIComponent(second)}&objects=person`))
+                    .expect(200)
+            ).body as { person: unknown[] };
+            expect(global.person).toEqual([]);
+        });
+
+        it('a trashed person is not found by an additional email in the list; the trash finds them', async () => {
+            const second = `gone-${stamp}@elsewhere.test`;
+            const id = (
+                (
+                    await as(admin)
+                        .post(w('/people'))
+                        .send({
+                            nameFirst: 'Renfield',
+                            emails: { primary: `rf-${stamp}@carfax.test`, additional: [second] },
+                        })
+                        .expect(201)
+                ).body as Person
+            ).id;
+            await as(admin)
+                .delete(w(`/people/${id}`))
+                .expect(204);
+            const listed = await as(admin)
+                .get(w(`/people?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((listed.body as Page<Person>).items).toEqual([]);
+            const trash = await as(admin)
+                .get(w(`/people/deleted?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((trash.body as Page<Person>).items.map((p) => p.id)).toEqual([id]);
+        });
+
         it('pages with a cursor under a chosen sort, and refuses a sort off the allowlist', async () => {
             for (const name of ['Page A', 'Page B', 'Page C']) {
                 await as(admin)
