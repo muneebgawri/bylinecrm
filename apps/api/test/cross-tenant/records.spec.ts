@@ -695,6 +695,32 @@ describe('records', () => {
             expect((byDomain.body as Page<Company>).items.map((c) => c.name)).toEqual(['Hyrule Castle']);
         });
 
+        it('finds a person by an additional email, in the list and in global search', async () => {
+            const second = `alt-${stamp}@elsewhere.test`;
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Mina',
+                    nameLast: 'Harker',
+                    emails: { primary: `mh-${stamp}@whitby.test`, additional: [second] },
+                })
+                .expect(201);
+            const listed = await as(admin)
+                .get(w(`/people?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((listed.body as Page<Person>).items.map((p) => p.nameFirst)).toEqual(['Mina']);
+            const typed = await as(admin)
+                .get(w(`/people?q=ALT-${stamp}`))
+                .expect(200);
+            expect((typed.body as Page<Person>).items.map((p) => p.nameFirst)).toEqual(['Mina']);
+            const global = (
+                await as(admin)
+                    .get(w(`/search?q=${encodeURIComponent(second)}&objects=person`))
+                    .expect(200)
+            ).body as { person: { title: string }[] };
+            expect(global.person.map((h) => h.title)).toEqual(['Mina Harker']);
+        });
+
         it('pages with a cursor under a chosen sort, and refuses a sort off the allowlist', async () => {
             for (const name of ['Page A', 'Page B', 'Page C']) {
                 await as(admin)

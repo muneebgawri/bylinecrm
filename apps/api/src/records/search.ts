@@ -30,11 +30,17 @@ export async function searchCandidates(
     const prefix = `${q.toLowerCase().replace(/[\\%_]/g, '\\$&')}%`;
     // A table with no prefix column matches on the vector alone; `FALSE` keeps one query shape.
     const prefixClause = prefixColumn ? Prisma.sql`${prefixColumn} LIKE ${prefix}` : Prisma.sql`FALSE`;
+    // A person is found by an additional address too: the one-person-per-address check refuses those, so
+    // search must find whoever holds one (`person_addresses`, trigger-kept, lower-case like `email_primary`).
+    const addressClause =
+        table === 'people'
+            ? Prisma.sql`"id" IN (SELECT "person_id" FROM "person_addresses" WHERE "address" LIKE ${prefix})`
+            : Prisma.sql`FALSE`;
     const words = prefixQuery(q);
     const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM ${name}
         WHERE ${deletedClause}
-          AND ("search" @@ to_tsquery('simple', ${words}) OR ${prefixClause})
+          AND ("search" @@ to_tsquery('simple', ${words}) OR ${prefixClause} OR ${addressClause})
         ORDER BY ts_rank("search", to_tsquery('simple', ${words})) DESC, "id"
         LIMIT ${SEARCH_CANDIDATE_LIMIT}`;
     return rows.map((r) => r.id);
