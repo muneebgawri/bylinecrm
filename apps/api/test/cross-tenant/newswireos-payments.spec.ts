@@ -583,7 +583,12 @@ describe('INV-2 paid invoices from NewswireOS go on their deal', () => {
                         .expect(201)
                 ).body as { id: string }
             ).id;
+            // Pooled as `link-lead-pool` does it: join, then record the people saved before.
             await owner.workspace.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { leadPoolId: pool.id } });
+            await owner.$executeRaw`
+                INSERT INTO lead_pool_addresses (person_id, pool_id, workspace_id, email)
+                SELECT id, ${pool.id}::uuid, workspace_id, email_primary FROM people
+                WHERE workspace_id IN (${a.id}::uuid, ${b.id}::uuid) AND email_primary = ${email}`;
             const co = (
                 (
                     await as(b.who)
