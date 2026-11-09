@@ -1,7 +1,7 @@
 import { cn } from '@bylinecrm/ui';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
-import { LogoMark } from '../../shell/LogoMark';
+import { Wordmark } from '../../shell/LogoMark';
 import { paths } from '../paths';
 
 /** The left column on a wide screen: an eyebrow chip, a big heading, a line of copy. */
@@ -92,8 +92,7 @@ export function AuthFrame({
                     className="hero-in flex items-center gap-2 text-sm font-semibold max-md:min-h-touch"
                     style={step(0)}
                 >
-                    <LogoMark />
-                    BylineCRM
+                    <Wordmark />
                 </Link>
                 {aside && (
                     <p className="hero-in m-0 text-sm text-text-muted" style={step(1)}>
