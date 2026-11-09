@@ -515,6 +515,30 @@ describe('records', () => {
             expect((listed.body as { key: string }[]).map((f) => f.key)).toEqual(['beat']);
         });
 
+        it('a field asked in the Add person popup: set on create, listed, turned off', async () => {
+            const created = await as(admin)
+                .post(w('/custom-fields'))
+                .send({ object: 'person', key: 'pr_title', label: 'PR title', type: 'text', showOnCreate: true })
+                .expect(201);
+            const fieldId = (created.body as { id: string; showOnCreate: boolean }).id;
+            expect((created.body as { showOnCreate: boolean }).showOnCreate).toBe(true);
+            const asked = (res: Response) =>
+                (res.body as { key: string; showOnCreate: boolean }[]).filter((f) => f.showOnCreate).map((f) => f.key);
+            expect(asked(await as(rep).get(w('/custom-fields?object=person')).expect(200))).toEqual(['pr_title']);
+            await as(rep)
+                .patch(w(`/custom-fields/${fieldId}`))
+                .send({ showOnCreate: false })
+                .expect(403);
+            await as(admin)
+                .patch(w(`/custom-fields/${fieldId}`))
+                .send({ showOnCreate: false })
+                .expect(200);
+            expect(asked(await as(rep).get(w('/custom-fields?object=person')).expect(200))).toEqual([]);
+            await as(admin)
+                .delete(w(`/custom-fields/${fieldId}`))
+                .expect(204);
+        });
+
         it('an admin-only field (FR-CRMS-UI-6): a member neither sees its definition or values nor writes it; an admin does', async () => {
             const ltv = await as(admin)
                 .post(w('/custom-fields'))

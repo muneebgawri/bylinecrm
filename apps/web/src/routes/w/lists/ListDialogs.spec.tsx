@@ -12,8 +12,24 @@ function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-/** The workspace's `pr_link` field, as the custom-fields list returns it. */
-const PR_LINK_FIELD = { key: 'pr_link', label: 'Pr link', type: 'url', options: [], required: false, archivedAt: null };
+/** A person custom field, as the custom-fields list returns it. */
+function field(over: Record<string, unknown>) {
+    return {
+        id: `f-${String(over['key'])}`,
+        object: 'person',
+        type: 'text',
+        options: [],
+        required: false,
+        adminOnly: false,
+        showOnCreate: false,
+        position: 1,
+        archivedAt: null,
+        ...over,
+    };
+}
+const PR_LINK = field({ key: 'pr_link', label: 'Pr link', type: 'url', showOnCreate: true, position: 1 });
+const PR_TITLE = field({ key: 'pr_title', label: 'PR title', showOnCreate: true, position: 2 });
+const BEAT = field({ key: 'beat', label: 'Beat', position: 3 });
 
 /** The address check answers `holder`; a create answers a new person. Every call is kept. */
 function stubApi(holder: { ownerName: string | null; trashed: boolean } | null, fields: unknown[] = []) {
@@ -26,11 +42,24 @@ function stubApi(holder: { ownerName: string | null; trashed: boolean } | null, 
             calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
             if (url.includes('/people/address-check')) return json({ available: holder === null, holder });
             if (url.includes('/custom-fields')) return json(fields);
+            if (url.includes('/search?'))
+                return json({
+                    person: [],
+                    opportunity: [],
+                    company: [{ object: 'company', id: 'c1', title: 'Acme Corp', subtitle: 'acme.com' }],
+                });
             if (method === 'POST' && url.split('?')[0]!.endsWith('/people')) return json({ id: 'p9' }, 201);
             return json({});
         }),
     );
     return calls;
+}
+
+/** Picks Acme Corp in the required Company field. */
+async function pickCompany() {
+    await userEvent.click(screen.getByRole('button', { name: /^Company:/ }));
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Search company' }), 'acme');
+    await userEvent.click(await screen.findByRole('option', { name: /Acme Corp/ }, { timeout: 3000 }));
 }
 
 function renderDialog() {
@@ -71,6 +100,7 @@ describe('Add person: the address first', () => {
         await userEvent.type(screen.getByLabelText(/Last name/), 'Young');
         await userEvent.type(screen.getByLabelText(/^Phone/), '888-988-1699');
         await userEvent.type(screen.getByLabelText(/Ext\./), '204');
+        await pickCompany();
         await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
         await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
         expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({
@@ -78,6 +108,7 @@ describe('Add person: the address first', () => {
             nameLast: 'Young',
             emails: { primary: 'new@lead.example' },
             phones: { primary: { number: '8889881699', countryCode: 'US', extension: '204' } },
+            companyId: 'c1',
         });
     });
 
@@ -89,25 +120,46 @@ describe('Add person: the address first', () => {
         expect(calls.some((c) => c.url.includes('/address-check'))).toBe(false);
     });
 
-    it('the PR link is saved with the lead where the workspace has the field', async () => {
-        const calls = stubApi(null, [PR_LINK_FIELD]);
+    it('the company is required', async () => {
+        stubApi(null);
+        renderDialog();
+        await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+        await pickCompany();
+        expect(screen.getByRole('button', { name: 'Add person' })).toBeEnabled();
+    });
+
+    it('asks the fields an admin chose, in their order, and saves them in their types', async () => {
+        const calls = stubApi(null, [PR_TITLE, BEAT, PR_LINK]);
         renderDialog();
         await userEvent.type(screen.getByLabelText(/Email/), 'new@lead.example');
         await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
         await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
-        await userEvent.type(await screen.findByLabelText(/Pr link/), 'https://www.prweb.com/x');
+        const link = await screen.findByLabelText(/Pr link/);
+        const title = screen.getByLabelText(/PR title/);
+        expect(link.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.queryByLabelText(/Beat/)).toBeNull();
+        await userEvent.type(link, 'www.prweb.com/x');
+        await userEvent.type(title, 'Acme launches');
+        await pickCompany();
         await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
         await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
         expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({
-            custom: { pr_link: 'https://www.prweb.com/x' },
+            companyId: 'c1',
+            custom: { pr_link: 'https://www.prweb.com/x', pr_title: 'Acme launches' },
         });
     });
 
-    it('no PR link box where the workspace has no such field', async () => {
-        stubApi(null);
+    it('a required field is always asked, and must be filled', async () => {
+        stubApi(null, [field({ key: 'beat', label: 'Beat', required: true })]);
         renderDialog();
         await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
-        expect(await screen.findByLabelText(/First name/)).toBeInTheDocument();
-        expect(screen.queryByLabelText(/Pr link/)).toBeNull();
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        await pickCompany();
+        const beat = await screen.findByLabelText(/Beat/);
+        expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+        await userEvent.type(beat, 'Fintech');
+        expect(screen.getByRole('button', { name: 'Add person' })).toBeEnabled();
     });
 });

@@ -22,9 +22,11 @@ import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
 import { people, useCustomFields } from '../../../api/records';
-import type { AddressCheckView, BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
+import type { AddressCheckView, BulkResultView, CompanyInput, CustomFieldView, PersonInput } from '../../../api/types';
+import { RecordPicker } from '../../../components/RecordPicker';
+import { useCompanyCreator } from '../../../components/useCompanyCreator';
 import { failureText } from '../../../lib/errors';
-import { PR_LINK_KEY } from '../records/PersonRecord';
+import { linkTo, TEXT_TYPES } from '../records/PropertiesColumn';
 import { LIST_COPY, type ListObject } from './listConfig';
 
 /** The shared dialog and message, re-exported where the lists and the deals page already read them. */
@@ -207,7 +209,10 @@ export function CreateRecordDialog<O extends ListObject>({
     const [jobTitle, setJobTitle] = useState('');
     const [phone, setPhone] = useState('');
     const [extension, setExtension] = useState('');
-    const [prLinkValue, setPrLinkValue] = useState('');
+    /** The asked custom fields' values as typed, by key; turned into their types on save. */
+    const [customValues, setCustomValues] = useState<Record<string, string>>({});
+    /** A person's company: required here (not by the API, which imports and keys write without one). */
+    const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
     /** A person's step: the address first, then the rest once it is known to be free (or left out). */
     const [step, setStep] = useState<'email' | 'details'>('email');
     const [checking, setChecking] = useState(false);
@@ -217,10 +222,13 @@ export function CreateRecordDialog<O extends ListObject>({
     const copy = LIST_COPY[object];
     const person = object === 'person';
     const askingEmail = person && step === 'email';
-    // The PR link a lead is saved with: only where the workspace has the field (`pr_link`, as on the record).
-    const prLink = useCustomFields(workspaceId, 'person').data?.find(
-        (d) => d.key === PR_LINK_KEY && d.archivedAt === null,
-    );
+    // The custom fields an admin asks for here (Settings → Custom fields), and every required one: the API
+    // refuses a new person without those.
+    const asked = (useCustomFields(workspaceId, 'person').data ?? [])
+        .filter((d) => d.archivedAt === null && (d.showOnCreate || d.required))
+        .sort((x, y) => x.position - y.position);
+    const createCompany = useCompanyCreator(workspaceId, email.trim() || null);
+    const missing = person && (!company || asked.some((d) => d.required && !(customValues[d.key] ?? '').trim()));
 
     const checkEmail = async () => {
         const address = email.trim();
@@ -264,7 +272,8 @@ export function CreateRecordDialog<O extends ListObject>({
                             },
                         }
                       : {}),
-                  ...(prLink && prLinkValue.trim() ? { custom: { [prLink.key]: prLinkValue.trim() } } : {}),
+                  ...(company ? { companyId: company.id } : {}),
+                  custom: customInput(asked, customValues),
                   ...(handToOwner ? { handToOwner: true } : {}),
               }
             : { name: a.trim(), ...(b.trim() ? { domain: b.trim() } : {}) };
@@ -363,17 +372,21 @@ export function CreateRecordDialog<O extends ListObject>({
                                 <Field label="Last name">
                                     <Input value={b} onChange={(e) => setB(e.target.value)} autoComplete="off" />
                                 </Field>
-                                {prLink && (
-                                    <Field label={prLink.label}>
-                                        <Input
-                                            type="url"
-                                            value={prLinkValue}
-                                            onChange={(e) => setPrLinkValue(e.target.value)}
-                                            placeholder="https://"
-                                            autoComplete="off"
-                                        />
-                                    </Field>
-                                )}
+                                <Field label="Company" required>
+                                    <RecordPicker
+                                        workspaceId={workspaceId}
+                                        object="company"
+                                        label="Company"
+                                        placeholder="Search or add a company"
+                                        value={company?.id ?? null}
+                                        valueLabel={company?.name}
+                                        onChange={(id) => {
+                                            if (!id) setCompany(null);
+                                        }}
+                                        onResolved={(id, name) => setCompany({ id, name })}
+                                        onCreate={createCompany}
+                                    />
+                                </Field>
                                 <Field label="Job title">
                                     <Input
                                         value={jobTitle}
@@ -401,6 +414,14 @@ export function CreateRecordDialog<O extends ListObject>({
                                         />
                                     </Field>
                                 </div>
+                                {asked.map((definition) => (
+                                    <CustomFieldInput
+                                        key={definition.key}
+                                        definition={definition}
+                                        value={customValues[definition.key] ?? ''}
+                                        onChange={(v) => setCustomValues((all) => ({ ...all, [definition.key]: v }))}
+                                    />
+                                ))}
                             </>
                         ) : (
                             <>
@@ -454,7 +475,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 shape="square"
                                 variant="primary"
                                 loading={create.isPending}
-                                disabled={!a.trim()}
+                                disabled={!a.trim() || missing}
                             >
                                 {copy.add}
                             </Button>
@@ -464,6 +485,76 @@ export function CreateRecordDialog<O extends ListObject>({
             </DialogContent>
         </Dialog>
     );
+}
+
+/** An asked custom field as a form input, by its type; the value is kept as typed until save. */
+function CustomFieldInput({
+    definition,
+    value,
+    onChange,
+}: {
+    definition: CustomFieldView;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    const choices =
+        definition.type === 'select' ? definition.options : definition.type === 'boolean' ? ['Yes', 'No'] : null;
+    if (choices) {
+        return (
+            <Field label={definition.label} required={definition.required}>
+                <Select {...(value ? { value } : {})} onValueChange={onChange}>
+                    <SelectTrigger aria-label={definition.label}>
+                        <SelectValue placeholder="Choose…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {choices.map((o) => (
+                            <SelectItem key={o} value={o}>
+                                {o}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </Field>
+        );
+    }
+    return (
+        <Field
+            label={definition.label}
+            required={definition.required}
+            {...(definition.type === 'multiselect'
+                ? { hint: `Comma separated: ${definition.options.join(', ')}` }
+                : {})}
+        >
+            <Input
+                // A link pasted without https:// is taken (linkTo adds it on save); `type="url"` would refuse it.
+                {...(definition.type === 'url'
+                    ? { type: 'text', inputMode: 'url' as const }
+                    : { type: TEXT_TYPES[definition.type] ?? 'text' })}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                autoComplete="off"
+            />
+        </Field>
+    );
+}
+
+/** The asked fields' typed values in their types, as the API takes them; an empty one is left out. */
+function customInput(definitions: readonly CustomFieldView[], typed: Record<string, string>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const d of definitions) {
+        const raw = (typed[d.key] ?? '').trim();
+        if (!raw) continue;
+        if (d.type === 'number') out[d.key] = Number(raw);
+        else if (d.type === 'boolean') out[d.key] = raw === 'Yes';
+        else if (d.type === 'multiselect')
+            out[d.key] = raw
+                .split(',')
+                .map((v) => v.trim())
+                .filter(Boolean);
+        else if (d.type === 'url') out[d.key] = linkTo(raw);
+        else out[d.key] = raw;
+    }
+    return out;
 }
 
 /** A taken address, said by whose person has it — what the saver needs to know whom to ask. */

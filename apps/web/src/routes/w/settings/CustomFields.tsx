@@ -142,6 +142,17 @@ export function CustomFields() {
                             phone: 'meta',
                             cell: (f) => (f.adminOnly ? <Badge shape="pill">Admins only</Badge> : null),
                         },
+                        ...(object === 'person'
+                            ? [
+                                  {
+                                      id: 'showOnCreate',
+                                      header: 'Add person',
+                                      phone: 'meta' as const,
+                                      cell: (f: CustomFieldView) =>
+                                          f.showOnCreate || f.required ? <Badge shape="pill">Asked</Badge> : null,
+                                  },
+                              ]
+                            : []),
                     ],
                     ...(canEdit && {
                         rowActions: {
@@ -289,6 +300,7 @@ function CustomFieldEditor({
     const [draftOption, setDraftOption] = useState('');
     const [required, setRequired] = useState(field?.required ?? false);
     const [adminOnly, setAdminOnly] = useState(field?.adminOnly ?? false);
+    const [showOnCreate, setShowOnCreate] = useState(field?.showOnCreate ?? false);
     const mutation = field ? update : create;
 
     const shownKey = field ? field.key : keyEdited ? key : fieldKeyFromLabel(label);
@@ -321,7 +333,7 @@ function CustomFieldEditor({
     const submit = (event: FormEvent) => {
         event.preventDefault();
         if (!valid) return;
-        const shared = { label: label.trim(), ...(needsOptions && { options }), required, adminOnly };
+        const shared = { label: label.trim(), ...(needsOptions && { options }), required, adminOnly, showOnCreate };
         if (field) update.mutate({ fieldId: field.id, ...shared }, { onSuccess: onClose });
         else create.mutate({ object, key: shownKey, type, ...shared }, { onSuccess: onClose });
     };
@@ -439,6 +451,19 @@ function CustomFieldEditor({
                             checked={adminOnly}
                             onCheckedChange={setAdminOnly}
                         />
+                        {object === 'person' && (
+                            <SwitchRow
+                                label="Show in Add person"
+                                hint={
+                                    required
+                                        ? 'Required fields are always asked when a person is added.'
+                                        : 'Asked in the Add person popup, under the name.'
+                                }
+                                checked={showOnCreate || required}
+                                disabled={required}
+                                onCheckedChange={setShowOnCreate}
+                            />
+                        )}
                     </DialogBody>
                     <DialogFooter>
                         <Button type="button" shape="square" onClick={onClose}>

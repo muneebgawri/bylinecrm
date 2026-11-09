@@ -255,6 +255,9 @@ export const customFieldView = named(
         adminOnly: z
             .boolean()
             .meta({ description: 'Seen and written only by callers with workspace:admin; hidden from everyone else.' }),
+        showOnCreate: z
+            .boolean()
+            .meta({ description: 'Asked in the create popup beside the fixed fields. A required field always is.' }),
         position: z.number(),
         archivedAt: dateTime.nullable(),
         createdAt: dateTime,
