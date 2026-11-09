@@ -1,9 +1,12 @@
+import type { Capability } from '@bylinecrm/shared';
 import { ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../../../api/queries';
+import type { MembershipSummary } from '../../../api/types';
+import { CapabilitiesProvider } from '../../../auth/capabilities';
 import { CreateRecordDialog } from './ListDialogs';
 
 const WS = '11111111-2222-4333-8444-555555555555';
@@ -49,6 +52,8 @@ function stubApi(holder: { ownerName: string | null; trashed: boolean } | null, 
                     company: [{ object: 'company', id: 'c1', title: 'Acme Corp', subtitle: 'acme.com' }],
                 });
             if (method === 'POST' && url.split('?')[0]!.endsWith('/people')) return json({ id: 'p9' }, 201);
+            if (method === 'POST' && url.split('?')[0]!.endsWith('/companies'))
+                return json({ id: 'c2', name: 'Globex' }, 201);
             return json({});
         }),
     );
@@ -62,13 +67,31 @@ async function pickCompany() {
     await userEvent.click(await screen.findByRole('option', { name: /Acme Corp/ }, { timeout: 3000 }));
 }
 
+const member = (capabilities: Capability[]): MembershipSummary => ({
+    memberId: 'm',
+    workspaceId: WS,
+    apiKeyId: null,
+    userId: 'u',
+    roleId: 'r',
+    roleName: 'member',
+    recordScope: 'all',
+    capabilities,
+});
+
 function renderDialog() {
     const onCreated = vi.fn();
     render(
         <ThemeProvider>
             <TooltipProvider>
                 <QueryClientProvider client={createQueryClient()}>
-                    <CreateRecordDialog workspaceId={WS} object="person" onOpenChange={vi.fn()} onCreated={onCreated} />
+                    <CapabilitiesProvider membership={member(['record:read', 'record:write'])}>
+                        <CreateRecordDialog
+                            workspaceId={WS}
+                            object="person"
+                            onOpenChange={vi.fn()}
+                            onCreated={onCreated}
+                        />
+                    </CapabilitiesProvider>
                 </QueryClientProvider>
             </TooltipProvider>
         </ThemeProvider>,
@@ -161,5 +184,48 @@ describe('Add person: the address first', () => {
         expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
         await userEvent.type(beat, 'Fintech');
         expect(screen.getByRole('button', { name: 'Add person' })).toBeEnabled();
+    });
+
+    it('a company added here is made only when the person is saved, so a cancelled popup leaves none', async () => {
+        const calls = stubApi(null);
+        const onCreated = renderDialog();
+        await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        await userEvent.click(screen.getByRole('button', { name: /^Company:/ }));
+        await userEvent.type(await screen.findByRole('combobox', { name: 'Search company' }), 'Globex');
+        await userEvent.click(
+            await screen.findByRole('option', { name: 'Create company "Globex"' }, { timeout: 3000 }),
+        );
+        expect(calls.some((c) => c.method === 'POST')).toBe(false);
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
+        const posts = calls.filter((c) => c.method === 'POST');
+        expect(posts.map((c) => c.url.split('?')[0]!.split('/').pop())).toEqual(['companies', 'people']);
+        expect(posts[0]!.body).toEqual({ name: 'Globex' });
+        expect(posts[1]!.body).toMatchObject({ companyId: 'c2' });
+    });
+
+    it('a multi-select is ticked from its options and saved in their order', async () => {
+        const calls = stubApi(null, [
+            field({
+                key: 'beats',
+                label: 'Beats',
+                type: 'multiselect',
+                options: ['Fintech', 'Health', 'Energy'],
+                required: true,
+            }),
+        ]);
+        renderDialog();
+        await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        await pickCompany();
+        expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+        await userEvent.click(await screen.findByRole('checkbox', { name: 'Energy' }));
+        await userEvent.click(screen.getByRole('checkbox', { name: 'Fintech' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+        expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({
+            custom: { beats: ['Fintech', 'Energy'] },
+        });
     });
 });

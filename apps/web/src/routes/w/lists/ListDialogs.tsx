@@ -209,10 +209,14 @@ export function CreateRecordDialog<O extends ListObject>({
     const [jobTitle, setJobTitle] = useState('');
     const [phone, setPhone] = useState('');
     const [extension, setExtension] = useState('');
-    /** The asked custom fields' values as typed, by key; turned into their types on save. */
-    const [customValues, setCustomValues] = useState<Record<string, string>>({});
-    /** A person's company: required here (not by the API, which imports and keys write without one). */
+    /** The asked custom fields' values as typed (a multi-select's as the options ticked), by key; typed on save. */
+    const [customValues, setCustomValues] = useState<Record<string, CustomValue>>({});
+    /**
+     * A person's company: required here (not by the API, which imports and keys write without one). One the rep
+     * adds ("Create company") is `NEW_COMPANY` until save makes it, so a cancelled popup leaves no empty company.
+     */
     const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+    const [saving, setSaving] = useState(false);
     /** A person's step: the address first, then the rest once it is known to be free (or left out). */
     const [step, setStep] = useState<'email' | 'details'>('email');
     const [checking, setChecking] = useState(false);
@@ -229,7 +233,7 @@ export function CreateRecordDialog<O extends ListObject>({
         .filter((d) => person && d.archivedAt === null && (d.showOnCreate || d.required))
         .sort((x, y) => x.position - y.position);
     const createCompany = useCompanyCreator(workspaceId, email.trim() || null);
-    const missing = person && (!company || asked.some((d) => d.required && !(customValues[d.key] ?? '').trim()));
+    const missing = person && (!company || asked.some((d) => d.required && !filled(customValues[d.key])));
 
     const checkEmail = async () => {
         const address = email.trim();
@@ -257,6 +261,36 @@ export function CreateRecordDialog<O extends ListObject>({
     };
 
     const save = async (handToOwner: boolean) => {
+        setSaving(true);
+        try {
+            await saveRecord(handToOwner);
+        } finally {
+            setSaving(false);
+        }
+    };
+    /** Makes the company the rep added, now the person is saved with it; false (and why) when it can't be. */
+    const makeCompany = async (): Promise<string | false> => {
+        if (!company || company.id !== NEW_COMPANY) return company?.id ?? false;
+        if (!createCompany) return false;
+        try {
+            const made = await createCompany(company.name);
+            // Kept, so a person refused below and saved again does not make the company twice.
+            setCompany({ id: made.id, name: made.title });
+            return made.id;
+        } catch (err) {
+            const existing = err instanceof ApiError ? err.details['companyId'] : undefined;
+            if (err instanceof ApiError && err.code === 'conflict.company_owned' && typeof existing === 'string') {
+                // Another company already has this address's domain: that one, not a twin.
+                const name = String(err.details['companyName'] ?? 'Another company');
+                setCompany({ id: existing, name });
+                setError(`${name} already has that domain, so it is chosen instead. Save again to add the person.`);
+            } else setError(failureText(err));
+            return false;
+        }
+    };
+    const saveRecord = async (handToOwner: boolean) => {
+        const companyId = person ? await makeCompany() : false;
+        if (person && companyId === false) return;
         const digits = phone.replace(/\D/g, '');
         const ext = extension.replace(/\D/g, '');
         const input: PersonInput | CompanyInput = person
@@ -273,7 +307,7 @@ export function CreateRecordDialog<O extends ListObject>({
                             },
                         }
                       : {}),
-                  ...(company ? { companyId: company.id } : {}),
+                  ...(companyId ? { companyId } : {}),
                   custom: customInput(asked, customValues),
                   ...(handToOwner ? { handToOwner: true } : {}),
               }
@@ -385,7 +419,10 @@ export function CreateRecordDialog<O extends ListObject>({
                                             if (!id) setCompany(null);
                                         }}
                                         onResolved={(id, name) => setCompany({ id, name })}
-                                        onCreate={createCompany}
+                                        onCreate={
+                                            createCompany &&
+                                            ((name) => Promise.resolve({ id: NEW_COMPANY, title: name, pending: true }))
+                                        }
                                     />
                                 </Field>
                                 <Field label="Job title">
@@ -449,7 +486,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 type="button"
                                 shape="square"
                                 className="self-start"
-                                loading={create.isPending}
+                                loading={saving}
                                 onClick={() => void save(true)}
                             >
                                 Save for {owned.ownerName}
@@ -475,7 +512,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 type="submit"
                                 shape="square"
                                 variant="primary"
-                                loading={create.isPending}
+                                loading={saving}
                                 disabled={!a.trim() || missing}
                             >
                                 {copy.add}
@@ -495,15 +532,44 @@ function CustomFieldInput({
     onChange,
 }: {
     definition: CustomFieldView;
-    value: string;
-    onChange: (value: string) => void;
+    value: CustomValue | undefined;
+    onChange: (value: CustomValue) => void;
 }) {
+    if (definition.type === 'multiselect') {
+        const ticked = new Set(Array.isArray(value) ? value : []);
+        return (
+            <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+                <legend className="mb-1 text-sm font-medium">
+                    {definition.label}
+                    {definition.required && <span className="text-danger"> *</span>}
+                </legend>
+                <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                    {definition.options.map((option) => (
+                        <label key={option} className="flex min-h-9 items-center gap-1.5 text-sm max-md:min-h-touch">
+                            <Checkbox
+                                checked={ticked.has(option)}
+                                onCheckedChange={(on) => {
+                                    const next = new Set(ticked);
+                                    if (on === true) next.add(option);
+                                    else next.delete(option);
+                                    // In the field's own order, whatever order they were ticked in.
+                                    onChange(definition.options.filter((o) => next.has(o)));
+                                }}
+                            />
+                            {option}
+                        </label>
+                    ))}
+                </div>
+            </fieldset>
+        );
+    }
+    const text = typeof value === 'string' ? value : '';
     const choices =
         definition.type === 'select' ? definition.options : definition.type === 'boolean' ? ['Yes', 'No'] : null;
     if (choices) {
         return (
             <Field label={definition.label} required={definition.required}>
-                <Select {...(value ? { value } : {})} onValueChange={onChange}>
+                <Select {...(text ? { value: text } : {})} onValueChange={onChange}>
                     <SelectTrigger aria-label={definition.label}>
                         <SelectValue placeholder="Choose…" />
                     </SelectTrigger>
@@ -519,19 +585,13 @@ function CustomFieldInput({
         );
     }
     return (
-        <Field
-            label={definition.label}
-            required={definition.required}
-            {...(definition.type === 'multiselect'
-                ? { hint: `Comma separated: ${definition.options.join(', ')}` }
-                : {})}
-        >
+        <Field label={definition.label} required={definition.required}>
             <Input
                 // A link pasted without https:// is taken (linkTo adds it on save); `type="url"` would refuse it.
                 {...(definition.type === 'url'
                     ? { type: 'text', inputMode: 'url' as const }
                     : { type: TEXT_TYPES[definition.type] ?? 'text' })}
-                value={value}
+                value={text}
                 onChange={(e) => onChange(e.target.value)}
                 autoComplete="off"
             />
@@ -540,18 +600,21 @@ function CustomFieldInput({
 }
 
 /** The asked fields' typed values in their types, as the API takes them; an empty one is left out. */
-function customInput(definitions: readonly CustomFieldView[], typed: Record<string, string>): Record<string, unknown> {
+function customInput(
+    definitions: readonly CustomFieldView[],
+    typed: Record<string, CustomValue>,
+): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const d of definitions) {
-        const raw = (typed[d.key] ?? '').trim();
-        if (!raw) continue;
+        const value = typed[d.key];
+        if (value === undefined || !filled(value)) continue;
+        if (Array.isArray(value)) {
+            out[d.key] = value;
+            continue;
+        }
+        const raw = value.trim();
         if (d.type === 'number') out[d.key] = Number(raw);
         else if (d.type === 'boolean') out[d.key] = raw === 'Yes';
-        else if (d.type === 'multiselect')
-            out[d.key] = raw
-                .split(',')
-                .map((v) => v.trim())
-                .filter(Boolean);
         else if (d.type === 'url') out[d.key] = linkTo(raw);
         else out[d.key] = raw;
     }
@@ -566,3 +629,12 @@ function takenText(holder: NonNullable<AddressCheckView['holder']>): string {
         : 'This person is already saved, with no owner';
     return holder.trashed ? `${whose}, in the trash.` : `${whose}.`;
 }
+
+/** An asked field's value in the form: text as typed, or a multi-select's ticked options. */
+type CustomValue = string | string[];
+
+const filled = (value: CustomValue | undefined): boolean =>
+    Array.isArray(value) ? value.length > 0 : (value ?? '').trim() !== '';
+
+/** The picker's id for a company added in the popup and not made yet (it is made on save). */
+const NEW_COMPANY = 'new-company';
