@@ -131,19 +131,28 @@ export class ReputationMonitor {
         // Per conversation: each thread the mailbox sent into in the window — a new one or a follow-up on an older
         // one — replied when someone outside the team wrote in it after the mailbox's first send there. A reply to a
         // follow-up is a reply: judging new threads only, a mailbox whose answers come on follow-ups read as silent.
+        // The mailbox's own copies first (`MATERIALIZED`), then their messages by id: the planner cannot see the
+        // workspace at plan time and guesses one row everywhere, and a plan driven by the workspace's messages
+        // instead looped over every message for every copy (seconds to minutes; the transaction expired).
         const [row] = await tx.$queryRaw<{ sends: number; replied: number }[]>`
-            WITH sent AS (
+            WITH mine AS MATERIALIZED (
+                SELECT message_id FROM mail_message_copies WHERE mailbox_id = ${mailbox.id}::uuid AND direction = 'outbound'
+            ),
+            sent AS MATERIALIZED (
                 SELECT m.thread_id, min(m.sent_at) AS first_sent
-                FROM mail_messages m
-                JOIN mail_message_copies c ON c.message_id = m.id AND c.mailbox_id = ${mailbox.id}::uuid AND c.direction = 'outbound'
+                FROM mine x
+                JOIN mail_messages m ON m.id = x.message_id
                 WHERE m.sent_at >= ${since}
                 GROUP BY m.thread_id
             )
             SELECT count(*)::int AS sends,
                    count(*) FILTER (WHERE EXISTS (
                        SELECT 1 FROM mail_messages r
-                       JOIN mail_participants rp ON rp.message_id = r.id AND rp.role = 'from' AND rp.member_id IS NULL
                        WHERE r.thread_id = s.thread_id AND r.direction = 'inbound' AND r.sent_at > s.first_sent
+                         AND EXISTS (
+                             SELECT 1 FROM mail_participants rp
+                             WHERE rp.message_id = r.id AND rp.role = 'from' AND rp.member_id IS NULL
+                         )
                    ))::int AS replied
             FROM sent s`;
         const sends = row?.sends ?? 0;
@@ -187,17 +196,21 @@ export class ReputationMonitor {
         const replies = await tx.$queryRaw<
             { id: string; from_address: string; body_text: string; person_id: string | null }[]
         >`
+            WITH mine AS MATERIALIZED (
+                SELECT message_id, direction FROM mail_message_copies WHERE mailbox_id = ${mailbox.id}::uuid
+            ),
+            written AS MATERIALIZED (
+                SELECT DISTINCT o.thread_id FROM mine x JOIN mail_messages o ON o.id = x.message_id
+                WHERE x.direction = 'outbound'
+            )
             SELECT m.id, lower(m.from_address) AS from_address, m.body_text,
                    (SELECT p.person_id FROM mail_participants p WHERE p.message_id = m.id AND p.role = 'from' LIMIT 1) AS person_id
-            FROM mail_messages m
-            JOIN mail_message_copies c ON c.message_id = m.id AND c.mailbox_id = ${mailbox.id}::uuid AND c.direction = 'inbound'
-            WHERE m.sent_at >= ${since}
+            FROM mine x
+            JOIN mail_messages m ON m.id = x.message_id
+            WHERE x.direction = 'inbound'
+              AND m.sent_at >= ${since}
               AND m.in_reply_to IS NOT NULL
-              AND EXISTS (
-                  SELECT 1 FROM mail_message_copies oc
-                  JOIN mail_messages o ON o.id = oc.message_id
-                  WHERE oc.mailbox_id = ${mailbox.id}::uuid AND oc.direction = 'outbound' AND o.thread_id = m.thread_id
-              )`;
+              AND m.thread_id IN (SELECT thread_id FROM written)`;
         for (const r of replies) {
             // The reply's own words: quoted text and signature dropped, as the fingerprint drops them.
             if (!isNegativeReply(normaliseBody(r.body_text))) continue;

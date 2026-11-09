@@ -16,6 +16,9 @@ import {
 import { insideTransaction } from './transaction-scope';
 import { WorkspaceContext } from './workspace-context';
 
+/** Postgres's per-statement limit, set transaction-locally beside the caller's settings. */
+const STATEMENT_TIMEOUT_SETTING = 'statement_timeout';
+
 /** The client handed to a `withWorkspace` callback: the transaction, already scoped. */
 export type WorkspaceClient = Prisma.TransactionClient;
 
@@ -151,7 +154,8 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
      * request pool inside a request's scope and on the background pool everywhere else, and its
      * callback runs marked as inside a transaction, so a network call made there is refused
      * (`assertNoOpenTransaction`), and what it registered with `afterCommit` runs once the commit is
-     * through (never on a rollback). It may run for `TRANSACTION_TIMEOUT_MS` before Prisma expires it.
+     * through (never on a rollback). It may run for `TRANSACTION_TIMEOUT_MS` before Prisma expires it,
+     * and so may any one statement in it (`statement_timeout`): Prisma does not cancel a running query.
      * A transaction that could not get a connection — the pool
      * exhausted (P2024), or no connection within `TRANSACTION_MAX_WAIT_MS` (P2028 before the
      * callback ran) — is retried with a bounded, doubling delay; any other error propagates.
@@ -170,9 +174,13 @@ export class RlsPrismaService extends PrismaClient implements OnModuleInit, OnMo
                     async (tx) => {
                         started = true;
                         const client = tx as WorkspaceClient;
-                        for (const [setting, value] of settings) {
-                            await client.$executeRaw`SELECT set_config(${setting}, ${value}, true)`;
-                        }
+                        // One round trip: the caller's settings, and a statement timeout equal to the
+                        // transaction's, so a query still running when Prisma expires the transaction is
+                        // stopped by Postgres instead of running on with nobody waiting for it.
+                        const all = [...settings, [STATEMENT_TIMEOUT_SETTING, String(TRANSACTION_TIMEOUT_MS)] as const];
+                        await client.$executeRaw`SELECT ${Prisma.join(
+                            all.map(([setting, value]) => Prisma.sql`set_config(${setting}, ${value}, true)`),
+                        )}`;
                         return insideTransaction(committed, () => fn(client));
                     },
                     { maxWait: TRANSACTION_MAX_WAIT_MS, timeout: TRANSACTION_TIMEOUT_MS },
