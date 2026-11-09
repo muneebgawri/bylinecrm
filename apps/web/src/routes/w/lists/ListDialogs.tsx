@@ -223,9 +223,10 @@ export function CreateRecordDialog<O extends ListObject>({
     const person = object === 'person';
     const askingEmail = person && step === 'email';
     // The custom fields an admin asks for here (Settings → Custom fields), and every required one: the API
-    // refuses a new person without those.
-    const asked = (useCustomFields(workspaceId, 'person').data ?? [])
-        .filter((d) => d.archivedAt === null && (d.showOnCreate || d.required))
+    // refuses a new person without those. Keyed on this dialog's own object: for New company that is the list
+    // page's cached query, so it costs no request, and none of it is asked.
+    const asked = (useCustomFields(workspaceId, object).data ?? [])
+        .filter((d) => person && d.archivedAt === null && (d.showOnCreate || d.required))
         .sort((x, y) => x.position - y.position);
     const createCompany = useCompanyCreator(workspaceId, email.trim() || null);
     const missing = person && (!company || asked.some((d) => d.required && !(customValues[d.key] ?? '').trim()));

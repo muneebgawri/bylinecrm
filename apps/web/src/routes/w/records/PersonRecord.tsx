@@ -42,7 +42,7 @@ export function personName(p: Pick<PersonView, 'nameFirst' | 'nameLast' | 'email
 }
 
 /** The custom field the imports write a lead's press-release link to. */
-export const PR_LINK_KEY = 'pr_link';
+const PR_LINK_KEY = 'pr_link';
 
 /** The person record (doc 50 §A), as a full page or inside the drawer. */
 export function PersonRecord({
