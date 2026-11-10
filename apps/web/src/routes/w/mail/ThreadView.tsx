@@ -1,5 +1,5 @@
 import { Badge, Button, LoadingRegion, Skeleton } from '@bylinecrm/ui';
-import { EyeOff, Paperclip, Reply } from 'lucide-react';
+import { CalendarClock, EyeOff, Paperclip, Reply } from 'lucide-react';
 import { useState } from 'react';
 import { useMailThread, useRecordDrafts } from '../../../api/mail';
 import { useRecord } from '../../../api/records';
@@ -119,7 +119,10 @@ function Message({ message }: { message: MailMessageView }) {
     );
 }
 
-/** Reply to the newest message: offered when the caller can read the thread and the other side is a person. */
+/**
+ * Reply to the newest message: offered when the caller can read the thread and the other side is a person. When the
+ * newest is an email the CRM sent, Schedule follow-up too (#350): a reply set for later, called off if they answer.
+ */
 function ReplyArea({
     workspaceId,
     thread,
@@ -129,7 +132,7 @@ function ReplyArea({
     thread: MailThreadView;
     newest: MailMessageView | undefined;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState<'reply' | 'follow-up' | null>(null);
     const personId = newest ? replyPersonId(newest) : null;
     // A reply drafted in this thread before: the button says so, and the composer opens with it.
     const drafts = useRecordDrafts(
@@ -155,12 +158,24 @@ function ReplyArea({
     }
     if (!open) {
         return (
-            <div>
-                <Button size="sm" shape="square" variant="secondary" onClick={() => setOpen(true)}>
+            <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" shape="square" variant="secondary" onClick={() => setOpen('reply')}>
                     <Reply aria-hidden />
                     {drafted ? 'Continue reply' : 'Reply'}
                 </Button>
-                {drafted && <Badge className="ml-2">Draft</Badge>}
+                {drafted && <Badge>Draft</Badge>}
+                {newest.direction === 'outbound' && newest.sentByCrm && (
+                    <Button
+                        size="sm"
+                        shape="square"
+                        variant="ghost"
+                        title="Send a nudge in this thread later, unless they answer first"
+                        onClick={() => setOpen('follow-up')}
+                    >
+                        <CalendarClock aria-hidden />
+                        Schedule follow-up
+                    </Button>
+                )}
             </div>
         );
     }
@@ -173,8 +188,10 @@ function ReplyArea({
                 mailboxIds: newest.mailboxIds,
                 subject: thread.subject,
                 threadId: thread.id,
+                followUp: open === 'follow-up',
             }}
-            onClose={() => setOpen(false)}
+            drafts={open === 'reply'}
+            onClose={() => setOpen(null)}
         />
     );
 }
@@ -183,11 +200,14 @@ function ReplyComposer({
     workspaceId,
     personId,
     reply,
+    drafts,
     onClose,
 }: {
     workspaceId: string;
     personId: string;
     reply: ComposerReply;
+    /** The thread's reply draft; a follow-up keeps none (it would come back as the reply). */
+    drafts: boolean;
     onClose: () => void;
 }) {
     const person = useRecord(workspaceId, 'person', personId);
@@ -204,7 +224,7 @@ function ReplyComposer({
             workspaceId={workspaceId}
             person={{ id: person.data.id, name: personName(person.data), email: person.data.emails.primary }}
             reply={reply}
-            drafts
+            drafts={drafts}
             autoFocus
             onSent={onClose}
             onDiscard={onClose}

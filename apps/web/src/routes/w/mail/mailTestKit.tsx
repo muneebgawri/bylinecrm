@@ -98,6 +98,7 @@ export const message = (over: Partial<MailMessageView> = {}): MailMessageView =>
     mailboxIds: ['mb-1'],
     bodiesVisible: true,
     direction: 'inbound',
+    sentByCrm: false,
     from: PERSON.email,
     subject: 'Intro',
     snippet: 'Thanks for reaching out',

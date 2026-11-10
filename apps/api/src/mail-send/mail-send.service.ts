@@ -97,6 +97,11 @@ export interface SendInput {
     timeZone?: string | undefined;
     /** Follow-ups queued behind this send, each later than the one before, sent in its thread. */
     followUps?: FollowUpInput[] | undefined;
+    /**
+     * #350: this scheduled reply is a follow-up on the email the CRM sent as `replyToMessageId` — queued behind it
+     * as a follow-up of its own (`followsOutboundId`), called off if the person answers first.
+     */
+    followUp?: boolean | undefined;
     /** The caller's draft this was written in: deleted with the send. */
     draftId?: string | undefined;
 }
@@ -290,6 +295,7 @@ export class MailSendService {
         // The send's id is fixed before the message is built: the MIME carries it (X-BylineCRM-Id).
         const id = randomUUID();
         const rfc822MessageId = newMessageId();
+        const follows = input.followUp ? await this.sentEmailToFollow(input) : null;
         const prepared = await this.prepare(input, { id, rfc822MessageId }, sendAt ? 'later' : 'request', {
             at: sendAt,
         });
@@ -307,6 +313,7 @@ export class MailSendService {
                     dealId: input.dealId ?? null,
                     templateId: input.templateId ?? null,
                     replyToMessageId: prepared.parentId,
+                    followsOutboundId: follows,
                     rfc822MessageId,
                     ...addressesOf(prepared),
                     subject: prepared.subject,
@@ -328,7 +335,7 @@ export class MailSendService {
                 },
             });
             if (sendAt) await this.announce(tx, 'email.scheduled', context, created.id);
-            let follows = created.id;
+            let previous = created.id;
             for (const f of followUps) {
                 await tx.mailOutbound.create({
                     data: {
@@ -339,7 +346,7 @@ export class MailSendService {
                         personId: input.personId,
                         dealId: input.dealId ?? null,
                         templateId: f.request.templateId ?? null,
-                        followsOutboundId: follows,
+                        followsOutboundId: previous,
                         rfc822MessageId: f.rfc822MessageId,
                         ...addressesOf(f.prepared),
                         subject: f.prepared.subject,
@@ -353,7 +360,7 @@ export class MailSendService {
                     },
                 });
                 await this.announce(tx, 'email.scheduled', context, f.id);
-                follows = f.id;
+                previous = f.id;
             }
             // The draft it was written in goes with it: sent (or scheduled) is no longer a draft.
             if (input.draftId) await deleteOwnDraft(tx, context, input.draftId);
@@ -376,6 +383,51 @@ export class MailSendService {
             recipientTimeZone: null,
             followUps: followUps.map((f) => ({ messageId: f.id, sendAt: f.sendAt })),
         };
+    }
+
+    /**
+     * #350: the CRM's send a follow-up on a sent email follows — the one stored as `replyToMessageId`, to the same
+     * person. Refused (`400`) for mail the CRM did not send (synced from Gmail), and when the person has already
+     * answered in the thread since it went: "unless they answer" has been met, so it would never go.
+     */
+    private sentEmailToFollow(input: SendInput): Promise<string> {
+        return this.rls.withWorkspace(async (tx) => {
+            const sent = await tx.mailOutbound.findFirst({
+                where: { mailMessageId: input.replyToMessageId!, status: 'sent' },
+                select: {
+                    id: true,
+                    personId: true,
+                    toAddresses: true,
+                    ccAddresses: true,
+                    mailMessage: { select: { threadId: true } },
+                },
+            });
+            if (!sent) {
+                throw new ValidationFailed('a follow-up goes on an email sent from the CRM', [
+                    { path: 'replyToMessageId', message: 'not an email sent from the CRM' },
+                ]);
+            }
+            if (sent.personId !== input.personId) {
+                throw new ValidationFailed('a follow-up goes to the person the email was sent to', [
+                    { path: 'personId', message: 'not the person this email was sent to' },
+                ]);
+            }
+            const first = await tx.mailOutbound.findUniqueOrThrow({
+                where: { id: await chainStart(tx, sent.id) },
+                select: { sentAt: true },
+            });
+            const replied = await hasReplyFrom(tx, {
+                addresses: [...sent.toAddresses, ...sent.ccAddresses],
+                since: first.sentAt ?? new Date(0),
+                threadId: sent.mailMessage?.threadId,
+            });
+            if (replied) {
+                throw new ValidationFailed('they have already answered in this thread', [
+                    { path: 'replyToMessageId', message: 'answered since it was sent' },
+                ]);
+            }
+            return sent.id;
+        });
     }
 
     /**

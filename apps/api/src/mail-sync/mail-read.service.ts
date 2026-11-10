@@ -13,6 +13,7 @@ type MessageForView = Prisma.MailMessageGetPayload<{
     include: {
         participants: true;
         copies: { select: { mailboxId: true; mailbox: { select: { ownerMemberId: true; purpose: true } } } };
+        outboundOf: { select: { id: true } };
     };
 }>;
 
@@ -98,6 +99,7 @@ export class MailReadService {
                                 },
                                 orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
                             },
+                            outboundOf: { where: { status: 'sent' }, select: { id: true }, take: 1 },
                         },
                     },
                 },
@@ -190,6 +192,7 @@ function messageView(m: MessageForView, bodiesVisible: boolean): MailMessageView
         mailboxIds: [...new Set(m.copies.map((c) => c.mailboxId))],
         bodiesVisible,
         direction: m.direction,
+        sentByCrm: m.outboundOf.length > 0,
         from: m.fromAddress,
         subject: m.subject,
         snippet: m.snippet,
