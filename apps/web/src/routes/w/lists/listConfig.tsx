@@ -410,7 +410,7 @@ export const LIST_COPY: Readonly<
         singular: 'person',
         plural: 'people',
         add: 'Add person',
-        search: 'Search people…',
+        search: 'Search name, email or phone…',
     },
     company: {
         title: 'Companies',

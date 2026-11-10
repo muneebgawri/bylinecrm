@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { e164Of, phoneTail } from '@bylinecrm/shared';
+import { e164Of, phoneSearchDigits, phoneTail } from '@bylinecrm/shared';
 import { directionOf, outsideNumber, ownNumber, phonesPattern, statusOf } from './call-rules';
 import { readEnvelope } from './quo-hook.service';
 import type { QuoCall } from './quo.port';
@@ -55,6 +55,32 @@ describe('CALL-1 call rules', () => {
         expect('"number":"7700900124"').not.toMatch(new RegExp(phonesPattern('+447700900123')!));
         expect(phonesPattern('+1555')).toBeNull();
         expect(phoneTail('+1 (415) 555-0100')).toBe('155550100');
+    });
+
+    it('finds a stored phone however the number is typed in a search box', () => {
+        const finds = (q: string, stored: string) =>
+            phoneSearchDigits(q).some((run) => new RegExp(`^[0-9]*${run}`).test(stored));
+        for (const q of [
+            '+44 7700 900123',
+            '+447700900123',
+            '0044 7700 900123',
+            '+44 (0)7700-900123',
+            '07700 900123',
+            '07700900123',
+            '7700 900 123',
+            '+44 7700',
+            '900123',
+        ]) {
+            expect(finds(q, '07700900123'), q).toBe(true);
+        }
+        for (const q of ['(415) 555-0100', '415.555.0100', '1-415-555-0100', '+1 415 555 0100 ext. 12', '555-0100']) {
+            expect(finds(q, '4155550100'), q).toBe(true);
+        }
+        expect(finds('+92 300 1234567', '3001234567')).toBe(true);
+        expect(finds('7700 900 124', '07700900123')).toBe(false);
+        expect(phoneSearchDigits('Matt Smith')).toEqual([]);
+        expect(phoneSearchDigits('mh@x.test')).toEqual([]);
+        expect(phoneSearchDigits('123')).toEqual([]);
     });
 
     it('dials a person’s phone in E.164, dropping a trunk zero outside North America', () => {

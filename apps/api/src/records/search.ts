@@ -1,4 +1,4 @@
-import { SEARCH_CANDIDATE_LIMIT } from '@bylinecrm/shared';
+import { SEARCH_CANDIDATE_LIMIT, phoneSearchDigits } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 
@@ -36,11 +36,17 @@ export async function searchCandidates(
         table === 'people'
             ? Prisma.sql`"id" IN (SELECT "person_id" FROM "person_addresses" WHERE "address" LIKE ${prefix})`
             : Prisma.sql`FALSE`;
+    // A person is found by any stored phone, primary or additional, however the number was typed. The runs are
+    // digits only, so they are safe in the regex; JSONB renders as text with a space after the colon.
+    const runs = table === 'people' ? phoneSearchDigits(q) : [];
+    const phoneClause = runs.length
+        ? Prisma.sql`"phones"::text ~ ${`"number":\\s*"[0-9]*(${runs.join('|')})`}`
+        : Prisma.sql`FALSE`;
     const words = prefixQuery(q);
     const rows = await tx.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM ${name}
         WHERE ${deletedClause}
-          AND ("search" @@ to_tsquery('simple', ${words}) OR ${prefixClause} OR ${addressClause})
+          AND ("search" @@ to_tsquery('simple', ${words}) OR ${prefixClause} OR ${addressClause} OR ${phoneClause})
         ORDER BY ts_rank("search", to_tsquery('simple', ${words})) DESC, "id"
         LIMIT ${SEARCH_CANDIDATE_LIMIT}`;
     return rows.map((r) => r.id);

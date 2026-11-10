@@ -721,6 +721,27 @@ describe('records', () => {
             expect(global.person.map((h) => h.title)).toEqual(['Mina Harker']);
         });
 
+        it('finds a person by an additional phone, however the number is typed', async () => {
+            const digits = String(stamp).replace(/\D/g, '').slice(-6).padStart(6, '0');
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Quincey',
+                    nameLast: 'Morris',
+                    phones: {
+                        primary: null,
+                        additional: [{ number: `0770${digits}`, countryCode: 'GB' }],
+                    },
+                })
+                .expect(201);
+            for (const q of [`+44 770 ${digits}`, `0044 (0)770-${digits}`, `0770 ${digits}`]) {
+                const listed = await as(admin)
+                    .get(w(`/people?q=${encodeURIComponent(q)}`))
+                    .expect(200);
+                expect((listed.body as Page<Person>).items.map((p) => p.nameFirst)).toEqual(['Quincey']);
+            }
+        });
+
         it('another workspace searching the same additional email finds nothing', async () => {
             const second = `cross-${stamp}@elsewhere.test`;
             await as(admin)
