@@ -164,6 +164,23 @@ describe('records', () => {
             expect((repList.body as Page<Person>).items.map((p) => p.id)).toEqual([repsPerson]);
         });
 
+        it("search keeps the member's scope: by name or address, they find their own person, not the admin's (#344)", async () => {
+            for (const q of ['Owned', 'Own', `admin-own-${stamp}`, `rep-own-${stamp}`]) {
+                const repFound = await as(rep)
+                    .get(w(`/people?q=${encodeURIComponent(q)}`))
+                    .expect(200);
+                expect((repFound.body as Page<Person>).items.map((p) => p.id)).not.toContain(adminsPerson);
+            }
+            const repOwn = await as(rep)
+                .get(w(`/people?q=${encodeURIComponent(`rep-own-${stamp}`)}`))
+                .expect(200);
+            expect((repOwn.body as Page<Person>).items.map((p) => p.id)).toEqual([repsPerson]);
+            const adminFound = await as(admin)
+                .get(w(`/people?q=${encodeURIComponent(`admin-own-${stamp}`)}`))
+                .expect(200);
+            expect((adminFound.body as Page<Person>).items.map((p) => p.id)).toEqual([adminsPerson]);
+        });
+
         it("another owner's record answers 404, not 403, to every verb", async () => {
             await as(rep)
                 .get(w(`/people/${adminsPerson}`))
