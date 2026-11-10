@@ -143,6 +143,8 @@ export function poachMessage(input: {
  * (`In-Reply-To` empty).
  */
 export interface OffCrmColdFacts {
+    /** The member who sent it: their own customers and prospects are theirs to write to from Gmail. */
+    senderId: string;
     recipients: readonly PoachRecipient[];
     internalDomains: ReadonlySet<string>;
     /** Addresses that wrote in the thread before this message. */
@@ -156,9 +158,11 @@ export interface OffCrmColdFinding {
 }
 
 /**
- * The outside addresses a first-touch message reached: every recipient that is neither a member nor on the
- * workspace's own domains — unless someone outside wrote in the thread first, in which case the message is an
- * answer, whatever its headers say, and nothing is cold. One finding per address.
+ * The outside addresses a first-touch message reached: every recipient that is neither a member, nor on the
+ * workspace's own domains, nor the sender's own lead (a customer or prospect they own, by person or company) —
+ * unless someone outside wrote in the thread first, in which case the message is an answer, whatever its headers
+ * say, and nothing is cold. Another member's lead still counts here (and is GUARD-2's poaching too). One finding
+ * per address.
  */
 export function offCrmColdFindings(facts: OffCrmColdFacts): OffCrmColdFinding[] {
     for (const who of facts.threadSenders) if (!isInternal(who, facts.internalDomains)) return [];
@@ -169,6 +173,7 @@ export function offCrmColdFindings(facts: OffCrmColdFacts): OffCrmColdFinding[] 
         if (seen.has(address)) continue;
         seen.add(address);
         if (r.memberId || isInternal(address, facts.internalDomains)) continue;
+        if (r.ownerId === facts.senderId) continue;
         findings.push({ address, personId: r.personId, companyId: r.companyId });
     }
     return findings;

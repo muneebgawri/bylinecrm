@@ -189,8 +189,9 @@ describe('GUARD-1/2 shared mailboxes', () => {
 
 describe('GUARD-3 cold mail outside the CRM', () => {
     const cold = (over: Partial<OffCrmColdFacts> = {}): OffCrmColdFacts => ({
+        senderId: X,
         recipients: [
-            recipient({ ownerId: X }),
+            recipient({ ownerId: Y }),
             recipient({ address: 'eli@other.com', personId: null, companyId: null }),
         ],
         internalDomains: new Set(['byline.example']),
@@ -198,9 +199,20 @@ describe('GUARD-3 cold mail outside the CRM', () => {
         ...over,
     });
 
-    it('flags every outside recipient of a first-touch mail, the sender’s own leads included', () => {
+    it('flags every outside recipient of a first-touch mail that is not the sender’s own lead', () => {
         expect(offCrmColdFindings(cold())).toEqual([
             { address: 'dana@acme.com', personId: 'person-1', companyId: 'company-1' },
+            { address: 'eli@other.com', personId: null, companyId: null },
+        ]);
+    });
+
+    it('lets a member write to their own customers and prospects from Gmail', () => {
+        const recipients = [
+            recipient({ ownerId: X }),
+            recipient({ address: 'ops@acme.com', personId: null, ownerId: X }),
+            recipient({ address: 'eli@other.com', personId: null, companyId: null, ownerId: null }),
+        ];
+        expect(offCrmColdFindings(cold({ recipients }))).toEqual([
             { address: 'eli@other.com', personId: null, companyId: null },
         ]);
     });
