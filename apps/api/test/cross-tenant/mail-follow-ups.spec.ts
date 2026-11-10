@@ -335,6 +335,104 @@ describe('mail follow-ups', () => {
         });
     });
 
+    describe('a follow-up on an email already sent (#350)', () => {
+        /** A follow-up, at `hours` from now, on the stored copy `messageId` of a sent email. */
+        const followUpOn = (messageId: string, hours: number, extra: Record<string, unknown> = {}) =>
+            as(admin)
+                .post(w('/mail/send'))
+                .send({
+                    mailboxId: adminMailbox,
+                    personId: danaId,
+                    replyToMessageId: messageId,
+                    followUp: true,
+                    sendAt: inMs(hours * HOUR),
+                    body: body(para(t('Any thoughts?'))),
+                    ...extra,
+                });
+
+        it('queues behind the sent email, goes in its thread at its time, and the rest stop when they answer', async () => {
+            const a = await accepted(queue([]));
+            expect(await send.deliver(workspace, a.messageId, noWait)).toBe('sent');
+            const first = gmail.sent.at(-1)!;
+            const sent = await status(a.messageId);
+
+            const nudges = await accepted(
+                followUpOn(sent.mailMessageId!, 24, {
+                    followUps: [{ sendAt: inMs(48 * HOUR), body: body(para(t('Last try.'))) }],
+                }),
+            );
+            expect(nudges.status).toBe('scheduled');
+            expect(await status(nudges.messageId)).toMatchObject({ followsOutboundId: a.messageId });
+            const [lastId] = nudges.followUps.map((f) => f.messageId) as [string];
+            expect(await status(lastId)).toMatchObject({ followsOutboundId: nudges.messageId });
+
+            expect(await send.deliver(workspace, nudges.messageId, noWait, await dueAt(nudges.messageId))).toBe('sent');
+            const nudge = gmail.sent.at(-1)!;
+            expect(nudge.threadId).toBe(await gmailThreadOf(a.messageId));
+            expect(header(nudge.raw, 'In-Reply-To')).toBe(`<${first.messageId}>`);
+            expect(header(nudge.raw, 'Subject')).toBe(`Re: Hello ${stamp}`);
+
+            gmail.deliver(adminEmail, {
+                from: dana,
+                to: [adminEmail],
+                subject: `Re: Hello ${stamp}`,
+                text: 'Thanks, not now.',
+                inReplyTo: nudge.messageId,
+            });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            await settle(app);
+            expect(await status(lastId)).toMatchObject({ status: 'cancelled', error: { code: 'follow_up.replied' } });
+
+            // Answered: a follow-up now would never go, so it is refused at the request.
+            const late = await followUpOn(sent.mailMessageId!, 24);
+            expect(late.status).toBe(400);
+            expect(err(late).fieldErrors?.map((f) => f.path)).toEqual(['replyToMessageId']);
+        });
+
+        it('a later nudge follows the last one pending, after it — never beside it', async () => {
+            const a = await accepted(queue([]));
+            expect(await send.deliver(workspace, a.messageId, noWait)).toBe('sent');
+            const sent = await status(a.messageId);
+            const one = await accepted(followUpOn(sent.mailMessageId!, 24));
+            const two = await accepted(followUpOn(sent.mailMessageId!, 48));
+            expect(await status(two.messageId)).toMatchObject({ followsOutboundId: one.messageId });
+            const early = await followUpOn(sent.mailMessageId!, 36);
+            expect(early.status).toBe(400);
+            expect(err(early).fieldErrors?.map((f) => f.path)).toEqual(['sendAt']);
+            // One cancelled by hand: the next nudge follows the one still pending.
+            await as(admin)
+                .post(w(`/mail/messages/${two.messageId}/cancel`))
+                .expect(200);
+            const three = await accepted(followUpOn(sent.mailMessageId!, 36));
+            expect(await status(three.messageId)).toMatchObject({ followsOutboundId: one.messageId });
+        });
+
+        it('goes from the mailbox the email was sent from', async () => {
+            const a = await accepted(queue([]));
+            expect(await send.deliver(workspace, a.messageId, noWait)).toBe('sent');
+            const sent = await status(a.messageId);
+            const other = await followUpOn(sent.mailMessageId!, 24, { mailboxId: memberMailbox });
+            expect(other.status).toBe(400);
+            expect(err(other).fieldErrors?.map((f) => f.path)).toEqual(['mailboxId']);
+        });
+
+        it('refuses mail the CRM did not send, a send now, and stores nothing', async () => {
+            const before = await owner.mailOutbound.count({ where: { workspaceId: workspace } });
+            gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: `Ping ${stamp}`, text: 'Hello?' });
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            const theirs = await owner.mailMessage.findFirstOrThrow({
+                where: { fromAddress: dana, subject: `Ping ${stamp}` },
+            });
+            const synced = await followUpOn(theirs.id, 24);
+            expect(synced.status).toBe(400);
+            expect(err(synced).fieldErrors?.map((f) => f.path)).toEqual(['replyToMessageId']);
+            const now = await followUpOn(theirs.id, 24, { sendAt: undefined });
+            expect(now.status).toBe(400);
+            expect(err(now).fieldErrors?.map((f) => f.path)).toEqual(['sendAt']);
+            expect(await owner.mailOutbound.count({ where: { workspaceId: workspace } })).toBe(before);
+        });
+    });
+
     async function gmailThreadOf(outboundId: string): Promise<string | null> {
         return (await owner.mailOutbound.findUniqueOrThrow({ where: { id: outboundId } })).providerThreadId;
     }

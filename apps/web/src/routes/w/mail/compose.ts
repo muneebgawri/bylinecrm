@@ -140,6 +140,8 @@ export interface Draft {
     timeZone: string;
     /** Follow-ups queued behind it, in order; each goes in its thread as a reply, unless the person answers. */
     followUps?: readonly FollowUpDraft[] | undefined;
+    /** #350: a scheduled follow-up on the sent email it replies to — called off if the person answers first. */
+    followUp?: boolean | undefined;
 }
 
 /**
@@ -222,6 +224,7 @@ export function sendInput(draft: Draft): SendMailInput {
             ? { templateId: draft.fill.templateId }
             : { body: draft.body, ...(subject !== '' ? { subject } : {}) }),
         ...(draft.replyToMessageId ? { replyToMessageId: draft.replyToMessageId } : {}),
+        ...(draft.followUp ? { followUp: true as const } : {}),
         ...(draft.signature !== undefined ? { signature: draft.signature } : {}),
         ...(draft.sendAt || draft.followUps?.length ? { timeZone: draft.timeZone } : {}),
         ...(draft.sendAt ? { sendAt: draft.sendAt.toISOString() } : {}),

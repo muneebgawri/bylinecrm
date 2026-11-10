@@ -80,6 +80,13 @@ export interface ComposerReply {
     subject: string;
     /** The thread it is in: a reply's draft is restored for the thread, whichever of its messages it answered. */
     threadId: string;
+    /**
+     * #350: a follow-up on this sent email — scheduled only (three days on, as a new follow-up row starts), and
+     * called off by the server if the person answers first.
+     */
+    followUp?: boolean | undefined;
+    /** A follow-up's sent email's From address: it goes from that mailbox, as the server requires. */
+    sentFrom?: string | undefined;
 }
 
 export interface ComposerHandle {
@@ -156,7 +163,7 @@ export function Composer(props: ComposerProps) {
         <div
             ref={root}
             tabIndex={-1}
-            aria-label={reply ? 'Reply' : `Email ${person?.name ?? ''}`.trim()}
+            aria-label={reply?.followUp ? 'Follow-up' : reply ? 'Reply' : `Email ${person?.name ?? ''}`.trim()}
             role="region"
             className={cn('outline-none', props.className)}
         >
@@ -194,7 +201,10 @@ function MailboxGate(props: ComposerProps & { person: ComposerPerson; formHandle
         );
     }
     const own = ownSendingMailboxes(mailboxes.data, membership?.memberId).filter(
-        (m) => !reply || reply.mailboxIds.includes(m.id),
+        (m) =>
+            !reply ||
+            (reply.mailboxIds.includes(m.id) &&
+                (!reply.sentFrom || m.email.toLowerCase() === reply.sentFrom.toLowerCase())),
     );
     if (own.length === 0) {
         if (reply) {
@@ -297,7 +307,10 @@ function ComposerForm({
     const [followUps, setFollowUps] = useState<FollowUpDraft[]>(() => [...(restored?.followUps ?? [])]);
     const followUpKey = useRef(0);
     // The time picked to schedule it, kept with the draft until it is scheduled.
-    const [scheduledFor, setScheduledFor] = useState<Date | null>(restored?.sendAt ?? null);
+    const followUpOnSent = !!reply?.followUp;
+    const [scheduledFor, setScheduledFor] = useState<Date | null>(
+        () => restored?.sendAt ?? (followUpOnSent ? nextFollowUpAt([], Date.now()) : null),
+    );
     const subjectRef = useRef<RichTextHandle>(null);
     const bodyRef = useRef<RichTextHandle>(null);
     const send = useSendMail(workspaceId);
@@ -516,6 +529,7 @@ function ComposerForm({
             sendAt,
             timeZone: timeZone ?? senderTimeZone(),
             followUps,
+            followUp: followUpOnSent,
         });
         const subjectText = docToSubject(subject) || (reply ? `Re: ${reply.subject.replace(/^re:\s*/i, '')}` : '');
         try {
@@ -776,6 +790,11 @@ function ComposerForm({
                         {why}
                     </p>
                 )}
+                {followUpOnSent && (
+                    <p className="m-0 w-full text-xs text-text-muted">
+                        Goes in this thread at the time you pick, unless they answer first.
+                    </p>
+                )}
                 {error && (
                     <p role="alert" className="m-0 w-full text-xs text-danger">
                         {error}
@@ -837,8 +856,8 @@ function ComposerForm({
                               </Button>
                           )}
                     <SchedulePicker
-                        title="Schedule send"
-                        confirm="Schedule send"
+                        title={followUpOnSent ? 'Schedule follow-up' : 'Schedule send'}
+                        confirm={followUpOnSent ? 'Schedule follow-up' : 'Schedule send'}
                         initial={scheduledFor ?? undefined}
                         pending={send.isPending}
                         error={error ?? undefined}
@@ -853,20 +872,22 @@ function ComposerForm({
                                 aria-describedby={why ? `${id}-why` : undefined}
                             >
                                 <CalendarClock aria-hidden />
-                                Schedule
+                                {followUpOnSent ? 'Schedule follow-up' : 'Schedule'}
                             </Button>
                         }
                     />
-                    <Button
-                        size="sm"
-                        shape="square"
-                        disabled={blocked}
-                        loading={send.isPending}
-                        aria-describedby={why ? `${id}-why` : undefined}
-                        onClick={() => void submit().catch(() => undefined)}
-                    >
-                        Send
-                    </Button>
+                    {!followUpOnSent && (
+                        <Button
+                            size="sm"
+                            shape="square"
+                            disabled={blocked}
+                            loading={send.isPending}
+                            aria-describedby={why ? `${id}-why` : undefined}
+                            onClick={() => void submit().catch(() => undefined)}
+                        >
+                            Send
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>
