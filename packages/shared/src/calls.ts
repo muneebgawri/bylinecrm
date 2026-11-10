@@ -239,3 +239,26 @@ export function e164Of(phone: { number: string; countryCode: string } | null | u
 export function phoneTail(numberOrE164: string): string {
     return numberOrE164.replace(/\D/g, '').slice(-9);
 }
+
+const CALLING_CODES = [...new Set(Object.values(CALLING_CODE_BY_COUNTRY))];
+
+/**
+ * The digit runs a search box text finds a stored phone `number` by (digits as dialled, a trunk `0` or not), in
+ * whatever format it was typed: `+44 7700 900123`, `0044 (0)7700-900123`, `07700 900123`, `(415) 555.0100 x12`,
+ * `1-415-555-0100`, or just part of one. Empty when the text is not a phone number (letters, under four digits).
+ * The text's digits without leading zeros; after a `+` or `00` the same without its calling code; and the last
+ * nine digits, which no calling code or trunk prefix changes (as `phoneTail`).
+ */
+export function phoneSearchDigits(q: string): string[] {
+    const text = q.trim().replace(/\s*(?:ext\.?|x)\s*\d{1,10}$/i, '');
+    if (!/^\+?[\d\s().\-/]+$/.test(text)) return [];
+    const digits = text.replace(/\D/g, '');
+    const core = digits.replace(/^0+/, '');
+    const runs = new Set([core, phoneTail(core)]);
+    if (text.startsWith('+') || digits.startsWith('00')) {
+        for (const code of CALLING_CODES) {
+            if (core.startsWith(code)) runs.add(core.slice(code.length).replace(/^0+/, ''));
+        }
+    }
+    return [...runs].filter((run) => run.length >= 4);
+}

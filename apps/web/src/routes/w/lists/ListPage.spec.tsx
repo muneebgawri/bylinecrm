@@ -271,7 +271,7 @@ describe('People list', () => {
         expect(within(cards).getAllByRole('button')).toHaveLength(2);
         expect(within(cards).getByText('Dana Reyes')).toBeInTheDocument();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
-        expect(screen.getByRole('searchbox', { name: 'Search people…' })).toBeInTheDocument();
+        expect(screen.getByRole('searchbox', { name: 'Search name, email or phone…' })).toBeInTheDocument();
     });
 
     it('says the view matches nothing — not that there are no people — when a filter is on', async () => {
