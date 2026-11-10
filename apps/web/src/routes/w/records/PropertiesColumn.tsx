@@ -132,7 +132,7 @@ export function SectionLabel({ children }: { children: ReactNode }) {
     );
 }
 
-const TEXT_TYPES: Partial<Record<CustomFieldType, 'text' | 'email' | 'url' | 'number' | 'date' | 'tel'>> = {
+export const TEXT_TYPES: Partial<Record<CustomFieldType, 'text' | 'email' | 'url' | 'number' | 'date' | 'tel'>> = {
     text: 'text',
     number: 'number',
     date: 'date',
@@ -143,7 +143,7 @@ const TEXT_TYPES: Partial<Record<CustomFieldType, 'text' | 'email' | 'url' | 'nu
 };
 
 /** A URL field's value as a link: one typed without a scheme ("prnewswire.com/…") opens over https. */
-function linkTo(value: string): string {
+export function linkTo(value: string): string {
     return /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
 }
 

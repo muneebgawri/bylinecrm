@@ -147,6 +147,7 @@ export class CreateCustomFieldDto extends createZodDto(
             options: customFieldOptions.optional(),
             required: z.boolean().optional(),
             adminOnly: z.boolean().optional(),
+            showOnCreate: z.boolean().optional(),
             position: position.optional(),
         })
         .superRefine((value, ctx) => {
@@ -161,6 +162,7 @@ export class UpdateCustomFieldDto extends createZodDto(
         options: customFieldOptions.optional(),
         required: z.boolean().optional(),
         adminOnly: z.boolean().optional(),
+        showOnCreate: z.boolean().optional(),
         position: position.optional(),
     }),
 ) {}
