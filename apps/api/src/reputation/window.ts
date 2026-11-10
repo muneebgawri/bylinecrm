@@ -53,11 +53,15 @@ export async function newThreadMail(
             addresses: string[];
         }[]
     >`
+        -- The mailbox's copies first, then their messages by id: see ReputationMonitor.replyRateFloor.
+        WITH mine AS MATERIALIZED (
+            SELECT message_id FROM mail_message_copies WHERE mailbox_id = ${mailboxId}::uuid AND direction = 'outbound'
+        )
         SELECT m.id, m.subject, m.body_text, m.body_simhash, m.subject_key, m.sent_at,
                ARRAY(SELECT DISTINCT lower(p.address) FROM mail_participants p
                      WHERE p.message_id = m.id AND p.role IN ('to', 'cc', 'bcc') AND p.member_id IS NULL) AS addresses
-        FROM mail_messages m
-        JOIN mail_message_copies c ON c.message_id = m.id AND c.mailbox_id = ${mailboxId}::uuid AND c.direction = 'outbound'
+        FROM mine x
+        JOIN mail_messages m ON m.id = x.message_id
         WHERE m.sent_at >= ${since}
           AND m.in_reply_to IS NULL
           AND NOT EXISTS (SELECT 1 FROM mail_outbound o WHERE o.mail_message_id = m.id)`;
