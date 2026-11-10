@@ -39,9 +39,10 @@ export interface RecordPickerProps {
     onResolved?: ((id: string, title: string) => void) | undefined;
     /**
      * Makes a new record named as typed, offered as `Create <label> "<typed>"` when no match has that name;
-     * absent (the member may not create one), nothing is offered. Resolves the new record, which is then chosen.
+     * absent (the member may not create one), nothing is offered. Resolves the new record, which is then chosen;
+     * `pending` when the caller only makes it later (on its own save), so nothing says it was created yet.
      */
-    onCreate?: ((name: string) => Promise<{ id: string; title: string }>) | undefined;
+    onCreate?: ((name: string) => Promise<{ id: string; title: string; pending?: boolean }>) | undefined;
     canEdit?: boolean;
     /** Why editing is not offered (FR-CRMS-UI-6). */
     reason?: string | undefined;
@@ -122,7 +123,7 @@ export function RecordPicker({
     const create = async (name: string) => {
         if (!onCreate || creating) return;
         setCreating(true);
-        let created: { id: string; title: string };
+        let created: { id: string; title: string; pending?: boolean };
         try {
             created = await onCreate(name);
         } catch (e) {
@@ -144,7 +145,8 @@ export function RecordPicker({
             setCreating(false);
         }
         onResolved?.(created.id, created.title);
-        if (await choose(created.id)) toast({ tone: 'success', title: `Created ${noun} “${created.title}”.` });
+        if ((await choose(created.id)) && !created.pending)
+            toast({ tone: 'success', title: `Created ${noun} “${created.title}”.` });
     };
 
     return (

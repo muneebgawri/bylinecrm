@@ -25,6 +25,7 @@ function custom(partial: Partial<CustomFieldView> & Pick<CustomFieldView, 'key' 
         options: [],
         required: false,
         adminOnly: false,
+        showOnCreate: false,
         position: 0,
         archivedAt: null,
         createdAt: '2026-10-09T00:00:00.000Z',
