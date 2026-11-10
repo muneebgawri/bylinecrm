@@ -281,4 +281,66 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
         expect(res.status).toBe(409);
         expect(res.body).toMatchObject({ code: 'conflict.company_owned', details: { companyId: company } });
     });
+
+    describe('#353: a new company is made with the person, in one transaction', () => {
+        const companiesNamed = async (name: string) =>
+            (
+                (
+                    await as(admin)
+                        .get(w(`/companies?q=${encodeURIComponent(name)}`))
+                        .expect(200)
+                ).body as {
+                    items: { id: string; name: string; domain: string | null }[];
+                }
+            ).items.filter((c) => c.name === name);
+
+        it('makes the company, at the address’s domain, and the person at it', async () => {
+            const name = `Vega ${stamp}`;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Ola',
+                    emails: { primary: `ola@vega-${stamp}.test`, additional: [] },
+                    company: { name },
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            const [made] = await companiesNamed(name);
+            expect(made).toMatchObject({ domain: `vega-${stamp}.test` });
+            expect(res.body).toMatchObject({ companyId: made!.id, ownerId: benId });
+        });
+
+        it('a person create that fails leaves no company behind', async () => {
+            const name = `Fail ${stamp}`;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Pia',
+                    emails: { primary: `pia@fail-${stamp}.test`, additional: [] },
+                    custom: { nosuchfield: 'x' },
+                    company: { name },
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(422);
+            expect(await companiesNamed(name)).toHaveLength(0);
+        });
+
+        it('an owned domain is refused before any write, with the same details', async () => {
+            const name = `Twin ${stamp}`;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send(person('rui', { company: { name } }));
+            expect(res.status).toBe(409);
+            expect(res.body).toMatchObject({
+                code: 'conflict.company_owned',
+                details: { companyId: company, ownerMemberId: anaId },
+            });
+            expect(await companiesNamed(name)).toHaveLength(0);
+        });
+
+        it('names a company or a new one, never both', async () => {
+            await as(ana)
+                .post(w('/people'))
+                .send(person('tia', { companyId: company, company: { name: `Both ${stamp}` } }))
+                .expect(422);
+        });
+    });
 });

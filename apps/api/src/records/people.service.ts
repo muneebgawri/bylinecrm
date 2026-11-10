@@ -10,6 +10,7 @@ import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { CompanyOwnership, companyDomainOfAddress } from './company-ownership';
+import { CompaniesService } from './companies.service';
 import { requireCallerMember } from '../infra/caller-member';
 import { RotationService } from '../cadence/rotation.service';
 import { TransfersService } from '../transfers/transfers.service';
@@ -43,6 +44,8 @@ export interface PersonInput {
      * create; the person is theirs at once, and they are told (a `forced` transfer from the saver).
      */
     handToOwner?: boolean | undefined;
+    /** Only on create (#353): a new company, made with the person in one transaction. Never with `companyId`. */
+    company?: { name: string } | undefined;
 }
 
 /** A record list request: paging, plus the filter, sort, view and search the planner resolves (P1-4). */
@@ -93,6 +96,7 @@ export class PeopleService implements BulkRecords {
         private readonly ownership: CompanyOwnership,
         private readonly transfers: TransfersService,
         private readonly rotation: RotationService,
+        private readonly companies: CompaniesService,
     ) {}
 
     /** Live people, or the trash when `deleted`; the page and its total read one `where`. */
@@ -128,12 +132,28 @@ export class PeopleService implements BulkRecords {
 
     async create(input: PersonInput): Promise<PersonView> {
         const context = this.current();
+        if (input.company && input.companyId != null) {
+            throw new UnprocessableEntityException('name an existing company or a new one, not both');
+        }
         if (input.handToOwner) {
+            // Handed over, the person goes to the owner's company: a new company is never made for them.
             const handed = await this.handToOwner(context, input);
             if (handed) return handed;
         }
+        const { company, ...person } = input;
         const row = await this.rls.withWorkspace(async (tx) => {
-            const created = await this.createIn(tx, context, input);
+            // #353: the new company and the person commit together or not at all. Its domain check (OWN-2) runs
+            // before its write, so an owned domain is refused with nothing written.
+            if (company) {
+                const made = await this.companies.createIn(tx, context, {
+                    name: company.name,
+                    domain: companyDomainOfAddress(person.emails?.primary),
+                    ownerId: person.ownerId,
+                });
+                await this.events.record(tx, made.event);
+                person.companyId = made.row.id;
+            }
+            const created = await this.createIn(tx, context, person);
             await this.events.record(tx, created.event);
             return created.row;
         });

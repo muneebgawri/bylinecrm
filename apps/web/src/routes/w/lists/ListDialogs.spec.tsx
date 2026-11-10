@@ -55,9 +55,9 @@ function stubApi(
                     opportunity: [],
                     company: [{ object: 'company', id: 'c1', title: 'Acme Corp', subtitle: 'acme.com' }],
                 });
-            if (method === 'POST' && url.split('?')[0]!.endsWith('/people')) return json({ id: 'p9' }, 201);
-            if (method === 'POST' && url.split('?')[0]!.endsWith('/companies'))
-                return opts.companyOwnedBy
+            if (method === 'POST' && url.split('?')[0]!.endsWith('/people'))
+                // #353: a new company goes with the person; the API refuses an owned domain before writing either.
+                return opts.companyOwnedBy && (calls.at(-1)!.body as { company?: unknown }).company
                     ? json(
                           {
                               code: 'conflict.company_owned',
@@ -72,7 +72,7 @@ function stubApi(
                           },
                           409,
                       )
-                    : json({ id: 'c2', name: 'Globex' }, 201);
+                    : json({ id: 'p9' }, 201);
             return json({});
         }),
     );
@@ -205,7 +205,7 @@ describe('Add person: the address first', () => {
         expect(screen.getByRole('button', { name: 'Add person' })).toBeEnabled();
     });
 
-    it('a company added here is made only when the person is saved, so a cancelled popup leaves none', async () => {
+    it('a company added here is sent with the person in one request, so a cancelled popup leaves none', async () => {
         const calls = stubApi(null);
         const onCreated = renderDialog();
         await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
@@ -219,9 +219,9 @@ describe('Add person: the address first', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
         await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
         const posts = calls.filter((c) => c.method === 'POST');
-        expect(posts.map((c) => c.url.split('?')[0]!.split('/').pop())).toEqual(['companies', 'people']);
-        expect(posts[0]!.body).toEqual({ name: 'Globex' });
-        expect(posts[1]!.body).toMatchObject({ companyId: 'c2' });
+        expect(posts.map((c) => c.url.split('?')[0]!.split('/').pop())).toEqual(['people']);
+        expect(posts[0]!.body).toMatchObject({ company: { name: 'Globex' } });
+        expect(posts[0]!.body).not.toHaveProperty('companyId');
     });
 
     it('a company added here that another member owns offers to save the lead for them at once', async () => {
@@ -239,11 +239,13 @@ describe('Add person: the address first', () => {
         expect(await screen.findByText(/Globex Inc is Dana’s/)).toBeInTheDocument();
         expect(screen.queryByText(/Save again/)).not.toBeInTheDocument();
         const handOver = screen.getByRole('button', { name: /Save for Dana/ });
-        expect(calls.filter((c) => c.method === 'POST' && c.url.includes('/people'))).toHaveLength(0);
+        // The one refused request; no company is ever made on its own.
+        expect(calls.filter((c) => c.method === 'POST' && c.url.includes('/people'))).toHaveLength(1);
+        expect(calls.some((c) => c.method === 'POST' && c.url.includes('/companies'))).toBe(false);
         await userEvent.click(handOver);
         await vi.waitFor(() =>
             expect(
-                calls.find((c) => c.method === 'POST' && c.url.split('?')[0]!.endsWith('/people'))?.body,
+                calls.filter((c) => c.method === 'POST' && c.url.split('?')[0]!.endsWith('/people')).at(-1)?.body,
             ).toMatchObject({ companyId: 'c7', handToOwner: true }),
         );
         expect(onCreated).not.toHaveBeenCalled();
