@@ -189,6 +189,7 @@ function ReplyArea({
                 subject: thread.subject,
                 threadId: thread.id,
                 followUp: open === 'follow-up',
+                ...(open === 'follow-up' ? { sentFrom: newest.from } : {}),
             }}
             drafts={open === 'reply'}
             onClose={() => setOpen(null)}

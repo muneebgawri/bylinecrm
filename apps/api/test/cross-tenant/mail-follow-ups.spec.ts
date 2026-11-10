@@ -389,6 +389,33 @@ describe('mail follow-ups', () => {
             expect(err(late).fieldErrors?.map((f) => f.path)).toEqual(['replyToMessageId']);
         });
 
+        it('a later nudge follows the last one pending, after it — never beside it', async () => {
+            const a = await accepted(queue([]));
+            expect(await send.deliver(workspace, a.messageId, noWait)).toBe('sent');
+            const sent = await status(a.messageId);
+            const one = await accepted(followUpOn(sent.mailMessageId!, 24));
+            const two = await accepted(followUpOn(sent.mailMessageId!, 48));
+            expect(await status(two.messageId)).toMatchObject({ followsOutboundId: one.messageId });
+            const early = await followUpOn(sent.mailMessageId!, 36);
+            expect(early.status).toBe(400);
+            expect(err(early).fieldErrors?.map((f) => f.path)).toEqual(['sendAt']);
+            // One cancelled by hand: the next nudge follows the one still pending.
+            await as(admin)
+                .post(w(`/mail/messages/${two.messageId}/cancel`))
+                .expect(200);
+            const three = await accepted(followUpOn(sent.mailMessageId!, 36));
+            expect(await status(three.messageId)).toMatchObject({ followsOutboundId: one.messageId });
+        });
+
+        it('goes from the mailbox the email was sent from', async () => {
+            const a = await accepted(queue([]));
+            expect(await send.deliver(workspace, a.messageId, noWait)).toBe('sent');
+            const sent = await status(a.messageId);
+            const other = await followUpOn(sent.mailMessageId!, 24, { mailboxId: memberMailbox });
+            expect(other.status).toBe(400);
+            expect(err(other).fieldErrors?.map((f) => f.path)).toEqual(['mailboxId']);
+        });
+
         it('refuses mail the CRM did not send, a send now, and stores nothing', async () => {
             const before = await owner.mailOutbound.count({ where: { workspaceId: workspace } });
             gmail.deliver(adminEmail, { from: dana, to: [adminEmail], subject: `Ping ${stamp}`, text: 'Hello?' });

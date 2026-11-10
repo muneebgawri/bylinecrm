@@ -121,11 +121,12 @@ describe('FR-CRMS-4: the thread view', () => {
     });
 
     it('#350: schedules a follow-up on an email the CRM sent, three days on, unless they answer', async () => {
-        const sent = sentEmail();
+        // In two of the member's mailboxes: it goes from the one that sent it, listed second here.
+        const sent = sentEmail({ mailboxIds: ['mb-2', 'mb-1'] });
         const seen = view([
             threadRoute(thread({ messages: [sent] })),
             personRoute,
-            mailboxesRoute([mailbox()]),
+            mailboxesRoute([mailbox({ id: 'mb-2', email: 'kate@other.example' }), mailbox()]),
             (r) =>
                 r.method === 'POST' && r.url.endsWith('/mail/send')
                     ? json(
@@ -150,7 +151,12 @@ describe('FR-CRMS-4: the thread view', () => {
         await userEvent.click(within(panel).getByRole('button', { name: 'Schedule follow-up' }));
         await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
         const body = seen.find((r) => r.url.endsWith('/mail/send'))?.body as { sendAt: string };
-        expect(body).toMatchObject({ replyToMessageId: 'msg-1', followUp: true, personId: PERSON.id });
+        expect(body).toMatchObject({
+            mailboxId: 'mb-1',
+            replyToMessageId: 'msg-1',
+            followUp: true,
+            personId: PERSON.id,
+        });
         // Three days on, as a new follow-up row starts.
         expect(Date.parse(body.sendAt) - Date.now()).toBeGreaterThan(2.9 * 24 * 60 * 60 * 1000);
     });

@@ -85,6 +85,8 @@ export interface ComposerReply {
      * called off by the server if the person answers first.
      */
     followUp?: boolean | undefined;
+    /** A follow-up's sent email's From address: it goes from that mailbox, as the server requires. */
+    sentFrom?: string | undefined;
 }
 
 export interface ComposerHandle {
@@ -199,7 +201,10 @@ function MailboxGate(props: ComposerProps & { person: ComposerPerson; formHandle
         );
     }
     const own = ownSendingMailboxes(mailboxes.data, membership?.memberId).filter(
-        (m) => !reply || reply.mailboxIds.includes(m.id),
+        (m) =>
+            !reply ||
+            (reply.mailboxIds.includes(m.id) &&
+                (!reply.sentFrom || m.email.toLowerCase() === reply.sentFrom.toLowerCase())),
     );
     if (own.length === 0) {
         if (reply) {
