@@ -43,8 +43,9 @@ export async function searchCandidates(
  * People, at production size (#344). Row-level security lets only leakproof operators use an index, and neither `@@`
  * nor `LIKE` is one, so the old single query seq-scanned the workspace. The name/email/title vector, the primary
  * address and the additional addresses (`person_addresses`, trigger-kept, lower-case) are matched by `people_search`,
- * which runs as the table's owner with the workspace and the record scope in its own WHERE, so each branch uses its
- * index (migration 20261130090000). A phone number, primary or additional, however it was typed, has no index to use,
+ * which runs as `bylinecrm_search` (past RLS, SELECT on those two tables only) with the transaction's workspace and
+ * record scope in every branch's WHERE, so each branch uses its index and an own-scoped member's candidates are all
+ * their own (migration 20261130090000). A phone number, primary or additional, however it was typed, has no index to use,
  * so it is matched here as before, only when the search holds digits. Best match first, then id, as one query had it.
  */
 async function peopleCandidates(tx: WorkspaceClient, q: string, deleted: boolean): Promise<string[]> {

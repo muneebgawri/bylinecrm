@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SEARCH_CANDIDATE_LIMIT, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../src/infra/prisma.service';
@@ -179,6 +179,37 @@ describe('records', () => {
                 .get(w(`/people?q=${encodeURIComponent(`admin-own-${stamp}`)}`))
                 .expect(200);
             expect((adminFound.body as Page<Person>).items.map((p) => p.id)).toEqual([adminsPerson]);
+        });
+
+        it("an own-scoped member finds their match when other members' people would fill the candidate limit (#344)", async () => {
+            const word = `zorbax${stamp}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+            // More of the admin's matches than the search keeps, so a function ranking the whole workspace would hand the
+            // rep a full candidate list with nothing of theirs in it.
+            await app.get(PrismaService).person.createMany({
+                data: Array.from({ length: SEARCH_CANDIDATE_LIMIT + 50 }, (_, i) => ({
+                    workspaceId: workspace,
+                    ownerId: adminMemberId,
+                    createdBy: { kind: 'member', id: adminMemberId },
+                    nameFirst: word,
+                    nameLast: `Admin${i}`,
+                })),
+            });
+            const mine = await as(rep).post(w('/people')).send({ nameFirst: word, nameLast: 'Rep' }).expect(201);
+            const elsewhere = await as(other)
+                .post(`/api/w/${otherWorkspace}/people`)
+                .send({ nameFirst: word, nameLast: 'Elsewhere' })
+                .expect(201);
+
+            const repFound = await as(rep)
+                .get(w(`/people?q=${word}`))
+                .expect(200);
+            expect((repFound.body as Page<Person>).items.map((p) => p.id)).toEqual([(mine.body as Person).id]);
+            const adminFound = await as(admin)
+                .get(w(`/people?q=${word}`))
+                .expect(200);
+            expect((adminFound.body as Page<Person>).items.map((p) => p.id)).not.toContain(
+                (elsewhere.body as Person).id,
+            );
         });
 
         it("another owner's record answers 404, not 403, to every verb", async () => {
