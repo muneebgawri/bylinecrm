@@ -413,7 +413,7 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         expect((await as(ana).get(w('/guardrails/mailbox-coverage'))).status).toBe(403);
     });
 
-    it('GUARD-3: flags a first touch to an outside address sent around the CRM — once per address a day, medium at three, off when turned off', async () => {
+    it('GUARD-3: flags a first touch to an outside address sent around the CRM — not the sender’s own leads, once per address a day, medium at three, off when turned off', async () => {
         // On by default: a workspace that never saved settings has it.
         expect((await as(otherAdmin).get(w('/guardrails/settings', otherWorkspace)).expect(200)).body).toMatchObject({
             offCrmColdAlerts: true,
@@ -445,6 +445,15 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         const them = `them@partner-${stamp}.test`;
         const inbound = await synced({ to: [emails.ana], fromAddress: them, sentAt: new Date(Date.now() - 60_000) });
         expect(await detector.judge(workspace, (await synced({ to: [them], threadId: inbound.threadId })).id)).toBe(0);
+
+        // A member's own customer or prospect: theirs to write to from Gmail, so nothing is cold.
+        const own = await synced({ to: [benLeadAddress], fromAddress: emails.ben, fromMemberId: benId });
+        expect(await detector.judge(workspace, own.id)).toBe(0);
+        expect(
+            await owner.guardrailEvent.count({
+                where: { workspaceId: workspace, kind: 'off_crm_cold', address: benLeadAddress },
+            }),
+        ).toBe(0);
 
         // The third distinct outside address in a day is medium: the reviewers are told.
         expect(await detector.judge(workspace, (await synced({ to: [`b@vendor-${stamp}.test`] })).id)).toBe(1);

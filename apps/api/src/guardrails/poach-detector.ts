@@ -109,7 +109,12 @@ export class PoachDetector {
             // GUARD-3: only mail that went around the CRM, and only a first touch.
             const cold =
                 settings.offCrmColdAlerts && message._count.outboundOf === 0 && message.inReplyTo === null
-                    ? offCrmColdFindings({ recipients: facts, internalDomains: internal, threadSenders })
+                    ? offCrmColdFindings({
+                          senderId: sender.memberId,
+                          recipients: facts,
+                          internalDomains: internal,
+                          threadSenders,
+                      })
                     : [];
             if (findings.length === 0 && cold.length === 0) return 0;
 

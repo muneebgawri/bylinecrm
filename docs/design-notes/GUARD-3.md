@@ -12,8 +12,11 @@ message that left a member's mailbox. GUARD-3 is a second rule over the same fac
 
 - **Candidate**: the message has no CRM send linked (`outboundOf` empty — a CRM send carries `X-BylineCRM-Id` and is
   linked by sync), its `In-Reply-To` is empty, and nobody outside the workspace wrote in the thread before it.
-- **Findings** (`offCrmColdFindings`, pure, unit-tested): every recipient that is not a member and not on the
-  workspace's own domains. The sender's own leads count — the point is the path, not the ownership.
+- **Findings** (`offCrmColdFindings`, pure, unit-tested): every recipient that is not a member, not on the
+  workspace's own domains, and not the sender's own lead (owner of the person, else of the company — the same
+  `ownerId` GUARD-2 reads). Reps may start a Gmail thread with their own customers and prospects; another member's
+  lead still counts (and is GUARD-2 poaching as well). Changed 2026-11-11 at the owner's request: the CRM reports
+  only true cold mail, while the Workspace rule, which cannot see ownership, still holds every first touch.
 - **Event**: `off_crm_cold`, `warned`, path `sync`, one per (message, address); never twice for one (sender,
   address) in 24 hours (`OFF_CRM_COLD_WINDOW_MS`).
 - **Ladder** (`offCrmColdSeverity`): distinct outside addresses by the sender in 24 hours. 1–2 `low` (audit row
