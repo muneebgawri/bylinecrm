@@ -35,7 +35,11 @@ const PR_TITLE = field({ key: 'pr_title', label: 'PR title', showOnCreate: true,
 const BEAT = field({ key: 'beat', label: 'Beat', position: 3 });
 
 /** The address check answers `holder`; a create answers a new person. Every call is kept. */
-function stubApi(holder: { ownerName: string | null; trashed: boolean } | null, fields: unknown[] = []) {
+function stubApi(
+    holder: { ownerName: string | null; trashed: boolean } | null,
+    fields: unknown[] = [],
+    opts: { companyOwnedBy?: string } = {},
+) {
     const calls: { method: string; url: string; body: unknown }[] = [];
     vi.stubGlobal(
         'fetch',
@@ -53,7 +57,22 @@ function stubApi(holder: { ownerName: string | null; trashed: boolean } | null, 
                 });
             if (method === 'POST' && url.split('?')[0]!.endsWith('/people')) return json({ id: 'p9' }, 201);
             if (method === 'POST' && url.split('?')[0]!.endsWith('/companies'))
-                return json({ id: 'c2', name: 'Globex' }, 201);
+                return opts.companyOwnedBy
+                    ? json(
+                          {
+                              code: 'conflict.company_owned',
+                              message: 'Globex Inc is theirs.',
+                              requestId: 'r1',
+                              details: {
+                                  companyId: 'c7',
+                                  companyName: 'Globex Inc',
+                                  ownerMemberId: 'm2',
+                                  ownerName: opts.companyOwnedBy,
+                              },
+                          },
+                          409,
+                      )
+                    : json({ id: 'c2', name: 'Globex' }, 201);
             return json({});
         }),
     );
@@ -203,6 +222,31 @@ describe('Add person: the address first', () => {
         expect(posts.map((c) => c.url.split('?')[0]!.split('/').pop())).toEqual(['companies', 'people']);
         expect(posts[0]!.body).toEqual({ name: 'Globex' });
         expect(posts[1]!.body).toMatchObject({ companyId: 'c2' });
+    });
+
+    it('a company added here that another member owns offers to save the lead for them at once', async () => {
+        const calls = stubApi(null, [], { companyOwnedBy: 'Dana' });
+        const onCreated = renderDialog();
+        await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        await userEvent.click(screen.getByRole('button', { name: /^Company:/ }));
+        await userEvent.type(await screen.findByRole('combobox', { name: 'Search company' }), 'Globex');
+        await userEvent.click(
+            await screen.findByRole('option', { name: 'Create company "Globex"' }, { timeout: 3000 }),
+        );
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        // One save: the owned message and the hand-to-owner action, never "save again" into the same refusal.
+        expect(await screen.findByText(/Globex Inc is Dana’s/)).toBeInTheDocument();
+        expect(screen.queryByText(/Save again/)).not.toBeInTheDocument();
+        const handOver = screen.getByRole('button', { name: /Save for Dana/ });
+        expect(calls.filter((c) => c.method === 'POST' && c.url.includes('/people'))).toHaveLength(0);
+        await userEvent.click(handOver);
+        await vi.waitFor(() =>
+            expect(
+                calls.find((c) => c.method === 'POST' && c.url.split('?')[0]!.endsWith('/people'))?.body,
+            ).toMatchObject({ companyId: 'c7', handToOwner: true }),
+        );
+        expect(onCreated).not.toHaveBeenCalled();
     });
 
     it('a multi-select is ticked from its options and saved in their order', async () => {

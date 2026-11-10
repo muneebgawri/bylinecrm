@@ -268,6 +268,17 @@ export function CreateRecordDialog<O extends ListObject>({
             setSaving(false);
         }
     };
+    /** Another member owns the company: say whose, and (for a person) offer to save the lead for them. */
+    const showOwned = (err: ApiError) => {
+        const ownerName = String(err.details['ownerName'] ?? 'another member');
+        const companyName = String(err.details['companyName'] ?? 'This company');
+        setOwned(person ? { ownerName, companyName } : null);
+        setError(
+            person
+                ? `${companyName} is ${ownerName}’s. Its people and deals are theirs, so you can’t save this lead for yourself.`
+                : `${companyName} already has this domain, and it is ${ownerName}’s.`,
+        );
+    };
     /** Makes the company the rep added, now the person is saved with it; false (and why) when it can't be. */
     const makeCompany = async (): Promise<string | false> => {
         if (!company || company.id !== NEW_COMPANY) return company?.id ?? false;
@@ -280,10 +291,10 @@ export function CreateRecordDialog<O extends ListObject>({
         } catch (err) {
             const existing = err instanceof ApiError ? err.details['companyId'] : undefined;
             if (err instanceof ApiError && err.code === 'conflict.company_owned' && typeof existing === 'string') {
-                // Another company already has this address's domain: that one, not a twin.
-                const name = String(err.details['companyName'] ?? 'Another company');
-                setCompany({ id: existing, name });
-                setError(`${name} already has that domain, so it is chosen instead. Save again to add the person.`);
+                // Another member's company already has this domain: choose it, not a twin, and offer what saving can
+                // actually do — hand the lead to its owner. Saving again for oneself would only meet the same refusal.
+                setCompany({ id: existing, name: String(err.details['companyName'] ?? 'Another company') });
+                showOwned(err);
             } else setError(failureText(err));
             return false;
         }
@@ -322,14 +333,7 @@ export function CreateRecordDialog<O extends ListObject>({
             onCreated(created.id);
         } catch (err) {
             if (err instanceof ApiError && err.code === 'conflict.company_owned') {
-                const ownerName = String(err.details['ownerName'] ?? 'another member');
-                const companyName = String(err.details['companyName'] ?? 'This company');
-                setOwned(person ? { ownerName, companyName } : null);
-                setError(
-                    person
-                        ? `${companyName} is ${ownerName}’s. Its people and deals are theirs, so you can’t save this lead for yourself.`
-                        : `${companyName} already has this domain, and it is ${ownerName}’s.`,
-                );
+                showOwned(err);
                 return;
             }
             setOwned(null);
