@@ -308,6 +308,15 @@ describe('#193 the signature', () => {
 describe('queued follow-ups: the compose box queues emails that go later in the same thread', () => {
     const sendRoute: FakeRoute = (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined);
 
+    it('says why Schedule waits when only a follow-up is written: the email at the top is empty', async () => {
+        composer([mailboxesRoute(MAILBOXES), sendRoute]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Add follow-up' }));
+        await userEvent.type(screen.getByRole('textbox', { name: 'Follow-up 1 message' }), 'Following up on my email');
+        expect(screen.getByText(/The email at the top is empty/)).toBeInTheDocument();
+        expect(screen.getByText(/reply to it and schedule the reply/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    });
+
     it('adds a follow-up row with a time in the sender’s zone and the thread’s subject, and sends it with the email', async () => {
         const seen = composer([mailboxesRoute(MAILBOXES), sendRoute]);
         await write('Hello', 'Hi Dana');

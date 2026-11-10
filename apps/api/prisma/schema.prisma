@@ -693,21 +693,23 @@ enum LostReasonCode {
 /// `custom` column under `key`. A definition is never deleted while a record may hold its value:
 /// it is archived, and an archived key is unknown to the validator from then on.
 model CustomFieldDefinition {
-  id          String          @id @default(uuid()) @db.Uuid
-  workspaceId String          @map("workspace_id") @db.Uuid
-  object      RecordObject
-  key         String
-  label       String
-  type        CustomFieldType
+  id           String          @id @default(uuid()) @db.Uuid
+  workspaceId  String          @map("workspace_id") @db.Uuid
+  object       RecordObject
+  key          String
+  label        String
+  type         CustomFieldType
   /// For `select`/`multiselect`: the allowed values, as strings. Empty otherwise.
-  options     Json            @default("[]")
-  required    Boolean         @default(false)
+  options      Json            @default("[]")
+  required     Boolean         @default(false)
   /// Hidden from callers without `workspace:admin`: their definition list, record values and writes.
-  adminOnly   Boolean         @default(false) @map("admin_only")
-  position    Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
-  archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  adminOnly    Boolean         @default(false) @map("admin_only")
+  /// Asked in the "Add person" (or other create) popup beside the fixed fields; a required field always is.
+  showOnCreate Boolean         @default(false) @map("show_on_create")
+  position     Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  archivedAt   DateTime?       @map("archived_at") @db.Timestamptz
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

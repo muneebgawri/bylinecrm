@@ -30169,6 +30169,9 @@
                     "adminOnly": {
                         "type": "boolean"
                     },
+                    "showOnCreate": {
+                        "type": "boolean"
+                    },
                     "position": {
                         "type": "number"
                     }
@@ -30196,6 +30199,9 @@
                         "type": "boolean"
                     },
                     "adminOnly": {
+                        "type": "boolean"
+                    },
+                    "showOnCreate": {
                         "type": "boolean"
                     },
                     "position": {
@@ -37214,6 +37220,10 @@
                         "type": "boolean",
                         "description": "Seen and written only by callers with workspace:admin; hidden from everyone else."
                     },
+                    "showOnCreate": {
+                        "type": "boolean",
+                        "description": "Asked in the create popup beside the fixed fields. A required field always is."
+                    },
                     "position": {
                         "type": "number"
                     },
@@ -37246,6 +37256,7 @@
                     "options",
                     "required",
                     "adminOnly",
+                    "showOnCreate",
                     "position",
                     "archivedAt",
                     "createdAt",

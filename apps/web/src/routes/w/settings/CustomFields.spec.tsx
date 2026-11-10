@@ -16,6 +16,7 @@ const field = (over: Partial<CustomFieldView>): CustomFieldView => ({
     options: ['Fintech', 'Health'],
     required: false,
     adminOnly: false,
+    showOnCreate: false,
     position: 1,
     archivedAt: null,
     createdAt: '2026-10-01T00:00:00Z',
@@ -133,6 +134,7 @@ describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
             options: ['Axios', 'TechWire'],
             required: true,
             adminOnly: false,
+            showOnCreate: false,
         });
     });
 
@@ -164,6 +166,7 @@ describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
             options: ['Fintech', 'Health'],
             required: false,
             adminOnly: false,
+            showOnCreate: false,
         });
     });
 
@@ -179,6 +182,32 @@ describe('Custom fields settings (doc 48 §5; FR-CRMS-UI-6)', () => {
         await userEvent.click(within(dialog).getByRole('button', { name: 'Save field' }));
         await waitFor(() => expect(seen.some((r) => r.method === 'PATCH')).toBe(true));
         expect(seen.find((r) => r.method === 'PATCH')?.body).toMatchObject({ adminOnly: true });
+    });
+
+    it('puts a person field in the Add person popup from its editor', async () => {
+        const seen = api([(r) => (r.method === 'PATCH' ? json(field({ showOnCreate: true })) : undefined)]);
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for Beat' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+        const dialog = await screen.findByRole('dialog');
+        const toggle = within(dialog).getByRole('switch', { name: 'Show in Add person' });
+        expect(toggle).not.toBeChecked();
+        await userEvent.click(toggle);
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Save field' }));
+        await waitFor(() => expect(seen.some((r) => r.method === 'PATCH')).toBe(true));
+        expect(seen.find((r) => r.method === 'PATCH')?.body).toMatchObject({ showOnCreate: true });
+    });
+
+    it('a required field is always asked in Add person: the switch is on and locked', async () => {
+        api([]);
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for Beat' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+        const dialog = await screen.findByRole('dialog');
+        await userEvent.click(within(dialog).getByRole('switch', { name: 'Required' }));
+        const toggle = within(dialog).getByRole('switch', { name: 'Show in Add person' });
+        expect(toggle).toBeChecked();
+        expect(toggle).toBeDisabled();
     });
 
     it('shows an admin-only field with its badge', async () => {

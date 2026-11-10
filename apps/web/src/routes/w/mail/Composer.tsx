@@ -430,16 +430,21 @@ function ComposerForm({
     const blank = isBlank(body);
     const noSubject = !reply && docToSubject(subject).trim() === '';
     const followUpBlank = followUps.some((f) => isBlank(f.body));
+    // A follow-up written under an empty email: the rep meant to follow up an email already sent, which this box
+    // does not do (its follow-ups follow the email written here). Said plainly, beside the disabled buttons.
+    const followUpOnly = blank && !reply && followUps.some((f) => !isBlank(f.body));
     const blocked = empty.length > 0 || blank || noSubject || followUpBlank || preview.isPending;
     const why = empty.length
         ? emptyVariablesText(empty, person.name)
-        : blank
-          ? 'Write a message to send.'
-          : noSubject
-            ? 'Add a subject to send.'
-            : followUpBlank
-              ? 'Write each follow-up’s message.'
-              : null;
+        : followUpOnly
+          ? 'The email at the top is empty: a follow-up goes after it. To follow up an email you already sent, reply to it and schedule the reply.'
+          : blank
+            ? 'Write a message to send.'
+            : noSubject
+              ? 'Add a subject to send.'
+              : followUpBlank
+                ? 'Write each follow-up’s message.'
+                : null;
     // A follow-up with no subject of its own takes the thread's, as the server will.
     const threadSubject = `Re: ${(docToSubject(subject) || reply?.subject || '…').replace(/^re:\s*/i, '')}`;
 
@@ -763,7 +768,9 @@ function ComposerForm({
                             'm-0 text-xs',
                             empty.length
                                 ? 'rounded-full bg-danger-soft px-2.5 py-0.5 font-medium text-danger'
-                                : 'text-text-faint',
+                                : followUpOnly
+                                  ? 'w-full font-medium text-warning'
+                                  : 'text-text-faint',
                         )}
                     >
                         {why}
