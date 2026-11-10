@@ -45,6 +45,9 @@ export const mailMessageView = named(
         direction: z.enum(MAIL_DIRECTIONS).meta({
             description: "The workspace's view: outbound when one of the workspace's mailboxes sent it.",
         }),
+        sentByCrm: z.boolean().meta({
+            description: 'Sent from the CRM (not only synced from Gmail): a follow-up can be scheduled on it (#350).',
+        }),
         from: z.string(),
         subject: z.string(),
         snippet: z.string(),

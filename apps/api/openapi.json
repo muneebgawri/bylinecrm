@@ -31933,6 +31933,11 @@
                         "type": "string",
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "followUp": {
+                        "description": "A follow-up on an email the CRM sent (`replyToMessageId`), scheduled (`sendAt`): sent in its thread as a reply once it is due, and called off — with any `followUps` after it — if the person answers first. Refused for mail synced from Gmail and for a thread they have already answered.",
+                        "type": "boolean",
+                        "enum": [true]
                     }
                 },
                 "required": ["mailboxId", "personId"]
@@ -40796,6 +40801,10 @@
                         "enum": ["inbound", "outbound"],
                         "description": "The workspace's view: outbound when one of the workspace's mailboxes sent it."
                     },
+                    "sentByCrm": {
+                        "type": "boolean",
+                        "description": "Sent from the CRM (not only synced from Gmail): a follow-up can be scheduled on it (#350)."
+                    },
                     "from": {
                         "type": "string"
                     },
@@ -40876,6 +40885,7 @@
                     "mailboxIds",
                     "bodiesVisible",
                     "direction",
+                    "sentByCrm",
                     "from",
                     "subject",
                     "snippet",
