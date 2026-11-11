@@ -4,8 +4,11 @@ import { NestFactory } from '@nestjs/core';
 import type { EventActor } from '@bylinecrm/shared';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../infra/prisma.service';
-import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { StageMoveService } from '../pipelines/stage-move.service';
+import { DomainEvents } from '../events/domain-events.service';
+import { TasksService } from '../records/tasks.service';
 
 const USAGE =
     'usage: node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--months <n>] [--chunk <n>]';
@@ -62,10 +65,17 @@ export interface CloseStaleReport {
     closed: number;
     /** Of those, left open: their pipeline has no lost stage, or another writer closed or trashed them first. */
     skipped: number;
+    /** Open tasks on the closed deals, and on no deal still open, marked done with them. */
+    tasksDone: number;
 }
 
 /** The clean-up acts for the workspace, not for a member: the history and timeline say the system did it. */
 const SYSTEM: EventActor = { kind: 'system', id: null };
+
+/** A job acting for the workspace: no caller, every record of the workspace in reach. */
+function jobContext(workspaceId: string): WorkspaceRunContext {
+    return { workspaceId, capabilities: new Set(), actor: SYSTEM };
+}
 
 /**
  * The open Bigin-imported deals whose last activity is older than `months` — the latest of: the deal's creation
@@ -118,6 +128,9 @@ export async function closeStaleDeals(
     const owner = app.get(PrismaService);
     const rls = app.get(RlsPrismaService);
     const moves = app.get(StageMoveService);
+    const tasks = app.get(TasksService);
+    const events = app.get(DomainEvents);
+    const context = jobContext(workspaceId);
     const progress = options.onProgress ?? (() => undefined);
     const months = options.months ?? DEFAULT_IDLE_MONTHS;
     const chunk = options.chunk ?? DEFAULT_CHUNK;
@@ -125,7 +138,7 @@ export async function closeStaleDeals(
     if (!Number.isInteger(chunk) || chunk < 1) throw new Error('chunk must be a whole number of deals, 1 or more');
 
     const stale = await findStaleDeals(owner, workspaceId, months);
-    const report: CloseStaleReport = { stale: stale.length, closed: 0, skipped: 0 };
+    const report: CloseStaleReport = { stale: stale.length, closed: 0, skipped: 0, tasksDone: 0 };
     if (!options.apply) return report;
 
     const close = { lostReason: staleLostReason(months), lostReasonCode: STALE_LOST_REASON_CODE };
@@ -139,6 +152,7 @@ export async function closeStaleDeals(
                 select: { id: true, workspaceId: true, pipelineId: true, stageId: true },
             });
             let closed = 0;
+            let tasksDone = 0;
             for (const deal of deals) {
                 let lost = lostStages.get(deal.pipelineId);
                 if (lost === undefined) {
@@ -159,16 +173,56 @@ export async function closeStaleDeals(
                 if (outcome.outcome !== 'moved') continue;
                 await moves.announce(tx, workspaceId, deal.id, SYSTEM, outcome, { internal: true });
                 closed += 1;
+                tasksDone += await finishTasksOf(tx, context, tasks, events, deal.id);
             }
-            return closed;
+            return { closed, tasksDone };
         });
-        report.closed += done;
-        report.skipped += ids.length - done;
+        report.closed += done.closed;
+        report.skipped += ids.length - done.closed;
+        report.tasksDone += done.tasksDone;
         if ((at / chunk) % 50 === 0 || at + chunk >= stale.length) {
             progress(`… ${report.closed} of ${report.stale} closed, ${report.skipped} skipped`);
         }
     }
     return report;
+}
+
+/**
+ * A follow-up on a dead deal has no reader: every open task on the deal just closed, unless it is also on a deal
+ * still open, is marked done through the task service — the system's, its `task.updated` internal — so the
+ * Dashboard's task list shows what is left to do, not what the backlog forgot. Returns how many.
+ */
+async function finishTasksOf(
+    tx: WorkspaceClient,
+    context: WorkspaceRunContext,
+    tasks: TasksService,
+    events: DomainEvents,
+    dealId: string,
+): Promise<number> {
+    const open = await tx.task.findMany({
+        where: {
+            deletedAt: null,
+            status: { not: 'done' },
+            targets: { some: { targetType: 'opportunity', targetId: dealId } },
+        },
+        select: { id: true, targets: { select: { targetType: true, targetId: true } } },
+    });
+    let done = 0;
+    for (const task of open) {
+        const otherDeals = task.targets
+            .filter((t) => t.targetType === 'opportunity' && t.targetId !== dealId)
+            .map((t) => t.targetId);
+        if (otherDeals.length) {
+            const live = await tx.opportunity.count({
+                where: { id: { in: otherDeals }, deletedAt: null, closedAt: null },
+            });
+            if (live > 0) continue;
+        }
+        const { event } = await tasks.updateIn(tx, context, task.id, { status: 'done' });
+        if (event) await events.record(tx, { ...event, internal: true });
+        done += 1;
+    }
+    return done;
 }
 
 /** The flags of a run, or `null` when they do not read. */
@@ -235,7 +289,7 @@ async function main(): Promise<void> {
         });
         if (parsed.options.apply) {
             console.log(
-                `closed: ${report.closed} of ${report.stale} imported deals idle ${months}+ months as lost (${report.skipped} skipped: no lost stage, or closed meanwhile)`,
+                `closed: ${report.closed} of ${report.stale} imported deals idle ${months}+ months as lost (${report.skipped} skipped: no lost stage, or closed meanwhile); ${report.tasksDone} open tasks on them marked done`,
             );
         } else {
             console.log(`would close: ${report.stale} imported deals idle ${months}+ months as lost`);

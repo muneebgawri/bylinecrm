@@ -55,6 +55,12 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
     let bookkept: string;
     /** Old, but not the import's: kept. */
     let native: string;
+    /** An open task on the silent deal alone: done with it. */
+    let taskOnSilent: string;
+    /** An open task on the silent deal and on the Bigin-touched one, which stays open: kept. */
+    let taskOnBoth: string;
+    /** An open task on the kept deal: kept. */
+    let taskOnKept: string;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -163,6 +169,21 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
                 actor: { kind: 'system', id: null },
             },
         });
+        const task = async (title: string, deals: string[]) =>
+            id(
+                await as(admin)
+                    .post(w('/tasks'))
+                    .send({ title, targets: deals.map((dealId) => ({ type: 'opportunity', id: dealId })) })
+                    .expect(201),
+            );
+        taskOnSilent = await task('Call back', [silent]);
+        taskOnBoth = await task('Send deck', [silent, touchedInBigin]);
+        taskOnKept = await task('Follow up', [touchedInBigin]);
+        // The tasks' own timeline entries are the import's shape too: bookkeeping, not activity.
+        await owner.timelineActivity.updateMany({
+            where: { kind: { startsWith: 'linked-task.' } },
+            data: { kind: 'linked-task.imported', happenedAt: OLD },
+        });
         await owner.timelineActivity.create({
             data: {
                 workspaceId: workspace,
@@ -202,6 +223,7 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
             stale: 2,
             closed: 0,
             skipped: 0,
+            tasksDone: 0,
         });
         // A longer cut-off than the deals' age: nothing is idle. A bad one is refused before any read.
         expect((await closeStaleDeals(app, workspace, { apply: false, months: 24 })).stale).toBe(0);
@@ -216,7 +238,24 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
             stale: 2,
             closed: 2,
             skipped: 0,
+            tasksDone: 1,
         });
+        const taskRow = (taskId: string) =>
+            owner.task.findUniqueOrThrow({ where: { id: taskId }, select: { status: true, completedAt: true } });
+        expect((await taskRow(taskOnSilent)).status).toBe('done');
+        expect((await taskRow(taskOnSilent)).completedAt).not.toBeNull();
+        expect((await taskRow(taskOnBoth)).status, 'also on a deal still open').toBe('todo');
+        expect((await taskRow(taskOnKept)).status).toBe('todo');
+        const taskEvent = await owner.outboxEvent.findFirst({
+            where: {
+                workspaceId: workspace,
+                type: 'task.updated',
+                payload: { path: ['recordId'], equals: taskOnSilent },
+            },
+            select: { payload: true },
+        });
+        expect((taskEvent?.payload as { internal?: boolean; actor: unknown }).internal).toBe(true);
+        expect((taskEvent?.payload as { actor: unknown }).actor).toEqual({ kind: 'system', id: null });
         for (const closed of [silent, bookkept]) {
             const row = await deal(closed);
             expect(row.stage.kind).toBe('lost');
@@ -241,6 +280,7 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
             stale: 0,
             closed: 0,
             skipped: 0,
+            tasksDone: 0,
         });
     });
 });
