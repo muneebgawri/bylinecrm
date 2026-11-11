@@ -100,6 +100,15 @@ export class CreatePersonDto extends createZodDto(
              * Instead of `companyId`, never with it.
              */
             company: z.object({ name: text(200).min(1) }),
+            /**
+             * A deal made with the person, in the same transaction (the "Add lead" popup): the person is its point of
+             * contact, their company its company and their owner its owner. It starts where `pipelineId`/`stageId`
+             * say, else in the default pipeline's first stage; its name defaults to "<Company> — <Person>". When the
+             * person is handed to their company's owner (`handToOwner`) no deal is made: the lead is theirs.
+             */
+            withDeal: z
+                .object({ name: text(200).min(1), amount: money.nullable(), pipelineId: uuid, stageId: uuid })
+                .partial(),
         })
         .partial()
         .refine((body) => !(body.company && body.companyId != null), {

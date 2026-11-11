@@ -1,6 +1,6 @@
 import { Badge, FactGrid, toast } from '@bylinecrm/ui';
 import { CONTACT_STATUS_LABELS, CONTACT_STATUSES, type ContactStatus } from '@bylinecrm/shared';
-import { Building2, Handshake, ListTodo, Mail, Phone, Send, StickyNote } from 'lucide-react';
+import { Building2, ListTodo, Mail, Phone, Send, StickyNote } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useSetContactStatus } from '../../../api/customers';
@@ -26,11 +26,11 @@ import {
     PropertiesColumn,
     type PropertyRow,
 } from './PropertiesColumn';
-import { RailCard, RailEmpty, RailLoading, RailRow } from './RailCard';
+import { RailCard, RailEmpty, RailRow } from './RailCard';
 import { RecordHeader } from './RecordHeader';
 import { RecordLayout } from './RecordLayout';
 import { RecordActionBar, RecordHeaderActions, type RecordAction } from './recordActions';
-import { useRelated } from './related';
+import { PersonDeals } from './PersonDeals';
 import { TasksPanel } from './TasksPanel';
 import { EnrolDialog, enrolSummary } from '../sequences/EnrolDialog';
 import { PersonEnrolments } from '../sequences/PersonEnrolments';
@@ -63,7 +63,6 @@ export function PersonRecord({
     const write = usePermission('record:write');
     const company = useRecord(workspaceId, 'company', person.companyId ?? '');
     const createCompany = useCompanyCreator(workspaceId, person.emails.primary);
-    const deals = useRelated(workspaceId, 'opportunity', 'pointOfContactId', person.id);
     // The PR link a rep writes about, next to the compose rather than down the properties (`pr_link`, from Bigin/Twenty).
     const prLink = useCustomFields(workspaceId, 'person').data?.find(
         (d) => d.key === PR_LINK_KEY && d.archivedAt === null,
@@ -107,7 +106,6 @@ export function PersonRecord({
         next: siblings?.next,
     });
 
-    const personDeals = deals.items;
     const companyName = person.companyId ? (company.data?.name ?? '…') : null;
 
     // The primary phone, edited in place: in the properties and in the facts strip beside the compose (at a glance).
@@ -511,26 +509,13 @@ export function PersonRecord({
                             <RailEmpty>Not linked to a company.</RailEmpty>
                         )}
                     </RailCard>
-                    <RailCard
-                        title="Deals"
-                        icon={<Handshake />}
-                        count={deals.data && !deals.more ? personDeals.length : undefined}
-                    >
-                        {deals.isPending ? (
-                            <RailLoading />
-                        ) : personDeals.length === 0 ? (
-                            <RailEmpty>No deals with this person as the contact.</RailEmpty>
-                        ) : (
-                            personDeals.map((d) => (
-                                <RailRow
-                                    key={d.id}
-                                    to={paths.deal(workspaceId, d.id)}
-                                    title={d.name}
-                                    subtitle={`${d.daysInStage}d in stage`}
-                                />
-                            ))
-                        )}
-                    </RailCard>
+                    <PersonDeals
+                        workspaceId={workspaceId}
+                        person={{ id: person.id, name: personName(person) }}
+                        company={
+                            person.companyId && company.data ? { id: person.companyId, name: company.data.name } : null
+                        }
+                    />
                     <TasksPanel
                         workspaceId={workspaceId}
                         target={target}

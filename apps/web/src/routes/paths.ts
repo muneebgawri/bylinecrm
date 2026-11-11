@@ -89,12 +89,16 @@ export const paths = {
     unsubscribe: (token: string) => `${UNSUBSCRIBE_PAGE_PATH}/${token}`,
 } as const;
 
-/** `?create=1` on a list page opens its "new" dialog (the ⌘K and "+ Create" commands land there). */
+/**
+ * `?create=1` on a list page opens its "new" dialog (the ⌘K and "+ Create" commands land there); on the people list
+ * `?create=lead` opens it as "Add lead", which makes the person's deal with them.
+ */
 export const CREATE_PARAM = 'create';
+export const CREATE_LEAD = 'lead';
 
-/** A list page with its "new" dialog open. */
-export function withCreate(path: string): string {
-    return `${path}?${CREATE_PARAM}=1`;
+/** A list page with its "new" dialog open (`what`: `lead` for "Add lead" on the people list). */
+export function withCreate(path: string, what: '1' | typeof CREATE_LEAD = '1'): string {
+    return `${path}?${CREATE_PARAM}=${what}`;
 }
 
 /**

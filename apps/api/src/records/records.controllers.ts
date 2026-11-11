@@ -33,8 +33,10 @@ import {
     companyPage,
     companyView,
     customFieldView,
+    personCreatedView,
     personPage,
     personView,
+    type PersonCreatedView,
 } from './responses';
 
 /**
@@ -138,8 +140,8 @@ export class PeopleController {
 
     @Requires('record:write')
     @Post()
-    @Returns(personView)
-    create(@Body() body: CreatePersonDto): Promise<PersonView> {
+    @Returns(personCreatedView)
+    create(@Body() body: CreatePersonDto): Promise<PersonCreatedView> {
         return this.people.create(body);
     }
 
