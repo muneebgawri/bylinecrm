@@ -106,10 +106,21 @@ export class MailboxesService {
 
     // ── Changing ─────────────────────────────────────────────────────────────────────────────
 
-    /** The label only. A different purpose is refused: it is fixed when the mailbox connects. */
+    /**
+     * The label, and who a pool mailbox sends as. A different purpose is refused: it is fixed when the mailbox connects.
+     *
+     * A pool mailbox speaks as its owner — the From name, `{{sender.*}}` and the signature's member details (#144) — and
+     * its owner is whoever connected it, often an admin connecting a teammate's mailbox. So an admin may hand a pool
+     * mailbox to the member it belongs to, a current one. A personal mailbox is its owner's own mail and never changes
+     * hands; a service inbox sends nothing.
+     */
     update(
         id: string,
-        patch: { label?: string | null | undefined; purpose?: MailboxPurpose | undefined },
+        patch: {
+            label?: string | null | undefined;
+            purpose?: MailboxPurpose | undefined;
+            ownerMemberId?: string | undefined;
+        },
     ): Promise<MailboxView> {
         const context = this.current();
         return this.rls.withWorkspace(async (tx) => {
@@ -121,8 +132,32 @@ export class MailboxesService {
                     "a mailbox's purpose is fixed when it connects; disconnect it and connect it again for the other purpose",
                 );
             }
-            if (patch.label === undefined || patch.label === row.label) return view(row);
-            return view(await tx.mailbox.update({ where: { id }, data: { label: patch.label } }));
+            const data: Prisma.MailboxUpdateInput = {};
+            if (patch.label !== undefined && patch.label !== row.label) data.label = patch.label;
+            if (patch.ownerMemberId !== undefined && patch.ownerMemberId !== row.ownerMemberId) {
+                if (!isAdmin(context)) {
+                    throw new ApiException(403, 'forbidden', 'only an admin chooses who a shared mailbox sends as');
+                }
+                if (row.purpose !== 'pool') {
+                    throw new ApiException(
+                        409,
+                        'conflict',
+                        'only a shared outreach mailbox changes hands; a personal mailbox stays with whoever connected it',
+                    );
+                }
+                const member = await tx.workspaceMember.findFirst({
+                    where: { id: patch.ownerMemberId, leftAt: null },
+                    select: { id: true },
+                });
+                if (!member) {
+                    throw new ApiException(422, 'unprocessable', 'not a current member of this workspace', [
+                        { path: 'ownerMemberId', message: 'no current member with this id' },
+                    ]);
+                }
+                data.owner = { connect: { id: member.id } };
+            }
+            if (Object.keys(data).length === 0) return view(row);
+            return view(await tx.mailbox.update({ where: { id }, data }));
         });
     }
 
@@ -303,7 +338,8 @@ export class MailboxesService {
 
         if (query.error || !query.code) return end('denied');
         if (callerUserId !== pending.userId) return end('wrong_user');
-        if (!(await this.mayStillConnect(pending))) return end('not_permitted');
+        const access = await this.connectAccess(pending);
+        if (!access) return end('not_permitted');
 
         const client = await this.rls.withWorkspace(workspaceId, (tx) => this.clients.storedIn(tx));
         if (!client || client.rowId !== pending.clientRowId) return end('no_client');
@@ -340,7 +376,11 @@ export class MailboxesService {
                 where: { workspaceId_email: { workspaceId, email: address } },
             });
             if (existing && existing.status !== 'disconnected') {
-                if (existing.ownerMemberId !== pending.memberId) return { result: 'owned_by_another' as const };
+                // An admin reconnects a pool mailbox handed to the member it sends as, and it stays theirs.
+                const adminReconnectsPool = access.admin && existing.purpose === 'pool' && purpose === 'pool';
+                if (existing.ownerMemberId !== pending.memberId && !adminReconnectsPool) {
+                    return { result: 'owned_by_another' as const };
+                }
                 if (existing.purpose !== purpose) return { result: 'purpose_mismatch' as const };
                 // An SMTP2Go pool mailbox (TRANS-1) is not taken over by a Gmail grant while it works.
                 if (existing.transport !== 'gmail') return { result: 'purpose_mismatch' as const };
@@ -362,7 +402,11 @@ export class MailboxesService {
                 ? await tx.mailbox.update({
                       where: { id: existing.id },
                       // A disconnected mailbox connects afresh: owner and purpose are the new connection's.
-                      data: { ...tokens, ownerMemberId: pending.memberId, purpose },
+                      data: {
+                          ...tokens,
+                          ownerMemberId: existing.status === 'disconnected' ? pending.memberId : existing.ownerMemberId,
+                          purpose,
+                      },
                   })
                 : await tx.mailbox.create({
                       data: {
@@ -456,11 +500,13 @@ export class MailboxesService {
      * The member who started the connect is still a member and may still do what they started: a
      * mailbox takes `mailbox:manage`; the Postmaster Tools account is an admin's.
      */
-    private async mayStillConnect(pending: PendingConnect): Promise<boolean> {
+    /** Whether the member who started a connect may still finish it (`null`: not), and whether they are an admin. */
+    private async connectAccess(pending: PendingConnect): Promise<{ admin: boolean } | null> {
         const membership = await this.memberships.find(pending.userId, pending.workspaceId);
-        if (!membership || membership.memberId !== pending.memberId) return false;
+        if (!membership || membership.memberId !== pending.memberId) return null;
         const access = await this.roles.access(pending.workspaceId, membership.roleId);
-        return access?.capabilities.has(connectCapability(pending.purpose)) ?? false;
+        if (!access?.capabilities.has(connectCapability(pending.purpose))) return null;
+        return { admin: access.capabilities.has('workspace:admin') };
     }
 
     /** The mailbox if the caller may see it; otherwise `404`, never a hint that it exists. */

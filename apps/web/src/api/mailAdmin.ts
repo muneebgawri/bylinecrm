@@ -8,6 +8,7 @@ import type {
     CalendarSyncTriggeredView,
     CalendarSyncView,
     ConnectMailboxInput,
+    UpdateMailboxInput,
     CreateBlocklistEntryInput,
     CreateSuppressionInput,
     DelegationAuditEntryView,
@@ -96,6 +97,9 @@ export const mailboxes = {
     /** Starts a connect: the answer's `authorizeUrl` is where the browser goes next. */
     connect: (workspaceId: string, input: ConnectMailboxInput) =>
         request<MailboxConnectStartView>('POST', workspacePath(workspaceId, '/mailboxes/connect'), { body: input }),
+    /** Its label, and — an admin's, for a pool mailbox — the member it sends as. */
+    update: (workspaceId: string, mailboxId: string, input: UpdateMailboxInput) =>
+        request<MailboxView>('PATCH', workspacePath(workspaceId, `/mailboxes/${mailboxId}`), { body: input }),
     check: (workspaceId: string, mailboxId: string) =>
         request<MailboxCheckView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/check`)),
     disconnect: (workspaceId: string, mailboxId: string) =>
@@ -316,6 +320,15 @@ export const useCheckMailbox = (workspaceId: string) =>
 
 export const useDisconnectMailbox = (workspaceId: string) =>
     useMailboxWrite(workspaceId, (mailboxId) => mailboxes.disconnect(workspaceId, mailboxId));
+
+export function useUpdateMailbox(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: ({ mailboxId, input }: { mailboxId: string; input: UpdateMailboxInput }) =>
+            mailboxes.update(workspaceId, mailboxId, input),
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.mailboxes(workspaceId) }),
+    });
+}
 
 export function useSyncMailbox(workspaceId: string) {
     const client = useQueryClient();
