@@ -216,7 +216,10 @@ export class MailboxesController {
         return this.mailboxes.get(mailboxId);
     }
 
-    /** The label. A different `purpose` is refused with `409`: disconnect and connect again instead. */
+    /**
+     * The label, and — an admin's, for a pool mailbox — the member it sends as (`ownerMemberId`). A different `purpose` is
+     * refused with `409`: disconnect and connect again instead.
+     */
     @Requires('mailbox:manage')
     @Patch(':mailboxId')
     @Returns(mailboxView)

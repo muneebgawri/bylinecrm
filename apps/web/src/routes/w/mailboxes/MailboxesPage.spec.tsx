@@ -226,6 +226,40 @@ describe('FR-CRMS-1, FR-CRMS-2: each mailbox shows where it stands and its sync'
     });
 });
 
+describe('#144: who a shared outreach mailbox sends as', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        toasts.clear();
+    });
+
+    it('an admin hands a pool mailbox to the member it belongs to', async () => {
+        const seen = api([
+            (r) =>
+                r.method === 'PATCH' && r.url.endsWith('/mailboxes/mb-2')
+                    ? json(
+                          mailbox({ id: 'mb-2', ownerMemberId: 'm-1', email: 'outreach@example.com', purpose: 'pool' }),
+                      )
+                    : undefined,
+        ]);
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for outreach@example.com' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Choose who it sends as' }));
+        const dialog = await screen.findByRole('dialog');
+        await userEvent.click(within(dialog).getByRole('combobox', { name: 'Sends as' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Kate Morgan' }));
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(seen.find((r) => r.method === 'PATCH')?.body).toEqual({ ownerMemberId: 'm-1' }));
+    });
+
+    it('is not offered for a personal mailbox', async () => {
+        api();
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for kate@example.com' }));
+        expect(await screen.findByRole('menuitem', { name: 'Disconnect' })).toBeInTheDocument();
+        expect(screen.queryByRole('menuitem', { name: 'Choose who it sends as' })).not.toBeInTheDocument();
+    });
+});
+
 describe('FR-CRMS-2: the blocklist removes mail it covers', () => {
     afterEach(() => {
         vi.unstubAllGlobals();
