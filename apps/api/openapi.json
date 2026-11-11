@@ -20702,6 +20702,144 @@
                 "tags": ["tracking"]
             }
         },
+        "/api/w/{workspaceId}/tracking/policy": {
+            "get": {
+                "operationId": "trackingPolicy_get",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrackingPolicy"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            },
+            "patch": {
+                "operationId": "trackingPolicy_update",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchTrackingPolicyDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrackingPolicy"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["tracking"]
+            }
+        },
         "/r/{token}": {
             "get": {
                 "operationId": "trackingPublic_click",
@@ -23471,6 +23609,69 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Smtp2GoTestResult"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
+        "/api/hooks/smtp2go/relay/{workspaceId}": {
+            "post": {
+                "operationId": "poolSmtpHook_receiveRelay",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Smtp2GoHookResult"
                                 }
                             }
                         },
@@ -31950,6 +32151,10 @@
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
+                    "track": {
+                        "description": "TRACK-2: track this email’s opens and clicks (follow-ups queued with it too). Left out, the workspace’s default for CRM-written mail (`GET /tracking/policy`).",
+                        "type": "boolean"
+                    },
                     "followUp": {
                         "description": "A follow-up on an email the CRM sent (`replyToMessageId`), scheduled (`sendAt`): sent in its thread as a reply once it is due, and called off — with any `followUps` after it — if the person answers first. Refused for mail synced from Gmail and for a thread they have already answered.",
                         "type": "boolean",
@@ -33195,6 +33400,33 @@
                     }
                 },
                 "required": ["domain"]
+            },
+            "PatchTrackingPolicyDto": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": ["builtin", "smtp2go"]
+                    },
+                    "trackOpens": {
+                        "type": "boolean"
+                    },
+                    "trackClicks": {
+                        "type": "boolean"
+                    },
+                    "trackPersonalMail": {
+                        "type": "boolean"
+                    },
+                    "gmailReplyNotices": {
+                        "type": "boolean"
+                    },
+                    "smtp2goApiKey": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 200,
+                        "nullable": true
+                    }
+                }
             },
             "CreatePlatformWorkspaceDto": {
                 "type": "object",
@@ -41685,6 +41917,84 @@
                     }
                 },
                 "required": ["clicks", "uniqueClicks", "opens"]
+            },
+            "TrackingPolicy": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": ["builtin", "smtp2go"],
+                        "description": "`builtin`: our short links and pixel (the short-link domain must pass). `smtp2go`: CRM-written mail goes through SMTP2Go, which tracks it, with a copy kept in Gmail’s Sent."
+                    },
+                    "trackOpens": {
+                        "type": "boolean"
+                    },
+                    "trackClicks": {
+                        "type": "boolean"
+                    },
+                    "trackPersonalMail": {
+                        "type": "boolean",
+                        "description": "Whether an email written in the CRM is tracked unless its writer turns it off."
+                    },
+                    "gmailReplyNotices": {
+                        "type": "boolean",
+                        "description": "Whether a member hears of a CRM contact’s reply to an email they sent straight from Gmail."
+                    },
+                    "smtp2go": {
+                        "type": "object",
+                        "properties": {
+                            "keySet": {
+                                "type": "boolean",
+                                "description": "An API key is set; it is never shown."
+                            },
+                            "hookUrl": {
+                                "type": "string"
+                            },
+                            "hookAuthorization": {
+                                "nullable": true,
+                                "type": "string"
+                            },
+                            "lastHookAt": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "lastHookResult": {
+                                "nullable": true,
+                                "type": "string"
+                            }
+                        },
+                        "required": ["keySet", "hookUrl", "hookAuthorization", "lastHookAt", "lastHookResult"]
+                    },
+                    "mailboxesWithoutCopy": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "email": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["id", "email"]
+                        },
+                        "description": "Personal mailboxes connected without `gmail.insert`: their CRM-written mail goes through Gmail until they connect again."
+                    }
+                },
+                "required": [
+                    "provider",
+                    "trackOpens",
+                    "trackClicks",
+                    "trackPersonalMail",
+                    "gmailReplyNotices",
+                    "smtp2go",
+                    "mailboxesWithoutCopy"
+                ]
             },
             "EmailTemplate": {
                 "type": "object",

@@ -9,6 +9,7 @@ import {
 } from './notifications.controllers';
 import { NOTIFICATIONS_MAINTENANCE_QUEUE } from './notifications.constants';
 import { EmailEngagementNotificationsConsumer } from './email-engagement.consumer';
+import { GmailReplyNotificationsConsumer } from './gmail-reply.consumer';
 import { TaskNotificationsConsumer } from './notifications.consumer';
 import { NotificationsWorkers } from './notifications.workers';
 import { TaskNotificationsService } from './task-notifications.service';
@@ -33,6 +34,7 @@ import { TaskNotificationsService } from './task-notifications.service';
         TaskNotificationsService,
         TaskNotificationsConsumer,
         EmailEngagementNotificationsConsumer,
+        GmailReplyNotificationsConsumer,
         NotificationsWorkers,
     ],
 })
