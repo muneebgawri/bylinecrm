@@ -1,6 +1,11 @@
-import { REPUTATION_DEFAULTS, type RecordObject } from '@bylinecrm/shared';
+import { REPUTATION_DEFAULTS, TODAY_SECTION_PATHS, type RecordObject, type TodaySection } from '@bylinecrm/shared';
 import type { Page, Route } from '@playwright/test';
 import * as data from './fixtures';
+
+/** A Today section by its URL segment. */
+const TODAY_SECTION_BY_PATH: Record<string, TodaySection> = Object.fromEntries(
+    Object.entries(TODAY_SECTION_PATHS).map(([section, path]) => [path, section as TodaySection]),
+);
 
 /**
  * The API, as the route gate sees it: every `/api/**` request the web app makes is answered here
@@ -120,6 +125,12 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/notifications$`), () => data.notificationsInbox],
     [new RegExp(`^${W}/notification-settings$`), () => data.notificationSettings],
     [new RegExp(`^${W}/my-tasks$`), () => data.myTasks],
+    // Today (#360): the overview, and a section's later page — the same rows, the last page.
+    [new RegExp(`^${W}/today$`), () => data.today],
+    [
+        new RegExp(`^${W}/today/(replies|follow-ups|new-leads|tasks|stalled)$`),
+        (m) => ({ ...data.today[TODAY_SECTION_BY_PATH[m[1] ?? ''] ?? 'replies'], nextCursor: null }),
+    ],
     // The dashboard's live deal feed; no activity in the fixtures.
     [new RegExp(`^${W}/deal-feed$`), () => ({ items: [] })],
     // OWN-1: a record's transfers (the owner field's open offer); none in the fixtures.
@@ -224,6 +235,8 @@ export interface Unanswered {
 export interface ApiOptions {
     /** A signed-in person who has not verified their address yet (#93). */
     unverified?: true;
+    /** A plain member, not an admin (#360): the dashboard shows their day's work without the pipeline cards. */
+    member?: true;
 }
 
 export async function installApi(page: Page, options: ApiOptions = {}): Promise<Unanswered[]> {
@@ -232,6 +245,9 @@ export async function installApi(page: Page, options: ApiOptions = {}): Promise<
     // Registered after the table on purpose: Playwright tries the most recently added route first.
     if (options.unverified) {
         await page.route('**/api/me', (route) => route.fulfill({ json: { ...data.user, emailVerified: false } }));
+    }
+    if (options.member) {
+        await page.route('**/api/w/*/me', (route) => route.fulfill({ json: data.memberMembership }));
     }
     // The status page reads `/health`; it is served outside `/api` (vite.config.ts proxy).
     await page.route('**/health', (route) =>

@@ -471,8 +471,19 @@ async function openTasksIn(tx: WorkspaceClient, memberId: string): Promise<MyTas
         where: { ...OPEN, assigneeId: memberId },
         orderBy: [{ dueAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }, { id: 'asc' }],
         take: MY_TASKS_LIMIT,
-        select: { id: true, title: true, status: true, dueAt: true, ...WITH_TARGETS },
+        select: MY_TASK_SELECT,
     });
+    return myTaskViews(tx, rows);
+}
+
+/** What a task row needs to be a `MyTask`: My tasks and Today's tasks read the same. */
+export const MY_TASK_SELECT = { id: true, title: true, status: true, dueAt: true, ...WITH_TARGETS } as const;
+
+/** Tasks as `MyTask`s, in the order given, their targets labelled in one query per kind. */
+export async function myTaskViews(
+    tx: WorkspaceClient,
+    rows: readonly Prisma.TaskGetPayload<{ select: typeof MY_TASK_SELECT }>[],
+): Promise<MyTaskView[]> {
     const labels = await labelTargets(
         tx,
         rows.flatMap((r) => r.targets),
