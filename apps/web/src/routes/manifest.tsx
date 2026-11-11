@@ -89,7 +89,7 @@ const sequences = {
     builder: () => import('./w/sequences/SequencePage').then((m) => ({ Component: m.SequencePage })),
 };
 
-/** The dashboard is its own chunk: My tasks (#192). */
+/** The dashboard is its own chunk: the pipeline cards and the member's day (#360). */
 const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.HomePage }));
 
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */

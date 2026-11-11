@@ -22,8 +22,8 @@ export interface DealMoveApi {
 
 export function useDealMove(
     workspaceId: string,
-    /** The pipeline the deals are in: its stages gate the move, its rules are named on a backward one. */
-    pipeline: Pick<PipelineView, 'id' | 'stages'> | undefined,
+    /** The pipeline the deals move in: the board's, or (Today, #360) the deal's own. */
+    pipeline: PipelineView | undefined,
     announce?: (text: string) => void,
 ): DealMoveApi {
     const move = useMoveDeal(workspaceId);

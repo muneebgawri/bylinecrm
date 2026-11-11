@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
+    gmailInsertGranted,
     NO_TRACKING_COUNTS,
     type TrackingCounts,
     MAIL_SEND_HORIZON_DAYS,
@@ -41,6 +42,7 @@ import { UnsubscribeService } from '../suppression/unsubscribe.service';
 import { fingerprint, type Fingerprint } from '../reputation/fingerprint';
 import { ReputationGate } from '../reputation/reputation-gate';
 import { trackingCountsForSends } from '../tracking/tracking-counts';
+import { trackingRulesIn } from '../tracking/tracking-policy.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { afterCommit } from '../infra/transaction-scope';
 import { RolesService } from '../workspace/roles.service';
@@ -104,6 +106,8 @@ export interface SendInput {
     followUp?: boolean | undefined;
     /** The caller's draft this was written in: deleted with the send. */
     draftId?: string | undefined;
+    /** TRACK-2: track this email's opens and clicks; absent, the workspace's default for CRM-written mail. */
+    track?: boolean | undefined;
 }
 
 /** One queued follow-up: when, and what it says (a template, or a body and perhaps a subject of its own). */
@@ -236,6 +240,12 @@ interface Prepared {
     mime: string;
     /** REP-1: what the message is compared by (body simhash, normalised subject). */
     fingerprint: Fingerprint;
+    /** TRACK-2: a CRM-written send with its opens and clicks tracked. */
+    tracked: boolean;
+    /** TRACK-2: it goes through the workspace's SMTP2Go relay, a copy kept in the sender's Gmail Sent. */
+    viaRelay: boolean;
+    /** TRACK-2: the tracking tokens its HTML names, written with its row (none for a message built ahead of time). */
+    trackingTokens: Prisma.TrackingTokenCreateManyInput[];
 }
 
 /**
@@ -319,6 +329,8 @@ export class MailSendService {
                     subject: prepared.subject,
                     bodySimhash: prepared.fingerprint.simhash,
                     subjectKey: prepared.fingerprint.subjectKey,
+                    tracked: prepared.tracked,
+                    viaRelay: prepared.viaRelay,
                     ...(sendAt
                         ? {
                               status: 'scheduled' as const,
@@ -334,6 +346,9 @@ export class MailSendService {
                           }),
                 },
             });
+            if (prepared.trackingTokens.length > 0) {
+                await tx.trackingToken.createMany({ data: prepared.trackingTokens });
+            }
             if (sendAt) await this.announce(tx, 'email.scheduled', context, created.id);
             let previous = created.id;
             for (const f of followUps) {
@@ -352,6 +367,8 @@ export class MailSendService {
                         subject: f.prepared.subject,
                         bodySimhash: f.prepared.fingerprint.simhash,
                         subjectKey: f.prepared.fingerprint.subjectKey,
+                        tracked: f.prepared.tracked,
+                        viaRelay: f.prepared.viaRelay,
                         status: 'scheduled',
                         mime: null,
                         sendAt: f.sendAt,
@@ -466,6 +483,7 @@ export class MailSendService {
                 ...(f.templateId ? { templateId: f.templateId } : {}),
                 ...(f.subject !== undefined ? { subject: f.subject } : {}),
                 ...(f.body !== undefined ? { body: f.body } : {}),
+                ...(input.track !== undefined ? { track: input.track } : {}),
                 followUp: true,
             };
             const send = { id: randomUUID(), rfc822MessageId: newMessageId() };
@@ -666,6 +684,26 @@ export class MailSendService {
             });
         }
 
+        // TRACK-2: tracked as its writer chose (the workspace's default otherwise). With SMTP2Go as the provider it goes
+        // through SMTP2Go, which tracks it — when the mailbox can keep a copy in its Sent; otherwise, and with our own
+        // tracking, through Gmail with our short links and pixel. A send built ahead of its time is tracked when it is
+        // built again at that time, so no tokens are made for a message that is never sent as built.
+        const rules = await this.rls.withWorkspace((tx) => trackingRulesIn(tx, context.workspaceId));
+        const tracked = (input.track ?? rules.trackPersonalMail) && (rules.trackOpens || rules.trackClicks);
+        const viaRelay =
+            tracked &&
+            rules.provider === 'smtp2go' &&
+            rules.relayKeyCiphertext !== null &&
+            mailbox.transport === 'gmail' &&
+            gmailInsertGranted(mailbox.grantedScopes) &&
+            // SMTP2Go reads the recipients from the headers: a blind copy's address would show. Bcc goes through Gmail.
+            recipients.bcc.length === 0;
+        const planned =
+            tracked && !viaRelay && when !== 'later'
+                ? await this.tracking.trackPersonal(context.workspaceId, { outboundId: send.id, html: rendered.html })
+                : { html: rendered.html, tokens: [] };
+        const html = planned.html;
+
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
             : [];
@@ -676,7 +714,7 @@ export class MailSendService {
             bcc: recipients.bcc.map(toMime),
             subject,
             text: rendered.text,
-            html: rendered.html,
+            html,
             messageId: send.rfc822MessageId,
             crmId: send.id,
             inReplyTo: parent?.rfc822MessageId ?? null,
@@ -691,6 +729,9 @@ export class MailSendService {
             subject,
             mime,
             fingerprint: print,
+            tracked,
+            viaRelay,
+            trackingTokens: planned.tokens,
         };
     }
 
@@ -769,6 +810,7 @@ export class MailSendService {
             outboundId: send.id,
             html: email.html,
             exclude: [link.pageUrl],
+            viaSmtp2Go: mailbox.transport === 'smtp2go',
         });
         const references = parent
             ? [...parent.references, ...(parent.rfc822MessageId ? [parent.rfc822MessageId] : [])]
@@ -796,6 +838,9 @@ export class MailSendService {
             subject,
             mime,
             fingerprint: fingerprint(subject, email.text),
+            tracked: false,
+            viaRelay: false,
+            trackingTokens: [],
         };
     }
 
@@ -1111,6 +1156,10 @@ export class MailSendService {
             return 'failed';
         }
         if (mailbox.transport === 'smtp2go') return this.deliverThroughSmtp2Go(workspaceId, row, mailbox, mime);
+        if (row.viaRelay) {
+            const relayed = await this.deliverThroughRelay(workspaceId, row, mailbox, mime, retry);
+            if (relayed !== null) return relayed;
+        }
         const threadId = await this.parentThread(workspaceId, row);
 
         let sent: { message: GmailSent; found: boolean };
@@ -1256,6 +1305,97 @@ export class MailSendService {
             this.logger.warn(
                 `send ${id}: sent through SMTP2Go as ${emailId}, not stored (${error instanceof Error ? error.message : String(error)})`,
             );
+        }
+        return 'sent';
+    }
+
+    /**
+     * TRACK-2: a CRM-written send through the workspace's SMTP2Go relay, which tracks its opens and clicks and reports
+     * them to the relay's webhook. SMTP2Go has no idempotency key, so — as for a pool mailbox's send — an attempt that
+     * may have reached it is never repeated. What went is put into the sender's Gmail Sent (in the thread it answers)
+     * and stored through sync's writer from there, so the conversation reads in Gmail as if Gmail had sent it; a copy
+     * Gmail would not take is stored by the CRM alone and said in the log. `null` when the relay's key was removed
+     * since the send was built: it goes through Gmail, as written.
+     */
+    private async deliverThroughRelay(
+        workspaceId: string,
+        row: OutboundRow,
+        mailbox: MailboxRow,
+        mime: string,
+        retry: RetryOptions,
+    ): Promise<DeliveryOutcome | null> {
+        const id = row.id;
+        const rules = await this.rls.withWorkspace(workspaceId, (tx) => trackingRulesIn(tx, workspaceId));
+        if (!rules.relayKeyCiphertext) return null;
+        const prior = (row.lastError as { code?: string } | null)?.code;
+        if (row.status === 'sending' && prior !== SMTP2GO_NOT_SENT) {
+            await this.markFailed(workspaceId, id, {
+                code: 'smtp2go.unconfirmed',
+                message:
+                    'an earlier attempt may have reached SMTP2Go; it was not sent again — check SMTP2Go’s activity',
+                at: new Date().toISOString(),
+            });
+            return 'failed';
+        }
+        let emailId: string;
+        try {
+            await this.policy.assertSendable(workspaceId, storedRecipients(row));
+            emailId = (await this.smtp2go.sendMime(this.secrets.open(rules.relayKeyCiphertext), mime)).emailId;
+        } catch (error) {
+            if (error instanceof RecipientSuppressed) {
+                await this.markFailed(workspaceId, id, refusalRecord(error, Date.now()));
+                return 'failed';
+            }
+            if (!(error instanceof Smtp2GoError)) throw error;
+            const at = new Date().toISOString();
+            if (error.outcome === 'retry') {
+                await this.recordError(workspaceId, id, {
+                    code: SMTP2GO_NOT_SENT,
+                    message: `SMTP2Go did not take the message (${error.status || 'no answer'}); it is tried again`,
+                    at,
+                });
+                throw error;
+            }
+            await this.markFailed(
+                workspaceId,
+                id,
+                error.outcome === 'refused'
+                    ? { code: `smtp2go.${error.reason}`, message: error.refusal, at }
+                    : {
+                          code: 'smtp2go.unconfirmed',
+                          message: `SMTP2Go's answer was lost (${error.status || 'timeout'}); it may have gone and was not sent again`,
+                          at,
+                      },
+            );
+            return 'failed';
+        }
+
+        const { providerMessageId, sentAt } = await this.recordSmtp2GoSent(workspaceId, row, emailId);
+        const threadId = await this.parentThread(workspaceId, row);
+        try {
+            const copy = await this.sync.gmailRequest(mailbox, GMAIL_UNITS.insert, retry, (token) =>
+                this.gmail.insertSent(token, { raw: mime, ...(threadId ? { threadId } : {}) }),
+            );
+            // The send's conversation is Gmail's thread from here: a reply in it is found as any send's is.
+            await this.rls.withWorkspace(workspaceId, (tx) =>
+                tx.mailOutbound.update({ where: { id }, data: { providerThreadId: copy.threadId } }),
+            );
+            await this.sync.importMessage(workspaceId, mailbox.id, copy.id, retry);
+        } catch (error) {
+            this.logger.warn(
+                `send ${id}: sent through SMTP2Go as ${emailId}, no copy in Gmail (${error instanceof Error ? error.message : String(error)}); stored by the CRM only`,
+            );
+            try {
+                await this.sync.storeSent(
+                    workspaceId,
+                    mailbox.id,
+                    gmailShapeOf(mime, { id: providerMessageId, threadId: providerMessageId, sentAt }),
+                );
+            } catch (stored) {
+                this.logger.warn(
+                    `send ${id}: not stored (${stored instanceof Error ? stored.message : String(stored)}); the next sync of Gmail will not have it`,
+                );
+            }
         }
         return 'sent';
     }
@@ -1433,8 +1573,8 @@ export class MailSendService {
             if (!(error instanceof HttpException)) throw error;
             return this.failScheduled(workspaceId, row.id, refusalRecord(error, now));
         }
-        const changed = await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailOutbound.updateMany({
+        const changed = await this.rls.withWorkspace(workspaceId, async (tx) => {
+            const moved = await tx.mailOutbound.updateMany({
                 where: { id: row.id, status: 'scheduled' },
                 data: {
                     status: 'queued',
@@ -1442,11 +1582,17 @@ export class MailSendService {
                     subject: prepared.subject,
                     bodySimhash: prepared.fingerprint.simhash,
                     subjectKey: prepared.fingerprint.subjectKey,
+                    tracked: prepared.tracked,
+                    viaRelay: prepared.viaRelay,
                     replyToMessageId: prepared.parentId,
                     ...addressesOf(prepared),
                 },
-            }),
-        );
+            });
+            if (moved.count === 1 && prepared.trackingTokens.length > 0) {
+                await tx.trackingToken.createMany({ data: prepared.trackingTokens });
+            }
+            return moved;
+        });
         return changed.count === 1 ? 'ready' : this.lostTo(workspaceId, row.id);
     }
 

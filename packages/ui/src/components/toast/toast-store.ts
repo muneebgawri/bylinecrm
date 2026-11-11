@@ -17,6 +17,8 @@ export interface ToastInput {
     tone?: Tone | undefined;
     /** How long it stays; a refusal stays longer so the reason can be read. */
     durationMs?: number | undefined;
+    /** One thing the reader can do about it from the toast (“Undo”); choosing it dismisses the toast. */
+    action?: { label: string; onSelect: () => void } | undefined;
 }
 
 export interface ToastRecord extends ToastInput {

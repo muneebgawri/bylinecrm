@@ -14,6 +14,7 @@ import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
 import { SETTINGS_SECTION_TITLE_ID } from './sectionTitle';
+import { TrackingPolicySection } from './TrackingPolicy';
 
 /**
  * Tracking (P3-4, FR-CRMS-8): the workspace's short-link domain, the CNAME to publish for it, and
@@ -27,11 +28,16 @@ export function Tracking() {
     return (
         <section aria-labelledby={SETTINGS_SECTION_TITLE_ID} className="max-w-3xl">
             <p className="m-0 mb-5 max-w-[70ch] text-[13px] text-text-muted">
-                Links in outreach email are shortened through a domain of yours, so a click is recorded on the person’s
-                timeline and may move a deal by a stage rule. An open is only ever indicative: mail clients and security
-                scanners fetch images without anyone reading, so it is shown but never moves anything. Until the domain
-                is set and verified, links go out as written. Personal 1:1 mail and unsubscribe links are never
-                rewritten.
+                Tracked email records clicks and opens on the person’s timeline and tells its sender. Sequence email is
+                always tracked; email written in the CRM is tracked when its writer leaves tracking on. An open is only
+                ever indicative: mail clients and security scanners fetch images without anyone reading, so it is shown
+                but never moves anything. Unsubscribe links are never rewritten.
+            </p>
+            <TrackingPolicySection workspaceId={workspaceId} />
+            <h3 className="m-0 mb-3 mt-8 text-[15px] font-semibold text-text">Short-link domain</h3>
+            <p className="m-0 mb-4 max-w-[70ch] text-[13px] text-text-muted">
+                Built-in tracking shortens links through a domain of yours. Until it is set and verified, links go out
+                as written and built-in tracking records nothing.
             </p>
             {settings.data ? (
                 // A save (here or elsewhere) starts the form again from what is stored.

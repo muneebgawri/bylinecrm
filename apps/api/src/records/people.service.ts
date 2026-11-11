@@ -266,7 +266,9 @@ export class PeopleService implements BulkRecords {
             ownerId,
         });
         if (placed.companyId) input = { ...input, companyId: placed.companyId };
-        else await assertCompanyExists(tx, input.companyId ?? null);
+        // OWN-2 looked past the caller's owner scope: a company nobody owns is one an own-scoped rep may join,
+        // though their row-level scope hides it — checking it again under that scope said "company not found".
+        else if (placed.company?.companyId !== input.companyId) await assertCompanyExists(tx, input.companyId ?? null);
         // CADENCE-1: a new unowned lead from a route or an import goes to the next rep in turn.
         ownerId = await this.rotation.intakeOwner(tx, context, ownerId, input.companyId ?? null);
         const custom = await this.customFields.validated(tx, 'person', input.custom ?? {}, 'create');
@@ -306,6 +308,7 @@ export class PeopleService implements BulkRecords {
             patch.companyId === undefined &&
             newPrimary !== undefined &&
             companyDomainOfAddress(newPrimary) !== companyDomainOfAddress(current.emailPrimary);
+        let placedCompanyId: string | undefined;
         if (companyChanged || addressChanged) {
             const placed = await this.ownership.checkPerson(tx, context, {
                 address: newPrimary ?? current.emailPrimary,
@@ -313,8 +316,10 @@ export class PeopleService implements BulkRecords {
                 ownerId,
             });
             if (placed.companyId) patch = { ...patch, companyId: placed.companyId };
+            placedCompanyId = placed.company?.companyId;
         }
-        if (companyChanged) await assertCompanyExists(tx, patch.companyId!);
+        // As on create: a company OWN-2 already found (past the owner scope) is not looked up again under it.
+        if (companyChanged && placedCompanyId !== patch.companyId) await assertCompanyExists(tx, patch.companyId!);
         const custom = patch.custom
             ? await this.customFields.validated(
                   tx,

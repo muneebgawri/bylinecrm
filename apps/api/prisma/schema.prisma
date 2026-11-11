@@ -103,6 +103,7 @@ model Workspace {
   biginStageMappings   BiginStageMapping[]
 
   trackingDomain TrackingDomain?
+  trackingPolicy TrackingPolicy?
   trackingTokens TrackingToken[]
   trackingHits   TrackingHit[]
 
@@ -1643,6 +1644,10 @@ model MailOutbound {
   /// TRANS-1: an admin's "Send test" through an SMTP2Go pool mailbox, to themselves. Left out of the mailbox's
   /// allowance, spacing and rates, so a test never holds back a real send.
   isTest                  Boolean            @default(false) @map("is_test")
+  /// TRACK-2: a CRM-written send with its links and opens tracked (built in, or SMTP2Go's when it went through it).
+  tracked                 Boolean            @default(false)
+  /// TRACK-2: a CRM-written send that goes through the workspace's SMTP2Go relay, with a copy put in Gmail's Sent.
+  viaRelay                Boolean            @default(false) @map("via_relay")
   /// The sequence step this send is (P3-3); null for 1:1 mail.
   sequenceEnrolmentId     String?            @map("sequence_enrolment_id") @db.Uuid
   sequenceStepId          String?            @map("sequence_step_id") @db.Uuid
@@ -2029,6 +2034,8 @@ model ReputationSettings {
   replyRateFloorBps      Int      @default(100) @map("reply_rate_floor_bps")
   replyRateMinSends      Int      @default(50) @map("reply_rate_min_sends")
   replyRateWindowDays    Int      @default(7) @map("reply_rate_window_days")
+  /// REP-2 (#362): a send is judged once it is this many hours old — younger ones had no time to be answered.
+  replyRateMaturityHours Int      @default(72) @map("reply_rate_maturity_hours")
   /// REP-2: Postmaster spam-rate kill switch and warn line (basis points).
   spamPauseBps           Int      @default(30) @map("spam_pause_bps")
   spamWarnBps            Int      @default(10) @map("spam_warn_bps")
@@ -2868,6 +2875,40 @@ model TrackingDomain {
 }
 
 /// What a tracking token stands for: a link in the mail, or the mail's open pixel.
+/// TRACK-2: who tracks opens and clicks. `builtin`: our short links and pixel on the workspace's short-link domain;
+/// `smtp2go`: SMTP2Go's own tracking, with CRM-written mail sent through SMTP2Go (a copy kept in Gmail's Sent).
+enum TrackingProvider {
+  builtin
+  smtp2go
+
+  @@map("tracking_provider")
+}
+
+/// TRACK-2: how a workspace tracks the mail it sends, an admin's (Settings → Tracking). No row: the defaults.
+model TrackingPolicy {
+  workspaceId               String           @id @map("workspace_id") @db.Uuid
+  provider                  TrackingProvider @default(builtin)
+  trackOpens                Boolean          @default(true) @map("track_opens")
+  trackClicks               Boolean          @default(true) @map("track_clicks")
+  /// Whether an email written in the CRM is tracked unless its writer turns it off (the composer's default).
+  trackPersonalMail         Boolean          @default(false) @map("track_personal_mail")
+  /// Whether a member hears of a CRM contact's reply to an email they sent straight from Gmail.
+  gmailReplyNotices         Boolean          @default(true) @map("gmail_reply_notices")
+  /// The SMTP2Go API key CRM-written mail goes through (sealed, never returned).
+  relayKeyCiphertext        String?          @map("relay_key_ciphertext")
+  /// The secret SMTP2Go's webhook for that mail must carry (sealed).
+  relayHookSecretCiphertext String?          @map("relay_hook_secret_ciphertext")
+  lastRelayHookAt           DateTime?        @map("last_relay_hook_at") @db.Timestamptz
+  lastRelayHookResult       String?          @map("last_relay_hook_result")
+  updatedById               String?          @map("updated_by_id") @db.Uuid
+  createdAt                 DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("tracking_policies")
+}
+
 enum TrackingKind {
   click
   open
