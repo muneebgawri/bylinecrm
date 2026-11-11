@@ -760,6 +760,7 @@ export class MailSyncService {
             providerMessageId: parsed.providerMessageId,
             direction,
             labelIds: parsed.labelIds,
+            sentAt: parsed.sentAt,
         });
         const linkSend = (messageId: string, rfc822MessageId: string | null) =>
             linkOutbound(tx, mailbox, {

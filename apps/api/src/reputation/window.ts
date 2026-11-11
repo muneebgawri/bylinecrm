@@ -54,8 +54,11 @@ export async function newThreadMail(
         }[]
     >`
         -- The mailbox's copies first, then their messages by id: see ReputationMonitor.replyRateFloor.
+        -- Only copies in the window, by the copy's own sent_at (index); a copy from before it was kept (null) may be.
         WITH mine AS MATERIALIZED (
-            SELECT message_id FROM mail_message_copies WHERE mailbox_id = ${mailboxId}::uuid AND direction = 'outbound'
+            SELECT message_id FROM mail_message_copies
+            WHERE mailbox_id = ${mailboxId}::uuid AND direction = 'outbound'
+              AND (sent_at >= ${since} OR sent_at IS NULL)
         )
         SELECT m.id, m.subject, m.body_text, m.body_simhash, m.subject_key, m.sent_at,
                ARRAY(SELECT DISTINCT lower(p.address) FROM mail_participants p

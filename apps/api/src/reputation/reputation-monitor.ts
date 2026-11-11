@@ -140,7 +140,9 @@ export class ReputationMonitor {
         // instead looped over every message for every copy (seconds to minutes; the transaction expired).
         const [row] = await tx.$queryRaw<{ sends: number; replied: number }[]>`
             WITH mine AS MATERIALIZED (
-                SELECT message_id FROM mail_message_copies WHERE mailbox_id = ${mailbox.id}::uuid AND direction = 'outbound'
+                SELECT message_id FROM mail_message_copies
+                WHERE mailbox_id = ${mailbox.id}::uuid AND direction = 'outbound'
+                  AND ((sent_at >= ${since} AND sent_at <= ${matureBefore}) OR sent_at IS NULL)
             ),
             sent AS MATERIALIZED (
                 SELECT m.thread_id, min(m.sent_at) AS first_sent
@@ -212,6 +214,7 @@ export class ReputationMonitor {
             WITH mine AS MATERIALIZED (
                 SELECT message_id FROM mail_message_copies
                 WHERE mailbox_id = ${mailbox.id}::uuid AND direction = 'inbound'
+                  AND (sent_at >= ${since} OR sent_at IS NULL)
             ),
             replies AS MATERIALIZED (
                 SELECT m.id, m.thread_id, m.from_address, m.body_text
