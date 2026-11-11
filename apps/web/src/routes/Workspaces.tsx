@@ -46,7 +46,7 @@ export function Workspaces() {
     const platformAdmin = access.data?.platformAdmin === true;
     const mayCreate = platformAdmin || access.data?.signupMode === 'open';
     const list = workspaces.data;
-    if (list.length === 1 && list[0] && !platformAdmin) return <Navigate to={paths.today(list[0].id)} replace />;
+    if (list.length === 1 && list[0] && !platformAdmin) return <Navigate to={paths.home(list[0].id)} replace />;
 
     return (
         <Frame
@@ -95,7 +95,7 @@ export function Workspaces() {
                     {list.map((w) => (
                         <li key={w.id}>
                             <Link
-                                to={paths.today(w.id)}
+                                to={paths.home(w.id)}
                                 className={cn(
                                     'flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 shadow-sm hover:bg-surface-raised',
                                     focusRing,
@@ -146,7 +146,7 @@ export function CreateWorkspaceDialog({
         create.mutate(name, {
             onSuccess: (workspace) => {
                 onOpenChange(false);
-                navigate(paths.today(workspace.id));
+                navigate(paths.home(workspace.id));
             },
         });
     };

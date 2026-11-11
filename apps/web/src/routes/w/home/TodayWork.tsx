@@ -4,7 +4,6 @@ import {
     Card,
     CardContent,
     CardHeader,
-    Checkbox,
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
@@ -14,13 +13,15 @@ import {
     Input,
     KpiCard,
     LoadingRegion,
-    PageHeader,
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
     Skeleton,
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
     cn,
     toast,
 } from '@bylinecrm/ui';
@@ -29,6 +30,7 @@ import {
     AlarmClock,
     CalendarClock,
     CalendarPlus,
+    Check,
     Hourglass,
     ListChecks,
     Mail,
@@ -38,13 +40,13 @@ import {
     UserPlus,
     type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 import { usePipeline } from '../../../api/deals';
 import { ResponsivePanel } from '../../../components/ResponsivePanel';
 import { useUpdateMyTask } from '../../../api/notifications';
 import { useMembersSummary, usePatchRecord, useRecord } from '../../../api/records';
-import { readerTimeZone, todayKeys, useToday, useTodayMore, type TodayParams } from '../../../api/today';
+import { todayKeys, useToday, useTodayMore, type TodayParams } from '../../../api/today';
 import type {
     MyTaskView,
     TodayDealView,
@@ -79,6 +81,9 @@ interface RowContext {
     act: (action: Omit<PersonAction, 'nonce'>) => void;
     /** A row acted on leaves the list at once; the next read agrees once the server has caught up. */
     done: (section: TodaySection, id: string) => void;
+    /** Undo from a task's notice: the status or due time put back, and the row with it. The page owns the
+     *  mutation, as the row is gone by the time Undo is chosen. */
+    undoTask: (task: MyTaskView, before: { status?: MyTaskView['status']; dueAt?: string | null }) => void;
     canWrite: boolean;
     /** `deal:move` — without it there is no Move action, as on the board. */
     canMove: boolean;
@@ -100,25 +105,33 @@ function countText(count: number, exact: boolean): string {
 }
 
 /**
- * Today (#360): the member's day, most urgent first — the replies nobody has answered, the deals whose follow-up is
+ * The day's work (#360), on the dashboard: the member's day, most urgent first — the replies nobody has answered, the deals whose follow-up is
  * due, the new leads nobody has contacted, the tasks due and the deals gone quiet. Every row carries what to do
  * about it: open it, email or call the person, move the deal or plan its next follow-up, finish or snooze the task.
  * An admin can read any member's day. Each list is counted and paged by the API, so a backlog of thousands reads
  * the same as a handful.
  */
-export function TodayPage() {
-    const workspaceId = useWorkspaceId();
+export function TodayWork({
+    workspaceId,
+    params,
+    onMemberChange,
+}: {
+    workspaceId: string;
+    /** Whose day and where "today" is; the page owns them (the welcome counts the same list). */
+    params: TodayParams;
+    onMemberChange: (memberId: string | undefined) => void;
+}) {
+    const memberId = params.memberId;
     const membership = useMembership();
     const admin = can(membership, 'workspace:admin');
     const canWrite = useCan('record:write');
     const canMove = useCan('deal:move');
     const location = useLocation();
     const client = useQueryClient();
-    const [memberId, setMemberId] = useState<string | undefined>(undefined);
-    const params = useMemo<TodayParams>(() => ({ memberId, timeZone: readerTimeZone() }), [memberId]);
     const day = useToday(workspaceId, params);
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
     const [action, setAction] = useState<PersonAction | null>(null);
+    const taskUpdate = useUpdateMyTask(workspaceId);
     if (day.isError) throw day.error;
 
     const refresh = () => void client.invalidateQueries({ queryKey: todayKeys.all(workspaceId) });
@@ -127,6 +140,22 @@ export function TodayPage() {
         search: location.search,
         act: (a) => setAction({ ...a, nonce: Date.now() }),
         done: (section, id) => setHidden((h) => new Set(h).add(`${section}:${id}`)),
+        undoTask: (task, before) =>
+            taskUpdate.mutate(
+                { taskId: task.id, ...before },
+                {
+                    onSuccess: () => {
+                        setHidden((h) => {
+                            const next = new Set(h);
+                            next.delete(`tasks:${task.id}`);
+                            return next;
+                        });
+                        toast({ title: `Put back: ${task.title}`, tone: 'success' });
+                    },
+                    onError: (error) =>
+                        toast({ title: 'The task was not put back', description: failureText(error), tone: 'danger' }),
+                },
+            ),
         canWrite,
         canMove,
     };
@@ -134,19 +163,20 @@ export function TodayPage() {
     const own = !memberId || memberId === membership?.memberId;
 
     return (
-        <div className="flex flex-col gap-4 p-4 md:p-6">
-            <PageHeader
-                className="mb-0"
-                title="Today"
-                subtitle={
-                    data
-                        ? `${formatDay(data.date)} · ${own ? 'what needs you now' : `what needs ${data.member.name ?? 'this member'} now`}`
-                        : 'What needs you now.'
-                }
-                actions={
-                    admin ? <MemberPicker workspaceId={workspaceId} value={memberId} onChange={setMemberId} /> : null
-                }
-            />
+        <section aria-labelledby="today-title" className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 id="today-title" className="m-0 text-base font-semibold">
+                        Today
+                    </h2>
+                    <p className="m-0 text-sm text-text-muted">
+                        {data
+                            ? `${formatDay(data.date)} · ${own ? 'what needs you now' : `what needs ${data.member.name ?? 'this member'} now`}`
+                            : 'What needs you now.'}
+                    </p>
+                </div>
+                {admin && <MemberPicker workspaceId={workspaceId} value={memberId} onChange={onMemberChange} />}
+            </div>
             <TodaySummary data={data} />
             <div className="grid grid-cols-12 gap-4">
                 <SectionCard
@@ -217,7 +247,7 @@ export function TodayPage() {
                     }}
                 />
             )}
-        </div>
+        </section>
     );
 }
 
@@ -255,13 +285,14 @@ function MemberPicker({
 function TodaySummary({ data }: { data: TodayView | undefined }) {
     const sections: TodaySection[] = ['replies', 'followUps', 'newLeads', 'tasks', 'stalled'];
     return (
-        <div className="grid gap-4 max-md:hidden md:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-5">
             {sections.map((s) => {
                 const meta = SECTION_META[s];
                 const Icon = meta.icon;
                 return data ? (
                     <a key={s} href={`#today-${s}`} className="rounded-xl no-underline">
                         <KpiCard
+                            className="gap-1 py-4"
                             icon={<Icon />}
                             tone={meta.tone}
                             label={meta.title}
@@ -269,7 +300,7 @@ function TodaySummary({ data }: { data: TodayView | undefined }) {
                         />
                     </a>
                 ) : (
-                    <Skeleton key={s} className="h-26 rounded-xl" />
+                    <Skeleton key={s} className="h-21 rounded-xl" />
                 );
             })}
         </div>
@@ -395,7 +426,7 @@ function Row({
             </span>
             <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{title}</div>
-                <div className="flex flex-wrap gap-x-3 text-xs text-text-muted">{meta}</div>
+                <div className="flex flex-wrap items-center gap-x-3 text-xs text-text-muted">{meta}</div>
                 {detail && <p className="m-0 mt-1 line-clamp-2 text-xs text-text-muted">{detail}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-1">{actions}</div>
@@ -408,6 +439,27 @@ const linkClass =
 const metaLinkClass =
     'underline-offset-2 hover:text-text hover:underline max-md:inline-flex max-md:min-h-touch max-md:items-center';
 
+/**
+ * An action's name on hover and focus (the icon alone does not say it). A disabled button takes no focus,
+ * so a wrapper does and the tooltip stays reachable — the record actions' pattern.
+ */
+function WithTip({ label, disabled, children }: { label: string; disabled?: boolean; children: ReactNode }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                {disabled ? (
+                    <span tabIndex={0} className="inline-flex rounded-md">
+                        {children}
+                    </span>
+                ) : (
+                    children
+                )}
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+    );
+}
+
 /** Email and call: the person's two ways to reach them, as icon buttons. */
 function PersonButtons({
     person,
@@ -418,28 +470,38 @@ function PersonButtons({
     dealId?: string | undefined;
     context: RowContext;
 }) {
+    const noEmail = !person.email || !context.canWrite;
+    const noPhone = !person.phones.primary || !context.canWrite;
     return (
         <>
-            <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Email ${person.name}`}
-                title="Email"
-                disabled={!person.email || !context.canWrite}
-                onClick={() => context.act({ kind: 'email', person, dealId })}
+            <WithTip
+                label={!context.canWrite ? 'Email' : person.email ? 'Email' : 'No email address'}
+                disabled={noEmail}
             >
-                <Mail />
-            </Button>
-            <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Call ${person.name}`}
-                title="Call"
-                disabled={!person.phones.primary || !context.canWrite}
-                onClick={() => context.act({ kind: 'call', person, dealId })}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Email ${person.name}`}
+                    disabled={noEmail}
+                    onClick={() => context.act({ kind: 'email', person, dealId })}
+                >
+                    <Mail />
+                </Button>
+            </WithTip>
+            <WithTip
+                label={!context.canWrite ? 'Call' : person.phones.primary ? 'Call' : 'No phone number'}
+                disabled={noPhone}
             >
-                <Phone />
-            </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Call ${person.name}`}
+                    disabled={noPhone}
+                    onClick={() => context.act({ kind: 'call', person, dealId })}
+                >
+                    <Phone />
+                </Button>
+            </WithTip>
         </>
     );
 }
@@ -504,16 +566,23 @@ function TaskRow({ task, context }: { task: MyTaskView; context: RowContext }) {
     const update = useUpdateMyTask(context.workspaceId);
     const canTask = useCan('task:write');
     const overdue = task.dueAt !== null && new Date(task.dueAt) < new Date(new Date().setHours(0, 0, 0, 0));
+    const failed = (error: unknown) =>
+        toast({ title: 'The task was not changed', description: failureText(error), tone: 'danger' });
+    // Done and Snooze act at once and offer Undo from the toast: the task's status (or due time) is put back.
     const change = (patch: { status?: 'done'; dueAt?: string }, said: string) =>
         update.mutate(
             { taskId: task.id, ...patch },
             {
                 onSuccess: () => {
                     context.done('tasks', task.id);
-                    toast({ title: said, tone: 'success' });
+                    const before = patch.status ? { status: task.status } : { dueAt: task.dueAt };
+                    toast({
+                        title: said,
+                        tone: 'success',
+                        action: { label: 'Undo', onSelect: () => context.undoTask(task, before) },
+                    });
                 },
-                onError: (error) =>
-                    toast({ title: 'The task was not changed', description: failureText(error), tone: 'danger' }),
+                onError: failed,
             },
         );
     return (
@@ -541,17 +610,19 @@ function TaskRow({ task, context }: { task: MyTaskView; context: RowContext }) {
                 canTask ? (
                     <>
                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label={`Snooze “${task.title}”`}
-                                    title="Snooze"
-                                    disabled={update.isPending}
-                                >
-                                    <AlarmClock />
-                                </Button>
-                            </DropdownMenuTrigger>
+                            <WithTip label="Due later: tomorrow or next week">
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        aria-label={`Snooze “${task.title}”`}
+                                        disabled={update.isPending}
+                                    >
+                                        <AlarmClock />
+                                        Snooze
+                                    </Button>
+                                </DropdownMenuTrigger>
+                            </WithTip>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Snooze until</DropdownMenuLabel>
                                 <DropdownMenuItem
@@ -568,13 +639,18 @@ function TaskRow({ task, context }: { task: MyTaskView; context: RowContext }) {
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <span className="grid size-8.5 place-items-center max-md:size-touch">
-                            <Checkbox
+                        <WithTip label="Mark done — Undo from the notice">
+                            <Button
+                                variant="secondary"
+                                size="sm"
                                 aria-label={`Complete “${task.title}”`}
                                 disabled={update.isPending}
-                                onCheckedChange={() => change({ status: 'done' }, `Done: ${task.title}`)}
-                            />
-                        </span>
+                                onClick={() => change({ status: 'done' }, `Done: ${task.title}`)}
+                            >
+                                <Check />
+                                Done
+                            </Button>
+                        </WithTip>
                     </>
                 ) : null
             }
@@ -666,38 +742,38 @@ function FollowUpButton({
             },
         );
     return (
-        <ResponsivePanel
-            title="Next follow-up"
-            open={open}
-            onOpenChange={setOpen}
-            widthClass="w-64"
-            trigger={
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Set next follow-up for ${deal.name}`}
-                    title="Next follow-up"
-                >
-                    <CalendarPlus />
-                </Button>
-            }
-            footer={
-                <Button variant="primary" size="sm" loading={patch.isPending} disabled={!date} onClick={save}>
-                    Save
-                </Button>
-            }
-        >
-            <label className="mb-1 block text-xs font-medium text-text" htmlFor={`follow-up-${deal.id}`}>
-                Next follow-up for {deal.name}
-            </label>
-            <Input
-                id={`follow-up-${deal.id}`}
-                type="date"
-                value={date}
-                min={tomorrowDate()}
-                onChange={(e) => setDate(e.target.value)}
-            />
-        </ResponsivePanel>
+        <Tooltip>
+            <ResponsivePanel
+                title="Next follow-up"
+                open={open}
+                onOpenChange={setOpen}
+                widthClass="w-64"
+                trigger={
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={`Set next follow-up for ${deal.name}`}>
+                            <CalendarPlus />
+                        </Button>
+                    </TooltipTrigger>
+                }
+                footer={
+                    <Button variant="primary" size="sm" loading={patch.isPending} disabled={!date} onClick={save}>
+                        Save
+                    </Button>
+                }
+            >
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor={`follow-up-${deal.id}`}>
+                    Next follow-up for {deal.name}
+                </label>
+                <Input
+                    id={`follow-up-${deal.id}`}
+                    type="date"
+                    value={date}
+                    min={tomorrowDate()}
+                    onChange={(e) => setDate(e.target.value)}
+                />
+            </ResponsivePanel>
+            <TooltipContent>Plan the next follow-up</TooltipContent>
+        </Tooltip>
     );
 }
 
@@ -712,16 +788,13 @@ function StageMenu({ deal, context }: { deal: TodayDealView; context: RowContext
     return (
         <>
             <DropdownMenu open={open} onOpenChange={setOpen}>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Move ${deal.name} to another stage`}
-                        title="Move stage"
-                    >
-                        <MoreHorizontal />
-                    </Button>
-                </DropdownMenuTrigger>
+                <WithTip label="Move to another stage">
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={`Move ${deal.name} to another stage`}>
+                            <MoreHorizontal />
+                        </Button>
+                    </DropdownMenuTrigger>
+                </WithTip>
                 <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Move to</DropdownMenuLabel>
                     {stages.map((s) => (

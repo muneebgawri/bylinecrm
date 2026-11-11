@@ -234,6 +234,8 @@ export interface Unanswered {
 export interface ApiOptions {
     /** A signed-in person who has not verified their address yet (#93). */
     unverified?: true;
+    /** A plain member, not an admin (#360): the dashboard shows their day's work without the pipeline cards. */
+    member?: true;
 }
 
 export async function installApi(page: Page, options: ApiOptions = {}): Promise<Unanswered[]> {
@@ -242,6 +244,9 @@ export async function installApi(page: Page, options: ApiOptions = {}): Promise<
     // Registered after the table on purpose: Playwright tries the most recently added route first.
     if (options.unverified) {
         await page.route('**/api/me', (route) => route.fulfill({ json: { ...data.user, emailVerified: false } }));
+    }
+    if (options.member) {
+        await page.route('**/api/w/*/me', (route) => route.fulfill({ json: data.memberMembership }));
     }
     // The status page reads `/health`; it is served outside `/api` (vite.config.ts proxy).
     await page.route('**/health', (route) =>

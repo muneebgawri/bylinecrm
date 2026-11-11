@@ -5,7 +5,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TodayDealView, TodayPersonView, TodayView } from '../../../api/types';
 import { apiError, json, renderAt, route, stubApi } from '../settings/settingsTestKit';
-import { TodayPage } from './TodayPage';
+import { useMemo, useState } from 'react';
+import { readerTimeZone, type TodayParams } from '../../../api/today';
+import { TodayWork } from './TodayWork';
 
 const WS = 'ws-1';
 
@@ -63,11 +65,17 @@ const DAY: TodayView = {
     stalled: empty,
 };
 
+/** The page's part: whose day, in the reader's zone. */
+function Host() {
+    const [memberId, setMemberId] = useState<string | undefined>(undefined);
+    const params = useMemo<TodayParams>(() => ({ memberId, timeZone: readerTimeZone() }), [memberId]);
+    return <TodayWork workspaceId={WS} params={params} onMemberChange={setMemberId} />;
+}
 const today = (capabilities: Capability[]) =>
-    renderAt([route('/w/:workspaceId/today', <TodayPage />)], `/w/${WS}/today`, capabilities);
+    renderAt([route('/w/:workspaceId/home', <Host />)], `/w/${WS}/home`, capabilities);
 const isToday = (url: string) => /\/w\/ws-1\/today(\?|$)/.test(url);
 
-describe('#360 Today', { timeout: 20_000 }, () => {
+describe('#360 the day’s work on the dashboard', { timeout: 40_000 }, () => {
     afterEach(() => {
         vi.unstubAllGlobals();
         toasts.clear();
@@ -79,11 +87,11 @@ describe('#360 Today', { timeout: 20_000 }, () => {
         const replies = await screen.findByRole('region', { name: 'Replies waiting' });
         expect(await within(replies).findByRole('link', { name: 'Re: pricing' })).toHaveAttribute(
             'href',
-            `/w/${WS}/today?thread=th-1`,
+            `/w/${WS}/home?thread=th-1`,
         );
         expect(within(replies).getByRole('link', { name: 'Pat Prospect' })).toHaveAttribute(
             'href',
-            `/w/${WS}/today?open=person%3Ap-1`,
+            `/w/${WS}/home?open=person%3Ap-1`,
         );
         const followUps = screen.getByRole('region', { name: 'Follow-ups due' });
         expect(within(followUps).getByText('12,000+')).toBeInTheDocument();
@@ -121,15 +129,29 @@ describe('#360 Today', { timeout: 20_000 }, () => {
         expect(within(followUps).queryByRole('button', { name: 'Show more' })).toBeNull();
     });
 
-    it('completes a task in place, and it leaves the list', async () => {
+    it('completes a task in place — it leaves the list — and Undo from the notice puts it back', async () => {
         const seen = stubApi([
             (r) => (r.method === 'GET' && isToday(r.url) ? json(DAY) : undefined),
             (r) => (r.method === 'PATCH' && r.url.endsWith('/tasks/t-1') ? json({ id: 't-1' }) : undefined),
         ]);
         today(['record:read', 'task:write']);
-        await userEvent.click(await screen.findByRole('checkbox', { name: 'Complete “Send the deck”' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Complete “Send the deck”' }));
         await waitFor(() => expect(seen.find((r) => r.method === 'PATCH')?.body).toEqual({ status: 'done' }));
         await waitFor(() => expect(screen.queryByText('Send the deck')).toBeNull());
+        const notice = toasts.all().find((t) => t.title === 'Done: Send the deck');
+        expect(notice?.action?.label).toBe('Undo');
+        notice!.action!.onSelect();
+        await waitFor(() => expect(seen.filter((r) => r.method === 'PATCH').at(-1)?.body).toEqual({ status: 'todo' }));
+        expect(await screen.findByText('Send the deck')).toBeInTheDocument();
+    });
+
+    it('names each icon action on hover', async () => {
+        stubApi([(r) => (r.method === 'GET' && isToday(r.url) ? json(DAY) : undefined)]);
+        today(['record:read', 'record:write', 'task:write']);
+        await userEvent.hover(await screen.findByRole('button', { name: 'Email Pat Prospect' }));
+        expect((await screen.findAllByText('Email')).length).toBeGreaterThan(0);
+        await userEvent.hover(screen.getByRole('button', { name: 'Set next follow-up for Q4 bundle' }));
+        expect((await screen.findAllByText('Plan the next follow-up')).length).toBeGreaterThan(0);
     });
 
     it('plans a deal’s next follow-up through the deal itself', async () => {
@@ -224,7 +246,7 @@ describe('#360 Today', { timeout: 20_000 }, () => {
         today(['record:read']);
         expect(await screen.findByRole('button', { name: 'Email Pat Prospect' })).toBeDisabled();
         expect(screen.queryByRole('button', { name: /Set next follow-up/ })).toBeNull();
-        expect(screen.queryByRole('checkbox')).toBeNull();
+        expect(screen.queryByRole('button', { name: /^Complete/ })).toBeNull();
         expect(screen.queryByRole('combobox', { name: 'Whose day' })).toBeNull();
     });
 

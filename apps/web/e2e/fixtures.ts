@@ -223,6 +223,16 @@ export const membership: MembershipSummary = {
     capabilities: [...CAPABILITIES],
 };
 
+/** A plain member (#360): the member role, no `workspace:admin` — the dashboard is their day's work. */
+export const memberMembership: MembershipSummary = {
+    ...membership,
+    memberId: IDS.secondMember,
+    roleId: IDS.memberRole,
+    roleName: SYSTEM_ROLES.member,
+    recordScope: 'own',
+    capabilities: ['record:read', 'record:write', 'deal:read', 'deal:move', 'deal:edit', 'task:write'],
+};
+
 export const roles: RoleView[] = [
     {
         id: IDS.adminRole,
