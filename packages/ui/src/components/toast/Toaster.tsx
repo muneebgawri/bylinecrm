@@ -40,6 +40,20 @@ export function Toaster({ store = toasts, label = 'Notifications' }: ToasterProp
                                 {record.description}
                             </ToastPrimitive.Description>
                         )}
+                        {record.action && (
+                            <ToastPrimitive.Action altText={record.action.label} asChild>
+                                <button
+                                    type="button"
+                                    onClick={record.action.onSelect}
+                                    className={cn(
+                                        'mt-2 inline-flex h-7 items-center rounded-md border border-border bg-surface px-2.5 text-xs font-medium text-text hover:bg-surface-raised',
+                                        focusRing,
+                                    )}
+                                >
+                                    {record.action.label}
+                                </button>
+                            </ToastPrimitive.Action>
+                        )}
                     </div>
                     <ToastPrimitive.Close
                         aria-label="Dismiss"

@@ -132,6 +132,7 @@ export function useMoveDeal(workspaceId: string) {
             void client.invalidateQueries({ queryKey: [...key, 'history'] });
             void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline', 'opportunity', input.dealId] });
             void client.invalidateQueries({ queryKey: keys.records(workspaceId, 'opportunity'), exact: false });
+            void client.invalidateQueries({ queryKey: keys.today(workspaceId) });
         },
         onSettled: (_result, _error, input) =>
             client.invalidateQueries({ queryKey: keys.boards(workspaceId, input.pipelineId) }),

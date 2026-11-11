@@ -48,6 +48,31 @@ const FEED: DealFeedItemView[] = [
     }),
 ];
 
+/** The rest of the dashboard (#360): the work list and welcome, empty. */
+const empty = { count: 0, countIsExact: true, nextCursor: null, items: [] };
+const rest = [
+    (r: { method: string; url: string }) =>
+        r.method === 'GET' && /\/today(\?|$)/.test(r.url)
+            ? json({
+                  member: { memberId: 'm-1', name: 'Kate', leftAt: null },
+                  date: '2026-11-11',
+                  windows: { replyDays: 30, newLeadDays: 14, stalledDays: 21 },
+                  replies: empty,
+                  followUps: empty,
+                  newLeads: empty,
+                  tasks: empty,
+                  stalled: empty,
+              })
+            : undefined,
+    (r: { method: string; url: string }) =>
+        r.method === 'GET' && /\/(me\/profile|members\/summary|pipelines)$/.test(r.url)
+            ? json(r.url.endsWith('/me/profile') ? { displayName: 'Kate' } : [])
+            : undefined,
+];
+
+/** The dashboard makes many reads; a cold worker under load takes a while to settle them all. */
+const WAIT = { timeout: 15_000 };
+
 const home = () => renderAt([route('/w/:workspaceId/home', <HomePage />)], `/w/${WS}/home`, ['record:read']);
 
 describe('live deal feed on the dashboard', () => {
@@ -63,10 +88,10 @@ describe('live deal feed on the dashboard', () => {
     it('tells what the team did, by day; a teammate’s deal is named, only an openable one links', async () => {
         stubApi([
             (r) => (r.method === 'GET' && r.url.endsWith('/deal-feed') ? json({ items: FEED }) : undefined),
-            (r) => (r.method === 'GET' && r.url.endsWith('/my-tasks') ? json([]) : undefined),
+            ...rest,
         ]);
         home();
-        const feed = await screen.findByRole('region', { name: 'Latest deal activity' });
+        const feed = await screen.findByRole('region', { name: 'Latest deal activity' }, WAIT);
         const today = await within(feed).findByRole('region', { name: 'Today' });
         expect(within(today).getByText('Sara Khan')).toBeInTheDocument();
         expect(within(today).getByText('Proposal')).toBeInTheDocument();
@@ -81,10 +106,10 @@ describe('live deal feed on the dashboard', () => {
     });
 
     it('a feed that cannot be read says so and leaves the rest of the dashboard standing', async () => {
-        stubApi([(r) => (r.method === 'GET' && r.url.endsWith('/my-tasks') ? json([]) : undefined)]);
+        stubApi(rest);
         home();
         expect(await screen.findByText('Deal activity is unavailable')).toBeInTheDocument();
         expect(screen.getByText('Paused')).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'My tasks' })).toBeInTheDocument();
+        expect(await screen.findByRole('region', { name: 'Replies waiting' }, WAIT)).toBeInTheDocument();
     });
 });

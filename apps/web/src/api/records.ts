@@ -331,6 +331,8 @@ export function usePatchRecord<O extends RecordObject>(workspaceId: string, obje
         onSettled: () => {
             void client.invalidateQueries({ queryKey: keys.records(workspaceId, object), exact: false });
             void client.invalidateQueries({ queryKey: key });
+            // Today (#360) reads the same records: a follow-up planned or a lead edited changes it.
+            void client.invalidateQueries({ queryKey: keys.today(workspaceId) });
         },
     });
 }
