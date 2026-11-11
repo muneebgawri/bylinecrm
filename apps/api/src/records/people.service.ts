@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, UnprocessableEntityException } from '@ne
 import type { Actor, DomainEvent, Emails, FilterGroup, Links, Phones } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
-import { UniqueConflict } from '../infra/errors/api-errors';
+import { UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -132,8 +132,11 @@ export class PeopleService implements BulkRecords {
 
     async create(input: PersonInput): Promise<PersonView> {
         const context = this.current();
+        // The request DTO refuses this too; callers inside the API get the same 400.
         if (input.company && input.companyId != null) {
-            throw new UnprocessableEntityException('name an existing company or a new one, not both');
+            throw new ValidationFailed('name an existing company or a new one, not both', [
+                { path: 'company', message: 'name an existing company (companyId) or a new one (company), not both' },
+            ]);
         }
         if (input.handToOwner) {
             // Handed over, the person goes to the owner's company: a new company is never made for them.

@@ -101,7 +101,11 @@ export class CreatePersonDto extends createZodDto(
              */
             company: z.object({ name: text(200).min(1) }),
         })
-        .partial(),
+        .partial()
+        .refine((body) => !(body.company && body.companyId != null), {
+            path: ['company'],
+            message: 'name an existing company (companyId) or a new one (company), not both',
+        }),
 ) {}
 /** `GET /people/address-check`: is this primary address free for a new person? */
 export class AddressCheckQueryDto extends createZodDto(z.object({ email: emailAddress })) {}
