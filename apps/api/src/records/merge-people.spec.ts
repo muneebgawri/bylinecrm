@@ -295,6 +295,20 @@ describe('addressKeepers', () => {
             { email: 'slee@x.com', holderIds: ['a', 'b'], why: 'names more than one of them' },
         ]);
     });
+
+    it('a person’s choice comes before the rules, for a keeper who holds the address', () => {
+        const a = person('a', 1, 'Sam', 'Lee', ['sam@x.com', 'slee@x.com', 'team@x.com']);
+        const b = person('b', 2, 'Sara', 'Lee', ['sara@x.com', 'slee@x.com', 'team@x.com']);
+        const decided = new Map([
+            ['team@x.com', 'b'],
+            // Not a holder: the rules decide as before.
+            ['slee@x.com', 'z'],
+        ]);
+        expect(addressKeepers([a, b], new Map(), decided)).toEqual({
+            releases: [{ email: 'team@x.com', keeperId: 'b', fromIds: ['a'], by: 'decided' }],
+            unresolved: [{ email: 'slee@x.com', holderIds: ['a', 'b'], why: 'names more than one of them' }],
+        });
+    });
 });
 
 describe('withoutAddress', () => {
