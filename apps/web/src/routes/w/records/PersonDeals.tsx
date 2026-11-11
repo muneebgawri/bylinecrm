@@ -114,7 +114,11 @@ function PipelineDeals({
                     >
                         <Link
                             to={paths.deal(workspaceId, deal.id)}
-                            className={cn('min-w-0 flex-1 rounded-sm hover:underline', focusRing)}
+                            className={cn(
+                                'flex min-w-0 flex-1 flex-col justify-center rounded-sm hover:underline',
+                                'max-md:min-h-touch',
+                                focusRing,
+                            )}
                         >
                             <span className="block truncate font-medium text-text">{deal.name}</span>
                             <span className="block truncate text-xs text-text-muted">{`${deal.daysInStage}d in stage`}</span>
@@ -127,6 +131,8 @@ function PipelineDeals({
                             onClick={() => setMoving(deal)}
                             className={cn(
                                 'inline-flex max-w-36 shrink-0 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs',
+                                // FR-CRMS-UI-12: a finger's target on a phone; the border and text keep their size.
+                                'max-md:min-h-touch max-md:min-w-touch',
                                 'hover:bg-surface-raised disabled:cursor-default disabled:hover:bg-transparent',
                                 focusRing,
                             )}
