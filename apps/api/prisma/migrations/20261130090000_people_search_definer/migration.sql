@@ -8,6 +8,8 @@
 
 -- What the prefix branches range over: byte order, so `~>=~` / `~<~` bound a prefix exactly whatever the collation
 -- (under en_US.utf8 a default-collation range can miss prefixes with punctuation).
+-- A plain build reads each table once and holds off writes to it while it does (seconds on people's 166k rows);
+-- CONCURRENTLY cannot run inside a migration.
 CREATE INDEX IF NOT EXISTS "people_email_primary_prefix_idx"
     ON "people" ("workspace_id", "email_primary" text_pattern_ops) WHERE "email_primary" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "person_addresses_prefix_idx"

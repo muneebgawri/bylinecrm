@@ -88,7 +88,9 @@ function likePrefix(q: string): string {
  */
 export function prefixUpperBound(low: string): string {
     const chars = [...low];
-    const last = chars.pop()!.codePointAt(0)!;
+    const last = chars.pop()?.codePointAt(0);
+    // Nothing typed: an empty range (>= '' and < ''), so the prefix branches match nothing.
+    if (last === undefined) return '';
     return chars.join('') + String.fromCodePoint(last + 1);
 }
 

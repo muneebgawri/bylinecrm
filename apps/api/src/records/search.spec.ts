@@ -41,6 +41,7 @@ describe('mergeRanked', () => {
 describe('prefixUpperBound', () => {
     it("is the prefix with its last character's successor, so `~>=~ low AND ~<~ high` is exactly the prefix", () => {
         expect(prefixUpperBound('matt')).toBe('matu');
+        expect(prefixUpperBound('')).toBe('');
         expect(prefixUpperBound('a.b@')).toBe('a.bA');
         expect(prefixUpperBound('zoë')).toBe('zoì');
         const high = prefixUpperBound('matt');
