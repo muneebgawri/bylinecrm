@@ -79,6 +79,19 @@ else
     echo "bootstrap-secrets: no RESEND_API_KEY yet — install it with install-resend-key.sh $BYLINECRM_ENV" >&2
 fi
 
+# Operator-installed: "Sign in with Google" (identity only). Both or neither — the api offers Google
+# only when both are set. Never generated or passed here; a re-run keeps what is stored and writes no
+# line until both exist. The client may be the workspace's mailbox OAuth client: register
+# APP_URL/api/auth/oidc/google/callback on it as well.
+GOOGLE_CLIENT_ID=$(existing "$APP_ENV" GOOGLE_CLIENT_ID)
+GOOGLE_CLIENT_SECRET=$(existing "$APP_ENV" GOOGLE_CLIENT_SECRET)
+if [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ]; then
+    echo "bootstrap-secrets: kept existing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET" >&2
+else
+    GOOGLE_CLIENT_ID='' GOOGLE_CLIENT_SECRET=''
+    echo "bootstrap-secrets: no Google sign-in client — Google sign-in stays off" >&2
+fi
+
 # Operator-set (not secret, not derived): the platform admins (P0-14). Pass
 # BYLINECRM_PLATFORM_ADMIN_EMAILS to change the list; otherwise the stored list is kept, so a re-run
 # never drops it. Empty is valid and means nobody can create a workspace.
@@ -132,6 +145,9 @@ PLATFORM_ADMIN_EMAILS=${PLATFORM_ADMIN_EMAILS}
 # Transactional mail (#93, D-249): Resend, from Pinion Newswire's verified domain.
 MAIL_FROM=BylineCRM <no-reply@pinionnewswire.com>
 ${RESEND_API_KEY:+RESEND_API_KEY=${RESEND_API_KEY}}
+# Sign in with Google (identity scopes only).
+${GOOGLE_CLIENT_ID:+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}}
+${GOOGLE_CLIENT_SECRET:+GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}}
 EOF
 
 # Operator-set (#166): the offsite backup remote and the rclone config it is in, read by lib.sh for the

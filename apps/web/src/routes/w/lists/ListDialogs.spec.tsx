@@ -38,7 +38,7 @@ const BEAT = field({ key: 'beat', label: 'Beat', position: 3 });
 function stubApi(
     holder: { ownerName: string | null; trashed: boolean } | null,
     fields: unknown[] = [],
-    opts: { companyOwnedBy?: string } = {},
+    opts: { companyOwnedBy?: string; company?: { id: string; name: string } } = {},
 ) {
     const calls: { method: string; url: string; body: unknown }[] = [];
     vi.stubGlobal(
@@ -47,7 +47,8 @@ function stubApi(
             const url = String(input);
             const method = init?.method ?? 'GET';
             calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-            if (url.includes('/people/address-check')) return json({ available: holder === null, holder });
+            if (url.includes('/people/address-check'))
+                return json({ available: holder === null, holder, company: opts.company ?? null });
             if (url.includes('/custom-fields')) return json(fields);
             if (url.includes('/search?'))
                 return json({
@@ -162,14 +163,47 @@ describe('Add person: the address first', () => {
         expect(calls.some((c) => c.url.includes('/address-check'))).toBe(false);
     });
 
-    it('the company is required', async () => {
-        stubApi(null);
-        renderDialog();
+    it('the company is required, and saving without one says so under it', async () => {
+        const calls = stubApi(null);
+        const onCreated = renderDialog();
         await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
         await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
-        expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        expect(await screen.findByText(/Choose the company they work at/)).toBeInTheDocument();
+        expect(calls.some((c) => c.method === 'POST')).toBe(false);
         await pickCompany();
-        expect(screen.getByRole('button', { name: 'Add person' })).toBeEnabled();
+        expect(screen.queryByText(/Choose the company they work at/)).toBeNull();
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
+    });
+
+    it('the company at the address’s domain is chosen for them', async () => {
+        const calls = stubApi(null, [], { company: { id: 'c1', name: 'Acme Corp' } });
+        const onCreated = renderDialog();
+        await userEvent.type(screen.getByLabelText(/Email/), 'dana@acme.com');
+        await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Dana');
+        expect(screen.getByRole('button', { name: /^Company:/ })).toHaveTextContent('Acme Corp');
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
+        expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ companyId: 'c1' });
+    });
+
+    it('a domain no company has yet is offered as a new company, named for it; free mail is not', async () => {
+        const calls = stubApi(null);
+        const onCreated = renderDialog();
+        await userEvent.type(screen.getByLabelText(/Email/), 'robin@goodbottle.example');
+        await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Robin');
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
+        expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ company: { name: 'goodbottle.example' } });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Change' }));
+        await userEvent.clear(screen.getByLabelText(/Email/));
+        await userEvent.type(screen.getByLabelText(/Email/), 'robin@gmail.com');
+        await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        expect(await screen.findByRole('button', { name: /^Company:/ })).not.toHaveTextContent('gmail');
     });
 
     it('asks the fields an admin chose, in their order, and saves them in their types', async () => {
@@ -200,7 +234,9 @@ describe('Add person: the address first', () => {
         await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
         await pickCompany();
         const beat = await screen.findByLabelText(/Beat/);
-        expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+        // The browser's own check stops an empty required input; nothing is sent.
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        expect(beat).toBeInvalid();
         await userEvent.type(beat, 'Fintech');
         expect(screen.getByRole('button', { name: 'Add person' })).toBeEnabled();
     });
@@ -265,7 +301,8 @@ describe('Add person: the address first', () => {
         await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
         await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
         await pickCompany();
-        expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Fill in Beats.');
         await userEvent.click(await screen.findByRole('checkbox', { name: 'Energy' }));
         await userEvent.click(screen.getByRole('checkbox', { name: 'Fintech' }));
         await userEvent.click(screen.getByRole('button', { name: 'Add person' }));

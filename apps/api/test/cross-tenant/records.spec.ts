@@ -374,7 +374,7 @@ describe('records', () => {
             const free = await as(admin)
                 .get(w(`/people/address-check?email=${encodeURIComponent(`free-${stamp}@x.test`)}`))
                 .expect(200);
-            expect(free.body).toEqual({ available: true, holder: null });
+            expect(free.body).toMatchObject({ available: true, holder: null });
             await as(admin).get(w('/people/address-check?email=not-an-address')).expect(400);
         });
 
