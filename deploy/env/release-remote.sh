@@ -103,6 +103,17 @@ compose up -d --wait postgres valkey
 log "migrating"
 compose run --rm migrate
 
+# GUARD-4: the outbound relay, where the environment has one. Not a colour: one instance, replaced here
+# (seconds; Google retries). Without its certificate it is not started, and the release says so.
+if [ -n "$BYLINECRM_RELAY_HOST" ]; then
+    if [ -s "$BYLINECRM_RUNTIME/relay-tls/fullchain.pem" ] && [ -s "$BYLINECRM_RUNTIME/relay-tls/privkey.pem" ]; then
+        log "starting relay ($BYLINECRM_RELAY_HOST:$BYLINECRM_RELAY_PORT)"
+        compose --profile relay up -d --no-deps relay
+    else
+        log "relay NOT started: no certificate in $BYLINECRM_RUNTIME/relay-tls — run install-relay-cert.sh $BYLINECRM_ENV"
+    fi
+fi
+
 # ── blue/green cutover ───────────────────────────────────────────────────────────────────────────
 ACTIVE=$(bylinecrm_active_colour)
 NEW=$(bylinecrm_other_colour "$ACTIVE")

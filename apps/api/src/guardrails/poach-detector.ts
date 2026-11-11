@@ -377,7 +377,7 @@ export class PoachDetectorConsumer implements OutboxConsumer {
  * address. Mail from a pool mailbox is a sequence's (the enrolment guard's), so it has no sender here; nor has
  * mail from a service inbox (SVC-1), a shared address outside the guardrails, whoever connected it.
  */
-async function senderOf(
+export async function senderOf(
     tx: WorkspaceClient,
     participants: readonly { role: string; address: string; memberId: string | null }[],
     fromAddress: string,
@@ -400,7 +400,7 @@ async function senderOf(
  * What the workspace knows of each recipient: the person, their company, the owner (none when it is a shared
  * mailbox), an exclusion.
  */
-async function readRecipients(
+export async function readRecipients(
     tx: WorkspaceClient,
     recipients: readonly { address: string; personId: string | null; memberId: string | null }[],
     sharedMailboxes: ReadonlySet<string>,

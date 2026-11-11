@@ -38535,7 +38535,8 @@
                             "repeat_blocks",
                             "export",
                             "sync",
-                            "pool_send"
+                            "pool_send",
+                            "relay"
                         ]
                     },
                     "actor": {

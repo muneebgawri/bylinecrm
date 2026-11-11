@@ -57,6 +57,9 @@ Run on the server unless marked **Mac**. Check first that no NewswireOS deploy i
 5. **Edge, HTTP only:** `bash <rel>/install-edge.sh production http` — the ACME challenge path and a
    redirect to https; it references no upstream, so `nginx -t` cannot depend on BylineCRM.
 6. **Certificate:** `certbot certonly --webroot -w /var/www/certbot -d crm.pinionnewswire.com`.
+   For the outbound relay (GUARD-4, `docs/design-notes/GUARD-4.md`): a DNS-only A record
+   `outbound-relay.pinionnewswire.com` → the server, then `deploy/env/install-relay-cert.sh production`
+   (issues the certificate and installs the renewal hook); the next release starts the `relay` service.
    The existing deploy hook (`/etc/letsencrypt/renewal-hooks/deploy/reload-web.sh`) reloads the edge
    on every renewal.
 7. **Edge, HTTPS:** `bash <rel>/install-edge.sh production https` — renders the server blocks for

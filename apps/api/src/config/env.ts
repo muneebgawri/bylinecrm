@@ -198,6 +198,33 @@ export const envSchema = z
         /** Google sign-in (identity only). Both or neither. */
         GOOGLE_CLIENT_ID: z.string().min(1).optional(),
         GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+        /**
+         * GUARD-4: the outbound relay process (`dist/relay/main.js`). Google Workspace routes a Sales rep's
+         * Gmail to RELAY_HOSTNAME; the relay judges it and hands what may leave to RELAY_UPSTREAM_HOST
+         * (Google's SMTP relay service, which allows this server's IP). The TLS files are read again
+         * when they change (certbot renews them). Only Google's own addresses may connect
+         * (`_spf.google.com`); RELAY_ALLOWED_CIDRS adds more, for a test from one address.
+         */
+        RELAY_PORT: z.coerce.number().int().positive().default(2525),
+        RELAY_HOSTNAME: z.string().min(1).optional(),
+        RELAY_TLS_CERT: z.string().min(1).optional(),
+        RELAY_TLS_KEY: z.string().min(1).optional(),
+        RELAY_UPSTREAM_HOST: z.string().min(1).default('smtp-relay.gmail.com'),
+        RELAY_UPSTREAM_PORT: z.coerce.number().int().positive().default(587),
+        RELAY_ALLOWED_CIDRS: z
+            .string()
+            .optional()
+            .transform((raw) =>
+                (raw ?? '')
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter((s) => s !== ''),
+            ),
+        RELAY_MAX_BYTES: z.coerce
+            .number()
+            .int()
+            .positive()
+            .default(40 * 1024 * 1024),
         /** JSON array of OIDC issuers; empty or absent means none beyond Google. */
         OIDC_ISSUERS: z
             .string()
@@ -211,6 +238,10 @@ export const envSchema = z
                     return z.NEVER;
                 }
             }),
+    })
+    .refine((env) => Boolean(env.RELAY_TLS_CERT) === Boolean(env.RELAY_TLS_KEY), {
+        message: 'RELAY_TLS_CERT and RELAY_TLS_KEY must be set together',
+        path: ['RELAY_TLS_KEY'],
     })
     .refine((env) => Boolean(env.GOOGLE_CLIENT_ID) === Boolean(env.GOOGLE_CLIENT_SECRET), {
         message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together',
