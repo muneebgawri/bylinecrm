@@ -48,6 +48,7 @@ import {
 import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
 import { GmailQuota } from './quota';
 import { identityKeyOf, recountThread, threadOfReferenced } from './threads';
+import { refreshContactStatus } from '../customers/contact-status.service';
 import { emailSummaryOf } from './summary';
 import { linkOutbound, replyEventFor } from './replies';
 import { rateLimitedRuns, withGmailRetry, type RateLimitRecord, type RetryOptions } from './retry';
@@ -90,6 +91,8 @@ class HistoryExpired extends Error {}
 interface Incoming {
     parsed: ParsedMessage;
     direction: 'inbound' | 'outbound';
+    /** Stored by the history backfill: its events say so (`EmailSummary.historical`). */
+    historical?: boolean;
 }
 
 /**
@@ -332,6 +335,7 @@ export class MailSyncService {
         blocklist: readonly string[],
         totals: Omit<SyncRunResult, 'mode'>,
         stored: (parsed: ParsedMessage) => void = () => undefined,
+        historical = false,
     ): Promise<void> {
         // A message listed a moment ago and gone by the time it is read (a deleted draft, a message
         // emptied from Trash) answers 404: it no longer exists, so it is skipped, never a failed run.
@@ -345,7 +349,7 @@ export class MailSyncService {
             const verdict = classify(run.mailbox, raw, blocklist);
             if (verdict === 'label') totals.skippedByLabel += 1;
             else if (verdict === 'blocked') totals.blocked += 1;
-            else incoming.push(verdict);
+            else incoming.push(historical ? { ...verdict, historical: true } : verdict);
         }
         incoming.sort((a, b) => a.parsed.sentAt.getTime() - b.parsed.sentAt.getTime());
         for (const message of incoming) {
@@ -628,9 +632,26 @@ export class MailSyncService {
             }
             const totals = { imported: 0, duplicates: 0, skippedByLabel: 0, blocked: 0, vanished: 0 };
             let bytes = 0;
-            await this.fetchAndStore(run, matched, blocklist, totals, (parsed) => {
-                bytes += storedBytesOf(parsed);
-            });
+            const addresses = new Set<string>();
+            await this.fetchAndStore(
+                run,
+                matched,
+                blocklist,
+                totals,
+                (parsed) => {
+                    bytes += storedBytesOf(parsed);
+                    for (const p of parsed.participants) addresses.add(p.address);
+                },
+                true,
+            );
+            // Their events are flagged historical, so contact status is not re-derived message by message (the
+            // outbox fell hours behind that way): the people this chunk stored mail for are refreshed here, once.
+            if (addresses.size > 0) {
+                await this.rls.withWorkspace(run.mailbox.workspaceId, async (tx) => {
+                    const people = await personsByAddress(tx, [...addresses]);
+                    await refreshContactStatus(tx, [...new Set(people.values())]);
+                });
+            }
             const done = addProgress(delta, totals);
             for (const key of Object.keys(done) as (keyof BackfillProgress)[]) counts[key] += done[key];
             counts.matched += matched.length;
@@ -739,6 +760,7 @@ export class MailSyncService {
             providerMessageId: parsed.providerMessageId,
             direction,
             labelIds: parsed.labelIds,
+            sentAt: parsed.sentAt,
         });
         const linkSend = (messageId: string, rfc822MessageId: string | null) =>
             linkOutbound(tx, mailbox, {
@@ -818,7 +840,7 @@ export class MailSyncService {
         await tx.mailMessageCopy.create({ data: copy(row.id, mailboxThreadId) });
         await recountThread(tx, threadId);
         const targets = await recordTargetsForPeople(tx, [...people.values()]);
-        const email = emailSummaryOf(row, mailbox.id);
+        const email = emailSummaryOf(row, mailbox.id, message.historical === true);
         const event: DomainEvent = {
             type: row.direction === 'inbound' ? 'email.received' : 'email.sent',
             object: 'email',
