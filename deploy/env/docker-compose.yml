@@ -57,6 +57,20 @@ services:
         env_file: ${BYLINECRM_RUNTIME}/postgres.env
         volumes:
             - ${BYLINECRM_RUNTIME}/data/postgres:/var/lib/postgresql/data
+        # The server's memory settings, sized to the container (lib.sh per environment): the image's defaults (128 MB of
+        # buffers) left a 10 GB production database reading from disk for every per-mailbox query.
+        command:
+            [
+                'postgres',
+                '-c',
+                'shared_buffers=${BYLINECRM_POSTGRES_SHARED_BUFFERS:-128MB}',
+                '-c',
+                'effective_cache_size=${BYLINECRM_POSTGRES_EFFECTIVE_CACHE:-384MB}',
+                '-c',
+                'work_mem=${BYLINECRM_POSTGRES_WORK_MEM:-4MB}',
+                '-c',
+                'maintenance_work_mem=${BYLINECRM_POSTGRES_MAINTENANCE_WORK_MEM:-64MB}',
+            ]
         mem_limit: ${BYLINECRM_POSTGRES_MEM:-512m}
         restart: unless-stopped
         healthcheck:
