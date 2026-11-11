@@ -344,6 +344,25 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
             expect(await companiesNamed(name)).toHaveLength(0);
         });
 
+        it('a new company at a domain a company already has joins that one, never a twin', async () => {
+            const domain = `kin-${stamp}.test`;
+            const own = await as(ben)
+                .post(w('/companies'))
+                .send({ name: `Kin ${tag}`, domain })
+                .expect(201);
+            const check = await as(ben)
+                .get(w(`/people/address-check?email=${encodeURIComponent(`lia@${domain}`)}`))
+                .expect(200);
+            expect(check.body).toMatchObject({ available: true, company: { id: own.body.id, name: `Kin ${tag}` } });
+            const name = `Kin twin ${tag}`;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Lia', emails: { primary: `lia@${domain}`, additional: [] }, company: { name } });
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            expect(res.body).toMatchObject({ companyId: own.body.id });
+            expect(await companiesNamed(name)).toHaveLength(0);
+        });
+
         it('names a company or a new one, never both, writing nothing', async () => {
             const name = `Both ${tag}`;
             await as(ana)

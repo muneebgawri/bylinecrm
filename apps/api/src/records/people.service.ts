@@ -135,8 +135,16 @@ export class PeopleService implements BulkRecords {
 
     /** Before a person is created: is the address free, and if not, whose person has it (`conflict` says the same). */
     async addressCheck(email: string): Promise<AddressCheckView> {
-        const holder = await this.ownership.addressHolder(this.current(), email);
-        return { available: holder === null, holder };
+        const context = this.current();
+        const [holder, company] = await Promise.all([
+            this.ownership.addressHolder(context, email),
+            this.ownership.companyForDomain(context, companyDomainOfAddress(email)),
+        ]);
+        return {
+            available: holder === null,
+            holder,
+            company: company ? { id: company.companyId, name: company.companyName } : null,
+        };
     }
 
     get(id: string): Promise<PersonView> {
@@ -167,10 +175,17 @@ export class PeopleService implements BulkRecords {
             if (handed) return { ...handed, deal: null };
         }
         const { company, ...person } = input;
+        // A new company whose domain a company already has is that company: the person joins it, never a twin.
+        // Its owner is then checked as for any named company (OWN-2), so another member's is still refused.
+        const sameDomain = company
+            ? await this.ownership.companyForDomain(context, companyDomainOfAddress(person.emails?.primary))
+            : null;
         const row = await this.rls.withWorkspace(async (tx) => {
             // #353: the new company and the person commit together or not at all. Its domain check (OWN-2) runs
             // before its write, so an owned domain is refused with nothing written.
-            if (company) {
+            if (sameDomain) {
+                person.companyId = sameDomain.companyId;
+            } else if (company) {
                 const made = await this.companies.createIn(tx, context, {
                     name: company.name,
                     domain: companyDomainOfAddress(person.emails?.primary),
