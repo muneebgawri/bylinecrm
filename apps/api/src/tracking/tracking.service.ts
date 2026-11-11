@@ -5,7 +5,7 @@ import {
     type DomainEvent,
     type EmailTrackingPayload,
 } from '@bylinecrm/shared';
-import type { TrackingKind } from '@prisma/client';
+import type { Prisma, TrackingKind } from '@prisma/client';
 import { hashToken, randomToken } from '../auth/tokens';
 import { DomainEvents } from '../events/domain-events.service';
 import { PrismaService } from '../infra/prisma.service';
@@ -13,6 +13,13 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { botReason } from './bots';
 import { rewriteLinks, trackableLinks, withOpenPixel } from './link-rewriter';
 import { TRACKING_TOKEN_BYTES } from './tracking.constants';
+import { trackingRulesIn, type TrackingRules } from './tracking-policy.service';
+
+/** TRACK-2: HTML rewritten for tracking, and the token rows it names, to be written with the send. */
+export interface PlannedTracking {
+    html: string;
+    tokens: Prisma.TrackingTokenCreateManyInput[];
+}
 
 /** What a public hit asks for: which token, from what client, when. */
 export interface HitRequest {
@@ -39,45 +46,79 @@ export class TrackingService {
     ) {}
 
     /**
-     * The HTML with its links rewritten and the pixel added, or unchanged when the workspace has no
-     * verified short-link domain. `exclude` names the links never rewritten (the unsubscribe link).
+     * A sequence step's HTML with its links rewritten and the pixel added — as the workspace's policy says (TRACK-2:
+     * opens and clicks each on or off) — or unchanged when the workspace has no verified short-link domain. A step sent
+     * through an SMTP2Go pool mailbox while SMTP2Go is the workspace's provider goes as it is: SMTP2Go tracks it.
+     * `exclude` names the links never rewritten (the unsubscribe link).
      */
     async trackOutreach(
         workspaceId: string,
-        input: { outboundId: string; html: string; exclude: readonly string[] },
+        input: { outboundId: string; html: string; exclude: readonly string[]; viaSmtp2Go?: boolean },
     ): Promise<string> {
+        const rules = await this.rls.withWorkspace(workspaceId, (tx) => trackingRulesIn(tx, workspaceId));
+        if (input.viaSmtp2Go && rules.provider === 'smtp2go') return input.html;
+        const planned = await this.plan(workspaceId, input, rules);
+        if (planned.tokens.length > 0) {
+            await this.rls.withWorkspace(workspaceId, (tx) => tx.trackingToken.createMany({ data: planned.tokens }));
+        }
+        return planned.html;
+    }
+
+    /**
+     * TRACK-2: an email written in the CRM, tracked by our own links and pixel — called only for a send its writer
+     * left tracked that goes through Gmail (one through the SMTP2Go relay is SMTP2Go's to track). The send's row does
+     * not exist yet: its tokens are returned for the caller to write with it, in its transaction.
+     */
+    async trackPersonal(workspaceId: string, input: { outboundId: string; html: string }): Promise<PlannedTracking> {
+        const rules = await this.rls.withWorkspace(workspaceId, (tx) => trackingRulesIn(tx, workspaceId));
+        return this.plan(workspaceId, { ...input, exclude: [] }, rules);
+    }
+
+    /** The HTML rewritten as the rules say, and the tokens it names (not written). */
+    private async plan(
+        workspaceId: string,
+        input: { outboundId: string; html: string; exclude: readonly string[] },
+        rules: TrackingRules,
+    ): Promise<PlannedTracking> {
+        const none = { html: input.html, tokens: [] };
+        if (!rules.trackOpens && !rules.trackClicks) return none;
         const domain = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.trackingDomain.findUnique({ where: { workspaceId }, select: { domain: true, status: true } }),
         );
-        if (!domain || domain.status !== 'pass') return input.html;
-        const links = trackableLinks(input.html, input.exclude).map((url) => ({
+        if (!domain || domain.status !== 'pass') return none;
+        const links = (rules.trackClicks ? trackableLinks(input.html, input.exclude) : []).map((url) => ({
             url,
             token: randomToken(TRACKING_TOKEN_BYTES),
         }));
-        const open = randomToken(TRACKING_TOKEN_BYTES);
-        await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.trackingToken.createMany({
-                data: [
-                    ...links.map((l) => ({
-                        workspaceId,
-                        outboundId: input.outboundId,
-                        kind: 'click' as const,
-                        tokenHash: hashToken(l.token),
-                        url: l.url,
-                    })),
-                    {
-                        workspaceId,
-                        outboundId: input.outboundId,
-                        kind: 'open' as const,
-                        tokenHash: hashToken(open),
-                        url: null,
-                    },
-                ],
-            }),
-        );
+        const open = rules.trackOpens ? randomToken(TRACKING_TOKEN_BYTES) : null;
+        const rows = [
+            ...links.map((l) => ({
+                workspaceId,
+                outboundId: input.outboundId,
+                kind: 'click' as const,
+                tokenHash: hashToken(l.token),
+                url: l.url,
+            })),
+            ...(open
+                ? [
+                      {
+                          workspaceId,
+                          outboundId: input.outboundId,
+                          kind: 'open' as const,
+                          tokenHash: hashToken(open),
+                          url: null,
+                      },
+                  ]
+                : []),
+        ];
+        if (rows.length === 0) return none;
         const base = `https://${domain.domain}`;
         const short = new Map(links.map((l) => [l.url, `${base}/${TRACKING_CLICK_PATH}/${l.token}`]));
-        return withOpenPixel(rewriteLinks(input.html, short), `${base}/${TRACKING_OPEN_PATH}/${open}`);
+        const rewritten = rewriteLinks(input.html, short);
+        return {
+            html: open ? withOpenPixel(rewritten, `${base}/${TRACKING_OPEN_PATH}/${open}`) : rewritten,
+            tokens: rows,
+        };
     }
 
     /**

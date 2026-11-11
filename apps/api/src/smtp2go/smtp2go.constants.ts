@@ -5,6 +5,9 @@ export const SMTP2GO_HTTP_TIMEOUT_MS = 20_000;
 /** Where SMTP2Go's webhook posts, per pool mailbox: `/api/hooks/smtp2go/<mailboxId>`. */
 export const SMTP2GO_HOOK_PATH = '/api/hooks/smtp2go';
 
+/** TRACK-2: where SMTP2Go's webhook posts for CRM-written mail sent through the workspace's relay key. */
+export const SMTP2GO_RELAY_HOOK_PATH = '/api/hooks/smtp2go/relay';
+
 /** Refused deliveries per client IP per window before the hook answers `429`. */
 export const SMTP2GO_HOOK_FAILURE_LIMIT = 30;
 export const SMTP2GO_HOOK_FAILURE_WINDOW_S = 600;

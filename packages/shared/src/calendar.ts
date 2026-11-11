@@ -1,4 +1,4 @@
-import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from './mail.js';
+import { GMAIL_INSERT_SCOPE, GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from './mail.js';
 
 /**
  * Contact pictures (AVATAR-1, ported from BylineAI's Google Contacts avatars): read the member's
@@ -35,6 +35,7 @@ export const PERSONAL_MAILBOX_SCOPES = [
     GMAIL_READONLY_SCOPE,
     GOOGLE_CALENDAR_SCOPE,
     ...GOOGLE_CONTACTS_SCOPES,
+    GMAIL_INSERT_SCOPE,
 ] as const;
 
 /**
