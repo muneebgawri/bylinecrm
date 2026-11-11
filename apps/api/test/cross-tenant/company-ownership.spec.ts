@@ -665,5 +665,32 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
             });
             expect(claimed?.payload).toMatchObject({ diff: { ownerId: { from: null, to: benId } } });
         });
+
+        it('a member who has left holds nothing: the next member to save a person there claims it', async () => {
+            const orla = `orla-${stamp}.test`;
+            const companyId = await unowned(`Orla ${stamp}`, orla);
+            // The import's person, owned by Ana, who then leaves (outreach@ came over from Twenty like this).
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Ola',
+                    emails: { primary: `ola@${orla}`, additional: [] },
+                    ownerId: anaId,
+                    companyId,
+                })
+                .expect(201);
+            const prisma = app.get(PrismaService);
+            await prisma.workspaceMember.update({ where: { id: anaId }, data: { leftAt: new Date() } });
+            try {
+                const saved = await as(ben)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Sam', emails: { primary: `sam@${orla}`, additional: [] } });
+                expect(saved.status, JSON.stringify(saved.body)).toBe(201);
+                expect(saved.body).toMatchObject({ ownerId: benId, companyId });
+                expect(await ownerOf(companyId)).toBe(benId);
+            } finally {
+                await prisma.workspaceMember.update({ where: { id: anaId }, data: { leftAt: null } });
+            }
+        });
     });
 });
