@@ -72,8 +72,8 @@ describe('assign-company-owners: companies take the owner their people name (OWN
         (await owner.person.findUniqueOrThrow({ where: { id: personId }, select: { ownerId: true } })).ownerId;
     const dealOwner = async (dealId: string) =>
         (await owner.opportunity.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true } })).ownerId;
-    const run = (apply: boolean, reassignPeople: boolean) =>
-        assignCompanyOwners(app, workspace, { apply, reassignPeople });
+    const run = (apply: boolean, reassignPeople: boolean, batch?: number) =>
+        assignCompanyOwners(app, workspace, { apply, reassignPeople, batch });
 
     beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -151,20 +151,19 @@ describe('assign-company-owners: companies take the owner their people name (OWN
     });
 
     it('estimates: the companies to fill and the people and deals to move, changing nothing', async () => {
-        expect(await run(false, true)).toEqual({
-            companies: 1,
-            assigned: 1,
-            companiesTouched: 2,
-            peopleMoved: 2,
-            dealsMoved: 1,
-        });
+        const expected = { companies: 1, assigned: 1, companiesTouched: 2, peopleMoved: 2, dealsMoved: 1 };
+        expect(await run(false, true)).toEqual(expected);
+        // `--batch`: a page of one company reads the same, page after page; a bad size is refused before any read.
+        expect(await run(false, true, 1)).toEqual(expected);
+        await expect(run(false, true, 0)).rejects.toThrow('batch');
         expect(await companyOwner(imported)).toBeNull();
         expect(await companyOwner(empty)).toBeNull();
         expect(await personOwner(bensPerson)).toBe(benId);
     });
 
     it('fills each unowned company with the owner of its first saved person, on its ownership history, silently', async () => {
-        expect(await run(true, false)).toEqual({
+        // A page of one: the fill is the same written page by page, chunk by chunk.
+        expect(await run(true, false, 1)).toEqual({
             companies: 1,
             assigned: 1,
             companiesTouched: 0,
