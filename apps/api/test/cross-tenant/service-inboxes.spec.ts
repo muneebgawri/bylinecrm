@@ -100,6 +100,7 @@ describe('service inboxes', () => {
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const withKey = (key: string, path: string, ws = workspace) =>
@@ -318,6 +319,68 @@ describe('service inboxes', () => {
             const items = (threads.body as { items: { subject: string }[] }).items;
             expect(items.map((t) => t.subject)).toEqual(['Copied to the admin']);
             expect((await linked()).filter((e) => e.link?.personId === danaId)).toHaveLength(1);
+        });
+    });
+
+    describe('mail left only in a service inbox leaves the records', () => {
+        const personAt = async (subject: string) =>
+            app.get(PrismaService).$queryRaw<{ person_id: string | null }[]>`
+                SELECT mp.person_id FROM mail_participants mp JOIN mail_messages m ON m.id = mp.message_id
+                WHERE m.workspace_id = ${workspace}::uuid AND m.subject = ${subject} AND mp.role = 'from'`;
+
+        it('SVC-1: when a member blocks the sender, their copy goes and the service inbox’s is on no record', async () => {
+            const rio = `rio-${stamp}@acme.example`;
+            const created = await as(admin)
+                .post(w('/people'))
+                .send({ nameFirst: 'Rio', nameLast: 'Vance', emails: { primary: rio, additional: [] } });
+            expect(created.status).toBe(201);
+            const rioId = (created.body as { id: string }).id;
+            const message = {
+                from: rio,
+                to: [adminEmail],
+                subject: 'Media@ was copied in blind',
+                text: 'x',
+                date: new Date(Date.now() - DAY),
+                messageIdHeader: `blind-${stamp}@acme.example`,
+            };
+            gmail.deliver(adminEmail, message);
+            gmail.deliver(mediaEmail, message);
+            await sync.syncMailbox(workspace, adminMailbox, noWait);
+            await sync.syncMailbox(workspace, serviceMailbox, noWait);
+            let threads = await as(admin).get(w(`/mail/threads?target=person:${rioId}`));
+            expect((threads.body as { items: unknown[] }).items).toHaveLength(1);
+
+            const blocked = await as(admin).post(w('/mail/blocklist')).send({ value: rio });
+            expect(blocked.status).toBe(201);
+            await settle(app);
+            threads = await as(admin).get(w(`/mail/threads?target=person:${rioId}`));
+            expect((threads.body as { items: unknown[] }).items).toEqual([]);
+            expect(await personAt(message.subject)).toEqual([{ person_id: null }]);
+        });
+
+        it('SVC-1: mail matched before the rule is unmatched at the person’s next re-match', async () => {
+            const subject = 'Matched before service inboxes were on no record';
+            gmail.deliver(mediaEmail, {
+                from: dana,
+                to: [mediaEmail],
+                subject,
+                text: 'x',
+                date: new Date(Date.now() - DAY),
+            });
+            await sync.syncMailbox(workspace, serviceMailbox, noWait);
+            // As mail synced before SVC-1 was: its sender matched to Dana.
+            await app.get(PrismaService).$executeRaw`
+                UPDATE mail_participants mp SET person_id = ${danaId}::uuid
+                FROM mail_messages m WHERE m.id = mp.message_id AND m.workspace_id = ${workspace}::uuid
+                  AND m.subject = ${subject} AND mp.role = 'from'`;
+            expect(await personAt(subject)).toEqual([{ person_id: danaId }]);
+
+            const updated = await as(admin)
+                .patch(w(`/people/${danaId}`))
+                .send({ emails: { primary: dana, additional: [`dana.alt-${stamp}@acme.example`] } });
+            expect(updated.status).toBe(200);
+            await settle(app);
+            expect(await personAt(subject)).toEqual([{ person_id: null }]);
         });
     });
 
