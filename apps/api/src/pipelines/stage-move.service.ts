@@ -209,7 +209,9 @@ export class StageMoveService {
      * for a close, `deal.stage_changed` for every other move. All three are about the opportunity
      * and carry the same shape — the move as `diff.stageId`, the shape every `updated` event uses,
      * so the timeline writes it on the deal like any change, and `stage` for the pipeline and the
-     * reason — so the timeline and webhooks need no case of their own.
+     * reason — so the timeline and webhooks need no case of their own. `internal` keeps the event in BylineCRM
+     * (timeline, history, the derived statuses), off every webhook: a clean-up closing thousands of idle deals is
+     * no move an integration mirrors.
      */
     announce(
         tx: WorkspaceClient,
@@ -217,6 +219,7 @@ export class StageMoveService {
         dealId: string,
         actor: EventActor,
         moved: Extract<MoveOutcome, { outcome: 'moved' }>,
+        options: { internal?: boolean } = {},
     ): Promise<void> {
         return this.events.record(tx, {
             type: moveEventType(moved.toKind, moved.fromKind),
@@ -227,6 +230,7 @@ export class StageMoveService {
             recordId: dealId,
             diff: { stageId: { from: moved.change.fromStageId, to: moved.change.toStageId } },
             stage: moved.change,
+            ...(options.internal ? { internal: true as const } : {}),
         });
     }
 }
