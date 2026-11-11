@@ -42,13 +42,15 @@ export async function membersByAddress(
  * (media@, pr@) is synced so an integration can read it; what only it holds is matched to no person and filed on no
  * record. The moment a member's or a pool mailbox holds the same message, it concerns its people as any mail does.
  * A message no mailbox holds a copy of (one a migration or importer wrote) is not a service inbox's: it is on records.
- * Over a row source with the message's id as `mp.message_id`.
+ * `SERVICE_ONLY` is that held-only-by-service-inboxes test; `ON_RECORDS` its negation. Over a row source with the
+ * message's id as `mp.message_id`.
  */
-const ON_RECORDS = Prisma.sql`
-    NOT (EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
-                 WHERE c.message_id = mp.message_id AND b.purpose = 'service')
-         AND NOT EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
-                         WHERE c.message_id = mp.message_id AND b.purpose <> 'service'))`;
+export const SERVICE_ONLY = Prisma.sql`
+    (EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
+             WHERE c.message_id = mp.message_id AND b.purpose = 'service')
+     AND NOT EXISTS (SELECT 1 FROM mail_message_copies c JOIN mailboxes b ON b.id = c.mailbox_id
+                     WHERE c.message_id = mp.message_id AND b.purpose <> 'service'))`;
+const ON_RECORDS = Prisma.sql`NOT ${SERVICE_ONLY}`;
 
 /** Whether only service inboxes hold this message (SVC-1): its participants are then matched to no one. */
 export async function heldOnlyByServiceInboxes(tx: WorkspaceClient, messageId: string): Promise<boolean> {
@@ -60,38 +62,46 @@ export async function heldOnlyByServiceInboxes(tx: WorkspaceClient, messageId: s
 }
 
 /**
+ * Who a participant is matched to: the person its address belongs to (`x.person_id`), or no one when only service
+ * inboxes hold the message (SVC-1). Mail matched before the rule — or left only in a service inbox when a member's copy
+ * went — is unmatched by the next re-match, so it leaves those people's records.
+ */
+const MATCHED_PERSON = Prisma.sql`CASE WHEN ${ON_RECORDS} THEN x.person_id ELSE NULL END`;
+
+/**
  * Re-points every participant with one of `addresses` at the person the address belongs to now
  * (or at no one). Returns the messages whose participants changed. Idempotent. Mail only service
- * inboxes hold is left matched to no one (SVC-1).
+ * inboxes hold is matched to no one (SVC-1).
  */
 export async function rematchAddresses(tx: WorkspaceClient, addresses: readonly string[]): Promise<string[]> {
     if (addresses.length === 0) return [];
     const rows = await tx.$queryRaw<{ message_id: string }[]>`
         UPDATE mail_participants mp
-        SET person_id = x.person_id
+        SET person_id = ${MATCHED_PERSON}
         FROM (
             SELECT a.address, (${PERSON_FOR_ADDRESS}) AS person_id
             FROM unnest(${[...new Set(addresses)]}::text[]) AS a(address)
         ) x
-        WHERE mp.address = x.address AND mp.person_id IS DISTINCT FROM x.person_id AND ${ON_RECORDS}
+        WHERE mp.address = x.address AND mp.person_id IS DISTINCT FROM ${MATCHED_PERSON}
         RETURNING mp.message_id`;
     return [...new Set(rows.map((r) => r.message_id))];
 }
 
 /**
  * Matches one message's participants to the people their addresses belong to now — for mail a service inbox stored
- * first, once a member's or a pool mailbox holds it too (SVC-1). Returns the message when a participant changed.
+ * first, once a member's or a pool mailbox holds it too; and to no one once only service inboxes hold it (SVC-1).
+ * Returns the message when a participant changed.
  */
 export async function rematchMessage(tx: WorkspaceClient, messageId: string): Promise<string[]> {
     const rows = await tx.$queryRaw<{ message_id: string }[]>`
         UPDATE mail_participants mp
-        SET person_id = x.person_id
+        SET person_id = ${MATCHED_PERSON}
         FROM (
             SELECT a.address, (${PERSON_FOR_ADDRESS}) AS person_id
             FROM (SELECT DISTINCT address FROM mail_participants WHERE message_id = ${messageId}::uuid) AS a(address)
         ) x
         WHERE mp.message_id = ${messageId}::uuid AND mp.address = x.address
-          AND mp.person_id IS DISTINCT FROM x.person_id AND ${ON_RECORDS}
+          AND mp.person_id IS DISTINCT FROM ${MATCHED_PERSON}
         RETURNING mp.message_id`;
     return [...new Set(rows.map((r) => r.message_id))];
 }

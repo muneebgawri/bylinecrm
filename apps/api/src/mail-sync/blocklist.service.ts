@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import type { DomainEvent } from '@bylinecrm/shared';
 import { normaliseBlocklistValue, type BlocklistScope } from '@bylinecrm/shared';
+import { DomainEvents } from '../events/domain-events.service';
 import { ApiException, UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
+import { heldOnlyByServiceInboxes, rematchMessage } from './matching';
+import { reconcileMessageTargets } from './reconcile';
 import { recountThread } from './threads';
 import type { BlocklistEntryCreated, BlocklistEntryView } from './responses';
 
@@ -22,6 +26,7 @@ export class BlocklistService {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
+        private readonly events: DomainEvents,
     ) {}
 
     list(): Promise<BlocklistEntryView[]> {
@@ -59,7 +64,9 @@ export class BlocklistService {
                         createdById: context.memberId ?? null,
                     },
                 });
-                return { entry: view(row), purged: await purgeCovered(tx, row) };
+                const { purged, events } = await purgeCovered(tx, context.workspaceId, row);
+                await this.events.recordAll(tx, events);
+                return { entry: view(row), purged };
             });
         } catch (error) {
             if (uniqueViolation(error)) throw new UniqueConflict('that entry is already on the blocklist', 'value');
@@ -97,13 +104,15 @@ export class BlocklistService {
  */
 async function purgeCovered(
     tx: WorkspaceClient,
+    workspaceId: string,
     entry: { value: string; memberId: string | null },
-): Promise<{ messages: number; threads: number }> {
+): Promise<{ purged: { messages: number; threads: number }; events: DomainEvent[] }> {
+    const none = { purged: { messages: 0, threads: 0 }, events: [] };
     const mailboxes = await tx.mailbox.findMany({
         where: entry.memberId === null ? {} : { ownerMemberId: entry.memberId, purpose: 'personal' },
         select: { id: true, email: true, ownerMemberId: true, purpose: true },
     });
-    if (mailboxes.length === 0) return { messages: 0, threads: 0 };
+    if (mailboxes.length === 0) return none;
     const covered = entry.value.startsWith('@') ? { endsWith: entry.value } : { equals: entry.value };
     const candidates = await tx.mailMessageCopy.findMany({
         where: {
@@ -116,7 +125,7 @@ async function purgeCovered(
             message: { select: { id: true, threadId: true, participants: { select: { address: true } } } },
         },
     });
-    if (candidates.length === 0) return { messages: 0, threads: 0 };
+    if (candidates.length === 0) return none;
     const entries = await tx.blocklistEntry.findMany({ select: { value: true, memberId: true } });
     const byId = new Map(mailboxes.map((m) => [m.id, m]));
     const doomed = candidates.filter((c) => {
@@ -127,13 +136,21 @@ async function purgeCovered(
             entriesFor(mailbox, entries),
         );
     });
-    if (doomed.length === 0) return { messages: 0, threads: 0 };
+    if (doomed.length === 0) return none;
     await tx.mailMessageCopy.deleteMany({ where: { id: { in: doomed.map((c) => c.id) } } });
     const touched = [...new Set(doomed.map((c) => c.message.id))];
     const orphaned = (
         await tx.mailMessage.findMany({ where: { id: { in: touched }, copies: { none: {} } }, select: { id: true } })
     ).map((m) => m.id);
-    if (orphaned.length === 0) return { messages: 0, threads: 0 };
+    // SVC-1: a message a service inbox still holds, and no member's or pool mailbox, leaves its people's records.
+    const unmatched: string[] = [];
+    for (const id of touched) {
+        if (!orphaned.includes(id) && (await heldOnlyByServiceInboxes(tx, id))) {
+            unmatched.push(...(await rematchMessage(tx, id)));
+        }
+    }
+    const events = await reconcileMessageTargets(tx, workspaceId, unmatched);
+    if (orphaned.length === 0) return { purged: { messages: 0, threads: 0 }, events };
     await tx.$queryRaw`SELECT delete_email_timeline_entries(${orphaned}::uuid[], NULL)`;
     await tx.mailMessage.deleteMany({ where: { id: { in: orphaned } } });
     const threadIds = [
@@ -147,7 +164,7 @@ async function purgeCovered(
         where: { id: { in: threadIds }, messages: { none: {} }, mailboxThreads: { none: {} } },
     });
     for (const threadId of threadIds) await recountThread(tx, threadId);
-    return { messages: orphaned.length, threads: emptied.count };
+    return { purged: { messages: orphaned.length, threads: emptied.count }, events };
 }
 
 function isAdmin(context: WorkspaceRunContext): boolean {
