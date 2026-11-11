@@ -1,9 +1,10 @@
 import type { Capability } from '@bylinecrm/shared';
+import { toasts } from '@bylinecrm/ui';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TodayDealView, TodayPersonView, TodayView } from '../../../api/types';
-import { json, renderAt, route, stubApi } from '../settings/settingsTestKit';
+import { apiError, json, renderAt, route, stubApi } from '../settings/settingsTestKit';
 import { TodayPage } from './TodayPage';
 
 const WS = 'ws-1';
@@ -67,7 +68,10 @@ const today = (capabilities: Capability[]) =>
 const isToday = (url: string) => /\/w\/ws-1\/today(\?|$)/.test(url);
 
 describe('#360 Today', { timeout: 20_000 }, () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        toasts.clear();
+    });
 
     it('shows each section with its count — a capped backlog says so — and its rows', async () => {
         const seen = stubApi([(r) => (r.method === 'GET' && isToday(r.url) ? json(DAY) : undefined)]);
@@ -141,6 +145,78 @@ describe('#360 Today', { timeout: 20_000 }, () => {
                 nextFollowUpDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
             }),
         );
+    });
+
+    it('says so when a move is refused, and the deal stays where it was', async () => {
+        const stages = [
+            {
+                id: 's-1',
+                pipelineId: 'pl-1',
+                name: 'Contacted',
+                position: 1,
+                probability: 20,
+                kind: 'open',
+                daysThreshold: null,
+                cadenceDays: 3,
+                colour: 'info',
+            },
+            {
+                id: 's-2',
+                pipelineId: 'pl-1',
+                name: 'Qualified',
+                position: 2,
+                probability: 40,
+                kind: 'open',
+                daysThreshold: null,
+                cadenceDays: 3,
+                colour: 'info',
+            },
+        ];
+        const seen = stubApi([
+            (r) => (r.method === 'GET' && isToday(r.url) ? json(DAY) : undefined),
+            (r) =>
+                r.method === 'GET' && r.url.endsWith('/pipelines/pl-1')
+                    ? json({ id: 'pl-1', name: 'Sales', isDefault: true, position: 0, stages })
+                    : undefined,
+            (r) =>
+                r.method === 'GET' && r.url.endsWith('/opportunities/d-1')
+                    ? json({
+                          id: 'd-1',
+                          name: 'Q4 bundle',
+                          pipelineId: 'pl-1',
+                          stageId: 's-1',
+                          amount: null,
+                          currency: 'USD',
+                      })
+                    : undefined,
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/opportunities/d-1/move')
+                    ? apiError(403, 'forbidden', 'your role may not move deals')
+                    : undefined,
+        ]);
+        today(['record:read', 'record:write', 'deal:move']);
+        await userEvent.click(await screen.findByRole('button', { name: 'Move Q4 bundle to another stage' }));
+        const target = await screen.findByRole('menuitem', { name: 'Qualified' });
+        await waitFor(() => expect(target).not.toHaveAttribute('aria-disabled', 'true'));
+        await userEvent.click(target);
+        await waitFor(() =>
+            expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/opportunities/d-1/move'))).toBe(true),
+        );
+        await waitFor(() =>
+            expect(toasts.all().map((t) => [t.title, t.description, t.tone])).toContainEqual([
+                'Q4 bundle was not moved',
+                'your role may not move deals',
+                'danger',
+            ]),
+        );
+        expect(screen.getByRole('link', { name: 'Q4 bundle' })).toBeInTheDocument();
+    });
+
+    it('offers no Move without deal:move, as the board does', async () => {
+        stubApi([(r) => (r.method === 'GET' && isToday(r.url) ? json(DAY) : undefined)]);
+        today(['record:read', 'record:write']);
+        await screen.findByRole('button', { name: 'Set next follow-up for Q4 bundle' });
+        expect(screen.queryByRole('button', { name: /Move Q4 bundle/ })).toBeNull();
     });
 
     it('offers no writes to a reader without them, and no member picker to a non-admin', async () => {

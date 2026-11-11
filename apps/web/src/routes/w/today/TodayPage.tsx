@@ -80,6 +80,8 @@ interface RowContext {
     /** A row acted on leaves the list at once; the next read agrees once the server has caught up. */
     done: (section: TodaySection, id: string) => void;
     canWrite: boolean;
+    /** `deal:move` — without it there is no Move action, as on the board. */
+    canMove: boolean;
 }
 
 const SECTION_META: Record<
@@ -109,6 +111,7 @@ export function TodayPage() {
     const membership = useMembership();
     const admin = can(membership, 'workspace:admin');
     const canWrite = useCan('record:write');
+    const canMove = useCan('deal:move');
     const location = useLocation();
     const client = useQueryClient();
     const [memberId, setMemberId] = useState<string | undefined>(undefined);
@@ -125,6 +128,7 @@ export function TodayPage() {
         act: (a) => setAction({ ...a, nonce: Date.now() }),
         done: (section, id) => setHidden((h) => new Set(h).add(`${section}:${id}`)),
         canWrite,
+        canMove,
     };
     const data = day.data;
     const own = !memberId || memberId === membership?.memberId;
@@ -622,7 +626,7 @@ function DealRow({
                 <>
                     {deal.contact && <PersonButtons person={deal.contact} dealId={deal.id} context={context} />}
                     {context.canWrite && <FollowUpButton deal={deal} section={section} context={context} />}
-                    {context.canWrite && <StageMenu deal={deal} context={context} />}
+                    {context.canMove && <StageMenu deal={deal} context={context} />}
                 </>
             }
         />
