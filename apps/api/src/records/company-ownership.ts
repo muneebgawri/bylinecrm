@@ -1,18 +1,47 @@
 import { Injectable } from '@nestjs/common';
-import { bareDomain, type CompanyOwnedDetails, type Emails, type OwnershipConflictView } from '@bylinecrm/shared';
+import {
+    bareDomain,
+    type CompanyOwnedDetails,
+    type DomainEvent,
+    type Emails,
+    type OwnershipConflictView,
+} from '@bylinecrm/shared';
 import { isFreeMailDomain } from '../enrichment/email-domain';
+import { DomainEvents } from '../events/domain-events.service';
 import { companyDomain } from './company-domain';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { actorOf } from './actor';
 import { acrossOwnerScope } from './record-scope';
 
 /** A company found by a domain, with who owns it. */
 export interface DomainCompany {
     companyId: string;
     companyName: string;
+    /**
+     * Who owns it: the company's own owner, else (OWN-2d) the owner of the first person saved at it — the Bigin
+     * import set owners on people, not on their companies. Null for nobody's.
+     */
     ownerId: string | null;
     ownerName: string | null;
+    /** True when the company row itself names no owner: a governed save at it claims it for its owner (OWN-2d). */
+    unclaimed: boolean;
+}
+
+/** What is read of a company to say whose it is. */
+const COMPANY_OWNER_SELECT = {
+    id: true,
+    name: true,
+    ownerId: true,
+    owner: { select: { user: { select: { displayName: true } } } },
+} as const;
+
+interface CompanyOwnerRow {
+    id: string;
+    name: string;
+    ownerId: string | null;
+    owner: { user: { displayName: string | null } } | null;
 }
 
 /**
@@ -42,12 +71,18 @@ export function normalisedDomain(value: string): string {
  *   else's (that is the point; nothing else of the company is shown).
  * - **The rule applies to people and API keys**, never to a job (sync, import) acting for the workspace,
  *   and never to a holder of `record:transfer`, who places records where they choose.
+ * - **A company nobody owns is its first saver's** (OWN-2d). The owner of a company whose row names none is
+ *   read from its people — the owner of the earliest person saved at it — and a governed save of a person
+ *   at a company with no owner claims it, in the same transaction, for the person's owner. So an imported
+ *   company (owners on its people, none on it) is held like one saved here, from the first save on.
+ *   `assign-company-owners.js` fills the imported ones in batches.
  */
 @Injectable()
 export class CompanyOwnership {
     constructor(
         private readonly rls: RlsPrismaService,
         private readonly context: WorkspaceContext,
+        private readonly events: DomainEvents,
     ) {}
 
     /** The live company whose domain, or other domain, this is; null for none. */
@@ -60,38 +95,17 @@ export class CompanyOwnership {
             const own = await tx.company.findFirst({
                 where: { domain: { in: forms }, deletedAt: null },
                 orderBy: { createdAt: 'asc' },
-                select: {
-                    id: true,
-                    name: true,
-                    ownerId: true,
-                    owner: { select: { user: { select: { displayName: true } } } },
-                },
+                select: COMPANY_OWNER_SELECT,
             });
             const company =
                 own ??
                 (
                     await tx.companyDomain.findFirst({
                         where: { domain: { in: forms }, company: { deletedAt: null } },
-                        select: {
-                            company: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    ownerId: true,
-                                    owner: { select: { user: { select: { displayName: true } } } },
-                                },
-                            },
-                        },
+                        select: { company: { select: COMPANY_OWNER_SELECT } },
                     })
                 )?.company;
-            return company
-                ? {
-                      companyId: company.id,
-                      companyName: company.name,
-                      ownerId: company.ownerId,
-                      ownerName: company.owner?.user.displayName ?? null,
-                  }
-                : null;
+            return company ? resolved(tx, company) : null;
         });
     }
 
@@ -101,30 +115,21 @@ export class CompanyOwnership {
         return this.widened(context, async (tx) => {
             const c = await tx.company.findFirst({
                 where: { id: companyId, deletedAt: null },
-                select: {
-                    id: true,
-                    name: true,
-                    ownerId: true,
-                    owner: { select: { user: { select: { displayName: true } } } },
-                },
+                select: COMPANY_OWNER_SELECT,
             });
-            return c
-                ? {
-                      companyId: c.id,
-                      companyName: c.name,
-                      ownerId: c.ownerId,
-                      ownerName: c.owner?.user.displayName ?? null,
-                  }
-                : null;
+            return c ? resolved(tx, c) : null;
         });
     }
 
     /**
      * What a person being saved with `address` at `companyId` comes to: the company to link (theirs by
      * domain, when none was named) and, when that company is someone else's, a `409 conflict.company_owned`.
-     * `ownerId` is the owner the write resolved to. Returns the company to link, if any.
+     * `ownerId` is the owner the write resolved to. A company nobody owns is claimed for that owner in `tx`,
+     * the save's own transaction (OWN-2d), so it is theirs from this save on — or not at all, if the save
+     * fails. Returns the company to link, if any.
      */
     async checkPerson(
+        tx: WorkspaceClient,
         context: WorkspaceRunContext,
         input: { address: string | null | undefined; companyId: string | null | undefined; ownerId: string | null },
     ): Promise<{ companyId?: string; company: DomainCompany | null }> {
@@ -134,9 +139,39 @@ export class CompanyOwnership {
         const company = named ?? byDomain;
         if (!company) return { company: null };
         assertSameOwner(company, input.ownerId);
+        if (company.unclaimed && input.ownerId) await this.claim(tx, context, company.companyId, input.ownerId);
         return byDomain && input.companyId === undefined
             ? { companyId: byDomain.companyId, company: byDomain }
             : { company };
+    }
+
+    /**
+     * Gives a company that has no owner to `memberId` (OWN-2d), in the caller's transaction, and records the
+     * change (`company.updated`) — the one way a company's empty owner is filled: a governed save at it, the
+     * hand-over of a lead to the owner its people name, and the `assign-company-owners.js` backfill. Runs past
+     * the caller's owner scope (`claim_company`, a definer function: an own-scoped member cannot see a company
+     * nobody owns). False when the company is gone, already someone's, or the member has left.
+     */
+    async claim(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        companyId: string,
+        memberId: string,
+    ): Promise<boolean> {
+        const [row] = await tx.$queryRaw<{ claimed: boolean }[]>`
+            SELECT claim_company(${companyId}::uuid, ${memberId}::uuid) AS claimed`;
+        if (!row?.claimed) return false;
+        const event: DomainEvent = {
+            type: 'company.updated',
+            object: 'company',
+            workspaceId: context.workspaceId,
+            actor: actorOf(context),
+            occurredAt: new Date().toISOString(),
+            recordId: companyId,
+            diff: { ownerId: { from: null, to: memberId } },
+        };
+        await this.events.record(tx, event);
+        return true;
     }
 
     /** A deal at `companyId` owned by `ownerId`: refused when the company is someone else's. */
@@ -312,6 +347,23 @@ export function companyOwned(company: DomainCompany, field: string): ApiExceptio
 /** The primary address of an `emails` value. */
 export function primaryOf(emails: Emails | null | undefined): string | null {
     return emails?.primary ?? null;
+}
+
+/**
+ * A company with whose it is (OWN-2d): its own owner, else the owner of the earliest live person saved at it — the
+ * first saver, whom the import left on the people and not on the company. Read in `tx`, across the owner scope.
+ */
+async function resolved(tx: WorkspaceClient, company: CompanyOwnerRow): Promise<DomainCompany> {
+    const base = { companyId: company.id, companyName: company.name, unclaimed: company.ownerId === null };
+    if (company.ownerId !== null) {
+        return { ...base, ownerId: company.ownerId, ownerName: company.owner?.user.displayName ?? null };
+    }
+    const first = await tx.person.findFirst({
+        where: { companyId: company.id, deletedAt: null, ownerId: { not: null } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { ownerId: true, owner: { select: { user: { select: { displayName: true } } } } },
+    });
+    return { ...base, ownerId: first?.ownerId ?? null, ownerName: first?.owner?.user.displayName ?? null };
 }
 
 /**
