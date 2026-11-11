@@ -95,8 +95,17 @@ export class CreatePersonDto extends createZodDto(
             ...personFields,
             /** OWN-2: the address's company is another member's — save the person for them instead. */
             handToOwner: z.boolean(),
+            /**
+             * #353: a new company, made with the person in one transaction (its domain is the primary address's).
+             * Instead of `companyId`, never with it.
+             */
+            company: z.object({ name: text(200).min(1) }),
         })
-        .partial(),
+        .partial()
+        .refine((body) => !(body.company && body.companyId != null), {
+            path: ['company'],
+            message: 'name an existing company (companyId) or a new one (company), not both',
+        }),
 ) {}
 /** `GET /people/address-check`: is this primary address free for a new person? */
 export class AddressCheckQueryDto extends createZodDto(z.object({ email: emailAddress })) {}

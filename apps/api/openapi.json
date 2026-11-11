@@ -29687,6 +29687,17 @@
                     },
                     "handToOwner": {
                         "type": "boolean"
+                    },
+                    "company": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                            }
+                        },
+                        "required": ["name"]
                     }
                 }
             },

@@ -24,7 +24,7 @@ import { useBulkChange, useCreateRecord } from '../../../api/lists';
 import { people, useCustomFields } from '../../../api/records';
 import type { AddressCheckView, BulkResultView, CompanyInput, CustomFieldView, PersonInput } from '../../../api/types';
 import { RecordPicker } from '../../../components/RecordPicker';
-import { useCompanyCreator } from '../../../components/useCompanyCreator';
+import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { linkTo, TEXT_TYPES } from '../records/PropertiesColumn';
 import { LIST_COPY, type ListObject } from './listConfig';
@@ -213,7 +213,8 @@ export function CreateRecordDialog<O extends ListObject>({
     const [customValues, setCustomValues] = useState<Record<string, CustomValue>>({});
     /**
      * A person's company: required here (not by the API, which imports and keys write without one). One the rep
-     * adds ("Create company") is `NEW_COMPANY` until save makes it, so a cancelled popup leaves no empty company.
+     * adds ("Create company") is `NEW_COMPANY`: save sends its name with the person, and the API makes both in one
+     * transaction (#353), so a cancelled popup or a refused person leaves no empty company.
      */
     const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
     const [saving, setSaving] = useState(false);
@@ -232,7 +233,7 @@ export function CreateRecordDialog<O extends ListObject>({
     const asked = (useCustomFields(workspaceId, object).data ?? [])
         .filter((d) => person && d.archivedAt === null && (d.showOnCreate || d.required))
         .sort((x, y) => x.position - y.position);
-    const createCompany = useCompanyCreator(workspaceId, email.trim() || null);
+    const mayAddCompany = useCan('record:write');
     const missing = person && (!company || asked.some((d) => d.required && !filled(customValues[d.key])));
 
     const checkEmail = async () => {
@@ -279,29 +280,14 @@ export function CreateRecordDialog<O extends ListObject>({
                 : `${companyName} already has this domain, and it is ${ownerName}’s.`,
         );
     };
-    /** Makes the company the rep added, now the person is saved with it; false (and why) when it can't be. */
-    const makeCompany = async (): Promise<string | false> => {
-        if (!company || company.id !== NEW_COMPANY) return company?.id ?? false;
-        if (!createCompany) return false;
-        try {
-            const made = await createCompany(company.name);
-            // Kept, so a person refused below and saved again does not make the company twice.
-            setCompany({ id: made.id, name: made.title });
-            return made.id;
-        } catch (err) {
-            const existing = err instanceof ApiError ? err.details['companyId'] : undefined;
-            if (err instanceof ApiError && err.code === 'conflict.company_owned' && typeof existing === 'string') {
-                // Another member's company already has this domain: choose it, not a twin, and offer what saving can
-                // actually do — hand the lead to its owner. Saving again for oneself would only meet the same refusal.
-                setCompany({ id: existing, name: String(err.details['companyName'] ?? 'Another company') });
-                showOwned(err);
-            } else setError(failureText(err));
-            return false;
-        }
-    };
     const saveRecord = async (handToOwner: boolean) => {
-        const companyId = person ? await makeCompany() : false;
-        if (person && companyId === false) return;
+        if (person && !company) return;
+        // A company the rep added goes with the person in the one request (#353); one they chose goes by its id.
+        const companyRef = company
+            ? company.id === NEW_COMPANY
+                ? { company: { name: company.name } }
+                : { companyId: company.id }
+            : {};
         const digits = phone.replace(/\D/g, '');
         const ext = extension.replace(/\D/g, '');
         const input: PersonInput | CompanyInput = person
@@ -318,7 +304,7 @@ export function CreateRecordDialog<O extends ListObject>({
                             },
                         }
                       : {}),
-                  ...(companyId ? { companyId } : {}),
+                  ...companyRef,
                   custom: customInput(asked, customValues),
                   ...(handToOwner ? { handToOwner: true } : {}),
               }
@@ -333,6 +319,12 @@ export function CreateRecordDialog<O extends ListObject>({
             onCreated(created.id);
         } catch (err) {
             if (err instanceof ApiError && err.code === 'conflict.company_owned') {
+                const existing = err.details['companyId'];
+                // The company the rep added has another member's domain: nothing was made. Choose that company, not
+                // a twin, and offer what saving can actually do — hand the lead to its owner.
+                if (company?.id === NEW_COMPANY && typeof existing === 'string') {
+                    setCompany({ id: existing, name: String(err.details['companyName'] ?? 'Another company') });
+                }
                 showOwned(err);
                 return;
             }
@@ -424,8 +416,10 @@ export function CreateRecordDialog<O extends ListObject>({
                                         }}
                                         onResolved={(id, name) => setCompany({ id, name })}
                                         onCreate={
-                                            createCompany &&
-                                            ((name) => Promise.resolve({ id: NEW_COMPANY, title: name, pending: true }))
+                                            mayAddCompany
+                                                ? (name) =>
+                                                      Promise.resolve({ id: NEW_COMPANY, title: name, pending: true })
+                                                : undefined
                                         }
                                     />
                                 </Field>
