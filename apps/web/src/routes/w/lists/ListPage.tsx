@@ -23,7 +23,7 @@ import { useDebounced } from '../../../lib/useDebounced';
 import { useKeyedState } from '../../../lib/useKeyedState';
 import { saveFile } from '../../../lib/saveFile';
 import { useWorkspaceId } from '../../params';
-import { paths } from '../../paths';
+import { CREATE_LEAD, CREATE_PARAM, paths } from '../../paths';
 import { withOpen } from '../records/targets';
 import { EnrolDialog, enrolSummary, type EnrolPerson } from '../sequences/EnrolDialog';
 import { ListCards } from './ListCards';
@@ -152,7 +152,30 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState<EnrolPerson[] | null>(null);
     const [deleting, setDeleting] = useState<string[] | null>(null);
-    const [creating, setCreating] = useState(false);
+    /** The "new" dialog from the list's own button. */
+    const [adding, setCreating] = useState(false);
+    // `?create=1` / `?create=lead` (the nav's "Add person" / "Add lead", ⌘K) opens it as well, as the deals page does:
+    // `lead` is "Add lead", which makes the person's deal with them. Closing it drops the parameter.
+    const createParam = new URLSearchParams(location.search).get(CREATE_PARAM);
+    const creating: false | 'plain' | 'lead' = adding
+        ? 'plain'
+        : createParam !== null && write.allowed
+          ? createParam === CREATE_LEAD && object === 'person'
+              ? 'lead'
+              : 'plain'
+          : false;
+    /** The page's query string without the create parameter. */
+    const searchWithoutCreate = () => {
+        const params = new URLSearchParams(location.search);
+        params.delete(CREATE_PARAM);
+        const search = params.toString();
+        return search ? `?${search}` : '';
+    };
+    const closeCreate = () => {
+        setCreating(false);
+        if (createParam !== null)
+            navigate({ pathname: location.pathname, search: searchWithoutCreate() }, { replace: true });
+    };
     const bulk = useBulkChange(workspaceId, object);
 
     const open = useCallback(
@@ -519,12 +542,13 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                 <CreateRecordDialog
                     workspaceId={workspaceId}
                     object={object}
-                    onOpenChange={(o) => !o && setCreating(false)}
+                    lead={creating === 'lead'}
+                    onOpenChange={(o) => !o && closeCreate()}
                     onCreated={(id) => {
                         setCreating(false);
                         navigate({
                             pathname: location.pathname,
-                            search: withOpen(location.search, { type: object, id }),
+                            search: withOpen(searchWithoutCreate(), { type: object, id }),
                         });
                     }}
                 />

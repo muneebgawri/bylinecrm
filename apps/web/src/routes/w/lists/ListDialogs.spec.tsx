@@ -34,6 +34,18 @@ const PR_LINK = field({ key: 'pr_link', label: 'Pr link', type: 'url', showOnCre
 const PR_TITLE = field({ key: 'pr_title', label: 'PR title', showOnCreate: true, position: 2 });
 const BEAT = field({ key: 'beat', label: 'Beat', position: 3 });
 
+/** The default pipeline: the deal "Create a deal" makes starts in its first open stage. */
+const PIPELINE = {
+    id: 'pl1',
+    name: 'Sales',
+    isDefault: true,
+    stages: [
+        { id: 's2', name: 'Contacted', kind: 'open', position: 2, colour: 'info' },
+        { id: 's1', name: 'New Opportunity', kind: 'open', position: 1, colour: 'neutral' },
+        { id: 's9', name: 'Closed Won', kind: 'won', position: 9, colour: 'ok' },
+    ],
+};
+
 /** The address check answers `holder`; a create answers a new person. Every call is kept. */
 function stubApi(
     holder: { ownerName: string | null; trashed: boolean } | null,
@@ -50,6 +62,7 @@ function stubApi(
             if (url.includes('/people/address-check'))
                 return json({ available: holder === null, holder, company: opts.company ?? null });
             if (url.includes('/custom-fields')) return json(fields);
+            if (url.split('?')[0]!.endsWith('/pipelines')) return json([PIPELINE]);
             if (url.includes('/search?'))
                 return json({
                     person: [],
@@ -73,7 +86,15 @@ function stubApi(
                           },
                           409,
                       )
-                    : json({ id: 'p9' }, 201);
+                    : json(
+                          {
+                              id: 'p9',
+                              deal: (calls.at(-1)!.body as { withDeal?: unknown }).withDeal
+                                  ? { id: 'd9', name: 'Acme Corp — Derek' }
+                                  : null,
+                          },
+                          201,
+                      );
             return json({});
         }),
     );
@@ -98,16 +119,17 @@ const member = (capabilities: Capability[]): MembershipSummary => ({
     capabilities,
 });
 
-function renderDialog() {
+function renderDialog(opts: { lead?: boolean; capabilities?: Capability[] } = {}) {
     const onCreated = vi.fn();
     render(
         <ThemeProvider>
             <TooltipProvider>
                 <QueryClientProvider client={createQueryClient()}>
-                    <CapabilitiesProvider membership={member(['record:read', 'record:write'])}>
+                    <CapabilitiesProvider membership={member(opts.capabilities ?? ['record:read', 'record:write'])}>
                         <CreateRecordDialog
                             workspaceId={WS}
                             object="person"
+                            lead={opts.lead ?? false}
                             onOpenChange={vi.fn()}
                             onCreated={onCreated}
                         />
@@ -310,5 +332,60 @@ describe('Add person: the address first', () => {
         expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({
             custom: { beats: ['Fintech', 'Energy'] },
         });
+    });
+});
+
+describe('Add lead: the deal goes with the person', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const DEALER: Capability[] = ['record:read', 'record:write', 'deal:read', 'deal:edit'];
+
+    async function fillLead() {
+        await userEvent.click(screen.getByRole('button', { name: /Continue without one/ }));
+        await userEvent.type(await screen.findByLabelText(/First name/), 'Derek');
+        await pickCompany();
+    }
+
+    it('"Create a deal" is ticked, says where it starts and its name, and is sent in the one request', async () => {
+        const calls = stubApi(null);
+        const onCreated = renderDialog({ lead: true, capabilities: DEALER });
+        expect(screen.getByRole('heading', { name: 'Add lead' })).toBeInTheDocument();
+        await fillLead();
+        expect(screen.getByRole('checkbox', { name: 'Create a deal' })).toBeChecked();
+        expect(await screen.findByText(/In New Opportunity, named “Acme Corp — Derek”/)).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('button', { name: 'Add lead' }));
+        await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('p9'));
+        const posts = calls.filter((c) => c.method === 'POST');
+        expect(posts).toHaveLength(1);
+        expect(posts[0]!.body).toMatchObject({ companyId: 'c1', withDeal: {} });
+    });
+
+    it('unticked, the person is saved alone', async () => {
+        const calls = stubApi(null);
+        renderDialog({ lead: true, capabilities: DEALER });
+        await fillLead();
+        await userEvent.click(screen.getByRole('checkbox', { name: 'Create a deal' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Add lead' }));
+        await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+        expect(calls.find((c) => c.method === 'POST')!.body).not.toHaveProperty('withDeal');
+    });
+
+    it('"Add person" offers the deal unticked', async () => {
+        const calls = stubApi(null);
+        renderDialog({ capabilities: DEALER });
+        await fillLead();
+        expect(screen.getByRole('checkbox', { name: 'Create a deal' })).not.toBeChecked();
+        await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+        await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+        expect(calls.find((c) => c.method === 'POST')!.body).not.toHaveProperty('withDeal');
+    });
+
+    it('without deal:edit there is no deal to make', async () => {
+        const calls = stubApi(null);
+        renderDialog({ lead: true });
+        await fillLead();
+        expect(screen.queryByRole('checkbox', { name: 'Create a deal' })).toBeNull();
+        await userEvent.click(screen.getByRole('button', { name: 'Add lead' }));
+        await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+        expect(calls.find((c) => c.method === 'POST')!.body).not.toHaveProperty('withDeal');
     });
 });

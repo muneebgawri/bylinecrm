@@ -14,7 +14,7 @@ const empty = () =>
     stubApi([
         (r) => {
             if (r.method !== 'GET') return undefined;
-            if (/\/(enrolments|attachments)(\?|$)/.test(r.url)) return json([]);
+            if (/\/(enrolments|attachments|pipelines|rules)(\?|$)/.test(r.url)) return json([]);
             return json({ items: [], nextCursor: null });
         },
     ]);
@@ -75,7 +75,11 @@ describe('a person’s other email addresses', () => {
                 r.method === 'PATCH' ? json({ ...person, emails: (r.body as { emails: unknown }).emails }) : undefined,
             (r) => {
                 if (r.method !== 'GET') return undefined;
-                if (/\/(enrolments|attachments|members\/summary|transfers|custom-fields)(\?|$)/.test(r.url))
+                if (
+                    /\/(enrolments|attachments|members\/summary|transfers|custom-fields|pipelines|rules)(\?|$)/.test(
+                        r.url,
+                    )
+                )
                     return json([]);
                 return json({ items: [], nextCursor: null });
             },

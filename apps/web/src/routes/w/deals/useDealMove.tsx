@@ -8,8 +8,8 @@ import { CloseDealDialog, type ClosePayload, type CloseRequest } from './CloseDe
 import { classifyMove } from './moveGate';
 
 /**
- * The one way the page moves a deal — drag, keyboard, the list's stage select and the bulk bar
- * all call `request`. It classifies the move (`moveGate`), asks first when the move closes the
+ * The one way a page moves a deal — the board's drag and keyboard, the list's stage select, the bulk bar and a
+ * person's Deals rail all call `request`. It classifies the move (`moveGate`), asks first when the move closes the
  * deal or goes backward, sends it optimistically (`useMoveDeal`), and on a refusal shows the
  * server's reason while the cache snaps back. `announce` feeds the board's live region.
  */
