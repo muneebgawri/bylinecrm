@@ -363,6 +363,47 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
             expect(await companiesNamed(name)).toHaveLength(0);
         });
 
+        it('a company nobody owns, hidden by the rep’s own scope, is still the one they join', async () => {
+            const domain = `open-${stamp}.test`;
+            const open = await as(admin)
+                .post(w('/companies'))
+                .send({ name: `Open ${tag}`, domain, ownerId: null })
+                .expect(201);
+            expect(open.body).toMatchObject({ ownerId: null });
+            const check = await as(ben)
+                .get(w(`/people/address-check?email=${encodeURIComponent(`max@${domain}`)}`))
+                .expect(200);
+            expect(check.body).toMatchObject({ company: { id: open.body.id } });
+            // As the dialog sends it: the company the address check found, or a new one named for the domain.
+            const picked = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Max',
+                    emails: { primary: `max@${domain}`, additional: [] },
+                    companyId: open.body.id,
+                });
+            expect(picked.status, JSON.stringify(picked.body)).toBe(201);
+            expect(picked.body).toMatchObject({ companyId: open.body.id, ownerId: benId });
+            const named = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Noa',
+                    emails: { primary: `noa@${domain}`, additional: [] },
+                    company: { name: domain },
+                });
+            expect(named.status, JSON.stringify(named.body)).toBe(201);
+            expect(named.body).toMatchObject({ companyId: open.body.id });
+            // A company that does not exist is still refused, whatever the address's domain.
+            await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Ivo',
+                    emails: { primary: `ivo@${domain}`, additional: [] },
+                    companyId: '00000000-0000-4000-8000-000000000000',
+                })
+                .expect(422);
+        });
+
         it('names a company or a new one, never both, writing nothing', async () => {
             const name = `Both ${tag}`;
             await as(ana)
