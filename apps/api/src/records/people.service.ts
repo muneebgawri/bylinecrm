@@ -222,8 +222,9 @@ export class PeopleService implements BulkRecords {
         let ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
         // OWN-2: a person at another member's company is theirs — refused here, by name; at a company
-        // the saver may hold, linked to it by their address's domain.
-        const placed = await this.ownership.checkPerson(context, {
+        // the saver may hold, linked to it by their address's domain; a company nobody owns is claimed for
+        // the saver in this transaction (OWN-2d).
+        const placed = await this.ownership.checkPerson(tx, context, {
             address: input.emails?.primary,
             companyId: input.companyId,
             ownerId,
@@ -270,7 +271,7 @@ export class PeopleService implements BulkRecords {
             newPrimary !== undefined &&
             companyDomainOfAddress(newPrimary) !== companyDomainOfAddress(current.emailPrimary);
         if (companyChanged || addressChanged) {
-            const placed = await this.ownership.checkPerson(context, {
+            const placed = await this.ownership.checkPerson(tx, context, {
                 address: newPrimary ?? current.emailPrimary,
                 companyId: companyChanged ? patch.companyId : undefined,
                 ownerId,
@@ -374,7 +375,8 @@ export class PeopleService implements BulkRecords {
     /**
      * OWN-2: save a person for the member who owns their address's company, and tell them. Null when there
      * is nobody else to hand them to (no company by that domain, no owner, or the saver owns it), so the
-     * caller saves them as usual.
+     * caller saves them as usual. A company whose owner is read from its people (OWN-2d) is claimed for
+     * them with the hand-over.
      */
     private async handToOwner(context: WorkspaceRunContext, input: PersonInput): Promise<PersonView | null> {
         const company = await this.ownership.companyForDomain(context, companyDomainOfAddress(input.emails?.primary));
@@ -387,6 +389,7 @@ export class PeopleService implements BulkRecords {
             me,
             owner,
             async (tx, wide) => {
+                if (company.unclaimed) await this.ownership.claim(tx, wide, company.companyId, owner);
                 const created = await tx.person.create({
                     data: {
                         ...compact(fields({ ...rest, companyId: company.companyId })),
