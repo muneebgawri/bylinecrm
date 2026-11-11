@@ -8,10 +8,20 @@ import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { CompanyOwnership } from '../records/company-ownership';
 import { TransfersService } from '../transfers/transfers.service';
 
-const USAGE = 'usage: node dist/cli/assign-company-owners.js <workspace-slug> --estimate|--apply [--reassign-people]';
+const USAGE =
+    'usage: node dist/cli/assign-company-owners.js <workspace-slug> --estimate|--apply [--reassign-people] [--batch <n>]';
 
-/** Companies read per statement, and filled per transaction: never holds `companies` long. */
-const BATCH = 1000;
+/** Companies read per statement (`--batch`): a page, never the whole table. */
+export const DEFAULT_BATCH = 200;
+
+/**
+ * Companies filled per transaction within a page — the Bigin import's lesson (`BIGIN_WRITE_CHUNK`, production
+ * 2026-10-19, again 2026-11-11 here): a page of 1,000 fills in one transaction (a claim, a hand-over row and two
+ * events each) outlived the 15-second transaction limit (`TRANSACTION_TIMEOUT_MS`) and was rolled back. A chunk is
+ * its own short transaction; a chunk that fails leaves the ones before it committed, and a rerun continues from
+ * the companies still without an owner.
+ */
+export const WRITE_CHUNK = 20;
 
 /** The reason on the hand-over that gave an imported company the owner its people name. */
 export const TRANSFER_REASON_COMPANY_OWNER_FILL = 'Company ownership: the first saver’s';
@@ -24,6 +34,8 @@ export interface AssignOptions {
     apply: boolean;
     /** Also move each person at a company whose owner differs to the company's owner, with their open deals. */
     reassignPeople: boolean;
+    /** Companies read per statement; `DEFAULT_BATCH` when absent. */
+    batch?: number | undefined;
     onProgress?: (line: string) => void;
 }
 
@@ -47,8 +59,9 @@ function jobContext(workspaceId: string): WorkspaceRunContext {
 
 /**
  * OWN-2d (`CompanyOwnership`): fills the owner of every live company that has none from its people — the owner of
- * the earliest live person saved at it, the first saver — a batch of companies per transaction, each fill on the
- * company's ownership history as an import's fill is (`recordHandOverIn`, silent). With `reassignPeople`, then moves
+ * the earliest live person saved at it, the first saver — a page of companies (`batch`) per read, `WRITE_CHUNK` fills
+ * per transaction, each fill on the company's ownership history as an import's fill is (`recordHandOverIn`, silent).
+ * With `reassignPeople`, then moves
  * every person at a company whose owner is not the company's to the company's owner, with the open deals they are
  * the contact of, through the transfer service (`reassign`: a forced transfer, its events written as for any move).
  * Re-running changes nothing once done. Counts only: no record is named.
@@ -64,6 +77,8 @@ export async function assignCompanyOwners(
     const transfers = app.get(TransfersService);
     const context = jobContext(workspaceId);
     const progress = options.onProgress ?? (() => undefined);
+    const BATCH = options.batch ?? DEFAULT_BATCH;
+    if (!Number.isInteger(BATCH) || BATCH < 1) throw new Error('batch must be a whole number of companies, 1 or more');
     const report: AssignReport = { companies: 0, assigned: 0, companiesTouched: 0, peopleMoved: 0, dealsMoved: 0 };
 
     // 1. Companies with no owner, each with the owner of its first saved person (an active member).
@@ -84,21 +99,25 @@ export async function assignCompanyOwners(
         report.companies += batch.length;
         const fills = batch.filter((c): c is { id: string; owner_id: string } => c.owner_id !== null);
         if (options.apply) {
-            report.assigned += await rls.withWorkspace(workspaceId, async (tx) => {
-                let claimed = 0;
-                for (const c of fills) {
-                    if (!(await ownership.claim(tx, context, c.id, c.owner_id))) continue;
-                    await transfers.recordHandOverIn(tx, context, {
-                        from: null,
-                        to: c.owner_id,
-                        target: { type: 'company', id: c.id },
-                        reason: TRANSFER_REASON_COMPANY_OWNER_FILL,
-                        silent: true,
-                    });
-                    claimed += 1;
-                }
-                return claimed;
-            });
+            // A page is written in chunks, each its own transaction (the class comment on `WRITE_CHUNK`).
+            for (let at = 0; at < fills.length; at += WRITE_CHUNK) {
+                const chunk = fills.slice(at, at + WRITE_CHUNK);
+                report.assigned += await rls.withWorkspace(workspaceId, async (tx) => {
+                    let claimed = 0;
+                    for (const c of chunk) {
+                        if (!(await ownership.claim(tx, context, c.id, c.owner_id))) continue;
+                        await transfers.recordHandOverIn(tx, context, {
+                            from: null,
+                            to: c.owner_id,
+                            target: { type: 'company', id: c.id },
+                            reason: TRANSFER_REASON_COMPANY_OWNER_FILL,
+                            silent: true,
+                        });
+                        claimed += 1;
+                    }
+                    return claimed;
+                });
+            }
         } else {
             report.assigned += fills.length;
         }
@@ -167,8 +186,10 @@ export async function assignCompanyOwners(
  * `node dist/cli/assign-company-owners.js <workspace-slug> --estimate|--apply [--reassign-people]` — run on the server,
  * inside the api container, after a backup. The Bigin import set owners on people and not on their companies, so the
  * company-ownership rule (OWN-2) never fired for an imported company; this gives each such company the owner its
- * people name (see `assignCompanyOwners`). `--estimate` changes nothing and prints what `--apply` would do. The domain
- * events go to the outbox; the running API's relay delivers them (timeline, webhooks).
+ * people name (see `assignCompanyOwners`). `--estimate` changes nothing and prints what `--apply` would do; `--batch`
+ * is the companies read per statement (`DEFAULT_BATCH`). A run that stops partway is rerun as it was: it continues
+ * from the companies still without an owner. The domain events go to the outbox; the running API's relay delivers
+ * them (timeline, webhooks).
  */
 async function main(): Promise<void> {
     const args = process.argv.slice(2);
@@ -176,6 +197,13 @@ async function main(): Promise<void> {
     const flags = args.slice(1);
     const known = new Set(['--estimate', '--apply', '--reassign-people']);
     const apply = flags.includes('--apply');
+    let batch: number | undefined;
+    const at = flags.indexOf('--batch');
+    if (at >= 0) {
+        batch = Number(flags[at + 1]);
+        if (!Number.isInteger(batch) || batch < 1) throw new Error(USAGE);
+        flags.splice(at, 2);
+    }
     if (!slug || slug.startsWith('--') || flags.some((f) => !known.has(f)) || apply === flags.includes('--estimate')) {
         throw new Error(USAGE);
     }
@@ -201,6 +229,7 @@ async function main(): Promise<void> {
         const report = await assignCompanyOwners(app, workspace.id, {
             apply,
             reassignPeople: flags.includes('--reassign-people'),
+            batch,
             onProgress: (line) => console.error(line),
         });
         const did = apply ? 'filled' : 'would fill';
