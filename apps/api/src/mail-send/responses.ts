@@ -160,3 +160,30 @@ export type MailDraftView = z.output<typeof mailDraftView>;
 
 export const mailDraftPage = named('MailDraftPage', page(mailDraftView));
 export type MailDraftPage = z.output<typeof mailDraftPage>;
+
+/**
+ * Suggested Cc for a composer: the To recipients' colleagues — the other live people at the same company who have
+ * an address and whom the caller may mail (the suppression list and the recipient guard, GUARD-1, asked quietly) —
+ * grouped by company in the To line's order, each group most recently contacted first. Capped at
+ * `MAIL_CC_SUGGESTIONS_MAX` in all. A suggestion is an offer: nobody is added by being listed.
+ */
+export const mailCcSuggestions = named(
+    'MailCcSuggestions',
+    z.object({
+        groups: z.array(
+            z.object({
+                company: z.object({ id, name: z.string() }),
+                people: z.array(
+                    z.object({
+                        id,
+                        name: z.string().meta({ description: 'The person as the composer names them.' }),
+                        email: z.string().meta({ description: 'Their primary address, which the Cc goes to.' }),
+                        jobTitle: z.string().nullable(),
+                        lastContactedAt: dateTime.nullable(),
+                    }),
+                ),
+            }),
+        ),
+    }),
+);
+export type MailCcSuggestions = z.output<typeof mailCcSuggestions>;

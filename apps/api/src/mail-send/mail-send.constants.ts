@@ -74,3 +74,9 @@ export const MAIL_DRAFT_NAME_MAX = 200;
 
 /** Failure codes a retry would meet again unchanged (#134): such a send offers no Retry. */
 export const MAIL_SEND_NOT_RETRYABLE: ReadonlySet<string> = new Set(['recipient.suppressed']);
+
+/**
+ * Suggested Cc (the composer's "Also at <Company>" row): at most this many colleagues of the To recipients are
+ * offered, across every company — the row is a prompt, not a directory. Nobody is added by being suggested.
+ */
+export const MAIL_CC_SUGGESTIONS_MAX = 20;

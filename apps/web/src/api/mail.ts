@@ -5,6 +5,7 @@ import { keys } from './queries';
 import type { RecordTarget } from '@bylinecrm/shared';
 import type {
     CreateMailDraftInput,
+    MailCcSuggestionsView,
     MailDraftPage,
     MailDraftView,
     MailOutboundView,
@@ -102,7 +103,27 @@ export const mail = {
         }),
     discardDraft: (workspaceId: string, draftId: string) =>
         request<void>('DELETE', workspacePath(workspaceId, `/mail/drafts/${draftId}`)),
+    /** Who else to Cc: the To recipients' colleagues the caller may mail, by company. */
+    ccSuggestions: (workspaceId: string, personIds: readonly string[], signal?: AbortSignal) =>
+        request<MailCcSuggestionsView>(
+            'GET',
+            workspacePath(workspaceId, `/mail/cc-suggestions${query({ personIds: personIds.join(',') })}`),
+            { signal },
+        ),
 };
+
+/**
+ * The composer's "Also at <Company>" row: the To recipients' colleagues, read once the To line has settled (the
+ * caller debounces the ids). Nothing is asked for an empty To line; an answer is kept for a minute, so adding and
+ * removing the same recipient does not ask again.
+ */
+export const useCcSuggestions = (workspaceId: string, personIds: readonly string[], enabled = true) =>
+    useQuery({
+        queryKey: keys.mailCcSuggestions(workspaceId, personIds),
+        queryFn: ({ signal }) => mail.ccSuggestions(workspaceId, personIds, signal),
+        enabled: enabled && personIds.length > 0,
+        staleTime: 60_000,
+    });
 
 /** How many of a record's drafts the page reads: one per composer it has (the person's, each deal's). */
 export const MAIL_DRAFTS_PAGE = 25;

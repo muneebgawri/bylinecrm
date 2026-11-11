@@ -17,6 +17,7 @@ import {
     MAIL_SEND_MAINTENANCE_QUEUE,
     MAIL_SEND_QUEUE,
 } from './mail-send.constants';
+import { CcSuggestionsService } from './cc-suggestions.service';
 import { MailFollowUpsConsumer } from './follow-ups.consumer';
 import { MailDraftsController } from './mail-drafts.controller';
 import { MailDraftsService } from './mail-drafts.service';
@@ -62,7 +63,15 @@ import { MailSendSweep } from './sweep';
         }),
     ],
     controllers: [MailSendController, MailDraftsController],
-    providers: [MailSendService, MailDraftsService, MailSendWorkers, MailSendSweep, SendPolicy, MailFollowUpsConsumer],
+    providers: [
+        MailSendService,
+        MailDraftsService,
+        MailSendWorkers,
+        MailSendSweep,
+        SendPolicy,
+        CcSuggestionsService,
+        MailFollowUpsConsumer,
+    ],
     exports: [MailSendService],
 })
 export class MailSendModule {}

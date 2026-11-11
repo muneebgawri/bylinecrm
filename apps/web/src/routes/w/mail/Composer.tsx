@@ -14,11 +14,11 @@ import {
     focusRing,
 } from '@bylinecrm/ui';
 import { useMutation } from '@tanstack/react-query';
-import { CalendarClock, FileText, Mail, Plus, X } from 'lucide-react';
+import { CalendarClock, FileText, Mail, Plus, Users, X } from 'lucide-react';
 import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Link } from 'react-router';
 import { templates } from '../../../api/templates';
-import { useRecordDrafts, useSendMail } from '../../../api/mail';
+import { useCcSuggestions, useRecordDrafts, useSendMail } from '../../../api/mail';
 import { useTrackingPolicy } from '../../../api/outreach';
 import { useMailboxes } from '../../../api/mailAdmin';
 import { useMailboxSignature } from '../../../api/signatures';
@@ -30,6 +30,7 @@ import { ResponsivePanel } from '../../../components/ResponsivePanel';
 import { RichTextEditor, type RichTextHandle } from '../../../components/rich-text/RichTextEditor';
 import { failureText } from '../../../lib/errors';
 import { formatWhen } from '../../../lib/format';
+import { useDebounced } from '../../../lib/useDebounced';
 import { paths } from '../../paths';
 import { docToSubject, subjectToDoc } from '../templates/subject';
 import {
@@ -298,6 +299,8 @@ function ComposerForm({
     const [bcc, setBcc] = useState<CopyRecipient[]>(() => [...(restored?.bcc ?? [])]);
     // Cc and Bcc are behind a toggle, as in any mail client — open from the start when the draft has some.
     const [copies, setCopies] = useState(() => cc.length + bcc.length > 0);
+    // The "Also at <Company>" row, once dismissed, stays away for this draft (until the composer empties).
+    const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
     const [subject, setSubject] = useState<RichText>(restored?.subject ?? EMPTY_DOC);
     const [body, setBody] = useState<RichText>(restored?.body ?? EMPTY_DOC);
     const [fill, setFill] = useState<TemplateFill | null>(null);
@@ -505,6 +508,7 @@ function ComposerForm({
         setCc([]);
         setBcc([]);
         setCopies(false);
+        setSuggestionsDismissed(false);
         setOwnSignature(null);
         setFollowUps([]);
         setScheduledFor(null);
@@ -658,6 +662,18 @@ function ComposerForm({
                     <CopyField workspaceId={workspaceId} field="Cc" list={cc} room={roomFor} onChange={setCc} />
                     <CopyField workspaceId={workspaceId} field="Bcc" list={bcc} room={roomFor} onChange={setBcc} />
                 </div>
+            )}
+            {!suggestionsDismissed && roomFor > 0 && (
+                <CcSuggestions
+                    workspaceId={workspaceId}
+                    toPersonIds={[person.id, ...alsoTo.map((p) => p.id)]}
+                    exclude={[...cc, ...bcc]}
+                    onAdd={(p) => {
+                        setCc((list) => withRecipient(list, { personId: p.id, name: p.name }));
+                        setCopies(true);
+                    }}
+                    onDismiss={() => setSuggestionsDismissed(true)}
+                />
             )}
             {saver.state.kind === 'conflict' && (
                 <div
@@ -1126,6 +1142,84 @@ function CopyField({
                     {problem}
                 </p>
             )}
+        </div>
+    );
+}
+
+/**
+ * "Also at <Company>": the To recipients' colleagues the server offers as Cc — the other people at their companies
+ * whom a send would accept (the suppression list and the recipient guard, asked quietly). One chip each; a click
+ * puts them on the Cc line, nothing is added unasked, and the row goes away for this draft when dismissed. Read
+ * once the To line has settled (a quarter second), and never for a recipient with no company (the server answers
+ * no groups; the row is simply not there). Anyone already copied is not offered again.
+ */
+function CcSuggestions({
+    workspaceId,
+    toPersonIds,
+    exclude,
+    onAdd,
+    onDismiss,
+}: {
+    workspaceId: string;
+    /** The To line's people, in order: the record's person first. */
+    toPersonIds: readonly string[];
+    /** Who is on Cc or Bcc already, by person or address. */
+    exclude: readonly CopyRecipient[];
+    onAdd: (person: { id: string; name: string }) => void;
+    onDismiss: () => void;
+}) {
+    const settled = useDebounced(toPersonIds.join(','));
+    const suggestions = useCcSuggestions(workspaceId, settled ? settled.split(',') : []);
+    const copiedIds = new Set(exclude.flatMap((r) => ('personId' in r ? [r.personId] : [])));
+    const copiedAddresses = new Set(exclude.flatMap((r) => ('address' in r ? [r.address.toLowerCase()] : [])));
+    const groups = (suggestions.data?.groups ?? [])
+        .map((g) => ({
+            ...g,
+            people: g.people.filter((p) => !copiedIds.has(p.id) && !copiedAddresses.has(p.email.toLowerCase())),
+        }))
+        .filter((g) => g.people.length > 0);
+    if (groups.length === 0) return null;
+    return (
+        <div
+            role="group"
+            aria-label="Suggested Cc"
+            className="flex items-start gap-2 border-b border-border px-3.5 py-2 text-[13px] text-text-muted"
+        >
+            <Users aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+                {groups.map((g) => (
+                    <span key={g.company.id} className="flex flex-wrap items-center gap-1.5">
+                        <span>Also at {g.company.name}:</span>
+                        {g.people.map((p) => (
+                            <button
+                                key={p.id}
+                                type="button"
+                                title={p.jobTitle ? `${p.email} · ${p.jobTitle}` : p.email}
+                                aria-label={`Cc ${p.name}`}
+                                onClick={() => onAdd({ id: p.id, name: p.name })}
+                                className={cn(
+                                    'inline-flex h-5.5 items-center gap-1 rounded-full border border-dashed border-border px-2 text-xs font-medium text-text hover:border-solid hover:bg-surface max-md:min-h-touch',
+                                    focusRing,
+                                )}
+                            >
+                                <Plus aria-hidden className="size-3 text-text-muted" />
+                                {p.name}
+                            </button>
+                        ))}
+                    </span>
+                ))}
+            </div>
+            <button
+                type="button"
+                aria-label="Dismiss suggested Cc"
+                onClick={onDismiss}
+                className={cn(
+                    '-mr-1 grid size-5 shrink-0 place-items-center rounded-full hover:bg-surface max-md:size-touch',
+                    focusRing,
+                )}
+            >
+                <X aria-hidden className="size-3.5" />
+            </button>
         </div>
     );
 }
