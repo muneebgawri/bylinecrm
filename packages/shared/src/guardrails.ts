@@ -107,6 +107,8 @@ export const GUARDRAIL_PATHS = [
     // REP-1: what Gmail sync measured (mail that left without the CRM), and the pool's gate at send time.
     'sync',
     'pool_send',
+    // GUARD-4: the outbound relay Google Workspace routes a rep's Gmail through, judged before it leaves.
+    'relay',
 ] as const;
 export type GuardrailPath = (typeof GUARDRAIL_PATHS)[number];
 

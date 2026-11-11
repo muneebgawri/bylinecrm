@@ -3386,6 +3386,8 @@ enum GuardrailPath {
   sync
   /// REP-1: the pool's gate as a send is claimed.
   pool_send
+  /// GUARD-4: the outbound relay, before the mail leaves Google.
+  relay
 
   @@map("guardrail_path")
 }

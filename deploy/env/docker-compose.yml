@@ -118,6 +118,42 @@ services:
         <<: *api
         profiles: [green]
 
+    # GUARD-4 (#355): the outbound relay Google Workspace routes a Sales rep's outside mail through
+    # (docs/design-notes/GUARD-4.md). The api image, another entrypoint; one instance, started only where
+    # BYLINECRM_RELAY_HOST is set (the `relay` profile) and restarted on a release — Google retries a
+    # connection it could not make for hours, so a restart loses nothing. It reads the environment's
+    # database, writes the guardrail events, and runs no worker of the api (OUTBOX_RELAY=0: the api's
+    # outbox delivers them). The certificate is the host's, copied for the `node` user by
+    # install-relay-cert.sh; the relay reads it again when certbot renews it.
+    relay:
+        <<: *api
+        profiles: [relay]
+        command: ['node', 'dist/relay/main.js']
+        environment:
+            OUTBOX_RELAY: '0'
+            RELAY_HOSTNAME: ${BYLINECRM_RELAY_HOST:-}
+            RELAY_TLS_CERT: /tls/fullchain.pem
+            RELAY_TLS_KEY: /tls/privkey.pem
+        volumes:
+            - ${BYLINECRM_RUNTIME}/relay-tls:/tls:ro
+        ports:
+            - '${BYLINECRM_RELAY_PORT:-587}:2525'
+        mem_limit: ${BYLINECRM_RELAY_MEM:-256m}
+        stop_grace_period: 30s
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "require('net').connect(2525,'127.0.0.1').once('connect',()=>process.exit(0)).once('error',()=>process.exit(1))",
+                ]
+            interval: 15s
+            timeout: 5s
+            start_period: 30s
+            retries: 5
+        networks: [data]
+
     web-blue:
         <<: *web
         profiles: [blue]
