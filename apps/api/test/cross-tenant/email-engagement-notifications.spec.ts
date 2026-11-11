@@ -10,6 +10,7 @@ import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { EmailEngagementNotificationsConsumer } from '../../src/notifications/email-engagement.consumer';
+import { GmailReplyNotificationsConsumer } from '../../src/notifications/gmail-reply.consumer';
 import { verifyAddress } from '../support/mail';
 
 interface Browser {
@@ -38,6 +39,7 @@ describe('email engagement notifications: replies, clicks and opens of a memberâ
     let http: () => request.Agent;
     let owner: PrismaService;
     let consumer: EmailEngagementNotificationsConsumer;
+    let gmailReplies: GmailReplyNotificationsConsumer;
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
     const anaEmail = `engage-ana-${stamp}@example.test`;
@@ -58,6 +60,7 @@ describe('email engagement notifications: replies, clicks and opens of a memberâ
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         put: (path: string) => http().put(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const inbox = async (who: Browser, ws = workspace): Promise<NotificationsView> =>
@@ -154,6 +157,7 @@ describe('email engagement notifications: replies, clicks and opens of a memberâ
         http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
         owner = app.get(PrismaService);
         consumer = app.get(EmailEngagementNotificationsConsumer);
+        gmailReplies = app.get(GmailReplyNotificationsConsumer);
 
         const signUp = async (email: string, name: string) => {
             const res = await http().post('/api/auth/signup').send({ email, password, workspaceName: name });
@@ -332,5 +336,119 @@ describe('email engagement notifications: replies, clicks and opens of a memberâ
         await owner.mailOutbound.update({ where: { id: out }, data: { isTest: true } });
         await deliver(tracked('email.opened', out, null));
         expect(await owner.notification.count({ where: { mailOutboundId: out } })).toBe(0);
+    });
+
+    describe('TRACK-2: a reply to an email sent straight from Gmail', () => {
+        /** An email Ana sent from Gmail itself (no CRM send), as sync stores it, in its own thread. */
+        const gmailSent = async (subject: string) => {
+            const own = (await owner.mailThread.create({ data: { workspaceId: workspace, lastMessageAt: new Date() } }))
+                .id;
+            const id = randomUUID();
+            const rfc = `<gmail-${id}@mail.gmail.com>`;
+            await owner.mailMessage.create({
+                data: {
+                    id,
+                    workspaceId: workspace,
+                    threadId: own,
+                    identityKey: rfc,
+                    rfc822MessageId: rfc,
+                    direction: 'outbound',
+                    fromAddress: `ana-box-${stamp}@example.test`,
+                    sentAt: new Date(Date.now() - 60_000),
+                    subject,
+                },
+            });
+            return { id, rfc, thread: own };
+        };
+        /** The person's answer, stored, and the `email.received` sync announces for it. */
+        const answer = async (to: { rfc: string; thread: string }, subject: string, fromContact = true) => {
+            const id = randomUUID();
+            const sentAt = new Date();
+            await owner.mailMessage.create({
+                data: {
+                    id,
+                    workspaceId: workspace,
+                    threadId: to.thread,
+                    identityKey: `<${id}@example.test>`,
+                    rfc822MessageId: `<${id}@example.test>`,
+                    inReplyTo: to.rfc,
+                    references: [to.rfc],
+                    direction: 'inbound',
+                    fromAddress: `pat-${stamp}@example.test`,
+                    sentAt,
+                    subject,
+                },
+            });
+            const event: DomainEvent = {
+                type: 'email.received',
+                object: 'email',
+                workspaceId: workspace,
+                actor: { kind: 'sync', id: mailbox },
+                occurredAt: sentAt.toISOString(),
+                recordId: id,
+                targets: fromContact ? [{ type: 'person', id: person }] : [],
+                email: {
+                    messageId: id,
+                    threadId: to.thread,
+                    mailboxId: mailbox,
+                    direction: 'inbound',
+                    subject,
+                    snippet: '',
+                    from: `pat-${stamp}@example.test`,
+                    sentAt: sentAt.toISOString(),
+                    rfc822MessageId: `<${id}@example.test>`,
+                    inReplyTo: to.rfc,
+                    references: [to.rfc],
+                },
+            };
+            expect(gmailReplies.accepts(event)).toBe(true);
+            await gmailReplies.consume({ id: randomUUID(), event });
+            await gmailReplies.consume({ id: randomUUID(), event });
+            return id;
+        };
+
+        it('tells the member whose mailbox sent it, once; nobody else', async () => {
+            const sent = await gmailSent(`From Gmail ${stamp}`);
+            const reply = await answer(sent, `Re: From Gmail ${stamp}`);
+            const mine = (await engagement(ana)).filter((n) => n.target.id === reply);
+            expect(mine).toHaveLength(1);
+            expect(mine[0]).toMatchObject({ kind: 'email_replied', target: { type: 'reply', id: reply } });
+            expect((await engagement(ben)).some((n) => n.target.id === reply)).toBe(false);
+        });
+
+        it('tells nobody of mail from someone not in the CRM, or of a reply to a CRM send', async () => {
+            const sent = await gmailSent(`Stranger ${stamp}`);
+            const stranger = await answer(sent, `Re: Stranger ${stamp}`, false);
+            expect(await owner.notification.count({ where: { mailMessageId: stranger } })).toBe(0);
+            // The answered message is a CRM send's copy: `email.replied` tells of it, not this.
+            const crm = await gmailSent(`CRM send ${stamp}`);
+            const out = await send(`CRM send ${stamp}`);
+            await owner.mailOutbound.update({ where: { id: out }, data: { mailMessageId: crm.id } });
+            const viaCrm = await answer(crm, `Re: CRM send ${stamp}`);
+            expect(await owner.notification.count({ where: { mailMessageId: viaCrm } })).toBe(0);
+        });
+
+        it('tells nobody while the workspace has Gmail reply notices off, or the member reply notifications', async () => {
+            await as(admin).patch(w('/tracking/policy')).send({ gmailReplyNotices: false }).expect(200);
+            try {
+                const sent = await gmailSent(`Off ${stamp}`);
+                const reply = await answer(sent, `Re: Off ${stamp}`);
+                expect(await owner.notification.count({ where: { mailMessageId: reply } })).toBe(0);
+            } finally {
+                await as(admin).patch(w('/tracking/policy')).send({ gmailReplyNotices: true }).expect(200);
+            }
+            await owner.workspaceMember.update({ where: { id: anaId }, data: { notifyEmailReplies: false } });
+            try {
+                const sent = await gmailSent(`Muted ${stamp}`);
+                const reply = await answer(sent, `Re: Muted ${stamp}`);
+                expect(await owner.notification.count({ where: { mailMessageId: reply } })).toBe(0);
+            } finally {
+                await owner.workspaceMember.update({ where: { id: anaId }, data: { notifyEmailReplies: true } });
+            }
+        });
+
+        it('an account manager may not change the policy', async () => {
+            await as(ana).patch(w('/tracking/policy')).send({ gmailReplyNotices: false }).expect(403);
+        });
     });
 });

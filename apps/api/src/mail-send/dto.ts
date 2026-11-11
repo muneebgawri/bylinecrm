@@ -104,6 +104,10 @@ export class SendMailDto extends createZodDto(
                 description:
                     'The caller’s draft this message was written in (`/mail/drafts`): deleted with the send, in the same transaction. A draft already gone is no error.',
             }),
+            track: z.boolean().optional().meta({
+                description:
+                    'TRACK-2: track this email’s opens and clicks (follow-ups queued with it too). Left out, the workspace’s default for CRM-written mail (`GET /tracking/policy`).',
+            }),
             followUp: z.literal(true).optional().meta({
                 description:
                     'A follow-up on an email the CRM sent (`replyToMessageId`), scheduled (`sendAt`): sent in its thread as a reply once it is due, and called off — with any `followUps` after it — if the person answers first. Refused for mail synced from Gmail and for a thread they have already answered.',

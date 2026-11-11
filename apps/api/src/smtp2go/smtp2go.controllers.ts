@@ -82,6 +82,19 @@ export class PoolSmtpMailboxesController {
 export class PoolSmtpHookController {
     constructor(private readonly hook: Smtp2GoHookService) {}
 
+    /** TRACK-2: SMTP2Go's webhook for CRM-written mail sent through the workspace's relay key. */
+    @HttpCode(200)
+    @Post('relay/:workspaceId')
+    @Returns(smtp2goHookResult)
+    async receiveRelay(
+        @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+        @Headers('authorization') authorization: string | undefined,
+        @Req() req: Request,
+        @Body() body: unknown,
+    ): Promise<{ result: Smtp2GoHookResult }> {
+        return { result: await this.hook.receiveRelay(workspaceId, authorization, body, req.ip ?? '') };
+    }
+
     @HttpCode(200)
     @Post(':mailboxId')
     @Returns(smtp2goHookResult)

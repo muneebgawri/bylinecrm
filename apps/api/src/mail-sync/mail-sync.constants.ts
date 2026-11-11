@@ -63,6 +63,8 @@ export const GMAIL_UNITS = {
     /** `messages.get` with `format=metadata` (sending's lookup of a lost send, P2-3a). */
     getMessageMetadata: 20,
     send: 100,
+    /** `messages.insert` (TRACK-2: a relayed send's copy in Sent). */
+    insert: 25,
     /** `users.settings.sendAs.list` (#193). */
     listSendAs: 1,
 } as const;

@@ -485,3 +485,54 @@ describe('Suggested Cc: the To recipients’ colleagues are offered, never added
         await waitFor(() => expect(screen.queryByRole('group', { name: 'Suggested Cc' })).not.toBeInTheDocument());
     });
 });
+
+describe('TRACK-2: an email written here is tracked as the workspace says, unless its writer switches it', () => {
+    const policy =
+        (trackPersonalMail: boolean): FakeRoute =>
+        (r) =>
+            r.method === 'GET' && r.url.endsWith('/tracking/policy')
+                ? json({
+                      provider: 'builtin',
+                      trackOpens: true,
+                      trackClicks: true,
+                      trackPersonalMail,
+                      gmailReplyNotices: true,
+                      smtp2go: {
+                          keySet: false,
+                          hookUrl: 'x',
+                          hookAuthorization: null,
+                          lastHookAt: null,
+                          lastHookResult: null,
+                      },
+                      mailboxesWithoutCopy: [],
+                  })
+                : undefined;
+
+    it('starts at the workspace default and sends what the switch says', async () => {
+        const seen = composer([
+            mailboxesRoute(MAILBOXES),
+            policy(true),
+            (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined),
+        ]);
+        const track = await screen.findByRole('switch', { name: 'Track opens and clicks' });
+        expect(track).toBeChecked();
+        await userEvent.click(track);
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        expect(seen.find((r) => r.url.endsWith('/mail/send'))?.body).toMatchObject({ track: false });
+    });
+
+    it('with the default off, sends untracked unless switched on', async () => {
+        const seen = composer([
+            mailboxesRoute(MAILBOXES),
+            policy(false),
+            (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined),
+        ]);
+        expect(await screen.findByRole('switch', { name: 'Track opens and clicks' })).not.toBeChecked();
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        expect(seen.find((r) => r.url.endsWith('/mail/send'))?.body).toMatchObject({ track: false });
+    });
+});

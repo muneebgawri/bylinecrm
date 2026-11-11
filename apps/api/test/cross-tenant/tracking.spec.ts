@@ -5,11 +5,13 @@ import { Test } from '@nestjs/testing';
 import {
     CSRF_COOKIE,
     CSRF_HEADER,
+    GMAIL_INSERT_SCOPE,
     GMAIL_SCOPES,
     SESSION_COOKIE,
     type DomainEvent,
     type EnrolmentBatchResult,
     type SequenceView,
+    type TrackingPolicyView,
     type TrackingSettingsView,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
@@ -29,10 +31,12 @@ import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { StageRulesService } from '../../src/pipelines/stage-rules.service';
 import { DNS_PORT } from '../../src/sending-pool/dns.port';
 import { SequenceRunner } from '../../src/sequences/sequence-runner';
+import { SMTP2GO_PORT } from '../../src/smtp2go/smtp2go.port';
 import { TRACKING_RATE_LIMIT, trackingRateKey } from '../../src/tracking/tracking.constants';
 import { FakeDns } from '../support/fake-dns';
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
+import { FakeSmtp2Go } from '../support/fake-smtp2go';
 import { verifyAddress } from '../support/mail';
 import { eventLog, settle, type EventLog } from '../support/outbox';
 
@@ -119,6 +123,7 @@ describe('FR-CRMS-8 tracking', () => {
     const google = new FakeGoogleOAuth();
     const gmail = new FakeGmail(google);
     const dns = new FakeDns();
+    const smtp2go = new FakeSmtp2Go();
 
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const password = 'correct horse battery staple';
@@ -139,6 +144,7 @@ describe('FR-CRMS-8 tracking', () => {
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         put: (path: string) => http().put(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         delete: (path: string) => http().delete(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string, id = workspace) => `/api/w/${id}${path}`;
     const stage = (name: string) => pipeline.stages.find((s) => s.name === name)!;
@@ -222,6 +228,8 @@ describe('FR-CRMS-8 tracking', () => {
             .useValue(gmail)
             .overrideProvider(DNS_PORT)
             .useValue(dns)
+            .overrideProvider(SMTP2GO_PORT)
+            .useValue(smtp2go)
             .compile();
         app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
         await app.init();
@@ -377,7 +385,7 @@ describe('FR-CRMS-8 tracking', () => {
             for (const id of [workspace, dana, outboundId]) expect(token).not.toContain(id.replace(/-/g, ''));
         });
 
-        it('never rewrites personal 1:1 mail', async () => {
+        it('leaves personal 1:1 mail untracked by default', async () => {
             const dana = await person('personal');
             const res = await as(admin)
                 .post(w('/mail/send'))
@@ -394,6 +402,133 @@ describe('FR-CRMS-8 tracking', () => {
             expect(hrefs(html)).toEqual([REPORT]);
             expect(pixelOf(html)).toBeUndefined();
             expect(await owner.trackingToken.count({ where: { outboundId: messageId } })).toBe(0);
+        });
+    });
+
+    describe('TRACK-2 CRM-written mail', () => {
+        const policy = (body: Record<string, unknown>) =>
+            as(admin).patch(w('/tracking/policy')).send(body).expect(200) as Promise<{ body: TrackingPolicyView }>;
+        const written = async (label: string, extra: Record<string, unknown> = {}) => {
+            const dana = await person(label);
+            const res = await as(admin)
+                .post(w('/mail/send'))
+                .send({
+                    mailboxId: personalMailbox,
+                    personId: dana,
+                    subject: `Written ${label}`,
+                    body: doc(para(t('See '), link('this', REPORT), t('.'))),
+                    ...extra,
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(202);
+            const { messageId } = res.body as { messageId: string };
+            return { messageId, dana };
+        };
+
+        it('is tracked by our links and pixel when its writer asks, or by the workspace default; opens and clicks each switch off', async () => {
+            const asked = await written('asked', { track: true });
+            await send.deliver(workspace, asked.messageId, noWait);
+            let html = htmlPart(gmail.sent.find((m) => m.raw.includes(asked.messageId))!.raw);
+            expect(shortLinks(html)).toHaveLength(1);
+            expect(pixelOf(html)).toMatch(new RegExp(`^https://${shortDomain}/o/`));
+            expect(await owner.mailOutbound.findUniqueOrThrow({ where: { id: asked.messageId } })).toMatchObject({
+                tracked: true,
+                viaRelay: false,
+            });
+
+            await policy({ trackPersonalMail: true, trackOpens: false });
+            try {
+                const byDefault = await written('default');
+                await send.deliver(workspace, byDefault.messageId, noWait);
+                html = htmlPart(gmail.sent.find((m) => m.raw.includes(byDefault.messageId))!.raw);
+                expect(shortLinks(html)).toHaveLength(1);
+                expect(pixelOf(html)).toBeUndefined();
+                // Its writer may still leave one untracked.
+                const off = await written('off', { track: false });
+                await send.deliver(workspace, off.messageId, noWait);
+                html = htmlPart(gmail.sent.find((m) => m.raw.includes(off.messageId))!.raw);
+                expect(hrefs(html)).toEqual([REPORT]);
+                expect(await owner.trackingToken.count({ where: { outboundId: off.messageId } })).toBe(0);
+            } finally {
+                await policy({ trackPersonalMail: false, trackOpens: true });
+            }
+        });
+
+        it('SMTP2Go is chosen only with its key; a member without admin rights changes nothing', async () => {
+            const refused = await as(admin).patch(w('/tracking/policy')).send({ provider: 'smtp2go' });
+            expect(refused.status).toBe(400);
+            const view = (await as(admin).get(w('/tracking/policy')).expect(200)).body as TrackingPolicyView;
+            expect(view).toMatchObject({ provider: 'builtin', smtp2go: { keySet: false, hookAuthorization: null } });
+            expect(view.mailboxesWithoutCopy.map((m) => m.id)).toContain(personalMailbox);
+        });
+
+        it('with SMTP2Go, goes through SMTP2Go with a copy in Gmail’s Sent, and SMTP2Go’s open is counted', async () => {
+            const apiKey = `api-relay-${stamp}`;
+            const set = (await policy({ provider: 'smtp2go', smtp2goApiKey: apiKey })).body;
+            expect(set).toMatchObject({ provider: 'smtp2go', smtp2go: { keySet: true } });
+            expect(JSON.stringify(set)).not.toContain(apiKey);
+            expect(set.smtp2go.hookUrl).toMatch(new RegExp(`/api/hooks/smtp2go/relay/${workspace}$`));
+            const before = await owner.mailbox.findUniqueOrThrow({ where: { id: personalMailbox } });
+            await owner.mailbox.update({
+                where: { id: personalMailbox },
+                data: { grantedScopes: [...before.grantedScopes, GMAIL_INSERT_SCOPE] },
+            });
+            try {
+                const relayed = await written('relay', { track: true });
+                expect(await send.deliver(workspace, relayed.messageId, noWait)).toBe('sent');
+                const out = smtp2go.sent.find((m) => m.mime.includes(relayed.messageId))!;
+                expect(out.apiKey).toBe(apiKey);
+                // SMTP2Go tracks it: our links and pixel are not added.
+                expect(hrefs(htmlPart(out.mime))).toEqual([REPORT]);
+                expect(gmail.sent.some((m) => m.raw.includes(relayed.messageId))).toBe(false);
+                const copy = gmail.inserted.find((m) => m.raw.includes(relayed.messageId))!;
+                expect(copy).toBeDefined();
+                const row = await owner.mailOutbound.findUniqueOrThrow({ where: { id: relayed.messageId } });
+                expect(row).toMatchObject({
+                    status: 'sent',
+                    viaRelay: true,
+                    tracked: true,
+                    providerMessageId: `smtp2go:${out.emailId}`,
+                    providerThreadId: copy.threadId,
+                });
+                expect(row.mailMessageId).not.toBeNull();
+
+                // SMTP2Go's open, to the relay's webhook with its secret; anything else is refused.
+                const later = new Date(Date.now() + 60_000).toISOString();
+                const open = { event: 'open', email_id: out.emailId, time: later, 'user-agent': 'Mozilla/5.0' };
+                await http().post(`/api/hooks/smtp2go/relay/${workspace}`).send(open).expect(401);
+                const auth = set.smtp2go.hookAuthorization!;
+                const hooked = await http()
+                    .post(`/api/hooks/smtp2go/relay/${workspace}`)
+                    .set('Authorization', auth)
+                    .send(open)
+                    .expect(200);
+                expect(hooked.body).toEqual({ result: 'recorded' });
+                expect(await owner.trackingHit.count({ where: { outboundId: relayed.messageId, kind: 'open' } })).toBe(
+                    1,
+                );
+                const after = (await as(admin).get(w('/tracking/policy')).expect(200)).body as TrackingPolicyView;
+                expect(after.smtp2go).toMatchObject({ lastHookResult: 'recorded' });
+                expect(after.mailboxesWithoutCopy.map((m) => m.id)).not.toContain(personalMailbox);
+            } finally {
+                await owner.mailbox.update({
+                    where: { id: personalMailbox },
+                    data: { grantedScopes: before.grantedScopes },
+                });
+                await policy({ provider: 'builtin' });
+            }
+        });
+
+        it('with SMTP2Go, a mailbox that cannot keep a copy goes through Gmail with our tracking', async () => {
+            await policy({ provider: 'smtp2go', smtp2goApiKey: `api-relay2-${stamp}` });
+            try {
+                const fallback = await written('fallback', { track: true });
+                await send.deliver(workspace, fallback.messageId, noWait);
+                expect(smtp2go.sent.some((m) => m.mime.includes(fallback.messageId))).toBe(false);
+                const html = htmlPart(gmail.sent.find((m) => m.raw.includes(fallback.messageId))!.raw);
+                expect(shortLinks(html)).toHaveLength(1);
+            } finally {
+                await policy({ provider: 'builtin', smtp2goApiKey: null });
+            }
         });
     });
 

@@ -46,7 +46,14 @@ interface FakeMailbox {
 }
 
 type Method =
-    'getProfile' | 'listMessages' | 'listHistory' | 'getMessage' | 'getMessageHeaders' | 'send' | 'listSendAs';
+    | 'getProfile'
+    | 'listMessages'
+    | 'listHistory'
+    | 'getMessage'
+    | 'getMessageHeaders'
+    | 'send'
+    | 'insertSent'
+    | 'listSendAs';
 
 /**
  * An in-memory Gmail for the tests: no network, ever. Access tokens are the fake OAuth's — a token
@@ -64,6 +71,8 @@ export class FakeGmail implements GmailPort {
      * the Message-ID Gmail stored and delivered it with — which is Gmail's own, not ours (below).
      */
     readonly sent: { email: string; raw: string; threadId: string | null; id: string; messageId: string }[] = [];
+    /** TRACK-2: copies put into a mailbox's Sent (`insertSent`). */
+    readonly inserted: { email: string; raw: string; threadId: string; id: string }[] = [];
     /** Every call made, for assertions: method, mailbox, and the message id for getMessage. */
     readonly calls: { method: Method; email: string; id?: string }[] = [];
     /**
@@ -309,6 +318,28 @@ export class FakeGmail implements GmailPort {
         if (this.acceptThenFail.delete(email)) {
             throw new GmailApiError(500, 'backendError', 'Gmail answered 500');
         }
+        return { id, threadId };
+    }
+
+    /** TRACK-2: a copy put under SENT as given (its Message-ID kept), recorded in `inserted`. */
+    async insertSent(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {
+        const email = await this.enter('insertSent', accessToken);
+        const box = this.box(email);
+        const id = `msg-${email}-${box.nextMessage++}`;
+        const threadId = input.threadId ?? `thr-${email}-${box.nextThread++}`;
+        const parsed = parseRaw(input.raw);
+        box.messages.set(id, {
+            id,
+            threadId,
+            labelIds: ['SENT'],
+            snippet: parsed.text.slice(0, SNIPPET_CHARS),
+            internalDate: String(Date.now()),
+            payload: parsed.payload,
+        });
+        box.order.push(id);
+        box.historyId += 1;
+        box.history.push({ historyId: box.historyId, messageId: id });
+        this.inserted.push({ email, raw: input.raw, threadId, id });
         return { id, threadId };
     }
 

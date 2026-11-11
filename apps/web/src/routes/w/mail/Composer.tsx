@@ -9,6 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
     Skeleton,
+    Switch,
     cn,
     focusRing,
 } from '@bylinecrm/ui';
@@ -18,6 +19,7 @@ import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode
 import { Link } from 'react-router';
 import { templates } from '../../../api/templates';
 import { useCcSuggestions, useRecordDrafts, useSendMail } from '../../../api/mail';
+import { useTrackingPolicy } from '../../../api/outreach';
 import { useMailboxes } from '../../../api/mailAdmin';
 import { useMailboxSignature } from '../../../api/signatures';
 import { useTemplates } from '../../../api/templates';
@@ -308,6 +310,11 @@ function ComposerForm({
     const [error, setError] = useState<string | null>(null);
     // Follow-ups queued behind this email, each in its thread; `followUpKey` names their rows.
     const [followUps, setFollowUps] = useState<FollowUpDraft[]>(() => [...(restored?.followUps ?? [])]);
+    // TRACK-2: tracked as the workspace says unless the writer switches it here (`undefined`: the default).
+    const policy = useTrackingPolicy(workspaceId);
+    const [ownTrack, setOwnTrack] = useState<boolean | undefined>(undefined);
+    const track = ownTrack ?? policy.data?.trackPersonalMail;
+    const trackable = policy.data ? policy.data.trackOpens || policy.data.trackClicks : false;
     const followUpKey = useRef(0);
     // The time picked to schedule it, kept with the draft until it is scheduled.
     const followUpOnSent = !!reply?.followUp;
@@ -534,6 +541,7 @@ function ComposerForm({
             timeZone: timeZone ?? senderTimeZone(),
             followUps,
             followUp: followUpOnSent,
+            track,
         });
         const subjectText = docToSubject(subject) || (reply ? `Re: ${reply.subject.replace(/^re:\s*/i, '')}` : '');
         try {
@@ -838,6 +846,19 @@ function ComposerForm({
                     <Plus aria-hidden />
                     Add follow-up
                 </Button>
+                {trackable && (
+                    <label
+                        className="flex items-center gap-2 text-[13px] text-text-muted"
+                        title="Record when they open the email or click a link, and tell you"
+                    >
+                        <Switch
+                            checked={track ?? false}
+                            onCheckedChange={setOwnTrack}
+                            aria-label="Track opens and clicks"
+                        />
+                        Track
+                    </label>
+                )}
                 <div className="ml-auto flex items-center gap-2">
                     <ComposerPreview
                         workspaceId={workspaceId}
