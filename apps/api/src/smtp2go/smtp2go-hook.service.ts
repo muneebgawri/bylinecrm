@@ -89,6 +89,43 @@ export class Smtp2GoHookService {
         return result;
     }
 
+    /**
+     * TRACK-2: SMTP2Go's webhook for CRM-written mail sent through the workspace's relay key (Settings → Tracking).
+     * The URL names the workspace; the request must carry the relay's secret. The event is matched to a relayed send of
+     * the workspace, then applied as a pool mailbox's is, for the send's own mailbox — opens and clicks counted,
+     * bounces, complaints, unsubscribes and rejects recorded alike.
+     */
+    async receiveRelay(
+        workspaceId: string,
+        authorization: string | undefined,
+        body: unknown,
+        clientIp: string,
+    ): Promise<Smtp2GoHookResult> {
+        const policy = await this.ownerPrisma.trackingPolicy.findUnique({
+            where: { workspaceId },
+            select: { relayHookSecretCiphertext: true },
+        });
+        if (!policy?.relayHookSecretCiphertext) {
+            await this.refused(clientIp);
+            throw new NotFoundException('not found');
+        }
+        if (!bearerMatches(authorization, this.secrets.open(policy.relayHookSecretCiphertext))) {
+            await this.noteRelay(workspaceId, 'bad_secret');
+            await this.refused(clientIp);
+            throw new ApiException(401, 'unauthorized', 'the delivery does not carry the relay’s hook secret');
+        }
+        const event = parseSmtp2GoEvent(body);
+        let result: Smtp2GoHookResult = 'ignored';
+        if (event.kind !== 'other') {
+            const send = await this.rls.withWorkspace(workspaceId, (tx) =>
+                relayedSendOf(tx, event, event.kind === 'reject' ? ['sent', 'failed'] : ['sent']),
+            );
+            result = send ? await this.apply({ id: send.mailboxId, workspaceId }, event) : 'unmatched';
+        }
+        await this.noteRelay(workspaceId, result);
+        return result;
+    }
+
     private async apply(mailbox: { id: string; workspaceId: string }, event: Read): Promise<Smtp2GoHookResult> {
         if (event.kind === 'spam') return this.providerSuppression(mailbox, event, 'complaint');
         if (event.kind === 'unsubscribe') return this.providerSuppression(mailbox, event, 'unsubscribe');
@@ -249,6 +286,15 @@ export class Smtp2GoHookService {
         if (over) throw new RateLimited('too many refused deliveries; try again later');
     }
 
+    private async noteRelay(workspaceId: string, result: Smtp2GoHookResult | 'bad_secret'): Promise<void> {
+        await this.rls.withWorkspace(workspaceId, (tx) =>
+            tx.trackingPolicy.update({
+                where: { workspaceId },
+                data: { lastRelayHookAt: new Date(), lastRelayHookResult: result },
+            }),
+        );
+    }
+
     private async note(mailbox: { id: string; workspaceId: string }, result: Smtp2GoHookResult): Promise<void> {
         await this.rls.withWorkspace(mailbox.workspaceId, (tx) =>
             tx.mailbox.update({ where: { id: mailbox.id }, data: { lastHookAt: new Date(), lastHookResult: result } }),
@@ -270,6 +316,20 @@ function sendOf(tx: WorkspaceClient, mailboxId: string, event: Read, statuses: M
     return tx.mailOutbound.findFirst({
         where: { mailboxId, status: { in: statuses }, OR: or },
         select: { id: true, status: true, personId: true, toAddresses: true },
+    });
+}
+
+/** TRACK-2: the relayed send of the workspace an event is about, by the same ids as `sendOf`. */
+function relayedSendOf(tx: WorkspaceClient, event: Read, statuses: MailOutboundStatus[]) {
+    const or = [
+        ...(event.emailId ? [{ providerMessageId: `${SMTP2GO_PROVIDER_PREFIX}${event.emailId}` }] : []),
+        ...(event.messageId ? [{ rfc822MessageId: event.messageId }] : []),
+        ...(event.crmId ? [{ id: event.crmId }] : []),
+    ];
+    if (or.length === 0) return Promise.resolve(null);
+    return tx.mailOutbound.findFirst({
+        where: { viaRelay: true, status: { in: statuses }, OR: or },
+        select: { mailboxId: true },
     });
 }
 

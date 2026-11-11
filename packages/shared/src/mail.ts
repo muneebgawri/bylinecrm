@@ -16,6 +16,18 @@ export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.reado
 export const GMAIL_SCOPES = [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE] as const;
 
 /**
+ * TRACK-2: lets the CRM put a copy of a message it sent through SMTP2Go into the sender's Gmail Sent, so the thread
+ * reads as if Gmail had sent it. Asked of a personal mailbox, never required: a mailbox without it sends through
+ * Gmail as before.
+ */
+export const GMAIL_INSERT_SCOPE = 'https://www.googleapis.com/auth/gmail.insert';
+
+/** True when a mailbox's grant lets the CRM put a sent copy into its Gmail. */
+export function gmailInsertGranted(grantedScopes: readonly string[]): boolean {
+    return grantedScopes.includes(GMAIL_INSERT_SCOPE);
+}
+
+/**
  * Postmaster Tools (P3-2b, #129, #190, FR-CRMS-13): a workspace connects one Google account that
  * owns its sending domains in Postmaster Tools, through the same OAuth client, so the sending-domain
  * check can read each domain's user-reported spam rate. The Postmaster Tools API v2's scopes — its

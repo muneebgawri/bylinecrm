@@ -1,12 +1,31 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Put, Res, UseGuards } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Headers,
+    HttpCode,
+    Param,
+    Patch,
+    Post,
+    Put,
+    Res,
+    UseGuards,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { TRACKING_CLICK_PATH, TRACKING_OPEN_PATH, type TrackingSettingsView } from '@bylinecrm/shared';
+import {
+    TRACKING_CLICK_PATH,
+    TRACKING_OPEN_PATH,
+    type TrackingPolicyView,
+    type TrackingSettingsView,
+} from '@bylinecrm/shared';
 import type { Response } from 'express';
 import { Public, Requires, TenantController } from '../auth/decorators';
 import { Redirects, Returns, ReturnsFile } from '../openapi/responses';
-import { PutTrackingDomainDto } from './dto';
-import { trackingSettingsView } from './responses';
+import { PatchTrackingPolicyDto, PutTrackingDomainDto } from './dto';
+import { trackingPolicyView, trackingSettingsView } from './responses';
 import { TrackingDomainService } from './tracking-domain.service';
+import { TrackingPolicyService } from './tracking-policy.service';
 import { TrackingRateGuard } from './tracking-rate.guard';
 import { TRACKING_PIXEL_GIF } from './tracking.constants';
 import { TrackingService } from './tracking.service';
@@ -48,6 +67,31 @@ export class TrackingDomainController {
     @Returns(trackingSettingsView)
     check(): Promise<TrackingSettingsView> {
         return this.domains.check();
+    }
+}
+
+/**
+ * TRACK-2: how the workspace tracks its mail — provider, opens, clicks, CRM-written mail, Gmail reply notices — read
+ * by whoever may send mail (the composer reads its default; only an admin is shown the webhook's secret), changed by
+ * an admin.
+ */
+@ApiTags('tracking')
+@TenantController('tracking')
+export class TrackingPolicyController {
+    constructor(private readonly policy: TrackingPolicyService) {}
+
+    @Requires('email:send')
+    @Get('policy')
+    @Returns(trackingPolicyView)
+    get(): Promise<TrackingPolicyView> {
+        return this.policy.get();
+    }
+
+    @Requires('workspace:admin')
+    @Patch('policy')
+    @Returns(trackingPolicyView)
+    update(@Body() body: PatchTrackingPolicyDto): Promise<TrackingPolicyView> {
+        return this.policy.update(body);
     }
 }
 
