@@ -403,3 +403,85 @@ describe('queued follow-ups: the compose box queues emails that go later in the 
         expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
     });
 });
+
+describe('Suggested Cc: the To recipients’ colleagues are offered, never added', () => {
+    const PRIYA = '0b1e0000-0000-4000-8000-0000000000d2';
+    const suggestionsRoute: FakeRoute = (r) =>
+        r.method === 'GET' && r.url.includes('/mail/cc-suggestions?')
+            ? json({
+                  groups: [
+                      {
+                          company: { id: '0b1e0000-0000-4000-8000-0000000000c1', name: 'Acme' },
+                          people: [
+                              {
+                                  id: PRIYA,
+                                  name: 'Priya Nair',
+                                  email: 'priya@acme.com',
+                                  jobTitle: 'CFO',
+                                  lastContactedAt: null,
+                              },
+                              {
+                                  id: '0b1e0000-0000-4000-8000-0000000000d3',
+                                  name: 'Omar Haddad',
+                                  email: 'omar@acme.com',
+                                  jobTitle: null,
+                                  lastContactedAt: null,
+                              },
+                          ],
+                      },
+                  ],
+              })
+            : undefined;
+
+    it('asks for the To line’s people and shows "Also at <Company>" chips under the header', async () => {
+        const seen = composer([mailboxesRoute(MAILBOXES), suggestionsRoute]);
+        const row = await screen.findByRole('group', { name: 'Suggested Cc' });
+        expect(row).toHaveTextContent('Also at Acme:');
+        expect(within(row).getByRole('button', { name: 'Cc Priya Nair' })).toHaveAttribute(
+            'title',
+            'priya@acme.com · CFO',
+        );
+        expect(within(row).getByRole('button', { name: 'Cc Omar Haddad' })).toBeInTheDocument();
+        const asked = seen.find((r) => r.url.includes('/mail/cc-suggestions?'));
+        expect(asked?.url).toContain(`personIds=${PERSON.id}`);
+        // Offered only: nothing is on Cc until the member says so.
+        expect(screen.queryByRole('group', { name: 'Cc' })).not.toBeInTheDocument();
+    });
+
+    it('a click puts the colleague on Cc, takes the chip away, and the send carries them as cc', async () => {
+        const seen = composer([
+            mailboxesRoute(MAILBOXES),
+            suggestionsRoute,
+            (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined),
+        ]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Cc Priya Nair' }));
+        const cc = screen.getByRole('group', { name: 'Cc' });
+        expect(within(cc).getByText('Priya Nair')).toBeInTheDocument();
+        const row = screen.getByRole('group', { name: 'Suggested Cc' });
+        expect(within(row).queryByRole('button', { name: 'Cc Priya Nair' })).not.toBeInTheDocument();
+        expect(within(row).getByRole('button', { name: 'Cc Omar Haddad' })).toBeInTheDocument();
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        const body = seen.find((r) => r.url.endsWith('/mail/send'))?.body as Record<string, unknown>;
+        expect(body).toMatchObject({ cc: [{ personId: PRIYA }] });
+    });
+
+    it('dismissing hides the row for this draft', async () => {
+        composer([mailboxesRoute(MAILBOXES), suggestionsRoute]);
+        await screen.findByRole('group', { name: 'Suggested Cc' });
+        await userEvent.click(screen.getByRole('button', { name: 'Dismiss suggested Cc' }));
+        expect(screen.queryByRole('group', { name: 'Suggested Cc' })).not.toBeInTheDocument();
+        await write('Hello', 'Hi Dana');
+        expect(screen.queryByRole('group', { name: 'Suggested Cc' })).not.toBeInTheDocument();
+    });
+
+    it('shows no row when the server offers nobody (a recipient with no company)', async () => {
+        composer([
+            mailboxesRoute(MAILBOXES),
+            (r) => (r.url.includes('/mail/cc-suggestions?') ? json({ groups: [] }) : undefined),
+        ]);
+        await screen.findByRole('textbox', { name: 'Message' });
+        await waitFor(() => expect(screen.queryByRole('group', { name: 'Suggested Cc' })).not.toBeInTheDocument());
+    });
+});

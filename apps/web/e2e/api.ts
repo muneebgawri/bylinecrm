@@ -167,6 +167,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/calls$`), () => []],
     [new RegExp(`^${W}/smtp2go/mailboxes$`), () => data.smtp2goMailboxes],
     [new RegExp(`^${W}/mailboxes$`), () => data.mailboxes],
+    [new RegExp(`^${W}/mail/cc-suggestions$`), () => data.ccSuggestions],
     [new RegExp(`^${W}/mail/messages$`), (_m, url) => data.page(recordSends(url))],
     [new RegExp(`^${W}/mail/messages/${ID}$`), (m) => byId(data.scheduledSends, m[1])],
     // The caller's composer drafts: none in the fixtures, so every composer opens empty.

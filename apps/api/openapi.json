@@ -17245,6 +17245,81 @@
                 "tags": ["integrations"]
             }
         },
+        "/api/w/{workspaceId}/mail/cc-suggestions": {
+            "get": {
+                "operationId": "mailSend_suggestCc",
+                "parameters": [
+                    {
+                        "name": "personIds",
+                        "required": true,
+                        "in": "query",
+                        "description": "Comma-separated person ids: the To recipients that are people in the CRM.",
+                        "schema": {
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MailCcSuggestions"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mail/send": {
             "post": {
                 "operationId": "mailSend_compose",
@@ -42489,6 +42564,70 @@
                     }
                 },
                 "required": ["items", "nextCursor"]
+            },
+            "MailCcSuggestions": {
+                "type": "object",
+                "properties": {
+                    "groups": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "company": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                            "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                        },
+                                        "name": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": ["id", "name"]
+                                },
+                                "people": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                                "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                            },
+                                            "name": {
+                                                "type": "string",
+                                                "description": "The person as the composer names them."
+                                            },
+                                            "email": {
+                                                "type": "string",
+                                                "description": "Their primary address, which the Cc goes to."
+                                            },
+                                            "jobTitle": {
+                                                "nullable": true,
+                                                "type": "string"
+                                            },
+                                            "lastContactedAt": {
+                                                "nullable": true,
+                                                "example": "2026-10-09T09:30:00.000Z",
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                            }
+                                        },
+                                        "required": ["id", "name", "email", "jobTitle", "lastContactedAt"]
+                                    }
+                                }
+                            },
+                            "required": ["company", "people"]
+                        }
+                    }
+                },
+                "required": ["groups"]
             },
             "LabelledTarget": {
                 "type": "object",

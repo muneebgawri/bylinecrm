@@ -69,6 +69,7 @@ import type {
     NewswireosOwnershipDeliveryView,
     BylineSettingsView,
     Smtp2GoMailboxView,
+    MailCcSuggestionsView,
     MailOutboundView,
     MailThreadView,
     MailSettingsView,
@@ -1659,6 +1660,13 @@ export const thread: MailThreadView = {
         },
     ],
 };
+
+/**
+ * The composer's suggested Cc (`GET /mail/cc-suggestions`): Dana is the only person at Acme in these fixtures, so
+ * the server offers nobody and the composer shows no row — the record pages' screenshots stay as they are. The
+ * row itself is checked by `Composer.spec.tsx`.
+ */
+export const ccSuggestions: MailCcSuggestionsView = { groups: [] };
 
 /** A follow-up Kate scheduled for Dana: the person page shows it with Reschedule and Cancel. */
 export const scheduledSends: MailOutboundView[] = [
