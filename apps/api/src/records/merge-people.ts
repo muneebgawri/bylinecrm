@@ -260,12 +260,13 @@ export interface AddressRelease {
     keeperId: string;
     /** Oldest first. */
     fromIds: string[];
-    /** Which rule chose the keeper. */
-    by: 'name' | 'company' | 'primary';
+    /** Which rule chose the keeper, or a person (`decided`). */
+    by: 'decided' | 'name' | 'company' | 'primary';
 }
 
 /** Why each rule gives the address to its keeper, as the report says it. */
 export const KEEPER_WHY: Record<AddressRelease['by'], string> = {
+    decided: 'a person chose the keeper',
     name: 'the address names the keeper',
     company: 'the keeper is at the company whose domain it is',
     primary: 'it is the keeper’s primary address',
@@ -286,12 +287,14 @@ export interface AddressUnresolved {
  * 2. the one holder at the company whose domain it is (`companyOf`, OWN-2's company-domain rule — `info@acme.com` is
  *    Acme's, so the person saved at Acme keeps it);
  * 3. the one holder whose primary address it is (the record saved by that address).
- * An address none of these settles is unresolved — a person decides. Only addresses stored on the people count;
- * `people` oldest first.
+ * An address none of these settles is unresolved — a person decides, and `decided` (address → keeper id) carries
+ * that choice: it comes before the rules, for a keeper who holds the address. Only addresses stored on the people
+ * count; `people` oldest first.
  */
 export function addressKeepers(
     people: readonly (NamedCandidate & { id: string; companyId?: string | null })[],
     companyOf: ReadonlyMap<string, string | null> = new Map(),
+    decided: ReadonlyMap<string, string> = new Map(),
 ): {
     releases: AddressRelease[];
     unresolved: AddressUnresolved[];
@@ -324,8 +327,10 @@ export function addressKeepers(
         const primary = ids.filter(
             (id) => normaliseEmail((byId.get(id)!.emails as Partial<Emails> | null)?.primary) === email,
         );
+        const chosen = decided.get(email);
         const rule: [AddressRelease['by'], string[]] | undefined = (
             [
+                ['decided', chosen && ids.includes(chosen) ? [chosen] : []],
                 ['name', named],
                 ['company', atCompany],
                 ['primary', primary],
