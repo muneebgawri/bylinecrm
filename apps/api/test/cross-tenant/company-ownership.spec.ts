@@ -14,6 +14,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
+import { PrismaService } from '../../src/infra/prisma.service';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
 
@@ -351,6 +352,99 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
                 .send(person('tia', { companyId: company, company: { name } }))
                 .expect(400);
             expect(await companiesNamed(name)).toHaveLength(0);
+        });
+    });
+
+    describe('OWN-2d: a company nobody owns (the import set owners on people, not companies)', () => {
+        /** A company as the import left it: saved, its domain set, no owner. */
+        const unowned = async (name: string, domain: string) => {
+            const id = (
+                (await as(admin).post(w('/companies')).send({ name, domain }).expect(201)).body as { id: string }
+            ).id;
+            await app.get(PrismaService).company.update({ where: { id }, data: { ownerId: null } });
+            return id;
+        };
+        const ownerOf = async (companyId: string) =>
+            (
+                (
+                    await as(admin)
+                        .get(w(`/companies/${companyId}`))
+                        .expect(200)
+                ).body as { ownerId: string | null }
+            ).ownerId;
+
+        it('its owner is the first saver of a person at it: others are refused by name, and may hand the lead over', async () => {
+            const nova = `nova-${stamp}.test`;
+            const companyId = await unowned(`Nova ${stamp}`, nova);
+            // The import's person: owned by Ana, at a company that names no owner.
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Una',
+                    emails: { primary: `una@${nova}`, additional: [] },
+                    ownerId: anaId,
+                    companyId,
+                })
+                .expect(201);
+            expect(await ownerOf(companyId)).toBeNull();
+
+            const refused = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Vic', emails: { primary: `vic@${nova}`, additional: [] } });
+            expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+            expect(refused.body).toMatchObject({
+                code: 'conflict.company_owned',
+                details: { companyId, ownerMemberId: anaId },
+            });
+            expect((refused.body as { message: string }).message).toContain(`Nova ${stamp}`);
+
+            const handed = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Vic', emails: { primary: `vic@${nova}`, additional: [] }, handToOwner: true });
+            expect(handed.status, JSON.stringify(handed.body)).toBe(201);
+            expect(handed.body).toMatchObject({ ownerId: anaId, companyId });
+            // The hand-over claims the company for the owner its people named.
+            expect(await ownerOf(companyId)).toBe(anaId);
+        });
+
+        it('with no owned people, the first member to save a person at it claims it, in that save’s transaction', async () => {
+            const lyra = `lyra-${stamp}.test`;
+            const companyId = await unowned(`Lyra ${stamp}`, lyra);
+            // An own-scoped member cannot see a company nobody owns…
+            await as(ben)
+                .get(w(`/companies/${companyId}`))
+                .expect(404);
+            // …and a save that fails claims nothing.
+            await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Pia', emails: { primary: `pia@${lyra}`, additional: [] }, custom: { nosuch: 1 } })
+                .expect(400);
+            expect(await ownerOf(companyId)).toBeNull();
+
+            const saved = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Zed', emails: { primary: `zed@${lyra}`, additional: [] } });
+            expect(saved.status, JSON.stringify(saved.body)).toBe(201);
+            expect(saved.body).toMatchObject({ ownerId: benId, companyId });
+            expect(await ownerOf(companyId)).toBe(benId);
+            // Theirs now: visible to them, and refused to the next member by name.
+            await as(ben)
+                .get(w(`/companies/${companyId}`))
+                .expect(200);
+            const refused = await as(ana)
+                .post(w('/people'))
+                .send({ nameFirst: 'Yan', emails: { primary: `yan@${lyra}`, additional: [] } });
+            expect(refused.status).toBe(409);
+            expect(refused.body).toMatchObject({ details: { companyId, ownerMemberId: benId } });
+            // The claim is on the record: a `company.updated` with the owner's change.
+            const claimed = await app.get(PrismaService).outboxEvent.findFirst({
+                where: {
+                    workspaceId: workspace,
+                    type: 'company.updated',
+                    payload: { path: ['recordId'], equals: companyId },
+                },
+            });
+            expect(claimed?.payload).toMatchObject({ diff: { ownerId: { from: null, to: benId } } });
         });
     });
 });
