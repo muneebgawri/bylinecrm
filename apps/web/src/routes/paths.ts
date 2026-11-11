@@ -21,6 +21,7 @@ export const paths = {
     /** Every workspace on the server, for platform admins (P0-14). */
     platformWorkspaces: '/platform/workspaces',
     workspace: (workspaceId: string) => `/w/${workspaceId}`,
+    /** Where a member lands: the dashboard — their day's work (#360), and for an admin the pipeline first. */
     home: (workspaceId: string) => `/w/${workspaceId}/home`,
     reports: (workspaceId: string) => `/w/${workspaceId}/reports`,
     people: (workspaceId: string) => `/w/${workspaceId}/people`,

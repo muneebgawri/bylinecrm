@@ -98,6 +98,8 @@ import type {
     SequenceEnrolmentView,
     SequenceView,
     MyTaskView,
+    TodayView,
+    TodayPersonView,
     NotificationSettingsView,
     NotificationsView,
     QuoSettingsView,
@@ -221,6 +223,16 @@ export const membership: MembershipSummary = {
     roleName: SYSTEM_ROLES.admin,
     recordScope: 'all',
     capabilities: [...CAPABILITIES],
+};
+
+/** A plain member (#360): the member role, no `workspace:admin` — the dashboard is their day's work. */
+export const memberMembership: MembershipSummary = {
+    ...membership,
+    memberId: IDS.secondMember,
+    roleId: IDS.memberRole,
+    roleName: SYSTEM_ROLES.member,
+    recordScope: 'own',
+    capabilities: ['record:read', 'record:write', 'deal:read', 'deal:move', 'deal:edit', 'task:write'],
 };
 
 export const roles: RoleView[] = [
@@ -637,6 +649,74 @@ export const myTasks: MyTaskView[] = [
         targets: [{ type: 'opportunity', id: IDS.deal, label: 'Series B PR' }],
     },
 ];
+
+/** Today (#360): Kate's day — a reply, a follow-up, a new lead, two tasks and a stalled backlog past the count cap. */
+const todayPerson = (
+    id: string,
+    name: string,
+    email: string,
+    company: { id: string; name: string } | null,
+): TodayPersonView => ({
+    id,
+    name,
+    email,
+    phones: { primary: { number: '5125550198', countryCode: 'US' }, additional: [] },
+    source: 'Agency list Q3',
+    company,
+});
+const dana = todayPerson(IDS.person, 'Dana Reyes', 'dana@acme.example', { id: IDS.company, name: 'Acme Corp' });
+const sam = todayPerson(IDS.secondPerson, 'Sam Okafor', 'sam@initech.example', {
+    id: IDS.secondCompany,
+    name: 'Initech',
+});
+const todayDeal = (id: string, name: string, stage: number, contact: TodayPersonView, quietHours: number) => ({
+    id,
+    name,
+    amount: { amountMinor: 12_000_00, currency: 'USD' },
+    currency: 'USD',
+    pipelineId: IDS.pipeline,
+    stage: { id: stageId(stage), name: pipeline.stages[stage]!.name },
+    dueAt: at(26),
+    nextFollowUpDate: null,
+    cadenceOverdue: true,
+    lastActivityAt: at(quietHours),
+    company: contact.company,
+    contact,
+});
+export const today: TodayView = {
+    member: membersSummary[0]!,
+    date: '2026-10-09',
+    windows: { replyDays: 30, newLeadDays: 14, stalledDays: 21 },
+    replies: {
+        count: 3,
+        countIsExact: true,
+        nextCursor: 'cursor-replies',
+        items: [
+            {
+                messageId: IDS.mailMessage,
+                threadId: IDS.thread,
+                subject: 'Distribution options',
+                snippet: 'Thanks — could you send pricing for three releases instead of five?',
+                receivedAt: at(5),
+                person: dana,
+            },
+        ],
+    },
+    followUps: {
+        count: 1,
+        countIsExact: true,
+        nextCursor: null,
+        items: [todayDeal(IDS.deal, 'Series B PR', 2, dana, 24 * 4)],
+    },
+    newLeads: { count: 1, countIsExact: true, nextCursor: null, items: [{ ...sam, createdAt: at(30) }] },
+    tasks: { count: 2, countIsExact: true, nextCursor: null, items: myTasks.filter((t) => t.dueAt !== null) },
+    stalled: {
+        count: 10_000,
+        countIsExact: false,
+        nextCursor: 'cursor-stalled',
+        items: [todayDeal(IDS.thirdDeal, 'Product launch', 1, dana, 24 * 30)],
+    },
+};
 
 /** The bell (#192): one unread — a sequence's task assigned — and one read reminder. */
 export const notificationsInbox: NotificationsView = {

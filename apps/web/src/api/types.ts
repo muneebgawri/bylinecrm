@@ -333,3 +333,13 @@ export type NotificationSettingsView = Schemas['NotificationSettings'];
 export type MyTaskView = Schemas['MyTask'];
 export type DealFeedView = Schemas['DealFeed'];
 export type DealFeedItemView = Schemas['DealFeedItem'];
+
+// ---- Today (#360) ---------------------------------------------------------------------------
+export type TodayView = Schemas['Today'];
+export type TodayPersonView = Schemas['TodayPerson'];
+export type TodayReplyView = Schemas['TodayReply'];
+export type TodayDealView = Schemas['TodayDeal'];
+export type TodayLeadView = Schemas['TodayLead'];
+/** One section's count and page (`TodaySection` from @bylinecrm/shared names them). */
+export type TodaySectionView<S extends keyof TodayView & ('replies' | 'followUps' | 'newLeads' | 'tasks' | 'stalled')> =
+    TodayView[S];

@@ -8,7 +8,7 @@ import { personsByAddress } from '../mail-sync/matching';
 import { PeopleService } from '../records/people.service';
 import { CALENDAR_LEAD_SOURCE } from './calendar.constants';
 import { MeetingStore } from './meeting-store';
-import { memberInScope } from './meetings.service';
+import { memberInScope } from '../records/record-scope';
 import type { LeadSuggestionAccepted, LeadSuggestionView } from './responses';
 import { SLOTLINE_LEAD_SOURCE } from './slotline/slotline.constants';
 
@@ -50,7 +50,7 @@ export class LeadSuggestionsService {
 
     list(requested: string | undefined): Promise<LeadSuggestionView[]> {
         const context = this.current();
-        const memberId = memberInScope(context, requested);
+        const memberId = memberInScope(context, requested, 'meetings');
         return this.rls.withWorkspace(async (tx) => {
             const rows = await tx.calendarEventParticipant.findMany({
                 where: memberId ? pending(memberId) : { ...pending(''), leadSuggestedForMemberId: { not: null } },
@@ -169,7 +169,7 @@ export class LeadSuggestionsService {
 
     /** The member a write acts for: the caller, or (an admin) the member named. */
     private actingFor(context: WorkspaceRunContext, requested: string | undefined): string {
-        const memberId = memberInScope(context, requested) ?? context.memberId;
+        const memberId = memberInScope(context, requested, 'meetings') ?? context.memberId;
         if (!memberId) throw new ApiException(400, 'validation.failed', 'name the member the suggestion is for');
         return memberId;
     }

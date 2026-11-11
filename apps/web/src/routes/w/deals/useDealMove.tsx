@@ -2,7 +2,7 @@ import { toast } from '@bylinecrm/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { ApiError } from '../../../api/client';
 import { useMoveDeal, useRules } from '../../../api/deals';
-import type { BoardView, OpportunityView, RuleView, StageView } from '../../../api/types';
+import type { OpportunityView, PipelineView, RuleView, StageView } from '../../../api/types';
 import { BackwardMoveDialog, ruleEventLabel, type BackwardRequest } from './BackwardMoveDialog';
 import { CloseDealDialog, type ClosePayload, type CloseRequest } from './CloseDealDialog';
 import { classifyMove } from './moveGate';
@@ -22,17 +22,18 @@ export interface DealMoveApi {
 
 export function useDealMove(
     workspaceId: string,
-    board: BoardView | undefined,
+    /** The pipeline the deals move in: the board's, or (Today, #360) the deal's own. */
+    pipeline: PipelineView | undefined,
     announce?: (text: string) => void,
 ): DealMoveApi {
     const move = useMoveDeal(workspaceId);
-    const rules = useRules(workspaceId, board?.pipeline.id);
+    const rules = useRules(workspaceId, pipeline?.id);
     const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
     const [backwardRequest, setBackwardRequest] = useState<BackwardRequest | null>(null);
 
     const stagesById = useMemo(
-        () => new Map((board?.pipeline.stages ?? []).map((stage) => [stage.id, stage])),
-        [board?.pipeline.stages],
+        () => new Map((pipeline?.stages ?? []).map((stage) => [stage.id, stage])),
+        [pipeline?.stages],
     );
 
     const perform = useCallback(
@@ -67,7 +68,7 @@ export function useDealMove(
 
     const request = useCallback(
         (deal: OpportunityView, toStageId: string) => {
-            const stages = board?.pipeline.stages ?? [];
+            const stages = pipeline?.stages ?? [];
             const gate = classifyMove(stages, deal.stageId, toStageId);
             const stage = stagesById.get(toStageId);
             if (gate.kind === 'same' || gate.kind === 'unknown' || !stage) return;
@@ -84,7 +85,7 @@ export function useDealMove(
             }
             perform(deal, stage);
         },
-        [board?.pipeline.stages, perform, rules.data, stagesById],
+        [pipeline?.stages, perform, rules.data, stagesById],
     );
 
     const dialogs = (

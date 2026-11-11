@@ -32,6 +32,8 @@ export interface RouteState {
     phone?: PhoneExpectations;
     /** The session is a signed-in person whose address is not verified yet (#93). */
     unverified?: true;
+    /** The session is a plain member, not an admin (#360). */
+    member?: true;
 }
 
 export interface PhoneExpectations {
@@ -81,6 +83,8 @@ const EXTRA_STATES: RouteState[] = [
     { name: 'drawer-person', url: `${paths.deals(IDS.workspace)}?open=person:${IDS.person}` },
     { name: 'drawer-deal', url: `${paths.home(IDS.workspace)}?open=opportunity:${IDS.deal}` },
     { name: 'palette', url: paths.home(IDS.workspace), after: 'palette' },
+    // The dashboard as an account manager sees it (#360): the day's work and the feed, no pipeline cards.
+    { name: 'home-member', url: paths.home(IDS.workspace), member: true },
     // An email thread opened from the person's timeline: a drawer on a desktop, the whole screen on a phone.
     { name: 'thread', url: `${paths.person(IDS.workspace, IDS.person)}?thread=${IDS.thread}` },
     // The pages a mailed link opens (#93): verify the address, choose a new password.
