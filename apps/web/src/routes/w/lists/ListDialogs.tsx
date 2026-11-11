@@ -17,7 +17,7 @@ import {
     type ToastInput,
     toast,
 } from '@bylinecrm/ui';
-import type { RecordObject } from '@bylinecrm/shared';
+import { companyDomainOfAddress, type RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
@@ -217,6 +217,10 @@ export function CreateRecordDialog<O extends ListObject>({
      * transaction (#353), so a cancelled popup or a refused person leaves no empty company.
      */
     const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+    /** The company came from the address's domain, not the rep: a changed address may replace it. */
+    const [companyGuessed, setCompanyGuessed] = useState(false);
+    /** Said under the company when saving without one (the button stays live, so the rep learns why). */
+    const [companyError, setCompanyError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     /** A person's step: the address first, then the rest once it is known to be free (or left out). */
     const [step, setStep] = useState<'email' | 'details'>('email');
@@ -234,7 +238,7 @@ export function CreateRecordDialog<O extends ListObject>({
         .filter((d) => person && d.archivedAt === null && (d.showOnCreate || d.required))
         .sort((x, y) => x.position - y.position);
     const mayAddCompany = useCan('record:write');
-    const missing = person && (!company || asked.some((d) => d.required && !filled(customValues[d.key])));
+    const unfilled = person ? asked.filter((d) => d.required && !filled(customValues[d.key])) : [];
 
     const checkEmail = async () => {
         const address = email.trim();
@@ -247,6 +251,15 @@ export function CreateRecordDialog<O extends ListObject>({
                 return;
             }
             setError(null);
+            // The company is found from the domain: one already saved, else a new one named for the domain (made
+            // on save, or joined to the domain's company if one turns up then). A rep's own choice stays.
+            if (!company || companyGuessed) {
+                const domain = companyDomainOfAddress(address);
+                const found = check.company ?? (domain && mayAddCompany ? { id: NEW_COMPANY, name: domain } : null);
+                setCompany(found);
+                setCompanyGuessed(found !== null);
+                if (found) setCompanyError(null);
+            }
             setStep('details');
         } catch (err) {
             setError(failureText(err));
@@ -257,6 +270,10 @@ export function CreateRecordDialog<O extends ListObject>({
 
     const withoutEmail = () => {
         setEmail('');
+        if (companyGuessed) {
+            setCompany(null);
+            setCompanyGuessed(false);
+        }
         setError(null);
         setStep('details');
     };
@@ -281,7 +298,14 @@ export function CreateRecordDialog<O extends ListObject>({
         );
     };
     const saveRecord = async (handToOwner: boolean) => {
-        if (person && !company) return;
+        if (person && !company) {
+            setCompanyError('Choose the company they work at: search for it, or type its name and add it.');
+            return;
+        }
+        if (unfilled.length > 0) {
+            setError(`Fill in ${unfilled.map((d) => d.label).join(', ')}.`);
+            return;
+        }
         // A company the rep added goes with the person in the one request (#353); one they chose goes by its id.
         const companyRef = company
             ? company.id === NEW_COMPANY
@@ -403,7 +427,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 <Field label="Last name">
                                     <Input value={b} onChange={(e) => setB(e.target.value)} autoComplete="off" />
                                 </Field>
-                                <Field label="Company" required>
+                                <Field label="Company" required error={companyError ?? undefined}>
                                     <RecordPicker
                                         workspaceId={workspaceId}
                                         object="company"
@@ -413,8 +437,13 @@ export function CreateRecordDialog<O extends ListObject>({
                                         valueLabel={company?.name}
                                         onChange={(id) => {
                                             if (!id) setCompany(null);
+                                            setCompanyGuessed(false);
                                         }}
-                                        onResolved={(id, name) => setCompany({ id, name })}
+                                        onResolved={(id, name) => {
+                                            setCompany({ id, name });
+                                            setCompanyGuessed(false);
+                                            setCompanyError(null);
+                                        }}
                                         onCreate={
                                             mayAddCompany
                                                 ? (name) =>
@@ -511,7 +540,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 shape="square"
                                 variant="primary"
                                 loading={saving}
-                                disabled={!a.trim() || missing}
+                                disabled={!a.trim()}
                             >
                                 {copy.add}
                             </Button>

@@ -120,6 +120,8 @@ describe('lead pools', () => {
         expect(check.body).toEqual({
             available: false,
             holder: { ownerName: null, trashed: false, workspaceName: pinionName },
+            // Only this workspace's companies are looked up: the other workspace's is never told.
+            company: null,
         });
         const refused = await as(lexis).post('/people').send(person(address.toUpperCase())).expect(409);
         expect(JSON.stringify(refused.body)).toContain(`already a lead in ${pinionName}`);
@@ -131,7 +133,7 @@ describe('lead pools', () => {
         const check = await as(lexis)
             .get(`/people/address-check?email=${encodeURIComponent(address)}`)
             .expect(200);
-        expect(check.body).toEqual({ available: true, holder: null });
+        expect(check.body).toMatchObject({ available: true, holder: null });
         await as(lexis).post('/people').send(person(address)).expect(201);
     });
 
@@ -170,7 +172,7 @@ describe('lead pools', () => {
         const check = await as(outside)
             .get(`/people/address-check?email=${encodeURIComponent(`lexis-first-${stamp}@x.test`)}`)
             .expect(200);
-        expect(check.body).toEqual({ available: true, holder: null });
+        expect(check.body).toMatchObject({ available: true, holder: null });
     });
 
     it('a person in the trash holds nothing, and comes back only while the address is free', async () => {

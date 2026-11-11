@@ -121,8 +121,16 @@ export class PeopleService implements BulkRecords {
 
     /** Before a person is created: is the address free, and if not, whose person has it (`conflict` says the same). */
     async addressCheck(email: string): Promise<AddressCheckView> {
-        const holder = await this.ownership.addressHolder(this.current(), email);
-        return { available: holder === null, holder };
+        const context = this.current();
+        const [holder, company] = await Promise.all([
+            this.ownership.addressHolder(context, email),
+            this.ownership.companyForDomain(context, companyDomainOfAddress(email)),
+        ]);
+        return {
+            available: holder === null,
+            holder,
+            company: company ? { id: company.companyId, name: company.companyName } : null,
+        };
     }
 
     get(id: string): Promise<PersonView> {
@@ -144,10 +152,17 @@ export class PeopleService implements BulkRecords {
             if (handed) return handed;
         }
         const { company, ...person } = input;
+        // A new company whose domain a company already has is that company: the person joins it, never a twin.
+        // Its owner is then checked as for any named company (OWN-2), so another member's is still refused.
+        const sameDomain = company
+            ? await this.ownership.companyForDomain(context, companyDomainOfAddress(person.emails?.primary))
+            : null;
         const row = await this.rls.withWorkspace(async (tx) => {
             // #353: the new company and the person commit together or not at all. Its domain check (OWN-2) runs
             // before its write, so an owned domain is refused with nothing written.
-            if (company) {
+            if (sameDomain) {
+                person.companyId = sameDomain.companyId;
+            } else if (company) {
                 const made = await this.companies.createIn(tx, context, {
                     name: company.name,
                     domain: companyDomainOfAddress(person.emails?.primary),
@@ -207,14 +222,17 @@ export class PeopleService implements BulkRecords {
         let ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
         // OWN-2: a person at another member's company is theirs — refused here, by name; at a company
-        // the saver may hold, linked to it by their address's domain.
-        const placed = await this.ownership.checkPerson(context, {
+        // the saver may hold, linked to it by their address's domain; a company nobody owns is claimed for
+        // the saver in this transaction (OWN-2d).
+        const placed = await this.ownership.checkPerson(tx, context, {
             address: input.emails?.primary,
             companyId: input.companyId,
             ownerId,
         });
         if (placed.companyId) input = { ...input, companyId: placed.companyId };
-        else await assertCompanyExists(tx, input.companyId ?? null);
+        // OWN-2 looked past the caller's owner scope: a company nobody owns is one an own-scoped rep may join,
+        // though their row-level scope hides it — checking it again under that scope said "company not found".
+        else if (placed.company?.companyId !== input.companyId) await assertCompanyExists(tx, input.companyId ?? null);
         // CADENCE-1: a new unowned lead from a route or an import goes to the next rep in turn.
         ownerId = await this.rotation.intakeOwner(tx, context, ownerId, input.companyId ?? null);
         const custom = await this.customFields.validated(tx, 'person', input.custom ?? {}, 'create');
@@ -254,15 +272,18 @@ export class PeopleService implements BulkRecords {
             patch.companyId === undefined &&
             newPrimary !== undefined &&
             companyDomainOfAddress(newPrimary) !== companyDomainOfAddress(current.emailPrimary);
+        let placedCompanyId: string | undefined;
         if (companyChanged || addressChanged) {
-            const placed = await this.ownership.checkPerson(context, {
+            const placed = await this.ownership.checkPerson(tx, context, {
                 address: newPrimary ?? current.emailPrimary,
                 companyId: companyChanged ? patch.companyId : undefined,
                 ownerId,
             });
             if (placed.companyId) patch = { ...patch, companyId: placed.companyId };
+            placedCompanyId = placed.company?.companyId;
         }
-        if (companyChanged) await assertCompanyExists(tx, patch.companyId!);
+        // As on create: a company OWN-2 already found (past the owner scope) is not looked up again under it.
+        if (companyChanged && placedCompanyId !== patch.companyId) await assertCompanyExists(tx, patch.companyId!);
         const custom = patch.custom
             ? await this.customFields.validated(
                   tx,
@@ -359,7 +380,8 @@ export class PeopleService implements BulkRecords {
     /**
      * OWN-2: save a person for the member who owns their address's company, and tell them. Null when there
      * is nobody else to hand them to (no company by that domain, no owner, or the saver owns it), so the
-     * caller saves them as usual.
+     * caller saves them as usual. A company whose owner is read from its people (OWN-2d) is claimed for
+     * them with the hand-over.
      */
     private async handToOwner(context: WorkspaceRunContext, input: PersonInput): Promise<PersonView | null> {
         const company = await this.ownership.companyForDomain(context, companyDomainOfAddress(input.emails?.primary));
@@ -372,6 +394,7 @@ export class PeopleService implements BulkRecords {
             me,
             owner,
             async (tx, wide) => {
+                if (company.unclaimed) await this.ownership.claim(tx, wide, company.companyId, owner);
                 const created = await tx.person.create({
                     data: {
                         ...compact(fields({ ...rest, companyId: company.companyId })),

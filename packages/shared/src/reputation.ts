@@ -44,6 +44,8 @@ export interface ReputationSettings {
     replyRateFloorBps: number;
     replyRateMinSends: number;
     replyRateWindowDays: number;
+    /** REP-2 (#362): only sends at least this many hours old are judged: a burst is not scored on mail no one has had time to answer. */
+    replyRateMaturityHours: number;
     /**
      * REP-2: the spam-rate kill switch, from Postmaster Tools' user-reported spam rate for a sending domain, in
      * basis points (30 = 0.3%, Google's line). At `spamPauseBps` every mailbox on the domain is paused for cold
@@ -64,6 +66,7 @@ export const REPUTATION_DEFAULTS: Readonly<ReputationSettings> = {
     replyRateFloorBps: 100,
     replyRateMinSends: 50,
     replyRateWindowDays: 7,
+    replyRateMaturityHours: 72,
     spamPauseBps: 30,
     spamWarnBps: 10,
 };
@@ -79,6 +82,7 @@ export const REPUTATION_LIMITS = {
     replyRateFloorBps: { min: 0, max: 10_000 },
     replyRateMinSends: { min: 1, max: 10_000 },
     replyRateWindowDays: { min: 1, max: 90 },
+    replyRateMaturityHours: { min: 0, max: 720 },
     spamPauseBps: { min: 1, max: 10_000 },
     spamWarnBps: { min: 1, max: 10_000 },
 } as const satisfies Record<Exclude<keyof ReputationSettings, 'primaryDomain'>, { min: number; max: number }>;
