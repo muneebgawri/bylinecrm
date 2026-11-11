@@ -8,6 +8,7 @@ import {
 } from '@bylinecrm/shared';
 import { isFreeMailDomain } from '../enrichment/email-domain';
 import { DomainEvents } from '../events/domain-events.service';
+import { effectiveOwner, guardrailSettings, ownerlessMembers } from '../guardrails/guardrail-settings';
 import { companyDomain } from './company-domain';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -21,7 +22,8 @@ export interface DomainCompany {
     companyName: string;
     /**
      * Who owns it: the company's own owner, else (OWN-2d) the owner of the first person saved at it — the Bigin
-     * import set owners on people, not on their companies. Null for nobody's.
+     * import set owners on people, not on their companies. A member who has left, or a shared mailbox, owns
+     * nothing here, as for the guard (`ownerlessMembers`). Null for nobody's.
      */
     ownerId: string | null;
     ownerName: string | null;
@@ -355,11 +357,16 @@ export function primaryOf(emails: Emails | null | undefined): string | null {
  */
 async function resolved(tx: WorkspaceClient, company: CompanyOwnerRow): Promise<DomainCompany> {
     const base = { companyId: company.id, companyName: company.name, unclaimed: company.ownerId === null };
+    // A member who has left, or a shared mailbox, keeps nobody from a company: its leads are anyone's, as they are
+    // to the recipient guard. The row's owner is not changed; a company with none is still claimed by its next saver.
+    const ownerless = await ownerlessMembers(tx, await guardrailSettings(tx));
     if (company.ownerId !== null) {
-        return { ...base, ownerId: company.ownerId, ownerName: company.owner?.user.displayName ?? null };
+        return effectiveOwner(company.ownerId, ownerless) === null
+            ? { ...base, ownerId: null, ownerName: null }
+            : { ...base, ownerId: company.ownerId, ownerName: company.owner?.user.displayName ?? null };
     }
     const first = await tx.person.findFirst({
-        where: { companyId: company.id, deletedAt: null, ownerId: { not: null } },
+        where: { companyId: company.id, deletedAt: null, ownerId: { not: null, notIn: [...ownerless] } },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         select: { ownerId: true, owner: { select: { user: { select: { displayName: true } } } } },
     });
