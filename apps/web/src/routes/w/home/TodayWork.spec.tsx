@@ -135,7 +135,7 @@ describe('#360 the day’s work on the dashboard', { timeout: 40_000 }, () => {
             (r) => (r.method === 'PATCH' && r.url.endsWith('/tasks/t-1') ? json({ id: 't-1' }) : undefined),
         ]);
         today(['record:read', 'task:write']);
-        await userEvent.click(await screen.findByRole('button', { name: 'Complete “Send the deck”' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Done: Send the deck' }));
         await waitFor(() => expect(seen.find((r) => r.method === 'PATCH')?.body).toEqual({ status: 'done' }));
         await waitFor(() => expect(screen.queryByText('Send the deck')).toBeNull());
         const notice = toasts.all().find((t) => t.title === 'Done: Send the deck');
@@ -246,7 +246,7 @@ describe('#360 the day’s work on the dashboard', { timeout: 40_000 }, () => {
         today(['record:read']);
         expect(await screen.findByRole('button', { name: 'Email Pat Prospect' })).toBeDisabled();
         expect(screen.queryByRole('button', { name: /Set next follow-up/ })).toBeNull();
-        expect(screen.queryByRole('button', { name: /^Complete/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /^Done:/ })).toBeNull();
         expect(screen.queryByRole('combobox', { name: 'Whose day' })).toBeNull();
     });
 

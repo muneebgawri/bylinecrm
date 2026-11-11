@@ -615,7 +615,7 @@ function TaskRow({ task, context }: { task: MyTaskView; context: RowContext }) {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        aria-label={`Snooze “${task.title}”`}
+                                        aria-label={`Snooze: ${task.title}`}
                                         disabled={update.isPending}
                                     >
                                         <AlarmClock />
@@ -643,7 +643,7 @@ function TaskRow({ task, context }: { task: MyTaskView; context: RowContext }) {
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                aria-label={`Complete “${task.title}”`}
+                                aria-label={`Done: ${task.title}`}
                                 disabled={update.isPending}
                                 onClick={() => change({ status: 'done' }, `Done: ${task.title}`)}
                             >
