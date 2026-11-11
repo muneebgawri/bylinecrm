@@ -218,6 +218,21 @@ export class ListRecordSendsQueryDto extends createZodDto(
 ) {}
 
 /**
+ * `GET /mail/cc-suggestions?personIds=` — the To recipients that are people, whose colleagues are suggested as Cc.
+ * As many as a send takes (to, cc and bcc together), so a composer's whole To line is one request.
+ */
+export class CcSuggestionsQueryDto extends createZodDto(
+    z.object({
+        personIds: z
+            .string()
+            .min(1)
+            .transform((raw) => [...new Set(raw.split(',').map((part) => part.trim()))])
+            .pipe(z.array(z.uuid()).min(1).max(MAIL_SEND_RECIPIENTS_MAX))
+            .meta({ description: 'Comma-separated person ids: the To recipients that are people in the CRM.' }),
+    }),
+) {}
+
+/**
  * A draft's recipient: as a send's, and for a person the name the composer showed — kept so a restored draft
  * names them without a lookup; never sent.
  */
