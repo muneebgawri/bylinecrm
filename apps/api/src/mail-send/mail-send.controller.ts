@@ -3,15 +3,25 @@ import { ApiTags } from '@nestjs/swagger';
 import { Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
 import { parseTarget } from '../records/targets';
-import { ListRecordSendsQueryDto, ListScheduledQueryDto, PreviewMailDto, RescheduleMailDto, SendMailDto } from './dto';
+import {
+    CcSuggestionsQueryDto,
+    ListRecordSendsQueryDto,
+    ListScheduledQueryDto,
+    PreviewMailDto,
+    RescheduleMailDto,
+    SendMailDto,
+} from './dto';
 import type { ComposedEmail } from '../templates/render/compose';
 import { renderedEmail } from '../templates/responses';
+import { CcSuggestionsService } from './cc-suggestions.service';
 import { MailSendService } from './mail-send.service';
 import {
+    mailCcSuggestions,
     mailOutboundView,
     mailRecordSendsPage,
     mailScheduledPage,
     mailSendAccepted,
+    type MailCcSuggestions,
     type MailOutboundView,
     type MailRecordSendsPage,
     type MailScheduledPage,
@@ -22,7 +32,23 @@ import {
 @ApiTags('mail')
 @TenantController('mail')
 export class MailSendController {
-    constructor(private readonly send: MailSendService) {}
+    constructor(
+        private readonly send: MailSendService,
+        private readonly ccSuggestions: CcSuggestionsService,
+    ) {}
+
+    /**
+     * Who else to Cc: the To recipients' colleagues — the other live people at their companies, within the caller's
+     * record scope, with an address, whom a send would accept (the suppression list and the recipient guard, asked
+     * without an audit). Grouped by company in the To line's order, most recently contacted first; empty for a
+     * recipient with no company. An offer the composer shows as chips: nobody is added by being listed.
+     */
+    @Requires('record:read')
+    @Get('cc-suggestions')
+    @Returns(mailCcSuggestions)
+    suggestCc(@Query() query: CcSuggestionsQueryDto): Promise<MailCcSuggestions> {
+        return this.ccSuggestions.suggest(query.personIds);
+    }
 
     /**
      * Builds the message, checks it (an empty variable, an outreach template, a pool or someone

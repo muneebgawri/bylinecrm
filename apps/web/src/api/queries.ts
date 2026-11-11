@@ -132,6 +132,9 @@ export const keys = {
     mailRecordSends: (workspaceId: string, target: RecordTarget) =>
         ['w', workspaceId, 'mail', 'record-sends', target.type, target.id] as const,
     mailThread: (workspaceId: string, threadId: string) => ['w', workspaceId, 'mail', 'threads', threadId] as const,
+    /** The composer's suggested Cc for these To recipients (people), in order. */
+    mailCcSuggestions: (workspaceId: string, personIds: readonly string[]) =>
+        ['w', workspaceId, 'mail', 'cc-suggestions', personIds.join(',')] as const,
     /** The caller's composer drafts: every record's, and one record's (`mailDrafts(…, target)`). */
     mailDraftsAll: (workspaceId: string) => ['w', workspaceId, 'mail', 'drafts'] as const,
     mailDrafts: (workspaceId: string, target: RecordTarget) =>
