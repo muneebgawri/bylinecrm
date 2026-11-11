@@ -210,6 +210,10 @@ describe('records', () => {
             expect((adminFound.body as Page<Person>).items.map((p) => p.id)).not.toContain(
                 (elsewhere.body as Person).id,
             );
+            // The other workspace is left as it was: a later test reads its people list as empty.
+            await as(other)
+                .delete(`/api/w/${otherWorkspace}/people/${(elsewhere.body as Person).id}`)
+                .expect(204);
         });
 
         it("another owner's record answers 404, not 403, to every verb", async () => {
