@@ -1,0 +1,254 @@
+import 'reflect-metadata';
+import type { INestApplicationContext } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import type { EventActor } from '@bylinecrm/shared';
+import { AppModule } from '../app.module';
+import { PrismaService } from '../infra/prisma.service';
+import { RlsPrismaService } from '../infra/rls-prisma.service';
+import { StageMoveService } from '../pipelines/stage-move.service';
+
+const USAGE =
+    'usage: node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--months <n>] [--chunk <n>]';
+
+/** Idle for this long and an imported deal is closed: the backlog cut-off the team agreed (2026-11-11). */
+export const DEFAULT_IDLE_MONTHS = 12;
+
+/**
+ * Deals closed per transaction: each close is an update, a history row and an event, well inside the 15-second
+ * transaction limit (`TRANSACTION_TIMEOUT_MS`). A chunk that fails leaves the ones before it committed; a rerun
+ * continues from the deals still open.
+ */
+export const DEFAULT_CHUNK = 20;
+
+/** The picklist reason the close records: nobody answered in a year. */
+export const STALE_LOST_REASON_CODE = 'no_response' as const;
+
+/** The free text beside it, naming the clean-up so a member reading the deal knows no one chose this by hand. */
+export function staleLostReason(months: number): string {
+    return `No activity for ${months} months: closed by the stale-deal clean-up`;
+}
+
+/**
+ * The timeline entries that are activity on a deal or its contact — something a person did or said: mail either
+ * way (synced, or carried over from Bigin as `external.email`), notes, tasks, calls, meetings, and what NewswireOS
+ * reported (an order, a distribution). The rest of the timeline is bookkeeping — `opportunity.updated` and
+ * `person.updated` from an import or a recount, stage rows an import wrote, owner fills — and the Bigin backlog
+ * has a fresh one of those on every deal, so counting them would make nothing idle.
+ */
+export const ACTIVITY_KIND_PATTERNS: readonly string[] = [
+    'linked-email.%',
+    'external.email%',
+    'linked-note.%',
+    'linked-task.%',
+    'linked-call.%',
+    'linked-meeting.%',
+    'external.newswireos_%',
+];
+
+export interface CloseStaleOptions {
+    /** Write: without it, nothing changes and the counts say what `--apply` would do. */
+    apply: boolean;
+    /** Idle for at least this many whole months; `DEFAULT_IDLE_MONTHS` when absent. */
+    months?: number | undefined;
+    /** Deals closed per transaction; `DEFAULT_CHUNK` when absent. */
+    chunk?: number | undefined;
+    onProgress?: (line: string) => void;
+}
+
+export interface CloseStaleReport {
+    /** Open imported deals idle past the cut-off: the deals closed (or that would be). */
+    stale: number;
+    /** Of those, closed as lost. */
+    closed: number;
+    /** Of those, left open: their pipeline has no lost stage, or another writer closed or trashed them first. */
+    skipped: number;
+}
+
+/** The clean-up acts for the workspace, not for a member: the history and timeline say the system did it. */
+const SYSTEM: EventActor = { kind: 'system', id: null };
+
+/**
+ * The open Bigin-imported deals whose last activity is older than `months` — the latest of: the deal's creation
+ * (restored from the Bigin export), Bigin's own modified time (`external_updated_at`), a stage change someone made
+ * (not an import's placement, not a stage delete's sweep), and the newest activity entry (`ACTIVITY_KIND_PATTERNS`)
+ * on the deal or on its contact. A date in the future (a synced message with a bad header) counts as now.
+ * One set-based read, ordered by id, so the estimate and the apply read the same deals.
+ */
+export async function findStaleDeals(owner: PrismaService, workspaceId: string, months: number): Promise<string[]> {
+    const rows = await owner.$queryRaw<{ id: string }[]>`
+        WITH d AS (
+            SELECT o.id, o.point_of_contact_id, o.created_at, l.external_updated_at
+            FROM opportunities o
+            JOIN bigin_import_links l
+              ON l.workspace_id = o.workspace_id AND l.local_type = 'opportunity' AND l.local_id = o.id
+            WHERE o.workspace_id = ${workspaceId}::uuid AND o.deleted_at IS NULL AND o.closed_at IS NULL),
+        sh AS (
+            SELECT opportunity_id, max(entered_at) AS at
+            FROM opportunity_stage_history
+            WHERE workspace_id = ${workspaceId}::uuid AND reason NOT IN ('import', 'stage_deleted')
+            GROUP BY 1),
+        ta AS (
+            SELECT target_type, target_id, max(least(happened_at, now())) AS at
+            FROM timeline_activities
+            WHERE workspace_id = ${workspaceId}::uuid AND target_type IN ('opportunity', 'person')
+              AND kind LIKE ANY (${ACTIVITY_KIND_PATTERNS}::text[])
+            GROUP BY 1, 2)
+        SELECT d.id::text AS id
+        FROM d
+        LEFT JOIN sh ON sh.opportunity_id = d.id
+        LEFT JOIN ta t1 ON t1.target_type = 'opportunity' AND t1.target_id = d.id
+        LEFT JOIN ta t2 ON t2.target_type = 'person' AND t2.target_id = d.point_of_contact_id
+        WHERE greatest(d.created_at, d.external_updated_at, sh.at, t1.at, t2.at) < now() - make_interval(months => ${months}::int)
+        ORDER BY d.id`;
+    return rows.map((r) => r.id);
+}
+
+/**
+ * Closes every stale imported deal (`findStaleDeals`) as lost — `STALE_LOST_REASON_CODE`, the free text naming the
+ * clean-up — in its pipeline's lost stage, through the one stage writer (`StageMoveService.move`), `chunk` deals a
+ * transaction, each close on the deal's history and timeline as the system's, its `deal.lost` kept internal: the
+ * derived contact statuses and cadences follow it, webhooks never see it. Re-running changes nothing once done.
+ * Counts only: no record is named.
+ */
+export async function closeStaleDeals(
+    app: INestApplicationContext,
+    workspaceId: string,
+    options: CloseStaleOptions,
+): Promise<CloseStaleReport> {
+    const owner = app.get(PrismaService);
+    const rls = app.get(RlsPrismaService);
+    const moves = app.get(StageMoveService);
+    const progress = options.onProgress ?? (() => undefined);
+    const months = options.months ?? DEFAULT_IDLE_MONTHS;
+    const chunk = options.chunk ?? DEFAULT_CHUNK;
+    if (!Number.isInteger(months) || months < 1) throw new Error('months must be a whole number, 1 or more');
+    if (!Number.isInteger(chunk) || chunk < 1) throw new Error('chunk must be a whole number of deals, 1 or more');
+
+    const stale = await findStaleDeals(owner, workspaceId, months);
+    const report: CloseStaleReport = { stale: stale.length, closed: 0, skipped: 0 };
+    if (!options.apply) return report;
+
+    const close = { lostReason: staleLostReason(months), lostReasonCode: STALE_LOST_REASON_CODE };
+    /** The lost stage of each pipeline met, by pipeline id (`null`: it has none). */
+    const lostStages = new Map<string, string | null>();
+    for (let at = 0; at < stale.length; at += chunk) {
+        const ids = stale.slice(at, at + chunk);
+        const done = await rls.withWorkspace(workspaceId, async (tx) => {
+            const deals = await tx.opportunity.findMany({
+                where: { id: { in: ids }, deletedAt: null, closedAt: null },
+                select: { id: true, workspaceId: true, pipelineId: true, stageId: true },
+            });
+            let closed = 0;
+            for (const deal of deals) {
+                let lost = lostStages.get(deal.pipelineId);
+                if (lost === undefined) {
+                    const stage = await tx.pipelineStage.findFirst({
+                        where: { pipelineId: deal.pipelineId, kind: 'lost' },
+                        orderBy: { position: 'asc' },
+                        select: { id: true },
+                    });
+                    lost = stage?.id ?? null;
+                    lostStages.set(deal.pipelineId, lost);
+                }
+                if (lost === null) continue;
+                const outcome = await moves.move(tx, deal, lost, SYSTEM, {
+                    reason: 'rule',
+                    allowBackward: true,
+                    close,
+                });
+                if (outcome.outcome !== 'moved') continue;
+                await moves.announce(tx, workspaceId, deal.id, SYSTEM, outcome, { internal: true });
+                closed += 1;
+            }
+            return closed;
+        });
+        report.closed += done;
+        report.skipped += ids.length - done;
+        if ((at / chunk) % 50 === 0 || at + chunk >= stale.length) {
+            progress(`… ${report.closed} of ${report.stale} closed, ${report.skipped} skipped`);
+        }
+    }
+    return report;
+}
+
+/** The flags of a run, or `null` when they do not read. */
+export function parseArgs(args: readonly string[]): { slug: string; options: CloseStaleOptions } | null {
+    const [slug, ...flags] = args;
+    if (!slug || slug.startsWith('--')) return null;
+    const options: CloseStaleOptions = { apply: false };
+    let mode: 'estimate' | 'apply' | undefined;
+    for (let i = 0; i < flags.length; i++) {
+        const flag = flags[i];
+        if (flag === '--estimate' || flag === '--apply') {
+            if (mode) return null;
+            mode = flag === '--apply' ? 'apply' : 'estimate';
+            options.apply = mode === 'apply';
+        } else if (flag === '--months' || flag === '--chunk') {
+            const n = Number(flags[++i]);
+            if (!Number.isInteger(n) || n < 1) return null;
+            if (flag === '--months') options.months = n;
+            else options.chunk = n;
+        } else {
+            return null;
+        }
+    }
+    return mode ? { slug, options } : null;
+}
+
+/**
+ * `node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--months <n>] [--chunk <n>]` — run on the
+ * server in its own container (a `docker compose run`, so a deploy cannot stop it), after a backup, when the outbox
+ * is quiet: every close is a `deal.lost` the relay then delivers (timeline, contact status, cadence). The Bigin
+ * backlog: a hundred thousand open deals nobody has touched since the migration, most of them silent for a year or
+ * more. `--estimate` changes nothing and prints what `--apply` would close; `--months` is the cut-off
+ * (`DEFAULT_IDLE_MONTHS`); `--chunk` the deals closed per transaction (`DEFAULT_CHUNK`). A run that stops partway is
+ * rerun as it was: it continues from the deals still open.
+ */
+async function main(): Promise<void> {
+    const parsed = parseArgs(process.argv.slice(2));
+    if (!parsed) throw new Error(USAGE);
+    // A one-off process: no worker, relay or schedule of its own — the running API delivers what it records.
+    for (const flag of [
+        'WEBHOOK_WORKER',
+        'MAIL_SYNC_WORKER',
+        'MAIL_SEND_WORKER',
+        'SEQUENCE_WORKER',
+        'CALENDAR_SYNC_WORKER',
+        'NOTIFICATIONS_WORKER',
+        'TWENTY_IMPORT_WORKER',
+        'ENRICHMENT_WORKER',
+        'OUTBOX_RELAY',
+        'TRANSACTIONAL_MAIL_RELAY',
+    ]) {
+        process.env[flag] = '0';
+    }
+    const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+    try {
+        const workspace = await app
+            .get(PrismaService)
+            .workspace.findUnique({ where: { slug: parsed.slug }, select: { id: true } });
+        if (!workspace) throw new Error(`no workspace ${parsed.slug}`);
+        const months = parsed.options.months ?? DEFAULT_IDLE_MONTHS;
+        const report = await closeStaleDeals(app, workspace.id, {
+            ...parsed.options,
+            onProgress: (line) => console.error(line),
+        });
+        if (parsed.options.apply) {
+            console.log(
+                `closed: ${report.closed} of ${report.stale} imported deals idle ${months}+ months as lost (${report.skipped} skipped: no lost stage, or closed meanwhile)`,
+            );
+        } else {
+            console.log(`would close: ${report.stale} imported deals idle ${months}+ months as lost`);
+            console.log('estimate: nothing changed; add --apply to do it');
+        }
+    } finally {
+        await app.close();
+    }
+}
+
+if (require.main === module) {
+    main().catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : error);
+        process.exitCode = 1;
+    });
+}
