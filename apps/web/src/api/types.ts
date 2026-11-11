@@ -266,6 +266,8 @@ export type MailSendAcceptedView = Schemas['MailSendAccepted'];
 export type MailOutboundView = Schemas['MailOutbound'];
 export type MailOutboundStatus = MailOutboundView['status'];
 export type MailRecordSendsPage = Schemas['MailRecordSendsPage'];
+/** Who else to Cc: the To recipients' colleagues, by company — an offer the composer shows as chips. */
+export type MailCcSuggestionsView = Schemas['MailCcSuggestions'];
 export type RescheduleMailInput = Loose<Schemas['RescheduleMailDto']>;
 /** A composer draft (the caller's own) and what it holds: the composer's state, unfinished as it may be. */
 export type MailDraftView = Schemas['MailDraft'];
