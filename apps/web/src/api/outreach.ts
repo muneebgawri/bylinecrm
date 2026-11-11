@@ -4,7 +4,9 @@ import { workspacePath } from './endpoints';
 import { keys } from './queries';
 import type {
     EmailVerificationSettingsView,
+    PatchTrackingPolicyInput,
     PutTrackingDomainInput,
+    TrackingPolicyView,
     PutVerificationSettingsInput,
     TrackingSettingsView,
     RegionPolicyChangeView,
@@ -110,5 +112,30 @@ export function useRemoveTrackingDomain(workspaceId: string) {
     return useMutation({
         mutationFn: () => trackingSettings.remove(workspaceId),
         onSuccess: () => client.invalidateQueries({ queryKey: keys.trackingSettings(workspaceId) }),
+    });
+}
+
+// ---- Tracking policy (TRACK-2) -----------------------------------------------------------------
+
+export const trackingPolicy = {
+    get: (workspaceId: string, signal?: AbortSignal) =>
+        request<TrackingPolicyView>('GET', workspacePath(workspaceId, '/tracking/policy'), { signal }),
+    update: (workspaceId: string, input: PatchTrackingPolicyInput) =>
+        request<TrackingPolicyView>('PATCH', workspacePath(workspaceId, '/tracking/policy'), { body: input }),
+};
+
+/** How the workspace tracks its mail; `enabled: false` for a member who may not read it (no outreach rights). */
+export const useTrackingPolicy = (workspaceId: string, enabled = true) =>
+    useQuery({
+        queryKey: keys.trackingPolicy(workspaceId),
+        queryFn: ({ signal }) => trackingPolicy.get(workspaceId, signal),
+        enabled,
+    });
+
+export function useUpdateTrackingPolicy(workspaceId: string) {
+    const client = useQueryClient();
+    return useMutation({
+        mutationFn: (input: PatchTrackingPolicyInput) => trackingPolicy.update(workspaceId, input),
+        onSuccess: (data) => client.setQueryData(keys.trackingPolicy(workspaceId), data),
     });
 }

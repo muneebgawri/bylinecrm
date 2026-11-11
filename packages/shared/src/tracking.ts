@@ -68,3 +68,33 @@ export interface EmailTrackingPayload {
     /** True for an open: the event says a client fetched the image, not that a person read the mail. */
     indicative: boolean;
 }
+
+/** TRACK-2: who tracks opens and clicks: our own short links and pixel, or SMTP2Go's tracking. */
+export const TRACKING_PROVIDERS = ['builtin', 'smtp2go'] as const;
+export type TrackingProvider = (typeof TRACKING_PROVIDERS)[number];
+
+/** TRACK-2: how the workspace tracks its mail (`GET /tracking/policy`); an admin changes it. */
+export interface TrackingPolicyView {
+    provider: TrackingProvider;
+    trackOpens: boolean;
+    trackClicks: boolean;
+    /** Whether an email written in the CRM is tracked unless its writer turns it off. */
+    trackPersonalMail: boolean;
+    /** Whether a member hears of a CRM contact's reply to an email they sent straight from Gmail. */
+    gmailReplyNotices: boolean;
+    smtp2go: {
+        /** An API key is set (it is never shown). */
+        keySet: boolean;
+        /** Where SMTP2Go's webhook for CRM-written mail posts to. */
+        hookUrl: string;
+        /** The `Authorization` header SMTP2Go must send; null until a key is set. */
+        hookAuthorization: string | null;
+        lastHookAt: string | null;
+        lastHookResult: string | null;
+    };
+    /**
+     * Personal mailboxes whose grant cannot keep a copy in Gmail's Sent: with SMTP2Go chosen, their CRM-written mail
+     * still goes through Gmail (tracked by our own links) until they are connected again.
+     */
+    mailboxesWithoutCopy: { id: string; email: string }[];
+}
