@@ -15,11 +15,14 @@ import {
     SelectValue,
     toast,
 } from '@bylinecrm/ui';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useCreateDeal } from '../../../api/deals';
-import { useRecordList } from '../../../api/records';
-import type { CompanyView, PipelineView } from '../../../api/types';
+import { keys } from '../../../api/queries';
+import { people } from '../../../api/records';
+import type { PipelineView } from '../../../api/types';
+import { RecordPicker } from '../../../components/RecordPicker';
 import { parseMoneyInput } from '../../../lib/money';
 import { fieldTitle } from '../records/fields';
 
@@ -30,15 +33,30 @@ export interface NewDealDialogProps {
     onOpenChange: (open: boolean) => void;
     /** The workspace's currency for an amount typed without one. */
     currency: string;
+    /** Filled in when the dialog opens from a record (a person's "New deal"): the contact, and their company. */
+    contact?: Linked | null | undefined;
+    company?: Linked | null | undefined;
 }
 
-/** How long typing pauses before the company search asks the API. */
-const SEARCH_DEBOUNCE_MS = 250;
-/** How many companies the picker suggests. */
-const COMPANY_SUGGESTIONS = 8;
+/** A record the deal links to, by id and name. */
+interface Linked {
+    id: string;
+    name: string;
+}
 
-/** "+ New deal": name, company (searched), amount, close date, starting stage (first open stage by default). */
-export function NewDealDialog({ workspaceId, pipeline, open, onOpenChange, currency }: NewDealDialogProps) {
+/**
+ * "+ New deal": name, contact, company, amount, close date, starting stage (first open stage by default). Picking a
+ * contact fills in their company; both are found with the one record picker.
+ */
+export function NewDealDialog({
+    workspaceId,
+    pipeline,
+    open,
+    onOpenChange,
+    currency,
+    contact,
+    company,
+}: NewDealDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -47,6 +65,8 @@ export function NewDealDialog({ workspaceId, pipeline, open, onOpenChange, curre
                         workspaceId={workspaceId}
                         pipeline={pipeline}
                         currency={currency}
+                        initialContact={contact ?? null}
+                        initialCompany={company ?? null}
                         onDone={() => onOpenChange(false)}
                     />
                 )}
@@ -59,11 +79,15 @@ function NewDealForm({
     workspaceId,
     pipeline,
     currency,
+    initialContact,
+    initialCompany,
     onDone,
 }: {
     workspaceId: string;
     pipeline: PipelineView;
     currency: string;
+    initialContact: Linked | null;
+    initialCompany: Linked | null;
     onDone: () => void;
 }) {
     const openStages = useMemo(() => pipeline.stages.filter((s) => s.kind === 'open'), [pipeline.stages]);
@@ -71,22 +95,26 @@ function NewDealForm({
     const [stageId, setStageId] = useState(openStages[0]?.id ?? '');
     const [amountText, setAmountText] = useState('');
     const [closeDate, setCloseDate] = useState('');
-    const [companyText, setCompanyText] = useState('');
-    const [company, setCompany] = useState<CompanyView | null>(null);
-    const [debounced, setDebounced] = useState('');
+    const [contact, setContact] = useState<Linked | null>(initialContact);
+    const [company, setCompany] = useState<Linked | null>(initialCompany);
+    /** The contact last picked: their company fills the company field when the person has loaded, unless another was picked since. */
+    const latestContact = useRef<string | null>(initialContact?.id ?? null);
+    const client = useQueryClient();
+    const pickContact = (id: string, name: string) => {
+        setContact({ id, name });
+        latestContact.current = id;
+        void client
+            .fetchQuery({
+                queryKey: keys.record(workspaceId, 'person', id),
+                queryFn: ({ signal }) => people.get(workspaceId, id, signal),
+            })
+            .then((person) => {
+                if (latestContact.current === id && person.company) setCompany({ ...person.company });
+            })
+            .catch(() => undefined);
+    };
     const [errors, setErrors] = useState<Record<string, string>>({});
     const create = useCreateDeal(workspaceId);
-    const search = useRecordList(
-        workspaceId,
-        'company',
-        { q: debounced, limit: COMPANY_SUGGESTIONS },
-        debounced.length > 0,
-    );
-
-    useEffect(() => {
-        const handle = setTimeout(() => setDebounced(company ? '' : companyText.trim()), SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(handle);
-    }, [companyText, company]);
 
     function submit(event: FormEvent) {
         event.preventDefault();
@@ -108,6 +136,7 @@ function NewDealForm({
                 amount,
                 closeDate: closeDate || null,
                 companyId: company?.id ?? null,
+                pointOfContactId: contact?.id ?? null,
             },
             {
                 onSuccess: (deal) => {
@@ -133,8 +162,6 @@ function NewDealForm({
         );
     }
 
-    const suggestions = company ? [] : (search.data?.items ?? []);
-
     return (
         <form onSubmit={submit} noValidate className="contents">
             <DialogTitle>New deal</DialogTitle>
@@ -143,45 +170,38 @@ function NewDealForm({
                 <Field label="Name" required error={errors.name}>
                     <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
                 </Field>
-                <Field
-                    label="Company"
-                    required
-                    error={errors.companyId}
-                    hint={company ? `Linked to ${company.name}` : 'Type to search by name or domain'}
-                >
-                    <Input
-                        value={company ? company.name : companyText}
-                        onChange={(e) => {
-                            setCompany(null);
-                            setCompanyText(e.target.value);
+                <Field label="Contact" error={errors.pointOfContactId} hint="Their company fills in below">
+                    <RecordPicker
+                        workspaceId={workspaceId}
+                        object="person"
+                        label="Contact"
+                        clearLabel="No contact"
+                        placeholder="Search people"
+                        value={contact?.id ?? null}
+                        valueLabel={contact?.name}
+                        onChange={(id) => {
+                            if (!id) {
+                                setContact(null);
+                                latestContact.current = null;
+                            }
                         }}
-                        role="combobox"
-                        aria-expanded={suggestions.length > 0}
-                        aria-autocomplete="list"
-                        aria-controls="new-deal-company-options"
+                        onResolved={pickContact}
                     />
                 </Field>
-                {suggestions.length > 0 && (
-                    <ul
-                        id="new-deal-company-options"
-                        role="listbox"
-                        aria-label="Companies"
-                        className="-mt-3 max-h-40 overflow-auto rounded-md border border-border bg-surface-raised py-1 text-sm"
-                    >
-                        {suggestions.map((c) => (
-                            <li key={c.id} role="option" aria-selected={false}>
-                                <button
-                                    type="button"
-                                    className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-surface"
-                                    onClick={() => setCompany(c)}
-                                >
-                                    <span>{c.name}</span>
-                                    {c.domain && <span className="text-xs text-text-faint">{c.domain}</span>}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                <Field label="Company" required error={errors.companyId}>
+                    <RecordPicker
+                        workspaceId={workspaceId}
+                        object="company"
+                        label="Company"
+                        placeholder="Search by name or domain"
+                        value={company?.id ?? null}
+                        valueLabel={company?.name}
+                        onChange={(id) => {
+                            if (!id) setCompany(null);
+                        }}
+                        onResolved={(id, title) => setCompany({ id, name: title })}
+                    />
+                </Field>
                 <div className="grid grid-cols-2 gap-4">
                     <Field label={`Amount (${currency})`} error={errors.amount}>
                         <Input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />

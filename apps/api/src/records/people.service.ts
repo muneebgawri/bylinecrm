@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { Actor, DomainEvent, Emails, FilterGroup, Links, Phones } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
@@ -20,9 +20,11 @@ import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
 import { recordWhere, resolveOwner } from './record-scope';
 import { assertCompanyExists, assertOwnerIsMember, compact, stored } from './references';
-import { type AddressCheckView, type PersonView } from './responses';
+import { OpportunitiesService } from './opportunities.service';
+import type { MoneyInput } from './references';
+import { type AddressCheckView, type PersonCreatedView, type PersonView } from './responses';
 import { COMPANY_SUMMARY_SELECT, companySummary, MEMBER_SUMMARY_SELECT, memberSummary } from './summaries';
-export type { PersonView } from './responses';
+export type { PersonCreatedView, PersonView } from './responses';
 
 export interface PersonInput {
     nameFirst?: string | undefined;
@@ -47,6 +49,17 @@ export interface PersonInput {
     /** Only on create (#353): a new company, made with the person in one transaction. Never with `companyId`. */
     company?: { name: string } | undefined;
 }
+
+/** A deal made with a new person (`POST /people` `withDeal`): where it starts, and its name and amount. */
+export interface DealWithPerson {
+    name?: string | undefined;
+    amount?: MoneyInput | null | undefined;
+    pipelineId?: string | undefined;
+    stageId?: string | undefined;
+}
+
+/** A deal's name the longest the API takes it. */
+const DEAL_NAME_MAX = 200;
 
 /** A record list request: paging, plus the filter, sort, view and search the planner resolves (P1-4). */
 export interface ListQuery {
@@ -97,6 +110,7 @@ export class PeopleService implements BulkRecords {
         private readonly transfers: TransfersService,
         private readonly rotation: RotationService,
         private readonly companies: CompaniesService,
+        private readonly opportunities: OpportunitiesService,
     ) {}
 
     /** Live people, or the trash when `deleted`; the page and its total read one `where`. */
@@ -138,8 +152,16 @@ export class PeopleService implements BulkRecords {
         return this.rls.withWorkspace(async (tx) => view(await find(tx, context, id)));
     }
 
-    async create(input: PersonInput): Promise<PersonView> {
+    /**
+     * A new person; with `withDeal`, a deal with them too, in the same transaction: a deal that cannot be made (no
+     * company, a closed stage, another member's company) leaves no person, and a person that cannot be saved no deal.
+     */
+    async create(input: PersonInput & { withDeal?: DealWithPerson | undefined }): Promise<PersonCreatedView> {
         const context = this.current();
+        const { withDeal, ...rest } = input;
+        input = rest;
+        // The deal is a deal write, as `POST /opportunities` is: the same capability, asked before anything is saved.
+        if (withDeal && !context.capabilities.has('deal:edit')) throw new ForbiddenException('requires deal:edit');
         // The request DTO refuses this too; callers inside the API get the same 400.
         if (input.company && input.companyId != null) {
             throw new ValidationFailed('name an existing company or a new one, not both', [
@@ -148,8 +170,9 @@ export class PeopleService implements BulkRecords {
         }
         if (input.handToOwner) {
             // Handed over, the person goes to the owner's company: a new company is never made for them.
+            // Handed over, the lead is the owner's to work: no deal is made for them.
             const handed = await this.handToOwner(context, input);
-            if (handed) return handed;
+            if (handed) return { ...handed, deal: null };
         }
         const { company, ...person } = input;
         // A new company whose domain a company already has is that company: the person joins it, never a twin.
@@ -173,9 +196,22 @@ export class PeopleService implements BulkRecords {
             }
             const created = await this.createIn(tx, context, person);
             await this.events.record(tx, created.event);
-            return created.row;
+            if (!withDeal) return { person: created.row, deal: null };
+            // The person's deal is with their company and theirs, as one made by hand from the person page.
+            const deal = await this.opportunities.createIn(tx, context, {
+                name: withDeal.name ?? dealNameFor(created.row),
+                amount: withDeal.amount,
+                pipelineId: withDeal.pipelineId,
+                stageId: withDeal.stageId,
+                pointOfContactId: created.row.id,
+                companyId: created.row.companyId,
+                ownerId: created.row.ownerId ?? undefined,
+            });
+            await this.events.record(tx, deal.event);
+            for (const e of deal.taskEvents) await this.events.record(tx, e);
+            return { person: created.row, deal: { id: deal.row.id, name: deal.row.name } };
         });
-        return view(row);
+        return { ...view(row.person), deal: row.deal };
     }
 
     /** Partial: a composite (`emails`, `phones`, `links`) is replaced whole; `custom` is merged key by key. */
@@ -418,6 +454,13 @@ export class PeopleService implements BulkRecords {
         if (!context) throw new Error('PeopleService is used inside a workspace scope');
         return context;
     }
+}
+
+/** A new lead's deal, unnamed by the saver: "<Company> — <Person>", or the one of the two there is. */
+export function dealNameFor(row: Pick<PersonRow, 'nameFirst' | 'nameLast' | 'emailPrimary' | 'company'>): string {
+    const person = `${row.nameFirst} ${row.nameLast}`.trim() || row.emailPrimary || '';
+    const name = [row.company?.name, person].filter(Boolean).join(' — ') || 'New deal';
+    return name.slice(0, DEAL_NAME_MAX);
 }
 
 /** The columns a caller may set, as they travel to Prisma; identity and bookkeeping are added by the service. */

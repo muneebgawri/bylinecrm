@@ -61,6 +61,8 @@ export type CreateInviteInput = Loose<Schemas['CreateInviteDto']>;
 
 // ---- Records (P1-1a/P1-1b/P1-3/P1-4a) -------------------------------------------------------
 export type PersonView = Schemas['Person'];
+/** `POST /people`'s answer: the person, and the deal made with them when `withDeal` asked for one. */
+export type PersonCreatedView = Schemas['PersonCreated'];
 export type CompanyView = Schemas['Company'];
 export type OpportunityView = Schemas['Opportunity'];
 export type NoteView = Schemas['Note'];
