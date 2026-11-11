@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { APP_DB_ROLE, SEARCH_DB_ROLE } from '@bylinecrm/shared';
+import { APP_DB_ROLE, OWNERSHIP_DB_ROLE, SEARCH_DB_ROLE } from '@bylinecrm/shared';
 import { describe, expect, it } from 'vitest';
 
 const MIGRATIONS = join(__dirname, '..', '..', 'prisma', 'migrations');
@@ -17,10 +17,10 @@ describe('migrations and the database roles', () => {
         .join('\n');
     const grants = sql.match(/\bTO\s+([a-z_][a-z0-9_]*)/g) ?? [];
 
-    it('grant privileges to the app role, and to the search role, and to nothing else', () => {
+    it('grant privileges to the app role, the search role and the ownership role, and to nothing else', () => {
         expect(grants.length).toBeGreaterThan(0);
         const roles = new Set(grants.map((g) => g.replace(/\bTO\s+/, '')));
-        expect([...roles].sort()).toEqual([APP_DB_ROLE, SEARCH_DB_ROLE].sort());
+        expect([...roles].sort()).toEqual([APP_DB_ROLE, SEARCH_DB_ROLE, OWNERSHIP_DB_ROLE].sort());
     });
 
     /**
@@ -37,6 +37,25 @@ describe('migrations and the database roles', () => {
                 `GRANT USAGE ON SCHEMA public TO ${SEARCH_DB_ROLE}`,
                 `GRANT SELECT ON "people", "person_addresses" TO ${SEARCH_DB_ROLE}`,
                 `ALTER FUNCTION people_search(text, text, text, text, boolean, int) OWNER TO ${SEARCH_DB_ROLE}`,
+            ]).toContain(statement);
+        }
+    });
+
+    /**
+     * The ownership role bypasses RLS (OWN-2d): it may update companies and read members, use the schema and own the
+     * claim function — never another table, never a delete. Any other grant to it fails here.
+     */
+    it('give the ownership role SELECT/UPDATE on companies, SELECT on workspace_members, schema USAGE and ownership of claim_company only', () => {
+        const toOwnership = [
+            ...sql.matchAll(new RegExp(`(GRANT|ALTER FUNCTION)\\s[^;]*?\\bTO\\s+${OWNERSHIP_DB_ROLE}\\b`, 'gi')),
+        ].map((m) => m[0].replace(/\s+/g, ' ').trim());
+        expect(toOwnership.length).toBeGreaterThan(0);
+        for (const statement of toOwnership) {
+            expect([
+                `GRANT USAGE ON SCHEMA public TO ${OWNERSHIP_DB_ROLE}`,
+                `GRANT SELECT, UPDATE ON "companies" TO ${OWNERSHIP_DB_ROLE}`,
+                `GRANT SELECT ON "workspace_members" TO ${OWNERSHIP_DB_ROLE}`,
+                `ALTER FUNCTION claim_company(uuid, uuid) OWNER TO ${OWNERSHIP_DB_ROLE}`,
             ]).toContain(statement);
         }
     });

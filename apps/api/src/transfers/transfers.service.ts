@@ -366,6 +366,42 @@ export class TransfersService {
         });
     }
 
+    /**
+     * OWN-2d: a forced move of a person to their company's owner, for a job acting for the workspace (the
+     * `assign-company-owners.js` backfill: the import left a company's people with different owners). It is any
+     * forced transfer of a person — proposed and decided by the receiver, as an import's fill is — whose unit is
+     * the person and the open deals they are the contact of (the company is the receiver's already, so it and its
+     * other people stay put); `transfer.completed` and the records' `updated` events are written as for any move.
+     * `silent` leaves the bells alone: a run moving thousands says so in its report. Null when the person is gone
+     * or already the receiver's.
+     */
+    async reassign(
+        context: WorkspaceRunContext,
+        input: { personId: string; to: string; reason: string; silent?: boolean | undefined },
+    ): Promise<TransferView | null> {
+        return this.widened(context, async (tx) => {
+            const wide = widen(context);
+            const head = await findHead(tx, wide, 'person', input.personId);
+            if (!head || head.ownerId === input.to) return null;
+            const row = await this.complete(tx, wide, {
+                create: {
+                    object: 'person',
+                    recordId: head.id,
+                    fromMemberId: head.ownerId,
+                    toMemberId: input.to,
+                    proposedByMemberId: input.to,
+                    decidedByMemberId: input.to,
+                    status: 'forced',
+                    reason: input.reason,
+                },
+                head,
+                me: input.to,
+                silent: input.silent,
+            });
+            return view(row, await labelsFor(tx, row));
+        });
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -382,6 +418,8 @@ export class TransfersService {
             me: string;
             /** The records to move, when not the object's usual unit (the rotation's). */
             unit?: { targets: RecordTarget[]; identity: TransferEventPayload['identity'] };
+            /** No bells (a backfill's move): the transfer, its events and the records' moves are written as ever. */
+            silent?: boolean | undefined;
         },
     ): Promise<Row> {
         const object = (input.create?.object ?? input.update!.object) as RecordObject;
@@ -406,7 +444,9 @@ export class TransfersService {
                   include: INCLUDE,
               });
         const updates = await this.widened(context, (w) => move(w, wide, moved, from, to));
-        if (row.status === 'forced') {
+        if (input.silent) {
+            // A backfill's move: its report says so; thousands of bells would say nothing.
+        } else if (row.status === 'forced') {
             await tell(tx, row, to, 'transfer_received');
             if (from && from !== input.me) await tell(tx, row, from, 'transfer_taken');
         } else if (row.proposedByMemberId !== input.me) {

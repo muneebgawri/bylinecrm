@@ -381,6 +381,7 @@ async function readFacts(
                 companyName: c.name,
                 ownerId: c.ownerId,
                 ownerName: c.owner?.user.displayName ?? null,
+                unclaimed: c.ownerId === null,
             }),
         ]),
     );
