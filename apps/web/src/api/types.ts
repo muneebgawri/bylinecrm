@@ -193,6 +193,11 @@ export type NewswireosOwnershipPreview = Schemas['NewswireosOwnershipPreview'];
 export type NewswireosDealWonPreview = Schemas['NewswireosDealWonPreview'];
 export type NewswireosDealWonDeliveryView = Schemas['NewswireosDealWonDelivery'];
 export type BylineSettingsView = Schemas['BylineSettings'];
+// CALL-1: calls with Quo.
+export type QuoSettingsView = Schemas['QuoSettings'];
+export type CallView = Schemas['Call'];
+export type LogCallInput = Loose<Schemas['LogCallDto']>;
+export type PatchCallInput = Loose<Schemas['PatchCallDto']>;
 export type PutBylineSettingsInput = Loose<Schemas['PutBylineSettingsDto']>;
 export type Smtp2GoMailboxView = Schemas['Smtp2GoMailbox'];
 export type Smtp2GoTestResult = Schemas['Smtp2GoTestResult'];

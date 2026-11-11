@@ -235,7 +235,12 @@ describe('#192 task notifications: the bell, due reminders and the daily digest'
         await notify.sendDigests(tomorrow);
         await deliverMail(app, () => tomorrow);
         expect(mailTo(anaEmail, 'task_digest')).toHaveLength(before + 1);
-        expect((await as(ana).get(w('/notification-settings')).expect(200)).body).toEqual({ taskDigest: false });
+        expect((await as(ana).get(w('/notification-settings')).expect(200)).body).toEqual({
+            taskDigest: false,
+            notifyEmailReplies: true,
+            notifyEmailClicks: true,
+            notifyEmailOpens: true,
+        });
     });
 
     it('lists my open tasks, soonest due first, each with what it is about; done ones and others’ are not mine', async () => {

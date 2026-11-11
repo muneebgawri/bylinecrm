@@ -35,6 +35,19 @@ const threadRoute =
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** An email the member sent to the person from the CRM. */
+const sentEmail = (over: Parameters<typeof message>[0] = {}) =>
+    message({
+        direction: 'outbound',
+        sentByCrm: true,
+        from: 'kate@example.com',
+        participants: [
+            { role: 'from', address: 'kate@example.com', displayName: 'Kate Morgan', personId: null, memberId: 'm-1' },
+            { role: 'to', address: PERSON.email, displayName: PERSON.name, personId: PERSON.id, memberId: null },
+        ],
+        ...over,
+    });
+
 describe('FR-CRMS-4: the thread view', () => {
     it('runs oldest to newest and frames a sanitised body in a sandbox that allows no script', async () => {
         view([
@@ -105,6 +118,68 @@ describe('FR-CRMS-4: the thread view', () => {
             personId: PERSON.id,
             replyToMessageId: 'msg-1',
         });
+    });
+
+    it('#350: schedules a follow-up on an email the CRM sent, three days on, unless they answer', async () => {
+        // In two of the member's mailboxes: it goes from the one that sent it, listed second here.
+        const sent = sentEmail({ mailboxIds: ['mb-2', 'mb-1'] });
+        const seen = view([
+            threadRoute(thread({ messages: [sent] })),
+            personRoute,
+            mailboxesRoute([mailbox({ id: 'mb-2', email: 'kate@other.example' }), mailbox()]),
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/mail/send')
+                    ? json(
+                          {
+                              messageId: 'out-2',
+                              status: 'scheduled',
+                              sendAt: '2026-12-01T09:00:00.000Z',
+                              senderTimeZone: null,
+                              recipientTimeZone: null,
+                              followUps: [],
+                          },
+                          202,
+                      )
+                    : undefined,
+        ]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Schedule follow-up' }));
+        expect(await screen.findByText(/unless they answer first/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+        await userEvent.type(await screen.findByRole('textbox', { name: 'Message' }), 'Any thoughts?');
+        await userEvent.click(screen.getByRole('button', { name: 'Schedule follow-up' }));
+        const panel = await screen.findByRole('dialog', { name: 'Schedule follow-up' });
+        await userEvent.click(within(panel).getByRole('button', { name: 'Schedule follow-up' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        const body = seen.find((r) => r.url.endsWith('/mail/send'))?.body as { sendAt: string };
+        expect(body).toMatchObject({
+            mailboxId: 'mb-1',
+            replyToMessageId: 'msg-1',
+            followUp: true,
+            personId: PERSON.id,
+        });
+        // Three days on, as a new follow-up row starts.
+        expect(Date.parse(body.sendAt) - Date.now()).toBeGreaterThan(2.9 * 24 * 60 * 60 * 1000);
+    });
+
+    it('#350: no follow-up on mail the CRM did not send, nor once they have answered', async () => {
+        view([threadRoute(thread({ messages: [sentEmail({ sentByCrm: false })] }))]);
+        expect(await screen.findByRole('button', { name: 'Reply' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Schedule follow-up' })).not.toBeInTheDocument();
+    });
+
+    it('#350: no follow-up once they have answered: the newest message is theirs', async () => {
+        view([
+            threadRoute(
+                thread({
+                    messages: [
+                        sentEmail({ sentAt: '2026-10-08T09:00:00.000Z' }),
+                        message({ id: 'msg-2', sentAt: '2026-10-09T09:00:00.000Z' }),
+                    ],
+                }),
+            ),
+        ]);
+        expect(await screen.findByRole('button', { name: 'Reply' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Schedule follow-up' })).not.toBeInTheDocument();
     });
 
     it('a reply drafted in this thread: “Continue reply” opens it, and sending names the draft', async () => {

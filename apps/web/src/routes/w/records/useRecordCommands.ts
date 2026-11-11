@@ -26,7 +26,9 @@ export function useRecordCommands(input: {
     next?: string | null | undefined;
 }) {
     const navigate = useNavigate();
-    const drawerOpen = new URLSearchParams(useLocation().search).has(OPEN_PARAM);
+    const location = useLocation();
+    const drawerOpen = new URLSearchParams(location.search).has(OPEN_PARAM);
+    const listState = location.state as unknown;
     const active = input.layout === 'drawer' || !drawerOpen;
     const ns = input.layout === 'drawer' ? 'drawer' : 'record';
 
@@ -42,8 +44,8 @@ export function useRecordCommands(input: {
         if (input.onOwner) add('owner', 'Change owner', 'o', input.onOwner);
         const prev = input.prev;
         const next = input.next;
-        if (prev) add('prev', 'Previous record', 'alt+[', () => navigate(prev));
-        if (next) add('next', 'Next record', 'alt+]', () => navigate(next));
+        if (prev) add('prev', 'Previous record', 'alt+[', () => navigate(prev, { state: listState }));
+        if (next) add('next', 'Next record', 'alt+]', () => navigate(next, { state: listState }));
         return list;
     }, [
         active,
@@ -57,6 +59,7 @@ export function useRecordCommands(input: {
         input.prev,
         input.next,
         navigate,
+        listState,
     ]);
     useRegisterCommands(commands, [commands]);
 }

@@ -95,8 +95,17 @@ export class CreatePersonDto extends createZodDto(
             ...personFields,
             /** OWN-2: the address's company is another member's — save the person for them instead. */
             handToOwner: z.boolean(),
+            /**
+             * #353: a new company, made with the person in one transaction (its domain is the primary address's).
+             * Instead of `companyId`, never with it.
+             */
+            company: z.object({ name: text(200).min(1) }),
         })
-        .partial(),
+        .partial()
+        .refine((body) => !(body.company && body.companyId != null), {
+            path: ['company'],
+            message: 'name an existing company (companyId) or a new one (company), not both',
+        }),
 ) {}
 /** `GET /people/address-check`: is this primary address free for a new person? */
 export class AddressCheckQueryDto extends createZodDto(z.object({ email: emailAddress })) {}
@@ -147,6 +156,7 @@ export class CreateCustomFieldDto extends createZodDto(
             options: customFieldOptions.optional(),
             required: z.boolean().optional(),
             adminOnly: z.boolean().optional(),
+            showOnCreate: z.boolean().optional(),
             position: position.optional(),
         })
         .superRefine((value, ctx) => {
@@ -161,6 +171,7 @@ export class UpdateCustomFieldDto extends createZodDto(
         options: customFieldOptions.optional(),
         required: z.boolean().optional(),
         adminOnly: z.boolean().optional(),
+        showOnCreate: z.boolean().optional(),
         position: position.optional(),
     }),
 ) {}
@@ -218,7 +229,8 @@ const richTextNode: z.ZodType<RichTextNode> = z.lazy(() =>
         })
         .passthrough(),
 );
-const richText = z.object({ type: z.literal('doc'), content: z.array(richTextNode).optional() });
+/** A rich-text document as the editors produce it; the notes' and (CALL-1) the Call panel's body. */
+export const richText = z.object({ type: z.literal('doc'), content: z.array(richTextNode).optional() });
 
 const noteFields = { title: text(300), body: richText, targets };
 export class CreateNoteDto extends createZodDto(z.object(noteFields).partial().required({ targets: true })) {}

@@ -1,10 +1,21 @@
 import { TRANSFER_REASON_CADENCE_ROTATION } from '@bylinecrm/shared';
 import { Button, Switch, Tabs, TabsList, TabsTrigger, cn, toneSoft, type Tone } from '@bylinecrm/ui';
-import { ArrowRightLeft, Bell, CalendarClock, Check, CircleDollarSign, ListTodo, ShieldAlert } from 'lucide-react';
+import {
+    ArrowRightLeft,
+    Bell,
+    CalendarClock,
+    Check,
+    CircleDollarSign,
+    ListTodo,
+    MailOpen,
+    MousePointerClick,
+    Reply,
+    ShieldAlert,
+} from 'lucide-react';
 import { useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useMarkNotificationsRead, useNotificationSettings, useUpdateNotificationSettings } from '../api/notifications';
-import type { NotificationsView } from '../api/types';
+import type { NotificationSettingsView, NotificationsView } from '../api/types';
 import { ResponsivePanel } from '../components/ResponsivePanel';
 import { formatDate, formatRelative } from '../lib/format';
 import { paths } from '../routes/paths';
@@ -25,11 +36,15 @@ const KIND_LABEL: Record<Item['kind'], string> = {
     invoice_needs_review: 'Invoice waiting for finance',
     invoice_coverage_lost: 'Refund: deal no longer paid in full',
     guardrail_poach_suspected: 'Another member’s lead mailed',
+    guardrail_off_crm_cold: 'Cold mail outside the CRM',
     cadence_warning: 'Follow-up overdue',
     cadence_rotated: 'Lead rotated',
     payment_needs_deal: 'Payment received: which deal?',
     payment_created_deal: 'Payment received: deal created',
     payment_unmatched: 'Payment from an unknown client',
+    email_replied: 'Reply to your email',
+    email_clicked: 'Link clicked',
+    email_opened: 'Email opened',
 };
 
 /** The tile each kind wears: an icon and a tone, so a glance tells a task from a payment. */
@@ -46,12 +61,29 @@ const KIND_LOOK: Record<Item['kind'], { icon: ReactNode; tone: Tone }> = {
     invoice_needs_review: { icon: <CircleDollarSign />, tone: 'warning' },
     invoice_coverage_lost: { icon: <CircleDollarSign />, tone: 'danger' },
     guardrail_poach_suspected: { icon: <ShieldAlert />, tone: 'danger' },
+    guardrail_off_crm_cold: { icon: <ShieldAlert />, tone: 'danger' },
     cadence_warning: { icon: <CalendarClock />, tone: 'warning' },
     cadence_rotated: { icon: <ArrowRightLeft />, tone: 'neutral' },
     payment_needs_deal: { icon: <CircleDollarSign />, tone: 'warning' },
     payment_created_deal: { icon: <CircleDollarSign />, tone: 'success' },
     payment_unmatched: { icon: <CircleDollarSign />, tone: 'danger' },
+    email_replied: { icon: <Reply />, tone: 'success' },
+    email_clicked: { icon: <MousePointerClick />, tone: 'accent' },
+    email_opened: { icon: <MailOpen />, tone: 'info' },
 };
+
+/** What a reply, click or open says: who did it. The subject goes under it. */
+function emailLine(item: Item): string {
+    const who = item.email!.personName ?? 'Someone';
+    switch (item.kind) {
+        case 'email_replied':
+            return `Reply from ${who}`;
+        case 'email_clicked':
+            return `${who} clicked a link`;
+        default:
+            return `${who} opened your email`;
+    }
+}
 
 /** What a transfer notification says under its label. */
 function transferLine(item: Item): string {
@@ -105,7 +137,7 @@ export function NotificationsPanel({
             open={open}
             onOpenChange={onOpenChange}
             widthClass="w-[min(24rem,calc(100vw-2rem))]"
-            footer={<DigestSetting workspaceId={workspaceId} />}
+            footer={<NotificationSettingsFooter workspaceId={workspaceId} />}
         >
             <div className="mb-2 flex items-center justify-between gap-2">
                 <Tabs value={tab} onValueChange={(v) => setTab(v as 'all' | 'unread')}>
@@ -178,7 +210,12 @@ export function NotificationsPanel({
 function guardrailLine(item: Item): string {
     const g = item.guardrail!;
     // GUARD-2: who, whom, when and the subject — the event's own words; never the body.
-    if (item.kind === 'guardrail_alert' || item.kind === 'guardrail_poach_suspected') return g.message;
+    if (
+        item.kind === 'guardrail_alert' ||
+        item.kind === 'guardrail_poach_suspected' ||
+        item.kind === 'guardrail_off_crm_cold'
+    )
+        return g.message;
     return `${g.actor?.name ?? 'A member'} was stopped ${g.count} times today from mailing others’ leads`;
 }
 
@@ -191,7 +228,9 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
             ? { type: 'opportunity' as const, id: item.invoice.opportunityId }
             : item.cadence
               ? { type: 'opportunity' as const, id: item.cadence.opportunityId }
-              : undefined;
+              : item.email?.personId
+                ? { type: 'person' as const, id: item.email.personId }
+                : undefined;
     const pay = item.payment;
     const title = item.task
         ? item.task.title
@@ -203,7 +242,9 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
               ? `${item.cadence.opportunityName} (${item.cadence.stageName}): touch it by ${formatDate(item.cadence.rotateAt)} or it rotates to the next rep`
               : pay
                 ? `${pay.clientName ?? 'A client'} paid ${pay.invoiceNumber}${pay.opportunityName ? ` · ${pay.opportunityName}` : ''}`
-                : guardrailLine(item);
+                : item.email
+                  ? emailLine(item)
+                  : guardrailLine(item);
     // INV-2: a payment on its deal opens the deal; one waiting for a deal opens the page to choose it.
     const to = target
         ? recordPath(workspaceId, target)
@@ -237,6 +278,12 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
                 {item.transfer?.reason && (
                     <span className="block truncate text-xs text-text-muted">{item.transfer.reason}</span>
                 )}
+                {item.email && (
+                    <span className="block truncate text-xs text-text-muted">
+                        {item.email.subject || '(no subject)'}
+                        {item.email.url && ` · ${item.email.url}`}
+                    </span>
+                )}
                 {targets.length > 0 && (
                     <span className="block truncate text-xs text-text-muted">
                         {targets.map((t) => t.label).join(', ')}
@@ -256,23 +303,38 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
     );
 }
 
-/** The daily email of tasks due or overdue (#192): on unless the member turns it off. */
-function DigestSetting({ workspaceId }: { workspaceId: string }) {
+type SettingKey = keyof NotificationSettingsView;
+
+/** The member's say (#192): the daily email of tasks due, and the bell for replies, clicks and opens of their sends. */
+const SETTINGS: readonly { key: SettingKey; label: string }[] = [
+    { key: 'taskDigest', label: 'Daily email of tasks due, each morning' },
+    { key: 'notifyEmailReplies', label: 'Replies to emails I send' },
+    { key: 'notifyEmailClicks', label: 'Links clicked in emails I send' },
+    { key: 'notifyEmailOpens', label: 'Emails I send opened (approximate: mail apps preload images)' },
+];
+
+/** Each on unless the member turns it off; a switch changes only its own setting. */
+function NotificationSettingsFooter({ workspaceId }: { workspaceId: string }) {
     const id = useId();
     const settings = useNotificationSettings(workspaceId);
     const update = useUpdateNotificationSettings(workspaceId);
     if (!settings.data) return null;
+    const current = settings.data;
     return (
-        <div className="flex w-full items-center justify-between gap-3">
-            <label htmlFor={id} className="text-xs text-text-muted">
-                Daily email of tasks due, each morning
-            </label>
-            <Switch
-                id={id}
-                checked={settings.data.taskDigest}
-                disabled={update.isPending}
-                onCheckedChange={(taskDigest) => update.mutate({ taskDigest })}
-            />
+        <div className="flex w-full flex-col gap-2">
+            {SETTINGS.map(({ key, label }) => (
+                <div key={key} className="flex w-full items-center justify-between gap-3">
+                    <label htmlFor={`${id}-${key}`} className="text-xs text-text-muted">
+                        {label}
+                    </label>
+                    <Switch
+                        id={`${id}-${key}`}
+                        checked={current[key]}
+                        disabled={update.isPending}
+                        onCheckedChange={(on) => update.mutate({ [key]: on })}
+                    />
+                </div>
+            ))}
         </div>
     );
 }

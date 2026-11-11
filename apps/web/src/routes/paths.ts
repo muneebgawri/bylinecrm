@@ -76,6 +76,8 @@ export const paths = {
     settingsNewswireos: (workspaceId: string) => `/w/${workspaceId}/settings/newswireos`,
     /** BylineAI (BYL-1): the lead webhook's secret and who leads at unowned companies are dealt to. */
     settingsByline: (workspaceId: string) => `/w/${workspaceId}/settings/byline`,
+    /** Quo (CALL-1): the API key, and which members Quo's users are. */
+    settingsQuo: (workspaceId: string) => `/w/${workspaceId}/settings/quo`,
     /** SMTP2Go (TRANS-1): pool mailboxes that send through SMTP2Go, with their webhook. */
     settingsSmtp2Go: (workspaceId: string) => `/w/${workspaceId}/settings/smtp2go`,
     /** The Twenty importer (P4-4, P4-UI-2): an admin connects a Twenty workspace and runs the import. */
@@ -92,6 +94,17 @@ export const CREATE_PARAM = 'create';
 /** A list page with its "new" dialog open. */
 export function withCreate(path: string): string {
     return `${path}?${CREATE_PARAM}=1`;
+}
+
+/**
+ * `?compose=1` on a person page opens its composer at once (GUARD-3's "Start new email": the CRM starts the
+ * thread, Gmail continues it). The page drops the parameter once it has acted on it.
+ */
+export const COMPOSE_PARAM = 'compose';
+
+/** A person page with its composer open. */
+export function withCompose(path: string): string {
+    return `${path}?${COMPOSE_PARAM}=1`;
 }
 
 /** The query parameter sign-in uses to return the person where they were. */

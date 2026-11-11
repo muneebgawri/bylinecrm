@@ -24,6 +24,7 @@ export interface CreateCustomFieldInput {
     options?: string[] | undefined;
     required?: boolean | undefined;
     adminOnly?: boolean | undefined;
+    showOnCreate?: boolean | undefined;
     position?: number | undefined;
 }
 
@@ -32,6 +33,7 @@ export interface UpdateCustomFieldInput {
     options?: string[] | undefined;
     required?: boolean | undefined;
     adminOnly?: boolean | undefined;
+    showOnCreate?: boolean | undefined;
     position?: number | undefined;
 }
 
@@ -86,6 +88,7 @@ export class CustomFieldsService {
                         options,
                         required: input.required ?? false,
                         adminOnly: input.adminOnly ?? false,
+                        showOnCreate: input.showOnCreate ?? false,
                         ...(input.position !== undefined ? { position: input.position } : {}),
                     },
                 });
@@ -99,7 +102,7 @@ export class CustomFieldsService {
         return view(row);
     }
 
-    /** Label, options, required and position may change; the type is fixed once values may exist. */
+    /** Label, options, required, visibility, the create popup and position may change; the type is fixed once values may exist. */
     async update(id: string, patch: UpdateCustomFieldInput): Promise<CustomFieldView> {
         const workspaceId = this.workspaceId();
         const row = await this.rls.withWorkspace(async (tx) => {
@@ -116,6 +119,7 @@ export class CustomFieldsService {
                     ...(patch.options !== undefined ? { options: patch.options } : {}),
                     ...(patch.required !== undefined ? { required: patch.required } : {}),
                     ...(patch.adminOnly !== undefined ? { adminOnly: patch.adminOnly } : {}),
+                    ...(patch.showOnCreate !== undefined ? { showOnCreate: patch.showOnCreate } : {}),
                     ...(patch.position !== undefined ? { position: patch.position } : {}),
                 },
             });
@@ -298,6 +302,7 @@ function view(row: {
     options: unknown;
     required: boolean;
     adminOnly: boolean;
+    showOnCreate: boolean;
     position: number;
     archivedAt: Date | null;
     createdAt: Date;
@@ -312,6 +317,7 @@ function view(row: {
         options: row.options as string[],
         required: row.required,
         adminOnly: row.adminOnly,
+        showOnCreate: row.showOnCreate,
         position: row.position,
         archivedAt: row.archivedAt,
         createdAt: row.createdAt,

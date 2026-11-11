@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
+import { CSRF_COOKIE, CSRF_HEADER, SEARCH_CANDIDATE_LIMIT, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../src/infra/prisma.service';
@@ -162,6 +162,57 @@ describe('records', () => {
 
             const repList = await as(rep).get(w('/people')).expect(200);
             expect((repList.body as Page<Person>).items.map((p) => p.id)).toEqual([repsPerson]);
+        });
+
+        it("search keeps the member's scope: by name or address, they find their own person, not the admin's (#344)", async () => {
+            for (const q of ['Owned', 'Own', `admin-own-${stamp}`, `rep-own-${stamp}`]) {
+                const repFound = await as(rep)
+                    .get(w(`/people?q=${encodeURIComponent(q)}`))
+                    .expect(200);
+                expect((repFound.body as Page<Person>).items.map((p) => p.id)).not.toContain(adminsPerson);
+            }
+            const repOwn = await as(rep)
+                .get(w(`/people?q=${encodeURIComponent(`rep-own-${stamp}`)}`))
+                .expect(200);
+            expect((repOwn.body as Page<Person>).items.map((p) => p.id)).toEqual([repsPerson]);
+            const adminFound = await as(admin)
+                .get(w(`/people?q=${encodeURIComponent(`admin-own-${stamp}`)}`))
+                .expect(200);
+            expect((adminFound.body as Page<Person>).items.map((p) => p.id)).toEqual([adminsPerson]);
+        });
+
+        it("an own-scoped member finds their match when other members' people would fill the candidate limit (#344)", async () => {
+            const word = `zorbax${stamp}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+            // More of the admin's matches than the search keeps, so a function ranking the whole workspace would hand the
+            // rep a full candidate list with nothing of theirs in it.
+            await app.get(PrismaService).person.createMany({
+                data: Array.from({ length: SEARCH_CANDIDATE_LIMIT + 50 }, (_, i) => ({
+                    workspaceId: workspace,
+                    ownerId: adminMemberId,
+                    createdBy: { kind: 'member', id: adminMemberId },
+                    nameFirst: word,
+                    nameLast: `Admin${i}`,
+                })),
+            });
+            const mine = await as(rep).post(w('/people')).send({ nameFirst: word, nameLast: 'Rep' }).expect(201);
+            const elsewhere = await as(other)
+                .post(`/api/w/${otherWorkspace}/people`)
+                .send({ nameFirst: word, nameLast: 'Elsewhere' })
+                .expect(201);
+
+            const repFound = await as(rep)
+                .get(w(`/people?q=${word}`))
+                .expect(200);
+            expect((repFound.body as Page<Person>).items.map((p) => p.id)).toEqual([(mine.body as Person).id]);
+            const adminFound = await as(admin)
+                .get(w(`/people?q=${word}`))
+                .expect(200);
+            expect((adminFound.body as Page<Person>).items.map((p) => p.id)).not.toContain(
+                (elsewhere.body as Person).id,
+            );
+            // Everything this test made is removed, in every workspace: later tests read the rep's people (trashed ones
+            // too) and the other workspace's list as they were.
+            await app.get(PrismaService).person.deleteMany({ where: { nameFirst: word } });
         });
 
         it("another owner's record answers 404, not 403, to every verb", async () => {
@@ -515,6 +566,30 @@ describe('records', () => {
             expect((listed.body as { key: string }[]).map((f) => f.key)).toEqual(['beat']);
         });
 
+        it('a field asked in the Add person popup: set on create, listed, turned off', async () => {
+            const created = await as(admin)
+                .post(w('/custom-fields'))
+                .send({ object: 'person', key: 'pr_title', label: 'PR title', type: 'text', showOnCreate: true })
+                .expect(201);
+            const fieldId = (created.body as { id: string; showOnCreate: boolean }).id;
+            expect((created.body as { showOnCreate: boolean }).showOnCreate).toBe(true);
+            const asked = (res: Response) =>
+                (res.body as { key: string; showOnCreate: boolean }[]).filter((f) => f.showOnCreate).map((f) => f.key);
+            expect(asked(await as(rep).get(w('/custom-fields?object=person')).expect(200))).toEqual(['pr_title']);
+            await as(rep)
+                .patch(w(`/custom-fields/${fieldId}`))
+                .send({ showOnCreate: false })
+                .expect(403);
+            await as(admin)
+                .patch(w(`/custom-fields/${fieldId}`))
+                .send({ showOnCreate: false })
+                .expect(200);
+            expect(asked(await as(rep).get(w('/custom-fields?object=person')).expect(200))).toEqual([]);
+            await as(admin)
+                .delete(w(`/custom-fields/${fieldId}`))
+                .expect(204);
+        });
+
         it('an admin-only field (FR-CRMS-UI-6): a member neither sees its definition or values nor writes it; an admin does', async () => {
             const ltv = await as(admin)
                 .post(w('/custom-fields'))
@@ -693,6 +768,102 @@ describe('records', () => {
                 .get(w(`/companies?q=hyrule-${stamp}`))
                 .expect(200);
             expect((byDomain.body as Page<Company>).items.map((c) => c.name)).toEqual(['Hyrule Castle']);
+        });
+
+        it('finds a person by an additional email, in the list and in global search', async () => {
+            const second = `alt-${stamp}@elsewhere.test`;
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Mina',
+                    nameLast: 'Harker',
+                    emails: { primary: `mh-${stamp}@whitby.test`, additional: [second] },
+                })
+                .expect(201);
+            const listed = await as(admin)
+                .get(w(`/people?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((listed.body as Page<Person>).items.map((p) => p.nameFirst)).toEqual(['Mina']);
+            const typed = await as(admin)
+                .get(w(`/people?q=ALT-${stamp}`))
+                .expect(200);
+            expect((typed.body as Page<Person>).items.map((p) => p.nameFirst)).toEqual(['Mina']);
+            const global = (
+                await as(admin)
+                    .get(w(`/search?q=${encodeURIComponent(second)}&objects=person`))
+                    .expect(200)
+            ).body as { person: { title: string }[] };
+            expect(global.person.map((h) => h.title)).toEqual(['Mina Harker']);
+        });
+
+        it('finds a person by an additional phone, however the number is typed', async () => {
+            const digits = String(stamp).replace(/\D/g, '').slice(-6).padStart(6, '0');
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Quincey',
+                    nameLast: 'Morris',
+                    phones: {
+                        primary: null,
+                        additional: [{ number: `0770${digits}`, countryCode: 'GB' }],
+                    },
+                })
+                .expect(201);
+            for (const q of [`+44 770 ${digits}`, `0044 (0)770-${digits}`, `0770 ${digits}`]) {
+                const listed = await as(admin)
+                    .get(w(`/people?q=${encodeURIComponent(q)}`))
+                    .expect(200);
+                expect((listed.body as Page<Person>).items.map((p) => p.nameFirst)).toEqual(['Quincey']);
+            }
+        });
+
+        it('another workspace searching the same additional email finds nothing', async () => {
+            const second = `cross-${stamp}@elsewhere.test`;
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Lucy',
+                    nameLast: 'Westenra',
+                    emails: { primary: `lw-${stamp}@whitby.test`, additional: [second] },
+                })
+                .expect(201);
+            const theirs = (path: string) => `/api/w/${otherWorkspace}${path}`;
+            const listed = await as(other)
+                .get(theirs(`/people?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((listed.body as Page<Person>).items).toEqual([]);
+            const global = (
+                await as(other)
+                    .get(theirs(`/search?q=${encodeURIComponent(second)}&objects=person`))
+                    .expect(200)
+            ).body as { person: unknown[] };
+            expect(global.person).toEqual([]);
+        });
+
+        it('a trashed person is not found by an additional email in the list; the trash finds them', async () => {
+            const second = `gone-${stamp}@elsewhere.test`;
+            const id = (
+                (
+                    await as(admin)
+                        .post(w('/people'))
+                        .send({
+                            nameFirst: 'Renfield',
+                            emails: { primary: `rf-${stamp}@carfax.test`, additional: [second] },
+                        })
+                        .expect(201)
+                ).body as Person
+            ).id;
+            await as(admin)
+                .delete(w(`/people/${id}`))
+                .expect(204);
+            const listed = await as(admin)
+                .get(w(`/people?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((listed.body as Page<Person>).items).toEqual([]);
+            const trash = await as(admin)
+                .get(w(`/people/deleted?q=${encodeURIComponent(second)}`))
+                .expect(200);
+            expect((trash.body as Page<Person>).items.map((p) => p.id)).toEqual([id]);
         });
 
         it('pages with a cursor under a chosen sort, and refuses a sort off the allowlist', async () => {

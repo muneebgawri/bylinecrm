@@ -2,16 +2,18 @@ import type { GuardrailSettingsView } from '@bylinecrm/shared';
 import type { WorkspaceClient } from '../infra/rls-prisma.service';
 
 /**
- * Settings → Guardrails (GUARD-2), as the guard and the detector read them: whether a `high` poaching alert is
- * emailed at once, and the members that are shared mailboxes. No row means the defaults (off, none).
+ * Settings → Guardrails (GUARD-2/3), as the guard and the detector read them: whether a `high` alert is emailed at
+ * once, the members that are shared mailboxes, and whether cold mail outside the CRM (GUARD-3) is reported. No row
+ * means the defaults (off, none, on).
  */
 export async function guardrailSettings(tx: WorkspaceClient): Promise<GuardrailSettingsView> {
     const row = await tx.guardrailSettings.findFirst({
-        select: { poachEmailAtOnce: true, sharedMailboxMemberIds: true },
+        select: { poachEmailAtOnce: true, sharedMailboxMemberIds: true, offCrmColdAlerts: true },
     });
     return {
         poachEmailAtOnce: row?.poachEmailAtOnce ?? false,
         sharedMailboxMemberIds: row?.sharedMailboxMemberIds ?? [],
+        offCrmColdAlerts: row?.offCrmColdAlerts ?? true,
     };
 }
 

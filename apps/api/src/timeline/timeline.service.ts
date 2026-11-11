@@ -304,6 +304,8 @@ async function rowsFor(tx: WorkspaceClient, event: DomainEvent): Promise<NewRow[
             ...(event.suppression ? { suppression: suppressionEntry(event.suppression) } : {}),
             ...(event.tracking ? { tracking: trackingEntry(event.tracking) } : {}),
             ...(event.meeting ? { meeting: meetingEntry(event.meeting) } : {}),
+            // CALL-1: the call as the timeline shows it — direction, outcome, duration, a recording's presence.
+            ...(event.call ? { call: event.call } : {}),
             ...(event.invoice
                 ? {
                       invoice: {
@@ -408,6 +410,16 @@ async function linkedName(tx: WorkspaceClient, type: LinkedObject, id: string): 
         }
         case 'invoice':
             return (await tx.dealInvoice.findUnique({ where: { id }, select: { reference: true } }))?.reference ?? null;
+        case 'call': {
+            const c = await tx.call.findUnique({
+                where: { id },
+                select: { direction: true, toNumber: true, fromNumber: true },
+            });
+            if (!c) return null;
+            return c.direction === 'outbound'
+                ? `Call to ${c.toNumber ?? 'a number'}`
+                : `Call from ${c.fromNumber ?? 'a number'}`;
+        }
     }
 }
 

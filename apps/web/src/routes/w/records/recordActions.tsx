@@ -12,7 +12,7 @@ import {
 } from '@bylinecrm/ui';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { Fragment, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 /**
  * One action on a record. A record page declares its actions ONCE, as a list of these; the header
@@ -83,6 +83,8 @@ export interface RecordActionBarProps {
  * opens a sheet with what does not fit; it is left out when there is nothing to put in it.
  */
 export function RecordActionBar({ name, actions, siblings }: RecordActionBarProps) {
+    // The list the record came from rides along, so prev/next keep working after the first step.
+    const listState = useLocation().state as unknown;
     const [moreOpen, setMoreOpen] = useState(false);
     const more = [
         siblings?.prev
@@ -138,7 +140,7 @@ export function RecordActionBar({ name, actions, siblings }: RecordActionBarProp
                                     shape="square"
                                     className="min-h-touch justify-start"
                                 >
-                                    <Link to={item.to} onClick={() => setMoreOpen(false)}>
+                                    <Link to={item.to} state={listState} onClick={() => setMoreOpen(false)}>
                                         {item.icon}
                                         {item.label}
                                     </Link>

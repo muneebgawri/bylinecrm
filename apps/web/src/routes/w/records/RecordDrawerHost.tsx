@@ -6,6 +6,7 @@ import { paths } from '../../paths';
 import { CompanyRecord } from './CompanyRecord';
 import { DealRecord } from './DealRecord';
 import { PersonRecord } from './PersonRecord';
+import { useSiblings } from './siblings';
 import { useMembersById } from '../../../api/records';
 import { RecordLoader } from './RecordPages';
 import { THREAD_PARAM } from '../mail/thread';
@@ -29,6 +30,11 @@ export function RecordDrawerHost() {
     const navigate = useNavigate();
     const target = parseTarget(new URLSearchParams(location.search).get(OPEN_PARAM));
     const members = useMembersById(workspaceId);
+    // Prev/next in the drawer follow the list it was opened from (a row click passes the ids), each step
+    // another `?open=` on the same page, so the list stays underneath.
+    const siblings = useSiblings(target?.id ?? '', (id) =>
+        target ? `${location.pathname}${withOpen(location.search, { type: target.type, id })}` : '',
+    );
     const close = () =>
         navigate({ pathname: location.pathname, search: withOpen(location.search, null) }, { replace: true });
 
@@ -67,6 +73,7 @@ export function RecordDrawerHost() {
                                     workspaceId={workspaceId}
                                     person={p}
                                     layout="drawer"
+                                    siblings={siblings}
                                     membersById={members}
                                 />
                             )}
@@ -82,6 +89,7 @@ export function RecordDrawerHost() {
                                     workspaceId={workspaceId}
                                     company={c}
                                     layout="drawer"
+                                    siblings={siblings}
                                     membersById={members}
                                 />
                             )}
@@ -93,7 +101,13 @@ export function RecordDrawerHost() {
                             id={target.id}
                             layout="drawer"
                             render={(d) => (
-                                <DealRecord workspaceId={workspaceId} deal={d} layout="drawer" membersById={members} />
+                                <DealRecord
+                                    workspaceId={workspaceId}
+                                    deal={d}
+                                    layout="drawer"
+                                    siblings={siblings}
+                                    membersById={members}
+                                />
                             )}
                         />
                     )}

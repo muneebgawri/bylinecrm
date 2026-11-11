@@ -21,6 +21,7 @@ import { labelled, labelTargets } from './task-labels';
 /** GUARD-2: the guardrail notifications a digest lists — those of the last day, once each. */
 const DIGEST_ALERT_KINDS = [
     'guardrail_poach_suspected',
+    'guardrail_off_crm_cold',
     'cadence_warning',
 ] as const satisfies readonly NotificationKind[];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,6 +30,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const OPEN = { deletedAt: null, status: { not: 'done' } } satisfies Prisma.TaskWhereInput;
 const WITH_TARGETS = { targets: { select: { targetType: true, targetId: true } } } as const;
 const MEMBER = { select: MEMBER_SUMMARY_SELECT } as const;
+/** A member's notification settings, as stored on their seat. */
+const SETTINGS = {
+    taskDigest: true,
+    notifyEmailReplies: true,
+    notifyEmailClicks: true,
+    notifyEmailOpens: true,
+} as const satisfies Record<keyof NotificationSettings, true>;
 
 /**
  * What members are told about their tasks (#192), one service for every way they hear of them:
@@ -218,6 +226,8 @@ export class TaskNotificationsService {
                     { invoiceId: { not: null } },
                     { cadenceLapseId: { not: null } },
                     { newswireosPaymentId: { not: null } },
+                    { mailOutboundId: { not: null } },
+                    { mailMessageId: { not: null } },
                 ],
             } satisfies Prisma.NotificationWhereInput;
             const rows = await tx.notification.findMany({
@@ -231,14 +241,50 @@ export class TaskNotificationsService {
                     invoice: { include: { opportunity: { select: { name: true } } } },
                     cadenceLapse: { include: { opportunity: { select: { name: true } } } },
                     newswireosPayment: { include: { opportunity: { select: { name: true } } } },
+                    mailOutbound: { select: { id: true, subject: true, personId: true } },
+                    mailMessage: {
+                        select: {
+                            id: true,
+                            subject: true,
+                            participants: {
+                                where: { role: 'from' },
+                                select: { personId: true, displayName: true, address: true },
+                                take: 1,
+                            },
+                        },
+                    },
                 },
             });
+            const repliedBy = (r: (typeof rows)[number]) => r.mailMessage?.participants[0];
             const labels = await labelTargets(tx, [
                 ...rows.flatMap((r) => r.task?.targets ?? []),
                 ...rows.flatMap((r) =>
                     r.transfer ? [{ targetType: r.transfer.object, targetId: r.transfer.recordId }] : [],
                 ),
+                ...rows.flatMap((r) => {
+                    const personId = r.mailOutbound?.personId ?? repliedBy(r)?.personId;
+                    return personId ? [{ targetType: 'person', targetId: personId }] : [];
+                }),
             ]);
+            // A click's link: the send's first click by a person (a scanner's never counts).
+            const clicked = rows.filter((r) => r.kind === 'email_clicked' && r.mailOutboundId);
+            const firstClick = new Map<string, string | null>();
+            if (clicked.length > 0) {
+                const hits = await tx.trackingHit.findMany({
+                    where: {
+                        outboundId: { in: clicked.map((r) => r.mailOutboundId!) },
+                        kind: 'click',
+                        botReason: null,
+                    },
+                    orderBy: [{ happenedAt: 'asc' }, { id: 'asc' }],
+                    select: { outboundId: true, url: true },
+                });
+                for (const h of hits) if (!firstClick.has(h.outboundId)) firstClick.set(h.outboundId, h.url);
+            }
+            const person = (id: string | null | undefined, fallback: string | null) => {
+                const label = id ? labels.get(`person:${id}`) : undefined;
+                return { personId: label ? id! : null, personName: label ?? fallback };
+            };
             const named = (m: { id: string; user: { displayName: string | null } } | null) =>
                 m ? { memberId: m.id, name: m.user.displayName } : null;
             return {
@@ -318,6 +364,26 @@ export class TaskNotificationsService {
                               rotateAt: r.cadenceLapse.rotateAt.toISOString(),
                           }
                         : null,
+                    email: r.mailOutbound
+                        ? {
+                              outboundId: r.mailOutbound.id,
+                              messageId: null,
+                              subject: r.mailOutbound.subject,
+                              ...person(r.mailOutbound.personId, null),
+                              url: r.kind === 'email_clicked' ? (firstClick.get(r.mailOutbound.id) ?? null) : null,
+                          }
+                        : r.mailMessage
+                          ? {
+                                outboundId: null,
+                                messageId: r.mailMessage.id,
+                                subject: r.mailMessage.subject,
+                                ...person(
+                                    repliedBy(r)?.personId,
+                                    repliedBy(r)?.displayName || repliedBy(r)?.address || null,
+                                ),
+                                url: null,
+                            }
+                          : null,
                 })),
                 unread: await tx.notification.count({ where: { ...live, readAt: null } }),
             };
@@ -344,25 +410,31 @@ export class TaskNotificationsService {
 
     async settings(): Promise<NotificationSettings> {
         const context = this.current();
-        return this.rls.withWorkspace(async (tx) => {
-            const member = await tx.workspaceMember.findUniqueOrThrow({
+        return this.rls.withWorkspace(async (tx) =>
+            tx.workspaceMember.findUniqueOrThrow({
                 where: { id: await requireCallerMember(tx, context) },
-                select: { taskDigest: true },
-            });
-            return { taskDigest: member.taskDigest };
-        });
+                select: SETTINGS,
+            }),
+        );
     }
 
-    async updateSettings(input: NotificationSettings): Promise<NotificationSettings> {
+    /** Changes the settings named; any left out stay as they are. */
+    async updateSettings(input: {
+        [K in keyof NotificationSettings]?: boolean | undefined;
+    }): Promise<NotificationSettings> {
         const context = this.current();
-        return this.rls.withWorkspace(async (tx) => {
-            const member = await tx.workspaceMember.update({
+        const data: Prisma.WorkspaceMemberUpdateInput = {};
+        for (const key of Object.keys(SETTINGS) as (keyof NotificationSettings)[]) {
+            const value = input[key];
+            if (value !== undefined) data[key] = value;
+        }
+        return this.rls.withWorkspace(async (tx) =>
+            tx.workspaceMember.update({
                 where: { id: await requireCallerMember(tx, context) },
-                data: { taskDigest: input.taskDigest },
-                select: { taskDigest: true },
-            });
-            return { taskDigest: member.taskDigest };
-        });
+                data,
+                select: SETTINGS,
+            }),
+        );
     }
 
     private current(): WorkspaceRunContext {

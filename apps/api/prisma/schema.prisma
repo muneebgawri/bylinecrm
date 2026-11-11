@@ -129,6 +129,9 @@ model Workspace {
   rotationMembers               RotationMember[]
   cadenceLapses                 CadenceLapse[]
 
+  calls       Call[]
+  quoSettings QuoSettings?
+
   @@map("workspaces")
 }
 
@@ -361,7 +364,11 @@ model WorkspaceMember {
   suggestedLeads        CalendarEventParticipant[] @relation("CalendarParticipantLeadSuggestedFor")
 
   /// #192: the daily email of tasks due or overdue; the member turns it off.
-  taskDigest Boolean @default(true) @map("task_digest")
+  taskDigest         Boolean @default(true) @map("task_digest")
+  /// The bell for replies to, clicks in and opens of the member's own sends; each on unless turned off.
+  notifyEmailReplies Boolean @default(true) @map("notify_email_replies")
+  notifyEmailClicks  Boolean @default(true) @map("notify_email_clicks")
+  notifyEmailOpens   Boolean @default(true) @map("notify_email_opens")
 
   transfersFrom     OwnershipTransfer[] @relation("TransferFrom")
   transfersTo       OwnershipTransfer[] @relation("TransferTo")
@@ -372,8 +379,12 @@ model WorkspaceMember {
   guardrailsOwned    GuardrailEvent[] @relation("GuardrailOwner")
   guardrailsReviewed GuardrailEvent[] @relation("GuardrailReviewer")
 
-  rotationMembership RotationMember?
-  cadenceLapses      CadenceLapse[]
+  rotationMembership    RotationMember?
+  cadenceLapses         CadenceLapse[]
+  /// CALL-1: the member's user in Quo (matched by email when the admin saved the key); null when none.
+  quoUserId             String?         @map("quo_user_id")
+  calls                 Call[]          @relation("CallMember")
+  quoSettingsConfigured QuoSettings[]   @relation("QuoConfiguredBy")
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -640,6 +651,7 @@ model Person {
   meetingParticipations CalendarEventParticipant[]
   guardrails            GuardrailEvent[]
   bylineLeads           BylineLead[]
+  calls                 Call[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, ownerId])
@@ -681,21 +693,23 @@ enum LostReasonCode {
 /// `custom` column under `key`. A definition is never deleted while a record may hold its value:
 /// it is archived, and an archived key is unknown to the validator from then on.
 model CustomFieldDefinition {
-  id          String          @id @default(uuid()) @db.Uuid
-  workspaceId String          @map("workspace_id") @db.Uuid
-  object      RecordObject
-  key         String
-  label       String
-  type        CustomFieldType
+  id           String          @id @default(uuid()) @db.Uuid
+  workspaceId  String          @map("workspace_id") @db.Uuid
+  object       RecordObject
+  key          String
+  label        String
+  type         CustomFieldType
   /// For `select`/`multiselect`: the allowed values, as strings. Empty otherwise.
-  options     Json            @default("[]")
-  required    Boolean         @default(false)
+  options      Json            @default("[]")
+  required     Boolean         @default(false)
   /// Hidden from callers without `workspace:admin`: their definition list, record values and writes.
-  adminOnly   Boolean         @default(false) @map("admin_only")
-  position    Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
-  archivedAt  DateTime?       @map("archived_at") @db.Timestamptz
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  adminOnly    Boolean         @default(false) @map("admin_only")
+  /// Asked in the "Add person" (or other create) popup beside the fixed fields; a required field always is.
+  showOnCreate Boolean         @default(false) @map("show_on_create")
+  position     Float           @default(dbgenerated("extract(epoch from clock_timestamp())"))
+  archivedAt   DateTime?       @map("archived_at") @db.Timestamptz
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -934,6 +948,7 @@ model Note {
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   author    WorkspaceMember? @relation(fields: [authorId], references: [id], onDelete: SetNull)
   targets   NoteTarget[]
+  calls     Call[]
 
   @@index([workspaceId, deletedAt])
   @@index([search], type: Gin)
@@ -1078,6 +1093,7 @@ enum LinkedObject {
   meeting
   transfer
   invoice
+  call
 
   @@map("linked_object")
 }
@@ -1386,21 +1402,21 @@ enum TemplateKind {
 /// subset (`TEMPLATE_BODY_NODES`); variables are `variable` nodes in it and `{{path}}` tokens in
 /// `subject`. `version` is the optimistic-concurrency counter a PATCH must name.
 model EmailTemplate {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String       @map("workspace_id") @db.Uuid
-  name        String
-  kind        TemplateKind
-  subject     String       @default("")
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId   String             @map("workspace_id") @db.Uuid
+  name          String
+  kind          TemplateKind
+  subject       String             @default("")
   /// `RichText` from @bylinecrm/shared.
-  body        Json
-  version     Int          @default(1)
+  body          Json
+  version       Int                @default(1)
   /// `Actor` from @bylinecrm/shared.
-  createdBy   Json         @map("created_by")
+  createdBy     Json               @map("created_by")
   /// `Actor` from @bylinecrm/shared.
-  updatedBy   Json         @map("updated_by")
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+  updatedBy     Json               @map("updated_by")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz
   /// `private`: its author, and anyone with `template:read_all`, read it. `public`: every member does.
   visibility    TemplateVisibility @default(private)
   /// The member who wrote it; null for an import, a key or the system (such a template is public).
@@ -1650,6 +1666,7 @@ model MailOutbound {
   bounces           MailBounce[]
   trackingTokens    TrackingToken[]
   trackingHits      TrackingHit[]
+  notifications     Notification[]
 
   sequenceEnrolment SequenceEnrolment? @relation("EnrolmentSends", fields: [sequenceEnrolmentId], references: [id], onDelete: SetNull)
   sequenceStep      SequenceStep?      @relation(fields: [sequenceStepId], references: [id], onDelete: SetNull)
@@ -1742,10 +1759,11 @@ model MailMessage {
   participants MailParticipant[]
   copies       MailMessageCopy[]
 
-  repliedFrom  MailOutbound[] @relation("MailOutboundReplyTo")
-  draftReplies MailDraft[]    @relation("MailDraftReplyTo")
-  outboundOf   MailOutbound[] @relation("MailOutboundStored")
-  bounces      MailBounce[]
+  repliedFrom   MailOutbound[] @relation("MailOutboundReplyTo")
+  draftReplies  MailDraft[]    @relation("MailDraftReplyTo")
+  outboundOf    MailOutbound[] @relation("MailOutboundStored")
+  bounces       MailBounce[]
+  notifications Notification[]
 
   @@unique([workspaceId, identityKey])
   @@index([workspaceId, threadId, sentAt])
@@ -2302,6 +2320,8 @@ model GuardrailSettings {
   poachEmailAtOnce       Boolean  @default(false) @map("poach_email_at_once")
   /// Members that are shared mailboxes (outreach@): leads they own count as nobody's to GUARD-1 and GUARD-2.
   sharedMailboxMemberIds String[] @default([]) @map("shared_mailbox_member_ids") @db.Uuid
+  /// GUARD-3: first-touch mail to outside addresses sent from Gmail rather than the CRM is recorded and reported.
+  offCrmColdAlerts       Boolean  @default(true) @map("off_crm_cold_alerts")
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3128,6 +3148,7 @@ enum NotificationKind {
   invoice_coverage_lost
   /// GUARD-2: a member mailed another member's lead or a customer (to the owner, managers and admins).
   guardrail_poach_suspected
+  guardrail_off_crm_cold
   /// CADENCE-1: a lead of theirs missed its cadence; it rotates after the grace (to the owner).
   cadence_warning
   /// CADENCE-1: a lead was rotated to the next rep (to managers; the two owners hear `transfer_*`).
@@ -3138,6 +3159,12 @@ enum NotificationKind {
   payment_created_deal
   /// INV-2: NewswireOS reported a payment from no one in the CRM (to holders of `invoice:verify`).
   payment_unmatched
+  /// A reply to an email the member sent from the CRM (to its sender; every reply).
+  email_replied
+  /// A link clicked in an email the member sent (to its sender; once per send).
+  email_clicked
+  /// An email the member sent was opened — approximate (to its sender; once per send).
+  email_opened
 
   @@map("notification_kind")
 }
@@ -3160,6 +3187,10 @@ model Notification {
   cadenceLapseId      String?          @map("cadence_lapse_id") @db.Uuid
   /// INV-2: the paid invoice NewswireOS reported, for `payment_*`.
   newswireosPaymentId String?          @map("newswireos_payment_id") @db.Uuid
+  /// The send, for `email_clicked` / `email_opened`.
+  mailOutboundId      String?          @map("mail_outbound_id") @db.Uuid
+  /// The inbound reply, for `email_replied`.
+  mailMessageId       String?          @map("mail_message_id") @db.Uuid
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
   readAt              DateTime?        @map("read_at") @db.Timestamptz
 
@@ -3171,6 +3202,8 @@ model Notification {
   invoice           DealInvoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   cadenceLapse      CadenceLapse?      @relation(fields: [cadenceLapseId], references: [id], onDelete: Cascade)
   newswireosPayment NewswireosPayment? @relation(fields: [newswireosPaymentId], references: [id], onDelete: Cascade)
+  mailOutbound      MailOutbound?      @relation(fields: [mailOutboundId], references: [id], onDelete: Cascade)
+  mailMessage       MailMessage?       @relation(fields: [mailMessageId], references: [id], onDelete: Cascade)
 
   @@unique([memberId, kind, taskId])
   @@unique([memberId, kind, transferId])
@@ -3178,6 +3211,8 @@ model Notification {
   @@unique([memberId, kind, invoiceId])
   @@unique([memberId, kind, cadenceLapseId])
   @@unique([memberId, kind, newswireosPaymentId])
+  @@unique([memberId, kind, mailOutboundId])
+  @@unique([memberId, kind, mailMessageId])
   @@index([memberId, createdAt])
   @@map("notifications")
 }
@@ -3273,6 +3308,8 @@ enum GuardrailKind {
   /// GUARD-2: mail that left (Gmail sync or a CRM send) to another member's lead, or to a customer on the exclusions.
   poach_suspected
   pooled_customer
+  /// GUARD-3: first-touch mail to an outside address sent from Gmail, not the CRM.
+  off_crm_cold
 
   @@map("guardrail_kind")
 }
@@ -3769,4 +3806,94 @@ model PersonAddress {
   @@id([personId, address])
   @@index([workspaceId, address, personCreatedAt, personId], map: "person_addresses_lookup_idx")
   @@map("person_addresses")
+}
+
+/// CALL-1: Settings → Quo. The API key Quo is asked with (sealed) and the webhook the CRM registered there
+/// (its id, and the `whsec_` key deliveries are signed with, sealed). One row per workspace.
+model QuoSettings {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId             String    @unique @map("workspace_id") @db.Uuid
+  apiKeyCiphertext        String    @map("api_key_ciphertext")
+  webhookId               String?   @map("webhook_id")
+  webhookSecretCiphertext String?   @map("webhook_secret_ciphertext")
+  /// Quo users with no member at their email, as the admin last saved; shown so they can be invited.
+  unmatchedQuoEmails      String[]  @default([]) @map("unmatched_quo_emails")
+  configuredById          String    @map("configured_by_id") @db.Uuid
+  lastDeliveryAt          DateTime? @map("last_delivery_at") @db.Timestamptz
+  lastDeliveryResult      String?   @map("last_delivery_result")
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configuredBy WorkspaceMember @relation("QuoConfiguredBy", fields: [configuredById], references: [id], onDelete: Cascade)
+
+  @@map("quo_settings")
+}
+
+enum CallDirection {
+  outbound
+  inbound
+
+  @@map("call_direction")
+}
+
+enum CallStatus {
+  answered
+  missed
+  voicemail
+  unanswered
+  logged
+
+  @@map("call_status")
+}
+
+enum CallDisposition {
+  connected
+  voicemail
+  no_answer
+  busy
+  wrong_number
+  callback
+  not_interested
+
+  @@map("call_disposition")
+}
+
+/// CALL-1: a call between a member and a person — Quo's report (`provider` quo, `externalId` its call id) or a
+/// member's own log from the Call panel (`provider` manual), the two merged when Quo reports the call that was
+/// logged. Numbers in E.164. `recordings`, `summary` and `transcript` are Quo's, in @bylinecrm/shared's shapes.
+model Call {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String           @map("workspace_id") @db.Uuid
+  provider     String           @default("quo")
+  externalId   String?          @map("external_id")
+  personId     String?          @map("person_id") @db.Uuid
+  memberId     String?          @map("member_id") @db.Uuid
+  direction    CallDirection
+  status       CallStatus
+  fromNumber   String?          @map("from_number")
+  toNumber     String?          @map("to_number")
+  startedAt    DateTime         @map("started_at") @db.Timestamptz
+  answeredAt   DateTime?        @map("answered_at") @db.Timestamptz
+  completedAt  DateTime?        @map("completed_at") @db.Timestamptz
+  durationSec  Int?             @map("duration_sec")
+  hasVoicemail Boolean          @default(false) @map("has_voicemail")
+  recordings   Json             @default("[]")
+  summary      Json?
+  transcript   Json?
+  disposition  CallDisposition?
+  noteId       String?          @map("note_id") @db.Uuid
+  quoLink      String?          @map("quo_link")
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person?          @relation(fields: [personId], references: [id], onDelete: SetNull)
+  member    WorkspaceMember? @relation("CallMember", fields: [memberId], references: [id], onDelete: SetNull)
+  note      Note?            @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, provider, externalId])
+  @@index([workspaceId, personId, startedAt])
+  @@index([workspaceId, memberId, startedAt])
+  @@map("calls")
 }

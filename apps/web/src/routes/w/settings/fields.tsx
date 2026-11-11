@@ -64,11 +64,13 @@ export function SwitchRow({
     hint,
     checked,
     onCheckedChange,
+    disabled,
 }: {
     label: string;
     hint?: ReactNode;
     checked: boolean;
     onCheckedChange: (checked: boolean) => void;
+    disabled?: boolean | undefined;
 }) {
     const id = useId();
     return (
@@ -77,6 +79,7 @@ export function SwitchRow({
                 id={id}
                 checked={checked}
                 onCheckedChange={onCheckedChange}
+                disabled={disabled}
                 aria-describedby={hint ? `${id}-hint` : undefined}
             />
             <div className="grid gap-0.5 text-sm">

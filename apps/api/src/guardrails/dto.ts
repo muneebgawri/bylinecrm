@@ -34,7 +34,11 @@ export class MarkLegitimateDto extends createZodDto(
 export const guardrailSettingsShape = z.object({
     poachEmailAtOnce: z.boolean().meta({
         description:
-            'A `high` poaching alert is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default.',
+            'A `high` alert — poaching (GUARD-2) or cold mail outside the CRM (GUARD-3) — is also emailed to the lead’s owner and the reviewers at once. The bell and the daily digest always tell. Off by default.',
+    }),
+    offCrmColdAlerts: z.boolean().meta({
+        description:
+            'GUARD-3: a member’s first-touch mail to an outside address, sent from Gmail rather than through the CRM, is recorded as `off_crm_cold`; reviewers are told once a member reaches several such recipients in a day. On by default.',
     }),
     sharedMailboxMemberIds: z.array(z.uuid()).max(GUARDRAIL_SHARED_MAILBOXES_MAX).meta({
         description:

@@ -98,6 +98,7 @@ import type {
     MyTaskView,
     NotificationSettingsView,
     NotificationsView,
+    QuoSettingsView,
 } from '../src/api/types';
 
 /**
@@ -547,6 +548,7 @@ export const customFields = (object: RecordObject): CustomFieldView[] =>
                   options: [],
                   required: false,
                   adminOnly: false,
+                  showOnCreate: false,
                   position: 0,
                   archivedAt: null,
                   createdAt: at(24 * 30),
@@ -568,6 +570,7 @@ export const archivedCustomFields = (object: RecordObject): CustomFieldView[] =>
                   options: [],
                   required: false,
                   adminOnly: false,
+                  showOnCreate: false,
                   position: 1,
                   archivedAt: at(24 * 3),
                   createdAt: at(24 * 60),
@@ -646,6 +649,7 @@ export const notificationsInbox: NotificationsView = {
             invoice: null,
             cadence: null,
             payment: null,
+            email: null,
             createdAt: at(1),
             readAt: null,
             task: {
@@ -664,6 +668,7 @@ export const notificationsInbox: NotificationsView = {
             invoice: null,
             cadence: null,
             payment: null,
+            email: null,
             createdAt: at(26),
             readAt: at(25),
             task: { id: tasks[0]!.id, title: tasks[0]!.title, dueAt: tasks[0]!.dueAt, targets: myTasks[1]!.targets },
@@ -671,7 +676,12 @@ export const notificationsInbox: NotificationsView = {
     ],
 };
 
-export const notificationSettings: NotificationSettingsView = { taskDigest: true };
+export const notificationSettings: NotificationSettingsView = {
+    taskDigest: true,
+    notifyEmailReplies: true,
+    notifyEmailClicks: true,
+    notifyEmailOpens: true,
+};
 
 export const attachments: AttachmentView[] = [
     {
@@ -1586,6 +1596,7 @@ export const thread: MailThreadView = {
             mailboxIds: [IDS.mailbox],
             bodiesVisible: true,
             direction: 'outbound',
+            sentByCrm: true,
             from: 'kate.morgan@example.com',
             subject: 'Distribution options',
             snippet: 'Attached is the distribution list for Acme.',
@@ -1618,6 +1629,7 @@ export const thread: MailThreadView = {
             mailboxIds: [IDS.mailbox],
             bodiesVisible: true,
             direction: 'inbound',
+            sentByCrm: false,
             from: 'dana@acme.example',
             subject: 'Re: Distribution options',
             snippet: 'Thanks — the list looks right.',
@@ -2156,6 +2168,16 @@ export const newswireosDealWonDeliveries: NewswireosDealWonDeliveryView[] = [
 ];
 
 /** The BylineAI link (BYL-1): linked, two members dealt leads in turn, a lead heard from. */
+export const quoSettings: QuoSettingsView = {
+    configured: true,
+    webhookUrl: 'https://crm.example.com/api/w/0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b/inbound/quo',
+    webhookRegistered: true,
+    matchedMemberIds: members.slice(0, 2).map((m) => m.id),
+    unmatchedQuoEmails: ['ops@quo.example'],
+    lastDeliveryAt: at(2),
+    lastDeliveryResult: 'recorded',
+};
+
 export const bylineSettings: BylineSettingsView = {
     configured: true,
     apiConfigured: true,

@@ -286,7 +286,7 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
         // Ben stands in for outreach@: marked a shared mailbox, his leads are nobody's to the guard.
         await as(admin)
             .put(w('/guardrails/settings'))
-            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [benId] })
+            .send({ poachEmailAtOnce: false, offCrmColdAlerts: false, sharedMailboxMemberIds: [benId] })
             .expect(200);
         const res = await mail(ana, anaMailbox, benLead, { cc: [{ address: `ceo@${benCompanyDomain}` }] });
         expect(res.status, JSON.stringify(res.body)).toBe(202);
@@ -294,7 +294,7 @@ describe('GUARD-1 recipient guard (FR-CRMS-21)', () => {
         expect(err(await mail(ana, anaMailbox, customerLead)).details?.reason).toBe('excluded_customer');
         await as(admin)
             .put(w('/guardrails/settings'))
-            .send({ poachEmailAtOnce: false, sharedMailboxMemberIds: [] })
+            .send({ poachEmailAtOnce: false, offCrmColdAlerts: false, sharedMailboxMemberIds: [] })
             .expect(200);
         expect((await mail(ana, anaMailbox, benLead)).status).toBe(422);
         expect((await owner.person.findUniqueOrThrow({ where: { id: benLead } })).ownerId).toBe(benId);

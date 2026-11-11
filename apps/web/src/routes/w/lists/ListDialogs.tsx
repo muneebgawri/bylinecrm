@@ -21,9 +21,12 @@ import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
-import { people } from '../../../api/records';
-import type { AddressCheckView, BulkResultView, CompanyInput, PersonInput } from '../../../api/types';
+import { people, useCustomFields } from '../../../api/records';
+import type { AddressCheckView, BulkResultView, CompanyInput, CustomFieldView, PersonInput } from '../../../api/types';
+import { RecordPicker } from '../../../components/RecordPicker';
+import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
+import { linkTo, TEXT_TYPES } from '../records/PropertiesColumn';
 import { LIST_COPY, type ListObject } from './listConfig';
 
 /** The shared dialog and message, re-exported where the lists and the deals page already read them. */
@@ -206,6 +209,15 @@ export function CreateRecordDialog<O extends ListObject>({
     const [jobTitle, setJobTitle] = useState('');
     const [phone, setPhone] = useState('');
     const [extension, setExtension] = useState('');
+    /** The asked custom fields' values as typed (a multi-select's as the options ticked), by key; typed on save. */
+    const [customValues, setCustomValues] = useState<Record<string, CustomValue>>({});
+    /**
+     * A person's company: required here (not by the API, which imports and keys write without one). One the rep
+     * adds ("Create company") is `NEW_COMPANY`: save sends its name with the person, and the API makes both in one
+     * transaction (#353), so a cancelled popup or a refused person leaves no empty company.
+     */
+    const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+    const [saving, setSaving] = useState(false);
     /** A person's step: the address first, then the rest once it is known to be free (or left out). */
     const [step, setStep] = useState<'email' | 'details'>('email');
     const [checking, setChecking] = useState(false);
@@ -215,6 +227,14 @@ export function CreateRecordDialog<O extends ListObject>({
     const copy = LIST_COPY[object];
     const person = object === 'person';
     const askingEmail = person && step === 'email';
+    // The custom fields an admin asks for here (Settings → Custom fields), and every required one: the API
+    // refuses a new person without those. Keyed on this dialog's own object: for New company that is the list
+    // page's cached query, so it costs no request, and none of it is asked.
+    const asked = (useCustomFields(workspaceId, object).data ?? [])
+        .filter((d) => person && d.archivedAt === null && (d.showOnCreate || d.required))
+        .sort((x, y) => x.position - y.position);
+    const mayAddCompany = useCan('record:write');
+    const missing = person && (!company || asked.some((d) => d.required && !filled(customValues[d.key])));
 
     const checkEmail = async () => {
         const address = email.trim();
@@ -242,6 +262,32 @@ export function CreateRecordDialog<O extends ListObject>({
     };
 
     const save = async (handToOwner: boolean) => {
+        setSaving(true);
+        try {
+            await saveRecord(handToOwner);
+        } finally {
+            setSaving(false);
+        }
+    };
+    /** Another member owns the company: say whose, and (for a person) offer to save the lead for them. */
+    const showOwned = (err: ApiError) => {
+        const ownerName = String(err.details['ownerName'] ?? 'another member');
+        const companyName = String(err.details['companyName'] ?? 'This company');
+        setOwned(person ? { ownerName, companyName } : null);
+        setError(
+            person
+                ? `${companyName} is ${ownerName}’s. Its people and deals are theirs, so you can’t save this lead for yourself.`
+                : `${companyName} already has this domain, and it is ${ownerName}’s.`,
+        );
+    };
+    const saveRecord = async (handToOwner: boolean) => {
+        if (person && !company) return;
+        // A company the rep added goes with the person in the one request (#353); one they chose goes by its id.
+        const companyRef = company
+            ? company.id === NEW_COMPANY
+                ? { company: { name: company.name } }
+                : { companyId: company.id }
+            : {};
         const digits = phone.replace(/\D/g, '');
         const ext = extension.replace(/\D/g, '');
         const input: PersonInput | CompanyInput = person
@@ -258,6 +304,8 @@ export function CreateRecordDialog<O extends ListObject>({
                             },
                         }
                       : {}),
+                  ...companyRef,
+                  custom: customInput(asked, customValues),
                   ...(handToOwner ? { handToOwner: true } : {}),
               }
             : { name: a.trim(), ...(b.trim() ? { domain: b.trim() } : {}) };
@@ -271,14 +319,13 @@ export function CreateRecordDialog<O extends ListObject>({
             onCreated(created.id);
         } catch (err) {
             if (err instanceof ApiError && err.code === 'conflict.company_owned') {
-                const ownerName = String(err.details['ownerName'] ?? 'another member');
-                const companyName = String(err.details['companyName'] ?? 'This company');
-                setOwned(person ? { ownerName, companyName } : null);
-                setError(
-                    person
-                        ? `${companyName} is ${ownerName}’s. Its people and deals are theirs, so you can’t save this lead for yourself.`
-                        : `${companyName} already has this domain, and it is ${ownerName}’s.`,
-                );
+                const existing = err.details['companyId'];
+                // The company the rep added has another member's domain: nothing was made. Choose that company, not
+                // a twin, and offer what saving can actually do — hand the lead to its owner.
+                if (company?.id === NEW_COMPANY && typeof existing === 'string') {
+                    setCompany({ id: existing, name: String(err.details['companyName'] ?? 'Another company') });
+                }
+                showOwned(err);
                 return;
             }
             setOwned(null);
@@ -356,6 +403,26 @@ export function CreateRecordDialog<O extends ListObject>({
                                 <Field label="Last name">
                                     <Input value={b} onChange={(e) => setB(e.target.value)} autoComplete="off" />
                                 </Field>
+                                <Field label="Company" required>
+                                    <RecordPicker
+                                        workspaceId={workspaceId}
+                                        object="company"
+                                        label="Company"
+                                        placeholder="Search or add a company"
+                                        value={company?.id ?? null}
+                                        valueLabel={company?.name}
+                                        onChange={(id) => {
+                                            if (!id) setCompany(null);
+                                        }}
+                                        onResolved={(id, name) => setCompany({ id, name })}
+                                        onCreate={
+                                            mayAddCompany
+                                                ? (name) =>
+                                                      Promise.resolve({ id: NEW_COMPANY, title: name, pending: true })
+                                                : undefined
+                                        }
+                                    />
+                                </Field>
                                 <Field label="Job title">
                                     <Input
                                         value={jobTitle}
@@ -383,6 +450,14 @@ export function CreateRecordDialog<O extends ListObject>({
                                         />
                                     </Field>
                                 </div>
+                                {asked.map((definition) => (
+                                    <CustomFieldInput
+                                        key={definition.key}
+                                        definition={definition}
+                                        value={customValues[definition.key] ?? ''}
+                                        onChange={(v) => setCustomValues((all) => ({ ...all, [definition.key]: v }))}
+                                    />
+                                ))}
                             </>
                         ) : (
                             <>
@@ -409,7 +484,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 type="button"
                                 shape="square"
                                 className="self-start"
-                                loading={create.isPending}
+                                loading={saving}
                                 onClick={() => void save(true)}
                             >
                                 Save for {owned.ownerName}
@@ -435,8 +510,8 @@ export function CreateRecordDialog<O extends ListObject>({
                                 type="submit"
                                 shape="square"
                                 variant="primary"
-                                loading={create.isPending}
-                                disabled={!a.trim()}
+                                loading={saving}
+                                disabled={!a.trim() || missing}
                             >
                                 {copy.add}
                             </Button>
@@ -448,6 +523,102 @@ export function CreateRecordDialog<O extends ListObject>({
     );
 }
 
+/** An asked custom field as a form input, by its type; the value is kept as typed until save. */
+function CustomFieldInput({
+    definition,
+    value,
+    onChange,
+}: {
+    definition: CustomFieldView;
+    value: CustomValue | undefined;
+    onChange: (value: CustomValue) => void;
+}) {
+    if (definition.type === 'multiselect') {
+        const ticked = new Set(Array.isArray(value) ? value : []);
+        return (
+            <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+                <legend className="mb-1 text-sm font-medium">
+                    {definition.label}
+                    {definition.required && <span className="text-danger"> *</span>}
+                </legend>
+                <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                    {definition.options.map((option) => (
+                        <label key={option} className="flex min-h-9 items-center gap-1.5 text-sm max-md:min-h-touch">
+                            <Checkbox
+                                checked={ticked.has(option)}
+                                onCheckedChange={(on) => {
+                                    const next = new Set(ticked);
+                                    if (on === true) next.add(option);
+                                    else next.delete(option);
+                                    // In the field's own order, whatever order they were ticked in.
+                                    onChange(definition.options.filter((o) => next.has(o)));
+                                }}
+                            />
+                            {option}
+                        </label>
+                    ))}
+                </div>
+            </fieldset>
+        );
+    }
+    const text = typeof value === 'string' ? value : '';
+    const choices =
+        definition.type === 'select' ? definition.options : definition.type === 'boolean' ? ['Yes', 'No'] : null;
+    if (choices) {
+        return (
+            <Field label={definition.label} required={definition.required}>
+                <Select {...(text ? { value: text } : {})} onValueChange={onChange}>
+                    <SelectTrigger aria-label={definition.label}>
+                        <SelectValue placeholder="Choose…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {choices.map((o) => (
+                            <SelectItem key={o} value={o}>
+                                {o}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </Field>
+        );
+    }
+    return (
+        <Field label={definition.label} required={definition.required}>
+            <Input
+                // A link pasted without https:// is taken (linkTo adds it on save); `type="url"` would refuse it.
+                {...(definition.type === 'url'
+                    ? { type: 'text', inputMode: 'url' as const }
+                    : { type: TEXT_TYPES[definition.type] ?? 'text' })}
+                value={text}
+                onChange={(e) => onChange(e.target.value)}
+                autoComplete="off"
+            />
+        </Field>
+    );
+}
+
+/** The asked fields' typed values in their types, as the API takes them; an empty one is left out. */
+function customInput(
+    definitions: readonly CustomFieldView[],
+    typed: Record<string, CustomValue>,
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const d of definitions) {
+        const value = typed[d.key];
+        if (value === undefined || !filled(value)) continue;
+        if (Array.isArray(value)) {
+            out[d.key] = value;
+            continue;
+        }
+        const raw = value.trim();
+        if (d.type === 'number') out[d.key] = Number(raw);
+        else if (d.type === 'boolean') out[d.key] = raw === 'Yes';
+        else if (d.type === 'url') out[d.key] = linkTo(raw);
+        else out[d.key] = raw;
+    }
+    return out;
+}
+
 /** A taken address, said by whose person has it — what the saver needs to know whom to ask. */
 function takenText(holder: NonNullable<AddressCheckView['holder']>): string {
     if (holder.workspaceName) return `This person is already a lead in ${holder.workspaceName}.`;
@@ -456,3 +627,12 @@ function takenText(holder: NonNullable<AddressCheckView['holder']>): string {
         : 'This person is already saved, with no owner';
     return holder.trashed ? `${whose}, in the trash.` : `${whose}.`;
 }
+
+/** An asked field's value in the form: text as typed, or a multi-select's ticked options. */
+type CustomValue = string | string[];
+
+const filled = (value: CustomValue | undefined): boolean =>
+    Array.isArray(value) ? value.length > 0 : (value ?? '').trim() !== '';
+
+/** The picker's id for a company added in the popup and not made yet (it is made on save). */
+const NEW_COMPANY = 'new-company';

@@ -162,10 +162,10 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     object === 'person' ? paths.person(workspaceId, row.id) : paths.company(workspaceId, row.id);
                 navigate(path, { state: { list: { ids: rows.map((r) => r.id) } } });
             } else {
-                navigate({
-                    pathname: location.pathname,
-                    search: withOpen(location.search, { type: object, id: row.id }),
-                });
+                navigate(
+                    { pathname: location.pathname, search: withOpen(location.search, { type: object, id: row.id }) },
+                    { state: { list: { ids: rows.map((r) => r.id) } } },
+                );
             }
         },
         [phone, object, workspaceId, navigate, rows, location.pathname, location.search],

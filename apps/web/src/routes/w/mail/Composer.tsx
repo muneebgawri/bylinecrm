@@ -80,6 +80,13 @@ export interface ComposerReply {
     subject: string;
     /** The thread it is in: a reply's draft is restored for the thread, whichever of its messages it answered. */
     threadId: string;
+    /**
+     * #350: a follow-up on this sent email — scheduled only (three days on, as a new follow-up row starts), and
+     * called off by the server if the person answers first.
+     */
+    followUp?: boolean | undefined;
+    /** A follow-up's sent email's From address: it goes from that mailbox, as the server requires. */
+    sentFrom?: string | undefined;
 }
 
 export interface ComposerHandle {
@@ -156,7 +163,7 @@ export function Composer(props: ComposerProps) {
         <div
             ref={root}
             tabIndex={-1}
-            aria-label={reply ? 'Reply' : `Email ${person?.name ?? ''}`.trim()}
+            aria-label={reply?.followUp ? 'Follow-up' : reply ? 'Reply' : `Email ${person?.name ?? ''}`.trim()}
             role="region"
             className={cn('outline-none', props.className)}
         >
@@ -194,7 +201,10 @@ function MailboxGate(props: ComposerProps & { person: ComposerPerson; formHandle
         );
     }
     const own = ownSendingMailboxes(mailboxes.data, membership?.memberId).filter(
-        (m) => !reply || reply.mailboxIds.includes(m.id),
+        (m) =>
+            !reply ||
+            (reply.mailboxIds.includes(m.id) &&
+                (!reply.sentFrom || m.email.toLowerCase() === reply.sentFrom.toLowerCase())),
     );
     if (own.length === 0) {
         if (reply) {
@@ -297,7 +307,10 @@ function ComposerForm({
     const [followUps, setFollowUps] = useState<FollowUpDraft[]>(() => [...(restored?.followUps ?? [])]);
     const followUpKey = useRef(0);
     // The time picked to schedule it, kept with the draft until it is scheduled.
-    const [scheduledFor, setScheduledFor] = useState<Date | null>(restored?.sendAt ?? null);
+    const followUpOnSent = !!reply?.followUp;
+    const [scheduledFor, setScheduledFor] = useState<Date | null>(
+        () => restored?.sendAt ?? (followUpOnSent ? nextFollowUpAt([], Date.now()) : null),
+    );
     const subjectRef = useRef<RichTextHandle>(null);
     const bodyRef = useRef<RichTextHandle>(null);
     const send = useSendMail(workspaceId);
@@ -430,16 +443,21 @@ function ComposerForm({
     const blank = isBlank(body);
     const noSubject = !reply && docToSubject(subject).trim() === '';
     const followUpBlank = followUps.some((f) => isBlank(f.body));
+    // A follow-up written under an empty email: the rep meant to follow up an email already sent, which this box
+    // does not do (its follow-ups follow the email written here). Said plainly, beside the disabled buttons.
+    const followUpOnly = blank && !reply && followUps.some((f) => !isBlank(f.body));
     const blocked = empty.length > 0 || blank || noSubject || followUpBlank || preview.isPending;
     const why = empty.length
         ? emptyVariablesText(empty, person.name)
-        : blank
-          ? 'Write a message to send.'
-          : noSubject
-            ? 'Add a subject to send.'
-            : followUpBlank
-              ? 'Write each follow-up’s message.'
-              : null;
+        : followUpOnly
+          ? 'The email at the top is empty: a follow-up goes after it. To follow up an email you already sent, reply to it and schedule the reply.'
+          : blank
+            ? 'Write a message to send.'
+            : noSubject
+              ? 'Add a subject to send.'
+              : followUpBlank
+                ? 'Write each follow-up’s message.'
+                : null;
     // A follow-up with no subject of its own takes the thread's, as the server will.
     const threadSubject = `Re: ${(docToSubject(subject) || reply?.subject || '…').replace(/^re:\s*/i, '')}`;
 
@@ -454,6 +472,21 @@ function ComposerForm({
     };
     const changeFollowUp = (key: string, change: Partial<FollowUpDraft>) =>
         setFollowUps((list) => list.map((f) => (f.key === key ? { ...f, ...change } : f)));
+    // A follow-up filled from a template (the 2nd, 3rd, 4th nudge each have their own): its body, under the
+    // thread's subject. The editor takes its content when it mounts, so the row remounts (`fills`).
+    const [fills, setFills] = useState<Record<string, number>>({});
+    const applyFollowUpTemplate = async (key: string, template: EmailTemplateView) => {
+        setError(null);
+        try {
+            const rendered = await preview.mutateAsync(template);
+            setMissing((m) => [...new Set([...m, ...rendered.missing])]);
+        } catch (e) {
+            setError(`The template could not be checked for ${person.name}: ${failureText(e)}`);
+            return;
+        }
+        changeFollowUp(key, { body: template.body });
+        setFills((f) => ({ ...f, [key]: (f[key] ?? 0) + 1 }));
+    };
 
     /** Back to an empty composer: after a send, or a draft discarded. */
     const reset = () => {
@@ -496,6 +529,7 @@ function ComposerForm({
             sendAt,
             timeZone: timeZone ?? senderTimeZone(),
             followUps,
+            followUp: followUpOnSent,
         });
         const subjectText = docToSubject(subject) || (reply ? `Re: ${reply.subject.replace(/^re:\s*/i, '')}` : '');
         try {
@@ -725,11 +759,14 @@ function ComposerForm({
                 <ol aria-label="Follow-ups" className="m-0 list-none border-t border-border p-0">
                     {followUps.map((f, index) => (
                         <FollowUpRow
-                            key={`${f.key}-${generation}`}
+                            key={`${f.key}-${generation}-${fills[f.key] ?? 0}`}
+                            workspaceId={workspaceId}
                             followUp={f}
                             number={index + 1}
                             threadSubject={threadSubject}
                             missing={missing}
+                            templatePending={preview.isPending}
+                            onTemplate={(t) => void applyFollowUpTemplate(f.key, t)}
                             onChange={(change) => changeFollowUp(f.key, change)}
                             onRemove={() => setFollowUps((list) => list.filter((x) => x.key !== f.key))}
                         />
@@ -745,10 +782,17 @@ function ComposerForm({
                             'm-0 text-xs',
                             empty.length
                                 ? 'rounded-full bg-danger-soft px-2.5 py-0.5 font-medium text-danger'
-                                : 'text-text-faint',
+                                : followUpOnly
+                                  ? 'w-full font-medium text-warning'
+                                  : 'text-text-faint',
                         )}
                     >
                         {why}
+                    </p>
+                )}
+                {followUpOnSent && (
+                    <p className="m-0 w-full text-xs text-text-muted">
+                        Goes in this thread at the time you pick, unless they answer first.
                     </p>
                 )}
                 {error && (
@@ -812,8 +856,8 @@ function ComposerForm({
                               </Button>
                           )}
                     <SchedulePicker
-                        title="Schedule send"
-                        confirm="Schedule send"
+                        title={followUpOnSent ? 'Schedule follow-up' : 'Schedule send'}
+                        confirm={followUpOnSent ? 'Schedule follow-up' : 'Schedule send'}
                         initial={scheduledFor ?? undefined}
                         pending={send.isPending}
                         error={error ?? undefined}
@@ -828,20 +872,22 @@ function ComposerForm({
                                 aria-describedby={why ? `${id}-why` : undefined}
                             >
                                 <CalendarClock aria-hidden />
-                                Schedule
+                                {followUpOnSent ? 'Schedule follow-up' : 'Schedule'}
                             </Button>
                         }
                     />
-                    <Button
-                        size="sm"
-                        shape="square"
-                        disabled={blocked}
-                        loading={send.isPending}
-                        aria-describedby={why ? `${id}-why` : undefined}
-                        onClick={() => void submit().catch(() => undefined)}
-                    >
-                        Send
-                    </Button>
+                    {!followUpOnSent && (
+                        <Button
+                            size="sm"
+                            shape="square"
+                            disabled={blocked}
+                            loading={send.isPending}
+                            aria-describedby={why ? `${id}-why` : undefined}
+                            onClick={() => void submit().catch(() => undefined)}
+                        >
+                            Send
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>
@@ -854,17 +900,24 @@ function ComposerForm({
  * to the email before it, and not at all if the person answers first.
  */
 function FollowUpRow({
+    workspaceId,
     followUp,
     number,
     threadSubject,
     missing,
+    templatePending,
+    onTemplate,
     onChange,
     onRemove,
 }: {
+    workspaceId: string;
     followUp: FollowUpDraft;
     number: number;
     threadSubject: string;
     missing: readonly string[];
+    templatePending: boolean;
+    /** Fill this follow-up from a personal template (its body; the subject stays the thread's). */
+    onTemplate: (template: EmailTemplateView) => void;
     onChange: (change: Partial<FollowUpDraft>) => void;
     onRemove: () => void;
 }) {
@@ -887,11 +940,18 @@ function FollowUpRow({
                 <span id={`${id}-zone`} className="text-xs">
                     {zone} · unless they answer first
                 </span>
+                <span className="ml-auto flex items-center gap-1">
+                    <TemplateMenu
+                        workspaceId={workspaceId}
+                        pending={templatePending}
+                        label={`Template for follow-up ${number}`}
+                        onPick={onTemplate}
+                    />
+                </span>
                 <Button
                     size="xs"
                     shape="square"
                     variant="ghost"
-                    className="ml-auto"
                     aria-label={`Remove follow-up ${number}`}
                     onClick={onRemove}
                 >
@@ -1102,10 +1162,13 @@ function RecipientAdder({
 function TemplateMenu({
     workspaceId,
     pending,
+    label,
     onPick,
 }: {
     workspaceId: string;
     pending: boolean;
+    /** The trigger's accessible name when several menus share a composer ("Template for follow-up 2"). */
+    label?: string;
     onPick: (template: EmailTemplateView) => void;
 }) {
     const [open, setOpen] = useState(false);
@@ -1118,7 +1181,14 @@ function TemplateMenu({
             onOpenChange={setOpen}
             widthClass="w-[min(22rem,calc(100vw-2rem))]"
             trigger={
-                <Button size="xs" shape="square" variant="ghost" loading={pending} aria-haspopup="dialog">
+                <Button
+                    size="xs"
+                    shape="square"
+                    variant="ghost"
+                    loading={pending}
+                    aria-haspopup="dialog"
+                    {...(label ? { 'aria-label': label } : {})}
+                >
                     <FileText aria-hidden />
                     Template
                 </Button>

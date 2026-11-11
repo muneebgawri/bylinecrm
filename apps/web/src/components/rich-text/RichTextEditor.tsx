@@ -2,8 +2,9 @@ import type { MailAssetView, RichText } from '@bylinecrm/shared';
 import { Button, cn, focusRing } from '@bylinecrm/ui';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import { TableKit } from '@tiptap/extension-table';
+import { Table, TableKit } from '@tiptap/extension-table';
 import { EditorContent, Node, useEditor, type AnyExtension, type Editor, type JSONContent } from '@tiptap/react';
+import { Fragment, Slice, type Node as PmNode } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import { Bold, Heading2, Heading3, ImagePlus, Italic, Link2, List, ListOrdered, Table2 } from 'lucide-react';
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
@@ -94,8 +95,48 @@ export const PROFILES: Record<RichTextProfile, ProfileSpec> = {
 /** A document with exactly one paragraph: the subject line. */
 const SingleLineDocument = Node.create({ name: 'doc', topNode: true, content: 'paragraph' });
 
+/**
+ * A table sits only at the top of a body, never in a cell or a list item — the API's rule (`body-subset.ts`).
+ * Tiptap's table is a `block`, so a cell (`block+`) or a list item would take one: a pasted signature built of
+ * nested tables went in, and the send was refused with `"table" cannot sit in "tableCell"`. Here a table is its
+ * own group that only the document holds, so pasted nested tables are laid out flat as they arrive.
+ */
+const TOP_TABLE_GROUP = 'topTable';
+const BodyDocument = Node.create({ name: 'doc', topNode: true, content: `(block | ${TOP_TABLE_GROUP})+` });
+const TopTable = Table.extend({ group: TOP_TABLE_GROUP }).configure({ resizable: false });
+
+/** A table with nothing in it: no text and no image, variable or other leaf, only empty cells. */
+function isEmptyTable(node: PmNode): boolean {
+    if (node.type.name !== 'table' || node.textContent.trim() !== '') return false;
+    let leaf = false;
+    node.descendants((child) => {
+        if (child.isLeaf && !child.isText && child.type.name !== 'hardBreak') leaf = true;
+        return !leaf;
+    });
+    return !leaf;
+}
+
+/**
+ * The pasted content without its empty tables, at any depth. Mail copied from another client often carries an
+ * empty layout table (a signature's or a quote's wrapper) that shows as a blank grid and only gets in the way.
+ */
+export function withoutEmptyTables(fragment: Fragment): Fragment {
+    const kept: PmNode[] = [];
+    let changed = false;
+    fragment.forEach((node) => {
+        if (isEmptyTable(node)) {
+            changed = true;
+            return;
+        }
+        const content = withoutEmptyTables(node.content);
+        if (content !== node.content) changed = true;
+        kept.push(content === node.content ? node : node.copy(content));
+    });
+    return changed ? Fragment.fromArray(kept) : fragment;
+}
+
 /** `trigger`: whether `{{` asks for a variable picker — only when the owner offers one. */
-function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension[] {
+export function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension[] {
     const spec = PROFILES[profile];
     const variables = [Variable.configure({ trigger }), MissingVariables];
     const link = spec.linkSchemes
@@ -130,9 +171,11 @@ function extensionsFor(profile: RichTextProfile, trigger: boolean): AnyExtension
             }),
         ];
         // Tables in a body only; the API refuses one in a signature. Fixed layout: no column resizing.
-        const tables = profile === 'template' ? [TableKit.configure({ table: { resizable: false } })] : [];
+        const tables = profile === 'template' ? [BodyDocument, TopTable, TableKit.configure({ table: false })] : [];
         return [
             StarterKit.configure({
+                // A body's document also holds tables (BodyDocument); a signature's is the plain one.
+                ...(profile === 'template' ? { document: false as const } : {}),
                 heading: { levels: [2, 3] },
                 codeBlock: false,
                 blockquote: false,
@@ -226,6 +269,11 @@ export function RichTextEditor({
             },
             // A subject is one line: Enter does nothing rather than splitting it.
             handleKeyDown: (_view, event) => spec.singleLine && event.key === 'Enter',
+            // Pasted empty tables are left out (withoutEmptyTables); anything else goes in as it came.
+            transformPasted: (slice) => {
+                const content = withoutEmptyTables(slice.content);
+                return content === slice.content ? slice : Slice.maxOpen(content);
+            },
             // A pasted or dropped image is uploaded and goes in by its public address, never as data.
             handlePaste: (_view, event) => {
                 const files = imageFilesOf(event.clipboardData);

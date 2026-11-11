@@ -104,8 +104,24 @@ export class SendMailDto extends createZodDto(
                 description:
                     'The caller’s draft this message was written in (`/mail/drafts`): deleted with the send, in the same transaction. A draft already gone is no error.',
             }),
+            followUp: z.literal(true).optional().meta({
+                description:
+                    'A follow-up on an email the CRM sent (`replyToMessageId`), scheduled (`sendAt`): sent in its thread as a reply once it is due, and called off — with any `followUps` after it — if the person answers first. Refused for mail synced from Gmail and for a thread they have already answered.',
+            }),
         })
         .superRefine((input, ctx) => {
+            if (input.followUp) {
+                if (input.replyToMessageId === undefined) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['replyToMessageId'],
+                        message: 'the sent email to follow up',
+                    });
+                }
+                if (input.sendAt === undefined) {
+                    ctx.addIssue({ code: 'custom', path: ['sendAt'], message: 'a follow-up is scheduled' });
+                }
+            }
             // Each follow-up after the email before it; a follow-up of a send now is checked against the clock.
             let previous = input.sendAt === undefined ? null : Date.parse(input.sendAt);
             for (const [index, f] of (input.followUps ?? []).entries()) {

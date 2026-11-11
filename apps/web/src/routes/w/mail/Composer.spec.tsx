@@ -308,6 +308,15 @@ describe('#193 the signature', () => {
 describe('queued follow-ups: the compose box queues emails that go later in the same thread', () => {
     const sendRoute: FakeRoute = (r) => (r.method === 'POST' && r.url.endsWith('/mail/send') ? accepted() : undefined);
 
+    it('says why Schedule waits when only a follow-up is written: the email at the top is empty', async () => {
+        composer([mailboxesRoute(MAILBOXES), sendRoute]);
+        await userEvent.click(await screen.findByRole('button', { name: 'Add follow-up' }));
+        await userEvent.type(screen.getByRole('textbox', { name: 'Follow-up 1 message' }), 'Following up on my email');
+        expect(screen.getByText(/The email at the top is empty/)).toBeInTheDocument();
+        expect(screen.getByText(/reply to it and schedule the reply/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    });
+
     it('adds a follow-up row with a time in the sender’s zone and the thread’s subject, and sends it with the email', async () => {
         const seen = composer([mailboxesRoute(MAILBOXES), sendRoute]);
         await write('Hello', 'Hi Dana');
@@ -335,6 +344,35 @@ describe('queued follow-ups: the compose box queues emails that go later in the 
         // No subject of its own: the server gives it the thread's `Re: Hello`.
         expect(body.followUps[0]).not.toHaveProperty('subject');
         expect(JSON.stringify(body.followUps[0]!.body)).toContain('Any thoughts?');
+    });
+
+    it('fills a follow-up from a personal template — its body, under the thread’s subject — and sends it', async () => {
+        const seen = composer([
+            mailboxesRoute(MAILBOXES),
+            (r) =>
+                r.method === 'GET' && r.url.includes('/templates?')
+                    ? json({ items: [template()], nextCursor: null })
+                    : undefined,
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/templates/t-1/preview')
+                    ? json({ subject: 'About Acme', html: '<p>Hi</p>', text: 'Hi', missing: [], sendable: true })
+                    : undefined,
+            sendRoute,
+        ]);
+        await write('Hello', 'Hi Dana');
+        await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Template for follow-up 1' }));
+        await userEvent.click(await screen.findByRole('button', { name: /Follow-up after a reply/ }));
+        await waitFor(() =>
+            expect(screen.getByRole('textbox', { name: 'Follow-up 1 message' })).toHaveTextContent('person.firstName'),
+        );
+        // The thread's subject stays: the template's is not copied into the follow-up.
+        expect(screen.getByRole('textbox', { name: 'Follow-up 1 subject' })).toHaveTextContent('');
+        expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveTextContent('Hello');
+        await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/mail/send'))).toBe(true));
+        const body = seen.find((r) => r.url.endsWith('/mail/send'))?.body as { followUps: { body: unknown }[] };
+        expect(JSON.stringify(body.followUps[0]!.body)).toContain('person.firstName');
     });
 
     it('refuses a follow-up timed before the email it follows, sending nothing', async () => {

@@ -29,6 +29,13 @@ export interface HealthStatus {
 export const APP_DB_ROLE = 'bylinecrm_app';
 
 /**
+ * The role people search runs as (#344): `people_search` is a SECURITY DEFINER function it owns. NOLOGIN and BYPASSRLS,
+ * so the planner may use the search indexes, with SELECT on `people` and `person_addresses` and nothing else. The
+ * migrations grant it exactly that; `app-role.spec.ts` keeps them to it.
+ */
+export const SEARCH_DB_ROLE = 'bylinecrm_search';
+
+/**
  * The transaction-local setting that carries the current workspace to the row-level policies.
  * `withWorkspace` sets it; the policies read it through `app_workspace_id()`; unset means no rows.
  */
@@ -64,5 +71,6 @@ export * from './enrichment.js';
 export * from './tracking.js';
 export * from './notifications.js';
 export * from './guardrails.js';
+export * from './calls.js';
 export * from './reputation.js';
 export * from './compose-lint.js';
