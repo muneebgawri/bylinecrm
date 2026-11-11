@@ -27,6 +27,7 @@ export class UpdateReputationSettingsDto extends createZodDto(
             replyRateFloorBps: int(L.replyRateFloorBps),
             replyRateMinSends: int(L.replyRateMinSends),
             replyRateWindowDays: int(L.replyRateWindowDays),
+            replyRateMaturityHours: int(L.replyRateMaturityHours),
             spamPauseBps: int(L.spamPauseBps),
             spamWarnBps: int(L.spamWarnBps),
         })

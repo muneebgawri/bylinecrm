@@ -37,6 +37,10 @@ export const reputationSettings = named(
             .number()
             .int()
             .meta({ description: 'REP-2: the window the reply rate is measured over.' }),
+        replyRateMaturityHours: z.number().int().meta({
+            description:
+                'REP-2: how old a send must be (hours) before it is judged; younger sends had no time for a reply.',
+        }),
         spamPauseBps: z.number().int().meta({
             description:
                 'REP-2: Postmaster spam rate (basis points; 30 = 0.3%) that pauses every mailbox on the domain.',
