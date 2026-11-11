@@ -106,6 +106,10 @@ export const addressCheckView = named(
                 }),
             })
             .nullable(),
+        company: z.object({ id: z.uuid(), name: z.string() }).nullable().meta({
+            description:
+                "The company at the address's domain (its own or another domain), for the new person to join; null for free mail or none.",
+        }),
     }),
 );
 export type AddressCheckView = z.output<typeof addressCheckView>;
