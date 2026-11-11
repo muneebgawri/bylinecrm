@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../infra/prisma.service';
@@ -11,10 +11,10 @@ import {
 } from '../records/people-dedupe.service';
 
 const USAGE =
-    'usage: node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review | --release-addresses] [--limit <n>] [--csv <file>]';
+    'usage: node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review | --release-addresses [--keep <file>]] [--limit <n>] [--csv <file>]';
 
 /**
- * `node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review | --release-addresses] [--limit <n>] [--csv <file>]`
+ * `node dist/cli/merge-duplicate-people.js <workspace-slug> [--apply] [--include-review | --release-addresses [--keep <file>]] [--limit <n>] [--csv <file>]`
  * — run on the server inside the api container. Merges people saved more than once (the 2026-10-12 Twenty
  * import's duplicates, `PeopleDedupe`). Tiers: `auto` (the people share an address and their names agree),
  * `auto_name_mismatch` (they share an address but the names differ — listed in the CSV, never merged) and `review` (only the name
@@ -26,7 +26,9 @@ const USAGE =
  *
  * `--release-addresses` merges nothing: for the `auto_name_mismatch` groups, each shared address goes to the person
  * it names and the others give it up (`PeopleDedupe.releaseAddresses`); the rest are listed as unresolved. Dry run
- * unless `--apply`; `--csv` writes one row per shared address.
+ * unless `--apply`; `--csv` writes one row per shared address. `--keep` reads a person's choices for unresolved
+ * addresses: a CSV with `email` and `keeper_id` columns (the `--csv` file, edited, will do); each such address goes
+ * to that keeper, mail or not.
  */
 async function main(): Promise<void> {
     const args = process.argv.slice(2);
@@ -44,14 +46,17 @@ async function main(): Promise<void> {
     const csv = value('--csv');
     const limitArg = value('--limit');
     const limit = limitArg === undefined ? undefined : Number(limitArg);
+    const keep = value('--keep');
     if (
         !slug ||
         slug.startsWith('--') ||
         (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) ||
-        (releaseAddresses && (includeReview || limit !== undefined))
+        (releaseAddresses && (includeReview || limit !== undefined)) ||
+        (keep !== undefined && !releaseAddresses)
     ) {
         throw new Error(USAGE);
     }
+    const decided = keep === undefined ? undefined : keepers(readFileSync(keep, 'utf8'));
     // A one-off process: no worker, relay or schedule of its own — the running API delivers what it records.
     for (const flag of [
         'WEBHOOK_WORKER',
@@ -77,7 +82,11 @@ async function main(): Promise<void> {
             if (seen % 50 === 0) console.error(`… ${seen} groups`);
         };
         if (releaseAddresses) {
-            const report = await app.get(PeopleDedupe).releaseAddresses(workspace.id, { apply, onGroup: progress });
+            const report = await app.get(PeopleDedupe).releaseAddresses(workspace.id, {
+                apply,
+                decided,
+                onGroup: progress,
+            });
             console.log(
                 `${apply ? 'released' : 'would release'}: ${report.released} addresses; unresolved ${report.unresolved}; failed ${report.failed}`,
             );
@@ -129,6 +138,26 @@ function line(g: DedupeGroupResult): string {
         `[${g.tier}] ${g.outcome}: keep "${g.survivorName}" (${g.survivorId}) ← ${g.mergedNames.map((n, i) => `"${n}" (${g.mergedIds[i]})`).join(', ')}` +
         ` | owner ${g.owner ?? 'none'} — ${g.ownerWhy} | ${g.why}${g.biginIds.length ? ` | bigin ${g.biginIds.join(' ')}` : ''}`
     );
+}
+
+/** `--keep`: address → keeper id, from a CSV with `email` and `keeper_id` columns (no quoted commas in either). */
+function keepers(text: string): Map<string, string> {
+    const [head, ...rows] = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+    const cols = (head ?? '').split(',').map((c) => c.trim().toLowerCase());
+    const e = cols.indexOf('email');
+    const k = cols.indexOf('keeper_id');
+    if (e < 0 || k < 0) throw new Error('--keep: the CSV needs email and keeper_id columns');
+    const out = new Map<string, string>();
+    for (const row of rows) {
+        const cells = row.split(',');
+        const email = cells[e]?.trim().toLowerCase();
+        const id = cells[k]?.trim();
+        if (!email || !id) continue;
+        if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error(`--keep: ${email} has no keeper id`);
+        if (out.has(email) && out.get(email) !== id) throw new Error(`--keep: ${email} has two keepers`);
+        out.set(email, id);
+    }
+    return out;
 }
 
 const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
