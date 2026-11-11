@@ -116,6 +116,7 @@ const GETS: [RegExp, Handler][] = [
         (m) => data.enrichmentHistory(m[1] as 'person' | 'company', m[2]!),
     ],
     [new RegExp(`^${W}/tracking/domain$`), () => data.trackingSettings],
+    [new RegExp(`^${W}/tracking/policy$`), () => data.trackingPolicy],
     [new RegExp(`^${W}/sequences/${ID}/enrolments$`), () => data.enrolments],
     [new RegExp(`^${W}/sequences/${ID}$`), (m) => byId(data.sequences, m[1])],
     [new RegExp(`^${W}/sequences$`), () => data.sequences],

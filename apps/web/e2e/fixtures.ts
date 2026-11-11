@@ -34,6 +34,7 @@ import type {
     EmailVerificationSettingsView,
     EnrichmentHistoryView,
     EnrichmentSettingsView,
+    TrackingPolicyView,
     TrackingSettingsView,
     SuppressionView,
     SendingDomainView,
@@ -1619,6 +1620,23 @@ export const trackingSettings: TrackingSettingsView = {
         checkedAt: at(6),
         updatedAt: at(20),
     },
+};
+
+/** How email is tracked (TRACK-2): built in, CRM-written mail tracked by default, Gmail reply notices on. */
+export const trackingPolicy: TrackingPolicyView = {
+    provider: 'builtin',
+    trackOpens: true,
+    trackClicks: true,
+    trackPersonalMail: true,
+    gmailReplyNotices: true,
+    smtp2go: {
+        keySet: false,
+        hookUrl: 'https://api.bylinecrm.example/api/hooks/smtp2go/relay/0b1e0000-0000-4000-8000-000000000001',
+        hookAuthorization: null,
+        lastHookAt: null,
+        lastHookResult: null,
+    },
+    mailboxesWithoutCopy: [],
 };
 
 /** The suppression list (P3-1): one of each kind of entry — a permanent one and two an admin may lift. */

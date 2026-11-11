@@ -228,6 +228,9 @@ export type TrackingSettingsView = Schemas['TrackingSettings'];
 export type TrackingDomainView = NonNullable<TrackingSettingsView['domain']>;
 export type TrackingCountsView = Schemas['TrackingCounts'];
 export type PutTrackingDomainInput = Schemas['PutTrackingDomainDto'];
+/** TRACK-2: how the workspace tracks its mail. */
+export type TrackingPolicyView = Schemas['TrackingPolicy'];
+export type PatchTrackingPolicyInput = Schemas['PatchTrackingPolicyDto'];
 export type SuppressionPage = Schemas['SuppressionPage'];
 // ---- Guardrails (GUARD-1) ---------------------------------------------------------------------
 export type GuardrailEventView = Schemas['GuardrailEvent'];

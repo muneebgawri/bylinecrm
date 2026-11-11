@@ -142,6 +142,8 @@ export interface Draft {
     followUps?: readonly FollowUpDraft[] | undefined;
     /** #350: a scheduled follow-up on the sent email it replies to — called off if the person answers first. */
     followUp?: boolean | undefined;
+    /** TRACK-2: track this email's opens and clicks; left out, the workspace's default. */
+    track?: boolean | undefined;
 }
 
 /**
@@ -225,6 +227,7 @@ export function sendInput(draft: Draft): SendMailInput {
             : { body: draft.body, ...(subject !== '' ? { subject } : {}) }),
         ...(draft.replyToMessageId ? { replyToMessageId: draft.replyToMessageId } : {}),
         ...(draft.followUp ? { followUp: true as const } : {}),
+        ...(draft.track !== undefined ? { track: draft.track } : {}),
         ...(draft.signature !== undefined ? { signature: draft.signature } : {}),
         ...(draft.sendAt || draft.followUps?.length ? { timeZone: draft.timeZone } : {}),
         ...(draft.sendAt ? { sendAt: draft.sendAt.toISOString() } : {}),

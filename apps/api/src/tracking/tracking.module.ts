@@ -3,7 +3,8 @@ import { AuthModule } from '../auth/auth.module';
 import { SendingPoolModule } from '../sending-pool/sending-pool.module';
 import { TrackingDomainService } from './tracking-domain.service';
 import { TrackingRateGuard } from './tracking-rate.guard';
-import { TrackingDomainController, TrackingPublicController } from './tracking.controllers';
+import { TrackingDomainController, TrackingPolicyController, TrackingPublicController } from './tracking.controllers';
+import { TrackingPolicyService } from './tracking-policy.service';
 import { TrackingService } from './tracking.service';
 
 /**
@@ -14,8 +15,8 @@ import { TrackingService } from './tracking.service';
  */
 @Module({
     imports: [AuthModule, SendingPoolModule],
-    controllers: [TrackingDomainController, TrackingPublicController],
-    providers: [TrackingDomainService, TrackingService, TrackingRateGuard],
-    exports: [TrackingService],
+    controllers: [TrackingDomainController, TrackingPolicyController, TrackingPublicController],
+    providers: [TrackingDomainService, TrackingPolicyService, TrackingService, TrackingRateGuard],
+    exports: [TrackingService, TrackingPolicyService],
 })
 export class TrackingModule {}
