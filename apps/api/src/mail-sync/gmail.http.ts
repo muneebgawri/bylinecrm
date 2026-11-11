@@ -117,6 +117,26 @@ export class GmailHttp implements GmailPort {
         return { id: body['id'], threadId: body['threadId'] };
     }
 
+    async insertSent(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent> {
+        const payload = {
+            raw: Buffer.from(input.raw, 'utf8').toString('base64url'),
+            labelIds: ['SENT'],
+            ...(input.threadId ? { threadId: input.threadId } : {}),
+        };
+        const body = await this.request(accessToken, '/messages?internalDateSource=dateHeader', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+        if (typeof body['id'] !== 'string' || typeof body['threadId'] !== 'string') {
+            throw new GmailApiError(
+                null,
+                'unexpected_response',
+                'Gmail returned an inserted message without an id or thread',
+            );
+        }
+        return { id: body['id'], threadId: body['threadId'] };
+    }
+
     private get(accessToken: string, path: string): Promise<Record<string, unknown>> {
         return this.request(accessToken, path, { method: 'GET' });
     }

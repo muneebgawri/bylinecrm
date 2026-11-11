@@ -55,3 +55,33 @@ export type TrackingTypeChecks = [
     Assert<Same<z.output<typeof trackingSettingsView>, TrackingSettingsView>>,
     Assert<Same<z.output<typeof trackingCounts>, TrackingCounts>>,
 ];
+
+/** TRACK-2: `GET /tracking/policy` and every change to it. */
+export const trackingPolicyView = named(
+    'TrackingPolicy',
+    z.object({
+        provider: z.enum(['builtin', 'smtp2go']).meta({
+            description:
+                '`builtin`: our short links and pixel (the short-link domain must pass). `smtp2go`: CRM-written mail goes through SMTP2Go, which tracks it, with a copy kept in Gmail’s Sent.',
+        }),
+        trackOpens: z.boolean(),
+        trackClicks: z.boolean(),
+        trackPersonalMail: z
+            .boolean()
+            .meta({ description: 'Whether an email written in the CRM is tracked unless its writer turns it off.' }),
+        gmailReplyNotices: z.boolean().meta({
+            description: 'Whether a member hears of a CRM contact’s reply to an email they sent straight from Gmail.',
+        }),
+        smtp2go: z.object({
+            keySet: z.boolean().meta({ description: 'An API key is set; it is never shown.' }),
+            hookUrl: z.string(),
+            hookAuthorization: z.string().nullable(),
+            lastHookAt: isoTime.nullable(),
+            lastHookResult: z.string().nullable(),
+        }),
+        mailboxesWithoutCopy: z.array(z.object({ id: z.uuid(), email: z.string() })).meta({
+            description:
+                'Personal mailboxes connected without `gmail.insert`: their CRM-written mail goes through Gmail until they connect again.',
+        }),
+    }),
+);

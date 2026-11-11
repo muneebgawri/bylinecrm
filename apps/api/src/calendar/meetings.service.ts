@@ -6,6 +6,7 @@ import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.serv
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { MailboxesService } from '../mail-accounts/mailboxes.service';
 import { paginate, type Page } from '../records/list-query';
+import { memberInScope } from '../records/record-scope';
 import { MEMBER_SUMMARY_SELECT, memberSummaryOf } from '../records/summaries';
 import type { CalendarSyncView, MeetingKpiRow, MeetingKpis, MeetingView } from './responses';
 
@@ -54,7 +55,7 @@ export class MeetingsService {
         limit: number;
     }): Promise<Page<MeetingView>> {
         const context = this.current();
-        const memberId = memberInScope(context, query.memberId);
+        const memberId = memberInScope(context, query.memberId, 'meetings');
         const where: Prisma.CalendarEventWhereInput = {
             ...(memberId ? { OR: [{ hostMemberId: memberId }, { copies: { some: { memberId } } }] } : {}),
             ...(query.from || query.to
@@ -97,7 +98,7 @@ export class MeetingsService {
         if (to.getTime() - from.getTime() > MEETING_KPI_MAX_DAYS * DAY_MS) {
             throw new ApiException(400, 'validation.failed', `a KPI period is at most ${MEETING_KPI_MAX_DAYS} days`);
         }
-        const only = isAdmin(context) ? null : memberInScope(context, undefined);
+        const only = isAdmin(context) ? null : memberInScope(context, undefined, 'meetings');
         return this.rls.withWorkspace(async (tx) => {
             const members = await tx.workspaceMember.findMany({
                 where: {
@@ -161,22 +162,6 @@ export class MeetingsService {
 
 function isAdmin(context: WorkspaceRunContext): boolean {
     return context.capabilities.has('workspace:admin');
-}
-
-/**
- * The member a meeting read or a lead suggestion is narrowed to: the one asked for, for an admin (or none:
- * everyone); the caller themselves for anyone else — asking for someone else is `403`, and an API key, being no
- * one, `403`. One rule for the meetings, the KPIs and the suggestions.
- */
-export function memberInScope(context: WorkspaceRunContext, requested: string | undefined): string | null {
-    if (isAdmin(context)) return requested ?? null;
-    if (!context.memberId) {
-        throw new ApiException(403, 'forbidden', 'meetings are a member’s own; an API key needs the admin role');
-    }
-    if (requested && requested !== context.memberId) {
-        throw new ApiException(403, 'forbidden', 'only an admin may act on another member’s meetings');
-    }
-    return context.memberId;
 }
 
 /** The KPI counts of `memberIds` over `[from, to)`, in one statement; a member with nothing is absent. */

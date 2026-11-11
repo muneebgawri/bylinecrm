@@ -142,6 +142,13 @@ export interface GmailPort {
     send(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent>;
 
     /**
+     * TRACK-2: puts a copy of a message another server sent into the mailbox (`messages.insert`, `internalDateSource:
+     * dateHeader`) under `SENT`, in `threadId` when it answers one — so Gmail keeps the conversation whole. Gmail keeps
+     * the Message-ID as given (it rewrites only what it sends itself). Needs `gmail.insert`.
+     */
+    insertSent(accessToken: string, input: { raw: string; threadId?: string }): Promise<GmailSent>;
+
+    /**
      * The mailbox's send-as addresses and their signatures (#193), for importing a signature. Google lists
      * `gmail.readonly` among the scopes `users.settings.sendAs.list` accepts, which every mailbox holds.
      */

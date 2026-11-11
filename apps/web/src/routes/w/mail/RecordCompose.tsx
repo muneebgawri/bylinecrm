@@ -10,7 +10,8 @@ export interface RecordComposeHandle {
 /**
  * The compose box where a record page puts it (doc 50 §A): at the top of the activity column on a
  * tablet or desktop; on a phone (FR-CRMS-UI-12) a full-screen sheet raised by the bottom bar's
- * "Email", so the record stays readable and the keyboard has the whole screen.
+ * "Email", so the record stays readable and the keyboard has the whole screen. A page with no
+ * activity column (Today, #360) asks for the sheet at every width (`sheet`).
  */
 export function RecordCompose({
     workspaceId,
@@ -18,28 +19,43 @@ export function RecordCompose({
     noPerson,
     dealId,
     handle,
+    sheet = false,
+    onSent,
 }: {
     workspaceId: string;
     person: ComposerPerson | null;
     noPerson?: string;
     dealId?: string | undefined;
     handle?: Ref<RecordComposeHandle>;
+    /** Always the sheet, opened by `start`; never the inline box. */
+    sheet?: boolean;
+    onSent?: () => void;
 }) {
-    const phone = useIsMobile();
+    const asSheet = useIsMobile() || sheet;
     const [open, setOpen] = useState(false);
     const inline = useRef<ComposerHandle>(null);
-    useImperativeHandle(handle, () => ({ start: () => (phone ? setOpen(true) : inline.current?.focus()) }), [phone]);
+    useImperativeHandle(handle, () => ({ start: () => (asSheet ? setOpen(true) : inline.current?.focus()) }), [
+        asSheet,
+    ]);
 
     // The record's composer keeps a draft: closing the sheet, or leaving the page, saves it; opening it restores it.
     const common = { workspaceId, person, dealId, drafts: true, ...(noPerson ? { noPerson } : {}) };
-    if (!phone) return <Composer {...common} handle={inline} />;
+    if (!asSheet) return <Composer {...common} handle={inline} {...(onSent ? { onSent } : {})} />;
     const name = person?.name ?? 'this person';
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent className="max-md:h-dvh max-md:max-h-dvh max-md:rounded-none max-md:pt-4">
                 <DialogTitle className="pr-12">Email {name}</DialogTitle>
                 <DialogDescription className="sr-only">Write an email to {name}.</DialogDescription>
-                <Composer {...common} autoFocus onSent={() => setOpen(false)} onDiscard={() => setOpen(false)} />
+                <Composer
+                    {...common}
+                    autoFocus
+                    onSent={() => {
+                        setOpen(false);
+                        onSent?.();
+                    }}
+                    onDiscard={() => setOpen(false)}
+                />
             </DialogContent>
         </Dialog>
     );
