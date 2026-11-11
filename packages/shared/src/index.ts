@@ -36,6 +36,14 @@ export const APP_DB_ROLE = 'bylinecrm_app';
 export const SEARCH_DB_ROLE = 'bylinecrm_search';
 
 /**
+ * The role a company's claim runs as (OWN-2d): `claim_company` is a SECURITY DEFINER function it owns. NOLOGIN and
+ * BYPASSRLS, so an own-scoped member's save can claim a company nobody owns (which their policies hide from them),
+ * with SELECT and UPDATE on `companies`, SELECT on `workspace_members` and nothing else. The migrations grant it
+ * exactly that; `app-role.spec.ts` keeps them to it.
+ */
+export const OWNERSHIP_DB_ROLE = 'bylinecrm_ownership';
+
+/**
  * The transaction-local setting that carries the current workspace to the row-level policies.
  * `withWorkspace` sets it; the policies read it through `app_workspace_id()`; unset means no rows.
  */
