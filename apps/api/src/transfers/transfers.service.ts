@@ -27,6 +27,8 @@ import { assertNotCooling, coolingDays } from './transfer-cooling';
 
 /** The reason on a hand-over that gave an owner to a record that had none, from an import's source (Bigin). */
 export const TRANSFER_REASON_IMPORT_FILL = 'import_fill';
+/** The reason on a claim: a member saved the first lead at a company nobody owned, so it is theirs (OWN-2). */
+export const TRANSFER_REASON_FIRST_LEAD = 'first_lead';
 
 const MEMBER = { select: MEMBER_SUMMARY_SELECT } as const;
 const INCLUDE = { from: MEMBER, to: MEMBER, proposedBy: MEMBER, decidedBy: MEMBER } as const;
@@ -366,6 +368,37 @@ export class TransfersService {
         });
     }
 
+    /**
+     * OWN-2: "the first to save a company — or the first person at it — keeps its leads". A company nobody owns
+     * becomes `to`'s, with the people and open deals at it that nobody owns either (its unit from no owner), as a
+     * forced transfer from no one. Nothing is taken from anyone, so nobody is told and, like an import's fill, the
+     * `transfer.completed` is internal. Runs past the caller's owner scope: an own-scoped member cannot see a company
+     * nobody owns. Null when the company is gone or already has an owner.
+     */
+    async claim(context: WorkspaceRunContext, companyId: string, to: string): Promise<TransferView | null> {
+        return this.widened(context, async (tx) => {
+            const wide = widen(context);
+            const head = await findHead(tx, wide, 'company', companyId);
+            if (!head || head.ownerId !== null) return null;
+            const row = await this.complete(tx, wide, {
+                create: {
+                    object: 'company',
+                    recordId: companyId,
+                    fromMemberId: null,
+                    toMemberId: to,
+                    proposedByMemberId: to,
+                    decidedByMemberId: to,
+                    status: 'forced',
+                    reason: TRANSFER_REASON_FIRST_LEAD,
+                },
+                head,
+                me: to,
+                quiet: true,
+            });
+            return view(row, await labelsFor(tx, row));
+        });
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -382,6 +415,8 @@ export class TransfersService {
             me: string;
             /** The records to move, when not the object's usual unit (the rotation's). */
             unit?: { targets: RecordTarget[]; identity: TransferEventPayload['identity'] };
+            /** A claim (nothing taken from anyone): nobody is told, and `transfer.completed` is internal. */
+            quiet?: boolean;
         },
     ): Promise<Row> {
         const object = (input.create?.object ?? input.update!.object) as RecordObject;
@@ -406,13 +441,16 @@ export class TransfersService {
                   include: INCLUDE,
               });
         const updates = await this.widened(context, (w) => move(w, wide, moved, from, to));
-        if (row.status === 'forced') {
+        if (input.quiet) {
+            // A claim: nobody to tell.
+        } else if (row.status === 'forced') {
             await tell(tx, row, to, 'transfer_received');
             if (from && from !== input.me) await tell(tx, row, from, 'transfer_taken');
         } else if (row.proposedByMemberId !== input.me) {
             await tell(tx, row, row.proposedByMemberId, 'transfer_accepted');
         }
-        await this.events.recordAll(tx, [event(context, 'transfer.completed', row, moved, identity), ...updates]);
+        const completed = event(context, 'transfer.completed', row, moved, identity);
+        await this.events.recordAll(tx, [input.quiet ? { ...completed, internal: true } : completed, ...updates]);
         return row;
     }
 
