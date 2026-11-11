@@ -2034,6 +2034,8 @@ model ReputationSettings {
   replyRateFloorBps      Int      @default(100) @map("reply_rate_floor_bps")
   replyRateMinSends      Int      @default(50) @map("reply_rate_min_sends")
   replyRateWindowDays    Int      @default(7) @map("reply_rate_window_days")
+  /// REP-2 (#362): a send is judged once it is this many hours old — younger ones had no time to be answered.
+  replyRateMaturityHours Int      @default(72) @map("reply_rate_maturity_hours")
   /// REP-2: Postmaster spam-rate kill switch and warn line (basis points).
   spamPauseBps           Int      @default(30) @map("spam_pause_bps")
   spamWarnBps            Int      @default(10) @map("spam_warn_bps")
