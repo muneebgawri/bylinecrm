@@ -177,6 +177,11 @@ export type EmailSummary = {
     inReplyTo: string | null;
     /** The `References` header's ids, oldest first. */
     references: string[];
+    /**
+     * Stored by the mail history backfill: old mail, not news. What re-derives per message (contact status, cadence)
+     * leaves it to the backfill's own refresh of the people each window touched (`isHistoricalMail`).
+     */
+    historical?: boolean;
 };
 
 /**

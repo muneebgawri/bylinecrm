@@ -206,21 +206,31 @@ export class ReputationMonitor {
         const replies = await tx.$queryRaw<
             { id: string; from_address: string; body_text: string; person_id: string | null }[]
         >`
+            -- The window's replies first; then, for each, whether this mailbox wrote in its thread — by the thread's own
+            -- messages (the workspace + thread index), never by every thread the mailbox ever wrote in: after the mail
+            -- history backfill that set was a mailbox's whole history, read for every check (2026-11-11).
             WITH mine AS MATERIALIZED (
-                SELECT message_id, direction FROM mail_message_copies WHERE mailbox_id = ${mailbox.id}::uuid
+                SELECT message_id FROM mail_message_copies
+                WHERE mailbox_id = ${mailbox.id}::uuid AND direction = 'inbound'
             ),
-            written AS MATERIALIZED (
-                SELECT DISTINCT o.thread_id FROM mine x JOIN mail_messages o ON o.id = x.message_id
-                WHERE x.direction = 'outbound'
+            replies AS MATERIALIZED (
+                SELECT m.id, m.thread_id, m.from_address, m.body_text
+                FROM mine x
+                JOIN mail_messages m ON m.id = x.message_id
+                WHERE m.sent_at >= ${since}
+                  AND m.in_reply_to IS NOT NULL
             )
-            SELECT m.id, lower(m.from_address) AS from_address, m.body_text,
-                   (SELECT p.person_id FROM mail_participants p WHERE p.message_id = m.id AND p.role = 'from' LIMIT 1) AS person_id
-            FROM mine x
-            JOIN mail_messages m ON m.id = x.message_id
-            WHERE x.direction = 'inbound'
-              AND m.sent_at >= ${since}
-              AND m.in_reply_to IS NOT NULL
-              AND m.thread_id IN (SELECT thread_id FROM written)`;
+            SELECT r.id, lower(r.from_address) AS from_address, r.body_text,
+                   (SELECT p.person_id FROM mail_participants p WHERE p.message_id = r.id AND p.role = 'from' LIMIT 1) AS person_id
+            FROM replies r
+            WHERE EXISTS (
+                SELECT 1 FROM mail_messages o
+                JOIN mail_message_copies c ON c.message_id = o.id
+                WHERE o.workspace_id = ${context.workspaceId}::uuid
+                  AND o.thread_id = r.thread_id
+                  AND c.mailbox_id = ${mailbox.id}::uuid
+                  AND c.direction = 'outbound'
+            )`;
         for (const r of replies) {
             // The reply's own words: quoted text and signature dropped, as the fingerprint drops them.
             if (!isNegativeReply(normaliseBody(r.body_text))) continue;

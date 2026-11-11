@@ -292,6 +292,12 @@ describe('mail history backfill', () => {
         for (const e of events) expect(e.targets).toContainEqual({ type: 'person', id: danaId });
         const participants = await owner.mailParticipant.count({ where: { workspaceId: workspace, personId: danaId } });
         expect(participants).toBe(4);
+        // Old mail, flagged so: contact status is not re-derived per message, but by the step, once — Dana's mail
+        // and her reply count already, before any event is consumed.
+        for (const e of events) expect(e.email?.historical).toBe(true);
+        const dana = await owner.person.findUniqueOrThrow({ where: { id: danaId } });
+        expect(dana.contactAttempts).toBeGreaterThan(0);
+        expect(dana.contactStatus).not.toBe('new');
     });
 
     it('does not store what the first import already holds (the margin is skipped unread)', async () => {

@@ -3,6 +3,7 @@ import type { DomainEvent } from '@bylinecrm/shared';
 import { peopleConcerned } from '../customers/contact-status.consumer';
 import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { isHistoricalMail } from '../mail-sync/summary';
 import { refreshCadence, resolveLapses } from './cadence.service';
 
 /** What may touch a lead, change its stage, owner or scope. */
@@ -41,7 +42,8 @@ export class CadenceConsumer implements OutboxConsumer {
     constructor(private readonly rls: RlsPrismaService) {}
 
     accepts(event: DomainEvent): boolean {
-        return ACCEPTS.has(event.type);
+        // Old mail the history backfill stored is no new touch: the hourly run sees it (`refreshCadenceInBatches`).
+        return ACCEPTS.has(event.type) && !isHistoricalMail(event);
     }
 
     async consume({ event }: DeliveredEvent): Promise<void> {

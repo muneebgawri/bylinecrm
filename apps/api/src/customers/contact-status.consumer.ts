@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { DomainEvent } from '@bylinecrm/shared';
 import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
+import { isHistoricalMail } from '../mail-sync/summary';
 import { refreshContactStatus } from './contact-status.service';
 
 const ACCEPTS = new Set<string>([
@@ -36,7 +37,8 @@ export class ContactStatusConsumer implements OutboxConsumer {
     constructor(private readonly rls: RlsPrismaService) {}
 
     accepts(event: DomainEvent): boolean {
-        return ACCEPTS.has(event.type);
+        // Old mail the history backfill stored: the backfill refreshes the people of each window once.
+        return ACCEPTS.has(event.type) && !isHistoricalMail(event);
     }
 
     async consume({ event }: DeliveredEvent): Promise<void> {
