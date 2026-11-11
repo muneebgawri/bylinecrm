@@ -27,8 +27,6 @@ import { assertNotCooling, coolingDays } from './transfer-cooling';
 
 /** The reason on a hand-over that gave an owner to a record that had none, from an import's source (Bigin). */
 export const TRANSFER_REASON_IMPORT_FILL = 'import_fill';
-/** The reason on a claim: a member saved the first lead at a company nobody owned, so it is theirs (OWN-2). */
-export const TRANSFER_REASON_FIRST_LEAD = 'first_lead';
 
 const MEMBER = { select: MEMBER_SUMMARY_SELECT } as const;
 const INCLUDE = { from: MEMBER, to: MEMBER, proposedBy: MEMBER, decidedBy: MEMBER } as const;
@@ -369,38 +367,6 @@ export class TransfersService {
     }
 
     /**
-     * OWN-2: "the first to save a company — or the first person at it — keeps its leads". A company nobody owns
-     * becomes `to`'s, with the people and open deals at it that nobody owns either (its unit from no owner), as a
-     * forced transfer from no one. Nothing is taken from anyone, so nobody is told and, like an import's fill, the
-     * `transfer.completed` is internal. Runs past the caller's owner scope: an own-scoped member cannot see a company
-     * nobody owns. Null when the company is gone or already has an owner.
-     */
-    async claim(context: WorkspaceRunContext, companyId: string, to: string): Promise<TransferView | null> {
-        return this.widened(context, async (tx) => {
-            const wide = widen(context);
-            const head = await findHead(tx, wide, 'company', companyId);
-            if (!head || head.ownerId !== null) return null;
-            const row = await this.complete(tx, wide, {
-                create: {
-                    object: 'company',
-                    recordId: companyId,
-                    fromMemberId: null,
-                    toMemberId: to,
-                    proposedByMemberId: to,
-                    decidedByMemberId: to,
-                    status: 'forced',
-                    reason: TRANSFER_REASON_FIRST_LEAD,
-                },
-                head,
-                me: to,
-                silent: true,
-                internal: true,
-            });
-            return view(row, await labelsFor(tx, row));
-        });
-    }
-
-    /**
      * OWN-2d: a forced move of a person to their company's owner, for a job acting for the workspace (the
      * `assign-company-owners.js` backfill: the import left a company's people with different owners). It is any
      * forced transfer of a person — proposed and decided by the receiver, as an import's fill is — whose unit is
@@ -452,10 +418,8 @@ export class TransfersService {
             me: string;
             /** The records to move, when not the object's usual unit (the rotation's). */
             unit?: { targets: RecordTarget[]; identity: TransferEventPayload['identity'] };
-            /** No bells (a backfill's move, a claim): the transfer, its events and the records' moves are written as ever. */
+            /** No bells (a backfill's move): the transfer, its events and the records' moves are written as ever. */
             silent?: boolean | undefined;
-            /** `transfer.completed` stays on the timeline, never sent to a webhook (a claim, as an import's fill). */
-            internal?: boolean;
         },
     ): Promise<Row> {
         const object = (input.create?.object ?? input.update!.object) as RecordObject;
@@ -481,15 +445,14 @@ export class TransfersService {
               });
         const updates = await this.widened(context, (w) => move(w, wide, moved, from, to));
         if (input.silent) {
-            // A backfill's move or a claim: its report says so, or nothing was taken from anyone.
+            // A backfill's move: its report says so; thousands of bells would say nothing.
         } else if (row.status === 'forced') {
             await tell(tx, row, to, 'transfer_received');
             if (from && from !== input.me) await tell(tx, row, from, 'transfer_taken');
         } else if (row.proposedByMemberId !== input.me) {
             await tell(tx, row, row.proposedByMemberId, 'transfer_accepted');
         }
-        const completed = event(context, 'transfer.completed', row, moved, identity);
-        await this.events.recordAll(tx, [input.internal ? { ...completed, internal: true } : completed, ...updates]);
+        await this.events.recordAll(tx, [event(context, 'transfer.completed', row, moved, identity), ...updates]);
         return row;
     }
 

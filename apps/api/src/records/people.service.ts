@@ -173,7 +173,7 @@ export class PeopleService implements BulkRecords {
             }
             const created = await this.createIn(tx, context, person);
             await this.events.record(tx, created.event);
-            return (await this.claimCompany(tx, context, created.row)) ?? created.row;
+            return created.row;
         });
         return view(row);
     }
@@ -184,10 +184,7 @@ export class PeopleService implements BulkRecords {
         const { after } = await this.rls.withWorkspace(async (tx) => {
             const result = await this.updateIn(tx, context, id, patch);
             if (result.event) await this.events.record(tx, result.event);
-            // Moved to a company (by its id, or by a new address at its domain): the first lead there claims it.
-            const moved = result.event && (patch.companyId != null || patch.emails !== undefined);
-            const claimed = moved ? await this.claimCompany(tx, context, result.after) : null;
-            return claimed ? { ...result, after: claimed } : result;
+            return result;
         });
         return view(after);
     }
@@ -386,25 +383,6 @@ export class PeopleService implements BulkRecords {
      * caller saves them as usual. A company whose owner is read from its people (OWN-2d) is claimed for
      * them with the hand-over.
      */
-    /**
-     * OWN-2: "the first to save a company — or the first person at it — keeps its leads". A lead saved at a company
-     * nobody owns makes it the lead's owner's, with its other unowned people and open deals (`TransfersService.claim`).
-     * Only a member or an API key saving claims: a job (sync, import) acts for the workspace. Returns the person read
-     * again (their company now in the caller's scope) when a claim was made; null when there was nothing to claim.
-     */
-    private async claimCompany(
-        tx: WorkspaceClient,
-        context: WorkspaceRunContext,
-        row: PersonRow,
-    ): Promise<PersonRow | null> {
-        const caller = context.memberId !== undefined || context.apiKeyId !== undefined;
-        if (!caller || !row.companyId || !row.ownerId) return null;
-        // An own-scoped member sees only their own companies: one they can see is already theirs.
-        if (context.ownerScopeMemberId && row.company) return null;
-        const claimed = await this.transfers.claim(context, row.companyId, row.ownerId);
-        return claimed ? find(tx, context, row.id) : null;
-    }
-
     private async handToOwner(context: WorkspaceRunContext, input: PersonInput): Promise<PersonView | null> {
         const company = await this.ownership.companyForDomain(context, companyDomainOfAddress(input.emails?.primary));
         const me = await this.rls.withWorkspace((tx) => requireCallerMember(tx, context));
