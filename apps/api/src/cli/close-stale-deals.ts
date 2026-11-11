@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import type { EventActor } from '@bylinecrm/shared';
+import type { Actor } from '@bylinecrm/shared';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
@@ -70,7 +70,7 @@ export interface CloseStaleReport {
 }
 
 /** The clean-up acts for the workspace, not for a member: the history and timeline say the system did it. */
-const SYSTEM: EventActor = { kind: 'system', id: null };
+const SYSTEM: Actor = { kind: 'system', id: null };
 
 /** A job acting for the workspace: no caller, every record of the workspace in reach. */
 function jobContext(workspaceId: string): WorkspaceRunContext {
