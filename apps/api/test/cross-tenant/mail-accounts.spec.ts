@@ -544,6 +544,53 @@ describe('mail accounts', () => {
             expect((await list(admin)).filter((m) => m.email === `pool-${stamp}@example.com`)).toHaveLength(1);
         });
 
+        it('an admin hands a pool mailbox to the member it sends as; an admin reconnects it and it stays theirs', async () => {
+            const memberId = memberPersonal.ownerMemberId;
+            const handed = track(
+                await as(admin)
+                    .patch(w(`/mailboxes/${adminPool.id}`))
+                    .send({ ownerMemberId: memberId }),
+            );
+            expect(handed.status).toBe(200);
+            expect(handed.body).toMatchObject({ ownerMemberId: memberId });
+
+            // Now theirs: they label it, but only an admin chooses who it sends as.
+            const labelled = track(
+                await as(member)
+                    .patch(w(`/mailboxes/${adminPool.id}`))
+                    .send({ label: 'Outreach' }),
+            );
+            expect(labelled.status).toBe(200);
+            const back = track(
+                await as(member)
+                    .patch(w(`/mailboxes/${adminPool.id}`))
+                    .send({ ownerMemberId: adminPool.ownerMemberId }),
+            );
+            expect(back.status).toBe(403);
+
+            // A personal mailbox never changes hands; nor does a pool mailbox go to someone who is not a member.
+            const personal = track(
+                await as(admin)
+                    .patch(w(`/mailboxes/${memberPersonal.id}`))
+                    .send({ ownerMemberId: adminPool.ownerMemberId }),
+            );
+            expect(personal.status).toBe(409);
+            const stranger = track(
+                await as(admin)
+                    .patch(w(`/mailboxes/${adminPool.id}`))
+                    .send({ ownerMemberId: '00000000-0000-4000-8000-000000000000' }),
+            );
+            expect(stranger.status).toBe(422);
+
+            const again = await connect(admin, 'pool', {
+                email: `pool-${stamp}@example.com`,
+                scopes: [...GMAIL_SCOPES],
+            });
+            expect(again.result).toBe('connected');
+            const after = (await list(admin)).find((m) => m.email === `pool-${stamp}@example.com`)!;
+            expect(after).toMatchObject({ status: 'connected', ownerMemberId: memberId });
+        });
+
         it("one workspace never sees another's client or mailboxes, nor finishes another's connect", async () => {
             expect(await list(otherAdmin, otherWorkspace)).toEqual([]);
             const peek = track(await as(otherAdmin).get(w(`/mailboxes/${adminPersonal.id}`, otherWorkspace)));

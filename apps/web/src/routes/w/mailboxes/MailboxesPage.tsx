@@ -37,6 +37,7 @@ import { BlocklistSection } from './BlocklistSection';
 import { DomainHealthSection } from './DomainHealthSection';
 import { MailHistorySection } from './MailHistorySection';
 import { PoolHealthSection } from './PoolHealthSection';
+import { SendsAsDialog } from './SendsAsDialog';
 import { ConnectMailboxDialog, PURPOSE_LABEL } from './ConnectMailboxDialog';
 import {
     MAILBOX_CONNECT_PURPOSE_PARAM,
@@ -166,6 +167,7 @@ function MailboxTable({
     const connect = useConnectMailbox(workspaceId);
     const disconnect = useDisconnectMailbox(workspaceId);
     const [disconnecting, setDisconnecting] = useState<MailboxView | null>(null);
+    const [choosingSender, setChoosingSender] = useState<MailboxView | null>(null);
 
     const admin = can(membership, 'workspace:admin');
     const mayChange = (m: MailboxView) =>
@@ -305,6 +307,11 @@ function MailboxTable({
                                                 ))}
                                         </>
                                     )}
+                                    {admin && m.purpose === 'pool' && m.status !== 'disconnected' && (
+                                        <DropdownMenuItem onSelect={() => setChoosingSender(m)}>
+                                            Choose who it sends as
+                                        </DropdownMenuItem>
+                                    )}
                                     {m.status !== 'connected' && (
                                         <DropdownMenuItem onSelect={() => reconnect(m.purpose)}>
                                             Reconnect
@@ -325,6 +332,11 @@ function MailboxTable({
                             ) : null,
                     },
                 }}
+            />
+            <SendsAsDialog
+                workspaceId={workspaceId}
+                mailbox={choosingSender}
+                onOpenChange={(open) => !open && setChoosingSender(null)}
             />
             <ConfirmDialog
                 open={disconnecting !== null}

@@ -28,12 +28,14 @@ export class ConnectMailboxDto extends createZodDto(z.object({ purpose: z.enum(M
  * What can change on a mailbox. `purpose` is accepted only to be refused when it differs: a
  * mailbox's purpose is fixed when it connects, and changing it means disconnecting and connecting
  * again (FR-CRMS-1) — the refusal says so rather than a validator calling the field unknown.
+ * `ownerMemberId` is who a pool mailbox sends as — its From name, `{{sender.*}}` and signature — an admin's choice.
  */
 export class UpdateMailboxDto extends createZodDto(
     z
         .object({
             label: z.string().trim().max(MAILBOX_LABEL_MAX).nullable(),
             purpose: z.enum(MAILBOX_PURPOSES),
+            ownerMemberId: z.uuid(),
         })
         .partial()
         .refine((body) => Object.keys(body).length > 0, { message: 'nothing to update' }),

@@ -164,6 +164,7 @@ export type PutOAuthClientInput = Loose<Schemas['PutOAuthClientDto']>;
 export type MailboxView = Schemas['Mailbox'];
 export type MailboxConnectStartView = Schemas['MailboxConnectStart'];
 export type ConnectMailboxInput = Loose<Schemas['ConnectMailboxDto']>;
+export type UpdateMailboxInput = Loose<Schemas['UpdateMailboxDto']>;
 export type MailboxDisconnectedView = Schemas['MailboxDisconnected'];
 export type MailboxCheckView = Schemas['MailboxCheck'];
 export type MailboxSyncView = Schemas['MailboxSync'];
