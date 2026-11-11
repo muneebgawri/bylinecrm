@@ -353,4 +353,135 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
             expect(await companiesNamed(name)).toHaveLength(0);
         });
     });
+    describe('lead → deal in one step: `withDeal` makes the deal with the person, in one transaction', () => {
+        const tag = stamp.replace(/[^a-z0-9]/gi, '');
+        interface Stage {
+            id: string;
+            name: string;
+            kind: 'open' | 'won' | 'lost';
+            position: number;
+        }
+        const defaultPipeline = async () => {
+            const pipelines = (await as(admin).get(w('/pipelines')).expect(200)).body as {
+                id: string;
+                isDefault: boolean;
+                stages: Stage[];
+            }[];
+            const pipeline = pipelines.find((p) => p.isDefault)!;
+            return { ...pipeline, stages: [...pipeline.stages].sort((a, b) => a.position - b.position) };
+        };
+        const dealsWith = async (personId: string) =>
+            (
+                (
+                    await as(admin)
+                        .get(
+                            w(
+                                `/opportunities?filter=${Buffer.from(
+                                    JSON.stringify({ and: [{ field: 'pointOfContactId', op: 'eq', value: personId }] }),
+                                ).toString('base64url')}`,
+                            ),
+                        )
+                        .expect(200)
+                ).body as { items: Record<string, unknown>[] }
+            ).items;
+        const addressFree = async (email: string) =>
+            (
+                (
+                    await as(admin)
+                        .get(w(`/people/address-check?email=${encodeURIComponent(email)}`))
+                        .expect(200)
+                ).body as { available: boolean }
+            ).available;
+
+        it('the person is the contact, their company the company, their owner the owner; first stage, default name', async () => {
+            const name = `Lumen ${tag}`;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Noa',
+                    nameLast: 'Park',
+                    emails: { primary: `noa@lumen-${stamp}.test`, additional: [] },
+                    company: { name },
+                    withDeal: {},
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            const body = res.body as { id: string; companyId: string; deal: { id: string; name: string } };
+            expect(body.deal.name).toBe(`${name} — Noa Park`);
+            const pipeline = await defaultPipeline();
+            const [deal] = await dealsWith(body.id);
+            expect(deal).toMatchObject({
+                id: body.deal.id,
+                pointOfContactId: body.id,
+                companyId: body.companyId,
+                ownerId: benId,
+                pipelineId: pipeline.id,
+                stageId: pipeline.stages.find((s) => s.kind === 'open')!.id,
+            });
+        });
+
+        it('takes a name, an amount and a starting stage', async () => {
+            const pipeline = await defaultPipeline();
+            const second = pipeline.stages.filter((s) => s.kind === 'open')[1]!;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Ivo',
+                    emails: { primary: `ivo@nadir-${stamp}.test`, additional: [] },
+                    company: { name: `Nadir ${tag}` },
+                    withDeal: { name: 'Press kit', amount: { amountMinor: 120000 }, stageId: second.id },
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            const [deal] = await dealsWith((res.body as { id: string }).id);
+            expect(deal).toMatchObject({ name: 'Press kit', stageId: second.id, amount: { amountMinor: 120000 } });
+        });
+
+        it('a deal that cannot be made leaves no person and no company: the transaction rolls back', async () => {
+            const won = (await defaultPipeline()).stages.find((s) => s.kind === 'won')!;
+            const email = `una@zenith-${stamp}.test`;
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Una',
+                    emails: { primary: email, additional: [] },
+                    company: { name: `Zenith ${tag}` },
+                    withDeal: { stageId: won.id },
+                });
+            expect(res.status, JSON.stringify(res.body)).toBe(422);
+            expect(await addressFree(email)).toBe(true);
+            const companies = (
+                (
+                    await as(admin)
+                        .get(w(`/companies?q=${encodeURIComponent(`Zenith ${tag}`)}`))
+                        .expect(200)
+                ).body as { items: unknown[] }
+            ).items;
+            expect(companies).toHaveLength(0);
+        });
+
+        it('a person at another member’s company is refused as before, and no deal is made', async () => {
+            const res = await as(ben)
+                .post(w('/people'))
+                .send(person('ida', { withDeal: {} }));
+            expect(res.status).toBe(409);
+            expect(res.body).toMatchObject({ code: 'conflict.company_owned' });
+            expect(await addressFree(`ida@${domain}`)).toBe(true);
+        });
+
+        it('a lead saved for its company’s owner (handToOwner) is theirs, with no deal', async () => {
+            const res = await as(ben)
+                .post(w('/people'))
+                .send(person('eli', { handToOwner: true, withDeal: {} }));
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            expect(res.body).toMatchObject({ ownerId: anaId, companyId: company, deal: null });
+            expect(await dealsWith((res.body as { id: string }).id)).toHaveLength(0);
+        });
+
+        it('a person alone answers `deal: null`', async () => {
+            const res = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Oz', emails: { primary: `oz-${stamp}@gmail.com`, additional: [] } });
+            expect(res.status, JSON.stringify(res.body)).toBe(201);
+            expect(res.body).toMatchObject({ deal: null });
+        });
+    });
 });

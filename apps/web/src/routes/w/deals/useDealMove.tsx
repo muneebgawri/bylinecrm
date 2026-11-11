@@ -2,14 +2,14 @@ import { toast } from '@bylinecrm/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { ApiError } from '../../../api/client';
 import { useMoveDeal, useRules } from '../../../api/deals';
-import type { BoardView, OpportunityView, RuleView, StageView } from '../../../api/types';
+import type { OpportunityView, PipelineView, RuleView, StageView } from '../../../api/types';
 import { BackwardMoveDialog, ruleEventLabel, type BackwardRequest } from './BackwardMoveDialog';
 import { CloseDealDialog, type ClosePayload, type CloseRequest } from './CloseDealDialog';
 import { classifyMove } from './moveGate';
 
 /**
- * The one way the page moves a deal — drag, keyboard, the list's stage select and the bulk bar
- * all call `request`. It classifies the move (`moveGate`), asks first when the move closes the
+ * The one way a page moves a deal — the board's drag and keyboard, the list's stage select, the bulk bar and a
+ * person's Deals rail all call `request`. It classifies the move (`moveGate`), asks first when the move closes the
  * deal or goes backward, sends it optimistically (`useMoveDeal`), and on a refusal shows the
  * server's reason while the cache snaps back. `announce` feeds the board's live region.
  */
@@ -22,17 +22,18 @@ export interface DealMoveApi {
 
 export function useDealMove(
     workspaceId: string,
-    board: BoardView | undefined,
+    /** The pipeline the deals are in: its stages gate the move, its rules are named on a backward one. */
+    pipeline: Pick<PipelineView, 'id' | 'stages'> | undefined,
     announce?: (text: string) => void,
 ): DealMoveApi {
     const move = useMoveDeal(workspaceId);
-    const rules = useRules(workspaceId, board?.pipeline.id);
+    const rules = useRules(workspaceId, pipeline?.id);
     const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
     const [backwardRequest, setBackwardRequest] = useState<BackwardRequest | null>(null);
 
     const stagesById = useMemo(
-        () => new Map((board?.pipeline.stages ?? []).map((stage) => [stage.id, stage])),
-        [board?.pipeline.stages],
+        () => new Map((pipeline?.stages ?? []).map((stage) => [stage.id, stage])),
+        [pipeline?.stages],
     );
 
     const perform = useCallback(
@@ -67,7 +68,7 @@ export function useDealMove(
 
     const request = useCallback(
         (deal: OpportunityView, toStageId: string) => {
-            const stages = board?.pipeline.stages ?? [];
+            const stages = pipeline?.stages ?? [];
             const gate = classifyMove(stages, deal.stageId, toStageId);
             const stage = stagesById.get(toStageId);
             if (gate.kind === 'same' || gate.kind === 'unknown' || !stage) return;
@@ -84,7 +85,7 @@ export function useDealMove(
             }
             perform(deal, stage);
         },
-        [board?.pipeline.stages, perform, rules.data, stagesById],
+        [pipeline?.stages, perform, rules.data, stagesById],
     );
 
     const dialogs = (

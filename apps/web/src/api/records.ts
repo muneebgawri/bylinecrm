@@ -26,6 +26,8 @@ import type {
     OpportunityInput,
     OpportunityPage,
     OpportunityView,
+    PersonCreatedView,
+    PersonCreateInput,
     PersonInput,
     PersonPage,
     PersonView,
@@ -85,6 +87,9 @@ function recordRoutes<View, Page, Input>(segment: string) {
 
 export const people = {
     ...recordRoutes<PersonView, PersonPage, PersonInput>('people'),
+    /** Create may make the person's deal in the same transaction (`withDeal`); the answer names it. */
+    create: (workspaceId: string, input: PersonCreateInput) =>
+        request<PersonCreatedView>('POST', workspacePath(workspaceId, '/people'), { body: input }),
     /** Before a create: is this primary address free, and if not, whose person has it. */
     addressCheck: (workspaceId: string, email: string, signal?: AbortSignal) =>
         request<AddressCheckView>('GET', workspacePath(workspaceId, `/people/address-check${query({ email })}`), {

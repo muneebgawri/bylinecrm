@@ -112,6 +112,17 @@ export type AddressCheckView = z.output<typeof addressCheckView>;
 
 export const personPage = named('PersonPage', countedPage(personView));
 
+/** `POST /people`: the person, and the deal made with them when the request asked for one (`withDeal`). */
+export const personCreatedView = named(
+    'PersonCreated',
+    personView.extend({
+        deal: recordSummaryView.nullable().meta({
+            description:
+                'The deal made with the person (`withDeal`); null when none was asked for or the lead was handed to its owner.',
+        }),
+    }),
+);
+
 /** A company (PAR-005). */
 export const companyView = named(
     'Company',
@@ -297,6 +308,7 @@ export const bulkResultView = named(
 export type RecordSummaryView = z.output<typeof recordSummaryView>;
 export type BulkResultView = z.output<typeof bulkResultView>;
 export type PersonView = z.output<typeof personView>;
+export type PersonCreatedView = z.output<typeof personCreatedView>;
 export type CompanyView = z.output<typeof companyView>;
 export type OpportunityView = z.output<typeof opportunityView>;
 export type NoteView = z.output<typeof noteView>;

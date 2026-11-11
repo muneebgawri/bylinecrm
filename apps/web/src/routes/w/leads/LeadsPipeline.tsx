@@ -22,7 +22,7 @@ import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
 import { formatRelative } from '../../../lib/format';
 import { useWorkspaceId } from '../../params';
-import { paths, withCreate } from '../../paths';
+import { CREATE_LEAD, paths, withCreate } from '../../paths';
 import { CONTACT_STATUS_TONE, LEADS_FILTER } from './leadsFilter';
 
 /** The statuses a lead moves through before it is a customer or out; `do_not_contact` is set by suppression, not here. */
@@ -66,7 +66,7 @@ export function LeadsPipeline() {
                         </Button>
                         {canWrite && (
                             <Button asChild variant="primary" data-primary-action>
-                                <Link to={withCreate(paths.people(workspaceId))}>Add lead</Link>
+                                <Link to={withCreate(paths.people(workspaceId), CREATE_LEAD)}>Add lead</Link>
                             </Button>
                         )}
                     </>

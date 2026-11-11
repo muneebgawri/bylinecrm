@@ -10,8 +10,15 @@ import {
 import { search } from './records';
 import type { ListParams } from './endpoints';
 import { keys } from './queries';
-import { recordEndpoints, type RecordInputOf, type RecordPageOf, type RecordViewOf } from './records';
-import type { BulkInput, BulkResultView } from './types';
+import { recordEndpoints, type RecordPageOf, type RecordViewOf } from './records';
+import type {
+    BulkInput,
+    BulkResultView,
+    CompanyCreateInput,
+    CompanyView,
+    PersonCreatedView,
+    PersonCreateInput,
+} from './types';
 
 /**
  * The query hooks only the lazily loaded data views use (P1-UI-2, P1-UI-6): a list read by cursor,
@@ -80,13 +87,25 @@ export function useSearch(workspaceId: string, q: string, objects: readonly Reco
     });
 }
 
+type RecordCreateInputOf<O extends 'person' | 'company'> = O extends 'person' ? PersonCreateInput : CompanyCreateInput;
+/** What a create answers: a person comes with the deal made with them, if any. */
+type RecordCreatedOf<O extends 'person' | 'company'> = O extends 'person' ? PersonCreatedView : RecordViewOf<O>;
+
 /** Creates a person or a company; every list of that object refetches. */
 export function useCreateRecord<O extends 'person' | 'company'>(workspaceId: string, object: O) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: (input: RecordInputOf<O>) =>
-            recordEndpoints[object].create(workspaceId, input as never) as Promise<RecordViewOf<O>>,
-        onSuccess: () => client.invalidateQueries({ queryKey: keys.records(workspaceId, object) }),
+        mutationFn: (input: RecordCreateInputOf<O>) =>
+            recordEndpoints[object].create(workspaceId, input as never) as Promise<RecordCreatedOf<O>>,
+        onSuccess: (data) => {
+            const created: PersonCreatedView | CompanyView = data;
+            // A person saved with their deal (`withDeal`): the deal lists and boards have it too.
+            if ('deal' in created && created.deal) {
+                void client.invalidateQueries({ queryKey: keys.records(workspaceId, 'opportunity'), exact: false });
+                void invalidateBoards(client, workspaceId);
+            }
+            return client.invalidateQueries({ queryKey: keys.records(workspaceId, object) });
+        },
     });
 }
 

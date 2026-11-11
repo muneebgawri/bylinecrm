@@ -127,7 +127,7 @@ export function DealsPage() {
     const rules = useRules(workspaceId, pipelineId);
     const [announcement, setAnnouncement] = useState('');
     const announce = useCallback((text: string) => setAnnouncement(text), []);
-    const move = useDealMove(workspaceId, board.data, announce);
+    const move = useDealMove(workspaceId, board.data?.pipeline, announce);
 
     const setParam = useCallback(
         (key: string, value: string | undefined) =>

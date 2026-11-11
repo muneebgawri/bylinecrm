@@ -3593,7 +3593,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Person"
+                                    "$ref": "#/components/schemas/PersonCreated"
                                 }
                             }
                         },
@@ -29698,6 +29698,42 @@
                             }
                         },
                         "required": ["name"]
+                    },
+                    "withDeal": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                            },
+                            "amount": {
+                                "type": "object",
+                                "properties": {
+                                    "amountMinor": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "pattern": "^[A-Z]{3}$"
+                                    }
+                                },
+                                "required": ["amountMinor"],
+                                "nullable": true
+                            },
+                            "pipelineId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "stageId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            }
+                        }
                     }
                 }
             },
@@ -36523,6 +36559,202 @@
                     }
                 },
                 "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
+            "PersonCreated": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "nameFirst": {
+                        "type": "string"
+                    },
+                    "nameLast": {
+                        "type": "string"
+                    },
+                    "emails": {
+                        "$ref": "#/components/schemas/Emails"
+                    },
+                    "phones": {
+                        "$ref": "#/components/schemas/Phones"
+                    },
+                    "jobTitle": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "city": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "source": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "country": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "contactStatus": {
+                        "type": "string",
+                        "enum": [
+                            "new",
+                            "attempted_contact",
+                            "contacted",
+                            "engaged",
+                            "unresponsive",
+                            "do_not_contact",
+                            "customer"
+                        ],
+                        "description": "Derived (#242) from mail sent and received, meetings, won deals and the suppression list, unless `contactStatusOverride` is set; `do_not_contact` whenever the primary address is suppressed."
+                    },
+                    "contactStatusOverride": {
+                        "nullable": true,
+                        "description": "A member’s choice, which outranks everything but `do_not_contact`.",
+                        "type": "string",
+                        "enum": [
+                            "new",
+                            "attempted_contact",
+                            "contacted",
+                            "engaged",
+                            "unresponsive",
+                            "do_not_contact",
+                            "customer"
+                        ]
+                    },
+                    "contactAttempts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Derived: emails sent to them, from a connected mailbox or imported."
+                    },
+                    "lastContactedAt": {
+                        "nullable": true,
+                        "description": "Derived: when the last message was sent to them.",
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "cadenceOverdue": {
+                        "type": "boolean",
+                        "description": "Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed."
+                    },
+                    "newswireosCustomerId": {
+                        "nullable": true,
+                        "description": "Read-only (PNW-766): their NewswireOS client, from its answer to the latest won-deal push.",
+                        "type": "string"
+                    },
+                    "links": {
+                        "$ref": "#/components/schemas/Links"
+                    },
+                    "avatarUrl": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "number"
+                    },
+                    "companyId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "ownerId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "company": {
+                        "nullable": true,
+                        "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owner, by name; null when the record has none.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "createdBy": {
+                        "$ref": "#/components/schemas/Actor"
+                    },
+                    "custom": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "deletedAt": {
+                        "nullable": true,
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "createdAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "updatedAt": {
+                        "example": "2026-10-09T09:30:00.000Z",
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "deal": {
+                        "nullable": true,
+                        "description": "The deal made with the person (`withDeal`); null when none was asked for or the lead was handed to its owner.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecordSummary"
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "id",
+                    "nameFirst",
+                    "nameLast",
+                    "emails",
+                    "phones",
+                    "jobTitle",
+                    "city",
+                    "source",
+                    "country",
+                    "contactStatus",
+                    "contactStatusOverride",
+                    "contactAttempts",
+                    "lastContactedAt",
+                    "cadenceOverdue",
+                    "newswireosCustomerId",
+                    "links",
+                    "avatarUrl",
+                    "position",
+                    "companyId",
+                    "ownerId",
+                    "company",
+                    "owner",
+                    "createdBy",
+                    "custom",
+                    "deletedAt",
+                    "createdAt",
+                    "updatedAt",
+                    "deal"
+                ]
             },
             "Company": {
                 "type": "object",

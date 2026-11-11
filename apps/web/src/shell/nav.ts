@@ -15,7 +15,7 @@ import {
     UsersRound,
     type LucideIcon,
 } from 'lucide-react';
-import { paths, withCreate } from '../routes/paths';
+import { CREATE_LEAD, paths, withCreate } from '../routes/paths';
 import { LEADS_FILTER } from '../routes/w/leads/leadsFilter';
 
 /**
@@ -78,7 +78,7 @@ export const NAV: readonly NavGroup[] = [
                     {
                         id: 'leads.new',
                         label: 'Add lead',
-                        to: (ws) => withCreate(paths.people(ws)),
+                        to: (ws) => withCreate(paths.people(ws), CREATE_LEAD),
                         requires: 'record:write',
                     },
                 ],

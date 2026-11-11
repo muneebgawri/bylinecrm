@@ -20,9 +20,16 @@ import {
 import type { RecordObject } from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
+import { usePipelines } from '../../../api/deals';
 import { useBulkChange, useCreateRecord } from '../../../api/lists';
 import { people, useCustomFields } from '../../../api/records';
-import type { AddressCheckView, BulkResultView, CompanyInput, CustomFieldView, PersonInput } from '../../../api/types';
+import type {
+    AddressCheckView,
+    BulkResultView,
+    CompanyCreateInput,
+    CustomFieldView,
+    PersonCreateInput,
+} from '../../../api/types';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
@@ -186,6 +193,13 @@ export function AssignOwnerDialog<O extends RecordObject>({
     );
 }
 
+/** The line under "Create a deal": where it starts and the name the API gives it ("<Company> — <Person>"). */
+export function dealHint(stage: string | undefined, company: string | undefined, first: string, last: string): string {
+    const name = [company, `${first} ${last}`.trim()].filter(Boolean).join(' — ');
+    const where = stage ? `In ${stage}` : 'In the first stage';
+    return name ? `${where}, named “${name}”. You own it; rename it on the deal.` : `${where}. You own it.`;
+}
+
 /**
  * Adds a person or a company (name, domain); everything else is edited on its record. A person starts
  * from the address: it is checked first, so a lead someone already has is caught before any typing,
@@ -194,11 +208,17 @@ export function AssignOwnerDialog<O extends RecordObject>({
 export function CreateRecordDialog<O extends ListObject>({
     workspaceId,
     object,
+    lead = false,
     onOpenChange,
     onCreated,
 }: {
     workspaceId: string;
     object: O;
+    /**
+     * "Add lead": the person's deal is made with them, in one request (`withDeal`), unless the rep unticks it.
+     * "Add person" offers the same tick, off: a contact is not always a sale.
+     */
+    lead?: boolean;
     onOpenChange: (open: boolean) => void;
     onCreated: (id: string) => void;
 }) {
@@ -226,6 +246,14 @@ export function CreateRecordDialog<O extends ListObject>({
     const [owned, setOwned] = useState<{ ownerName: string; companyName: string } | null>(null);
     const copy = LIST_COPY[object];
     const person = object === 'person';
+    const mayDeal = useCan('deal:edit') && person;
+    const [withDeal, setWithDeal] = useState(lead);
+    const dealId = useId();
+    const pipelines = usePipelines(workspaceId);
+    const firstStage = (pipelines.data?.find((p) => p.isDefault) ?? pipelines.data?.[0])?.stages
+        .filter((st) => st.kind === 'open')
+        .sort((x, y) => x.position - y.position)[0];
+    const title = person && lead ? 'Add lead' : copy.add;
     const askingEmail = person && step === 'email';
     // The custom fields an admin asks for here (Settings → Custom fields), and every required one: the API
     // refuses a new person without those. Keyed on this dialog's own object: for New company that is the list
@@ -290,7 +318,7 @@ export function CreateRecordDialog<O extends ListObject>({
             : {};
         const digits = phone.replace(/\D/g, '');
         const ext = extension.replace(/\D/g, '');
-        const input: PersonInput | CompanyInput = person
+        const input: PersonCreateInput | CompanyCreateInput = person
             ? {
                   nameFirst: a.trim(),
                   nameLast: b.trim(),
@@ -307,6 +335,8 @@ export function CreateRecordDialog<O extends ListObject>({
                   ...companyRef,
                   custom: customInput(asked, customValues),
                   ...(handToOwner ? { handToOwner: true } : {}),
+                  // The deal goes with the person, in the API's one transaction; a lead handed to its owner gets none.
+                  ...(mayDeal && withDeal && !handToOwner ? { withDeal: {} } : {}),
               }
             : { name: a.trim(), ...(b.trim() ? { domain: b.trim() } : {}) };
         try {
@@ -315,6 +345,9 @@ export function CreateRecordDialog<O extends ListObject>({
                 toast({ tone: 'success', title: `Saved for ${owned.ownerName}. They’ve been told.` });
                 onOpenChange(false);
                 return;
+            }
+            if ('deal' in created && created.deal) {
+                toast({ tone: 'success', title: `Deal “${created.deal.name}” created` });
             }
             onCreated(created.id);
         } catch (err) {
@@ -342,7 +375,7 @@ export function CreateRecordDialog<O extends ListObject>({
         <Dialog open onOpenChange={onOpenChange}>
             <DialogContent>
                 <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
-                    <DialogTitle>{copy.add}</DialogTitle>
+                    <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>
                         {askingEmail
                             ? 'Start with their email: we check nobody has them yet.'
@@ -458,6 +491,23 @@ export function CreateRecordDialog<O extends ListObject>({
                                         onChange={(v) => setCustomValues((all) => ({ ...all, [definition.key]: v }))}
                                     />
                                 ))}
+                                {mayDeal && (
+                                    <div className="flex flex-col gap-0.5">
+                                        <label htmlFor={dealId} className="flex items-center gap-2 text-sm">
+                                            <Checkbox
+                                                id={dealId}
+                                                checked={withDeal}
+                                                onCheckedChange={(on) => setWithDeal(on === true)}
+                                            />
+                                            Create a deal
+                                        </label>
+                                        {withDeal && (
+                                            <p className="m-0 pl-6 text-xs text-text-muted">
+                                                {dealHint(firstStage?.name, company?.name, a.trim(), b.trim())}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <>
@@ -513,7 +563,7 @@ export function CreateRecordDialog<O extends ListObject>({
                                 loading={saving}
                                 disabled={!a.trim() || missing}
                             >
-                                {copy.add}
+                                {title}
                             </Button>
                         )}
                     </DialogFooter>
