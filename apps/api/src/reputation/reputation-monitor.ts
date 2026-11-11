@@ -114,7 +114,8 @@ export class ReputationMonitor {
 
     /**
      * The reply-rate floor (REP-2, FR-CRMS-24): conversations replied to over conversations the mailbox wrote in, in the window
-     * (since its last resume, so a resume is not undone by the same history). Under the floor on enough sends,
+     * (since its last resume, so a resume is not undone by the same history), counting only sends old enough to have
+     * been answered (#362) and addressed to someone outside the team (#363). Under the floor on enough sends,
      * the mailbox is paused for new recipients (a pool mailbox: for everything) until a manager resumes it; a
      * `reply_rate` event (high) tells its owner and the reviewers.
      */
@@ -128,6 +129,9 @@ export class ReputationMonitor {
         const s = await reputationSettingsIn(tx);
         const windowStart = new Date(now.getTime() - s.replyRateWindowDays * REPUTATION_WINDOW_MS);
         const since = mailbox.resumedAt && mailbox.resumedAt > windowStart ? mailbox.resumedAt : windowStart;
+        // #362: a send younger than the maturity had no time to be answered; judged on a burst of fresh mail, a
+        // mailbox paused at once and stayed paused when the replies came.
+        const matureBefore = new Date(now.getTime() - s.replyRateMaturityHours * 60 * 60 * 1000);
         // Per conversation: each thread the mailbox sent into in the window — a new one or a follow-up on an older
         // one — replied when someone outside the team wrote in it after the mailbox's first send there. A reply to a
         // follow-up is a reply: judging new threads only, a mailbox whose answers come on follow-ups read as silent.
@@ -143,6 +147,12 @@ export class ReputationMonitor {
                 FROM mine x
                 JOIN mail_messages m ON m.id = x.message_id
                 WHERE m.sent_at >= ${since}
+                  AND m.sent_at <= ${matureBefore}
+                  -- #363: mail to members only is not a cold send; a member's answer would never count as a reply.
+                  AND EXISTS (
+                      SELECT 1 FROM mail_participants tp
+                      WHERE tp.message_id = m.id AND tp.role IN ('to', 'cc', 'bcc') AND tp.member_id IS NULL
+                  )
                 GROUP BY m.thread_id
             )
             SELECT count(*)::int AS sends,
