@@ -49,6 +49,7 @@ export function pickReputationSettings(row: Row): ReputationSettings {
         replyRateFloorBps: row.replyRateFloorBps,
         replyRateMinSends: row.replyRateMinSends,
         replyRateWindowDays: row.replyRateWindowDays,
+        replyRateMaturityHours: row.replyRateMaturityHours,
         spamPauseBps: row.spamPauseBps,
         spamWarnBps: row.spamWarnBps,
     };

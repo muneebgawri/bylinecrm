@@ -84,6 +84,7 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
     let workspace: string;
     let otherWorkspace: string;
     let anaId: string;
+    let miaId: string;
     let anaMailbox: string;
     const people: string[] = [];
 
@@ -127,6 +128,8 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
         inReplyTo?: string;
         threadId?: string;
         minutesAgo?: number;
+        /** The recipient is this workspace member (sync links member addresses). */
+        toMemberId?: string;
     }): Promise<{ threadId: string }> {
         const sentAt = new Date(Date.now() - (input.minutesAgo ?? 5) * 60_000);
         const key = `${stamp}-${Math.random().toString(36).slice(2)}`;
@@ -169,7 +172,13 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
         await owner.mailParticipant.createMany({
             data: [
                 { workspaceId: workspace, messageId: message.id, role: 'from', address: input.from.toLowerCase() },
-                { workspaceId: workspace, messageId: message.id, role: 'to', address: input.to.toLowerCase() },
+                {
+                    workspaceId: workspace,
+                    messageId: message.id,
+                    role: 'to',
+                    address: input.to.toLowerCase(),
+                    memberId: input.toMemberId ?? null,
+                },
             ],
         });
         return { threadId };
@@ -213,6 +222,7 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
         mia = await join(emails.mia, SYSTEM_ROLES.manager);
         const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
         anaId = members.find((m) => m.email === emails.ana)!.id;
+        miaId = members.find((m) => m.email === emails.mia)!.id;
 
         const clientId = `555-${stamp.replace(/[^a-z0-9]/g, '')}.apps.googleusercontent.com`;
         const secret = `GOCSPX-rep-${stamp}`;
@@ -419,17 +429,54 @@ describe('REP-1 sender reputation (FR-CRMS-23)', () => {
     });
 
     it('pauses a mailbox under the reply-rate floor until a manager resumes it (FR-CRMS-24)', async () => {
-        // Three new-thread messages left through Gmail; one got a reply (33%). A 50% floor on 3 sends pauses.
+        const paused = async () =>
+            (await as(mia).get(w('/reputation/paused-mailboxes')).expect(200)).body as {
+                mailboxId: string;
+                pause: { code: string };
+            }[];
+        // Three new-thread messages left through Gmail minutes ago; one got a reply (33%).
+        // #362: under a 50% floor on 3 sends, but too fresh to judge: the default maturity (72 h) holds the pause.
         await as(admin)
             .put(w('/reputation/settings'))
             .send({ ...REPUTATION_DEFAULTS, replyRateFloorBps: 5000, replyRateMinSends: 3 })
             .expect(200);
         await app.get(ReputationMonitor).judge(workspace, anaMailbox);
-        const paused = (await as(mia).get(w('/reputation/paused-mailboxes')).expect(200)).body as {
-            mailboxId: string;
-            pause: { code: string };
-        }[];
-        expect(paused).toEqual([
+        expect(await paused()).toEqual([]);
+
+        // #363: two notes to a teammate, answered by her, are not cold sends. Counted, 1 in 5 (20%) would fall under a
+        // 30% floor; uncounted, 1 in 3 (33%) does not.
+        for (const subject of ['Working from home today', 'Office closed Friday']) {
+            const { threadId } = await synced({
+                direction: 'outbound',
+                from: emails.ana,
+                to: emails.mia,
+                toMemberId: miaId,
+                subject,
+                text: 'FYI',
+            });
+            await synced({
+                direction: 'inbound',
+                from: emails.mia,
+                to: emails.ana,
+                subject: `Re: ${subject}`,
+                text: 'ok',
+                threadId,
+            });
+        }
+        await as(admin)
+            .put(w('/reputation/settings'))
+            .send({ ...REPUTATION_DEFAULTS, replyRateFloorBps: 3000, replyRateMinSends: 3, replyRateMaturityHours: 0 })
+            .expect(200);
+        await app.get(ReputationMonitor).judge(workspace, anaMailbox);
+        expect(await paused()).toEqual([]);
+
+        // Mature (maturity 0) and under a 50% floor: paused.
+        await as(admin)
+            .put(w('/reputation/settings'))
+            .send({ ...REPUTATION_DEFAULTS, replyRateFloorBps: 5000, replyRateMinSends: 3, replyRateMaturityHours: 0 })
+            .expect(200);
+        await app.get(ReputationMonitor).judge(workspace, anaMailbox);
+        expect(await paused()).toEqual([
             expect.objectContaining({ mailboxId: anaMailbox, pause: expect.objectContaining({ code: 'reply_rate' }) }),
         ]);
         expect((await events(mia)).some((e) => e.kind === 'reply_rate' && e.outcome === 'blocked')).toBe(true);
