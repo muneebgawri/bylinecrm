@@ -10,6 +10,7 @@ import {
     LayoutDashboard,
     ListOrdered,
     Settings,
+    Sun,
     Target,
     Users,
     UsersRound,
@@ -54,6 +55,7 @@ export const NAV: readonly NavGroup[] = [
     {
         label: 'Overview',
         items: [
+            { id: 'today', label: 'Today', icon: Sun, to: paths.today, shortcut: 'g o' },
             { id: 'home', label: 'Dashboard', icon: LayoutDashboard, to: paths.home, shortcut: 'g h' },
             { id: 'reports', label: 'Reports', icon: BarChart3, to: paths.reports, shortcut: 'g r' },
         ],

@@ -91,6 +91,8 @@ const sequences = {
 
 /** The dashboard is its own chunk: My tasks (#192). */
 const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.HomePage }));
+/** Today is its own chunk: the member's day (#360). */
+const todayPage = () => import('./w/today/TodayPage').then((m) => ({ Component: m.TodayPage }));
 
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
 const profilePage = () => import('./w/profile/ProfilePage').then((m) => ({ Component: m.ProfilePage }));
@@ -144,7 +146,8 @@ const workspaceRoutes: RouteObject = {
     element: <AppShell />,
     errorElement: <RouteError />,
     children: [
-        { index: true, element: <Navigate to="home" replace /> },
+        { index: true, element: <Navigate to="today" replace /> },
+        lazyPage('today', todayPage, 'Today'),
         lazyPage('home', homePage, 'Dashboard'),
         lazyPage('reports', reportsPage, 'Reports'),
         lazyPage('leads', leadsPage, 'Leads'),

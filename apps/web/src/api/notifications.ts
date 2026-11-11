@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
-import type { MyTaskView, NotificationSettingsView, NotificationsView } from './types';
+import { keys as sharedKeys } from './queries';
+import type { MyTaskView, NotificationSettingsView, NotificationsView, TaskInput } from './types';
 
 /**
  * A member's task notifications (#192): the bell's list and unread count, marking read, the digest
@@ -29,8 +30,8 @@ export const notifications = {
         request<NotificationSettingsView>('PUT', workspacePath(workspaceId, '/notification-settings'), { body: input }),
     myTasks: (workspaceId: string, signal?: AbortSignal) =>
         request<MyTaskView[]>('GET', workspacePath(workspaceId, '/my-tasks'), { signal }),
-    completeTask: (workspaceId: string, taskId: string) =>
-        request<unknown>('PATCH', workspacePath(workspaceId, `/tasks/${taskId}`), { body: { status: 'done' } }),
+    updateTask: (workspaceId: string, taskId: string, patch: MyTaskPatch) =>
+        request<unknown>('PATCH', workspacePath(workspaceId, `/tasks/${taskId}`), { body: patch }),
 };
 
 export function useNotifications(workspaceId: string) {
@@ -72,11 +73,19 @@ export function useMyTasks(workspaceId: string) {
     });
 }
 
-/** Completes one of my tasks; it leaves My tasks, and the bell is asked again. */
-export function useCompleteMyTask(workspaceId: string) {
+/** What My tasks and Today change on one of my tasks: done, or due another time (a snooze). */
+export type MyTaskPatch = Pick<TaskInput, 'status' | 'dueAt'>;
+
+/** Changes one of my tasks (done leaves My tasks); My tasks, the bell and Today are asked again. */
+export function useUpdateMyTask(workspaceId: string) {
     const client = useQueryClient();
     return useMutation({
-        mutationFn: (taskId: string) => notifications.completeTask(workspaceId, taskId),
-        onSuccess: () => client.invalidateQueries({ queryKey: base(workspaceId) }),
+        mutationFn: ({ taskId, ...patch }: MyTaskPatch & { taskId: string }) =>
+            notifications.updateTask(workspaceId, taskId, patch),
+        onSuccess: () =>
+            Promise.all([
+                client.invalidateQueries({ queryKey: base(workspaceId) }),
+                client.invalidateQueries({ queryKey: sharedKeys.today(workspaceId) }),
+            ]),
     });
 }

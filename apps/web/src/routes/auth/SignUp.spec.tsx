@@ -19,7 +19,7 @@ function renderSignUp(initial: string) {
         [
             { path: paths.signUp, element: <SignUp /> },
             { path: paths.signIn, element: <Where /> },
-            { path: '/w/:workspaceId/home', element: <Where /> },
+            { path: '/w/:workspaceId/today', element: <Where /> },
         ],
         { initialEntries: [initial] },
     );
@@ -83,7 +83,7 @@ describe('SignUp (P0-14)', () => {
         await user.type(screen.getByLabelText(/Password/), 'correct horse battery staple');
         await user.type(screen.getByLabelText(/Workspace name/), 'New');
         await user.click(screen.getByRole('button', { name: 'Create workspace' }));
-        expect(await screen.findByRole('status', {}, WAIT)).toHaveTextContent('/w/ws-9/home');
+        expect(await screen.findByRole('status', {}, WAIT)).toHaveTextContent('/w/ws-9/today');
         const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/auth/signup'));
         expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ inviteToken: 'sig-token' });
     });
@@ -108,7 +108,7 @@ describe('SignUp (P0-14)', () => {
         expect(screen.getByLabelText('Email')).toHaveValue('owner@client.example');
         await user.type(screen.getByLabelText(/Choose a password/), 'correct horse battery staple');
         await user.click(screen.getByRole('button', { name: 'Create account and join' }));
-        expect(await screen.findByRole('status', {}, WAIT)).toHaveTextContent('/w/ws-7/home');
+        expect(await screen.findByRole('status', {}, WAIT)).toHaveTextContent('/w/ws-7/today');
         // Signed out, the page never asked who is signed in: that 401 would have sent the person away.
         expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/api/me'))).toBe(false);
     });

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
+import { keys } from './queries';
 import type { CallView, LogCallInput, PatchCallInput, QuoSettingsView } from './types';
 
 /**
@@ -61,6 +62,7 @@ export function useLogCall(workspaceId: string) {
         onSuccess: (call) => {
             if (call.personId) void client.invalidateQueries({ queryKey: callsKey(workspaceId, call.personId) });
             void client.invalidateQueries({ queryKey: ['w', workspaceId, 'timeline'] });
+            void client.invalidateQueries({ queryKey: keys.today(workspaceId) });
         },
     });
 }

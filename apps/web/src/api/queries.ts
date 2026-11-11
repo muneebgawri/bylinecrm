@@ -26,6 +26,8 @@ export const keys = {
     roles: (workspaceId: string) => ['w', workspaceId, 'roles'] as const,
     apiKeys: (workspaceId: string) => ['w', workspaceId, 'api-keys'] as const,
     invites: (workspaceId: string) => ['w', workspaceId, 'invites'] as const,
+    /** Today (#360): every section of every member's day; a write to what it reads marks it stale. */
+    today: (workspaceId: string) => ['w', workspaceId, 'today'] as const,
     providers: ['auth', 'providers'] as const,
     invitePreview: (token: string) => ['auth', 'invites', token] as const,
     platformAccess: ['platform', 'access'] as const,

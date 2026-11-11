@@ -31,6 +31,26 @@ export function acrossOwnerScope<T>(
  * their owner scope. The base every record read starts from — a list, a single record, a bulk
  * action's check of which named ids it may touch.
  */
+/**
+ * The member a per-member read is narrowed to — meetings, lead suggestions, Today: the one asked for, for an admin
+ * (or none: everyone); the caller themselves for anyone else. Asking for someone else is `403`, and so is an API
+ * key, being no one. `what` names the thing in the refusal.
+ */
+export function memberInScope(
+    context: WorkspaceRunContext,
+    requested: string | undefined,
+    what: string,
+): string | null {
+    if (context.capabilities.has('workspace:admin')) return requested ?? null;
+    if (!context.memberId) {
+        throw new ApiException(403, 'forbidden', `${what} are a member’s own; an API key needs the admin role`);
+    }
+    if (requested && requested !== context.memberId) {
+        throw new ApiException(403, 'forbidden', `only an admin may act on another member’s ${what}`);
+    }
+    return context.memberId;
+}
+
 export function recordWhere(
     context: WorkspaceRunContext,
     deleted: boolean,

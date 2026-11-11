@@ -60,7 +60,7 @@ function CreateAccount({ signupToken }: { signupToken: string | null }) {
         event.preventDefault();
         signup.mutate(
             { email, password, workspaceName, inviteToken: signupToken ?? undefined },
-            { onSuccess: ({ workspace }) => navigate(paths.home(workspace.id), { replace: true }) },
+            { onSuccess: ({ workspace }) => navigate(paths.today(workspace.id), { replace: true }) },
         );
     };
 
@@ -167,7 +167,7 @@ function AcceptInvitation({ token }: { token: string }) {
             This invitation is for <b className="font-medium text-text">{email}</b>.
         </>
     );
-    const goHome = (workspace: { id: string }) => navigate(paths.home(workspace.id), { replace: true });
+    const goHome = (workspace: { id: string }) => navigate(paths.today(workspace.id), { replace: true });
 
     const signedIn = me.data;
     if (signedIn) {

@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, Checkbox, EmptyState, LoadingRegion, Skeleton, cn, toast } from '@bylinecrm/ui';
 import { CalendarClock, CheckCircle2, CircleAlert } from 'lucide-react';
 import { Link } from 'react-router';
-import { useCompleteMyTask, useMyTasks } from '../../../api/notifications';
+import { useMyTasks, useUpdateMyTask } from '../../../api/notifications';
 import type { MyTaskView } from '../../../api/types';
 import { useCan } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
@@ -35,7 +35,7 @@ const GROUP_ICON: Record<Group, { icon: typeof CircleAlert; className: string }>
  */
 export function MyTasksCard({ workspaceId, className }: { workspaceId: string; className?: string }) {
     const tasks = useMyTasks(workspaceId);
-    const complete = useCompleteMyTask(workspaceId);
+    const update = useUpdateMyTask(workspaceId);
     const canComplete = useCan('task:write');
     if (tasks.isError) throw tasks.error;
     const now = new Date();
@@ -117,18 +117,24 @@ export function MyTasksCard({ workspaceId, className }: { workspaceId: string; c
                                             {canComplete && (
                                                 <Checkbox
                                                     aria-label={`Complete “${t.title}”`}
-                                                    disabled={complete.isPending}
+                                                    disabled={update.isPending}
                                                     onCheckedChange={() =>
-                                                        complete.mutate(t.id, {
-                                                            onSuccess: () =>
-                                                                toast({ title: `Done: ${t.title}`, tone: 'success' }),
-                                                            onError: (error) =>
-                                                                toast({
-                                                                    title: 'Could not complete the task',
-                                                                    description: failureText(error),
-                                                                    tone: 'danger',
-                                                                }),
-                                                        })
+                                                        update.mutate(
+                                                            { taskId: t.id, status: 'done' },
+                                                            {
+                                                                onSuccess: () =>
+                                                                    toast({
+                                                                        title: `Done: ${t.title}`,
+                                                                        tone: 'success',
+                                                                    }),
+                                                                onError: (error) =>
+                                                                    toast({
+                                                                        title: 'Could not complete the task',
+                                                                        description: failureText(error),
+                                                                        tone: 'danger',
+                                                                    }),
+                                                            },
+                                                        )
                                                     }
                                                 />
                                             )}

@@ -293,7 +293,7 @@ function WorkspaceSwitcher({ workspaceId, collapsed }: { workspaceId: string; co
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-56">
                 {(workspaces.data ?? []).map((w) => (
-                    <DropdownMenuItem key={w.id} onSelect={() => navigate(paths.home(w.id))}>
+                    <DropdownMenuItem key={w.id} onSelect={() => navigate(paths.today(w.id))}>
                         <span className="truncate">{w.name}</span>
                         {w.id === workspaceId && <Check aria-hidden className="ml-auto" />}
                     </DropdownMenuItem>

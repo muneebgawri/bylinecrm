@@ -21,6 +21,9 @@ export const paths = {
     /** Every workspace on the server, for platform admins (P0-14). */
     platformWorkspaces: '/platform/workspaces',
     workspace: (workspaceId: string) => `/w/${workspaceId}`,
+    /** Where a member lands (#360): their day — replies, follow-ups, new leads, tasks and stalled deals. */
+    today: (workspaceId: string) => `/w/${workspaceId}/today`,
+    /** The dashboard: the workspace's numbers and charts, My tasks and the deal feed. */
     home: (workspaceId: string) => `/w/${workspaceId}/home`,
     reports: (workspaceId: string) => `/w/${workspaceId}/reports`,
     people: (workspaceId: string) => `/w/${workspaceId}/people`,

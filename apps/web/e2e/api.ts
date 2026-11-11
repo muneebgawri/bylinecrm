@@ -1,6 +1,11 @@
-import { REPUTATION_DEFAULTS, type RecordObject } from '@bylinecrm/shared';
+import { REPUTATION_DEFAULTS, TODAY_SECTION_PATHS, type RecordObject, type TodaySection } from '@bylinecrm/shared';
 import type { Page, Route } from '@playwright/test';
 import * as data from './fixtures';
+
+/** A Today section by its URL segment. */
+const TODAY_SECTION_BY_PATH: Record<string, TodaySection> = Object.fromEntries(
+    Object.entries(TODAY_SECTION_PATHS).map(([section, path]) => [path, section as TodaySection]),
+);
 
 /**
  * The API, as the route gate sees it: every `/api/**` request the web app makes is answered here
@@ -119,6 +124,12 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/notifications$`), () => data.notificationsInbox],
     [new RegExp(`^${W}/notification-settings$`), () => data.notificationSettings],
     [new RegExp(`^${W}/my-tasks$`), () => data.myTasks],
+    // Today (#360): the overview, and a section's later page — the same rows, the last page.
+    [new RegExp(`^${W}/today$`), () => data.today],
+    [
+        new RegExp(`^${W}/today/(replies|follow-ups|new-leads|tasks|stalled)$`),
+        (m) => ({ ...data.today[TODAY_SECTION_BY_PATH[m[1] ?? ''] ?? 'replies'], nextCursor: null }),
+    ],
     // The dashboard's live deal feed; no activity in the fixtures.
     [new RegExp(`^${W}/deal-feed$`), () => ({ items: [] })],
     // OWN-1: a record's transfers (the owner field's open offer); none in the fixtures.
