@@ -1787,6 +1787,10 @@ model MailMessageCopy {
   providerMessageId String        @map("provider_message_id")
   direction         MailDirection
   labelIds          String[]      @default([]) @map("label_ids")
+  /// The message's `sent_at`, kept on the copy so a mailbox's mail in a window is read by index, not by every message
+  /// it ever held (2026-11-11: after the history backfill that was 10-20k per mailbox, per check). Null only on copies
+  /// written before it existed, until `cli/backfill-copy-sent-at` fills them; readers treat null as "maybe in window".
+  sentAt            DateTime?     @map("sent_at") @db.Timestamptz
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1797,6 +1801,7 @@ model MailMessageCopy {
   @@unique([mailboxId, providerMessageId])
   @@index([messageId])
   @@index([mailboxThreadId])
+  @@index([mailboxId, direction, sentAt])
   @@map("mail_message_copies")
 }
 
