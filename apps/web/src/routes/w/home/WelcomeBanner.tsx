@@ -32,22 +32,22 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
     });
     const team = (members.data ?? []).filter((m) => m.leftAt === null).map((m) => m.name ?? 'Unnamed member');
     return (
-        <Card className="relative gap-6 overflow-hidden bg-[linear-gradient(120deg,var(--color-info-soft),var(--color-surface)_45%,var(--color-success-soft))]">
+        <Card className="relative gap-0 overflow-hidden py-4 bg-[linear-gradient(120deg,var(--color-info-soft),var(--color-surface)_45%,var(--color-success-soft))]">
             <div
                 aria-hidden
                 className="pointer-events-none absolute inset-0 text-border [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:16px_16px] [mask-image:linear-gradient(to_right,transparent,white)]"
             />
-            <CardContent className="relative flex flex-wrap items-start justify-between gap-6">
-                <div className="min-w-0 max-w-2xl">
-                    <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+            <CardContent className="relative flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-4 xl:flex-nowrap">
+                <div className="min-w-0 max-w-2xl xl:flex-1">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-2.5 py-1 text-text-muted">
                             <Activity aria-hidden className="size-3.5" />
                             {data ? `${data.pipeline.name} · live` : 'Loading the pipeline'}
                         </span>
                     </div>
-                    <h2 className="m-0 text-3xl font-semibold tracking-tight">Welcome back{name ? `, ${name}` : ''}</h2>
+                    <h2 className="m-0 text-xl font-semibold tracking-tight">Welcome back{name ? `, ${name}` : ''}</h2>
                     {data ? (
-                        <p className="m-0 mt-3 text-base leading-7 text-text-muted">
+                        <p className="m-0 mt-1 text-sm leading-6 text-text-muted">
                             Here's how your pipeline is performing today —{' '}
                             <b className="font-semibold text-text">{openCount}</b> open{' '}
                             {openCount === 1 ? 'deal' : 'deals'} worth{' '}
@@ -64,9 +64,26 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
                             )}
                         </p>
                     ) : (
-                        <Skeleton className="mt-3 h-6 w-96" />
+                        <Skeleton className="mt-1 h-5 w-96" />
                     )}
-                    <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border/60 pt-5">
+                </div>
+                <div className="flex shrink-0 flex-col gap-2 max-md:w-full md:items-end">
+                    <div className="flex gap-2">
+                        <Button asChild variant="secondary" size="sm">
+                            <Link to={paths.deals(workspaceId)}>
+                                <ExternalLink aria-hidden /> Open pipeline
+                            </Link>
+                        </Button>
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            loading={board.isFetching}
+                            onClick={() => void board.refetch()}
+                        >
+                            <RefreshCw aria-hidden /> Refresh data
+                        </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 md:justify-end">
                         <HeroStat
                             label="Pipeline value"
                             value={data ? money(sumOf(open(data), currency).amountMinor) : '…'}
@@ -91,19 +108,7 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
                             </div>
                         )}
                     </div>
-                </div>
-                <div className="flex flex-col items-end gap-3">
-                    <div className="flex gap-2">
-                        <Button asChild variant="secondary">
-                            <Link to={paths.deals(workspaceId)}>
-                                <ExternalLink aria-hidden /> Open pipeline
-                            </Link>
-                        </Button>
-                        <Button variant="primary" loading={board.isFetching} onClick={() => void board.refetch()}>
-                            <RefreshCw aria-hidden /> Refresh data
-                        </Button>
-                    </div>
-                    <span className="text-sm text-text-muted">{today}</span>
+                    <span className="text-xs text-text-muted">{today}</span>
                 </div>
             </CardContent>
         </Card>
@@ -112,9 +117,9 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
 
 function HeroStat({ label, value, dot = false }: { label: string; value: string; dot?: boolean }) {
     return (
-        <div className="border-r border-border/60 pr-6 last:border-r-0">
+        <div className="border-r border-border/60 pr-5 last:border-r-0">
             <div className="text-[11px] font-medium tracking-wide text-text-muted uppercase">{label}</div>
-            <div className="mt-1 flex items-center gap-1.5 text-2xl font-semibold tracking-tight tabular-nums">
+            <div className="flex items-center gap-1.5 text-lg font-semibold tracking-tight tabular-nums">
                 {dot && <span aria-hidden className="size-1.5 rounded-full bg-success" />}
                 {value}
             </div>
