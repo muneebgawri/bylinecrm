@@ -31136,6 +31136,11 @@
                         "minimum": 1,
                         "maximum": 90
                     },
+                    "replyRateMaturityHours": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 720
+                    },
                     "spamPauseBps": {
                         "type": "integer",
                         "minimum": 1,
@@ -31158,6 +31163,7 @@
                     "replyRateFloorBps",
                     "replyRateMinSends",
                     "replyRateWindowDays",
+                    "replyRateMaturityHours",
                     "spamPauseBps",
                     "spamWarnBps"
                 ]
@@ -39700,6 +39706,12 @@
                         "maximum": 9007199254740991,
                         "description": "REP-2: the window the reply rate is measured over."
                     },
+                    "replyRateMaturityHours": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "REP-2: how old a send must be (hours) before it is judged; younger sends had no time for a reply."
+                    },
                     "spamPauseBps": {
                         "type": "integer",
                         "minimum": -9007199254740991,
@@ -39725,6 +39737,7 @@
                     "replyRateFloorBps",
                     "replyRateMinSends",
                     "replyRateWindowDays",
+                    "replyRateMaturityHours",
                     "spamPauseBps",
                     "spamWarnBps"
                 ]

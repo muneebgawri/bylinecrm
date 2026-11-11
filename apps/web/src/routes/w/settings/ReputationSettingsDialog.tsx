@@ -46,6 +46,11 @@ const FIELDS: { key: NumberKey; label: string; hint: string }[] = [
     { key: 'replyRateMinSends', label: 'Judge reply rate after (sends)', hint: 'New-thread messages in the window.' },
     { key: 'replyRateWindowDays', label: 'Reply rate over (days)', hint: 'Counted from the last resume, if later.' },
     {
+        key: 'replyRateMaturityHours',
+        label: 'Judge sends after (hours)',
+        hint: 'Younger sends are not counted: no one has had time to reply.',
+    },
+    {
         key: 'spamPauseBps',
         label: 'Spam-rate kill switch (basis points)',
         hint: '30 = 0.3%, Google’s line. Pauses cold mail on the domain.',

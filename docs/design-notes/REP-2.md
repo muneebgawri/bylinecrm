@@ -37,7 +37,9 @@ not built.
 
 `ReputationMonitor` after each sync: replies (an inbound message from a non-member later in the thread) over
 new-thread messages that left the mailbox (CRM or Gmail) in the last `replyRateWindowDays`, counted from the
-mailbox's last resume if later. Under `replyRateFloorBps` on at least `replyRateMinSends` sends → the mailbox is
+mailbox's last resume if later. Only sends at least `replyRateMaturityHours` old are counted, so a burst is not
+judged on mail nobody has had time to answer (#362), and only sends with a to/cc/bcc recipient outside the team, so a
+note to teammates is not a cold send (#363). Under `replyRateFloorBps` on at least `replyRateMinSends` sends → the mailbox is
 paused (`pause_reason.code = reply_rate`, `mailbox.paused` event), a `reply_rate` / `blocked` / high guardrail event,
 and a `guardrail_alert` to the owner and every reviewer (admins + `guardrail:review`).
 
@@ -71,13 +73,14 @@ a member writing to a non-`manual` contact.
 
 ## Defaults
 
-| Setting               | Default   | Bounds           |
-| --------------------- | --------- | ---------------- |
-| `replyRateFloorBps`   | 100 (1%)  | 0–10000          |
-| `replyRateMinSends`   | 50        | 1–10000          |
-| `replyRateWindowDays` | 7         | 1–90             |
-| `spamPauseBps`        | 30 (0.3%) | 1–10000          |
-| `spamWarnBps`         | 10 (0.1%) | 1–10000, ≤ pause |
+| Setting                  | Default   | Bounds           |
+| ------------------------ | --------- | ---------------- |
+| `replyRateFloorBps`      | 100 (1%)  | 0–10000          |
+| `replyRateMinSends`      | 50        | 1–10000          |
+| `replyRateWindowDays`    | 7         | 1–90             |
+| `replyRateMaturityHours` | 72        | 0–720            |
+| `spamPauseBps`           | 30 (0.3%) | 1–10000          |
+| `spamWarnBps`            | 10 (0.1%) | 1–10000, ≤ pause |
 
 ## Tests
 
