@@ -88,6 +88,26 @@ const SEVERITY: Readonly<Record<GuardrailKind, GuardrailSeverity>> = {
     off_crm_cold: 'low',
 };
 
+/**
+ * Why a company another member owns stops the send, said so the sender can see the link: the address's domain
+ * when that is what tied the recipient to the company (the person's record may name no company, or the company
+ * may trade under another name than its domain), and that owning the lead does not outrank the account's owner.
+ * No full stop: `RecipientGuarded` ends it.
+ */
+export function accountOwnedMessage(input: {
+    companyName: string;
+    ownerName: string | null;
+    /** The address's domain when the company was found by it; `null` when the person is linked to the company. */
+    domain: string | null;
+    /** The sender owns the person. */
+    sendersLead: boolean;
+}): string {
+    const who = input.domain ? `everyone at ${input.domain}` : input.sendersLead ? 'they' : 'this person';
+    const tie = input.domain ? 'belongs to' : input.sendersLead ? 'are at' : 'is at';
+    const subject = input.sendersLead ? `This is your lead, but ${who}` : who.charAt(0).toUpperCase() + who.slice(1);
+    return `${subject} ${tie} ${input.companyName}, which is ${input.ownerName ?? 'another member'}’s account — only the account’s owner can email people there. Ask ${input.ownerName ?? 'them'} to introduce you`;
+}
+
 const NAMED = { select: { user: { select: { displayName: true } } } } as const;
 
 /**
@@ -230,7 +250,7 @@ export class RecipientGuard {
                           kind: 'in_negotiation',
                           owner: { memberId: deal.ownerId, name: deal.ownerName },
                           companyId: company!.companyId,
-                          message: `${deal.ownerName ?? 'Another member'} is negotiating with ${company!.companyName} (${deal.name}) — ask them to introduce you`,
+                          message: `${deal.ownerName ?? 'Another member'} has an open deal with ${company!.companyName} (${deal.name}), so only they can email people there — ask ${deal.ownerName ?? 'them'} to introduce you`,
                           detail: { dealId: deal.id },
                       }
                     : person?.ownerId && person.ownerId !== sender
@@ -238,14 +258,23 @@ export class RecipientGuard {
                             kind: 'owned_by_other',
                             owner: { memberId: person.ownerId, name: person.ownerName },
                             companyId: company?.companyId ?? null,
-                            message: `${person.ownerName ?? 'Another member'}’s lead — ask them to introduce you`,
+                            message: `This person is ${person.ownerName ?? 'another member'}’s lead, so only they can email them — ask ${person.ownerName ?? 'them'} to introduce you`,
                         }
                       : company?.ownerId && company.ownerId !== sender
                         ? {
                               kind: 'owned_by_other',
                               owner: { memberId: company.ownerId, name: company.ownerName },
                               companyId: company.companyId,
-                              message: `${company.companyName} is ${company.ownerName ?? 'another member'}’s account — ask them to introduce you`,
+                              message: accountOwnedMessage({
+                                  companyName: company.companyName,
+                                  ownerName: company.ownerName,
+                                  // Not linked to the company: it was found by the address's domain (OWN-2).
+                                  domain:
+                                      person?.companyId === company.companyId
+                                          ? null
+                                          : companyDomainOfAddress(r.address),
+                                  sendersLead: person?.ownerId === sender,
+                              }),
                           }
                         : null;
                 // A colleague's lead in a thread that colleague is on: answering it is not poaching.
