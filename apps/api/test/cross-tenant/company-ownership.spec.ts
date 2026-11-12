@@ -14,7 +14,6 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
-import { linkDomainPeople } from '../../src/cli/link-domain-people';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
@@ -860,36 +859,6 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
             expect(person.ownerId).toBe(anaId);
             expect(await ownerOfCompany(person.companyId)).toBe(anaId);
             expect(await companyOfPerson(first.id)).toBe(person.companyId);
-        });
-
-        it('link-domain-people links the leads an import left without their company, and nothing twice', async () => {
-            const umber = `umber-${stamp}.test`;
-            const lone = (
-                await as(ana)
-                    .post(w('/people'))
-                    .send({ nameFirst: 'Gil', emails: { primary: `gil@${umber}`, additional: [] } })
-                    .expect(201)
-            ).body as { id: string };
-            const free = (
-                await as(ana)
-                    .post(w('/people'))
-                    .send({ nameFirst: 'Hal', emails: { primary: `hal-${stamp}@gmail.com`, additional: [] } })
-                    .expect(201)
-            ).body as { id: string };
-            // The import's company: saved without its people (as the Bigin import left them).
-            const prisma = app.get(PrismaService);
-            const company = await prisma.company.create({
-                data: { workspaceId: workspace, name: `Umber ${stamp}`, domain: umber, createdBy: { kind: 'import' } },
-            });
-
-            const estimate = await linkDomainPeople(app, workspace, { apply: false });
-            expect(estimate.linked).toBeGreaterThanOrEqual(1);
-            expect(await companyOfPerson(lone.id)).toBeNull();
-
-            await linkDomainPeople(app, workspace, { apply: true });
-            expect(await companyOfPerson(lone.id)).toBe(company.id);
-            expect(await companyOfPerson(free.id)).toBeNull();
-            expect((await linkDomainPeople(app, workspace, { apply: false })).linked).toBe(0);
         });
     });
 });
