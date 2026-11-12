@@ -26,6 +26,7 @@ import { TaskNotificationsService } from '../../src/notifications/task-notificat
 import { FakeGmail } from '../support/fake-gmail';
 import { FakeGoogleOAuth } from '../support/fake-google-oauth';
 import { deliverMail, mailTo, verifyAddress } from '../support/mail';
+import { settle } from '../support/outbox';
 
 interface Browser {
     cookie: string;
@@ -372,6 +373,30 @@ describe('GUARD-2 poaching detection (FR-CRMS-22)', () => {
         } finally {
             await owner.workspaceMember.update({ where: { id: outreachId }, data: { leftAt: null } });
         }
+    });
+
+    it('OWN-2f: treats a company whose owner has let it go as nobody’s: no alert', async () => {
+        const quiet = `quiet-${stamp}.test`;
+        const company = (
+            (
+                await as(ben)
+                    .post(w('/companies'))
+                    .send({ name: `Quiet ${stamp}`, domain: quiet })
+                    .expect(201)
+            ).body as {
+                id: string;
+            }
+        ).id;
+        await settle(app);
+        expect(await detector.judge(workspace, (await synced({ to: [`ceo@${quiet}`] })).id)).toBe(1);
+        // Seven months on, with nothing done there since.
+        const old = new Date(Date.now() - 214 * 24 * 60 * 60 * 1000);
+        await owner.company.update({ where: { id: company }, data: { createdAt: old } });
+        await owner.timelineActivity.updateMany({
+            where: { workspaceId: workspace, targetId: company },
+            data: { happenedAt: old },
+        });
+        expect(await detector.judge(workspace, (await synced({ to: [`cfo@${quiet}`] })).id)).toBe(0);
     });
 
     it('does not judge calendar invitations or answers to another member’s lead', async () => {
