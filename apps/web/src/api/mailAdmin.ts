@@ -104,6 +104,9 @@ export const mailboxes = {
         request<MailboxCheckView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/check`)),
     disconnect: (workspaceId: string, mailboxId: string) =>
         request<MailboxDisconnectedView>('DELETE', workspacePath(workspaceId, `/mailboxes/${mailboxId}`)),
+    /** Removes the mailbox with the mail only it held (#385); mail another mailbox also holds stays. */
+    remove: (workspaceId: string, mailboxId: string) =>
+        request<void>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/remove`)),
     /** Moves a shared (pool or service) Gmail mailbox onto the workspace's Google service account (#225). */
     useDelegation: (workspaceId: string, mailboxId: string) =>
         request<MailboxView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/delegation`)),
@@ -323,6 +326,9 @@ export const useCheckMailbox = (workspaceId: string) =>
 
 export const useDisconnectMailbox = (workspaceId: string) =>
     useMailboxWrite(workspaceId, (mailboxId) => mailboxes.disconnect(workspaceId, mailboxId));
+
+export const useRemoveMailbox = (workspaceId: string) =>
+    useMailboxWrite(workspaceId, (mailboxId) => mailboxes.remove(workspaceId, mailboxId));
 
 export const useMoveMailboxToDelegation = (workspaceId: string) =>
     useMailboxWrite(workspaceId, (mailboxId) => mailboxes.useDelegation(workspaceId, mailboxId));

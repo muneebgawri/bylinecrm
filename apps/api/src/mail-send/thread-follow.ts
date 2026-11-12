@@ -14,7 +14,8 @@ export const THREAD_PARENT_WAIT_MS = 5 * 60_000;
 /** The earlier send, as far as threading after it is concerned. */
 export interface EarlierSend {
     status: MailOutboundStatus;
-    mailboxId: string;
+    /** Null once the mailbox it went from was removed (#385). */
+    mailboxId: string | null;
     /** Its stored copy, once sync has it. */
     mailMessageId: string | null;
 }
@@ -33,5 +34,7 @@ export function followAfter(earlier: EarlierSend): ThreadFollow {
         return { kind: 'broken', status: earlier.status };
     }
     if (earlier.status !== 'sent' || earlier.mailMessageId === null) return { kind: 'wait' };
+    // The mailbox that sent it is gone (#385): nothing can answer from it, so what follows is called off.
+    if (earlier.mailboxId === null) return { kind: 'broken', status: 'cancelled' };
     return { kind: 'reply', mailboxId: earlier.mailboxId, parentMessageId: earlier.mailMessageId };
 }

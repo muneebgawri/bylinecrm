@@ -48,7 +48,7 @@ export class SendingPoolConsumer implements OutboxConsumer {
                     select: { mailboxId: true, isTest: true },
                 }),
             );
-            if (send && !send.isTest) await this.pool.evaluateRejects(event.workspaceId, send.mailboxId);
+            if (send?.mailboxId && !send.isTest) await this.pool.evaluateRejects(event.workspaceId, send.mailboxId);
             return;
         }
         if (event.type === 'suppression.added') {
@@ -58,7 +58,7 @@ export class SendingPoolConsumer implements OutboxConsumer {
                     select: { outbound: { select: { mailboxId: true } } },
                 }),
             );
-            if (entry?.outbound) await this.pool.evaluate(event.workspaceId, entry.outbound.mailboxId);
+            if (entry?.outbound?.mailboxId) await this.pool.evaluate(event.workspaceId, entry.outbound.mailboxId);
         }
     }
 }

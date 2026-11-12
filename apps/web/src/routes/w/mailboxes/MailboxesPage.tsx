@@ -17,6 +17,7 @@ import {
     useCheckMailbox,
     useConnectMailbox,
     useDisconnectMailbox,
+    useRemoveMailbox,
     useMoveMailboxToDelegation,
     useMailboxSyncs,
     useMailboxes,
@@ -168,6 +169,8 @@ function MailboxTable({
     const connect = useConnectMailbox(workspaceId);
     const disconnect = useDisconnectMailbox(workspaceId);
     const [disconnecting, setDisconnecting] = useState<MailboxView | null>(null);
+    const remove = useRemoveMailbox(workspaceId);
+    const [removing, setRemoving] = useState<MailboxView | null>(null);
     const moveToDelegation = useMoveMailboxToDelegation(workspaceId);
     const [delegating, setDelegating] = useState<MailboxView | null>(null);
     const [choosingSender, setChoosingSender] = useState<MailboxView | null>(null);
@@ -345,6 +348,17 @@ function MailboxTable({
                                                 Disconnect
                                             </DropdownMenuItem>
                                         )}
+                                    {m.status === 'disconnected' && (
+                                        <DropdownMenuItem
+                                            destructive
+                                            onSelect={() => {
+                                                remove.reset();
+                                                setRemoving(m);
+                                            }}
+                                        >
+                                            Remove
+                                        </DropdownMenuItem>
+                                    )}
                                 </>
                             ) : null,
                     },
@@ -393,6 +407,24 @@ function MailboxTable({
                                 tone: 'success',
                             });
                             setDisconnecting(null);
+                        },
+                    })
+                }
+            />
+            <ConfirmDialog
+                open={removing !== null}
+                onOpenChange={(open) => !open && setRemoving(null)}
+                title={`Remove ${removing?.email ?? ''}?`}
+                body="The mailbox leaves this list for good. Mail that only it held is deleted from the records it was on; mail another mailbox also holds stays. This cannot be undone."
+                confirm="Remove"
+                pending={remove.isPending}
+                error={remove.isError ? failureText(remove.error) : undefined}
+                onConfirm={() =>
+                    removing &&
+                    remove.mutate(removing.id, {
+                        onSuccess: () => {
+                            toast({ title: `Removed ${removing.email}`, tone: 'success' });
+                            setRemoving(null);
                         },
                     })
                 }

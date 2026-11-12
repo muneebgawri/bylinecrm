@@ -120,7 +120,7 @@ export class Smtp2GoHookService {
             const send = await this.rls.withWorkspace(workspaceId, (tx) =>
                 relayedSendOf(tx, event, event.kind === 'reject' ? ['sent', 'failed'] : ['sent']),
             );
-            result = send ? await this.apply({ id: send.mailboxId, workspaceId }, event) : 'unmatched';
+            result = send?.mailboxId ? await this.apply({ id: send.mailboxId, workspaceId }, event) : 'unmatched';
         }
         await this.noteRelay(workspaceId, result);
         return result;
