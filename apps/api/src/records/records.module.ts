@@ -15,6 +15,8 @@ import { TasksService } from './tasks.service';
 import { CompanyOwnership } from './company-ownership';
 import { CompanyDomainsController, OwnershipController } from './ownership.controller';
 import { OwnershipService } from './ownership.service';
+import { IntegrationOwnersController } from './integration-owners.controller';
+import { OwnerLookupService } from './owner-lookup.service';
 import { PeopleDedupe } from './people-dedupe.service';
 import { TransfersModule } from '../transfers/transfers.module';
 
@@ -31,6 +33,7 @@ import { TransfersModule } from '../transfers/transfers.module';
         AttachmentsController,
         CompanyDomainsController,
         OwnershipController,
+        IntegrationOwnersController,
     ],
     providers: [
         PeopleService,
@@ -43,6 +46,7 @@ import { TransfersModule } from '../transfers/transfers.module';
         BulkService,
         CompanyOwnership,
         OwnershipService,
+        OwnerLookupService,
     ],
     exports: [
         CompanyOwnership,

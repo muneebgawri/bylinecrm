@@ -144,6 +144,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
     'mail:service_read':
         'Read everything service inboxes hold, bodies included (for an integration such as NewswireOS)',
     'mail:sent_counts': 'Read how many emails each sender sent per day — counts only (for an integration)',
+    'record:owner_lookup': 'Look up who owns a person or company, by email (for an integration such as NewswireOS)',
     'guardrail:review': 'Review guardrail events and hear of repeated blocks',
     'invoice:verify': 'Verify or refuse invoices by hand, and hear of ones waiting for finance',
     'workspace:admin': 'Administer the workspace',

@@ -290,3 +290,14 @@ export class ListAttachmentsQueryDto extends createZodDto(z.object({ target: tar
 
 /** The upload's target travels in the query string; the file is the multipart body. */
 export class UploadAttachmentQueryDto extends createZodDto(z.object({ target: targetParam })) {}
+
+/** `GET /integrations/owners/lookup` (OWN-LOOKUP): an address, and optionally the company domain to fall back to. */
+export class OwnerLookupQueryDto extends createZodDto(
+    z.object({
+        email: z.email().meta({ description: 'The address to look up — a person’s primary or additional email.' }),
+        domain: z.string().min(1).max(253).optional().meta({
+            description:
+                'The company domain to fall back to when no person (or no owned person) has the address. Default: the address’s registrable domain, unless it is free mail.',
+        }),
+    }),
+) {}

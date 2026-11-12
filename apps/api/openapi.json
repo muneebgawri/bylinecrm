@@ -8821,6 +8821,93 @@
                 "tags": ["companies"]
             }
         },
+        "/api/w/{workspaceId}/integrations/owners/lookup": {
+            "get": {
+                "operationId": "integrationOwners_lookup",
+                "parameters": [
+                    {
+                        "name": "email",
+                        "required": true,
+                        "in": "query",
+                        "description": "The address to look up — a person’s primary or additional email.",
+                        "schema": {
+                            "format": "email",
+                            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "domain",
+                        "required": false,
+                        "in": "query",
+                        "description": "The company domain to fall back to when no person (or no owned person) has the address. Default: the address’s registrable domain, unless it is free mail.",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 253,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OwnerLookup"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["integrations"]
+            }
+        },
         "/api/w/{workspaceId}/search": {
             "get": {
                 "operationId": "search_find",
@@ -30146,7 +30233,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 29,
+                        "maxItems": 30,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -30177,6 +30264,7 @@
                                 "mailbox:manage",
                                 "mail:service_read",
                                 "mail:sent_counts",
+                                "record:owner_lookup",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -30199,7 +30287,7 @@
                         "maxLength": 120
                     },
                     "capabilities": {
-                        "maxItems": 29,
+                        "maxItems": 30,
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -30230,6 +30318,7 @@
                                 "mailbox:manage",
                                 "mail:service_read",
                                 "mail:sent_counts",
+                                "record:owner_lookup",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -36349,6 +36438,7 @@
                                 "mailbox:manage",
                                 "mail:service_read",
                                 "mail:sent_counts",
+                                "record:owner_lookup",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -36487,6 +36577,7 @@
                                 "mailbox:manage",
                                 "mail:service_read",
                                 "mail:sent_counts",
+                                "record:owner_lookup",
                                 "guardrail:review",
                                 "invoice:verify",
                                 "workspace:admin"
@@ -38922,6 +39013,48 @@
                     "companyOwnerMemberId",
                     "companyOwnerName"
                 ]
+            },
+            "OwnerLookup": {
+                "type": "object",
+                "properties": {
+                    "found": {
+                        "type": "boolean",
+                        "description": "A person with the address, or a company at the domain, exists."
+                    },
+                    "match": {
+                        "nullable": true,
+                        "description": "Which record answered.",
+                        "type": "string",
+                        "enum": ["person", "company"]
+                    },
+                    "recordId": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                    },
+                    "recordName": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "owner": {
+                        "nullable": true,
+                        "description": "The owning member, by sign-in email. Null when nobody owns them, or the owner has left, is a shared mailbox, or is dormant (OWN-2f).",
+                        "type": "object",
+                        "properties": {
+                            "email": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "nullable": true,
+                                "type": "string"
+                            }
+                        },
+                        "required": ["email", "name"]
+                    }
+                },
+                "required": ["found", "match", "recordId", "recordName", "owner"]
             },
             "Stage": {
                 "type": "object",
