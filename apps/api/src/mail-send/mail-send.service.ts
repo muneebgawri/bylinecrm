@@ -671,7 +671,8 @@ export class MailSendService {
 
         // REP-1: mail the member sets going — a message that starts a thread, or a queued follow-up — passes the
         // mailbox's budget and repetition rules: at the request (a send later: for the time it goes, with what is
-        // already set to go then) and again at a scheduled send's time. A reply is never judged.
+        // already set to go then) and again at a scheduled send's time. A reply is never judged; a follow-up is
+        // judged for repetition, not against the budgets (they are for first emails).
         const print = fingerprint(subject, rendered.text);
         if (!parent || input.followUp) {
             await this.reputation.assertPersonalSend({
@@ -680,6 +681,7 @@ export class MailSendService {
                 recipients: [...recipients.to, ...recipients.cc, ...recipients.bcc],
                 fingerprint: print,
                 path: when === 'due' ? 'scheduled_send' : 'send',
+                ...(input.followUp ? { followUp: true } : {}),
                 ...(when === 'later' && options.at ? { now: options.at } : {}),
             });
         }

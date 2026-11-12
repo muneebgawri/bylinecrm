@@ -12,8 +12,9 @@ const NO_ID = '00000000-0000-0000-0000-000000000000';
  * not fingerprinted yet is fingerprinted here, once (its two derived columns are the only ones the app
  * may update). `exceptOutboundId`: the send being judged.
  *
- * A queued follow-up is counted although it goes as a reply: it is mail the member set going, not an answer to
- * anyone, so it is judged like new mail and counts like it — its recipient once, as the set of addresses does.
+ * A queued follow-up is here although it goes as a reply: it is mail the member set going, not an answer to
+ * anyone, so the repetition rules judge it like new mail. It is marked (`followUp`) because the new-recipient
+ * budgets do not count it — they are for first emails.
  * With `until` (the gate), sends still scheduled for the window count too: judged for a time ahead — a scheduled
  * send at its request — the window is the one around that time, and what is already set to go in it is part of it.
  */
@@ -30,9 +31,11 @@ export async function newThreadMail(
             body_simhash: bigint | null;
             subject_key: string | null;
             at: Date;
+            follow_up: boolean;
         }[]
     >`
         SELECT to_addresses || cc_addresses || bcc_addresses AS addresses, body_simhash, subject_key,
+               follows_outbound_id IS NOT NULL AS follow_up,
                coalesce(sent_at, last_attempt_at, send_at, created_at) AS at
         FROM mail_outbound
         WHERE mailbox_id = ${mailboxId}::uuid
@@ -74,6 +77,7 @@ export async function newThreadMail(
         simhash: r.body_simhash,
         subjectKey: r.subject_key,
         at: r.at,
+        followUp: r.follow_up,
     }));
     for (const r of synced) {
         let simhash = r.body_simhash;
@@ -88,7 +92,7 @@ export async function newThreadMail(
             });
         }
         if (r.addresses.length === 0) continue;
-        entries.push({ addresses: r.addresses, simhash, subjectKey, at: r.sent_at });
+        entries.push({ addresses: r.addresses, simhash, subjectKey, at: r.sent_at, followUp: false });
     }
     return entries;
 }
