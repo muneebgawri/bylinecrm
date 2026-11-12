@@ -846,11 +846,21 @@ describe('mail send and reply detection', () => {
         let delivered: string;
 
         beforeAll(async () => {
+            // A connected mailbox's address is not a contact's (#383): the API refuses it, so the person the send
+            // needs is made as a contact and re-addressed underneath, as an earlier system's auto-contacts were.
             const created = await as(admin)
                 .post(w('/people'))
-                .send({ nameFirst: 'Pool', nameLast: 'Inbox', emails: { primary: poolEmail, additional: [] } });
+                .send({
+                    nameFirst: 'Pool',
+                    nameLast: 'Inbox',
+                    emails: { primary: `was-pool-${stamp}@example.com`, additional: [] },
+                });
             expect(created.status).toBe(201);
             poolPersonId = (created.body as { id: string }).id;
+            await owner.person.update({
+                where: { id: poolPersonId },
+                data: { emails: { primary: poolEmail, additional: [] } },
+            });
             ours = await sendAndDeliver({
                 mailboxId: adminMailbox,
                 personId: poolPersonId,
