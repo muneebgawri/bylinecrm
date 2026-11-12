@@ -9,7 +9,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
-import { CompanyOwnership, companyDomainOfAddress } from './company-ownership';
+import { CompanyOwnership, companyDomainOfAddress, domainHeld, isGoverned } from './company-ownership';
 import { CompaniesService } from './companies.service';
 import { requireCallerMember } from '../infra/caller-member';
 import { RotationService } from '../cadence/rotation.service';
@@ -181,6 +181,20 @@ export class PeopleService implements BulkRecords {
         const sameDomain = company
             ? await this.ownership.companyForDomain(context, companyDomainOfAddress(person.emails?.primary))
             : null;
+        // OWN-2g: a new company at a domain where another member saved leads first is theirs: refused here (the rep
+        // may save the lead for them), and otherwise takes those leads in.
+        const leads =
+            company && !sameDomain
+                ? await this.ownership.domainLeads(context, companyDomainOfAddress(person.emails?.primary))
+                : null;
+        if (
+            company &&
+            leads?.holder &&
+            isGoverned(context) &&
+            leads.holder.ownerId !== resolveOwner(context, person.ownerId, undefined)
+        ) {
+            throw domainHeld(company.name, leads.holder, 'company');
+        }
         const row = await this.rls.withWorkspace(async (tx) => {
             // #353: the new company and the person commit together or not at all. Its domain check (OWN-2) runs
             // before its write, so an owned domain is refused with nothing written.
@@ -193,6 +207,7 @@ export class PeopleService implements BulkRecords {
                     ownerId: person.ownerId,
                 });
                 await this.events.record(tx, made.event);
+                if (leads) await this.ownership.linkPeople(tx, made.row.id, leads.personIds);
                 person.companyId = made.row.id;
             }
             const created = await this.createIn(tx, context, person);
@@ -425,8 +440,10 @@ export class PeopleService implements BulkRecords {
      * them with the hand-over.
      */
     private async handToOwner(context: WorkspaceRunContext, input: PersonInput): Promise<PersonView | null> {
-        const company = await this.ownership.companyForDomain(context, companyDomainOfAddress(input.emails?.primary));
+        const domain = companyDomainOfAddress(input.emails?.primary);
+        const company = await this.ownership.companyForDomain(context, domain);
         const me = await this.rls.withWorkspace((tx) => requireCallerMember(tx, context));
+        if (!company && input.company) return this.handToDomainHolder(context, me, domain, input);
         if (!company?.ownerId || company.ownerId === me) return null;
         const { handToOwner: _hand, ownerId: _owner, ...rest } = input;
         const owner = company.ownerId;
@@ -450,6 +467,48 @@ export class PeopleService implements BulkRecords {
                 return { row: created, target: { type: 'person' as const, id: created.id } };
             },
             `${company.companyName} is theirs`,
+        );
+        return view(row);
+    }
+
+    /**
+     * OWN-2g: the lead and the new company it names, saved for the member who saved leads at its domain first
+     * (`domainLeads`): the company is made theirs and takes those leads in, and the lead joins it as theirs. Null
+     * when nobody else holds the domain, so the caller saves them as usual.
+     */
+    private async handToDomainHolder(
+        context: WorkspaceRunContext,
+        me: string,
+        domain: string | null,
+        input: PersonInput,
+    ): Promise<PersonView | null> {
+        const leads = await this.ownership.domainLeads(context, domain);
+        const holder = leads.holder;
+        if (!holder || holder.ownerId === me || !input.company) return null;
+        const { handToOwner: _hand, ownerId: _owner, company: named, ...rest } = input;
+        const owner = holder.ownerId;
+        const row = await this.transfers.handOver(
+            context,
+            me,
+            owner,
+            async (tx, wide) => {
+                const made = await this.companies.createIn(tx, wide, { name: named!.name, domain, ownerId: owner });
+                await this.events.record(tx, made.event);
+                await this.ownership.linkPeople(tx, made.row.id, leads.personIds);
+                const created = await tx.person.create({
+                    data: {
+                        ...compact(fields({ ...rest, companyId: made.row.id })),
+                        workspaceId: context.workspaceId,
+                        ownerId: owner,
+                        createdBy: actorOf(context),
+                        custom: await this.customFields.validated(tx, 'person', rest.custom ?? {}, 'create'),
+                    },
+                    include: personInclude,
+                });
+                await this.events.record(tx, event(wide, 'person.created', created.id));
+                return { row: created, target: { type: 'person' as const, id: created.id } };
+            },
+            `${holder.ownerName ?? 'They'} saved a lead at ${domain} first`,
         );
         return view(row);
     }

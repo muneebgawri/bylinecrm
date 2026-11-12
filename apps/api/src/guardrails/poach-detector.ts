@@ -12,7 +12,13 @@ import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../e
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { notify } from '../notifications/notify';
-import { companyDomainOfAddress, normalisedDomain } from '../records/company-ownership';
+import {
+    companyDomainOfAddress,
+    normalisedDomain,
+    ownerReading,
+    resolveCompanyOwner,
+    type OwnerReading,
+} from '../records/company-ownership';
 import { exclusionHits } from '../sequences/exclusions.service';
 import { AccountMail } from '../transactional-mail/account-mail';
 import { effectiveOwner, guardrailSettings, ownerlessMembers } from './guardrail-settings';
@@ -430,7 +436,14 @@ export async function readRecipients(
                 { otherDomains: { some: { domain: { in: forms } } } },
             ],
         },
-        select: { id: true, ownerId: true, domain: true, otherDomains: { select: { domain: true } } },
+        select: {
+            id: true,
+            name: true,
+            ownerId: true,
+            owner: { select: { user: { select: { displayName: true } } } },
+            domain: true,
+            otherDomains: { select: { domain: true } },
+        },
         orderBy: { createdAt: 'asc' },
     });
     const companyById = new Map(companies.map((c) => [c.id, c]));
@@ -444,7 +457,21 @@ export async function readRecipients(
     }
     const excluded = await exclusionHits(tx, addresses);
 
-    return recipients.map((r) => {
+    // A company's owner, read the one way OWN-2 reads it (`resolveCompanyOwner`): a member who has left, a shared
+    // mailbox or an owner who has let it go (OWN-2f) holds it for nobody; one naming none is its first saver's.
+    // Read only for a recipient whose own owner does not decide it, and once per message.
+    const owners = new Map<string, string | null>();
+    let reading: OwnerReading | undefined;
+    const companyOwner = async (c: (typeof companies)[number]): Promise<string | null> => {
+        if (!owners.has(c.id)) {
+            reading ??= await ownerReading(tx);
+            owners.set(c.id, (await resolveCompanyOwner(tx, c, reading)).ownerId);
+        }
+        return owners.get(c.id) ?? null;
+    };
+
+    const read: PoachRecipient[] = [];
+    for (const r of recipients) {
         const address = r.address.toLowerCase();
         const person = (r.personId ? byId.get(r.personId) : undefined) ?? byAddress.get(address) ?? null;
         const domain = companyDomainOfAddress(address);
@@ -453,7 +480,7 @@ export async function readRecipients(
             (domain ? companyByDomain.get(normalisedDomain(domain)) : undefined) ??
             null;
         const hit = excluded.get(address);
-        return {
+        read.push({
             address,
             memberId: r.memberId,
             personId: person?.id ?? null,
@@ -461,10 +488,11 @@ export async function readRecipients(
             // A shared mailbox's person reads as unowned: their company's owner, if any, is the owner (as GUARD-1 reads it).
             ownerId:
                 effectiveOwner(person?.ownerId ?? null, sharedMailboxes) ??
-                effectiveOwner(company?.ownerId ?? null, sharedMailboxes),
+                (company ? await companyOwner(company) : null),
             exclusion: hit ? { source: hit.source, reason: hit.reason } : null,
-        };
-    });
+        });
+    }
+    return read;
 }
 
 /**
