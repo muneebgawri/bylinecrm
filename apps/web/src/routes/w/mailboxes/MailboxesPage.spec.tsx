@@ -260,6 +260,46 @@ describe('#144: who a shared outreach mailbox sends as', () => {
     });
 });
 
+describe('#225: an admin moves a shared mailbox onto Workspace delegation', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        toasts.clear();
+    });
+
+    it('moves a pool mailbox only after the page’s own confirmation', async () => {
+        const seen = api([
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/mailboxes/mb-2/delegation')
+                    ? json(
+                          mailbox({
+                              id: 'mb-2',
+                              ownerMemberId: 'm-2',
+                              email: 'outreach@example.com',
+                              purpose: 'pool',
+                              credentialSource: 'delegation',
+                          }),
+                      )
+                    : undefined,
+        ]);
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for outreach@example.com' }));
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Sync via Workspace delegation' }));
+        const dialog = await screen.findByRole('dialog');
+        expect(seen.some((r) => r.url.endsWith('/delegation'))).toBe(false);
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Move to delegation' }));
+        await waitFor(() => expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/delegation'))).toBe(true));
+        expect(await screen.findByText('outreach@example.com now syncs via Workspace delegation')).toBeInTheDocument();
+    });
+
+    it('is not offered for a personal mailbox', async () => {
+        api();
+        page();
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for kate@example.com' }));
+        expect(await screen.findByRole('menuitem', { name: 'Disconnect' })).toBeInTheDocument();
+        expect(screen.queryByRole('menuitem', { name: 'Sync via Workspace delegation' })).not.toBeInTheDocument();
+    });
+});
+
 describe('FR-CRMS-2: the blocklist removes mail it covers', () => {
     afterEach(() => {
         vi.unstubAllGlobals();

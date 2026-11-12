@@ -48,8 +48,8 @@ export const DELEGATION_SCOPES = PERSONAL_MAILBOX_SCOPES;
 
 /**
  * What the delegation's audit log records (#225): key and domain changes, exclusion toggles, a member's
- * first delegated sync (and their first again after a gap or an exclusion change), and a delegated sync
- * failing — once per member until it works again. Not every sync: they run every few minutes.
+ * first delegated sync (and their first again after a gap or an exclusion change), a delegated sync
+ * failing — once per member until it works again — and a shared mailbox moved onto the service account. Not every sync: they run every few minutes.
  */
 export const DELEGATION_AUDIT_ACTIONS = [
     'key_set',
@@ -59,6 +59,7 @@ export const DELEGATION_AUDIT_ACTIONS = [
     'member_included',
     'sync_started',
     'sync_failed',
+    'shared_delegated',
 ] as const;
 export type DelegationAuditAction = (typeof DELEGATION_AUDIT_ACTIONS)[number];
 

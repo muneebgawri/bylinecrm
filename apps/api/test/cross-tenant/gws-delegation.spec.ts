@@ -358,6 +358,94 @@ describe('Google Workspace delegation', () => {
         expect(workspaceGoogle.mints.length).toBe(mints);
     });
 
+    it('moves a shared mailbox onto delegation only when Google mints for it, and keeps it there', async () => {
+        const connectPool = async (email: string) => {
+            const start = await as(admin).post(w('/mailboxes/connect')).send({ purpose: 'pool' });
+            const { code, state } = google.consent((start.body as { authorizeUrl: string }).authorizeUrl, {
+                email,
+                scopes: [...GMAIL_SCOPES],
+            });
+            const callback = await as(admin).get(`${MAIL_OAUTH_CALLBACK_PATH}?state=${state}&code=${code}`);
+            expect(new URL(String(callback.headers['location'])).searchParams.get('connect')).toBe('connected');
+            return (await mailboxAt(email))!;
+        };
+        const poolEmail = `pool@${domain}`;
+        const pool = await connectPool(poolEmail);
+        const outsidePool = await connectPool(`pool-${stamp}@elsewhere.example`);
+        const move = (who: Browser, id: string) => as(who).post(w(`/mailboxes/${id}/delegation`));
+
+        // An admin's action: a member may not, and a member's own mailbox moves by being disconnected instead.
+        expect((await move(synced, pool.id)).status).toBe(403);
+        const own = (await mailboxAt(syncedEmail))!;
+        expect((await move(admin, own.id)).status).toBe(409);
+
+        // Outside the allowed domains, or an address the Workspace does not have: refused, nothing changes.
+        expect((await move(admin, outsidePool.id)).status).toBe(409);
+        const unknown = await move(admin, pool.id);
+        expect(unknown.status).toBe(409);
+        expect(String((unknown.body as { message?: string }).message ?? JSON.stringify(unknown.body))).toContain(
+            poolEmail,
+        );
+        expect(await mailboxAt(poolEmail)).toMatchObject({ credentialSource: 'oauth', status: 'connected' });
+
+        // Once the Workspace has the address, the same row moves, its own grant is revoked, and sync uses delegation.
+        workspaceGoogle.addUsers(poolEmail);
+        const revokes = google.revokeCalls;
+        const moved = await move(admin, pool.id);
+        expect(moved.status).toBe(200);
+        expect(moved.body as MailboxView).toMatchObject({
+            id: pool.id,
+            credentialSource: 'delegation',
+            status: 'connected',
+        });
+        expect(google.revokeCalls).toBe(revokes + 1);
+        const row = (await mailboxAt(poolEmail))!;
+        expect(row.refreshTokenCiphertext).toBeNull();
+        expect(row.purpose).toBe('pool');
+        // Moving it again changes nothing.
+        expect((await move(admin, pool.id)).status).toBe(200);
+        expect(google.revokeCalls).toBe(revokes + 1);
+
+        // The reconcile keeps it, and its sync mints a token for its own address.
+        await app.get(DelegationService).reconcileAll();
+        expect(await mailboxAt(poolEmail)).toMatchObject({ credentialSource: 'delegation', status: 'connected' });
+        await owner.mailbox.update({
+            where: { id: pool.id },
+            data: { accessTokenCiphertext: null, accessExpiresAt: null },
+        });
+        await app.get(MailSyncService).syncMailbox(workspace, pool.id, { sleep: () => Promise.resolve() });
+        expect(workspaceGoogle.mints.at(-1)?.subject).toBe(poolEmail);
+
+        // An admin can disconnect it; the reconcile does not bring it back; moving it again does.
+        const off = await as(admin).delete(w(`/mailboxes/${pool.id}`));
+        expect(off.status).toBe(200);
+        expect((off.body as { revoked: boolean }).revoked).toBe(false);
+        await app.get(DelegationService).reconcileAll();
+        expect((await mailboxAt(poolEmail))?.status).toBe('disconnected');
+        expect((await move(admin, pool.id)).status).toBe(200);
+        expect(await mailboxAt(poolEmail)).toMatchObject({ credentialSource: 'delegation', status: 'connected' });
+
+        // A domain no longer allowed stops it, as it stops a member's.
+        const view = (await as(admin).get(w(G))).body as { allowedDomains: string[] };
+        expect(
+            (
+                await as(admin)
+                    .patch(w(G))
+                    .send({ allowedDomains: ['unrelated.example'] })
+            ).status,
+        ).toBe(200);
+        expect((await mailboxAt(poolEmail))?.status).toBe('disconnected');
+        expect((await as(admin).patch(w(G)).send({ allowedDomains: view.allowedDomains })).status).toBe(200);
+        expect((await move(admin, pool.id)).status).toBe(200);
+
+        const actions = (
+            (await as(admin).get(w(`${G}/audit`))).body as { action: string; detail: { email?: string } }[]
+        )
+            .filter((a) => a.action === 'shared_delegated')
+            .map((a) => a.detail.email);
+        expect(actions).toEqual([poolEmail, poolEmail, poolEmail]);
+    });
+
     it('audits every key and setting change', async () => {
         const res = await as(admin).get(w(`${G}/audit`));
         expect(res.status).toBe(200);
@@ -369,6 +457,7 @@ describe('Google Workspace delegation', () => {
             'member_included',
             'sync_started',
             'sync_failed',
+            'shared_delegated',
         ]) {
             expect(actions).toContain(action);
         }

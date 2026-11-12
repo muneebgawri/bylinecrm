@@ -17,6 +17,7 @@ import {
     useCheckMailbox,
     useConnectMailbox,
     useDisconnectMailbox,
+    useMoveMailboxToDelegation,
     useMailboxSyncs,
     useMailboxes,
     useOAuthClientStatus,
@@ -167,6 +168,8 @@ function MailboxTable({
     const connect = useConnectMailbox(workspaceId);
     const disconnect = useDisconnectMailbox(workspaceId);
     const [disconnecting, setDisconnecting] = useState<MailboxView | null>(null);
+    const moveToDelegation = useMoveMailboxToDelegation(workspaceId);
+    const [delegating, setDelegating] = useState<MailboxView | null>(null);
     const [choosingSender, setChoosingSender] = useState<MailboxView | null>(null);
 
     const admin = can(membership, 'workspace:admin');
@@ -317,17 +320,31 @@ function MailboxTable({
                                             Reconnect
                                         </DropdownMenuItem>
                                     )}
-                                    {m.status !== 'disconnected' && m.credentialSource !== 'delegation' && (
-                                        <DropdownMenuItem
-                                            destructive
-                                            onSelect={() => {
-                                                disconnect.reset();
-                                                setDisconnecting(m);
-                                            }}
-                                        >
-                                            Disconnect
-                                        </DropdownMenuItem>
-                                    )}
+                                    {admin &&
+                                        m.purpose !== 'personal' &&
+                                        m.transport === 'gmail' &&
+                                        (m.credentialSource !== 'delegation' || m.status === 'disconnected') && (
+                                            <DropdownMenuItem
+                                                onSelect={() => {
+                                                    moveToDelegation.reset();
+                                                    setDelegating(m);
+                                                }}
+                                            >
+                                                Sync via Workspace delegation
+                                            </DropdownMenuItem>
+                                        )}
+                                    {m.status !== 'disconnected' &&
+                                        (m.credentialSource !== 'delegation' || m.purpose !== 'personal') && (
+                                            <DropdownMenuItem
+                                                destructive
+                                                onSelect={() => {
+                                                    disconnect.reset();
+                                                    setDisconnecting(m);
+                                                }}
+                                            >
+                                                Disconnect
+                                            </DropdownMenuItem>
+                                        )}
                                 </>
                             ) : null,
                     },
@@ -337,6 +354,24 @@ function MailboxTable({
                 workspaceId={workspaceId}
                 mailbox={choosingSender}
                 onOpenChange={(open) => !open && setChoosingSender(null)}
+            />
+            <ConfirmDialog
+                open={delegating !== null}
+                onOpenChange={(open) => !open && setDelegating(null)}
+                title={`Sync ${delegating?.email ?? ''} via Workspace delegation?`}
+                body="The workspace’s Google service account takes over this mailbox, so a scope change never needs it reconnected. Google must allow the service account to act as this address; if it does not, nothing changes. Its own Google connection is then revoked. Synced mail stays as it is."
+                confirm="Move to delegation"
+                pending={moveToDelegation.isPending}
+                error={moveToDelegation.isError ? failureText(moveToDelegation.error) : undefined}
+                onConfirm={() =>
+                    delegating &&
+                    moveToDelegation.mutate(delegating.id, {
+                        onSuccess: (m) => {
+                            toast({ title: `${m.email} now syncs via Workspace delegation`, tone: 'success' });
+                            setDelegating(null);
+                        },
+                    })
+                }
             />
             <ConfirmDialog
                 open={disconnecting !== null}
@@ -369,7 +404,8 @@ function MailboxTable({
 function MailboxStatus({ mailbox }: { mailbox: MailboxView }) {
     const badge = <MailboxStatusBadge mailbox={mailbox} />;
     if (mailbox.credentialSource !== 'delegation' || mailbox.status === 'disconnected') return badge;
-    // #225: a member's mailbox the workspace's service account syncs; their own connection would replace it.
+    // #225: a mailbox the workspace's service account syncs — a member's (their own connection would replace it), or
+    // a shared one an admin moved onto it.
     return (
         <span className="inline-flex flex-wrap items-center gap-1.5">
             {badge}
