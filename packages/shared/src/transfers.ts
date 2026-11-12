@@ -15,6 +15,28 @@ export type TransferStatus = (typeof TRANSFER_STATUSES)[number];
 /** A transfer that changed owners: the receiver accepted it, or a manager forced it. */
 export const COMPLETED_TRANSFER_STATUSES: readonly TransferStatus[] = ['accepted', 'forced'];
 
+/**
+ * What a manager's move of a record would take, and from whom (OWN-1b): the confirmation before the move. A
+ * manager moving a company, or a person at one, moves the whole company — every person at it and the open deals
+ * they are the contact for, whoever holds them — so it is shown first, by who loses what.
+ */
+export interface TransferPreviewView {
+    /** The member each record is taken from; `null` for records nobody owns. Never the receiver. */
+    losers: {
+        member: TransferMember | null;
+        companies: number;
+        people: number;
+        deals: number;
+        /** Up to `TRANSFER_PREVIEW_NAMES` of the records' names, people and deals first. */
+        names: string[];
+    }[];
+    /** Every record the move would take, the receiver's own left out. */
+    total: number;
+}
+
+/** How many record names the preview lists for each member. */
+export const TRANSFER_PREVIEW_NAMES = 5;
+
 export interface TransferMember {
     memberId: string;
     name: string | null;

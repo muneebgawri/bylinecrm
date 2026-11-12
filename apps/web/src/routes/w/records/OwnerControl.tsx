@@ -19,8 +19,8 @@ import {
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { currentMembers, useMembersSummary } from '../../../api/records';
-import { useDecideTransfer, useProposeTransfer, useRecordTransfers } from '../../../api/transfers';
-import type { TransferView } from '../../../api/types';
+import { transfers, useDecideTransfer, useProposeTransfer, useRecordTransfers } from '../../../api/transfers';
+import type { TransferPreviewView, TransferView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
 import { InlineSelect } from './InlineEdit';
 
@@ -28,8 +28,9 @@ import { InlineSelect } from './InlineEdit';
  * The owner field (OWN-1, #200). A record changes hands only through a transfer, so the field does
  * what the caller may do:
  *
- * - **A manager** (`record:transfer`) picks the new owner and the record — with its unit (a company's
- *   people and open deals) — moves at once; both members are told.
+ * - **A manager** (`record:transfer`) picks the new owner and the record moves at once. A company, or a person
+ *   at one, takes the whole company — every person at it and their open deals, whoever holds them (OWN-1b) — so
+ *   when the move takes more than the record, it is confirmed first, by who loses what. Everyone is told.
  * - **The owner** hands it on: "Hand on…" offers it to a member, who accepts or declines.
  * - **Anyone with `record:write`** may claim, or assign, a record nobody owns.
  * - **Everyone else** sees who owns it, and why they cannot change it.
@@ -61,6 +62,13 @@ export function OwnerControl({
     const history = useRecordTransfers(workspaceId, object, recordId);
     const propose = useProposeTransfer(workspaceId);
     const [handing, setHanding] = useState(false);
+    /** OWN-1b: a manager's move that takes more than the record, waiting on the manager's confirmation. */
+    const [confirming, setConfirming] = useState<{
+        toMemberId: string;
+        toName: string;
+        preview: TransferPreviewView;
+        resolve: (done: boolean) => void;
+    } | null>(null);
 
     const options = currentMembers(members.data).map((m) => ({ value: m.memberId, label: m.name ?? 'Unnamed member' }));
     const open = history.data?.find((t) => t.status === 'proposed') ?? null;
@@ -68,7 +76,20 @@ export function OwnerControl({
     const ownScoped = membership?.recordScope === 'own';
 
     const save = async (next: string | null) => {
-        if (next === null || value === null) return onSave(next);
+        // Clearing the owner, or a member claiming a record nobody owns, is a plain write. A manager's assignment
+        // is a move (OWN-1b): the record's company goes with it, so a larger move is confirmed first.
+        if (next === null || (value === null && !canForce)) return onSave(next);
+        if (canForce) {
+            const preview = await transfers.preview(workspaceId, { object, recordId, toMemberId: next });
+            if (preview.total > 1) {
+                const toName = options.find((o) => o.value === next)?.label ?? 'them';
+                const go = await new Promise<boolean>((resolve) =>
+                    setConfirming({ toMemberId: next, toName, preview, resolve }),
+                );
+                setConfirming(null);
+                if (!go) return false;
+            }
+        }
         const moved = await propose.mutateAsync({ object, recordId, toMemberId: next });
         toast({ tone: 'success', title: movedText(moved) });
         return moved;
@@ -106,6 +127,13 @@ export function OwnerControl({
                 </Button>
             )}
             {open && <OpenOffer workspaceId={workspaceId} offer={open} me={me} canForce={canForce} />}
+            {confirming && (
+                <ConfirmMoveDialog
+                    toName={confirming.toName}
+                    preview={confirming.preview}
+                    onAnswer={(go) => confirming.resolve(go)}
+                />
+            )}
             <HandOnDialog
                 open={handing}
                 onClose={() => setHanding(false)}
@@ -126,6 +154,70 @@ export function OwnerControl({
                 }}
             />
         </div>
+    );
+}
+
+/** One member's losses, as the confirmation reads them: "Arvore Partners, 3 contacts and 1 open deal". */
+function lossText(l: TransferPreviewView['losers'][number]): string {
+    const parts = [
+        l.companies > 0 ? (l.companies === 1 ? 'the company' : `${l.companies} companies`) : null,
+        l.people > 0 ? `${l.people} contact${l.people === 1 ? '' : 's'}` : null,
+        l.deals > 0 ? `${l.deals} open deal${l.deals === 1 ? '' : 's'}` : null,
+    ].filter((p): p is string => p !== null);
+    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : (parts[0] ?? 'nothing');
+}
+
+/**
+ * OWN-1b: the manager's confirmation before a move that takes more than the record — the whole company, by who
+ * loses what. Nothing moves until they confirm.
+ */
+function ConfirmMoveDialog({
+    toName,
+    preview,
+    onAnswer,
+}: {
+    toName: string;
+    preview: TransferPreviewView;
+    onAnswer: (go: boolean) => void;
+}) {
+    return (
+        <Dialog open onOpenChange={(o) => !o && onAnswer(false)}>
+            <DialogContent>
+                <DialogTitle>Move the whole company to {toName}?</DialogTitle>
+                <DialogDescription>
+                    The company and everyone at it go to {toName}, with their open deals, so one person owns the
+                    account. Everyone below is told.
+                </DialogDescription>
+                <DialogBody>
+                    <ul className="m-0 grid list-none gap-3 p-0">
+                        {preview.losers.map((l) => (
+                            <li key={l.member?.memberId ?? 'nobody'} className="text-[13px]">
+                                <span className="font-medium text-text">
+                                    {l.member ? (l.member.name ?? 'A member') : 'Nobody (unowned)'}
+                                </span>{' '}
+                                <span className="text-text-muted">
+                                    {l.member ? 'loses' : '—'} {lossText(l)}
+                                </span>
+                                {l.names.length > 0 && (
+                                    <span className="block text-text-muted">
+                                        {l.names.join(', ')}
+                                        {l.people + l.deals + l.companies > l.names.length ? ', …' : ''}
+                                    </span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </DialogBody>
+                <DialogFooter>
+                    <Button type="button" onClick={() => onAnswer(false)}>
+                        Cancel
+                    </Button>
+                    <Button type="button" variant="primary" onClick={() => onAnswer(true)}>
+                        Move {preview.total} records
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
