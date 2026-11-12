@@ -158,12 +158,15 @@ describe('clean-up jobs: page-title company names and unowned open deals', () =>
         const run = (apply: boolean) => assignDealOwners(app, workspace, { apply, batch: 1 });
         const dealOwner = async (dealId: string) =>
             (await owner.opportunity.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true } })).ownerId;
+        let loose: string;
         const expected = {
             deals: 3,
-            assigned: 1,
-            noContactOwner: 1,
-            companyElsewhere: 1,
-            owners: 1,
+            assigned: 2,
+            toCompanyOwner: 1,
+            toContactOwner: 1,
+            toMemberInMail: 0,
+            nobodyToGive: 1,
+            owners: 2,
             mostToOne: 1,
             failed: 0,
         };
@@ -194,11 +197,11 @@ describe('clean-up jobs: page-title company names and unowned open deals', () =>
             const open = await company(`Open ${stamp}`, `open-${stamp}.test`);
             await owner.company.update({ where: { id: open }, data: { ownerId: null } });
             filled = await deal('Fill me', await person(ana, 'ana-contact', open), open);
-            // The admin's company, Ana's contact: a deal with it would be the admin's, so it is left.
+            // The admin's company, Ana's contact: a deal with a company is its owner's.
             const admins = await company(`Admins ${stamp}`, `admins-${stamp}.test`);
             elsewhere = await deal('Leave me', await person(ana, 'ana-elsewhere', admins), admins);
             // A contact nobody owns.
-            const loose = await person(admin, 'loose', open);
+            loose = await person(admin, 'loose', open);
             await owner.person.update({ where: { id: loose }, data: { ownerId: null } });
             orphan = await deal('Nobody’s', loose, open);
         });
@@ -211,7 +214,7 @@ describe('clean-up jobs: page-title company names and unowned open deals', () =>
         it('gives an unowned open deal to its contact’s owner, silently and on its ownership history', async () => {
             expect(await run(true)).toEqual(expected);
             expect(await dealOwner(filled)).toBe(anaId);
-            expect(await dealOwner(elsewhere), `the company is ${adminId}’s`).toBeNull();
+            expect(await dealOwner(elsewhere), 'the company’s owner').toBe(adminId);
             expect(await dealOwner(orphan)).toBeNull();
             const fill = await owner.ownershipTransfer.findFirstOrThrow({
                 where: { object: 'opportunity', recordId: filled },
@@ -226,7 +229,60 @@ describe('clean-up jobs: page-title company names and unowned open deals', () =>
         });
 
         it('changes nothing run again', async () => {
-            expect(await run(true)).toEqual({ ...expected, deals: 2, assigned: 0, owners: 0, mostToOne: 0 });
+            expect(await run(true)).toEqual({
+                ...expected,
+                deals: 1,
+                assigned: 0,
+                toCompanyOwner: 0,
+                toContactOwner: 0,
+                owners: 0,
+                mostToOne: 0,
+            });
+        });
+
+        it('--by-mail gives a deal nobody could be given, and its contact, to the member in mail with the contact', async () => {
+            const byMail = (apply: boolean) => assignDealOwners(app, workspace, { apply, byMailDays: 30 });
+            expect(await byMail(false), 'nobody is in mail with them').toMatchObject({ assigned: 0, nobodyToGive: 1 });
+            // Ana wrote to the contact last week.
+            const sentAt = new Date(Date.now() - 7 * 86_400_000);
+            const thread = await owner.mailThread.create({
+                data: { workspaceId: workspace, subject: 'Hello', lastMessageAt: sentAt },
+            });
+            const message = await owner.mailMessage.create({
+                data: {
+                    workspaceId: workspace,
+                    threadId: thread.id,
+                    identityKey: `cuj-${stamp}`,
+                    direction: 'outbound',
+                    fromAddress: `cuj-ana-${stamp}@example.test`,
+                    sentAt,
+                    subject: 'Hello',
+                },
+            });
+            await owner.mailParticipant.createMany({
+                data: [
+                    {
+                        workspaceId: workspace,
+                        messageId: message.id,
+                        role: 'from',
+                        address: `cuj-ana-${stamp}@example.test`,
+                        memberId: anaId,
+                    },
+                    {
+                        workspaceId: workspace,
+                        messageId: message.id,
+                        role: 'to',
+                        address: `loose-${stamp}@example.test`,
+                        personId: loose,
+                    },
+                ],
+            });
+            expect(await byMail(true)).toMatchObject({ deals: 1, assigned: 1, toMemberInMail: 1, nobodyToGive: 0 });
+            expect(await dealOwner(orphan)).toBe(anaId);
+            expect(
+                (await owner.person.findUniqueOrThrow({ where: { id: loose }, select: { ownerId: true } })).ownerId,
+            ).toBe(anaId);
+            expect((await byMail(true)).deals).toBe(0);
         });
     });
 });
