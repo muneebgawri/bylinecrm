@@ -283,4 +283,23 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
             tasksDone: 0,
         });
     });
+    it('--unowned closes an imported deal nobody owns and nobody could be given, whatever its source', async () => {
+        const unowned = (apply: boolean) => closeStaleDeals(app, workspace, { apply, months: MONTHS, unowned: true });
+        // `native` has no Bigin link: the other import's. Unowned, but its contact is a member's: theirs to be given.
+        await owner.opportunity.update({
+            where: { id: native },
+            data: { ownerId: null, createdBy: { kind: 'import', id: null } },
+        });
+        expect((await unowned(false)).stale).toBe(0);
+        await owner.opportunity.update({ where: { id: native }, data: { pointOfContactId: null } });
+        expect((await unowned(false)).stale).toBe(1);
+        expect(await unowned(true)).toMatchObject({ stale: 1, closed: 1, skipped: 0 });
+        const closed = await owner.opportunity.findUniqueOrThrow({
+            where: { id: native },
+            select: { closedAt: true, lostReason: true, lostReasonCode: true },
+        });
+        expect(closed.closedAt).not.toBeNull();
+        expect(closed).toMatchObject({ lostReason: staleLostReason(MONTHS, true), lostReasonCode: 'no_response' });
+        expect((await unowned(true)).stale).toBe(0);
+    });
 });

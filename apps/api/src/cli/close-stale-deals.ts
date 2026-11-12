@@ -2,16 +2,18 @@ import 'reflect-metadata';
 import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { Actor } from '@bylinecrm/shared';
+import { Prisma } from '@prisma/client';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { StageMoveService } from '../pipelines/stage-move.service';
 import { DomainEvents } from '../events/domain-events.service';
+import { guardrailSettings, ownerlessMembers } from '../guardrails/guardrail-settings';
 import { TasksService } from '../records/tasks.service';
 
 const USAGE =
-    'usage: node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--months <n>] [--chunk <n>]';
+    'usage: node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--unowned] [--months <n>] [--chunk <n>]';
 
 /** Idle for this long and an imported deal is closed: the backlog cut-off the team agreed (2026-11-11). */
 export const DEFAULT_IDLE_MONTHS = 12;
@@ -27,8 +29,10 @@ export const DEFAULT_CHUNK = 20;
 export const STALE_LOST_REASON_CODE = 'no_response' as const;
 
 /** The free text beside it, naming the clean-up so a member reading the deal knows no one chose this by hand. */
-export function staleLostReason(months: number): string {
-    return `No activity for ${months} months: closed by the stale-deal clean-up`;
+export function staleLostReason(months: number, unowned = false): string {
+    return unowned
+        ? `Nobody’s deal, with no activity for ${months} ${months === 1 ? 'month' : 'months'}: closed by the unowned-deal clean-up`
+        : `No activity for ${months} months: closed by the stale-deal clean-up`;
 }
 
 /**
@@ -55,6 +59,11 @@ export interface CloseStaleOptions {
     months?: number | undefined;
     /** Deals closed per transaction; `DEFAULT_CHUNK` when absent. */
     chunk?: number | undefined;
+    /**
+     * The other backlog: imported deals from any source that nobody owns and nobody could be given — no owner, and
+     * no contact an active member owns (`assign-deal-owners` gives the rest to their contact's owner).
+     */
+    unowned?: boolean | undefined;
     onProgress?: (line: string) => void;
 }
 
@@ -83,15 +92,35 @@ function jobContext(workspaceId: string): WorkspaceRunContext {
  * (not an import's placement, not a stage delete's sweep), and the newest activity entry (`ACTIVITY_KIND_PATTERNS`)
  * on the deal or on its contact. A date in the future (a synced message with a bad header) counts as now.
  * One set-based read, ordered by id, so the estimate and the apply read the same deals.
+ *
+ * `nobody` (the `unowned` run) reads another set by the same clock: imported deals from any source with no owner and
+ * no contact an active member owns — `nobody` being the members who own nothing (left, or a shared mailbox).
  */
-export async function findStaleDeals(owner: PrismaService, workspaceId: string, months: number): Promise<string[]> {
+export async function findStaleDeals(
+    owner: PrismaService,
+    workspaceId: string,
+    months: number,
+    nobody: readonly string[] | null = null,
+): Promise<string[]> {
+    const candidates = nobody
+        ? Prisma.sql`
+            LEFT JOIN bigin_import_links l
+              ON l.workspace_id = o.workspace_id AND l.local_type = 'opportunity' AND l.local_id = o.id
+            WHERE o.workspace_id = ${workspaceId}::uuid AND o.deleted_at IS NULL AND o.closed_at IS NULL
+              AND o.owner_id IS NULL AND o.created_by ->> 'kind' = 'import'
+              AND NOT EXISTS (
+                  SELECT 1 FROM people p
+                  WHERE p.id = o.point_of_contact_id AND p.deleted_at IS NULL AND p.owner_id IS NOT NULL
+                    AND p.owner_id::text <> ALL (${[...nobody]}::text[]))`
+        : Prisma.sql`
+            JOIN bigin_import_links l
+              ON l.workspace_id = o.workspace_id AND l.local_type = 'opportunity' AND l.local_id = o.id
+            WHERE o.workspace_id = ${workspaceId}::uuid AND o.deleted_at IS NULL AND o.closed_at IS NULL`;
     const rows = await owner.$queryRaw<{ id: string }[]>`
         WITH d AS (
             SELECT o.id, o.point_of_contact_id, o.created_at, l.external_updated_at
             FROM opportunities o
-            JOIN bigin_import_links l
-              ON l.workspace_id = o.workspace_id AND l.local_type = 'opportunity' AND l.local_id = o.id
-            WHERE o.workspace_id = ${workspaceId}::uuid AND o.deleted_at IS NULL AND o.closed_at IS NULL),
+            ${candidates}),
         sh AS (
             SELECT opportunity_id, max(entered_at) AS at
             FROM opportunity_stage_history
@@ -137,11 +166,15 @@ export async function closeStaleDeals(
     if (!Number.isInteger(months) || months < 1) throw new Error('months must be a whole number, 1 or more');
     if (!Number.isInteger(chunk) || chunk < 1) throw new Error('chunk must be a whole number of deals, 1 or more');
 
-    const stale = await findStaleDeals(owner, workspaceId, months);
+    const unowned = options.unowned === true;
+    const nobody = unowned
+        ? [...(await rls.withWorkspace(workspaceId, async (tx) => ownerlessMembers(tx, await guardrailSettings(tx))))]
+        : null;
+    const stale = await findStaleDeals(owner, workspaceId, months, nobody);
     const report: CloseStaleReport = { stale: stale.length, closed: 0, skipped: 0, tasksDone: 0 };
     if (!options.apply) return report;
 
-    const close = { lostReason: staleLostReason(months), lostReasonCode: STALE_LOST_REASON_CODE };
+    const close = { lostReason: staleLostReason(months, unowned), lostReasonCode: STALE_LOST_REASON_CODE };
     /** The lost stage of each pipeline met, by pipeline id (`null`: it has none). */
     const lostStages = new Map<string, string | null>();
     for (let at = 0; at < stale.length; at += chunk) {
@@ -237,6 +270,8 @@ export function parseArgs(args: readonly string[]): { slug: string; options: Clo
             if (mode) return null;
             mode = flag === '--apply' ? 'apply' : 'estimate';
             options.apply = mode === 'apply';
+        } else if (flag === '--unowned') {
+            options.unowned = true;
         } else if (flag === '--months' || flag === '--chunk') {
             const n = Number(flags[++i]);
             if (!Number.isInteger(n) || n < 1) return null;
@@ -250,13 +285,14 @@ export function parseArgs(args: readonly string[]): { slug: string; options: Clo
 }
 
 /**
- * `node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--months <n>] [--chunk <n>]` — run on the
+ * `node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--unowned] [--months <n>] [--chunk <n>]` — run on the
  * server in its own container (a `docker compose run`, so a deploy cannot stop it), after a backup, when the outbox
  * is quiet: every close is a `deal.lost` the relay then delivers (timeline, contact status, cadence). The Bigin
  * backlog: a hundred thousand open deals nobody has touched since the migration, most of them silent for a year or
  * more. `--estimate` changes nothing and prints what `--apply` would close; `--months` is the cut-off
  * (`DEFAULT_IDLE_MONTHS`); `--chunk` the deals closed per transaction (`DEFAULT_CHUNK`). A run that stops partway is
- * rerun as it was: it continues from the deals still open.
+ * rerun as it was: it continues from the deals still open. `--unowned` reads the other backlog instead: imported
+ * deals nobody owns and nobody could be given (`CloseStaleOptions.unowned`), idle past the same cut-off.
  */
 async function main(): Promise<void> {
     const parsed = parseArgs(process.argv.slice(2));
@@ -287,12 +323,13 @@ async function main(): Promise<void> {
             ...parsed.options,
             onProgress: (line) => console.error(line),
         });
+        const what = parsed.options.unowned ? 'imported deals nobody owns' : 'imported deals';
         if (parsed.options.apply) {
             console.log(
-                `closed: ${report.closed} of ${report.stale} imported deals idle ${months}+ months as lost (${report.skipped} skipped: no lost stage, or closed meanwhile); ${report.tasksDone} open tasks on them marked done`,
+                `closed: ${report.closed} of ${report.stale} ${what} idle ${months}+ months as lost (${report.skipped} skipped: no lost stage, or closed meanwhile); ${report.tasksDone} open tasks on them marked done`,
             );
         } else {
-            console.log(`would close: ${report.stale} imported deals idle ${months}+ months as lost`);
+            console.log(`would close: ${report.stale} ${what} idle ${months}+ months as lost`);
             console.log('estimate: nothing changed; add --apply to do it');
         }
     } finally {
