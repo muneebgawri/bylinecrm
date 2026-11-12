@@ -7,12 +7,17 @@ export interface WindowEntry {
     simhash: bigint | null;
     subjectKey: string | null;
     at: Date;
+    /** A queued follow-up: judged for repetition like any mail the member set going, never counted in a budget. */
+    followUp: boolean;
 }
 
-/** Distinct recipients of the entries at or after `since`. */
+/**
+ * Distinct recipients of the first mail at or after `since` — what a new-recipient budget counts. A follow-up
+ * is not counted: its person was a new recipient once, when the first email went.
+ */
 export function recipientsSince(entries: readonly WindowEntry[], since: Date): Set<string> {
     const out = new Set<string>();
-    for (const e of entries) if (e.at >= since) for (const a of e.addresses) out.add(a);
+    for (const e of entries) if (!e.followUp && e.at >= since) for (const a of e.addresses) out.add(a);
     return out;
 }
 

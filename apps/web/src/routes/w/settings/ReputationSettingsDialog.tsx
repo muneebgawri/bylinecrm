@@ -23,7 +23,7 @@ const FIELDS: { key: NumberKey; label: string; hint: string }[] = [
     {
         key: 'dailyNewRecipients',
         label: 'New recipients per day',
-        hint: 'Per personal mailbox, rolling 24 hours. Replies are never counted.',
+        hint: 'Per personal mailbox, rolling 24 hours. Replies and follow-ups are never counted.',
     },
     { key: 'hourlyNewRecipients', label: 'New recipients per hour', hint: 'Spreads the day’s budget.' },
     { key: 'poolHourlyCap', label: 'Pool sends per hour', hint: 'Per pool mailbox, beside its daily cap.' },
