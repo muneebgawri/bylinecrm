@@ -13,7 +13,7 @@ import { guardrailSettings, ownerlessMembers } from '../guardrails/guardrail-set
 import { TasksService } from '../records/tasks.service';
 
 const USAGE =
-    'usage: node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--unowned | --new-of <member-id,…>] [--months <n>] [--chunk <n>]';
+    'usage: node dist/cli/close-stale-deals.js <workspace-slug> --estimate|--apply [--unowned | --new-of <member-id,…> [--stage <name>]] [--months <n>] [--chunk <n>]';
 
 /** Idle for this long and an imported deal is closed: the backlog cut-off the team agreed (2026-11-11). */
 export const DEFAULT_IDLE_MONTHS = 12;
@@ -29,10 +29,16 @@ export const DEFAULT_CHUNK = 20;
 export const STALE_LOST_REASON_CODE = 'no_response' as const;
 
 /** The free text beside it, naming the clean-up so a member reading the deal knows no one chose this by hand. */
-export function staleLostReason(months: number, backlog: 'bigin' | 'unowned' | 'new' = 'bigin'): string {
+export function staleLostReason(
+    months: number,
+    backlog: 'bigin' | 'unowned' | 'new' = 'bigin',
+    stage?: string,
+): string {
     const span = `${months} ${months === 1 ? 'month' : 'months'}`;
     if (backlog === 'unowned')
         return `Nobody’s deal, with no activity for ${span}: closed by the unowned-deal clean-up`;
+    if (backlog === 'new' && stage)
+        return `In ${stage} with no amount and no activity for ${span}: closed by the backlog clean-up`;
     if (backlog === 'new')
         return `Never worked: new, no amount, no activity for ${span}: closed by the backlog clean-up`;
     return `No activity for ${months} months: closed by the stale-deal clean-up`;
@@ -73,6 +79,11 @@ export interface CloseStaleOptions {
      * pipeline's first open stage, with no amount. What a member moved on, priced or touched stays.
      */
     newOf?: readonly string[] | undefined;
+    /**
+     * With `newOf`: the open stage to read instead of the first, by its name (any case) — those members' imported
+     * deals left in it with no amount.
+     */
+    stage?: string | undefined;
     onProgress?: (line: string) => void;
 }
 
@@ -110,9 +121,17 @@ export async function findStaleDeals(
     owner: PrismaService,
     workspaceId: string,
     months: number,
-    backlog: { nobody?: readonly string[]; newOf?: readonly string[] } = {},
+    backlog: { nobody?: readonly string[]; newOf?: readonly string[]; stage?: string } = {},
 ): Promise<string[]> {
-    const { nobody, newOf } = backlog;
+    const { nobody, newOf, stage } = backlog;
+    const inStage = stage
+        ? Prisma.sql`o.stage_id IN (
+                  SELECT s.id FROM pipeline_stages s
+                  WHERE s.pipeline_id = o.pipeline_id AND s.kind = 'open' AND lower(s.name) = lower(${stage}))`
+        : Prisma.sql`o.stage_id = (
+                  SELECT s.id FROM pipeline_stages s
+                  WHERE s.pipeline_id = o.pipeline_id AND s.kind = 'open'
+                  ORDER BY s.position, s.id LIMIT 1)`;
     const candidates = newOf
         ? Prisma.sql`
             LEFT JOIN bigin_import_links l
@@ -120,10 +139,7 @@ export async function findStaleDeals(
             WHERE o.workspace_id = ${workspaceId}::uuid AND o.deleted_at IS NULL AND o.closed_at IS NULL
               AND o.created_by ->> 'kind' = 'import' AND o.owner_id::text = ANY (${[...newOf]}::text[])
               AND COALESCE(o.amount_minor, 0) = 0
-              AND o.stage_id = (
-                  SELECT s.id FROM pipeline_stages s
-                  WHERE s.pipeline_id = o.pipeline_id AND s.kind = 'open'
-                  ORDER BY s.position, s.id LIMIT 1)`
+              AND ${inStage}`
         : nobody
           ? Prisma.sql`
             LEFT JOIN bigin_import_links l
@@ -193,18 +209,21 @@ export async function closeStaleDeals(
     const newOf = options.newOf;
     if (unowned && newOf) throw new Error('one backlog at a time: unowned or newOf');
     if (newOf && newOf.length === 0) throw new Error('newOf names at least one member');
+    const stage = options.stage?.trim() || undefined;
+    if (stage && !newOf) throw new Error('a stage is read with newOf');
     const nobody = unowned
         ? [...(await rls.withWorkspace(workspaceId, async (tx) => ownerlessMembers(tx, await guardrailSettings(tx))))]
         : undefined;
     const stale = await findStaleDeals(owner, workspaceId, months, {
         ...(nobody ? { nobody } : {}),
         ...(newOf ? { newOf } : {}),
+        ...(stage ? { stage } : {}),
     });
     const report: CloseStaleReport = { stale: stale.length, closed: 0, skipped: 0, tasksDone: 0 };
     if (!options.apply) return report;
 
     const close = {
-        lostReason: staleLostReason(months, newOf ? 'new' : unowned ? 'unowned' : 'bigin'),
+        lostReason: staleLostReason(months, newOf ? 'new' : unowned ? 'unowned' : 'bigin', stage),
         lostReasonCode: STALE_LOST_REASON_CODE,
     };
     /** The lost stage of each pipeline met, by pipeline id (`null`: it has none). */
@@ -308,6 +327,10 @@ export function parseArgs(args: readonly string[]): { slug: string; options: Clo
             const ids = (flags[++i] ?? '').split(',').filter(Boolean);
             if (ids.length === 0) return null;
             options.newOf = ids;
+        } else if (flag === '--stage') {
+            const name = (flags[++i] ?? '').trim();
+            if (!name) return null;
+            options.stage = name;
         } else if (flag === '--months' || flag === '--chunk') {
             const n = Number(flags[++i]);
             if (!Number.isInteger(n) || n < 1) return null;
@@ -318,6 +341,7 @@ export function parseArgs(args: readonly string[]): { slug: string; options: Clo
         }
     }
     if (options.unowned && options.newOf) return null;
+    if (options.stage && !options.newOf) return null;
     return mode ? { slug, options } : null;
 }
 
@@ -330,7 +354,8 @@ export function parseArgs(args: readonly string[]): { slug: string; options: Clo
  * (`DEFAULT_IDLE_MONTHS`); `--chunk` the deals closed per transaction (`DEFAULT_CHUNK`). A run that stops partway is
  * rerun as it was: it continues from the deals still open. `--unowned` reads the other backlog instead: imported
  * deals nobody owns and nobody could be given (`CloseStaleOptions.unowned`), idle past the same cut-off; `--new-of`
- * the never-worked deals of the members named (`CloseStaleOptions.newOf`).
+ * the never-worked deals of the members named (`CloseStaleOptions.newOf`), or with `--stage` their deals left in
+ * that stage.
  */
 async function main(): Promise<void> {
     const parsed = parseArgs(process.argv.slice(2));
@@ -362,7 +387,9 @@ async function main(): Promise<void> {
             onProgress: (line) => console.error(line),
         });
         const what = parsed.options.newOf
-            ? 'never-worked imported deals of the named members'
+            ? parsed.options.stage
+                ? `imported deals of the named members left in ${parsed.options.stage} with no amount`
+                : 'never-worked imported deals of the named members'
             : parsed.options.unowned
               ? 'imported deals nobody owns'
               : 'imported deals';

@@ -323,6 +323,12 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
         });
         const before = (await run(false, [me])).stale;
         expect(before).toBeGreaterThanOrEqual(1);
+        // `--stage` reads another open stage by name: nothing of theirs is in Contacted, and the first stage's is.
+        const inStage = (stage: string) =>
+            closeStaleDeals(app, workspace, { apply: false, months: MONTHS, newOf: [me], stage });
+        expect((await inStage('Contacted')).stale).toBe(0);
+        expect((await inStage('new')).stale).toBe(before);
+        await expect(closeStaleDeals(app, workspace, { apply: false, stage: 'New' })).rejects.toThrow('newOf');
         expect((await run(false, ['00000000-0000-0000-0000-000000000000'])).stale, 'another member’s').toBe(0);
         // Priced, it was worked: left.
         await owner.opportunity.update({ where: { id: touchedInBigin }, data: { amountMinor: 5000n } });
