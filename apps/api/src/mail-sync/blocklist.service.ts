@@ -7,9 +7,7 @@ import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
 import { entriesFor, everyOutsideBlocked } from './blocklist-rule';
-import { heldOnlyByServiceInboxes, rematchMessage } from './matching';
-import { reconcileMessageTargets } from './reconcile';
-import { recountThread } from './threads';
+import { purgeCopies } from './purge';
 import type { BlocklistEntryCreated, BlocklistEntryView } from './responses';
 
 /**
@@ -136,35 +134,8 @@ async function purgeCovered(
             entriesFor(mailbox, entries),
         );
     });
-    if (doomed.length === 0) return none;
-    await tx.mailMessageCopy.deleteMany({ where: { id: { in: doomed.map((c) => c.id) } } });
-    const touched = [...new Set(doomed.map((c) => c.message.id))];
-    const orphaned = (
-        await tx.mailMessage.findMany({ where: { id: { in: touched }, copies: { none: {} } }, select: { id: true } })
-    ).map((m) => m.id);
-    // SVC-1: a message a service inbox still holds, and no member's or pool mailbox, leaves its people's records.
-    const unmatched: string[] = [];
-    for (const id of touched) {
-        if (!orphaned.includes(id) && (await heldOnlyByServiceInboxes(tx, id))) {
-            unmatched.push(...(await rematchMessage(tx, id)));
-        }
-    }
-    const events = await reconcileMessageTargets(tx, workspaceId, unmatched);
-    if (orphaned.length === 0) return { purged: { messages: 0, threads: 0 }, events };
-    await tx.$queryRaw`SELECT delete_email_timeline_entries(${orphaned}::uuid[], NULL)`;
-    await tx.mailMessage.deleteMany({ where: { id: { in: orphaned } } });
-    const threadIds = [
-        ...new Set(doomed.filter((c) => orphaned.includes(c.message.id)).map((c) => c.message.threadId)),
-    ];
-    // A thread left with no message goes, with its mailbox mappings — those holding no copy.
-    await tx.mailboxThread.deleteMany({
-        where: { threadId: { in: threadIds }, copies: { none: {} }, thread: { messages: { none: {} } } },
-    });
-    const emptied = await tx.mailThread.deleteMany({
-        where: { id: { in: threadIds }, messages: { none: {} }, mailboxThreads: { none: {} } },
-    });
-    for (const threadId of threadIds) await recountThread(tx, threadId);
-    return { purged: { messages: orphaned.length, threads: emptied.count }, events };
+    // What nothing holds any more goes with them (`purgeCopies`: one rule for every reason a copy goes).
+    return purgeCopies(tx, workspaceId, doomed);
 }
 
 function isAdmin(context: WorkspaceRunContext): boolean {

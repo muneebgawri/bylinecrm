@@ -142,6 +142,8 @@ export const DOMAIN_EVENT_TYPES = [
     // writes nothing for these, webhooks deliver them.
     'mailbox.connected',
     'mailbox.disconnected',
+    // A mailbox removed with the mail only it held (#385); `recordId` is the mailbox, which no longer exists.
+    'mailbox.removed',
     'mailbox.reconnect_needed',
     // A pool mailbox paused for its bounce or complaint rate, and resumed by an admin (P3-2,
     // FR-CRMS-6, -13); `recordId` is the mailbox, `pause` why.
