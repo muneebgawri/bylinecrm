@@ -44,6 +44,9 @@ export const CAPABILITIES = [
     // default role: an admin grants them to the role of the key an integration (NewswireOS) holds.
     'mail:service_read',
     'mail:sent_counts',
+    // An integration asking who owns a person or company (OWN-LOOKUP): NewswireOS shows the salesperson working a client
+    // who signs up. Read only. In no default role: an admin grants it to the role of the integration's key.
+    'record:owner_lookup',
     // Guardrails (GUARD-1, FR-CRMS-21): read the events, mark one legitimate, and be told of repeated blocks.
     'guardrail:review',
     // Invoices (INV-1, FR-CRMS-19): verify or reject an invoice by hand (one NewswireOS could not decide, or
