@@ -9,9 +9,11 @@ import type {
     RecordTarget,
     TransferEventPayload,
     TransferMember,
+    TransferPreviewView,
     TransferStatus,
     TransferView,
 } from '@bylinecrm/shared';
+import { TRANSFER_PREVIEW_NAMES } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { requireCallerMember } from '../infra/caller-member';
@@ -111,6 +113,7 @@ export class TransfersService {
                     },
                     head,
                     me,
+                    scope: wholeCompany(input.object),
                 });
                 return view(row, await labelsFor(tx, row));
             }
@@ -137,6 +140,30 @@ export class TransfersService {
             await tell(tx, row, to.id, 'transfer_proposed');
             await this.events.record(tx, event(context, 'transfer.proposed', row, []));
             return view(row, await labelsFor(tx, row));
+        });
+    }
+
+    /**
+     * OWN-1b: what a manager's move of the record to `toMemberId` would take, and from whom — the confirmation
+     * before the move. Read past the caller's owner scope, as the move is.
+     */
+    async preview(input: { object: RecordObject; recordId: string; toMemberId: string }): Promise<TransferPreviewView> {
+        const context = this.current();
+        if (!context.capabilities.has('record:transfer')) {
+            throw new ForbiddenException('only a manager moves a record at once');
+        }
+        return this.widened(context, async (tx) => {
+            const head = await findHead(tx, widen(context), input.object, input.recordId);
+            if (!head) throw new NotFoundException('record not found');
+            const unit = await unitOf(
+                tx,
+                input.object,
+                head,
+                head.ownerId,
+                wholeCompany(input.object),
+                input.toMemberId,
+            );
+            return previewOf(tx, unit);
         });
     }
 
@@ -425,17 +452,19 @@ export class TransfersService {
             unit?: { targets: RecordTarget[]; identity: TransferEventPayload['identity'] };
             /** No bells (a backfill's move): the transfer, its events and the records' moves are written as ever. */
             silent?: boolean | undefined;
+            /** OWN-1b: a manager's move takes the whole company (`unitOf`'s `company` scope). */
+            scope?: 'owner' | 'company';
         },
     ): Promise<Row> {
         const object = (input.create?.object ?? input.update!.object) as RecordObject;
         const from = input.head.ownerId;
         const to = input.create?.toMemberId ?? input.update!.toMemberId;
         const wide = widen(context);
-        const { moved, identity } = input.unit
-            ? { moved: input.unit.targets, identity: input.unit.identity }
+        const { moved, identity, owners } = input.unit
+            ? { moved: input.unit.targets, identity: input.unit.identity, owners: undefined }
             : await this.widened(context, async (w) => {
-                  const unit = await unitOf(w, object, input.head, from);
-                  return { moved: unit.targets, identity: unit.identity };
+                  const unit = await unitOf(w, object, input.head, from, input.scope ?? 'owner', to);
+                  return { moved: unit.targets, identity: unit.identity, owners: unit.owners };
               });
         const now = new Date();
         const row = input.create
@@ -448,12 +477,16 @@ export class TransfersService {
                   data: { status: 'accepted', decidedByMemberId: input.me, decidedAt: now, moved: moved as object[] },
                   include: INCLUDE,
               });
-        const updates = await this.widened(context, (w) => move(w, wide, moved, from, to));
+        const updates = await this.widened(context, (w) => move(w, wide, moved, from, to, owners));
         if (input.silent) {
             // A backfill's move: its report says so; thousands of bells would say nothing.
         } else if (row.status === 'forced') {
             await tell(tx, row, to, 'transfer_received');
-            if (from && from !== input.me) await tell(tx, row, from, 'transfer_taken');
+            // Everyone it took something from is told — under OWN-1b, each holder of a person or deal at the company.
+            const losers = new Set([from, ...(owners?.values() ?? [])]);
+            for (const loser of losers) {
+                if (loser && loser !== input.me && loser !== to) await tell(tx, row, loser, 'transfer_taken');
+            }
         } else if (row.proposedByMemberId !== input.me) {
             await tell(tx, row, row.proposedByMemberId, 'transfer_accepted');
         }
@@ -522,85 +555,130 @@ async function contactAlone(
     return { target: { type: 'person', id: person.id }, email: primary ? primary.toLowerCase() : null };
 }
 
+/** What a transfer moves: the records, whom each is taken from, and what a receiver matches it on. */
+interface Unit {
+    targets: RecordTarget[];
+    /** Each target's owner as read (`id` → member, or null for nobody). */
+    owners: Map<string, string | null>;
+    identity: TransferEventPayload['identity'];
+}
+
+/**
+ * A transfer's unit. `owner` (an offer, an accepted one): the records `from` holds — a company with its people and
+ * open deals; a person with their company's unit when `from` holds the company, else with the open deals they are
+ * the contact for; a deal alone. `company` (OWN-1b, a manager's move): a company, or a person at one, takes the
+ * whole company — every live person at it and the open deals with it or with them, whoever holds them — so the
+ * company and its contacts end up with one member; a person with no company takes their open deals the same way.
+ * Records `to` already holds are left out.
+ */
 async function unitOf(
     tx: WorkspaceClient,
     object: RecordObject,
     head: Head,
     from: string | null,
-): Promise<{ targets: RecordTarget[]; identity: TransferEventPayload['identity'] }> {
+    scope: 'owner' | 'company' = 'owner',
+    to: string | null = null,
+): Promise<Unit> {
     const targets: RecordTarget[] = [];
+    const owners = new Map<string, string | null>();
     const emails: string[] = [];
     let companyDomain: string | null = null;
-    const live = { deletedAt: null, ownerId: from } as const;
+    // The receiver's own records stay out; records nobody owns are taken too (`<>` alone would drop them).
+    const held =
+        scope === 'owner' ? { ownerId: from } : to ? { OR: [{ ownerId: null }, { ownerId: { not: to } }] } : {};
+    const push = (type: RecordObject, id: string, ownerId: string | null) => {
+        if (owners.has(id)) return;
+        targets.push({ type, id });
+        owners.set(id, ownerId);
+    };
 
     const addPeople = async (where: Prisma.PersonWhereInput) => {
-        const people = await tx.person.findMany({ where: { ...where, ...live }, select: { id: true, emails: true } });
+        const people = await tx.person.findMany({
+            where: { AND: [where, { deletedAt: null }, held] },
+            select: { id: true, emails: true, ownerId: true },
+        });
         for (const p of people) {
-            targets.push({ type: 'person', id: p.id });
+            push('person', p.id, p.ownerId);
             const primary = (p.emails as Emails | null)?.primary;
             if (primary) emails.push(primary.toLowerCase());
         }
+        return people.map((p) => p.id);
     };
     const addDeals = async (where: Prisma.OpportunityWhereInput) => {
         const deals = await tx.opportunity.findMany({
-            where: { ...where, ...live, closedAt: null },
-            select: { id: true },
+            where: { AND: [where, { deletedAt: null, closedAt: null }, held] },
+            select: { id: true, ownerId: true },
         });
-        for (const d of deals) targets.push({ type: 'opportunity', id: d.id });
+        for (const d of deals) push('opportunity', d.id, d.ownerId);
     };
     const addCompany = async (companyId: string) => {
         const company = await tx.company.findFirst({
-            where: { id: companyId, ...live },
-            select: { id: true, domain: true },
+            where: { id: companyId, deletedAt: null, ...(scope === 'owner' ? { ownerId: from } : {}) },
+            select: { id: true, domain: true, ownerId: true },
         });
         if (!company) return false;
-        targets.push({ type: 'company', id: company.id });
+        if (scope === 'owner' || company.ownerId !== to) push('company', company.id, company.ownerId);
         companyDomain = company.domain;
+        if (scope === 'owner') {
+            await addPeople({ companyId: company.id });
+            await addDeals({ companyId: company.id });
+            return true;
+        }
+        // The whole company: its people, whoever holds them, and the open deals with it or with them.
+        const everyone = await tx.person.findMany({
+            where: { companyId: company.id, deletedAt: null },
+            select: { id: true },
+        });
         await addPeople({ companyId: company.id });
-        await addDeals({ companyId: company.id });
+        await addDeals({
+            OR: [{ companyId: company.id }, { pointOfContactId: { in: everyone.map((p) => p.id) } }],
+        });
         return true;
     };
 
     switch (object) {
         case 'company':
-            if (!(await addCompany(head.id))) targets.push({ type: 'company', id: head.id });
+            if (!(await addCompany(head.id))) push('company', head.id, head.ownerId);
             break;
         case 'person': {
             const withCompany = head.companyId ? await addCompany(head.companyId) : false;
             if (!withCompany) {
                 await addPeople({ id: head.id });
-                if (targets.length === 0) targets.push({ type: 'person', id: head.id });
+                if (targets.length === 0) push('person', head.id, head.ownerId);
                 await addDeals({ pointOfContactId: head.id });
-            } else if (!targets.some((t) => t.type === 'person' && t.id === head.id)) {
+            } else if (!owners.has(head.id)) {
                 await addPeople({ id: head.id });
             }
             break;
         }
         case 'opportunity':
-            targets.push({ type: 'opportunity', id: head.id });
+            push('opportunity', head.id, head.ownerId);
             break;
     }
-    return { targets, identity: { companyDomain, personEmails: [...new Set(emails)] } };
+    return { targets, owners, identity: { companyDomain, personEmails: [...new Set(emails)] } };
 }
 
-/** Changes each moved record's owner and returns its `…updated` event. A record that moved meanwhile is skipped. */
+/**
+ * Changes each moved record's owner, from the owner it was read with (`owners`, else `from`), and returns its
+ * `…updated` event. A record that moved meanwhile is skipped.
+ */
 async function move(
     tx: WorkspaceClient,
     context: WorkspaceRunContext,
     targets: readonly RecordTarget[],
     from: string | null,
     to: string,
+    owners?: ReadonlyMap<string, string | null>,
 ): Promise<DomainEvent[]> {
     const events: DomainEvent[] = [];
-    const diff = { ownerId: { from, to } };
     const base = {
         workspaceId: context.workspaceId,
         actor: actorOf(context),
         occurredAt: new Date().toISOString(),
-        diff,
     };
     for (const t of targets) {
-        const where = { id: t.id, ownerId: from, deletedAt: null };
+        const was = owners?.has(t.id) ? (owners.get(t.id) ?? null) : from;
+        const where = { id: t.id, ownerId: was, deletedAt: null };
         const data = { ownerId: to };
         const result =
             t.type === 'person'
@@ -609,9 +687,67 @@ async function move(
                   ? await tx.company.updateMany({ where, data })
                   : await tx.opportunity.updateMany({ where, data });
         if (result.count === 0) continue;
-        events.push({ ...base, type: `${t.type}.updated`, object: t.type, recordId: t.id } as DomainEvent);
+        events.push({
+            ...base,
+            diff: { ownerId: { from: was, to } },
+            type: `${t.type}.updated`,
+            object: t.type,
+            recordId: t.id,
+        } as DomainEvent);
     }
     return events;
+}
+
+/** OWN-1b: a manager's move of a company, or a person (at one), takes the whole company; a deal moves alone. */
+function wholeCompany(object: RecordObject): 'owner' | 'company' {
+    return object === 'opportunity' ? 'owner' : 'company';
+}
+
+/** A unit as its confirmation reads: by member, how many of each, and some of their names. */
+async function previewOf(tx: WorkspaceClient, unit: Unit): Promise<TransferPreviewView> {
+    const ids = (type: RecordObject) => unit.targets.filter((t) => t.type === type).map((t) => t.id);
+    const [people, deals, companies] = await Promise.all([
+        tx.person.findMany({
+            where: { id: { in: ids('person') } },
+            select: { id: true, nameFirst: true, nameLast: true },
+        }),
+        tx.opportunity.findMany({ where: { id: { in: ids('opportunity') } }, select: { id: true, name: true } }),
+        tx.company.findMany({ where: { id: { in: ids('company') } }, select: { id: true, name: true } }),
+    ]);
+    const names = new Map<string, string>([
+        ...people.map((p) => [p.id, `${p.nameFirst} ${p.nameLast}`.trim() || 'Unnamed person'] as const),
+        ...deals.map((d) => [d.id, d.name] as const),
+        ...companies.map((c) => [c.id, c.name] as const),
+    ]);
+    const memberIds = [...new Set([...unit.owners.values()].filter((m): m is string => m !== null))];
+    const members = await tx.workspaceMember.findMany({
+        where: { id: { in: memberIds } },
+        select: { id: true, user: { select: { displayName: true } } },
+    });
+    const nameOf = new Map(members.map((m) => [m.id, m.user.displayName ?? null]));
+    const byOwner = new Map<string | null, TransferPreviewView['losers'][number]>();
+    // People and deals first: they are what a member loses; the company follows them.
+    const order: RecordObject[] = ['person', 'opportunity', 'company'];
+    const sorted = [...unit.targets].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
+    for (const t of sorted) {
+        const owner = unit.owners.get(t.id) ?? null;
+        const entry = byOwner.get(owner) ?? {
+            member: owner ? { memberId: owner, name: nameOf.get(owner) ?? null } : null,
+            companies: 0,
+            people: 0,
+            deals: 0,
+            names: [],
+        };
+        if (t.type === 'company') entry.companies += 1;
+        else if (t.type === 'person') entry.people += 1;
+        else entry.deals += 1;
+        if (entry.names.length < TRANSFER_PREVIEW_NAMES) entry.names.push(names.get(t.id) ?? 'Unnamed');
+        byOwner.set(owner, entry);
+    }
+    const losers = [...byOwner.values()].sort(
+        (a, b) => b.people + b.deals + b.companies - (a.people + a.deals + a.companies),
+    );
+    return { losers, total: unit.targets.length };
 }
 
 async function tell(tx: WorkspaceClient, row: Row, memberId: string, kind: NotificationKind): Promise<void> {

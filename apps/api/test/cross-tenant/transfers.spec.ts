@@ -8,12 +8,14 @@ import {
     DOMAIN_EVENT_TYPES,
     SESSION_COOKIE,
     type NotificationsView,
+    type TransferPreviewView,
     type TransferView,
 } from '@bylinecrm/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
+import { PrismaService } from '../../src/infra/prisma.service';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
 
@@ -310,6 +312,92 @@ describe('OWN-1 ownership transfers (FR-CRMS-17) and the manager role (FR-CRMS-1
             .send({ ownerId: benId })
             .expect(200);
         expect(await ownerOf(`/opportunities/${deal}`)).toBe(benId);
+    });
+
+    it('OWN-1b: a manager moving a person at a company moves the whole company — shown first, by who loses what', async () => {
+        // A company whose people and deals ended up with different members (an import's split, OWN-2 before it).
+        const prisma = app.get(PrismaService);
+        const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
+        const adminId = members.find((m) => m.email.startsWith('own-admin-'))?.id ?? members[0]!.id;
+        const by = { kind: 'import' };
+        const split = await prisma.company.create({
+            data: {
+                workspaceId: workspace,
+                name: `Split ${stamp}`,
+                domain: `split-${stamp}.test`,
+                ownerId: anaId,
+                createdBy: by,
+            },
+        });
+        const at = (first: string, ownerId: string | null) =>
+            prisma.person.create({
+                data: {
+                    workspaceId: workspace,
+                    nameFirst: first,
+                    nameLast: 'Split',
+                    emails: { primary: `${first.toLowerCase()}@split-${stamp}.test`, additional: [] },
+                    companyId: split.id,
+                    ownerId,
+                    createdBy: by,
+                },
+            });
+        const anas = await at('Ann', anaId);
+        const bens = await at('Bob', benId);
+        const nobodys = await at('Cy', null);
+        const pipeline = await prisma.pipeline.findFirstOrThrow({
+            where: { workspaceId: workspace },
+            select: { id: true, stages: { where: { kind: 'open' }, select: { id: true }, take: 1 } },
+        });
+        const dealOf = (name: string, ownerId: string, contact: string, companyId: string | null) =>
+            prisma.opportunity.create({
+                data: {
+                    workspaceId: workspace,
+                    name,
+                    ownerId,
+                    pointOfContactId: contact,
+                    companyId,
+                    pipelineId: pipeline.id,
+                    stageId: pipeline.stages[0]!.id,
+                    currency: 'USD',
+                    createdBy: by,
+                },
+            });
+        const bensDeal = await dealOf(`Bob's deal ${stamp}`, benId, bens.id, null);
+        const anasDeal = await dealOf(`Ann's deal ${stamp}`, anaId, anas.id, split.id);
+
+        // Only a manager asks; the preview names who loses what, and changes nothing.
+        const query = `/transfers/preview?object=person&recordId=${bens.id}&toMemberId=${adminId}`;
+        expect((await as(ana).get(w(query))).status).toBe(403);
+        const preview = (await as(mia).get(w(query)).expect(200)).body as TransferPreviewView;
+        expect(preview.total).toBe(6);
+        const lost = (id: string | null) => preview.losers.find((l) => (l.member?.memberId ?? null) === id);
+        expect(lost(anaId)).toMatchObject({ companies: 1, people: 1, deals: 1 });
+        expect(lost(benId)).toMatchObject({ companies: 0, people: 1, deals: 1 });
+        expect(lost(null)).toMatchObject({ people: 1 });
+        expect(await ownerOf(`/people/${bens.id}`)).toBe(benId);
+
+        const moved = await as(mia)
+            .post(w('/transfers'))
+            .send({ object: 'person', recordId: bens.id, toMemberId: adminId });
+        expect(moved.status, JSON.stringify(moved.body)).toBe(201);
+        const t = moved.body as TransferView;
+        expect(t.moved).toHaveLength(6);
+        for (const path of [
+            `/companies/${split.id}`,
+            `/people/${anas.id}`,
+            `/people/${bens.id}`,
+            `/people/${nobodys.id}`,
+            `/opportunities/${bensDeal.id}`,
+            `/opportunities/${anasDeal.id}`,
+        ]) {
+            expect(await ownerOf(path), path).toBe(adminId);
+        }
+        // Everyone it took something from is told.
+        for (const who of [ana, ben]) {
+            expect((await inbox(who)).items.some((n) => n.kind === 'transfer_taken' && n.transfer?.id === t.id)).toBe(
+                true,
+            );
+        }
     });
 
     it('announces transfers in the event catalogue, for webhooks and the NewswireOS adapter', () => {
