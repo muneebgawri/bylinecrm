@@ -104,6 +104,9 @@ export const mailboxes = {
         request<MailboxCheckView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/check`)),
     disconnect: (workspaceId: string, mailboxId: string) =>
         request<MailboxDisconnectedView>('DELETE', workspacePath(workspaceId, `/mailboxes/${mailboxId}`)),
+    /** Moves a shared (pool or service) Gmail mailbox onto the workspace's Google service account (#225). */
+    useDelegation: (workspaceId: string, mailboxId: string) =>
+        request<MailboxView>('POST', workspacePath(workspaceId, `/mailboxes/${mailboxId}/delegation`)),
     syncState: (workspaceId: string, mailboxId: string, signal?: AbortSignal) =>
         request<MailboxSyncView>('GET', workspacePath(workspaceId, `/mailboxes/${mailboxId}/sync`), { signal }),
     sync: (workspaceId: string, mailboxId: string) =>
@@ -320,6 +323,9 @@ export const useCheckMailbox = (workspaceId: string) =>
 
 export const useDisconnectMailbox = (workspaceId: string) =>
     useMailboxWrite(workspaceId, (mailboxId) => mailboxes.disconnect(workspaceId, mailboxId));
+
+export const useMoveMailboxToDelegation = (workspaceId: string) =>
+    useMailboxWrite(workspaceId, (mailboxId) => mailboxes.useDelegation(workspaceId, mailboxId));
 
 export function useUpdateMailbox(workspaceId: string) {
     const client = useQueryClient();

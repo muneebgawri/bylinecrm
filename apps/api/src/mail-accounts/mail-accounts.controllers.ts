@@ -236,6 +236,18 @@ export class MailboxesController {
         return this.mailboxes.disconnect(mailboxId);
     }
 
+    /**
+     * Moves a shared (pool or service) Gmail mailbox onto the workspace's Google service account (#225): Google must
+     * mint a token for its address first, else `409` and nothing changes. Its own grant is revoked once it has moved.
+     */
+    @Requires('workspace:admin')
+    @HttpCode(200)
+    @Post(':mailboxId/delegation')
+    @Returns(mailboxView)
+    useDelegation(@Param('mailboxId', ParseUUIDPipe) mailboxId: string): Promise<MailboxView> {
+        return this.mailboxes.useDelegation(mailboxId);
+    }
+
     /** A usable token and the scopes Google says it carries; a failure moves the mailbox to `reconnect_needed`. */
     @Requires('mailbox:manage')
     @HttpCode(200)
