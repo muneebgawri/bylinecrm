@@ -443,16 +443,32 @@ export function primaryOf(emails: Emails | null | undefined): string | null {
  * A company with whose it is (OWN-2d): its own owner, else the owner of the earliest live person saved at it — the
  * first saver, whom the import left on the people and not on the company. Read in `tx`, across the owner scope.
  */
-export async function resolveCompanyOwner(tx: WorkspaceClient, company: CompanyOwnerRow): Promise<DomainCompany> {
+/** What reading a company's owner needs from the workspace, read once for many companies (`ownerReading`). */
+export interface OwnerReading {
+    /** Members who hold nothing (OWN-2e): shared mailboxes and members who have left. */
+    ownerless: ReadonlySet<string>;
+    /** OWN-2f's window start; null when the workspace has turned the release off. */
+    since: Date | null;
+}
+
+/** OWN-2e/2f: the workspace settings `resolveCompanyOwner` reads, for a caller resolving several companies. */
+export async function ownerReading(tx: WorkspaceClient): Promise<OwnerReading> {
+    return { ownerless: await ownerlessMembers(tx, await guardrailSettings(tx)), since: await dormantSince(tx) };
+}
+
+export async function resolveCompanyOwner(
+    tx: WorkspaceClient,
+    company: CompanyOwnerRow,
+    reading?: OwnerReading,
+): Promise<DomainCompany> {
     const base = { companyId: company.id, companyName: company.name, unclaimed: company.ownerId === null };
     // A member who has left, or a shared mailbox, keeps nobody from a company: its leads are anyone's, as they are
     // to the recipient guard. The row's owner is not changed; a company with none is still claimed by its next saver.
-    const ownerless = await ownerlessMembers(tx, await guardrailSettings(tx));
+    const { ownerless, since } = reading ?? (await ownerReading(tx));
     if (company.ownerId !== null) {
         if (effectiveOwner(company.ownerId, ownerless) === null) return { ...base, ownerId: null, ownerName: null };
         // OWN-2f: an owner who has not worked the company in the workspace's months holds it for nobody; the next
         // governed save at it takes it over.
-        const since = await dormantSince(tx);
         if (since && !(await ownerWorkedCompany(tx, company.id, company.ownerId, since))) {
             return { ...base, ownerId: null, ownerName: null, unclaimed: true, dormantOwnerId: company.ownerId };
         }
@@ -501,14 +517,16 @@ export async function ownerWorkedCompany(
     const [row] = await tx.$queryRaw<{ worked: boolean }[]>`
         SELECT EXISTS (
                    SELECT 1 FROM opportunities d
-                   WHERE d.company_id = ${companyId}::uuid AND d.owner_id = ${ownerId}::uuid
+                   WHERE d.workspace_id = app_workspace_id() AND d.company_id = ${companyId}::uuid
+                     AND d.owner_id = ${ownerId}::uuid
                      AND d.deleted_at IS NULL AND d.closed_at IS NULL)
             OR EXISTS (
                    SELECT 1 FROM companies c
                    WHERE c.id = ${companyId}::uuid AND c.created_at >= ${since} AND c.created_by ->> 'kind' <> 'import')
             OR EXISTS (
                    SELECT 1 FROM ownership_transfers o
-                   WHERE o.object = 'company' AND o.record_id = ${companyId}::uuid AND o.to_member_id = ${ownerId}::uuid
+                   WHERE o.workspace_id = app_workspace_id() AND o.record_id = ${companyId}::uuid AND o.object = 'company'
+                     AND o.to_member_id = ${ownerId}::uuid
                      AND o.status IN ('accepted', 'forced') AND o.from_member_id IS NOT NULL
                      AND o.decided_at >= ${since})
             OR EXISTS (
@@ -516,7 +534,7 @@ export async function ownerWorkedCompany(
                    WHERE t.workspace_id = app_workspace_id() AND t.target_id = ${companyId}::uuid
                      AND t.target_type = 'company' AND t.happened_at >= ${since}
                      AND t.actor ->> 'kind' = 'member' AND t.actor ->> 'id' = ${ownerId})
-            OR ${workedPeopleSql(Prisma.sql`p.company_id = ${companyId}::uuid`, ownerId, since)}
+            OR ${workedPeopleSql(Prisma.sql`p.workspace_id = app_workspace_id() AND p.company_id = ${companyId}::uuid`, ownerId, since)}
                AS worked`;
     return row?.worked ?? false;
 }
@@ -533,7 +551,7 @@ export async function ownerWorkedPeople(
 ): Promise<boolean> {
     if (personIds.length === 0) return false;
     const [row] = await tx.$queryRaw<{ worked: boolean }[]>`
-        SELECT ${workedPeopleSql(Prisma.sql`p.id = ANY(${[...personIds]}::uuid[])`, ownerId, since)} AS worked`;
+        SELECT ${workedPeopleSql(Prisma.sql`p.workspace_id = app_workspace_id() AND p.id = ANY(${[...personIds]}::uuid[])`, ownerId, since)} AS worked`;
     return row?.worked ?? false;
 }
 

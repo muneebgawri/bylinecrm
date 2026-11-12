@@ -12,7 +12,13 @@ import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../e
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
 import { notify } from '../notifications/notify';
-import { companyDomainOfAddress, normalisedDomain, resolveCompanyOwner } from '../records/company-ownership';
+import {
+    companyDomainOfAddress,
+    normalisedDomain,
+    ownerReading,
+    resolveCompanyOwner,
+    type OwnerReading,
+} from '../records/company-ownership';
 import { exclusionHits } from '../sequences/exclusions.service';
 import { AccountMail } from '../transactional-mail/account-mail';
 import { effectiveOwner, guardrailSettings, ownerlessMembers } from './guardrail-settings';
@@ -453,9 +459,14 @@ export async function readRecipients(
 
     // A company's owner, read the one way OWN-2 reads it (`resolveCompanyOwner`): a member who has left, a shared
     // mailbox or an owner who has let it go (OWN-2f) holds it for nobody; one naming none is its first saver's.
+    // Read only for a recipient whose own owner does not decide it, and once per message.
     const owners = new Map<string, string | null>();
+    let reading: OwnerReading | undefined;
     const companyOwner = async (c: (typeof companies)[number]): Promise<string | null> => {
-        if (!owners.has(c.id)) owners.set(c.id, (await resolveCompanyOwner(tx, c)).ownerId);
+        if (!owners.has(c.id)) {
+            reading ??= await ownerReading(tx);
+            owners.set(c.id, (await resolveCompanyOwner(tx, c, reading)).ownerId);
+        }
         return owners.get(c.id) ?? null;
     };
 
