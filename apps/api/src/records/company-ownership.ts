@@ -27,9 +27,20 @@ export interface DomainCompany {
      */
     ownerId: string | null;
     ownerName: string | null;
-    /** True when the company row itself names no owner: a governed save at it claims it for its owner (OWN-2d). */
+    /**
+     * True when a governed save at it claims it for the saver: the row names no owner (OWN-2d), or its owner has not
+     * worked it in `DORMANT_OWNER_MONTHS` (OWN-2f, `dormantOwnerId`).
+     */
     unclaimed: boolean;
+    /** OWN-2f: the owner the row names who has not worked it in `DORMANT_OWNER_MONTHS`, and so holds it for nobody. */
+    dormantOwnerId?: string;
 }
+
+/**
+ * OWN-2f: the months an owner may leave a company untouched and keep it. After that its leads are anyone's (as a
+ * member who has left holds none), and the next member to save a person there takes the company over.
+ */
+export const DORMANT_OWNER_MONTHS = 6;
 
 /** What is read of a company to say whose it is. */
 const COMPANY_OWNER_SELECT = {
@@ -39,7 +50,7 @@ const COMPANY_OWNER_SELECT = {
     owner: { select: { user: { select: { displayName: true } } } },
 } as const;
 
-interface CompanyOwnerRow {
+export interface CompanyOwnerRow {
     id: string;
     name: string;
     ownerId: string | null;
@@ -78,6 +89,9 @@ export function normalisedDomain(value: string): string {
  *   at a company with no owner claims it, in the same transaction, for the person's owner. So an imported
  *   company (owners on its people, none on it) is held like one saved here, from the first save on.
  *   `assign-company-owners.js` fills the imported ones in batches.
+ * - **An owner who stops working a company lets it go** (OWN-2f). An owner with no open deal at it, no mail to
+ *   anyone there and nothing done on it or its people in `DORMANT_OWNER_MONTHS` holds it for nobody: its leads
+ *   are anyone's to mail and save, and the next governed save of a person there takes the company over.
  */
 @Injectable()
 export class CompanyOwnership {
@@ -107,7 +121,7 @@ export class CompanyOwnership {
                         select: { company: { select: COMPANY_OWNER_SELECT } },
                     })
                 )?.company;
-            return company ? resolved(tx, company) : null;
+            return company ? resolveCompanyOwner(tx, company) : null;
         });
     }
 
@@ -119,7 +133,7 @@ export class CompanyOwnership {
                 where: { id: companyId, deletedAt: null },
                 select: COMPANY_OWNER_SELECT,
             });
-            return c ? resolved(tx, c) : null;
+            return c ? resolveCompanyOwner(tx, c) : null;
         });
     }
 
@@ -141,7 +155,9 @@ export class CompanyOwnership {
         const company = named ?? byDomain;
         if (!company) return { company: null };
         assertSameOwner(company, input.ownerId);
-        if (company.unclaimed && input.ownerId) await this.claim(tx, context, company.companyId, input.ownerId);
+        if (company.unclaimed && input.ownerId) {
+            await this.claim(tx, context, company.companyId, input.ownerId, company.dormantOwnerId ?? null);
+        }
         return byDomain && input.companyId === undefined
             ? { companyId: byDomain.companyId, company: byDomain }
             : { company };
@@ -159,9 +175,11 @@ export class CompanyOwnership {
         context: WorkspaceRunContext,
         companyId: string,
         memberId: string,
+        /** OWN-2f: the dormant owner it is taken from; null for a company that names none. */
+        from: string | null = null,
     ): Promise<boolean> {
         const [row] = await tx.$queryRaw<{ claimed: boolean }[]>`
-            SELECT claim_company(${companyId}::uuid, ${memberId}::uuid) AS claimed`;
+            SELECT claim_company(${companyId}::uuid, ${memberId}::uuid, ${from}::uuid) AS claimed`;
         if (!row?.claimed) return false;
         const event: DomainEvent = {
             type: 'company.updated',
@@ -170,7 +188,7 @@ export class CompanyOwnership {
             actor: actorOf(context),
             occurredAt: new Date().toISOString(),
             recordId: companyId,
-            diff: { ownerId: { from: null, to: memberId } },
+            diff: { ownerId: { from, to: memberId } },
         };
         await this.events.record(tx, event);
         return true;
@@ -355,15 +373,19 @@ export function primaryOf(emails: Emails | null | undefined): string | null {
  * A company with whose it is (OWN-2d): its own owner, else the owner of the earliest live person saved at it — the
  * first saver, whom the import left on the people and not on the company. Read in `tx`, across the owner scope.
  */
-async function resolved(tx: WorkspaceClient, company: CompanyOwnerRow): Promise<DomainCompany> {
+export async function resolveCompanyOwner(tx: WorkspaceClient, company: CompanyOwnerRow): Promise<DomainCompany> {
     const base = { companyId: company.id, companyName: company.name, unclaimed: company.ownerId === null };
     // A member who has left, or a shared mailbox, keeps nobody from a company: its leads are anyone's, as they are
     // to the recipient guard. The row's owner is not changed; a company with none is still claimed by its next saver.
     const ownerless = await ownerlessMembers(tx, await guardrailSettings(tx));
     if (company.ownerId !== null) {
-        return effectiveOwner(company.ownerId, ownerless) === null
-            ? { ...base, ownerId: null, ownerName: null }
-            : { ...base, ownerId: company.ownerId, ownerName: company.owner?.user.displayName ?? null };
+        if (effectiveOwner(company.ownerId, ownerless) === null) return { ...base, ownerId: null, ownerName: null };
+        // OWN-2f: an owner who has not worked the company in DORMANT_OWNER_MONTHS holds it for nobody; the next
+        // governed save at it takes it over.
+        if (!(await ownerWorkedCompany(tx, company.id, company.ownerId, dormantSince()))) {
+            return { ...base, ownerId: null, ownerName: null, unclaimed: true, dormantOwnerId: company.ownerId };
+        }
+        return { ...base, ownerId: company.ownerId, ownerName: company.owner?.user.displayName ?? null };
     }
     const first = await tx.person.findFirst({
         where: { companyId: company.id, deletedAt: null, ownerId: { not: null, notIn: [...ownerless] } },
@@ -371,6 +393,66 @@ async function resolved(tx: WorkspaceClient, company: CompanyOwnerRow): Promise<
         select: { ownerId: true, owner: { select: { user: { select: { displayName: true } } } } },
     });
     return { ...base, ownerId: first?.ownerId ?? null, ownerName: first?.owner?.user.displayName ?? null };
+}
+
+/** OWN-2f: the start of the window an owner must have worked a company in to keep it. */
+export function dormantSince(now: Date = new Date()): Date {
+    const since = new Date(now);
+    since.setUTCMonth(since.getUTCMonth() - DORMANT_OWNER_MONTHS);
+    return since;
+}
+
+/**
+ * OWN-2f: whether `ownerId` has worked `companyId` since `since` — an open deal with it is theirs, the company or a
+ * person of theirs at it was saved (read from the rows, so a save counts before its timeline entry is written; a lead
+ * dealt to them by an intake counts, an import does not), a member handed it to them (a backfill's fill, from nobody,
+ * does not), they mailed
+ * someone at it, or the timeline shows them acting on it or on someone at it (a call, a note, a change). What an
+ * import or a sync wrote in their name does not count. Read in `tx` across the owner scope.
+ */
+export async function ownerWorkedCompany(
+    tx: WorkspaceClient,
+    companyId: string,
+    ownerId: string,
+    since: Date,
+): Promise<boolean> {
+    const [row] = await tx.$queryRaw<{ worked: boolean }[]>`
+        SELECT EXISTS (
+                   SELECT 1 FROM opportunities d
+                   WHERE d.company_id = ${companyId}::uuid AND d.owner_id = ${ownerId}::uuid
+                     AND d.deleted_at IS NULL AND d.closed_at IS NULL)
+            OR EXISTS (
+                   SELECT 1 FROM companies c
+                   WHERE c.id = ${companyId}::uuid AND c.created_at >= ${since} AND c.created_by ->> 'kind' <> 'import')
+            OR EXISTS (
+                   SELECT 1 FROM ownership_transfers o
+                   WHERE o.object = 'company' AND o.record_id = ${companyId}::uuid AND o.to_member_id = ${ownerId}::uuid
+                     AND o.status IN ('accepted', 'forced') AND o.from_member_id IS NOT NULL
+                     AND o.decided_at >= ${since})
+            OR EXISTS (
+                   SELECT 1 FROM people p
+                   WHERE p.company_id = ${companyId}::uuid AND p.deleted_at IS NULL AND p.created_at >= ${since}
+                     AND p.created_by ->> 'kind' <> 'import'
+                     AND (p.owner_id = ${ownerId}::uuid OR p.created_by ->> 'id' = ${ownerId}))
+            OR EXISTS (
+                   SELECT 1 FROM people p
+                   JOIN mail_participants mp ON mp.workspace_id = p.workspace_id AND mp.person_id = p.id
+                   JOIN mail_messages mm ON mm.id = mp.message_id AND mm.direction = 'outbound' AND mm.sent_at >= ${since}
+                   JOIN mail_participants sp ON sp.message_id = mm.id AND sp.role = 'from' AND sp.member_id = ${ownerId}::uuid
+                   WHERE p.company_id = ${companyId}::uuid AND p.deleted_at IS NULL)
+            OR EXISTS (
+                   SELECT 1 FROM timeline_activities t
+                   WHERE t.workspace_id = app_workspace_id() AND t.target_id = ${companyId}::uuid
+                     AND t.target_type = 'company' AND t.happened_at >= ${since}
+                     AND t.actor ->> 'kind' = 'member' AND t.actor ->> 'id' = ${ownerId})
+            OR EXISTS (
+                   SELECT 1 FROM people p
+                   JOIN timeline_activities t ON t.workspace_id = p.workspace_id AND t.target_id = p.id
+                    AND t.target_type = 'person' AND t.happened_at >= ${since}
+                   WHERE p.company_id = ${companyId}::uuid AND p.deleted_at IS NULL
+                     AND t.actor ->> 'kind' = 'member' AND t.actor ->> 'id' = ${ownerId})
+               AS worked`;
+    return row?.worked ?? false;
 }
 
 /**

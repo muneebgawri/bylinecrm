@@ -151,7 +151,14 @@ describe('assign-company-owners: companies take the owner their people name (OWN
     });
 
     it('estimates: the companies to fill and the people and deals to move, changing nothing', async () => {
-        const expected = { companies: 1, assigned: 1, companiesTouched: 2, peopleMoved: 2, dealsMoved: 1 };
+        const expected = {
+            companies: 1,
+            assigned: 1,
+            companiesTouched: 2,
+            peopleMoved: 2,
+            dealsMoved: 1,
+            companiesDormant: 0,
+        };
         expect(await run(false, true)).toEqual(expected);
         // `--batch`: a page of one company reads the same, page after page; a bad size is refused before any read.
         expect(await run(false, true, 1)).toEqual(expected);
@@ -169,6 +176,7 @@ describe('assign-company-owners: companies take the owner their people name (OWN
             companiesTouched: 0,
             peopleMoved: 0,
             dealsMoved: 0,
+            companiesDormant: 0,
         });
         expect(await companyOwner(imported)).toBe(anaId);
         expect(await companyOwner(empty), 'no people: nothing to read an owner from').toBeNull();
@@ -202,6 +210,7 @@ describe('assign-company-owners: companies take the owner their people name (OWN
             companiesTouched: 2,
             peopleMoved: 2,
             dealsMoved: 1,
+            companiesDormant: 0,
         });
         expect(await personOwner(anasPerson)).toBe(anaId);
         expect(await personOwner(bensPerson)).toBe(anaId);
@@ -244,6 +253,7 @@ describe('assign-company-owners: companies take the owner their people name (OWN
             companiesTouched: 0,
             peopleMoved: 0,
             dealsMoved: 0,
+            companiesDormant: 0,
         });
         expect(await run(true, true)).toEqual({
             companies: 0,
@@ -251,6 +261,7 @@ describe('assign-company-owners: companies take the owner their people name (OWN
             companiesTouched: 0,
             peopleMoved: 0,
             dealsMoved: 0,
+            companiesDormant: 0,
         });
     });
 });

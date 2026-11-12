@@ -56,6 +56,8 @@ describe('migrations and the database roles', () => {
                 `GRANT SELECT, UPDATE ON "companies" TO ${OWNERSHIP_DB_ROLE}`,
                 `GRANT SELECT ON "workspace_members" TO ${OWNERSHIP_DB_ROLE}`,
                 `ALTER FUNCTION claim_company(uuid, uuid) OWNER TO ${OWNERSHIP_DB_ROLE}`,
+                // OWN-2f: the claim takes the owner it is taken from.
+                `ALTER FUNCTION claim_company(uuid, uuid, uuid) OWNER TO ${OWNERSHIP_DB_ROLE}`,
             ]).toContain(statement);
         }
     });
