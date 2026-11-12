@@ -602,6 +602,45 @@ describe('mail follow-ups', () => {
             }
         });
 
+        it('a follow-up neither spends the new-recipient budget nor is held to it', async () => {
+            await as(admin)
+                .put(w('/reputation/settings'))
+                .send({ ...REPUTATION_DEFAULTS, dailyNewRecipients: 2, hourlyNewRecipients: 2 })
+                .expect(200);
+            try {
+                const [p1, p2, p3, p4, p5] = await Promise.all(
+                    ['Mo', 'Ned', 'Oz', 'Pia', 'Quin'].map((n) =>
+                        person(n, `${n.toLowerCase()}-${stamp}@first.example`),
+                    ),
+                );
+                // Far from every other test's sends: the first email at 60 h, its follow-up a day and more later.
+                await accepted(queue([90], { sendAt: inMs(60 * HOUR) }, member, p1));
+                const at = inMs(91 * HOUR);
+                const first = (personId: string) =>
+                    as(member)
+                        .post(w('/mail/send'))
+                        .send({
+                            mailboxId: memberMailbox,
+                            personId,
+                            subject: 'Hi',
+                            body: body(para(t('Hello.'))),
+                            sendAt: at,
+                        });
+                // The follow-up to p1 at 90 h is in this window and takes none of its two places.
+                for (const p of [p2!, p3!]) {
+                    const ok = await first(p);
+                    expect(ok.status, JSON.stringify(ok.body)).toBe(202);
+                }
+                const refused = await first(p4!);
+                expect(refused.status).toBe(422);
+                expect(err(refused).code).toBe('mailbox.budget_reached');
+                // A follow-up set for a full window is accepted: the budget is for first emails.
+                await accepted(queue([91], { sendAt: inMs(63 * HOUR) }, member, p5!));
+            } finally {
+                await as(admin).put(w('/reputation/settings')).send(REPUTATION_DEFAULTS).expect(200);
+            }
+        });
+
         it('a near-identical scheduled send to too many people is refused at its request, not only at its time', async () => {
             await as(admin)
                 .put(w('/reputation/settings'))

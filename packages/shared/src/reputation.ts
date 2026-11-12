@@ -57,7 +57,7 @@ export interface ReputationSettings {
 
 export const REPUTATION_DEFAULTS: Readonly<ReputationSettings> = {
     dailyNewRecipients: 50,
-    hourlyNewRecipients: 20,
+    hourlyNewRecipients: 35,
     poolHourlyCap: 12,
     nearDuplicateThreshold: 10,
     nearDuplicateDistance: 3,

@@ -6,6 +6,7 @@ import {
     largestSubject,
     nearDuplicateRecipients,
     recipientsSince,
+    subjectRecipients,
     type WindowEntry,
 } from './judge';
 
@@ -36,7 +37,7 @@ describe('REP-1 fingerprint (FR-CRMS-23)', () => {
         expect(simhash('')).toBeNull();
         expect(
             nearDuplicateRecipients(
-                [{ addresses: ['a@x.test'], simhash: null, subjectKey: '', at: new Date() }],
+                [{ addresses: ['a@x.test'], simhash: null, subjectKey: '', at: new Date(), followUp: false }],
                 null,
                 3,
             ).size,
@@ -58,6 +59,7 @@ describe('REP-1 judgement (FR-CRMS-23)', () => {
             simhash: f.simhash,
             subjectKey: f.subjectKey,
             at: new Date(now.getTime() - minutesAgo * 60_000),
+            followUp: false,
         };
     };
 
@@ -69,6 +71,12 @@ describe('REP-1 judgement (FR-CRMS-23)', () => {
         ];
         expect(recipientsSince(entries, new Date(now.getTime() - 3_600_000)).size).toBe(1);
         expect(recipientsSince(entries, new Date(now.getTime() - 86_400_000)).size).toBe(2);
+    });
+
+    it('a follow-up is not counted as a new recipient, and is still judged for repetition', () => {
+        const entries = [entry('a@x.test', 'x', 's', 10), { ...entry('c@x.test', 'x', 's', 5), followUp: true }];
+        expect([...recipientsSince(entries, new Date(now.getTime() - 3_600_000))]).toEqual(['a@x.test']);
+        expect(subjectRecipients(entries, entries[0]!.subjectKey).size).toBe(2);
     });
 
     it('finds the largest near-identical group and repeated subject', () => {

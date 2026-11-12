@@ -7,7 +7,8 @@ export const reputationSettings = named(
     'ReputationSettings',
     z.object({
         dailyNewRecipients: z.number().int().meta({
-            description: 'New-recipient messages a personal mailbox may send in a rolling 24 hours (replies exempt).',
+            description:
+                'New-recipient messages a personal mailbox may send in a rolling 24 hours (replies and queued follow-ups exempt).',
         }),
         hourlyNewRecipients: z.number().int().meta({ description: 'The same, in a rolling hour.' }),
         poolHourlyCap: z.number().int().meta({ description: 'A pool mailbox’s sends in a rolling hour.' }),

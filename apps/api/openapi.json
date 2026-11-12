@@ -40979,7 +40979,7 @@
                         "type": "integer",
                         "minimum": -9007199254740991,
                         "maximum": 9007199254740991,
-                        "description": "New-recipient messages a personal mailbox may send in a rolling 24 hours (replies exempt)."
+                        "description": "New-recipient messages a personal mailbox may send in a rolling 24 hours (replies and queued follow-ups exempt)."
                     },
                     "hourlyNewRecipients": {
                         "type": "integer",
