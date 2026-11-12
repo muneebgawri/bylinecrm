@@ -342,3 +342,18 @@ export const ownershipConflictView = named(
         companyOwnerName: z.string().nullable(),
     }),
 );
+
+/** OWN-LOOKUP: who owns the person with an address, or their company (`GET /integrations/owners/lookup`). */
+export const ownerLookupView = named(
+    'OwnerLookup',
+    z.object({
+        found: z.boolean().meta({ description: 'A person with the address, or a company at the domain, exists.' }),
+        match: z.enum(['person', 'company']).nullable().meta({ description: 'Which record answered.' }),
+        recordId: id.nullable(),
+        recordName: z.string().nullable(),
+        owner: z.object({ email: z.string(), name: z.string().nullable() }).nullable().meta({
+            description:
+                'The owning member, by sign-in email. Null when nobody owns them, or the owner has left, is a shared mailbox, or is dormant (OWN-2f).',
+        }),
+    }),
+);
