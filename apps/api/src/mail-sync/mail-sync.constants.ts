@@ -24,11 +24,12 @@ export const MAIL_BACKFILL_LEASE_MS = 15 * 60 * 1000;
 /** Backfill steps the worker keeps queued at once: they share its slots with every mailbox's incremental sync. */
 export const MAIL_BACKFILL_JOBS_AT_ONCE = 2;
 /**
- * People whose contact status a backfill chunk re-derives per transaction. A chunk's correspondents can number in the
- * hundreds, and a refresh reads all of each one's mail — on a cold cache well past a transaction's time (2026-11: 165
- * people took 12 s cold, 0.8 s warm) — so they are refreshed this many at a time, each batch its own transaction.
+ * People whose contact status a backfill window re-derives per transaction. A window's correspondents can number in
+ * the hundreds, and a refresh reads all of each one's mail — a frequent correspondent's takes seconds on a cold cache
+ * (2026-11: 4 s for one with 14k participant rows; 165 people took 12 s cold, 0.8 s warm) — so they are refreshed
+ * this many at a time, each batch its own transaction, well inside the transaction's 15 s.
  */
-export const MAIL_BACKFILL_REFRESH_BATCH = 25;
+export const MAIL_BACKFILL_REFRESH_BATCH = 5;
 /**
  * Added to a stored message's own bytes (bodies, subject, snippet; uncompressed) for its participants, its copy, its
  * thread rows and their index entries, when the budget counts what the backfill wrote: an over-estimate on purpose.
