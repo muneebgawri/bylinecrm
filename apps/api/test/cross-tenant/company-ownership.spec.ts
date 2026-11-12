@@ -692,5 +692,57 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
                 await prisma.workspaceMember.update({ where: { id: anaId }, data: { leftAt: null } });
             }
         });
+
+        it('OWN-2f: an owner who has not worked the company in six months lets it go: the next saver takes it over', async () => {
+            const pike = `pike-${stamp}.test`;
+            const companyId = await unowned(`Pike ${stamp}`, pike);
+            await as(ana)
+                .post(w('/people'))
+                .send({ nameFirst: 'Pat', emails: { primary: `pat@${pike}`, additional: [] } })
+                .expect(201);
+            expect(await ownerOf(companyId)).toBe(anaId);
+            await settle(app);
+
+            // Worked lately: Ben is refused, by name.
+            const refused = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Lee', emails: { primary: `lee@${pike}`, additional: [] } });
+            expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+            expect(refused.body).toMatchObject({ code: 'conflict.company_owned', details: { ownerMemberId: anaId } });
+
+            // Seven months on, with nothing done since: the company, its people and their timeline are old.
+            const prisma = app.get(PrismaService);
+            const old = new Date(Date.now() - 214 * 24 * 60 * 60 * 1000);
+            const people = await prisma.person.findMany({ where: { companyId }, select: { id: true } });
+            await prisma.company.update({ where: { id: companyId }, data: { createdAt: old } });
+            await prisma.person.updateMany({ where: { companyId }, data: { createdAt: old } });
+            await prisma.timelineActivity.updateMany({
+                where: { workspaceId: workspace, targetId: { in: [companyId, ...people.map((p) => p.id)] } },
+                data: { happenedAt: old },
+            });
+
+            const saved = await as(ben)
+                .post(w('/people'))
+                .send({ nameFirst: 'Lee', emails: { primary: `lee@${pike}`, additional: [] } });
+            expect(saved.status, JSON.stringify(saved.body)).toBe(201);
+            expect(saved.body).toMatchObject({ ownerId: benId, companyId });
+            expect(await ownerOf(companyId)).toBe(benId);
+            const taken = await prisma.outboxEvent.findFirst({
+                where: {
+                    workspaceId: workspace,
+                    type: 'company.updated',
+                    payload: { path: ['recordId'], equals: companyId },
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            expect(taken?.payload).toMatchObject({ diff: { ownerId: { from: anaId, to: benId } } });
+
+            // Ben has worked it now: Ana, coming back, is the one refused.
+            const back = await as(ana)
+                .post(w('/people'))
+                .send({ nameFirst: 'Kim', emails: { primary: `kim@${pike}`, additional: [] } });
+            expect(back.status, JSON.stringify(back.body)).toBe(409);
+            expect(back.body).toMatchObject({ details: { ownerMemberId: benId } });
+        });
     });
 });

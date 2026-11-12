@@ -13,7 +13,12 @@ import { DomainEvents } from '../events/domain-events.service';
 import { ApiException } from '../infra/errors/api-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
-import { CompanyOwnership, companyDomainOfAddress, type DomainCompany } from '../records/company-ownership';
+import {
+    CompanyOwnership,
+    companyDomainOfAddress,
+    resolveCompanyOwner,
+    type DomainCompany,
+} from '../records/company-ownership';
 import { exclusionHits, exclusionMessage } from '../sequences/exclusions.service';
 import { SuppressionService } from '../suppression/suppression.service';
 import { effectiveOwner, guardrailSettings, ownerlessMembers } from './guardrail-settings';
@@ -373,18 +378,10 @@ async function readFacts(
         where: { id: { in: linkedIds }, deletedAt: null },
         select: { id: true, name: true, ownerId: true, owner: NAMED },
     });
-    const companies = new Map<string, DomainCompany>(
-        linked.map((c) => [
-            c.id,
-            unshared({
-                companyId: c.id,
-                companyName: c.name,
-                ownerId: c.ownerId,
-                ownerName: c.owner?.user.displayName ?? null,
-                unclaimed: c.ownerId === null,
-            }),
-        ]),
-    );
+    // Read the one way OWN-2 reads an owner: a member who has left, a shared mailbox or a dormant owner (OWN-2f)
+    // holds the company for nobody.
+    const companies = new Map<string, DomainCompany>();
+    for (const c of linked) companies.set(c.id, unshared(await resolveCompanyOwner(tx, c)));
     for (const c of domainCompanies.values()) if (c) companies.set(c.companyId, c);
 
     const deals = await tx.opportunity.findMany({

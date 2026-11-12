@@ -5,7 +5,7 @@ import { AppModule } from '../app.module';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
-import { CompanyOwnership } from '../records/company-ownership';
+import { CompanyOwnership, dormantSince, ownerWorkedCompany } from '../records/company-ownership';
 import { TransfersService } from '../transfers/transfers.service';
 
 const USAGE =
@@ -50,6 +50,8 @@ export interface AssignReport {
     peopleMoved: number;
     /** `--reassign-people`: open deals those people are the contact of, moved with them. */
     dealsMoved: number;
+    /** `--reassign-people`: companies left as they are because their owner has let them go (OWN-2f). */
+    companiesDormant: number;
 }
 
 /** A job acting for the workspace: no caller, so the ownership rule's checks do not bind it. */
@@ -64,6 +66,7 @@ function jobContext(workspaceId: string): WorkspaceRunContext {
  * With `reassignPeople`, then moves
  * every person at a company whose owner is not the company's to the company's owner, with the open deals they are
  * the contact of, through the transfer service (`reassign`: a forced transfer, its events written as for any move).
+ * A company whose owner has let it go (OWN-2f, `ownerWorkedCompany`) keeps its people as they are.
  * Re-running changes nothing once done. Counts only: no record is named.
  */
 export async function assignCompanyOwners(
@@ -79,7 +82,15 @@ export async function assignCompanyOwners(
     const progress = options.onProgress ?? (() => undefined);
     const BATCH = options.batch ?? DEFAULT_BATCH;
     if (!Number.isInteger(BATCH) || BATCH < 1) throw new Error('batch must be a whole number of companies, 1 or more');
-    const report: AssignReport = { companies: 0, assigned: 0, companiesTouched: 0, peopleMoved: 0, dealsMoved: 0 };
+    const report: AssignReport = {
+        companies: 0,
+        assigned: 0,
+        companiesTouched: 0,
+        peopleMoved: 0,
+        dealsMoved: 0,
+        companiesDormant: 0,
+    };
+    const since = dormantSince();
 
     // 1. Companies with no owner, each with the owner of its first saved person (an active member).
     let after = '00000000-0000-0000-0000-000000000000';
@@ -154,6 +165,14 @@ export async function assignCompanyOwners(
         if (batch.length === 0) break;
         for (const c of batch) {
             if (c.people === 0 || c.owner_id === null) continue;
+            // OWN-2f: an owner who has let the company go is not given its people; the next saver takes it over.
+            const worked = await rls.withWorkspace(workspaceId, (tx) =>
+                ownerWorkedCompany(tx, c.id, c.owner_id, since),
+            );
+            if (!worked) {
+                report.companiesDormant += 1;
+                continue;
+            }
             report.companiesTouched += 1;
             if (!options.apply) {
                 report.peopleMoved += c.people;
@@ -240,6 +259,7 @@ async function main(): Promise<void> {
             console.log(
                 `${apply ? 'moved' : 'would move'}: ${report.peopleMoved} people and ${report.dealsMoved} open deals at ${report.companiesTouched} companies`,
             );
+            console.log(`left as they are: ${report.companiesDormant} companies whose owner has let them go (OWN-2f)`);
         }
         if (!apply) console.log('estimate: nothing changed; add --apply to do it');
     } finally {
